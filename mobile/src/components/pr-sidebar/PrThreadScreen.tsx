@@ -1,5 +1,5 @@
 import { ScrollView, Text, View } from 'react-native'
-import type { PRCommentGroup } from '../../../../src/shared/pr-comment-groups'
+import type { PRCommentGroup } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -7,9 +7,9 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-link'
 import { useKeyboardOcclusion } from '../../platform/keyboard-occlusion'
-import { isResolvableComment } from '../../session/pr-comment-actions'
+import { isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { MobileStateView } from '../MobileStateView'
-import { CommentMarkdown } from './CommentMarkdown'
+import { PrMarkdown } from './PrMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { PrCommentAvatar } from './PrCommentAvatar'
 import { PrMiniButton } from './PrMiniButton'
@@ -152,7 +152,7 @@ export function PrThreadScreen({
               <Text style={styles.time}>{commentRelativeTime(comment.createdAt, now, t)}</Text>
             </View>
             <View style={styles.body}>
-              <CommentMarkdown content={comment.body} />
+              <PrMarkdown content={comment.body} url={comment.url} />
             </View>
           </View>
         ))}

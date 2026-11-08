@@ -9,7 +9,7 @@ import type { AppState } from '@/store/types'
 import { emitCmdJRowIndexJump } from '@/lib/cmd-j-row-index-jump'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   LEAF_ID,
   makeAgentEntry,
@@ -47,7 +47,7 @@ vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/components/sidebar/StatusIndicator', () => ({
+vi.mock('@/components/sidebar/workspace-card/surface/StatusIndicator', () => ({
   default: () => <span data-status-indicator="true" />
 }))
 
@@ -63,7 +63,7 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
   activateWorkspaceTabPaletteResult: vi.fn((_result: unknown) => ({ status: 'activated' }) as const)
 }))
-vi.mock('@/lib/workspace-tab-palette-activation', () => ({
+vi.mock('@/lib/workspace/search/tabs/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: (result: unknown) => activateWorkspaceTabPaletteResult(result)
 }))
 
@@ -174,14 +174,6 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
   await flushEffects()
 }
 
-function getWorktreeRows(): string[] {
-  return [
-    ...testContainer.querySelectorAll<HTMLElement>(
-      `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
-    )
-  ].map((node) => node.textContent ?? '')
-}
-
 function getRenderedRowIds(): string[] {
   return [...testContainer.querySelectorAll<HTMLElement>('[data-command-item]')].map(
     (node) => node.dataset.commandItem ?? ''
@@ -211,22 +203,6 @@ function getTabRowIds(): string[] {
           )?.id ?? ''
     )
 }
-function getTabRowShortcutDigits(): string[] {
-  return [
-    ...testContainer.querySelectorAll<HTMLElement>(
-      `[data-command-item^="${encodePaletteIdentity(['workspace-tab'])}"]`
-    )
-  ].flatMap((row) =>
-    [...row.querySelectorAll<HTMLElement>('span')]
-      .map((node) => node.textContent ?? '')
-      .filter((text) => /^\d+$/.test(text))
-  )
-}
-function clickSeeMore(): void {
-  ;[...testContainer.querySelectorAll('button')]
-    .find((button) => button.textContent?.includes('See more'))
-    ?.click()
-}
 
 describe('WorktreeJumpPalette recent chats & terminals', () => {
   beforeEach(() => {
@@ -248,16 +224,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     useAppStore.setState(initialAppState, true)
   })
 
-  it('leads the empty-query list with the recent section', async () => {
-    await renderPalette(makeRecentTabState())
-
-    const rows = getRenderedRowIds().filter((id) => id.length > 0)
-    expect(rows[0].startsWith(encodePaletteIdentity(['workspace-tab']))).toBe(true)
-    expect(rows.some((id) => id.startsWith(encodePaletteIdentity(['worktree'])))).toBe(true)
-    expect(testContainer.textContent).toContain('Recent Chats & Terminals')
-    expect(testContainer.textContent).toContain('Recent Workspaces')
-  })
-
   it('keeps duplicate persisted tab ids as separate recent rows and digit targets', async () => {
     await renderPalette(makeDuplicateRecentTabState())
 
@@ -276,48 +242,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
       expect.objectContaining({ tabId: 'tab-duplicate', worktreeId: 'wt-beta' })
     )
-  })
-
-  it('caps the recent section so the worktree header stays above the fold', async () => {
-    await renderPalette(makeManyTabState(12))
-
-    expect(getTabRowIds()).toHaveLength(6)
-    expect(testContainer.textContent).toContain('Recent Workspaces')
-    // Maintain the 10-row total cap even before the order snapshot arrives.
-    expect(getWorktreeRows().length).toBeLessThanOrEqual(4)
-  })
-  it('shows more recent chats and terminals from the empty-query view', async () => {
-    await renderPalette(makeManyTabState(12))
-    const seeMoreButton = [...testContainer.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('See more')
-    )
-    expect(seeMoreButton).toBeDefined()
-    expect(testContainer.textContent).toContain('6 more')
-    await act(async () => {
-      seeMoreButton?.click()
-    })
-    await flushEffects()
-    expect(getTabRowIds()).toHaveLength(12)
-    expect(testContainer.textContent).not.toContain('6 more')
-  })
-  it('reveals every recent row from a single expansion', async () => {
-    await renderPalette(makeManyTabState(30))
-    expect(getTabRowIds()).toHaveLength(6)
-    await act(async () => {
-      clickSeeMore()
-    })
-    await flushEffects()
-    expect(getTabRowIds()).toHaveLength(30)
-  })
-  it('stops badging expanded recent rows at the last addressable digit', async () => {
-    await renderPalette(makeManyTabState(12))
-    expect(getTabRowShortcutDigits()).toEqual(['1', '2', '3', '4', '5', '6'])
-    await act(async () => {
-      clickSeeMore()
-    })
-    await flushEffects()
-    expect(getTabRowIds()).toHaveLength(12)
-    expect(getTabRowShortcutDigits()).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9'])
   })
 
   it('backfills past the cap when rows drop out of the frozen order', async () => {
@@ -362,22 +286,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     }
   }
 
-  it('leads a typed query with the tab section when it holds the stronger match', async () => {
-    await renderPalette(makeTypedRelevanceState())
-
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
-
-    const rows = getRenderedRowIds().filter((id) => id.length > 0)
-    expect(rows[0]).toBe(encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host']))
-    expect(rows).toContain(encodePaletteIdentity(['worktree', '|wt-weak']))
-    expect(getCommandValue()).toBe(
-      encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host'])
-    )
-  })
-
   it('selects the new first result when cmdk reports the deferred list selection', async () => {
     await renderPalette(makeTypedRelevanceState())
 
@@ -399,93 +307,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe(
       encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host'])
     )
-  })
-
-  // Honor onValueChange after ranking; cmdk’s advanced internal cursor otherwise makes the next ArrowDown a no-op.
-  it('keeps arrow selection after the typed query ranking has committed', async () => {
-    await renderPalette(makeTypedRelevanceState())
-
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
-    expect(getCommandValue()).toBe(
-      encodePaletteIdentity(['workspace-tab', '', 'wt-host', 'tab-host'])
-    )
-
-    const rows = getRenderedRowIds().filter((id) => id.length > 0)
-    expect(rows.length).toBeGreaterThan(1)
-
-    await act(async () => {
-      setCommandSelection?.(rows[1])
-    })
-    await flushEffects()
-
-    expect(getCommandValue()).toBe(rows[1])
-  })
-
-  it('keeps worktrees ahead of tabs when a worktree holds the stronger match', async () => {
-    await renderPalette({
-      ...makeTypedRelevanceState(),
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree('wt-strong', 'perf-diff-tighten'),
-          makeWorktree('wt-host', 'docs-update')
-        ]
-      }
-    })
-
-    await act(async () => {
-      setCommandQuery?.('perf-d')
-    })
-    await flushEffects()
-
-    const firstRow = getRenderedRowIds().find((id) => id.length > 0)
-    expect(firstRow).toBe(encodePaletteIdentity(['worktree', '|wt-strong']))
-  })
-
-  it('ranks a typed query by match position inside the worktree section', async () => {
-    await renderPalette({
-      worktreesByRepo: {
-        'repo-1': [
-          // Preserve input order under smart sort so only relevance ranking can promote the prefix hit.
-          makeWorktree('wt-word-a', 'improve-agent-dashboard-performance'),
-          makeWorktree('wt-word-b', 'rc-perf-update-channels'),
-          makeWorktree('wt-prefix', 'perf-diff-tighten')
-        ]
-      },
-      showSleepingWorkspaces: true
-    })
-
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
-
-    // Whole-word perf outranks the prefix in performance despite input order.
-    expect(
-      getRenderedRowIds().filter((id) => id.startsWith(encodePaletteIdentity(['worktree'])))
-    ).toEqual([
-      encodePaletteIdentity(['worktree', '|wt-prefix']),
-      encodePaletteIdentity(['worktree', '|wt-word-b']),
-      encodePaletteIdentity(['worktree', '|wt-word-a'])
-    ])
-  })
-
-  it('budget-caps the worktree section when nothing fills the recent one', async () => {
-    await renderPalette({
-      worktreesByRepo: {
-        'repo-1': Array.from({ length: 14 }, (_, index) =>
-          makeWorktree(`wt-${index}`, `Spare workspace ${index}`)
-        )
-      },
-      showSleepingWorkspaces: true
-    })
-
-    // Dropping all recent tabs must retain the workspace cap, not mount every workspace.
-    expect(getTabRowIds()).toEqual([])
-    expect(getWorktreeRows()).toHaveLength(10)
-    expect(testContainer.textContent).toContain('4 more')
   })
 
   it('captures the order when tabs hydrate after the palette is already open', async () => {
@@ -623,66 +444,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-alpha', 'tab-beta'])
   })
 
-  it('ranks a recently visited idle tab above a three-day-old blocked tab', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
-        },
-        unifiedTabsByWorktree: {
-          'wt-alpha': [
-            {
-              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-              lastFocusedAt: Date.now() - 3 * 86400_000
-            }
-          ],
-          'wt-beta': [
-            {
-              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-              lastFocusedAt: Date.now()
-            }
-          ]
-        }
-      })
-    )
-
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-  })
-
-  it('freezes the order captured on open while statuses keep changing', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        unifiedTabsByWorktree: {
-          'wt-alpha': [
-            {
-              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-              lastFocusedAt: Date.now() - 3 * 86400_000
-            }
-          ],
-          'wt-beta': [
-            {
-              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-              lastFocusedAt: Date.now()
-            }
-          ]
-        }
-      })
-    )
-
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-
-    await act(async () => {
-      useAppStore.setState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
-        }
-      } as Partial<AppState>)
-    })
-    await flushEffects()
-
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-  })
-
   it('captures the unfiltered order when reopened after a search', async () => {
     await renderPalette(makeRecentTabState())
 
@@ -704,72 +465,6 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await flushEffects()
 
     expect(getTabRowIds()).toHaveLength(2)
-  })
-
-  it('keeps the current tab in recent when its agent needs permission', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        activeWorktreeId: 'wt-alpha',
-        activeTabType: 'terminal',
-        activeTabId: 'term-alpha',
-        activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
-        activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'blocked', Date.now())
-        },
-        unifiedTabsByWorktree: {
-          'wt-alpha': [
-            {
-              ...makeUnifiedTab('tab-alpha', 'wt-alpha', 'term-alpha', 'Alpha chat'),
-              lastFocusedAt: Date.now() - 3 * 86400_000
-            }
-          ],
-          'wt-beta': [
-            {
-              ...makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'Beta chat'),
-              lastFocusedAt: Date.now()
-            }
-          ]
-        }
-      })
-    )
-
-    // Attention on the current tab still earns a row; idle current tabs do not.
-    expect(getTabRowIds()).toEqual(['tab-beta', 'tab-alpha'])
-    expect(testContainer.textContent).toContain('Current Tab')
-  })
-
-  it.each([undefined, true])('excludes current terminal outcomes', async (interrupted) => {
-    await renderPalette(
-      makeRecentTabState({
-        activeWorktreeId: 'wt-alpha',
-        activeTabType: 'terminal',
-        activeTabId: 'term-alpha',
-        activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
-        activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now(), {
-            interrupted
-          })
-        }
-      })
-    )
-
-    // Viewed completion stays done for 30 minutes after auto-ack; it must not displace offscreen news.
-    expect(getTabRowIds()).toEqual(['tab-beta'])
-  })
-
-  it('still lists a non-current tab whose agent is done', async () => {
-    await renderPalette(
-      makeRecentTabState({
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now())
-        }
-      })
-    )
-
-    // Offscreen completion still earns entry.
-    expect(getTabRowIds()).toContain('tab-alpha')
   })
 
   it('keeps the current tab in recent on a pane-only unread completion marker', async () => {

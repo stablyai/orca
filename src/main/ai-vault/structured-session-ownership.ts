@@ -9,32 +9,32 @@ import {
 import { acquiredAgentSessionAccount } from '../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import { CLAUDE_STRUCTURED_AGENT } from '../claude/structured/claude-structured-agent-definition'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
-import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { agentSessionOwnerObservationIsLive } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import { defaultAgentChatLabel } from '../../shared/agent-session/agent-session-chat-label'
-import type { AiVaultListResult } from '../../shared/ai-vault-types'
+import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { historyRowFallsBackToChatLabel } from '../../shared/structured-chat-row-name'
-import type { AiVaultSearchResponse } from '../../shared/ai-vault-search-types'
+import type { AiVaultSearchResponse } from '../../shared/ai-vault/search/ai-vault-search-types'
 import {
   redactForTransport,
   type SessionSearchTransport
-} from '../../shared/ai-vault-search-transport'
-import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault-resume-preparation'
-import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../../shared/ai-vault/search/ai-vault-search-transport'
+import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
   terminalResumeBlocked,
   type StructuredProviderSessionOwnership
-} from '../native-chat/agent-session-wire/structured-provider-session-ownership'
+} from '../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   sessionHistoryBinaryNames,
   type StructuredAgentResumeInvocation,
   type StructuredAgentSessionHistory
 } from '../native-chat/structured-agent-cli-conversations'
-import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/structured-agent-runtime-metadata'
-import type { StructuredAgentRuntimeMetadata } from '../runtime/structured-agent-runtime-registration-types'
+import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
+import type { StructuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { commandName, commandProgramIndex, shellCommands } from './shell-command-words'
 
 /** Hide chat-owned rows from clients unable to open that agent’s chat. */

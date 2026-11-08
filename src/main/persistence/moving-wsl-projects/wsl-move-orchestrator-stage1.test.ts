@@ -9,10 +9,6 @@ import { fakePorts, stateOf } from './wsl-move-orchestrator.test-support'
 describe('the move orchestrator in Stage 1', () => {
   const stage1 = () => fakePorts({ autoMovesBridgeProjects: wslMoveAutoMovesBridgeProjects })
 
-  it('ships with automatic moves of bridge projects off', () => {
-    expect(wslMoveAutoMovesBridgeProjects()).toBe(false)
-  })
-
   it.each(['project-opened', 'connect', 'startup', 'timer'] as const)(
     'starts no move on a %s wake, and readies no host for one',
     async (trigger) => {

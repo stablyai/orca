@@ -4,7 +4,7 @@ import type {
   TranscriptMessage,
   TranscriptReadOutcome,
   TranscriptSessionIdentity
-} from '../ai-vault/session-transcript-consumers'
+} from '../ai-vault/transcripts/session-transcript-consumers'
 import { SessionSearchWriteBuffer } from './session-search-write-buffer'
 import { EMPTY_CONTENT_HASH, foldContentHash } from './session-search-content-hash'
 import type {

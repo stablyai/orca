@@ -1,7 +1,6 @@
 import { withProfileStateWriteTransaction } from './profile-state-write-transaction'
 import { withProfileStateReadSnapshot } from './profile-state-read-snapshot'
 import type Database from '../../sqlite/sync-database'
-import { readCurrentAutomationRunsState } from './profile-state-automation-runs-storage'
 import {
   PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE,
   PROFILE_STATE_DOCUMENT_VERSION,
@@ -20,6 +19,7 @@ import {
 } from './profile-state-automation-runs'
 
 import { readProfileStateDocuments } from './profile-state-document-reader'
+import { clearProfileStateDocumentParts } from './profile-state-document-parts-storage'
 
 import { readProfileStateRevision } from './profile-state-revision'
 import { readProfileStateJsonAcceptance } from './legacy-json/profile-state-json-acceptance'
@@ -94,9 +94,10 @@ export function importProfileStateJson(
     if (options.expectedRevision !== undefined && actualRevision !== options.expectedRevision) {
       throw new ProfileStateRevisionConflictError(options.expectedRevision, actualRevision)
     }
-    readCurrentAutomationRunsState(db, actualRevision)
     const revision = actualRevision + 1
     clearProfileStateAutomationRuns(db)
+    // Imported rows are authoritative; the next write of a split domain re-splits it.
+    clearProfileStateDocumentParts(db)
     db.exec('DELETE FROM profile_state_documents')
     const automationRuns = entries.find((entry) => entry.domain === 'automationRuns')
     const normalizedRuns =

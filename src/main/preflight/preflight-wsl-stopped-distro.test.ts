@@ -7,14 +7,14 @@ vi.mock('@orca/process-host', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   runProcess: mocks.runProcess
 }))
-vi.mock('../wsl/wsl-runner', async (importOriginal) => ({
+vi.mock('../wsl/execution/wsl-runner', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   runWslProcess: mocks.runWslProcess
 }))
 
-import { _resetWslCachesForTests } from '../wsl'
-import { _resetWslBackgroundDistroGateForTests } from '../wsl-background-distro-gate'
-import { runAsWslExecUserAct } from '../wsl/wsl-background-exec-gate'
+import { _resetWslCachesForTests } from '../wsl/discovery/distro-catalog'
+import { _resetWslBackgroundDistroGateForTests } from '../wsl/discovery/wsl-background-distro-gate'
+import { runAsWslExecUserAct } from '../wsl/discovery/wsl-background-exec-gate'
 import { _resetPreflightCache, runPreflightCheck } from './agent-detection'
 
 function runningList(...distros: string[]): ProcessResult {

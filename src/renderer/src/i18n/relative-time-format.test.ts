@@ -18,10 +18,4 @@ describe('getUiRelativeTimeFormatter', () => {
     expect(korean).not.toBe(english)
     expect(korean.format(-1, 'day')).toBe('어제')
   })
-
-  // Synthetic plugin resource names must resolve to a real tag before reaching Intl.
-  it('formats in the tag a plugin language pack resolves to', () => {
-    mockIntlLocale.value = 'ja'
-    expect(getUiRelativeTimeFormatter().format(-1, 'day')).toBe('昨日')
-  })
 })

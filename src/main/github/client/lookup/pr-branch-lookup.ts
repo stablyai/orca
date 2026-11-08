@@ -9,17 +9,20 @@ import type { GhExecOptions } from './../github-exec-scope'
 import { isNoPullRequestError } from './../gh-error-predicates'
 import {
   PR_LOOKUP_JSON_FIELDS,
+  normalizePullRequestLookupData,
   PR_BRANCH_LIST_JSON_FIELDS,
   mapRestPullRequest,
-  normalizePullRequestLookupData,
   pullRequestMatchesHeadRepository,
   type PullRequestLookupData,
   type PullRequestLookupPolicy,
   type RestPullRequest
 } from './pull-request-lookup-data'
 import { getPRByNumber } from './pr-number-lookup'
+import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
+import type { PRProviderReadOptions } from './shared-pr-provider-reads'
 import { revalidateGitHubRestJson } from '../../github-rest-revalidation'
 import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { ownerRepoFromPullRequestUrl } from '../github-exec-scope'
 
 // Why: GitHub lists a branch's PRs newest first, so with a page of one a closed PR opened after
 // the live one wins. Fetch a page and prefer the open PR; fall back to the newest one.
@@ -70,23 +73,31 @@ export async function getFallbackPRListForBranch(
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
   const list = JSON.parse(stdout) as PullRequestLookupData[]
-  return preferOpenPullRequest(list) ?? null
+  const pr = preferOpenPullRequest(list)
+  // Branch lists paginate PRs, not their nested check contexts.
+  return pr ? { ...pr, statusCheckRollup: [], checksUnavailable: true } : null
 }
 
 export async function hydrateBranchLookupWithExactPR(
   ownerRepo: OwnerRepo,
   branchData: PullRequestLookupData | null,
   ghOptions: GhExecOptions,
-  executionScope: string
+  executionScope: string,
+  reads: PRProviderReadOptions = {}
 ): Promise<PullRequestLookupData | null> {
   if (!branchData) {
     return null
   }
   try {
-    return (
-      (await getPRByNumber(ownerRepo, branchData.number, ghOptions, executionScope, branchData)) ??
-      branchData
+    const exact = await getPRByNumber(
+      ownerRepo,
+      branchData.number,
+      ghOptions,
+      executionScope,
+      branchData,
+      reads
     )
+    return exact ?? branchData
   } catch {
     return branchData
   }
@@ -99,6 +110,7 @@ export async function lookupPRByBranchName(args: {
   ghOptions: GhExecOptions
   executionScope: string
   policy?: PullRequestLookupPolicy
+  reads?: PRProviderReadOptions
 }): Promise<{
   data: PullRequestLookupData | null
   dataRepo: OwnerRepo | null
@@ -129,7 +141,8 @@ export async function lookupPRByBranchName(args: {
           candidate,
           branchData,
           args.ghOptions,
-          args.executionScope
+          args.executionScope,
+          args.reads
         )
         if (
           data &&
@@ -157,7 +170,8 @@ export async function lookupPRByBranchName(args: {
             candidate,
             branchData,
             args.ghOptions,
-            args.executionScope
+            args.executionScope,
+            args.reads
           )
           if (
             data &&
@@ -186,10 +200,22 @@ export async function lookupPRByBranchName(args: {
       ['pr', 'view', args.branchName, '--json', PR_LOOKUP_JSON_FIELDS],
       args.ghOptions
     )
-    const lookup = {
-      data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
-      dataRepo: null
-    }
+    const parsedData: PullRequestLookupData = JSON.parse(stdout)
+    const repository = ownerRepoFromPullRequestUrl(parsedData.url)
+    const data = repository
+      ? await hydratePullRequestLookupData(
+          repository,
+          { ...parsedData, checksUnavailable: true },
+          args.ghOptions,
+          args.executionScope,
+          args.reads
+        )
+      : {
+          ...normalizePullRequestLookupData(parsedData),
+          statusCheckRollup: [],
+          checksUnavailable: true
+        }
+    const lookup = { data, dataRepo: null }
     return !args.policy || (await args.policy.accepts(lookup.data, null))
       ? lookup
       : { data: null, dataRepo: null }

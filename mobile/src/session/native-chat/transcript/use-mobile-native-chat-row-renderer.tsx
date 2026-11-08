@@ -14,7 +14,6 @@ export function useMobileNativeChatRowRenderer({
   runOwners,
   taskListPredecessors,
   fontScale,
-  onOpenFile,
   structuredActivityUi,
   turns,
   turnJournal,
@@ -28,7 +27,6 @@ export function useMobileNativeChatRowRenderer({
   /** The last plan each task-list tool wrote before each row, by row id. */
   taskListPredecessors: ReadonlyMap<string, NativeChatTaskListPredecessors>
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
   structuredActivityUi: boolean
   turns: ReturnType<typeof useMobileNativeChatTurnDisclosure>
   turnJournal: NativeChatTurnJournal | null
@@ -69,9 +67,9 @@ export function useMobileNativeChatRowRenderer({
         message={item}
         index={index}
         lookups={lookups}
-        {...{ scope, fontScale, onOpenFile, structuredActivityUi, onToggleTurn }}
+        {...{ scope, fontScale, structuredActivityUi, onToggleTurn }}
       />
     ),
-    [scope, rowKeyOf, lookups, fontScale, onOpenFile, structuredActivityUi, onToggleTurn]
+    [scope, rowKeyOf, lookups, fontScale, structuredActivityUi, onToggleTurn]
   )
 }

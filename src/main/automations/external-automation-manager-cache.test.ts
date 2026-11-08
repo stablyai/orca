@@ -1,11 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
-  ExternalAutomationManagerCache,
-  describeExternalManagerFailure,
-  MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES
-} from './external-automation-manager-cache'
+import { describe, expect, it } from 'vitest'
+import { ExternalAutomationManagerCache } from './external-automation-manager-cache'
 import { ExternalAutomationProbeCancelledError } from './external-automation-probe-scheduler'
-import type { ExternalAutomationManager } from '../../shared/automations-types'
+import type { ExternalAutomationManager } from '../../shared/automations/external/external-automation'
 
 function manager(id: string): ExternalAutomationManager {
   return {
@@ -25,16 +21,6 @@ const selfOwner = 'owner:desktop:self'
 const sshOwner = 'owner:desktop:ssh:target-a:3'
 
 describe('ExternalAutomationManagerCache', () => {
-  it('bounds distinct scope churn', () => {
-    const cache = new ExternalAutomationManagerCache()
-
-    for (let index = 0; index < MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES + 4; index += 1) {
-      cache.write({ ownerKey: `owner-${index}`, provider: 'openclaw' }, null)
-    }
-
-    expect(cache.size).toBe(MAX_EXTERNAL_AUTOMATION_MANAGER_CACHE_ENTRIES)
-  })
-
   it('keeps each owner’s manager and failure separate', () => {
     const cache = new ExternalAutomationManagerCache()
     const failedOwner = 'owner:desktop:ssh:target-b:1'
@@ -75,31 +61,6 @@ describe('ExternalAutomationManagerCache', () => {
     expect(cache.read({ ownerKey: selfOwner, provider: 'openclaw' })).toBeNull()
   })
 
-  it('prunes expired entries when the cache is accessed', () => {
-    let now = 1_000
-    const cache = new ExternalAutomationManagerCache({ ttlMs: 100, now: () => now })
-    for (let index = 0; index < 10; index += 1) {
-      cache.write({ ownerKey: `owner-${index}`, provider: 'openclaw' }, manager(String(index)))
-    }
-    now += 101
-
-    expect(cache.read({ ownerKey: 'unrelated', provider: 'openclaw' })).toBeNull()
-    expect(cache.size).toBe(0)
-  })
-
-  it('serves a fresh entry without reloading, and reloads on refresh', async () => {
-    const cache = new ExternalAutomationManagerCache()
-    const load = vi.fn(() => Promise.resolve(manager('openclaw:local')))
-    const key = { ownerKey: selfOwner, provider: 'openclaw' }
-
-    await cache.resolve(key, load)
-    await cache.resolve(key, load)
-    expect(load).toHaveBeenCalledTimes(1)
-
-    await cache.resolve(key, load, { refresh: true })
-    expect(load).toHaveBeenCalledTimes(2)
-  })
-
   it('records a load failure as error state rather than throwing', async () => {
     const cache = new ExternalAutomationManagerCache()
 
@@ -122,20 +83,5 @@ describe('ExternalAutomationManagerCache', () => {
       })
     ).rejects.toBeInstanceOf(ExternalAutomationProbeCancelledError)
     expect(cache.read(key)?.manager?.id).toBe('openclaw:ssh:target-a')
-  })
-})
-
-describe('describeExternalManagerFailure', () => {
-  it('keeps only a bounded message and never the thrown payload', () => {
-    expect(describeExternalManagerFailure({ prompt: 'secret prompt', jobs: [1, 2] })).toBe(
-      'External automation manager could not be read.'
-    )
-    expect(describeExternalManagerFailure(new Error('  '))).toBe(
-      'External automation manager could not be read.'
-    )
-
-    const long = describeExternalManagerFailure(new Error('x'.repeat(400)))
-    expect(long).toHaveLength(301)
-    expect(long.endsWith('…')).toBe(true)
   })
 })

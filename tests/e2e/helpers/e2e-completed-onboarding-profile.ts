@@ -45,7 +45,9 @@ export function getE2ECompletedOnboardingProfile() {
       browserImportHintHidden: true,
       // Suppress the usage-display toast in completed-user fixtures.
       usagePercentageDisplayChangeNoticeDismissed: true,
-      statusBarCompactChangeNoticeDismissed: true
+      statusBarCompactChangeNoticeDismissed: true,
+      // Shown once when a Codex terminal appears; it can land mid-test and close an open menu.
+      codexTerminalServerIsolationNoticeSeen: true
     }
   }
 }

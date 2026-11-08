@@ -1,11 +1,9 @@
+import { useGitHubItemTargetIdentity } from './github-work-item-target-context'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import {
-  getGitHubSourceRuntimeHost,
-  canUseGitHubRepoContext
-} from '@/lib/github-source-runtime-context'
-import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/task-source-runtime-capabilities'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
+import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/work-items/task-source-runtime-capabilities'
 import { githubTaskExecutionIdentity, captureGitHubTaskTarget } from '@/lib/github-task-target'
 import {
   useCallback,
@@ -20,12 +18,9 @@ import { useAppStore } from '@/store'
 
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import {
-  getTaskSourceCacheScope,
-  type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 
-import { getWorkItemDetailsCacheKey, workItemDetailsCache } from './work-item-details-cache'
+import { workItemDetailsCache } from './work-item-details-cache'
 import {
   startWorkItemDetailsFetch,
   loadCanonicalGitHubTaskDetails
@@ -38,14 +33,14 @@ export function useGitHubTaskRefresh({
   repoPath,
   effectiveRepoId,
   sourceContext,
-  issueRepository,
+  projectOrigin,
   onAccepted
 }: {
   workItem: GitHubWorkItem | null
   repoPath: string | null
   effectiveRepoId: string | null
   sourceContext?: TaskSourceContext | null
-  issueRepository: GitHubOwnerRepo | null
+  projectOrigin?: GitHubOwnerRepo
   onAccepted?: (item: GitHubWorkItem) => void
 }) {
   const registeredRepo = useAppStore((s) =>
@@ -58,7 +53,6 @@ export function useGitHubTaskRefresh({
   )
   // A reconnect re-captures the binding (the fence each read and send carries); the target and its data keys stay.
   const executionIdentity = useAppStore(() => githubTaskExecutionIdentity(registeredRepo))
-  const issueSourcePreference = registeredRepo?.issueSourcePreference
   const target = useMemo(
     () =>
       workItem?.type === 'issue' && sourceContext && registeredRepo
@@ -126,24 +120,15 @@ export function useGitHubTaskRefresh({
     },
     [bindingKey]
   )
-  const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  // Refresh writes the same entry ordinary loads use; only its own read is fresh and strict.
-  const detailsCacheKey =
-    workItem && effectiveRepoId && canUseDetailsRepoContext
-      ? getWorkItemDetailsCacheKey({
-          repoPath: repoPath ?? '',
-          repoId: effectiveRepoId,
-          issueSourcePreference,
-          sourceContext,
-          sourceCacheScope:
-            sourceContext?.provider === 'github' ? getTaskSourceCacheScope(sourceContext) : null,
-          type: workItem.type,
-          number: workItem.number,
-          ownerRepo: issueRepository,
-          bindingKey
-        })
-      : null
-  const optimisticKey = target?.key ?? detailsCacheKey ?? ''
+  const identity = useGitHubItemTargetIdentity({
+    workItem,
+    repoPath,
+    effectiveRepoId,
+    sourceContext,
+    projectOrigin,
+    bindingKey
+  })
+  const { detailsCacheKey } = identity
   const refreshTask = useCallback(async () => {
     if (!target || !binding || !detailsCacheKey || !cache.current(binding)) {
       return
@@ -201,7 +186,7 @@ export function useGitHubTaskRefresh({
           () => loadCanonicalGitHubTaskDetails(cache, binding, target, accepts),
           {
             userAction: true,
-            accepts,
+            isCurrent: accepts,
             onAccepted: (result) => {
               onAcceptedRef.current?.({ ...target.item, ...result.item })
               if (mounted.current) {
@@ -239,8 +224,8 @@ export function useGitHubTaskRefresh({
 
   return {
     binding,
-    detailsCacheKey,
-    optimisticKey,
+    ...identity,
+    expectedGhAccount: target ? target.expectedGhAccount : identity.expectedGhAccount,
     refreshTask,
     refreshing,
     acceptedRefresh,

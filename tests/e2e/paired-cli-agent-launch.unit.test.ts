@@ -3,17 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { AgentLaunchResult } from '../../src/shared/agent-launch-intent'
+import type { AgentLaunchResult } from '../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../src/main/runtime/runtime-rpc'
+import { OrcaRuntimeRpcServer } from '../../src/main/runtime/rpc/server/runtime-rpc'
 import {
   runtimeStub,
   setAgentLaunchRecordStore
-} from '../../src/main/runtime/rpc/methods/agent-launch.test-fixture'
-import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch'
-import { STATUS_METHODS } from '../../src/main/runtime/rpc/methods/status'
-import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch.test-fixture'
+import { AGENT_LAUNCH_METHODS } from '../../src/main/runtime/rpc/methods/agent-launch/agent-launch'
+import { STATUS_METHODS } from '../../src/main/runtime/rpc/methods/host-management/status'
+import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const TARGETS = [
   { kind: 'existing', worktree: 'id:wt-7' },

@@ -5,19 +5,22 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { OpenFile } from '@/store/slices/editor'
-import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
-import { openAiVaultSessionLogInOrca } from '../right-sidebar/ai-vault-session-log-open'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import type * as RuntimeFileReadClient from '@/runtime/files/reads/runtime-file-read-client'
+import { openAiVaultSessionLogInOrca } from '../right-sidebar/ai-vault/session-actions/ai-vault-session-log-open'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import type { FileContent } from './editor-panel-content-types'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn(), toastError: vi.fn() }))
-vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileReadClient>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-file-watch-client', () => ({ subscribeRuntimeFileChanges: vi.fn() }))
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
+  subscribeRuntimeFileChanges: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: mocks.toastError }) }))
 
 const fsApi = {

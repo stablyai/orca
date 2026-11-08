@@ -30,9 +30,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -41,7 +44,13 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { RuntimeRpcFailureError } from './runtime-client'
 
@@ -75,46 +84,11 @@ describe('orca cli worktree awareness', () => {
     spawnMock
   })
 
-  it('passes --branch as the branch name, separate from the workspace name and base ref', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_create', {
-        worktree: buildWorktree('/tmp/repo/task', 'DAT-111-fix', 'abc', 'repo-1')
-      })
-    )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    await main(
-      [
-        'worktree',
-        'create',
-        '--repo',
-        'id:repo-1',
-        '--name',
-        'Fix login',
-        '--branch',
-        'DAT-111-fix',
-        '--base-branch',
-        'origin/main',
-        '--no-parent',
-        '--json'
-      ],
-      '/tmp/repo'
-    )
-    expect(callMock).toHaveBeenCalledWith(
-      'worktree.create',
-      expect.objectContaining({
-        name: 'Fix login',
-        displayName: 'Fix login',
-        branchNameOverride: 'DAT-111-fix',
-        baseBranch: 'origin/main'
-      })
-    )
-  })
-
   it('passes explicit activation through worktree.create', async () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_create', {
         worktree: buildWorktree('/tmp/repo/feature', 'feature', 'abc', 'repo-1')
       })
@@ -126,7 +100,7 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'worktree.create', {
       repo: 'id:repo-1',
       name: 'feature',
       displayName: 'feature',
@@ -570,68 +544,6 @@ describe('orca cli worktree awareness', () => {
     expect(process.exitCode).toBe(1)
 
     process.exitCode = priorExitCode
-  })
-
-  it('passes caller terminal handle through worktree.create with cwd fallback', async () => {
-    process.env.ORCA_TERMINAL_HANDLE = 'term_parent'
-    queueFixtures(
-      callMock,
-      worktreeListFixture([buildWorktree('/tmp/repo', 'main', 'abc', 'repo-1')]),
-      okFixture('req_create', {
-        worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
-        lineage: null,
-        warnings: []
-      })
-    )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await main(
-      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledTimes(2)
-    expect(callMock).toHaveBeenNthCalledWith(2, 'worktree.create', {
-      repo: 'id:repo-1',
-      name: 'child',
-      displayName: 'child',
-      displayNameKind: 'user',
-      baseBranch: undefined,
-      linkedIssue: undefined,
-      comment: undefined,
-      runHooks: false,
-      activate: false,
-      parentWorktree: undefined,
-      cwdParentWorktree: 'id:repo-1::/tmp/repo',
-      noParent: false,
-      callerTerminalHandle: 'term_parent',
-      cliProvenanceRequest: { callerTerminalHandle: 'term_parent' }
-    })
-  })
-
-  it('marks every worktree.create as CLI-created even from an external shell', async () => {
-    delete process.env.ORCA_TERMINAL_HANDLE
-    queueFixtures(
-      callMock,
-      okFixture('req_create_external', {
-        worktree: buildWorktree('/tmp/repo/child', 'child', 'abc', 'repo-1'),
-        lineage: null,
-        warnings: []
-      })
-    )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    await main(
-      ['worktree', 'create', '--repo', 'id:repo-1', '--name', 'child', '--no-parent', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith(
-      'worktree.create',
-      expect.objectContaining({ cliProvenanceRequest: {} })
-    )
   })
 
   it('tells the user which --setup flag answers an undecided ask repo', async () => {

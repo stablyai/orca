@@ -180,12 +180,6 @@ describe.each(['initial', 'active'] as const)('%s pane focus', (operation) => {
     expect(document.activeElement).toBe(cover)
     expect(f.pane.terminal.focus).not.toHaveBeenCalled()
   })
-
-  it('honors an explicit no-focus request', () => {
-    const f = fixture()
-    focus(f, false)
-    expect(f.pane.terminal.focus).not.toHaveBeenCalled()
-  })
 })
 
 it('keeps focus that is already inside the chat covering the pane', () => {

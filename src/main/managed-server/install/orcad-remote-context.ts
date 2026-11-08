@@ -10,7 +10,7 @@ import {
   isWslOrcadHostTarget,
   type OrcadHostTarget,
   type OrcadHostTransport
-} from '../../ssh/orcad-host-transport'
+} from './orcad-host-transport'
 import {
   decideOrcadMachineHome,
   orcadMachineDataRoot,
@@ -24,18 +24,18 @@ import {
   readOrcadMachineClaimAnswer
 } from '../host-state/orcad-machine-claim-command'
 import { execOrcadRemote, type OrcadRemoteExecTarget } from './orcad-remote-runtime-control'
-import { readRemoteHomeCommand } from '../../ssh/ssh-remote-commands'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { readRemoteHomeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   normalizeRemoteHome,
   validateRemoteHome,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
-import { detectRemoteHostPlatform } from '../../ssh/ssh-remote-platform-detection'
+} from '../../ssh/remote-host/ssh-remote-platform'
+import { detectRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform-detection'
 import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
-import { rememberSshHostPlatform } from '../../ssh/ssh-host-platform-memo'
+import { rememberSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'
 
 /** Default SSH generic retains compatibility with lifecycle consumers requiring SSH-only fields. */
 export type OrcadRemoteContext<Target extends OrcadHostTarget = SshTarget> = {

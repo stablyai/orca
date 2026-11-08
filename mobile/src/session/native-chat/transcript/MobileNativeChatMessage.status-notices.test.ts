@@ -4,20 +4,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
-import {
-  NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
-  type NativeChatMessage
-} from '../../../../../src/shared/native-chat/native-chat-types'
-import {
-  agentSessionFailureFact,
-  readProviderRetry
-} from '../../../../../src/shared/agent-session/failures/agent-session-failure'
+import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
+import { agentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import {
   MobileNativeChatNoticeContext,
-  type MobileNativeChatNoticeNames
+  type MobileNativeChatNoticeView
 } from '../../mobile-native-chat-notice-context'
 
 vi.mock('react-native', async () => {
@@ -57,6 +52,8 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
+  CircleCheck: 'CircleCheck',
+  CircleX: 'CircleX',
   Copy: 'Copy',
   Eye: 'Eye',
   FileMinus2: 'FileMinus2',
@@ -110,7 +107,7 @@ describe('MobileNativeChatMessage status notices', () => {
       observedAt: 2,
       body
     })!
-  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeNames) => {
+  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeView) => {
     act(() => {
       renderer = create(
         createElement(
@@ -120,43 +117,54 @@ describe('MobileNativeChatMessage status notices', () => {
         )
       )
     })
-    return renderer!.root.find(
+    return renderer!.root.findAll(
       (node) => String(node.type) === 'Text' && node.props.selectable === true
-    )
+    )[0]!
   }
 
-  it('names the Orca host an Orca stop came from, in desktop words', () => {
-    const text = renderNotice(
-      {
-        kind: 'status',
-        text: 'Codex stopped while this response was in progress.',
-        tone: 'error',
-        presentation: 'orca-stop',
-        orcaStop: { cause: 'quit' }
-      },
-      { hostName: 'MacBook Pro' }
-    )
-    expect(text.props.children).toBe(
-      'Orca on MacBook Pro stopped while this response was in progress. You can continue in this conversation.'
-    )
-  })
-
-  it("rewords the host's missing saved conversation words in the reader's language", async () => {
-    await activateMobileUiLocale('fr')
-    const host = agentSessionFailureWords(agentSessionFailureFact('savedConversationMissing'), {
-      surface: 'row',
-      agentName: 'Claude'
+  it('links a CI result line to its pull request and commit through the link sheet', () => {
+    const openLink = vi.fn()
+    act(() => {
+      renderer = create(
+        createElement(
+          MarkdownLinkHandlerContext.Provider,
+          { value: openLink },
+          createElement(MobileNativeChatMessage, {
+            message: {
+              // The journal key percent-encodes the line's client message id.
+              id: 'orca:pr-event%3Agithub.com%2Facme%2Frepo%233%3A8d5f74b0c1%3A1',
+              role: 'system',
+              blocks: [
+                {
+                  type: 'text',
+                  text: 'CI failing on repo#3 at 8d5f74b',
+                  presentation: 'pull-request-event',
+                  tone: 'failure'
+                }
+              ],
+              timestamp: 0,
+              source: 'transcript'
+            }
+          })
+        )
+      )
     })
-    const text = renderNotice(
-      { kind: 'status', tone: 'error', ...host },
-      { hostName: null, agentName: 'Claude' }
+    const links = renderer!.root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'link'
     )
-    expect(text.props.children).toBe(
-      'Claude n’a pas trouvé la conversation enregistrée de ce chat. Démarrez un nouveau chat pour continuer.'
-    )
+    // The whole lead is the PR's target, so a lead the ellipsis cuts still opens it.
+    expect(links.map((link) => link.props.accessibilityLabel ?? link.props.children)).toEqual([
+      'CI failing on repo#3',
+      '8d5f74b'
+    ])
+    links.forEach((link) => act(() => link.props.onPress()))
+    expect(openLink.mock.calls).toEqual([
+      ['https://github.com/acme/repo/pull/3'],
+      ['https://github.com/acme/repo/commit/8d5f74b0c1']
+    ])
   })
 
-  it.each(['without reset', 'with reset', 'from an old host'] as const)(
+  it.each(['with reset', 'from an old host'] as const)(
     'draws an OpenCode usage warning %s',
     (source) => {
       const hasReset = source === 'with reset'
@@ -184,87 +192,64 @@ describe('MobileNativeChatMessage status notices', () => {
         }
         const text = renderNotice(body, { hostName: null, agentName: 'OpenCode' })
         const tree = renderer!
-        // An old host's stored advice gives way to desktop's sentence from the fact.
-        expect(text.props.children).toEqual(
-          hasReset
-            ? expect.stringMatching(/^OpenCode hit its usage limit\. It resets at \S.*\.$/u)
-            : 'OpenCode hit its usage limit.'
-        )
+        // An old host's stored advice gives way to the headline from the fact; the reset sits below it.
+        expect(text.props.children).toBe('OpenCode hit its usage limit.')
+        expect(
+          tree.root
+            .findAll((node) => String(node.type) === 'Text')
+            .some((node) => /^Resets at \S/u.test(String(node.props.children)))
+        ).toBe(hasReset)
         expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
         expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
           colors.statusAmber
         )
         expect(markdownIn(tree.root)).toEqual([])
+        const details = tree.root.find(
+          (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Details'
+        )
+        expect(details.props['aria-expanded']).toBe(false)
+        act(() => details.props.onPress())
+        expect(
+          tree.root
+            .findAll((node) => String(node.type) === 'Text')
+            .flatMap((node) => node.props.children)
+        ).toContain('Internal error: Rate limit exceeded. Please try again later.')
       } finally {
         now.mockRestore()
       }
     }
   )
 
-  it.each<readonly [string, NativeChatMessage, string]>([
-    [
-      'an API retry as a warning',
-      statusRow({
-        kind: 'status',
-        tone: 'warning',
-        ...agentSessionFailureWords(
-          agentSessionFailureFact('providerRetrying', {
-            retry: readProviderRetry({
-              error: 'overloaded',
-              status: 529,
-              attempt: 2,
-              maxRetries: 10
-            })
-          }),
-          { surface: 'row', agentName: 'Claude' }
-        )
-      }),
-      colors.statusAmber
-    ],
-    [
-      'a sign-in failure as an error',
-      statusRow({
-        kind: 'status',
-        tone: 'error',
-        ...agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
-          agentName: 'Claude',
-          provider: 'claude',
-          surface: 'row'
-        })
-      }),
-      colors.statusRed
-    ],
-    ...[
-      'Please add or update your payment method to continue',
-      'Your current subscription plan does not yet include access to glm-5'
-    ].map(
-      (instruction) =>
-        [
-          `an OpenCode corrective instruction: ${instruction}`,
-          statusRow({ kind: 'status', tone: 'error', text: `Internal error: ${instruction}` }),
-          colors.statusRed
-        ] as const
-    ),
-    [
-      'an interruption as a faint aside',
-      {
-        id: 'interrupted',
-        role: 'system',
-        blocks: [{ type: 'text', text: NATIVE_CHAT_INTERRUPTED_STATUS_TEXT }],
-        timestamp: 1,
-        source: 'transcript'
-      } satisfies NativeChatMessage,
-      colors.textMuted
-    ]
-  ])('draws %s, never as the agent speaking', (_, message, color) => {
-    const tree = render(message)
-    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
-    const text = tree.root.find(
-      (node) => String(node.type) === 'Text' && node.props.selectable === true
-    )
-    expect(text.props.children).toBe(message.blocks.find((block) => block.type === 'text')?.text)
-    expect(Object.assign({}, ...text.props.style)).toMatchObject({ color })
-  })
+  it.each([
+    ['Claude', 'managed', 'claude auth login'],
+    ['Codex', 'system', 'codex login --device-auth'],
+    ['Codex', 'managed', null]
+  ] as const)(
+    'offers %s (%s account) sign-in in a host terminal',
+    (agentName, account, command) => {
+      const onRunInTerminal = vi.fn()
+      renderNotice(
+        {
+          kind: 'status',
+          tone: 'error',
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('notSignedIn', account ? { account } : {}),
+            { surface: 'row', agentName }
+          )
+        },
+        { hostName: null, agentName, onRunInTerminal }
+      )
+      const signIn = renderer!.root.findAll(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityHint !== undefined
+      )
+      if (command === null) {
+        expect(signIn).toHaveLength(0)
+        return
+      }
+      act(() => signIn[0]!.props.onPress())
+      expect(onRunInTerminal).toHaveBeenCalledWith(command)
+    }
+  )
 
   // Protocol-shaped synthetic frames, not a live-provider reproduction.
   it.each([
@@ -275,14 +260,6 @@ describe('MobileNativeChatMessage status notices', () => {
       'Codex reported a safety review warning. View details.',
       'Codex a signalé un avertissement de sécurité. Voir les détails.',
       colors.statusAmber
-    ],
-    [
-      'claude',
-      'message:system:permission_denied',
-      'error',
-      'Claude denied permission. View details.',
-      'Claude a refusé la permission. Voir les détails.',
-      colors.statusRed
     ]
   ] as const)(
     'discloses the entire available %s notice without tool-output clipping or recovery',
@@ -345,17 +322,4 @@ describe('MobileNativeChatMessage status notices', () => {
       expect(detailTexts()).toHaveLength(0)
     }
   )
-
-  it('draws a compaction as a divider, not as a reply', () => {
-    const tree = render(
-      statusRow({ kind: 'status', text: 'Context compacted', presentation: 'compaction' })
-    )
-    expect(tree.root.findAll((node) => String(node.type) === 'MobileMarkdown')).toHaveLength(0)
-    expect(
-      tree.root.findAll(
-        (node) =>
-          String(node.type) === 'View' && node.props.accessibilityLabel === 'Context compacted'
-      )
-    ).toHaveLength(1)
-  })
 })

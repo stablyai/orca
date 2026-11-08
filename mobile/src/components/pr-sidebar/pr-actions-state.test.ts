@@ -1,3 +1,4 @@
+import { summarizeProviderChecks } from '../../../../src/shared/source-control/checks/provider-check-summary'
 import { describe, expect, it } from 'vitest'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import { presentPrMerge } from './pr-actions-state'
@@ -19,14 +20,6 @@ describe('presentPrMerge', () => {
     checksStatus: 'success' as const,
     mergeable: 'MERGEABLE' as const
   }
-
-  it('disables Merge with desktop copy when GitHub reports conflicts', () => {
-    expect(presentPrMerge(pr, 'squash')).toMatchObject({
-      enabled: false,
-      label: 'Conflicts',
-      hint: 'GitHub reports merge conflicts'
-    })
-  })
 
   it('lets a complete stack merge through, and names a blocking downstack PR', () => {
     const stack = {
@@ -50,6 +43,28 @@ describe('presentPrMerge', () => {
     expect(presentPrMerge({ ...pr, stack: blocked }, 'squash')).toMatchObject({
       enabled: false,
       hint: '#201 is still a draft.'
+    })
+  })
+  it('keeps the provider-authorized merge action available with cancelled checks', () => {
+    const checksSummary = summarizeProviderChecks([
+      { status: 'completed', conclusion: 'success' },
+      { status: 'completed', conclusion: 'cancelled' }
+    ])
+    expect(
+      presentPrMerge(
+        {
+          ...pr,
+          mergeable: 'MERGEABLE',
+          mergeStateStatus: 'CLEAN',
+          checksStatus: 'failure',
+          checksSummary
+        },
+        'squash'
+      )
+    ).toMatchObject({
+      label: 'Squash and merge',
+      hint: null,
+      enabled: true
     })
   })
 })

@@ -5,7 +5,9 @@ import { claudeChildCloseProven } from '../claude/claude-child-exit-proof-ladder
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
 const taskkill = vi.hoisted(() => vi.fn(async () => false))
-vi.mock('../windows-process-tree-kill', () => ({ terminateWindowsProcessTree: taskkill }))
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
+  terminateWindowsProcessTree: taskkill
+}))
 
 afterEach(() => {
   vi.useRealTimers()

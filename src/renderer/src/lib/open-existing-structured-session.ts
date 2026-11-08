@@ -8,21 +8,22 @@ import {
   type StructuredSessionOpenTab,
   type StructuredSessionOpenFailure
 } from '../../../shared/open-structured-agent-session'
-import type { OrchestrationPartyLocationResult } from '../../../shared/orchestration-caller-status'
+import type { OrchestrationPartyLocationResult } from '../../../shared/orchestration/orchestration-caller-status'
 import {
   findStructuredAgentSessionTab,
   activateStructuredAgentSessionById
 } from './agent-session/structured-agent-session-tab-activation'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
-import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './workspace/ownership/worktree-runtime-owner'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { refreshLocalStructuredSessionWorktreeTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
+import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 const STRUCTURED_SESSION_RESTORE_TIMEOUT_MS = 5_000
 
@@ -173,23 +174,25 @@ async function executeDesktopStructuredSession(
   deps: StructuredSessionOpenAdapterDeps,
   locate?: StructuredSessionOpenDeps['locate']
 ): Promise<StructuredSessionOpenResult> {
-  return openStructuredAgentSession(source, {
-    locate:
-      locate ??
-      (async (address, messageIds) => {
-        try {
-          return await withStructuredSessionRestoreTimeout(
-            callRuntimeRpc<OrchestrationPartyLocationResult>(
-              owner,
-              'orchestration.partyLocation',
-              { address, ...(messageIds.length ? { messageIds } : {}) },
-              { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
-            )
+  const party =
+    (method: 'orchestration.partyLocation' | 'orchestration.partyOpen') =>
+    async (address: string, messageIds: readonly string[]) => {
+      try {
+        return await withStructuredSessionRestoreTimeout(
+          callRuntimeRpc<OrchestrationPartyLocationResult>(
+            owner,
+            method,
+            { address, ...(messageIds.length ? { messageIds } : {}) },
+            { timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS }
           )
-        } catch (error) {
-          return structuredSessionOpenFailure(error)
-        }
-      }),
+        )
+      } catch (error) {
+        return structuredSessionOpenFailure(error)
+      }
+    }
+  return openStructuredAgentSession(source, {
+    locate: locate ?? party('orchestration.partyLocation'),
+    ...(locate ? {} : { open: party('orchestration.partyOpen') }),
     tabs: (target) => deps.tabs(target, owner),
     activate: (tab, target) =>
       deps

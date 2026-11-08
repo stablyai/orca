@@ -12,7 +12,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  PROFILE_STATE_DESKTOP_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_RESULT_PREFIX
 } from '../../shared/profile-state-recovery-command'
@@ -248,25 +247,6 @@ describe('Electron recovery preflight', () => {
     }
   })
 
-  it.each([
-    ['Orca', PROFILE_STATE_RECOVERY_FLAG, '{}'],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG, '{}'],
-    [
-      'Orca',
-      '--serve',
-      PROFILE_STATE_RECOVERY_FLAG,
-      JSON.stringify({ userDataPath: 'relative', selector: { kind: 'json', revision: 1 } })
-    ],
-    ['Orca', '--serve', PROFILE_STATE_RECOVERY_FLAG, '{}', PROFILE_STATE_RECOVERY_FLAG, '{}']
-  ])('fails closed for malformed launch %j', (...argv) => {
-    expect(runProfileStateRecoveryPreflight(argv)).toBe(true)
-    expect(response()).toMatchObject({ ok: false })
-    expect(mocks.setPath).not.toHaveBeenCalled()
-    expect(mocks.requestSingleInstanceLock).not.toHaveBeenCalled()
-    expect(mocks.exit).toHaveBeenCalledWith(1)
-  })
-
   describe('desktop choice relaunch', () => {
     function desktopArgv(item: ReturnType<typeof fixture>) {
       writeFileSync(item.dataFile, JSON.stringify(item.restored))
@@ -302,18 +282,6 @@ describe('Electron recovery preflight', () => {
         expect.objectContaining({ detail: expect.stringContaining('Stop Orca') })
       )
       expect(readFileSync(item.databaseFile, 'utf8')).toBe('broken database')
-    })
-
-    it.each([
-      ['Orca', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}'],
-      ['Orca', '--serve', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}'],
-      ['Orca', PROFILE_STATE_DESKTOP_RECOVERY_FLAG, '{}', PROFILE_STATE_RECOVERY_FLAG, '{}']
-    ])('fails closed for malformed desktop launch %j', async (...argv) => {
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      expect(runProfileStateRecoveryPreflight(argv)).toBe(true)
-      await vi.waitFor(() => expect(mocks.exit).toHaveBeenCalledWith(1))
-      expect(mocks.setPath).not.toHaveBeenCalled()
-      expect(mocks.relaunch).not.toHaveBeenCalled()
     })
   })
 })

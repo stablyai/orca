@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { statSync } from 'node:fs'
-import { resolveShellWrapperRoot } from '../../shell-wrapper-content-address'
+import { resolveShellWrapperRoot } from '../../pty/shell-startup/shell-wrapper-content-address'
 import {
   buildLocalShellReadyWrapperFiles,
   getLocalShellReadyWrapperPaths

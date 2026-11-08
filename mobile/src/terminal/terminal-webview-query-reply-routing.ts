@@ -1,4 +1,4 @@
-import { isTerminalQueryReply } from '../../../src/shared/terminal-query-reply'
+import { isTerminalQueryReply } from '../../../src/shared/terminal/protocol/queries/terminal-query-reply'
 
 export function routeTerminalQueryReply(
   message: Record<string, unknown>,

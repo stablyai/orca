@@ -34,11 +34,17 @@ type IssueSourceActionsInput = Pick<
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
-  toLinearLinkedWorkItem,
+  buildLinearWorkspaceSource as toLinearLinkedWorkItem,
+  buildJiraWorkspaceSource,
+  buildWorkspaceSourceSelection,
+  shouldApplyWorkspaceSourceAutoName
+} from '../../../../shared/new-workspace/workspace-source'
+import {
   getLinkedItemDisplayName,
   getSmartNameSelection as getFolderSmartNameSelection
-} from '@/components/sidebar/folder-workspace-composer-helpers'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import {
   buildLinearIssueLinkedWorkItem,
   getLinearLinkedWorkItemBranchName
@@ -50,13 +56,8 @@ import {
   getLinkedWorkItemWorkspaceName,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
-import {
-  buildJiraWorkspaceSource,
-  buildWorkspaceSourceSelection,
-  shouldApplyWorkspaceSourceAutoName
-} from '../../../../shared/new-workspace/workspace-source'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
   const {

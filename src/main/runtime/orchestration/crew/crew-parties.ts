@@ -1,4 +1,4 @@
-import { canonicalOrcaSessionFromEdges } from '../canonical-orca-session-id'
+import { canonicalOrcaSessionFromEdges } from '../addressing/session-lineage/canonical-orca-session-id'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import {
   formatOrcaSessionAddress,
@@ -6,15 +6,17 @@ import {
   type OrcaSessionId,
   parseOrcaSessionAddress
 } from '../../../../shared/orca-session-address'
-import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
-import { createCanonicalSessionPaneResolver, clearedInto } from '../structured-session-lineage'
-import type { CrewReadDependencies } from './crew-read-model'
-import type { CrewIdentityRead } from './crew-party-snapshot'
+import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
+import {
+  createCanonicalSessionPaneResolver,
+  clearedInto
+} from '../addressing/session-lineage/structured-session-lineage'
+import type { CrewReadDependencies, CrewIdentityRead } from './crew-read-dependencies'
 
 export type Party = AgentMessageSender['party'] & { paneKey: string | null }
 
 export function createCrewPartyRegistry(deps: CrewReadDependencies) {
-  const recordList = structuredClone(deps.records?.listRecords() ?? [])
+  const recordList = deps.records?.listRecords() ?? []
   const recordMap = new Map(recordList.map((record) => [record.sessionId, record]))
   const adjacent = new Map<string, Set<string>>()
   const incoming = new Map<string, number>()
@@ -71,7 +73,7 @@ export function createCrewPartyRegistry(deps: CrewReadDependencies) {
   const records = deps.records
     ? {
         ...deps.records,
-        listRecords: () => recordList,
+        listRecords: () => [...recordMap.values()],
         getRecord: (id: string) => recordMap.get(id) ?? null
       }
     : null
@@ -156,6 +158,14 @@ export function createCrewPartyRegistry(deps: CrewReadDependencies) {
       alias,
       party,
       records,
+      refreshRecordNames: (source: CrewReadDependencies['records'], ids: ReadonlySet<string>) => {
+        for (const id of ids) {
+          const record = source?.getRecord(id)
+          if (record && recordMap.has(id)) {
+            recordMap.set(id, record)
+          }
+        }
+      },
       commandCanonical: (id: OrcaSessionId) => canonicalOrcaSessionFromEdges(id, clearedFrom),
       fork: (identity?: CrewIdentityRead) => build(lookup, identity)
     }

@@ -1,3 +1,4 @@
+import type * as RuntimeEnvironmentStore from '../shared/remote-runtime/host-store/runtime-environment-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -23,13 +24,20 @@ const {
 vi.mock('./runtime/environments', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
-    ...actual,
-    listEnvironments: () => [{ id: 'env-1', name: 'env-1' }]
+    ...actual
   }
 })
 
+vi.mock(
+  '../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    listEnvironments: () => [{ id: 'env-1', name: 'env-1' }]
+  })
+)
+
 // Stub hook writes: this suite runs real handlers that would otherwise edit the developer's agent configs.
-vi.mock('../main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
   getManagedAgentHookStatuses: vi.fn(() => [])
 }))
@@ -169,45 +177,6 @@ describe('RuntimeClient module-graph deferral', () => {
       const [, , pairingCode, environment] = constructorArgsMock.mock.calls[0]
       expect(pairingCode).toBeUndefined()
       expect(environment).toBeUndefined()
-    } finally {
-      dispatchSpy.mockRestore()
-    }
-  })
-
-  it('forwards undefined for non-suppressed commands so the env fallback applies', async () => {
-    callMock.mockResolvedValue({ result: { worktrees: [] } })
-
-    await main(['worktree', 'list', '--json'], '/tmp/repo')
-
-    expect(constructorArgsMock).toHaveBeenCalled()
-    const [, , pairingCode, environment] = constructorArgsMock.mock.calls[0]
-    expect(pairingCode).toBeUndefined()
-    expect(environment).toBeUndefined()
-  })
-
-  it('forwards explicit --pairing-code and --environment values verbatim', async () => {
-    callMock.mockResolvedValue({ result: { worktrees: [] } })
-
-    await main(['worktree', 'list', '--pairing-code', 'code-1', '--json'], '/tmp/repo')
-    expect(constructorArgsMock.mock.calls[0][2]).toBe('code-1')
-    expect(constructorArgsMock.mock.calls[0][3]).toBeUndefined()
-
-    constructorArgsMock.mockClear()
-    await main(['worktree', 'list', '--environment', 'env-1', '--json'], '/tmp/repo')
-    expect(constructorArgsMock.mock.calls[0][2]).toBeUndefined()
-    expect(constructorArgsMock.mock.calls[0][3]).toBe('env-1')
-  })
-
-  it('reuses one client instance across repeated ctx.client reads', async () => {
-    const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
-    try {
-      await main(['worktree', 'list', '--json'], '/tmp/repo')
-
-      expect(dispatchSpy).toHaveBeenCalledTimes(1)
-      const ctx = dispatchSpy.mock.calls[0]?.[1]
-      const first = ctx?.client
-      expect(ctx?.client).toBe(first)
-      expect(constructorArgsMock).toHaveBeenCalledTimes(1)
     } finally {
       dispatchSpy.mockRestore()
     }

@@ -1,5 +1,6 @@
-import { provenSpawnResponse } from '../spawn-outcome'
-import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal-model-query-authority'
+import '../spawn-outcome'
+import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
+import { isNativeWindowsLocalPtySpawn } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import { normalizeValidPaneKey } from '../pane/key-state'
 import type { RuntimePtySpawnState } from './spawn-state'
 import { startupCwdFallbackOutcome } from '../spawn-startup-target'

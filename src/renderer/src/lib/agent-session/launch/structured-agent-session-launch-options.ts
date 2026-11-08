@@ -1,10 +1,10 @@
 import {
   createLegacyPrerequisites,
   type LegacyPrerequisites
-} from '../../structured-agent-session-launch-prerequisites'
+} from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
 import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
-import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
+import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 import type {
   SelectionOperation,
   SelectionOutcome
@@ -21,8 +21,8 @@ import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
 } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
@@ -51,6 +51,9 @@ export type StructuredLaunchSelection = {
 export function initialStructuredLaunchSelection(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredLaunchSelection {
+  if (intent.params.forkFrom) {
+    return {}
+  }
   return {
     seed: intent.seedOptions,
     ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),
@@ -100,10 +103,23 @@ export function holdStructuredAgentSessionLaunchOption(
   if (state.selection.seedPending) {
     return null
   }
-  const model = picker
-    ? (structuredAgentSessionOptionPicks(picker, { [id]: encoded })[0]?.modelId ?? null)
-    : (state.selection.seed?.model ?? null)
-  const operation = selectionController(state).issue(id, encoded, model)
+  // A resumed conversation already has turns: its value picks keep the remembered new-chat model.
+  const pick = picker
+    ? structuredAgentSessionOptionPicks(
+        picker,
+        { [id]: encoded },
+        state.intent.params.resumeFrom !== undefined
+      )[0]
+    : undefined
+  const model = picker ? (pick?.modelId ?? null) : (state.selection.seed?.model ?? null)
+  const operation = selectionController(state).issue(
+    id,
+    encoded,
+    model,
+    undefined,
+    undefined,
+    pick?.adoptModelAsLaunchDefault === false ? false : undefined
+  )
   const receipt = receipts.get(state)
   if (receipt) {
     void applyStructuredLaunchHeldOptions(state, receipt, false)
@@ -201,10 +217,10 @@ export function holdStructuredLaunchCreatePicks(state: StructuredLaunchState): v
 
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
-  options: Readonly<Record<string, string>>
+  outcome: SelectionOutcome
 ): void {
   for (const operation of createHeld.get(state) ?? []) {
-    selectionController(state).settle(operation, { kind: 'accepted', options })
+    selectionController(state).settle(operation, outcome)
   }
   createHeld.delete(state)
 }

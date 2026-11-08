@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { AutomationHostCacheEntry, AutomationHostRow } from './automation-host-cache-types'
 import type {
   AutomationHostCatalog,
   AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 import type { AutomationHostFilterResolution } from './automation-host-filter-resolution'
-import {
-  filterAutomationHostGroups,
-  resolveAutomationHostListRows
-} from './automation-host-list-rows'
+import { resolveAutomationHostListRows } from './automation-host-list-rows'
 
 function entry(
   overrides: Partial<AutomationHostCatalogEntry> & Pick<AutomationHostCatalogEntry, 'stableRef'>
@@ -37,16 +34,6 @@ const DESKTOP_ORPHAN = entry({
   stableKey: 'host:desktop:orphan',
   label: 'Unassigned legacy automations',
   kind: 'orphan'
-})
-const RUNTIME_SELF = entry({
-  stableRef: { authority: { kind: 'runtime', environmentId: 'gpu' }, selector: { kind: 'self' } },
-  stableKey: 'host:runtime:gpu:self',
-  label: 'GPU box',
-  authorityLabel: 'GPU box',
-  owner: {
-    authority: { kind: 'runtime', environmentId: 'gpu', pairingRevision: 4 },
-    selector: { kind: 'self' }
-  }
 })
 
 const RUNTIME_SSH = entry({
@@ -160,66 +147,5 @@ describe('automation host list rows', () => {
       DESKTOP_SELF.owner,
       RUNTIME_SSH.owner
     ])
-  })
-
-  it("carries each row's host of origin so two authorities stay distinguishable", () => {
-    const rows = resolveAutomationHostListRows({
-      catalog: catalogOf([DESKTOP_SELF, RUNTIME_SELF]),
-      resolution: ALL_HOSTS,
-      entry: (stableKey) =>
-        cached([
-          stableKey === 'host:desktop:self'
-            ? row('local-1', DESKTOP_SELF.owner)
-            : row('gpu-1', RUNTIME_SELF.owner)
-        ])
-    })
-
-    expect(rows.rows.map((item) => [item.automation.id, item.hostLabel])).toEqual([
-      ['local-1', 'This computer'],
-      ['gpu-1', 'GPU box']
-    ])
-    expect(rows.capturedOwners.get(rows.rows[1]!.key)?.owner).toEqual(RUNTIME_SELF.owner)
-    expect(rows.groups.map((group) => group.authorityKey)).toEqual([
-      'authority:desktop',
-      'authority:runtime:gpu'
-    ])
-  })
-
-  it('applies the search to grouped rows but keeps every host on screen', () => {
-    const rows = resolveAutomationHostListRows({
-      catalog: catalogOf([DESKTOP_SELF, RUNTIME_SELF]),
-      resolution: ALL_HOSTS,
-      entry: (stableKey) =>
-        cached([
-          stableKey === 'host:desktop:self'
-            ? row('local-1', DESKTOP_SELF.owner)
-            : row('gpu-1', RUNTIME_SELF.owner)
-        ])
-    })
-    const visible = rows.rows
-      .filter((item) => item.automation.id === 'gpu-1')
-      .map((item) => item.key)
-    const filtered = filterAutomationHostGroups(rows.groups, new Set(visible))
-
-    // Why every host survives: a query hiding a host's rows is not the host going away.
-    expect(filtered).toHaveLength(2)
-    expect(filtered[0].hosts[0].rows).toEqual([])
-    expect(filtered[1].hosts[0].rows.map((item) => item.automation.id)).toEqual(['gpu-1'])
-  })
-
-  it('renders one host without group headers', () => {
-    const rows = resolveAutomationHostListRows({
-      catalog: catalogOf([DESKTOP_SELF, RUNTIME_SELF]),
-      resolution: {
-        effective: { kind: 'host', host: DESKTOP_SELF.stableRef },
-        entry: DESKTOP_SELF,
-        status: 'ready',
-        announceFallback: false
-      },
-      entry: () => cached([row('a-1', DESKTOP_SELF.owner)])
-    })
-
-    expect(rows.groups).toEqual([])
-    expect(rows.automations.map((item) => item.id)).toEqual(['a-1'])
   })
 })

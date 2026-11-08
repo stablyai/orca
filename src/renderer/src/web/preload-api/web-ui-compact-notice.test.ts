@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../shared/constants'
 import { UiUpdateFields } from '../../../../shared/rpc-contract/client-ui-params'
-import { createUIStore } from '../../store/slices/ui-slice-test-harness'
+import { createUIStore } from '../../store/slices/ui/ui-slice-test-harness'
 import { createWebUiApi } from './web-ui-api'
 
 const runtime = vi.hoisted(() => ({ call: vi.fn(), id: 'new' }))

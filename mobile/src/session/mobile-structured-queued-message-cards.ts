@@ -1,6 +1,4 @@
 import { stripSentImagePromptMarkers } from '../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
-// The shared projection decides each card's hold; this layer words it for the phone.
-
 import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
@@ -15,7 +13,7 @@ import {
   queuedMessageReturnedNotice,
   type QueuedMessageCard
 } from '../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
-import { agentMessageAttribution } from './mobile-agent-message-attribution'
+// The shared projection decides each card's hold; this layer words it for the phone.
 
 export type MobileQueuedMessageCard = QueuedMessageCard & {
   /** The text, or for a card of images alone, the image's name or their count. */
@@ -23,7 +21,6 @@ export type MobileQueuedMessageCard = QueuedMessageCard & {
   needsAttention: boolean
   // Leave plain waits uncaptioned; the question or queue-pause row already explains the hold.
   caption: string | null
-  attribution: string | null
 }
 
 function queuedMessageCardCaption(
@@ -34,6 +31,9 @@ function queuedMessageCardCaption(
   switch (card.hold) {
     case 'returned': {
       const notice = queuedMessageReturnedNotice(card, agentName, statedFailures)
+      if (notice === null) {
+        return null
+      }
       return notice === 'withdrawn'
         ? 'Stopped before it was sent'
         : mobileAgentSessionWriteNoticeText(notice)
@@ -46,8 +46,6 @@ function queuedMessageCardCaption(
       return card.waitsForAgent
         ? "Couldn't send — tap Send to retry once the agent finishes"
         : "Couldn't send — tap Send to retry"
-    case 'behind-returned':
-      return 'Waiting — a message ahead needs attention'
     // The phone draws no card for a send still on its way.
     case 'sending':
     case 'turn':
@@ -76,7 +74,6 @@ export function mobileQueuedMessageCards(
       )
     }),
     needsAttention: queuedMessageCardNeedsAttention(card),
-    caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? []),
-    attribution: agentMessageAttribution('From', card.from)
+    caption: queuedMessageCardCaption(card, facts.agentName, facts.statedFailures ?? [])
   }))
 }

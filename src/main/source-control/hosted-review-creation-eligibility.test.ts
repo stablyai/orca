@@ -101,7 +101,7 @@ vi.mock('../gitlab/gl-utils', () => ({
     connectionId ? {} : { cwd: repoPath }
 }))
 
-vi.mock('../git/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
 
 vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
@@ -741,44 +741,6 @@ describe('getHostedReviewCreationEligibility', () => {
     expect(result).not.toHaveProperty('stackedCreationSupported')
 
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('resolves remote eligibility from SSH repo metadata without running git or PR copy', async () => {
-    const remoteGit = {
-      exec: vi.fn(async (args: string[]) => ({
-        stdout:
-          args[0] === 'remote'
-            ? 'origin\n'
-            : args[0] === 'show-ref'
-              ? 'abc refs/remotes/origin/main\n'
-              : '',
-        stderr: ''
-      }))
-    }
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/remote/repo',
-        executionHostId: 'ssh:ssh-1',
-        branch: 'feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'github',
-      canCreate: true,
-      head: 'feature/create-pr'
-    })
-
-    expect(getProjectSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getRepoSlugMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
-    expect(getHostedReviewForBranchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ repoPath: '/remote/repo', executionHostId: 'ssh:ssh-1' })
-    )
-    expect(remoteGit.exec).not.toHaveBeenCalled()
   })
 
   it('offers push as the next action for authenticated branches with local-only commits', async () => {

@@ -2,24 +2,26 @@ import { useCallback, useMemo, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { presentPrMerge } from '../components/pr-sidebar/pr-actions-state'
-import { useMobilePrActions } from '../session/use-mobile-pr-actions'
-import { useMobilePrAiTriage, type PrAiTriageKey } from '../session/use-mobile-pr-ai-triage'
+import { useMobilePrActions } from './review/use-mobile-pr-actions'
+import './review/pr-actions-engine'
+import type { PrActionBusyKey } from './review/pr-actions-engine'
+import { prActionSlices, type PrSlice } from './review/mobile-pr-queries'
+import { useMobilePrAiTriage, type PrAiTriageKey } from './review/use-mobile-pr-ai-triage'
 import {
   buildPrFixChecksPrompt,
   buildResolveConflictsPrompt as buildReviewConflictsPrompt
-} from '../session/pr-ai-triage-prompt'
-import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
-import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
-import { buildResolveConflictsPrompt } from '../../../src/shared/source-control-conflict-prompts'
+} from './review/pr-ai-triage-prompt'
+import type { PrSidebarState } from './review/mobile-pr-sidebar-state'
+import { buildResolveConflictsPrompt } from '../../../src/shared/source-control/recovery/source-control-conflict-prompts'
 import { resolveGitHubPRMergeMethods } from '../../../src/shared/github/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
-import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
-import { getBrokenChecks } from '../../../src/shared/pr-checks-fix-prompt'
-import { resolveSourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control-primary-action-decision'
+import { summarizeProviderChecks } from '../../../src/shared/source-control/checks/provider-check-summary'
+import { getBrokenChecks } from '../../../src/shared/source-control/checks/pr-checks-fix-prompt'
+import { resolveSourceControlCommitAreaPrimaryActionDecision } from '../../../src/shared/source-control/decisions/source-control-primary-action-decision'
 import {
   resolveSourceControlNextStep,
   type SourceControlNextStepReview
-} from '../../../src/shared/source-control-next-step-decision'
+} from '../../../src/shared/source-control/decisions/source-control-next-step-decision'
 import { splitWorktreeIdForFilesystem } from '../../../src/shared/worktree/id'
 import { MOBILE_COMPLETE_MERGE_ACTION_ID } from './mobile-source-control-conflict-actions'
 import {
@@ -39,7 +41,8 @@ type Params = {
   prState: PrSidebarState
   /** False on hosts without PR support; the bar then stops at Create PR. */
   reviewsSupported: boolean
-  refetchPr: (options?: PrSidebarLoadOptions) => void
+  /** Re-reads the parts of the PR a write changed; a failed read keeps the shown PR. */
+  rereadPr: (slices: readonly PrSlice[]) => Promise<void>
   headSha: string | null
   /** The Changes body shows git workflow failures; elsewhere the bar has to. */
   showWorkflowErrors: boolean
@@ -62,7 +65,7 @@ export function useMobileSourceControlNextStep({
   review,
   prState,
   reviewsSupported,
-  refetchPr,
+  rereadPr,
   headSha,
   showWorkflowErrors,
   onMerge
@@ -72,6 +75,10 @@ export function useMobileSourceControlNextStep({
   const readyPr = prState.kind === 'ready' ? prState.data : null
   const prNumber = readyPr?.pr.number ?? 0
   const prRepo = readyPr?.pr.prRepo ?? null
+  const rereadAfterAction = useCallback(
+    (action: PrActionBusyKey) => rereadPr(prActionSlices(action)),
+    [rereadPr]
+  )
   const actions = useMobilePrActions({
     client,
     connState,
@@ -79,7 +86,7 @@ export function useMobileSourceControlNextStep({
     prNumber,
     headSha,
     prRepo,
-    refetch: refetchPr
+    refetch: rereadAfterAction
   })
   const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
   const triage = useMobilePrAiTriage({

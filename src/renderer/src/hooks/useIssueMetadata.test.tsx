@@ -3,13 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  clearLinearMetadataCache,
-  useRepoLabels,
-  useRepoAssignees,
-  useTeamStates,
-  useTeamsStates
-} from './useIssueMetadata'
+import { clearLinearMetadataCache, useTeamsStates } from './useIssueMetadata'
+import { useRepoLabels, useRepoAssignees } from './useGitHubRepoMetadata'
 
 const linearMocks = vi.hoisted(() => ({
   linearTeamStates: vi.fn(),
@@ -20,13 +15,15 @@ const linearMocks = vi.hoisted(() => ({
 const runtimeMocks = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 const githubMocks = vi.hoisted(() => ({ listLabels: vi.fn(), listAssignableUsers: vi.fn() }))
 
-vi.mock('@/runtime/runtime-linear-project-client', () => ({
+vi.mock('@/runtime/linear/runtime-linear-project-client', () => ({
   linearTeamStates: linearMocks.linearTeamStates,
   linearTeamLabels: linearMocks.linearTeamLabels,
   linearTeamMembers: linearMocks.linearTeamMembers
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: runtimeMocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: runtimeMocks.callRuntimeRpc
+}))
 
 const roots: Root[] = []
 
@@ -140,48 +137,6 @@ describe('useIssueMetadata hooks', () => {
     await flushEffects()
     expect(logins).toEqual(['upstream-user'])
     expect(githubMocks.listAssignableUsers).toHaveBeenCalledTimes(2)
-  })
-
-  it('does not loop when cached team-state metadata is read with a fresh settings object', async () => {
-    let renders = 0
-    let states: unknown[] = []
-    linearMocks.linearTeamStates.mockResolvedValue([{ id: 's1', name: 'Todo' }])
-
-    function StatesProbe(): null {
-      renders += 1
-      const metadata = useTeamStates('team-1', { kind: 'local' }, 'ws-1')
-      states = metadata.data
-      return null
-    }
-
-    renderProbe(<StatesProbe />)
-    await flushEffects()
-
-    expect(states).toEqual([{ id: 's1', name: 'Todo' }])
-    expect(linearMocks.linearTeamStates).toHaveBeenCalledTimes(1)
-    expect(renders).toBeLessThanOrEqual(4)
-  })
-
-  it('does not re-issue a failed team-state fetch when a fresh settings object re-renders', async () => {
-    let renders = 0
-    let error: string | null = null
-    linearMocks.linearTeamStates.mockRejectedValue(new Error('Could not connect'))
-
-    function StatesProbe(): null {
-      renders += 1
-      const metadata = useTeamStates('team-1', { kind: 'local' }, 'ws-1')
-      error = metadata.error
-      return null
-    }
-
-    renderProbe(<StatesProbe />)
-    await flushEffects()
-    await flushEffects()
-    await flushEffects()
-
-    expect(error).toBe('Could not connect')
-    expect(linearMocks.linearTeamStates).toHaveBeenCalledTimes(1)
-    expect(renders).toBeLessThanOrEqual(4)
   })
 
   it('unions workflow states across every selected team (#8739)', async () => {

@@ -1,8 +1,8 @@
 import { app } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { BrowserError } from '../browser-error'
-import type { BrowserManager } from '../browser-manager'
-import type { BrowserPopupPage } from '../browser-manager-types'
+import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
+import type { BrowserPopupPage } from '../guest-lifecycle/popups/browser-popup-ownership'
 import { createAgentBrowserProcessEnvironment } from './agent-browser-process-environment'
 import { resolveAgentBrowserBinary } from './agent-browser-bridge-process'
 import type {

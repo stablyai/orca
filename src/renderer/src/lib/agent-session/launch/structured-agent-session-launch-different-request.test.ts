@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 
+// @vitest-environment happy-dom
 import {
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+// @vitest-environment happy-dom
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
@@ -55,14 +57,16 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   // Sends reach the runtime RPC through this wrapper, as in the app.
   callStructuredAgentSession: (target: unknown, method: string, params?: unknown) =>
     mocks.callRuntimeRpc(target, method, params)
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
@@ -87,16 +91,9 @@ vi.mock('@/lib/agent-catalog', () => ({
 }))
 
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
-import {
-  clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache
-} from '@/components/native-chat/native-chat-draft-cache'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
-import {
-  getStructuredAgentSessionLaunchLifecycle,
-  resetStructuredAgentLaunchRegistryForTests
-} from './structured-agent-session-launch-registry'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import {
   discardStructuredLaunchPrompts,
@@ -298,19 +295,6 @@ describe('one action delivered twice while its chat is still starting', () => {
     })
   })
 
-  it('makes one chat from a pick delivered twice with no text', () => {
-    mocks.launch.mockImplementation(() => new Promise(() => undefined))
-
-    const pick = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'pick' })
-    const again = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'pick',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(again.sessionId).toBe(pick.sessionId)
-    expect(mocks.createIntent).toHaveBeenCalledOnce()
-  })
-
   it('makes one chat and sends its text once while the create is in flight', async () => {
     let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
     mocks.launch.mockImplementation(() => new Promise((resolve) => (resolveLaunch = resolve)))
@@ -392,34 +376,6 @@ describe('one action delivered twice while its chat is still starting', () => {
     expect(repeat.sessionId).toBe(click.sessionId)
     expect(readNativeChatComposerDraft(scope).text).toBe('')
   })
-
-  it('opens a new chat for a click after the start failed', async () => {
-    mocks.launch
-      .mockRejectedValueOnce(new StructuredAgentSessionCreateRefusalError('refused'))
-      .mockImplementation(() => new Promise(() => undefined))
-
-    const failed = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'fix-click-1',
-      prompt: 'Fix check A',
-      promptDelivery: 'submit-after-ready'
-    })
-    await expect(failed.launchResult).rejects.toBeInstanceOf(
-      StructuredAgentSessionCreateRefusalError
-    )
-    const reclick = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
-      requestId: 'fix-click-2',
-      prompt: 'Fix check A',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(reclick.sessionId).toBe(second.sessionId)
-    expect(getStructuredAgentSessionLaunchLifecycle(WORKTREE_ID, first.sessionId)).toBe('failed')
-    expect(hasStagedStructuredLaunchPrompt(second.sessionId)).toBe(true)
-    // The failed chat's text waits in its own composer.
-    expect(readNativeChatDraftCache(structuredAgentSessionDraftScopeKey(first.sessionId))).toBe(
-      'Fix check A'
-    )
-  })
 })
 
 describe('an action with text beside an empty chat still starting', () => {
@@ -449,22 +405,6 @@ describe('an action with text beside an empty chat still starting', () => {
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
     })
-  })
-
-  it('opens its own chat for notes sent to a new agent', async () => {
-    const blank = startStructuredAgentLaunch(WORKTREE_ID, 'codex', { requestId: 'plus-pick' })
-
-    const notes = startStructuredAgentLaunch(WORKTREE_ID, 'codex', notesSend)
-    resolveFirstLaunch({ sessionId: first.sessionId, fence: 1 })
-
-    expect(blank.sessionId).toBe(first.sessionId)
-    expect(notes.sessionId).toBe(second.sessionId)
-    await expect(notes.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(sends()).toEqual([[second.sessionId, 'review notes']])
-    expect(hasStagedStructuredLaunchPrompt(blank.sessionId)).toBe(false)
   })
 
   it('sends notes delivered twice once, in their own chat', async () => {

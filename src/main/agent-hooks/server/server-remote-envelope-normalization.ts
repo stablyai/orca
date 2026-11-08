@@ -3,7 +3,10 @@ import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   readClaudeSettledRequests,
   type ClaudeSettledRequest
@@ -110,11 +113,15 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
-    // Live hooks settle their own requests; retained settlements only repair replay gaps.
+    // Live hooks settle their own requests, except a batch end, which lists the requests it resolved; retained settlements repair replay gaps.
     claudeSettledRequests:
-      source === 'claude' && envelope.isReplay === true
-        ? readClaudeSettledRequests(envelope.claudeSettledRequests)
-        : undefined,
+      source !== 'claude'
+        ? undefined
+        : envelope.isReplay === true
+          ? readClaudeSettledRequests(envelope.claudeSettledRequests)
+          : envelope.hookEventName === 'PostToolBatch'
+            ? readClaudeSettledRequests(envelope.claudeSettledRequests, Number.POSITIVE_INFINITY)
+            : undefined,
     toolAgentId:
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
         ? envelope.toolAgentId.trim()

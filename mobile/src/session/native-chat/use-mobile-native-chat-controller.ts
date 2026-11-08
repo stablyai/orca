@@ -1,7 +1,7 @@
 import { asyncQuestionSourceScope } from '../../../../src/shared/native-chat/input/native-chat-ask'
-import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { ConnectionState } from '../../transport/types'
+import { useCallback, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import type { StructuredAgentSessionHostSupport } from '../mobile-structured-agent-session-host-support'
 import { useMobileNativeChatDrafts } from './composer/use-mobile-native-chat-drafts'
@@ -15,7 +15,9 @@ import type { MobileNativeChatController } from './mobile-native-chat-controller
 import { useMobileBridgeChatPromptWrites } from '../use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
 import { useMobileNativeChatPromptController } from '../use-mobile-native-chat-prompt-controller'
+import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { useMobileNativeChatCiResultLines } from '../use-mobile-native-chat-ci-result-lines'
 
 export function useMobileNativeChatController(args: {
   client: RpcClient | null
@@ -83,6 +85,9 @@ export function useMobileNativeChatController(args: {
     onActionResolved: onSendResolved
   })
   const { structuredSession: structuredNativeChat, session: nativeChatSession } = nativeChatLane
+  // CI result lines come only from structured sessions' journals, so a terminal chat reads nothing.
+  const readsCiLines = showNativeChat && activeChatStructured
+  const showsCiResultLines = useMobileNativeChatCiResultLines(args.pairedHostClient, readsCiLines)
   const {
     draftKey: chatDraftKey,
     setComposerText: setChatComposerText,
@@ -108,7 +113,9 @@ export function useMobileNativeChatController(args: {
     // Off-chat null would look like host retraction and permanently decline launch prefill; preserve the draft plus visibility.
     chatActive: showNativeChat,
     transcriptLoading: nativeChatSession.transcriptLoading,
-    transcriptSettled: nativeChatSession.status === 'ready'
+    transcriptSettled: nativeChatSession.status === 'ready',
+    connected: connState === 'connected',
+    onSendError
   })
 
   // Require both input lease and live connection; remembered-only agents may now be shells and must never receive chat writes.
@@ -153,12 +160,29 @@ export function useMobileNativeChatController(args: {
     resolution: activeChatResolution,
     session: activeChatStructured ? null : nativeChatSession,
     latestPendingId: chatPending.at(-1)?.id ?? null,
+    pending: chatPending,
     hasPromptCard,
     scopeKey: streamIdentity,
     stop: handleNativeChatStop
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
   const nativeChatAgentWorking = activeTurn.isWorking
+  const workingEpoch = terminalTurn.workingEpoch
+  const placedChatPending = useMemo(
+    () =>
+      chatPending.map((entry) => ({
+        ...entry,
+        pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch)
+      })),
+    [chatPending, workingEpoch]
+  )
+  const captureTerminalSendOrigin = useCallback(
+    (text: string, sentAt?: number) => {
+      const origin = captureSendOrigin(text, sentAt)
+      return origin ? { ...origin, queuedDuringWorkingEpoch: workingEpoch } : null
+    },
+    [captureSendOrigin, workingEpoch]
+  )
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
 
@@ -176,7 +200,7 @@ export function useMobileNativeChatController(args: {
     deviceTokenRef,
     agentRef: activeChatAgentRef,
     commandSendRef: recordSessionOptionCommandRef,
-    captureSendOrigin,
+    captureSendOrigin: captureTerminalSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
     restoreRejectedDraft,
@@ -192,6 +216,7 @@ export function useMobileNativeChatController(args: {
     captureSendOrigin,
     clearDraftForSend,
     restoreRejectedDraft,
+    holdUnconfirmed: structuredNativeChat.holdUnconfirmed,
     onSendError
   })
 
@@ -211,8 +236,11 @@ export function useMobileNativeChatController(args: {
         optionPickerRequest: structuredNativeChat.optionPickerRequest,
         optionSurface: structuredNativeChat.optionSurface,
         conversationCommands: structuredNativeChat.conversationCommands,
+        compactInstructions: structuredNativeChat.compactInstructions,
         snapshot: structuredNativeChat.optionSnapshot,
         pendingId: structuredNativeChat.pendingOptionId,
+        appliesOnAttach: structuredNativeChat.appliesOnAttach,
+        heldPick: structuredNativeChat.heldPick,
         setOption: structuredNativeChat.setStructuredOption,
         invokeAction: structuredNativeChat.invokeStructuredOption
       },
@@ -238,7 +266,7 @@ export function useMobileNativeChatController(args: {
     chatDraftKey,
     setChatComposerText,
     getChatComposerEditGeneration,
-    chatPending,
+    chatPending: placedChatPending,
     chatImagePreviewsByMessageId: activeChatStructured
       ? structuredNativeChat.imagePreviewsByMessageId
       : chatImagePreviewsByMessageId,
@@ -249,6 +277,7 @@ export function useMobileNativeChatController(args: {
       activeChatStructured && agentSessionHostSupport?.itemDetail === true
         ? structuredNativeChat.visualSource
         : null,
+    nativeChatShowsCiResultLines: showsCiResultLines,
     nativeChatTurnActive: activeChatStructured
       ? structuredNativeChat.isWorking
       : terminalTurn.turnActive,
@@ -267,6 +296,12 @@ export function useMobileNativeChatController(args: {
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalTurn.stop,
     nativeChatQueued: structuredNativeChat.queued,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
+    nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
+    nativeChatInterruptedContinue: activeChatStructured
+      ? structuredNativeChat.interruptedContinue
+      : null,
+    nativeChatThreadGoal: activeChatStructured ? structuredNativeChat.threadGoal : null,
+    nativeChatRewind: activeChatStructured ? structuredNativeChat.rewind : undefined,
     ...workspaceCatalog,
     handleNativeChatSend: activeChatStructured
       ? structuredNativeChatSend.send
@@ -277,6 +312,8 @@ export function useMobileNativeChatController(args: {
     readSeededLaunchDraft,
     nativeChatSessionOptions,
     nativeChatSessionCommands: nativeChatLane.sessionCommands,
-    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages
+    nativeChatAcceptsImages: !activeChatStructured || structuredNativeChat.acceptsImages,
+    nativeChatForkSupport: activeChatStructured ? structuredNativeChat.forkSupport : undefined,
+    nativeChatUsageLimit: activeChatStructured ? structuredNativeChat.usageLimit : null
   }
 }

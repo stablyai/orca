@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import {
   CHECK_STATUS,
@@ -6,8 +6,9 @@ import {
   prCount,
   prNullableText,
   prStringList,
-  prText
-} from '../session/github-pr-entity-reply-schema'
+  prText,
+  prRepoIdentity
+} from '../source-control/review/github-pr-entity-reply-schema'
 import {
   assignableUserListSchema,
   detailCheckListSchema,
@@ -24,6 +25,10 @@ export const githubWorkItemDetailSchema = z
     item: salvagedOptional(
       'item',
       z.looseObject({
+        url: z.string(),
+        number: z.number(),
+        type: z.enum(['issue', 'pr']),
+        prRepo: prRepoIdentity('prRepo'),
         labels: prStringList('labels'),
         reviewDecision: prNullableText('reviewDecision'),
         reviewRequests: salvagedOptional('reviewRequests', assignableUserListSchema),

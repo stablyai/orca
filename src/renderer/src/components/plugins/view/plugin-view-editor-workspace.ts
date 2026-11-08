@@ -1,11 +1,14 @@
-import { toWorktreeRelativePath } from '../../../../../shared/terminal-links'
+import { toWorktreeRelativePath } from '../../../../../shared/terminal/links/terminal-links'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../../shared/folder-workspace-types'
-import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-workspace-worktree'
+import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
+import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WorkspaceRow = { id: string; path: string; hostId?: string; isArchived?: boolean }
 

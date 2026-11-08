@@ -3,9 +3,12 @@
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
-} from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
-import { hostStableKey, isSameAutomationOwner } from '../../../../shared/automation-owner-key'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
+import {
+  hostStableKey,
+  isSameAutomationOwner
+} from '../../../../shared/automations/ownership/automation-owner-key'
 import { getRepoSshConnectionId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type {
@@ -42,12 +45,29 @@ export type AutomationCreateDestinationResolution =
 export function automationCreateHostEligible(
   entry: AutomationHostCatalogEntry
 ): entry is AutomationHostCatalogEntry & { owner: AutomationOwnerRef } {
-  return entry.kind !== 'orphan' && entry.owner !== null && entry.querySupport === 'scoped'
+  return (
+    entry.kind !== 'orphan' &&
+    entry.owner !== null &&
+    entry.querySupport === 'scoped' &&
+    entry.servedBy === undefined
+  )
 }
 
-/** Offer ineligible hosts disabled with reasons so they do not appear gone; hide only removed targets and the orphan bucket. */
+/** The entry that holds new automations for a host key: a managed SSH host's is its Orca server's. */
+export function automationCreateHostFor(
+  entries: readonly AutomationHostCatalogEntry[],
+  stableKey: string | null | undefined
+): AutomationHostCatalogEntry | null {
+  const entry = stableKey ? entries.find((candidate) => candidate.stableKey === stableKey) : null
+  const server = entry?.servedBy
+    ? entries.find((candidate) => candidate.stableKey === entry.servedBy)
+    : null
+  return server ?? entry ?? null
+}
+
+/** Offer ineligible hosts disabled with reasons so they do not appear gone; hide removed targets, the orphan bucket, and SSH hosts their Orca server stands for. */
 export function automationCreateHostOffered(entry: AutomationHostCatalogEntry): boolean {
-  return entry.kind !== 'orphan' && entry.catalogState !== 'removed'
+  return entry.kind !== 'orphan' && entry.catalogState !== 'removed' && entry.servedBy === undefined
 }
 
 /** Name only authorities repaired by a server update; disabled tooltips are unreachable, and unverified targets need reconnect instead. */
@@ -88,11 +108,7 @@ export function preselectAutomationCreateHost(
   selectedStableKey: string | null,
   activeWorkspaceStableKey: string | null
 ): AutomationHostCatalogEntry | null {
-  const key = selectedStableKey ?? activeWorkspaceStableKey
-  if (!key) {
-    return null
-  }
-  return entries.find((entry) => entry.stableKey === key) ?? null
+  return automationCreateHostFor(entries, selectedStableKey ?? activeWorkspaceStableKey)
 }
 
 /** Revalidate against the live catalog; report a changed incarnation without silently following it or discarding the form. */

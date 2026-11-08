@@ -3,16 +3,17 @@ import { PanelRight, PanelRightClose, Workflow } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import StatusIndicator from '@/components/sidebar/StatusIndicator'
-import { formatStateCount } from '@/components/sidebar/worktree-card-agent-summary'
+import StatusIndicator from '@/components/sidebar/workspace-card/surface/StatusIndicator'
+import { formatStateCount } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
 import type { WorktreeStatus } from '@/lib/worktree-status'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useOrchestrationCrew } from '../native-chat/use-orchestration-crew'
+import { useOrchestrationCrew } from '../native-chat/worker-lifetime/use-orchestration-crew'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { CrewRowView, IconButton } from './CrewRowView'
@@ -52,14 +53,14 @@ const GROUP_STATUS = {
   failed: 'failed'
 } as const satisfies Record<CrewStatusGroup, WorktreeStatus>
 
-function groupCount(group: CrewStatusGroup, count: number): string {
+function groupCount(group: CrewStatusGroup, count: number, t: Translate = translate): string {
   // The sidebar's "needs attention" count is singular in every form, so this one is the panel's own.
   return group === 'needsYou'
-    ? translate('components.orchestrationCrew.needsYou', '{{count}} need you', {
+    ? t('components.orchestrationCrew.needsYou', '{{count}} need you', {
         count,
         defaultValue_one: '{{count}} needs you'
       })
-    : formatStateCount(group, count)
+    : formatStateCount(group, count, t)
 }
 
 /** Most recent traffic first; the read model keeps one latest message per row, either direction. */
@@ -74,9 +75,14 @@ function sortCrewRows(rows: readonly OrchestrationCrewRow[]): OrchestrationCrewR
     .map(({ row }) => row)
 }
 
+function disclosureKey(section: string, party: string): string {
+  return JSON.stringify([section, party])
+}
+
 function crewTabSummary(
   workers: number,
-  looks: readonly CrewRowLook[]
+  looks: readonly CrewRowLook[],
+  t: Translate = translate
 ): { groups: { group: CrewStatusGroup; looks: CrewRowLook[] }[]; counts: string } {
   const byGroup = new Map<CrewStatusGroup, CrewRowLook[]>()
   for (const look of looks) {
@@ -95,35 +101,65 @@ function crewTabSummary(
   const counts = [
     ...(workers > 0
       ? [
-          translate('components.orchestrationCrew.workers', '{{count}} workers', {
+          t('components.orchestrationCrew.workers', '{{count}} workers', {
             count: workers,
             defaultValue_one: '{{count}} worker'
           })
         ]
       : []),
-    ...groups.map(({ group, looks: members }) => groupCount(group, members.length))
+    ...groups.map(({ group, looks: members }) => groupCount(group, members.length, t))
   ].join(', ')
   return { groups, counts }
 }
 
 export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | null {
-  const snapshot = useOrchestrationCrew(props.target, props.party)
+  const snapshot = useOrchestrationCrew(
+    props.target,
+    props.isVisible === false ? null : props.party
+  )
   return <CrewPanelContent {...props} snapshot={snapshot} />
 }
 
 export function CrewPanelContent({
   target,
+  party,
   canMention,
   mention,
   snapshot,
   isVisible = true,
   surface = 'chat'
 }: PanelProps & { snapshot: OrchestrationCrewSnapshot }): React.JSX.Element | null {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
+  const scope = JSON.stringify([
+    target.kind,
+    target.kind === 'environment' ? target.environmentId : null,
+    party
+  ])
+  const [disclosures, setDisclosures] = useState(() => ({ scope, keys: new Set<string>() }))
+  const toggleDisclosure = useCallback(
+    (key: string) => {
+      setDisclosures((previous) => {
+        const keys = new Set(previous.scope === scope ? previous.keys : [])
+        if (keys.has(key)) {
+          keys.delete(key)
+        } else {
+          keys.add(key)
+        }
+        return { scope, keys }
+      })
+    },
+    [scope]
+  )
   const root = useRef<HTMLDivElement>(null)
   const tab = useRef<HTMLButtonElement>(null)
   const collapse = useRef<HTMLButtonElement>(null)
   const restore = useRef(false)
+  const closePanel = useCallback(() => {
+    restore.current = true
+    setOpen(false)
+    setDisclosures({ scope, keys: new Set() })
+  }, [scope])
   // Hosts pass a new mention function each render; rows get one stable function so their memo holds.
   const latestMention = useRef(mention)
   useLayoutEffect(() => {
@@ -148,6 +184,26 @@ export function CrewPanelContent({
     }),
     [snapshot]
   )
+  const currentDisclosureKeys = useMemo(
+    () =>
+      new Set([
+        ...managedBy.map((row) => disclosureKey('Managed by', row.partyKey)),
+        ...managing.map((row) => disclosureKey('Managing', row.partyKey)),
+        ...talkingWith.map((row) => disclosureKey('Talking with', row.partyKey))
+      ]),
+    [managedBy, managing, talkingWith]
+  )
+  if (disclosures.scope !== scope) {
+    setDisclosures({ scope, keys: new Set() })
+  } else if (
+    snapshot.status === 'ok' &&
+    [...disclosures.keys].some((key) => !currentDisclosureKeys.has(key))
+  ) {
+    setDisclosures({
+      scope,
+      keys: new Set([...disclosures.keys].filter((key) => currentDisclosureKeys.has(key)))
+    })
+  }
   // One row per party: a party in two sections shows once in the tab and keeps one look.
   const parties = useMemo(() => {
     const seen = new Set<string>()
@@ -182,30 +238,29 @@ export function CrewPanelContent({
       }
       event.preventDefault()
       event.stopPropagation()
-      restore.current = true
-      setOpen(false)
+      closePanel()
     }
     pane.addEventListener('keydown', onKeyDown, true)
     return () => pane.removeEventListener('keydown', onKeyDown, true)
-  }, [open, visible])
+  }, [open, visible, closePanel])
   if (!visible) {
     return null
   }
-  const summary = crewTabSummary(managing.length, looks)
+  const summary = crewTabSummary(managing.length, looks, t)
   const changeOpen = (value: boolean) => {
+    if (!value) {
+      closePanel()
+      return
+    }
     restore.current = true
-    setOpen(value)
+    setOpen(true)
   }
   const sections = [
-    ['Managed by', translate('components.orchestrationCrew.managedBy', 'Managed by'), managedBy],
-    ['Managing', translate('components.orchestrationCrew.managing', 'Managing'), managing],
-    [
-      'Talking with',
-      translate('components.orchestrationCrew.talkingWith', 'Talking with'),
-      talkingWith
-    ]
+    ['Managed by', t('components.orchestrationCrew.managedBy', 'Managed by'), managedBy],
+    ['Managing', t('components.orchestrationCrew.managing', 'Managing'), managing],
+    ['Talking with', t('components.orchestrationCrew.talkingWith', 'Talking with'), talkingWith]
   ] as const
-  const title = translate('components.orchestrationCrew.title', 'Orchestration')
+  const title = t('components.orchestrationCrew.title', 'Orchestration')
   return (
     <div
       ref={root}
@@ -213,7 +268,7 @@ export function CrewPanelContent({
       data-pane-prevent-terminal-focus
       data-native-chat-typing-redirect-ignore="true"
       // z-15: above terminal text and the chat rail, below the pane title strip (z-20) so its buttons stay usable.
-      className="pointer-events-none absolute inset-0 z-[15] text-foreground"
+      className="pointer-events-none absolute inset-0 z-[15] text-foreground [--crew-border:color-mix(in_srgb,var(--foreground)_20%,var(--border))] [--crew-surface:color-mix(in_srgb,var(--foreground)_7%,var(--card))]"
       onMouseDown={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation()
@@ -226,7 +281,7 @@ export function CrewPanelContent({
           // (their frame stops there); terminals keep the bottom quarter, where the CLI's prompt sits.
           // The header (and its collapse button) always shows: in a pane too short for both, it wins.
           className={cn(
-            'pointer-events-auto absolute right-2.5 top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] flex min-h-[calc(var(--spacing)*9+2px)] w-78 max-w-[calc(100%-var(--spacing)*5)] flex-col overflow-hidden rounded-[12px] border border-border bg-card text-card-foreground shadow-floating',
+            'pointer-events-auto absolute right-2.5 top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] flex min-h-[calc(var(--spacing)*9+2px)] w-78 max-w-[calc(100%-var(--spacing)*5)] flex-col overflow-hidden rounded-[12px] border border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating',
             surface === 'terminal'
               ? 'max-h-[calc(75%-var(--orca-pane-title-height)-var(--spacing)*2)]'
               : 'max-h-[calc(100%-var(--orca-pane-title-height)-var(--spacing)*4)]'
@@ -237,10 +292,7 @@ export function CrewPanelContent({
             <span className="min-w-0 truncate text-xs font-medium">{title}</span>
             <IconButton
               ref={collapse}
-              label={translate(
-                'components.orchestrationCrew.collapse',
-                'Collapse orchestration panel'
-              )}
+              label={t('components.orchestrationCrew.collapse', 'Collapse orchestration panel')}
               onClick={() => changeOpen(false)}
             >
               <PanelRightClose />
@@ -261,7 +313,7 @@ export function CrewPanelContent({
                         disabled={!canMention || !rows.some(runningWorker)}
                         onClick={() => mention(rows.filter(runningWorker))}
                       >
-                        {translate('components.orchestrationCrew.mentionAll', 'Mention all')}
+                        {t('components.orchestrationCrew.mentionAll', 'Mention all')}
                       </Button>
                     ) : null}
                   </div>
@@ -274,6 +326,9 @@ export function CrewPanelContent({
                       isVisible={isVisible}
                       canMention={canMention}
                       mention={stableMention}
+                      disclosureKey={disclosureKey(key, row.partyKey)}
+                      expanded={disclosures.keys.has(disclosureKey(key, row.partyKey))}
+                      toggleDisclosure={toggleDisclosure}
                     />
                   ))}
                 </section>
@@ -286,14 +341,12 @@ export function CrewPanelContent({
           <TooltipTrigger asChild>
             <Button
               ref={tab}
-              variant="outline"
+              variant="orchestration-tab"
               size="xs"
               className="pointer-events-auto absolute top-[calc(var(--orca-pane-title-height)+var(--spacing)*2)] right-0 max-w-[min(20rem,100%)]"
-              aria-label={translate(
-                'components.orchestrationCrew.show',
-                'Show orchestration: {{counts}}',
-                { counts: summary.counts }
-              )}
+              aria-label={t('components.orchestrationCrew.show', 'Show orchestration: {{counts}}', {
+                counts: summary.counts
+              })}
               aria-expanded={false}
               onClick={() => changeOpen(true)}
             >
@@ -320,7 +373,7 @@ export function CrewPanelContent({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate('components.orchestrationCrew.summary', 'Orchestration: {{counts}}', {
+            {t('components.orchestrationCrew.summary', 'Orchestration: {{counts}}', {
               counts: summary.counts
             })}
           </TooltipContent>

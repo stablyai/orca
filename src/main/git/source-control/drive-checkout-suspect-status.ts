@@ -1,7 +1,7 @@
 import * as path from 'node:path'
 import { lstat } from 'node:fs/promises'
-import type { GitStatusEntry } from '../../../shared/git-status-types'
-import { StatusPorcelainParser } from '../../../shared/git-status-porcelain-parser'
+import type { GitStatusEntry } from '../../../shared/git/status/git-status-types'
+import { StatusPorcelainParser } from '../../../shared/git/status/git-status-porcelain-parser'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import {
@@ -9,7 +9,7 @@ import {
   observeLocalWatcherEvents
 } from '../../ipc/filesystem/watchers/local-watcher-event-observers'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { usesHostGitForWslLinkedWorktree } from '../wsl-linked-worktree-git-routing'
+import { usesHostGitForWslLinkedWorktree } from '../command-runner/wsl-linked-worktree-git-routing'
 import {
   withWslWindowsCheckoutGitConfig,
   wslWindowsCheckoutKey

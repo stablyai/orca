@@ -19,6 +19,7 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - **UI zoom** — per-install UI scale.
 - **Default new-worktree name** — custom prefix or marine creatures.
 - **Editor Word Wrap** — default wrap for file editors (on by default). Toggle from a file tab's **⋯** menu or `Alt+Z`. Separate from **Diff Word Wrap**.
+- **Insert Final Newline** — add a missing line break when saving a non-empty file from the code editor; off by default.
 
 ## Appearance
 
@@ -59,11 +60,16 @@ Settings are grouped into panes. Everything here is searchable with `Cmd-,` then
 - Installed agents — detected CLIs you can enable or disable.
 - Enable or disable detected agents so launch menus only show the CLIs you want to use.
 - Agent Permissions — choose **Yolo** for fewer CLI permission prompts, or **Manual** to keep each agent's own approval flow for agents you haven't customized.
-- Claude and Codex account lists.
 - Startup hooks per agent.
 - **Agent status hooks** — show working / waiting / done states in Orca. Toggle takes effect without restarting the app (including the Windows WSL hook relay). CLI: `orca agent hooks on|off|status`.
 - **Keep computer awake** — **On** (stay awake continuously), **Agent** (stay awake while an agent is working), or **Off**. The same control lives on the desktop status bar as **Caffeinate** (coffee icon). Hidden on paired web clients.
 - **Skill freshness** — the Agents pane and skill cards still show full status. Sidebar navigation only badges skills that need action (**Update available**, **Needs attention** / review); healthy, loading, and optional not-installed rows stay quiet. Use **Update** in the dialog to refresh global skills in the background (no terminal). Progress appears on the status bar; closing the dialog does not cancel the run. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
+
+## AI Provider Accounts
+
+- Optional saved accounts per provider. Without any, Orca uses your existing logins.
+- **Claude** and **Codex** — **Add Account** signs in a separate, isolated account; switching applies to new sessions. See [Hot-swap Codex accounts](/docs/agents/codex-hot-swap).
+- **Antigravity** — **Save current account** remembers the current `agy` login and **Select** switches the machine's shared `agy` login back to it. This is switching, not parallel accounts. Antigravity chats use their own sign-in. See [Antigravity accounts](/docs/agents/antigravity-accounts).
 
 ## Chat
 

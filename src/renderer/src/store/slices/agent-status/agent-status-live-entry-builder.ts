@@ -1,11 +1,14 @@
-import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
-import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status-terminal-owner'
+import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import type { AppState } from '../../types'
 import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-main-agent'
-import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status-live-entry-state-history'
-import { pickHostTurnEnd, type AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status-ipc-payload'
+import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status/lifecycle/agent-status-live-entry-state-history'
+import {
+  pickHostTurnEnd,
+  type AgentStatusEntry
+} from '../../../../../shared/agent-status/contracts/agent-status-types'
+import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
@@ -15,7 +18,7 @@ import {
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
-} from '../../../../../shared/agent-status-identity'
+} from '../../../../../shared/agent-status/identity/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../../shared/command-code-turn-boundary'
 import type {
   AgentStatusMetadata,
@@ -32,7 +35,7 @@ import {
   canReuseStatusProviderSession,
   recordLaunchConfigForStatus,
   statusRetainsResumableIdentity
-} from '../../../../../shared/agent-resume-record-from-status'
+} from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry

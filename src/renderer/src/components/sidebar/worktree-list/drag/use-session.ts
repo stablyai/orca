@@ -4,27 +4,28 @@ import type { WorkspaceStatus } from '../../../../../../shared/worktree/types'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import { WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP } from '../viewport/virtual-rows'
-import { getWorkspaceStatusGroupKey } from '../../workspace-status'
-import { expandDraggedWorktreeIdsForVisibleLineage } from '../../worktree-manual-order'
-import { getWorktreeDragUnitGroups } from '../../worktree-drag-units'
+import '../../workspace-status/presentation/workspace-status'
+import { getWorkspaceStatusGroupKey } from '../../../../../../shared/workspace-statuses'
+import { expandDraggedWorktreeIdsForVisibleLineage } from './worktree-manual-order'
+import { getWorktreeDragUnitGroups } from './worktree-drag-units'
 import {
   getWorktreeSidebarDragRectsForGroup,
   refreshWorktreeSidebarDragSession,
   type WorktreeSidebarDragRect,
   type WorktreeSidebarDragSession
-} from '../../worktree-sidebar-drag-autoscroll'
+} from './worktree-sidebar-drag-autoscroll'
 import {
   shouldReevaluateWorktreeSidebarDropAnchor,
   type WorktreeSidebarDragGrab,
   type WorktreeSidebarDropAnchor
-} from '../../worktree-sidebar-drag-geometry'
+} from './worktree-sidebar-drag-geometry'
 import {
   computeWorktreeSidebarDropPreview,
   type WorktreeSidebarDropPreview
-} from '../../worktree-sidebar-drop-preview'
+} from './worktree-sidebar-drop-preview'
 import { getWorktreeDragGroups, getWorktreeDragIndexes } from './groups'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
-import { getNaturalWorktreeKeys } from '../../natural-worktree-keys'
+import { getNaturalWorktreeKeys } from '../listing/natural-worktree-keys'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity,

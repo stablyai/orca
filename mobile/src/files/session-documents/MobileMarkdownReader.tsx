@@ -1,0 +1,188 @@
+import { useRef, useState } from 'react'
+import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ChevronDown, Keyboard as KeyboardIcon, RefreshCw } from 'lucide-react-native'
+import {
+  MobileRichMarkdownEditor,
+  type MobileRichMarkdownEditorHandle
+} from '../../components/MobileRichMarkdownEditor'
+import { colors, spacing, pressedStyle } from '../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import {
+  resolveMarkdownFloatingActionsBottom,
+  shouldShowMarkdownFloatingActions
+} from './markdown-floating-actions-layout'
+import type { MarkdownDocState } from './session-document-state'
+import { styles } from '../../session/mobile-session-styles'
+import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+
+type Props = {
+  documentId: string
+  doc: MarkdownDocState | undefined
+  onRefresh: () => void
+  onChange: (content: string) => void
+  onSave: () => void
+  onCopy: () => void
+  onDiscard: () => void
+  keyboardLift: number
+}
+
+export function MobileMarkdownReader({
+  documentId,
+  doc,
+  onRefresh,
+  onChange,
+  onSave,
+  onCopy,
+  onDiscard,
+  keyboardLift
+}: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const editorRef = useRef<MobileRichMarkdownEditorHandle>(null)
+  // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
+  const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
+  const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
+  const keyboardOpen = effectiveKeyboardLift > 0
+
+  if (!doc || doc.status === 'loading') {
+    return (
+      <MobileStateView loading title={t('session.markdownReader.loading', 'Loading document…')} />
+    )
+  }
+  if (doc.status === 'error') {
+    return <MobileLoadErrorState error={doc.message} onRetry={onRefresh} />
+  }
+
+  const statusText = doc.saveError
+    ? doc.saveError
+    : doc.readOnlyReason
+      ? t('session.markdownReader.readOnly', 'Read only')
+      : doc.stale
+        ? t('session.markdownReader.changedOnDesktop', 'Changed on desktop')
+        : null
+  const showRefresh = Boolean((doc.stale && !doc.isDirty) || !doc.editable)
+  const showCopy = Boolean(doc.saveError || !doc.editable)
+  const showSave = Boolean(doc.isDirty || doc.saving)
+  const showFloatingActions = shouldShowMarkdownFloatingActions({
+    keyboardLift: effectiveKeyboardLift,
+    hasStatus: statusText != null,
+    showRefresh,
+    showCopy,
+    showSave
+  })
+
+  return (
+    <View style={styles.markdownEditor}>
+      <MobileRichMarkdownEditor
+        ref={editorRef}
+        key={documentId}
+        content={doc.localContent}
+        editable={doc.editable && !doc.saving}
+        onChange={onChange}
+        onKeyboardInsetChange={setWebviewKeyboardInset}
+      />
+      {showFloatingActions ? (
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.markdownFloatingBar,
+            // Why: editor focus lives in a WebView, so lift native Save/Discard controls instead of resizing it.
+            {
+              bottom: resolveMarkdownFloatingActionsBottom({
+                keyboardLift: effectiveKeyboardLift,
+                restingBottom: spacing.lg,
+                liftedClearance: spacing.md
+              })
+            }
+          ]}
+        >
+          {statusText ? (
+            <Text
+              style={[styles.markdownFloatingStatus, doc.saveError ? styles.markdownError : null]}
+              numberOfLines={2}
+            >
+              {statusText}
+            </Text>
+          ) : null}
+          <View style={styles.markdownFloatingActions}>
+            {keyboardOpen ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.markdownFloatingButton,
+                  styles.markdownKeyboardDismissButton,
+                  pressed && pressedStyle
+                ]}
+                onPress={() => editorRef.current?.dismissKeyboard()}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={t('session.markdownReader.dismissKeyboard', 'Dismiss keyboard')}
+                accessibilityHint={t(
+                  'session.markdownReader.dismissKeyboardHint',
+                  'Hides the software keyboard and keeps the markdown editor open.'
+                )}
+              >
+                <View style={styles.keyboardDismissGlyph}>
+                  <KeyboardIcon size={15} color={colors.textSecondary} strokeWidth={2} />
+                  <ChevronDown
+                    size={10}
+                    color={colors.textSecondary}
+                    strokeWidth={2.5}
+                    style={styles.keyboardDismissChevron}
+                  />
+                </View>
+              </Pressable>
+            ) : null}
+            {showCopy ? (
+              <Pressable
+                style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
+                onPress={onCopy}
+              >
+                <Text style={styles.markdownFloatingButtonText}>{t('common.copy', 'Copy')}</Text>
+              </Pressable>
+            ) : null}
+            {showRefresh ? (
+              <Pressable
+                style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
+                onPress={onRefresh}
+              >
+                <RefreshCw size={13} color={colors.textPrimary} />
+                <Text style={styles.markdownFloatingButtonText}>
+                  {t('common.refresh', 'Refresh')}
+                </Text>
+              </Pressable>
+            ) : null}
+            {doc.isDirty ? (
+              <Pressable
+                style={({ pressed }) => [styles.markdownFloatingButton, pressed && pressedStyle]}
+                onPress={onDiscard}
+              >
+                <Text style={styles.markdownFloatingButtonText}>
+                  {t('session.markdownReader.discard', 'Discard')}
+                </Text>
+              </Pressable>
+            ) : null}
+            {showSave ? (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.markdownFloatingButton,
+                  styles.markdownSaveButton,
+                  (!doc.editable || !doc.isDirty || doc.saving) && styles.markdownButtonDisabled,
+                  pressed && pressedStyle
+                ]}
+                disabled={!doc.editable || !doc.isDirty || doc.saving}
+                onPress={onSave}
+              >
+                {doc.saving ? (
+                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                ) : (
+                  <Text style={styles.markdownFloatingButtonText}>{t('common.save', 'Save')}</Text>
+                )}
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  )
+}

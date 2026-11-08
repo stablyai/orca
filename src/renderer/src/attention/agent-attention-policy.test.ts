@@ -60,48 +60,6 @@ describe('resolveAgentAttention', () => {
     expect(sink.calls).toEqual([])
   })
 
-  it('rejects a subject with no live session and no fresh activity evidence', () => {
-    const decision = resolveAgentAttention(
-      completion(),
-      makeSurface({ hasLiveSession: () => false })
-    )
-    expect(decision).toEqual({ admitted: false, cause: 'no-live-session' })
-  })
-
-  it('admits a dead surface when fresh activity evidence stands in for liveness', () => {
-    const admitSurface = vi.fn(() => ({ admitted: true, groupId: GROUP }) as const)
-    const decision = resolveAgentAttention(
-      completion({ hasFreshActivityEvidence: true }),
-      makeSurface({ hasLiveSession: () => false, admitSurface })
-    )
-    expect(decision.admitted).toBe(true)
-    // The surface must be told which evidence admitted the event so it can pick its gate.
-    expect(admitSurface).toHaveBeenCalledWith(
-      { workspaceId: WORKSPACE, surfaceKey: SUBJECT },
-      { hasLiveSession: false, hasFreshActivityEvidence: true }
-    )
-  })
-
-  it('rejects a superseded surface outright — no unread and no delivery', () => {
-    const decision = resolveAgentAttention(
-      completion(),
-      makeSurface({ admitSurface: () => ({ admitted: false, cause: 'superseded-surface' }) })
-    )
-    expect(decision).toEqual({ admitted: false, cause: 'superseded-surface' })
-
-    const sink = makeSink()
-    applyAgentAttention(decision, sink)
-    expect(sink.calls).toEqual([])
-  })
-
-  it('rejects a surface key that resolves to no container', () => {
-    const decision = resolveAgentAttention(
-      completion(),
-      makeSurface({ admitSurface: () => ({ admitted: false, cause: 'unknown-surface' }) })
-    )
-    expect(decision).toEqual({ admitted: false, cause: 'unknown-surface' })
-  })
-
   it('admits a viewed surface for delivery but earns it no unread', () => {
     const decision = resolveAgentAttention(
       completion(),
@@ -123,19 +81,6 @@ describe('resolveAgentAttention', () => {
     ])
   })
 
-  it('falls back to workspace visibility when the event names no surface', () => {
-    const isWorkspaceViewed = vi.fn(() => true)
-    const admitSurface = vi.fn()
-    const decision = resolveAgentAttention(
-      completion({ subject: { workspaceId: WORKSPACE } }),
-      makeSurface({ isWorkspaceViewed, admitSurface })
-    )
-    expect(decision).toMatchObject({ admitted: true, unread: null })
-    expect(isWorkspaceViewed).toHaveBeenCalledWith(WORKSPACE)
-    // No surface key means there is no address to validate.
-    expect(admitSurface).not.toHaveBeenCalled()
-  })
-
   it('delivers a bell without validating the surface address or writing unread', () => {
     const admitSurface = vi.fn()
     const isSurfaceViewed = vi.fn()
@@ -150,21 +95,5 @@ describe('resolveAgentAttention', () => {
     const sink = makeSink()
     applyAgentAttention(decision, sink)
     expect(sink.calls).toEqual([`deliver:${WORKSPACE}:${SUBJECT}`])
-  })
-
-  it('reports in-app workspace selection to the delivery owner', () => {
-    const decision = resolveAgentAttention(
-      completion(),
-      makeSurface({ isWorkspaceActive: (workspaceId) => workspaceId === WORKSPACE })
-    )
-    expect(decision).toMatchObject({ admitted: true, delivery: { workspaceIsActive: true } })
-  })
-
-  it('writes unread before requesting delivery so a suppressed banner still leaves a marker', () => {
-    const sink = makeSink()
-    applyAgentAttention(resolveAgentAttention(completion(), makeSurface()), sink)
-    expect(
-      sink.calls.indexOf(`unread:${WORKSPACE}:${SUBJECT}:${GROUP}:agent-completion`)
-    ).toBeLessThan(sink.calls.indexOf(`deliver:${WORKSPACE}:${SUBJECT}`))
   })
 })

@@ -2,6 +2,15 @@ export const TERMINAL_UNAVAILABLE_ERROR_CODE = 'terminal_unavailable' as const
 
 export const TERMINAL_PTY_DEGRADATION_CAPABILITY = 'terminal.pty.v1' as const
 
+export const TERMINAL_PERSISTENCE_UNAVAILABLE_CODE = 'terminal_persistence_unavailable' as const
+
+export const TERMINAL_PERSISTENCE_DEGRADATION_CAPABILITY = 'terminal.persistence.v1' as const
+
+export const TERMINAL_PERSISTENCE_UNAVAILABLE_MESSAGE =
+  'New terminals on this host run inside the server process and will not survive a server ' +
+  'restart: the terminal daemon is not running or cannot take new terminals. Terminals already ' +
+  "in the daemon keep working. The server's log has the cause."
+
 export type RuntimeBrowserUnavailableReason =
   | 'unconfigured'
   | 'driver_missing'
@@ -29,8 +38,14 @@ export type RuntimeTerminalUnavailableReason =
 
 export type RuntimeDegradation = {
   /** Open vocabulary: new codes/reasons need no protocol bump; clients render message instead of exhaustive switching. */
-  code: 'browser_unavailable' | typeof TERMINAL_UNAVAILABLE_ERROR_CODE
-  capability: 'browser.headless.v1' | typeof TERMINAL_PTY_DEGRADATION_CAPABILITY
+  code:
+    | 'browser_unavailable'
+    | typeof TERMINAL_UNAVAILABLE_ERROR_CODE
+    | typeof TERMINAL_PERSISTENCE_UNAVAILABLE_CODE
+  capability:
+    | 'browser.headless.v1'
+    | typeof TERMINAL_PTY_DEGRADATION_CAPABILITY
+    | typeof TERMINAL_PERSISTENCE_DEGRADATION_CAPABILITY
   message: string
   reason?: RuntimeBrowserUnavailableReason | RuntimeTerminalUnavailableReason
   /** Underlying error text when the host has one. Diagnostic only; never load-bearing. */

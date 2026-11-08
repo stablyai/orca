@@ -1,6 +1,6 @@
 // Publish changes as keyed records; splitting/joining preserves every field so additive wire fields pass through unchanged (E1).
 
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
 import { stableJson } from './workspace-layout-load-report'
 import type {
   PublishedBrowserTab,
@@ -303,13 +303,21 @@ export function applyWorkspaceLayoutRecordChange(
   if (!before) {
     throw new Error(`layout records: a change for unknown workspace ${change.key}`)
   }
-  const records = splitPublishedLayout(before)
-  return joinPublishedLayout({
+  return joinPublishedLayout(
+    applyPublishedLayoutRecordChanges(splitPublishedLayout(before), change)
+  )
+}
+
+export function applyPublishedLayoutRecordChanges(
+  records: PublishedLayoutRecords,
+  change: WorkspaceLayoutRecordChanges
+): PublishedLayoutRecords {
+  return {
     workspace: change.workspace ?? records.workspace,
     tabs: applyKind(records.tabs, change.tabs, RECORD_KEYS.tabs, true),
     paneTrees: applyKind(records.paneTrees, change.paneTrees, RECORD_KEYS.paneTrees, false),
     bindings: applyKind(records.bindings, change.bindings, RECORD_KEYS.bindings, false),
     editorFiles: applyKind(records.editorFiles, change.editorFiles, RECORD_KEYS.editorFiles, true),
     browserTabs: applyKind(records.browserTabs, change.browserTabs, RECORD_KEYS.browserTabs, true)
-  })
+  }
 }

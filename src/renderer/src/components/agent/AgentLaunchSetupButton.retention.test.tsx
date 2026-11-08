@@ -1,29 +1,25 @@
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, type ReactElement, type ReactNode } from 'react'
 import { fireEvent, getByRole } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { createTestStore } from '@/store/slices/store-test-helpers'
-import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { retireAgentPickerDrafts } from './agent-launch-picker-drafts'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
-import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft,
-  updateNativeChatComposerDraft,
-  writeLaunchSetupOptions
-} from '../native-chat/native-chat-composer-draft-store'
-import * as sources from '../native-chat/native-chat-launch-draft-source'
-import { transitionLaunchDrafts } from '../native-chat/native-chat-launch-draft-transition'
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import { changePrompt } from '../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
+import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-composer-draft-memory'
+import * as sources from '../native-chat/drafts/native-chat-launch-draft-source'
+import { transitionLaunchDrafts } from '../native-chat/drafts/native-chat-launch-draft-transition'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
@@ -44,31 +40,7 @@ function row(workspace: number, agent: (typeof AGENTS)[number]): AgentPickerEntr
     worktreeId: `folder:f${workspace}`
   }
 }
-function folder(id: string, executionHostId: ExecutionHostId) {
-  return {
-    id,
-    projectGroupId: 'group',
-    folderPath: `/${id}`,
-    name: id,
-    connectionId: null,
-    executionHostId,
-    linkedTask: null,
-    comment: '',
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1,
-    createdAt: 1,
-    updatedAt: 1
-  }
-}
 const sourceCount = () => [...sources.launchDraftSources()].length
-const listFolders = (folders: ReturnType<typeof folder>[]) =>
-  Object.assign(window, {
-    api: { folderWorkspaces: { list: vi.fn().mockResolvedValue(folders) } }
-  })
-
 let root: Root
 let host: HTMLDivElement
 beforeEach(() => {
@@ -87,111 +59,57 @@ afterEach(() => {
   clearNativeChatComposerDraftsForTests()
 })
 
-describe('setup records exist only for authored setups', () => {
-  it.each([100, 1000])(
-    'keeps %i rendered unopened rows record-free and visits only authored setups',
-    async (count) => {
-      const workspaces = count / AGENTS.length
-      const entries = Array.from({ length: workspaces }, (_, w) =>
-        AGENTS.map((agent) => row(w, agent))
-      )
-      const show = () =>
-        act(() =>
-          root.render(
-            <TooltipProvider>
-              <DropdownMenu defaultOpen modal={false}>
-                <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  {entries.map((menu, w) => (
-                    <AgentLaunchPickerMenu key={w} entries={menu} runLaunch={vi.fn()} hideSearch />
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TooltipProvider>
-          )
-        )
-      show()
-      show()
-      expect(document.querySelectorAll('button[aria-label^="Configure"]')).toHaveLength(count)
-      expect(sourceCount()).toBe(0)
-      for (const entry of entries.flat()) {
-        expect(sources.launchDraftSource(agentLaunchPromptScopeKey(entry))).toBeUndefined()
-      }
+const anchor = (trigger: ReactElement) => <div>{trigger}</div>
 
-      // Authored control: the same k rows at N and 10N, half typed and half option changes.
-      const authored = entries.slice(0, 5).map((menu) => menu[0])
-      authored.forEach((entry, i) => {
-        const scope = agentLaunchPromptScopeKey(entry)
-        if (i % 2 === 0) {
-          updateNativeChatComposerDraft(scope, { text: `task ${i}` }, 'immediate')
-        } else {
-          writeLaunchSetupOptions(scope, {
-            agent: entry.agent,
-            surface: 'chat',
-            choices: { model: `model-${i}` }
-          })
-        }
-      })
-      show()
-      expect(sourceCount()).toBe(authored.length)
-
-      // Real folder catalog applies, unchanged and repeated, visit authored setups only.
-      const visits: number[] = []
-      const all = sources.launchDraftSources
-      vi.spyOn(sources, 'launchDraftSources').mockImplementation(() => {
-        const listed = [...all()]
-        visits.push(listed.length)
-        return listed
-      })
-      const local = Array.from({ length: workspaces }, (_, w) =>
-        HOSTS[w % HOSTS.length] === 'local' ? [folder(`f${w}`, 'local')] : []
-      ).flat()
-      const store = createTestStore()
-      store.setState({ folderWorkspaces: local })
-      listFolders(local)
-      await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
-      await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
-      transitionLaunchDrafts(() => undefined)
-      const visitsPerApply = [...visits]
-      expect(visitsPerApply).toEqual([authored.length, authored.length, authored.length])
-
-      // A catalog pin after authoring carries the typed prompt to the row's new key.
-      const pinned = [{ ...local[0], executionHostId: 'ssh:pinned' as const }, ...local.slice(1)]
-      listFolders(pinned)
-      await store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
-      const moved = {
-        ...authored[0],
-        rows: [{ ...authored[0].rows[0], executionHostId: 'ssh:pinned' as const }]
-      }
-      expect(readNativeChatComposerDraft(agentLaunchPromptScopeKey(moved)).text).toBe('task 0')
-      const records = sourceCount()
-      expect(records).toBe(authored.length)
-      process.stdout.write(
-        `${JSON.stringify({ metric: 'unopened-setup-rows', count, authored: authored.length, records, visitsPerApply })}\n`
-      )
-    },
-    60_000
+function InMenu({ children }: { children: ReactNode }) {
+  return (
+    <TooltipProvider>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+        <DropdownMenuContent>{children}</DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
   )
+}
 
+describe('setup records exist only for authored setups', () => {
   it('keeps typed prompt and options through close, reopen and a rename', () => {
-    const entry = {
+    const entry: AgentPickerEntry = {
       ...row(0, 'codex'),
       worktreeId: 'repo::/old',
-      arguments: '--add-dir docs'
+      arguments: '--add-dir docs',
+      catalog: {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [
+          {
+            id: 'gpt',
+            label: 'gpt',
+            isDefault: true,
+            efforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'high', label: 'High' }
+            ]
+          }
+        ]
+      }
     }
     const show = (value: AgentPickerEntry) =>
       act(() =>
         root.render(
-          <TooltipProvider>
-            <AgentLaunchSetupButton entry={value} onUse={vi.fn()} />
-          </TooltipProvider>
+          <InMenu>
+            <AgentLaunchSetupButton entry={value} onUse={vi.fn()} renderAnchor={anchor} />
+          </InMenu>
         )
       )
     const configure = () =>
       document.querySelector<HTMLButtonElement>('button[aria-label="Configure codex"]')!
     const prompt = () =>
       document.querySelector<HTMLElement>('[contenteditable][aria-multiline="true"]')!
-    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+    const effort = (label: string) =>
+      getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
+    const close = () =>
+      fireEvent.keyDown(document.querySelector('[cmdk-input]')!, { key: 'Escape' })
     show(entry)
     fireEvent.click(configure())
     close()
@@ -199,15 +117,17 @@ describe('setup records exist only for authored setups', () => {
 
     // The open panel's first write is an option change; it shows at once and retains the setup.
     fireEvent.click(configure())
-    fireEvent.change(document.querySelector('textarea')!, { target: { value: '--add-dir src' } })
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    // Arguments are agent settings, so the launch panel offers no editor for them.
+    expect(document.querySelector('textarea[aria-label="Arguments"]')).toBeNull()
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
+    expect(effort('Low')).toBe('on')
     expect(sourceCount()).toBe(1)
     changePrompt(prompt(), 'fix the flaky test')
     close()
-    expect(document.querySelector('textarea')).toBeNull()
+    expect(document.querySelector('[cmdk-input]')).toBeNull()
     fireEvent.click(configure())
     expect(prompt().textContent).toBe('fix the flaky test')
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    expect(effort('Low')).toBe('on')
     close()
 
     act(() =>
@@ -220,7 +140,7 @@ describe('setup records exist only for authored setups', () => {
     show({ ...entry, worktreeId: 'repo::/new' })
     fireEvent.click(configure())
     expect(prompt().textContent).toBe('fix the flaky test')
-    expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('--add-dir src')
+    expect(effort('Low')).toBe('on')
   })
 
   it('keeps a search preset in its own options slot, saving only real changes, with one shared prompt', async () => {
@@ -249,10 +169,15 @@ describe('setup records exist only for authored setups', () => {
     }
     act(() =>
       root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupButton entry={entry} onUse={vi.fn()} />
-          <AgentLaunchSetupButton entry={entry} initial={preset} onUse={vi.fn()} />
-        </TooltipProvider>
+        <InMenu>
+          <AgentLaunchSetupButton entry={entry} onUse={vi.fn()} renderAnchor={anchor} />
+          <AgentLaunchSetupButton
+            entry={entry}
+            initial={preset}
+            onUse={vi.fn()}
+            renderAnchor={anchor}
+          />
+        </InMenu>
       )
     )
     const user = userEvent.setup()
@@ -264,7 +189,8 @@ describe('setup records exist only for authored setups', () => {
     const effort = (label: string) =>
       getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
     const model = () => document.querySelector('[cmdk-item][data-current="true"]')?.textContent
-    const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+    const close = () =>
+      fireEvent.keyDown(document.querySelector('[cmdk-input]')!, { key: 'Escape' })
 
     // Opening a preset saves nothing, and the plain row still shows defaults.
     fireEvent.click(searched)
@@ -296,5 +222,16 @@ describe('setup records exist only for authored setups', () => {
     expect(prompt().textContent).toBe('review the diff')
     close()
     expect(sourceCount()).toBe(1)
+    const scope = agentLaunchPromptScopeKey(entry)
+    writeLaunchSetupOptions(scope, {
+      agent: 'claude',
+      surface: 'terminal',
+      choices: {},
+      pendingArguments: '--ordinary'
+    })
+    retireAgentPickerDrafts([{ ...entry, catalog: { origin: 'probe', fetchedAt: 2, models: [] } }])
+    expect(sources.readLaunchSetupOptions(scope, JSON.stringify(preset.choices))).toBeUndefined()
+    expect(sources.readLaunchSetupOptions(scope)?.pendingArguments).toBe('--ordinary')
+    expect(readNativeChatComposerDraft(scope).text).toBe('review the diff')
   })
 })

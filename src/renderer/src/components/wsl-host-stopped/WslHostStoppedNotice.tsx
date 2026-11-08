@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { startWslHostAndReloadProjects } from '@/lib/wsl-host-user-start'
 
@@ -20,6 +21,7 @@ export function WslHostStoppedNotice({
   className?: string
   onStarted?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [starting, setStarting] = useState(false)
   const mountedRef = useMountedRef()
   const start = (): void => {
@@ -42,14 +44,18 @@ export function WslHostStoppedNotice({
       role="status"
       data-wsl-host-stopped-notice={environmentId}
     >
+      <LinuxPenguinIcon
+        className="mb-1 size-7 text-muted-foreground"
+        data-wsl-host-stopped-icon=""
+      />
       <span>
-        {translate('components.native-chat.hostOutage.stopped', '{{distro}} is stopped', {
+        {t('components.native-chat.hostOutage.stopped', '{{distro}} is stopped', {
           distro
         })}
       </span>
       <Button type="button" size={size} disabled={starting} onClick={start}>
         {starting ? <Loader2 className="animate-spin" /> : null}
-        {translate('components.native-chat.hostOutage.start', 'Start')}
+        {t('components.native-chat.hostOutage.start', 'Start')}
       </Button>
     </div>
   )

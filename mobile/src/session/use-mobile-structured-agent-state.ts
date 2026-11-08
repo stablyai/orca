@@ -10,6 +10,10 @@ import {
 } from '../../../src/shared/agent-session/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../src/shared/agent-session/view/structured-agent-session-holder'
 import { startStructuredAgentSessionLiveRead } from '../../../src/shared/agent-session/structured-agent-session-live-read'
+import {
+  type AgentSessionTextAppendCapabilities,
+  agentSessionTextAppendRequest
+} from '../../../src/shared/agent-session/agent-session-text-append'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
@@ -18,8 +22,18 @@ import {
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
 } from '../../../src/shared/agent-session/structured-agent-session-reducer'
-import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
-import type { RpcClient } from '../transport/rpc-client'
+import { subscribeConnectionRevival } from '../diagnostics/connection/connection-revival-signal'
+import {
+  readRuntimeStatusProbe,
+  recordRuntimeStatusProbe
+} from '../transport/connection/runtime-status-probe'
+import { decodeHostStatusReply, readHostStatusReply } from '../query/host-status-query'
+import { hostStatusSchema } from '../transport/hosts/host-status-reply-schema'
+import {
+  AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   agentSessionReadFailureRefusal,
   agentSessionReadRefusalText,
@@ -29,6 +43,36 @@ import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-sub
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
 
 const MAX_RETAINED_SESSION_STATES = 32
+/** The host already batches streamed text, so phones merge only within about a frame; desktop keeps the shared window. */
+const STREAMED_TEXT_COALESCE_MS = 16
+
+// Read alongside the hold, so the stream's first open knows whether to ask for appends: this
+// connection's probe, else the status the shell proved (direct hosts only), else the connection's status read.
+async function hostTextAppends(
+  client: RpcClient
+): Promise<AgentSessionTextAppendCapabilities | null> {
+  let status = readRuntimeStatusProbe(client)
+  const shell =
+    status === undefined ? hostStatusSchema.safeParse(client.getShellHostStatus?.()) : null
+  if (shell?.success) {
+    status = shell.data
+  } else if (status === undefined) {
+    const reply = await readHostStatusReply(client, {
+      timeoutMs: 15_000,
+      failWhenDisconnected: true
+    }).catch(() => null)
+    const landed = reply ? decodeHostStatusReply(reply) : null
+    if (landed) {
+      recordRuntimeStatusProbe(client, landed.status)
+    }
+    status = landed?.status
+  }
+  const advertised = status?.capabilities ?? []
+  return agentSessionTextAppendRequest({
+    textAppend: advertised.includes(AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY),
+    toolOutputAppend: advertised.includes(AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY)
+  })
+}
 
 export function useMobileStructuredAgentState(args: {
   onCommandsChanged?: () => void
@@ -132,6 +176,8 @@ export function useMobileStructuredAgentState(args: {
         callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
       subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
+      coalesceMs: STREAMED_TEXT_COALESCE_MS,
+      textAppend: hostTextAppends(client),
       subscribeRetryNow: subscribeConnectionRevival
     })
     return () => {

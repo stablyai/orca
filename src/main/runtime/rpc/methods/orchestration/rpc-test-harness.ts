@@ -1,9 +1,13 @@
 import { vi } from 'vitest'
-import { ORCHESTRATION_METHODS } from '../orchestration'
+import { ORCHESTRATION_METHODS } from './orchestration'
 import { isStreamingMethod, eraseRpcMethods, type RpcContext, type RpcMethod } from '../../core'
-import { OrchestrationDb } from '../../../orchestration/db'
+import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
+import '../../../orchestration/db/contract-constants'
+import '../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../orchestration/db/dispatch-row-writer'
+import '../../../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../../../orca-runtime'
-import type { TerminalHandleRecord } from '../../../runtime-terminal-contracts'
+import type { TerminalHandleRecord } from '../../../terminal/identity/terminal-handle-records'
 
 class OrchestrationRpcRuntime extends OrcaRuntimeService {
   seedTerminalHandle(handle: string, record: TerminalHandleRecord): void {

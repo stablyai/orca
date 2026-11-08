@@ -1,4 +1,4 @@
-import { abbreviateOrchestrationText } from '../../../shared/orchestration-task-summary'
+import { abbreviateOrchestrationText } from '../../../shared/orchestration/orchestration-task-summary'
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { printOrchestrationResult } from './agent-view'
@@ -7,8 +7,8 @@ import {
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../flags'
-import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
-import type { RunRemovedWork } from '../../../shared/orchestration-removed-work'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration/orchestration-run-pagination'
+import type { RunRemovedWork } from '../../../shared/orchestration/orchestration-removed-work'
 import { callOrchestrationMutation } from './mutation-request'
 import { formatRemovedWorkListing, formatRunRemovedWorkLine } from './removed-work-format'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
@@ -65,16 +65,17 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     const from = await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       run: { id: string; objective: string } | null
+      next?: string
     }>('orchestration.runCurrent', { from })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
-        fields: (r) => (r.run ? runFields(r.run) : { runId: null })
+        fields: (r) => (r.run ? { ...runFields(r.run), next: r.next } : { runId: null })
       })
       return
     }
     printResult(result, json, (r) =>
       r.run
-        ? `${r.run.id} ${r.run.objective}`
+        ? withReceiptNext(`${r.run.id} ${r.run.objective}`, r)
         : `No Run is bound to this ${from === undefined ? 'session' : 'terminal'}.`
     )
   },

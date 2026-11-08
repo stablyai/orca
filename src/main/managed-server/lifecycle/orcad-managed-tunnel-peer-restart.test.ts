@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createEnvironmentFromPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
-import { PAIRING_OFFER_VERSION } from '../../../shared/pairing'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
-import type { SshConnectionStore } from '../../ssh/connection/ssh-connection-store'
+import type { SshConnectionStore } from '../../ssh/targets/ssh-connection-store'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
 import type {
   PortForwardStartOptions,

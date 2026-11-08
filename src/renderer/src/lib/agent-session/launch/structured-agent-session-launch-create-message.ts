@@ -1,16 +1,19 @@
+import { StructuredAgentSessionCreateUnknownOutcomeError } from './structured-agent-session-launch-errors'
 import {
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
 } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../shared/agent-chat-permission-mode'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   type StructuredLaunchState,
   notifyStructuredLaunchListeners
 } from './structured-agent-session-launch-registry'
 import {
   prepareStructuredLaunchPromptForCreate,
+  hasStagedStructuredLaunchPrompt,
+  issueStructuredLaunchPromptForCreate,
   prepareLegacyStructuredLaunchPrompts
 } from './structured-agent-session-launch-prompt'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
@@ -19,7 +22,7 @@ import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
 } from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { firstFrameOptionState } from '@/components/native-chat/structured-agent-session-option-first-frame'
+import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import {
   applyStructuredLaunchHeldOptions,
   applyStructuredLaunchExplicitOptions,
@@ -30,7 +33,7 @@ import {
 import { structuredAgentSessionDrawnValues } from '../../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../../shared/agent-session/options/structured-agent-session-option-codec'
 
-/** Freeze what create carries once; an ambiguous reply always replays the same payload.
+/** Freeze what create carries once; later evidence must join this exact input.
  *  `hostTakesExplicitOptions`: the host advertises the create options-mode capability. */
 export function prepareStructuredLaunchCreateMessage(
   state: StructuredLaunchState,
@@ -45,7 +48,9 @@ export function prepareStructuredLaunchCreateMessage(
   }
   // Options without a model overlay the host's remembered model selection.
   const optionsMode: StructuredAgentSessionCreateParams['optionsMode'] =
-    hostTakesExplicitOptions && state.selection.explicit?.model !== undefined
+    !intent.params.forkFrom &&
+    hostTakesExplicitOptions &&
+    state.selection.explicit?.model !== undefined
       ? 'replace-model-selection'
       : undefined
   if (intent.createMessageSupport !== true) {
@@ -54,7 +59,17 @@ export function prepareStructuredLaunchCreateMessage(
     notifyStructuredLaunchListeners()
     return
   }
-  const firstMessage = prepareStructuredLaunchPromptForCreate(intent.sessionId, intent.target)
+  const hadPrompt = hasStagedStructuredLaunchPrompt(intent.sessionId)
+  const { firstMessage, deferred } = prepareStructuredLaunchPromptForCreate(
+    intent.sessionId,
+    intent.target,
+    intent.sendSkillsSupport === true
+  )
+  if (!deferred && (hadPrompt || firstMessage)) {
+    const beforeCreate = intent.beforeCreate
+    intent.beforeCreate = () =>
+      beforeCreate?.() !== false && issueStructuredLaunchPromptForCreate(intent.sessionId)
+  }
   const { options: requested, selection } = structuredLaunchCreateOptions(state)
   const options =
     requested && state.selection.explicit && !optionsMode
@@ -101,6 +116,10 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
   selection?: Readonly<Record<string, string>>
 } {
   const { intent } = state
+  // A fork's options are its source's, which the host copies.
+  if (intent.params.forkFrom) {
+    return {}
+  }
   const overlay = structuredLaunchOptionOverlay(state)
   const requested = structuredLaunchRequestedOptions({ ...state.selection, held: overlay })
   const firstFrame = firstFrameOptionState(intent.agent, intent.target, {
@@ -167,9 +186,39 @@ export function publishStructuredLaunchCreateOptions(
   if (state.intent.createMessageSupport !== true) {
     return applyStructuredLaunchExplicitOptions(state, receipt)
   }
-  settleStructuredLaunchCreateOptions(state, state.intent.params.options ?? {})
+  settleStructuredLaunchCreateOptions(state, {
+    kind: 'accepted',
+    options: state.intent.params.options ?? {}
+  })
   void applyStructuredLaunchHeldOptions(state, receipt, false).catch((error: unknown) => {
     console.warn('[native-chat] applying a launch option failed', error)
   })
   return receipt
+}
+
+/** Every sender waits on the launch promise, so picks held during launch reach the host first. */
+export function publishWithHeldOptions(
+  state: StructuredLaunchState,
+  created: Promise<StructuredAgentLaunchReceipt>
+): Promise<StructuredAgentLaunchReceipt> {
+  state.intent.prepareCreate = (hostTakesExplicitOptions) =>
+    prepareStructuredLaunchCreateMessage(state, hostTakesExplicitOptions)
+  const publishing: Promise<StructuredAgentLaunchReceipt> = created
+    .then((receipt) =>
+      state.promise === publishing
+        ? publishStructuredLaunchCreateOptions(state, receipt)
+        : state.intent.params.firstMessage
+          ? receipt
+          : state.promise
+    )
+    .catch((error: unknown) => {
+      if (state.promise !== publishing && state.intent.params.firstMessage) {
+        throw new StructuredAgentSessionCreateUnknownOutcomeError(
+          'Opening message outcome belongs to the current attempt.',
+          'agent_session_operation_unknown'
+        )
+      }
+      throw error
+    })
+  return publishing
 }

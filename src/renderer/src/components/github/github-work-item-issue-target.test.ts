@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { runIssueUpdate } from './github-work-item-edit-mutations'
+import { runIssueUpdate, runWorkItemBodyUpdate } from './github-work-item-edit-mutations'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { runGHEditLabelToggle } from '../github-item-dialog/edit-item-fields/gh-edit-section-mutations'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 
-vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
+vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn(() => ({ repos: [] })) } }))
 vi.mock('@/components/github/github-work-item-comment-mutations', () => ({
   notifyWorkItemDetailsMutation: vi.fn()
 }))
@@ -41,37 +44,38 @@ const item: GitHubWorkItem = {
 
 describe('issue edits retain the displayed repository', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(callRuntimeRpc).mockResolvedValue({ ok: true })
     vi.stubGlobal('window', {
       api: {
-        gh: { updateIssue: vi.fn().mockResolvedValue({ ok: true }), updateIssueBySlug: vi.fn() }
+        gh: {
+          updateIssue: vi.fn().mockResolvedValue({ ok: true }),
+          updateIssueBySlug: vi.fn(),
+          updatePullRequestBySlug: vi.fn()
+        }
       }
     })
   })
 
-  it.each([
-    { state: 'closed' as const },
-    { addLabels: ['bug'] },
-    { addAssignees: ['upstream-assignee'] }
-  ])('keeps Project field edits in the row repository: %j', async (updates) => {
-    vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true })
-
-    await runIssueUpdate({
-      repoPath: '/home/fixture/fork-widgets',
-      repoId: item.repoId,
-      sourceContext: localSource,
-      projectOrigin,
-      issueRepo: UPSTREAM,
-      number: 12,
-      updates
+  describe.each(['local', 'runtime:project-source'] as const)('Project source %s', (hostId) => {
+    const sourceContext = { ...localSource, hostId }
+    it('saves the Project row body through the original exact slug actor', async () => {
+      const bodyImageUrls = {
+        'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+          'https://private-user-images.githubusercontent.com/1/image.png?jwt=TEST'
+      }
+      vi.mocked(window.api.gh.updateIssueBySlug).mockResolvedValue({ ok: true, bodyImageUrls })
+      vi.mocked(callRuntimeRpc).mockResolvedValue({ ok: true, bodyImageUrls })
+      const result = await runWorkItemBodyUpdate({
+        item: { ...item, url: 'https://github.com/upstream-owner/widgets/issues/12' },
+        repoPath: '/home/fixture/fork-widgets',
+        sourceContext,
+        projectOrigin,
+        body: 'Project edit',
+        parsedSlug: UPSTREAM
+      })
+      expect(result).toEqual({ bodyImageUrls })
     })
-
-    expect(window.api.gh.updateIssueBySlug).toHaveBeenCalledWith({
-      ...UPSTREAM,
-      number: 12,
-      updates,
-      wakeWslDistro: true
-    })
-    expect(window.api.gh.updateIssue).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -97,35 +101,44 @@ describe('issue edits retain the displayed repository', () => {
     )
     expect(window.api.gh.updateIssueBySlug).not.toHaveBeenCalled()
   })
-
-  it.each([
-    { localLabels: [], updates: { addLabels: ['bug'] } },
-    { localLabels: ['bug'], updates: { removeLabels: ['bug'] } }
-  ])(
-    'retains the target for both label toggle directions: %j',
-    async ({ localLabels, updates }) => {
-      let mutation: Promise<unknown> = Promise.resolve()
-      runGHEditLabelToggle({
-        item,
-        itemNumber: item.number,
-        itemRepoId: item.repoId,
-        repoPath: 'C:\\workspace\\widgets',
+  it.each([true, false])(
+    'forwards local PR body PATCH maps without adding a reread (%s)',
+    async (hasMap) => {
+      const body =
+        '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+      vi.mocked(window.api.gh.updatePullRequestBySlug).mockResolvedValue(
+        hasMap
+          ? {
+              ok: true,
+              bodyImageUrls: {
+                'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+                  'https://private-user-images.githubusercontent.com/1/image.png?jwt=TEST'
+              }
+            }
+          : { ok: true }
+      )
+      const result = await runWorkItemBodyUpdate({
+        item: { ...item, type: 'pr' },
+        repoPath: '/repo',
+        sourceContext: localSource,
         projectOrigin: undefined,
-        issueRepo: ORIGIN,
-        label: 'bug',
-        localLabels,
-        run: async (_key, options) => {
-          mutation = options.mutate()
-          await mutation
-        },
-        onLabelsChange: vi.fn(),
-        patchProjectRowIfNeeded: vi.fn(),
-        onMutated: vi.fn()
+        body,
+        parsedSlug: ORIGIN
       })
-      await mutation
-
-      expect(window.api.gh.updateIssue).toHaveBeenCalledWith(
-        expect.objectContaining({ ownerRepo: ORIGIN, updates })
+      expect(result).toEqual({
+        bodyImageUrls: hasMap
+          ? {
+              'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+                'https://private-user-images.githubusercontent.com/1/image.png?jwt=TEST'
+            }
+          : undefined
+      })
+      expect(window.api.gh.updatePullRequestBySlug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          updates: {
+            body: '![shot](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+          }
+        })
       )
     }
   )

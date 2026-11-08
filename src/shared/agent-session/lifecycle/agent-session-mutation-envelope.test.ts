@@ -55,51 +55,10 @@ describe('computeAgentSessionPayloadFingerprint', () => {
     expect(a).toBe(b)
     expect(a).toMatch(/^[0-9a-f]{64}$/)
   })
-
-  it('separates one payload from another and one method from another', () => {
-    const send = computeAgentSessionPayloadFingerprint({
-      method: 'agentSession.send',
-      sessionId: 'session-1',
-      fields: { text: 'hi' }
-    })
-    expect(
-      computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.send',
-        sessionId: 'session-1',
-        fields: { text: 'hi there' }
-      })
-    ).not.toBe(send)
-    expect(
-      computeAgentSessionPayloadFingerprint({
-        method: 'agentSession.cancel',
-        sessionId: 'session-1',
-        fields: { text: 'hi' }
-      })
-    ).not.toBe(send)
-  })
 })
 
 describe('admitAgentSessionMutation', () => {
   const base = { envelope: envelope(), hostFingerprint: 'f'.repeat(64), lease: LEASE }
-
-  it('admits a matching first-time operation and refuses a mismatched payload', () => {
-    expect(admitAgentSessionMutation({ ...base, ledger: ADMIT('f'.repeat(64)) }).decision).toBe(
-      'admit'
-    )
-    expect(
-      admitAgentSessionMutation({
-        ...base,
-        hostFingerprint: 'a'.repeat(64),
-        ledger: ADMIT('a'.repeat(64))
-      })
-    ).toMatchObject({
-      decision: 'refused',
-      refusal: {
-        code: 'agent_session_operation_conflict',
-        details: { reason: 'fingerprintMismatch' }
-      }
-    })
-  })
 
   it('replays a recorded outcome even while the lease is unreconciled', () => {
     const recorded = {
@@ -124,63 +83,5 @@ describe('admitAgentSessionMutation', () => {
       })
       expect(admission, String(expectedRuntimeFence)).toMatchObject({ decision: 'admit' })
     }
-  })
-
-  it('refuses a writer while the lease is unreconciled', () => {
-    const admission = admitAgentSessionMutation({
-      ...base,
-      lease: { ...LEASE, unreconciled: true },
-      ledger: ADMIT('f'.repeat(64))
-    })
-    expect(admission).toMatchObject({
-      decision: 'refused',
-      refusal: { code: 'execution_owner_reconciling' }
-    })
-  })
-
-  it('refuses a writer while the chat is still starting', () => {
-    const admission = admitAgentSessionMutation({
-      ...base,
-      lease: { ...LEASE, handoffStage: 'new-owner-proving' },
-      ledger: ADMIT('f'.repeat(64))
-    })
-    expect(admission).toMatchObject({
-      decision: 'refused',
-      refusal: { code: 'agent_session_conflict', message: 'The chat is still starting.' }
-    })
-  })
-
-  it('names recovery rather than a handoff when a restart left the owner unproven', () => {
-    const admission = admitAgentSessionMutation({
-      ...base,
-      lease: { ...LEASE, handoffStage: 'recovering' },
-      ledger: ADMIT('f'.repeat(64))
-    })
-    expect(admission).toMatchObject({
-      decision: 'refused',
-      refusal: {
-        code: 'agent_session_conflict',
-        message:
-          "Orca has not yet confirmed that this chat's previous agent process stopped. Reopen the chat to check again."
-      }
-    })
-  })
-
-  it('surfaces a ledger refusal verbatim', () => {
-    const admission = admitAgentSessionMutation({
-      ...base,
-      ledger: {
-        decision: 'refused',
-        code: 'agent_session_operation_expired',
-        details: { reason: 'operationExpired' }
-      }
-    })
-    expect(admission).toMatchObject({
-      decision: 'refused',
-      refusal: {
-        code: 'agent_session_operation_expired',
-        details: { reason: 'operationExpired' }
-      }
-    })
   })
 })

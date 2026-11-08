@@ -1,34 +1,33 @@
 import { crewRecipientAvailability, type CrewActionCandidate } from './crew-recipient-availability'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-freshness'
 import {
   emptyCrew,
   type OrchestrationCrewSnapshot,
   type OrchestrationCrewRow
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
-import { createLineageRunningSessionResolver } from '../structured-session-lineage'
+import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
+import { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'
-import {
-  readCrewOwnedRunAddresses,
-  readCrewQuestions,
-  readCrewTraffic,
-  type CrewAssignmentRow
-} from './crew-query'
+import type { CrewAssignmentRow } from './crew-query'
 
 import type { Party } from './crew-parties'
 import { crewParentRelations } from './crew-parent-relations'
 import { createCrewHostDerivation } from './crew-host-derivation'
-import { statusForFleetWorker } from '../../../../shared/orchestration-fleet-status-index'
-import { projectLiveness } from '../../../../shared/orchestration-fleet-worker-projection'
-import { federatedMessageNamesOnlyHome } from '../dispatch-report-mailbox'
-import { workerReportRefusal } from '../worker-report-admission'
+import { statusForFleetWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-status-index'
+import {
+  projectLiveness,
+  sessionActivityEvidence
+} from '../../../../shared/orchestration/fleet/orchestration-fleet-worker-projection'
+import { createSessionWorkerLivenessReader } from '../workers/lifecycle/session-worker-liveness'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
+import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-report-mailbox'
+import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import type { CrewReadDependencies } from './crew-read-dependencies'
-export type { CrewReadDependencies, CrewIdentityRead } from './crew-read-dependencies'
 
 function preview(body: string): string {
-  const bytes = Buffer.from(body)
+  // One extra UTF-16 unit distinguishes a full ASCII preview from a longer body.
+  const bytes = Buffer.from(body.slice(0, 1025))
   return bytes.length <= 1024
     ? body
     : `${bytes
@@ -48,7 +47,6 @@ export function buildCrewSnapshot(
     return emptyCrew(deps.retainedDbExists ? 'unknown' : 'ok')
   }
   const now = deps.now ?? Date.now()
-  const cutoff = new Date(now - AGENT_STATUS_STALE_AFTER_MS).toISOString()
   const identity = deps.openIdentityRead?.()
   if (identity) {
     deps = { ...deps, ...identity }
@@ -57,6 +55,7 @@ export function buildCrewSnapshot(
   const { party, alias, addressOf, getParty, aliasesFor } = registry
   const records = host.deps.records
   const runningSession = createLineageRunningSessionResolver(records)
+  const observeSession = createSessionWorkerLivenessReader(db, host.deps.statuses, records)
   const hydrate = (addresses: string[], panes: string[] = []) => {
     const provenance = host.sourceInputs.provenance(addresses, panes)
     for (const family of [provenance.local, provenance.remote]) {
@@ -100,7 +99,7 @@ export function buildCrewSnapshot(
           remoteAttachment.process === deps.processForHandle?.(self.terminalHandle)
         )
       }))
-  const ownedRunAddresses = readCrewOwnedRunAddresses(db, self, host.sourceInputs.legacyOwner)
+  const ownedRunAddresses = host.sourceInputs.ownedRuns(self)
   for (const current of host.sourceInputs.runInputs(ownedRunAddresses)) {
     const coordinator = party(current.session, current.handle, current.pane, `run:${current.id}`)
     if (coordinator) {
@@ -108,8 +107,8 @@ export function buildCrewSnapshot(
     }
   }
   const selfAliases = () => aliasesFor(self.address)
-  const traffic = readCrewTraffic(db, selfAliases(), cutoff)
-  const questions = readCrewQuestions(db, selfAliases())
+  const traffic = host.sourceInputs.traffic(selfAliases(), now)
+  const questions = host.sourceInputs.questions(selfAliases())
   hydrate([
     ...new Set([
       ...traffic.map((message) => message.peer),
@@ -156,8 +155,13 @@ export function buildCrewSnapshot(
           evidence.binding.terminalHandle === target.terminalHandle &&
           evidence.binding.paneKey === target.paneKey &&
           (evidence.binding.kind !== 'worker' || evidence.binding.dispatchId === assignment?.id)))
-    const fresh =
-      bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
+    // Chats keep their own status row: their reach check queries SQLite on every Crew rebuild.
+    const session = isStructuredWorkerHandle(worker?.agentTerminalHandle)
+      ? observeSession(worker!)
+      : undefined
+    const fresh = session
+      ? sessionActivityEvidence(session)
+      : bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
         ? evidence
         : undefined
     const row: OrchestrationCrewRow = {

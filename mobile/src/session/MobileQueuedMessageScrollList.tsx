@@ -8,6 +8,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { spacing } from '../theme/mobile-theme'
 import { MobileEdgeFade } from '../components/MobileEdgeFade'
+import { useMobileNativeChatLowerRegion } from './native-chat/mobile-native-chat-lower-region-context'
 
 /** Desktop's `max-h-40`: three one-line cards and part of a fourth, whose cut-off edge is the
  *  sign that the list scrolls. */
@@ -37,6 +38,7 @@ export function MobileQueuedMessageScrollList({
   children: (reveal: (row: LayoutRectangle) => void, drag: MobileQueueDragViewport) => ReactNode
 }): React.JSX.Element {
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
+  const lowerRegion = useMobileNativeChatLowerRegion()
   const scrollOffsetY = useSharedValue(0)
   const scrollContentHeight = useSharedValue(0)
   const [dragging, setDragging] = useState(false)
@@ -68,6 +70,10 @@ export function MobileQueuedMessageScrollList({
   }
   // The nearest scroll that shows the whole row, as desktop's editor does, clear of the edge fades.
   const reveal = (row: LayoutRectangle) => {
+    if (lowerRegion) {
+      lowerRegion.layoutChanged()
+      return
+    }
     const { offset, viewport, content } = metrics.current
     if (viewport === 0) {
       return

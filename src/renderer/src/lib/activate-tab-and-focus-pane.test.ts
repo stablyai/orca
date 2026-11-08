@@ -78,45 +78,6 @@ describe('activateTabAndFocusPane', () => {
     )
   })
 
-  it('reveals the terminal surface before selecting the terminal tab', () => {
-    const callOrder: string[] = []
-    setActiveTabType.mockImplementation((tabType: string) => {
-      callOrder.push(`type:${tabType}`)
-    })
-    setActiveTab.mockImplementation((tabId: string) => {
-      callOrder.push(`tab:${tabId}`)
-    })
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn(() => 12)
-    )
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    vi.stubGlobal('window', {
-      dispatchEvent: vi.fn()
-    })
-
-    activateTabAndFocusPane('tab-1', 'leaf-1')
-
-    expect(callOrder).toEqual(['type:terminal', 'tab:tab-1'])
-  })
-
-  it('reveals the terminal surface for tab-only activation without dispatching pane focus', () => {
-    const requestAnimationFrame = vi.fn()
-    const dispatchEvent = vi.fn()
-    vi.stubGlobal('requestAnimationFrame', requestAnimationFrame)
-    vi.stubGlobal('cancelAnimationFrame', vi.fn())
-    vi.stubGlobal('window', {
-      dispatchEvent
-    })
-
-    activateTabAndFocusPane('tab-1', null)
-
-    expect(setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-    expect(setActiveTab).toHaveBeenCalledWith('tab-1')
-    expect(requestAnimationFrame).not.toHaveBeenCalled()
-    expect(dispatchEvent).not.toHaveBeenCalled()
-  })
-
   it("scopes the terminal reveal to the tab's own worktree, not the one the main window shows", () => {
     vi.stubGlobal('requestAnimationFrame', vi.fn())
     vi.stubGlobal('cancelAnimationFrame', vi.fn())

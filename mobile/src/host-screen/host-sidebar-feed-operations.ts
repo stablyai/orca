@@ -1,11 +1,11 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { SidebarInputsReadResultSchema } from '../../../src/shared/sidebar-list/sidebar-inputs-feed-contract'
 import type { SidebarFeedTransport } from '../../../src/shared/sidebar-feed-client/sidebar-feed-reader'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
-import type { RpcResponse } from '../transport/types'
-import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 
 // Only ORCA_SIDEBAR_INPUTS=main pages read this feed; method_not_found or an older allowlist’s forbidden means the page is newer than the host.
 

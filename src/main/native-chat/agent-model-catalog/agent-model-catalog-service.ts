@@ -3,12 +3,11 @@ import { agentSessionConversationView } from '../../../shared/agent-session/life
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAccountList } from './agent-model-catalog-account-list'
 import { captureAgentModelCatalogRead } from './agent-model-catalog-operation'
-import {
-  createAgentModelCatalogLookup,
-  type AgentModelCatalogClaim
-} from './agent-model-catalog-lookup'
+import { createAgentModelCatalogLookup } from './agent-model-catalog-lookup'
+import { createAgentModelCatalogRefreshes } from './agent-model-catalog-refresh'
 import { createAgentModelCatalogLiveListings } from './agent-model-catalog-live-listings'
 import { prewarmAgentModelCatalog } from './agent-model-catalog-prewarm'
+import { agentModelCatalogSessionPeek } from './agent-model-catalog-session-peek'
 
 import type {
   AgentModelCatalogServiceDeps,
@@ -16,37 +15,47 @@ import type {
   AgentModelCatalogReadParams
 } from './agent-model-catalog-service-contract'
 export type { AgentModelCatalogServiceDeps, AgentModelCatalogService }
-import { onAtRestCommandContextRetired } from '../agent-session-wire/at-rest-command-context'
+import { onAtRestCommandContextRetired } from '../agent-session-wire/options/at-rest-command-context'
 import {
   createAgentModelCatalogSnapshot,
   agentModelCatalogRequestKey,
   agentModelCatalogScopeIdentity,
-  retireAgentModelCatalogRequests,
+  retireAgentModelCatalogBindings,
   agentModelCatalogMemoryBinding,
-  agentModelCatalogSessionPeek,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
 import { PrioritySemaphore } from '../../../shared/priority-semaphore'
 import {
   AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
-  waitForAgentModelCatalogRead
+  waitForAgentModelCatalogRead,
+  waitWithinAgentModelCatalogRead
 } from './agent-model-catalog-listing-waiters'
 
 export function createAgentModelCatalogService(
   deps: AgentModelCatalogServiceDeps
 ): AgentModelCatalogService {
+  const tasks = new Set<Promise<unknown>>()
   const lifetime = new AbortController()
   const admission = new PrioritySemaphore(2)
 
   const bindings = new Map<string, AgentModelCatalogBinding>()
-  const claims = new Map<string, AgentModelCatalogClaim>()
   const requestKey = agentModelCatalogRequestKey.bind(null, deps)
   const capture = agentModelCatalogScopeIdentity.bind(null, deps)
+  const refreshes = createAgentModelCatalogRefreshes({
+    deps,
+    lifetime: lifetime.signal,
+    admission,
+    bindings,
+    requestKey,
+    tasks
+  })
+  const lookup = createAgentModelCatalogLookup(deps, refreshes, requestKey, capture)
   const retireContext = (workspaceId?: string, sources = true): void => {
     if (sources) {
       live.retireContext(workspaceId)
     }
-    retireAgentModelCatalogRequests(deps, bindings, claims, workspaceId)
+    retireAgentModelCatalogBindings(bindings, workspaceId)
+    refreshes.retire(workspaceId)
   }
   const live = createAgentModelCatalogLiveListings(deps, lifetime.signal)
   const unbindRetirement = onAtRestCommandContextRetired((workspaceId) =>
@@ -54,35 +63,32 @@ export function createAgentModelCatalogService(
   )
   const memoryBinding = (params: AgentModelCatalogReadParams) =>
     agentModelCatalogMemoryBinding(deps, params, bindings, capture)
+  // In progress while a refresh this read would join still runs.
   const snapshot = createAgentModelCatalogSnapshot(
     deps,
     memoryBinding,
-    (params, bound) =>
-      bound
-        ? claims.has(requestKey(params))
-        : claims.get(requestKey(params))?.identity === capture(params),
+    (params) => lookup.pending(params),
     () => lifetime.signal.aborted
   )
 
   const captureRead = (params: AgentModelCatalogReadParams) =>
     captureAgentModelCatalogRead(deps, lifetime.signal, params)
-  const resolve = createAgentModelCatalogLookup(
-    deps,
-    lifetime,
-    admission,
-    bindings,
-    claims,
-    requestKey,
-    capture,
-    captureRead
-  )
+  // The read asks for the shared refresh and waits on it only within its own budget.
+  const demand = async (params: AgentModelCatalogReadParams): Promise<void> => {
+    const operation = params.operation ?? captureRead(params)
+    await waitWithinAgentModelCatalogRead(operation, lookup.request(params, operation)?.done)
+  }
   return {
     captureRead,
     snapshot,
-    demand: (params) => (params.savedOnly ? Promise.resolve() : resolve(params)),
+    demand: async (params) => {
+      if (!params.savedOnly) {
+        await demand(params)
+      }
+    },
     async prepareSaved(params) {
       if (!memoryBinding(params)) {
-        await resolve({ ...params, savedOnly: true })
+        await demand({ ...params, savedOnly: true })
       }
       return snapshot({ ...params, savedOnly: true })
     },
@@ -94,30 +100,36 @@ export function createAgentModelCatalogService(
       live.providerStarted(record, source)
     },
     async read(params) {
-      if (!params.savedOnly && params.waitForListing) {
-        const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+      const waits = !params.savedOnly && params.waitForListing
+      const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+      if (waits) {
+        const operation = params.operation ?? captureRead({ ...params, deadline })
         await waitForAgentModelCatalogRead({
-          params: { ...params, deadline },
+          params,
+          reader: { deadline, signal: operation.signal },
           store: deps.store,
-          resolve,
-          claim: () => claims.get(requestKey(params)),
+          refresh: lookup.request(params, operation),
           binding: () => bindings.get(requestKey(params))
         })
       }
       const result = snapshot(params)
+      // A waiting read that used its whole budget is final; work still running doesn't reopen it.
+      const { listingInProgress: _, ...settled } = result
+      const answer = waits && Date.now() >= deadline ? settled : result
       return lifetime.signal.aborted
-        ? result
-        : readAccountList(deps, params, result, () => memoryBinding({ agent: params.agent })?.base)
+        ? answer
+        : readAccountList(deps, params, answer, () => memoryBinding({ agent: params.agent })?.base)
     },
     recordLiveListing: live.recordLiveListing,
     async prewarm() {
       await prewarmAgentModelCatalog(deps, lifetime.signal, (params) => this.read(params))
     },
-    stop() {
+    async stop() {
       lifetime.abort()
       unbindRetirement()
       retireContext()
       deps.store.clearPartialAttempts()
+      await Promise.allSettled(tasks)
     }
   }
 }

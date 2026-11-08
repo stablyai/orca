@@ -1,7 +1,7 @@
-import { z } from 'zod'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import type { RpcMethodName } from '../transport/rpc-params-contract'
+import * as z from 'zod'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import type { RpcMethodName } from '../../../src/shared/rpc-contract/rpc-params-catalog.generated'
 
 function openingRead<Method extends RpcMethodName, Schema extends z.ZodType>(
   method: Method,
@@ -17,22 +17,24 @@ function openingRead<Method extends RpcMethodName, Schema extends z.ZodType>(
     })
   )
 }
+const partyLocationResult = z.object({
+  location: z
+    .discriminatedUnion('kind', [
+      z.object({
+        kind: z.literal('chat'),
+        sessionId: z.string().min(1),
+        worktreeId: z.string().min(1)
+      }),
+      z.object({ kind: z.literal('terminal'), handle: z.string().min(1) })
+    ])
+    .nullable(),
+  lost: z.enum(['chat', 'terminal']).optional()
+})
 export const structuredOpenLocation = openingRead(
   'orchestration.partyLocation',
-  z.object({
-    location: z
-      .discriminatedUnion('kind', [
-        z.object({
-          kind: z.literal('chat'),
-          sessionId: z.string().min(1),
-          worktreeId: z.string().min(1)
-        }),
-        z.object({ kind: z.literal('terminal'), handle: z.string().min(1) })
-      ])
-      .nullable(),
-    lost: z.enum(['chat', 'terminal']).optional()
-  })
+  partyLocationResult
 )
+export const structuredOpenParty = openingRead('orchestration.partyOpen', partyLocationResult)
 export const structuredOpenReveal = openingRead(
   'agentSession.reveal',
   z.union([

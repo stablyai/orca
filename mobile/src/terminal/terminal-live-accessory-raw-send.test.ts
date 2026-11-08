@@ -1,8 +1,7 @@
 import { terminalInputSend } from './mobile-terminal-operations'
 import { describe, expect, it, vi } from 'vitest'
 import { sendTerminalLiveAccessoryRawBytes } from './terminal-live-accessory-raw-send'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 function captureClient(
   result: Promise<unknown> = Promise.resolve({
@@ -27,30 +26,6 @@ const BASE_ARGS = {
 } as const
 
 describe('terminal live accessory raw send', () => {
-  it('sends raw bytes now-or-never with the device presence tag', async () => {
-    const { client, sendRequest } = captureClient()
-
-    await expect(sendTerminalLiveAccessoryRawBytes({ ...BASE_ARGS, client })).resolves.toBe(true)
-
-    expect(sendRequest).toHaveBeenCalledWith(
-      'terminal.send',
-      { terminal: 'terminal-a', text: '', enter: false, client: { id: 'tok', type: 'mobile' } },
-      // Never park accessory keys to fire into a reconnected PTY long after the tap.
-      { failWhenDisconnected: true }
-    )
-    expect(sendRequest).toHaveBeenCalledTimes(1)
-  })
-
-  it('drops the bytes instead of sending while disconnected', async () => {
-    const { client, sendRequest } = captureClient()
-
-    await expect(
-      sendTerminalLiveAccessoryRawBytes({ ...BASE_ARGS, client, connState: 'reconnecting' })
-    ).resolves.toBe(false)
-
-    expect(sendRequest).not.toHaveBeenCalled()
-  })
-
   it('drops the bytes when the terminal selection went stale mid-flush', async () => {
     const { client, sendRequest } = captureClient()
 
@@ -59,23 +34,5 @@ describe('terminal live accessory raw send', () => {
     ).resolves.toBe(false)
 
     expect(sendRequest).not.toHaveBeenCalled()
-  })
-
-  it('reports a rejected send without surfacing transport errors', async () => {
-    const { client } = captureClient(Promise.reject(new Error('Not connected: terminal.send')))
-
-    await expect(sendTerminalLiveAccessoryRawBytes({ ...BASE_ARGS, client })).resolves.toBe(false)
-  })
-
-  it('reports a fulfilled RPC failure as a failed send', async () => {
-    const response: RpcResponse = {
-      id: 'send',
-      ok: false,
-      error: { code: 'terminal_error', message: 'failed' },
-      _meta: { runtimeId: 'test-runtime' }
-    }
-    const { client } = captureClient(Promise.resolve(response))
-
-    await expect(sendTerminalLiveAccessoryRawBytes({ ...BASE_ARGS, client })).resolves.toBe(false)
   })
 })

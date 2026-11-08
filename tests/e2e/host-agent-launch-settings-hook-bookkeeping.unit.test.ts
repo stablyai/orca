@@ -6,8 +6,8 @@ import {
   deferred,
   fixture
 } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
-import { RuntimeClientSettingsController } from '../../src/main/runtime/runtime-client-settings'
-import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/HostAgentLaunchSettings'
+import { RuntimeClientSettingsController } from '../../src/main/runtime/client/settings/runtime-client-settings'
+import { HostAgentLaunchSettings } from '../../src/renderer/src/components/settings/agents/launch/HostAgentLaunchSettings'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
 import { getAgentCatalog } from '../../src/renderer/src/lib/agent-catalog'
 
@@ -21,17 +21,20 @@ vi.mock('../../src/main/ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-vi.mock('../../src/main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../src/main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: hooks.apply
 }))
-vi.mock('../../src/renderer/src/components/settings/agent-launch-settings-transport', () => ({
-  readHostAgentLaunchSettings: transport.read,
-  mutateHostAgentLaunchSettings: transport.mutate,
-  hostSupportsLaunchChoices: async () => false,
-  hostSupportsOwnChatPermissions: async () => true,
-  hostSupportsAutoPermissions: async () => true,
-  hostSupportsNativeChatPermissions: async () => true
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/agent-launch-settings/agent-launch-settings-transport',
+  () => ({
+    readHostAgentLaunchSettings: transport.read,
+    mutateHostAgentLaunchSettings: transport.mutate,
+    hostSupportsLaunchChoices: async () => false,
+    hostSupportsOwnChatPermissions: async () => true,
+    hostSupportsAutoPermissions: async () => true,
+    hostSupportsNativeChatPermissions: async () => true
+  })
+)
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: () => ({
     detectedIds: ['claude'],

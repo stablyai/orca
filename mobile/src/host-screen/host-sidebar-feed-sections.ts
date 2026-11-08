@@ -3,19 +3,22 @@ import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
-import { folderWorkspaceToWorktree } from '../../../src/shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getFolderWorkspaceHostId } from '../../../src/shared/sidebar-list/folder-workspace-host-id'
 import type { HostSectionRow } from '../../../src/shared/sidebar-list/host-section-rows'
 import type { GroupHeaderRow } from '../../../src/shared/sidebar-list/row-types'
 import { PR_GROUP_LABELS } from '../../../src/shared/workspace-view/workspace-pr-groups'
 import type { Worktree as HostWorktree } from '../../../src/shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../src/shared/worktree/host-qualified-identity'
-import type { Section, Worktree } from '../worktree/workspace-list-types'
+import type { Section, Worktree, WorktreeHostContextView } from '../worktree/workspace-list-types'
 import {
   isLastVisitedWorktreeRow,
   type LastVisitedWorktreeOnHost
 } from '../worktree/host-list-highlight'
-import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
+import {
+  resolveWorktreeHostId,
+  type WorktreeHostContextOf
+} from '../worktree/worktree-host-context-labels'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
 import { rowFiltersForView, type MobileViewState } from '../worktree/workspace-view-settings'
 
@@ -24,6 +27,7 @@ export type HostFeedListSources = {
   /** The phone's own highlight; null while unread or never opened, when nothing is lit. */
   lastVisited: LastVisitedWorktreeOnHost | null
   liveRows: readonly Worktree[]
+  hostContextOf: WorktreeHostContextOf
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   search: string
 }
@@ -113,20 +117,19 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
   const query = sources.search.trim().toLowerCase()
   const sections: Section[] = []
   let sectionHostId: ExecutionHostId | null = null
-  const rowOf = (
+  const itemOf = (
     worktree: HostWorktree,
     hostId: ExecutionHostId,
     repoName: string | undefined,
     workspaceKind: Worktree['workspaceKind']
-  ): Worktree => {
-    const drawn = drawnRow(
-      worktree,
-      hostId,
-      repoName,
-      workspaceKind,
-      liveRowOf(worktree.id, hostId)
-    )
-    return hostId === sectionHostId ? { ...drawn, hostContextLabel: undefined } : drawn
+  ): { row: Worktree; hostContext: WorktreeHostContextView } => {
+    const live = liveRowOf(worktree.id, hostId)
+    const hostContext = (live && sources.hostContextOf(live)) ?? {}
+    return {
+      row: drawnRow(worktree, hostId, repoName, workspaceKind, live),
+      hostContext:
+        hostId === sectionHostId ? { ...hostContext, hostContextLabel: undefined } : hostContext
+    }
   }
   const push = (section: Section) => sections.push(section)
   const current = (): Section => {
@@ -169,28 +172,38 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
       case 'item': {
         // Local as the fallback, as the phone resolves its own rows: the desktop's focus is not an owner.
         const hostId = getWorktreeExecutionHostId(row.worktree, row.repo, LOCAL_EXECUTION_HOST_ID)
-        const drawn = rowOf(row.worktree, hostId, row.repo?.displayName, 'git')
+        const { row: drawn, hostContext } = itemOf(
+          row.worktree,
+          hostId,
+          row.repo?.displayName,
+          'git'
+        )
         current().data.push({
-          ...drawn,
-          isActive: isLastVisitedWorktreeRow(
-            { worktreeId: row.worktree.id, hostId },
-            sources.lastVisited
-          ),
-          sectionListKey: row.rowKey,
-          lineageDepth: row.depth,
-          ...(row.groupDepth ? { projectGroupDepth: row.groupDepth } : {}),
-          ...(row.repo?.projectGroupId && folderScanGroupIds.has(row.repo.projectGroupId)
-            ? { inFolderScanGroup: true }
-            : {}),
-          lineageChildCount: row.lineageChildCount,
-          lineageCollapsed: row.lineageCollapsed === true,
-          isLastLineageChild: row.isLastLineageChild,
-          ...(row.lineageGroupKey ? { lineageGroupKey: row.lineageGroupKey } : {}),
-          showProjectName: row.showProjectName === true,
-          // The desktop's mixed-host rule names the host; a health word alone still shows.
-          hostContextLabel:
-            row.hostContextLabel ??
-            (drawn.hostContextHealthLabel ? drawn.hostContextLabel : undefined)
+          row: {
+            ...drawn,
+            isActive: isLastVisitedWorktreeRow(
+              { worktreeId: row.worktree.id, hostId },
+              sources.lastVisited
+            )
+          },
+          view: {
+            ...hostContext,
+            sectionListKey: row.rowKey,
+            lineageDepth: row.depth,
+            ...(row.groupDepth ? { projectGroupDepth: row.groupDepth } : {}),
+            ...(row.repo?.projectGroupId && folderScanGroupIds.has(row.repo.projectGroupId)
+              ? { inFolderScanGroup: true }
+              : {}),
+            lineageChildCount: row.lineageChildCount,
+            lineageCollapsed: row.lineageCollapsed === true,
+            isLastLineageChild: row.isLastLineageChild,
+            ...(row.lineageGroupKey ? { lineageGroupKey: row.lineageGroupKey } : {}),
+            showProjectName: row.showProjectName === true,
+            // The desktop's mixed-host rule names the host; a health word alone still shows.
+            hostContextLabel:
+              row.hostContextLabel ??
+              (hostContext.hostContextHealthLabel ? hostContext.hostContextLabel : undefined)
+          }
         })
         break
       }
@@ -201,16 +214,30 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
           row.projectGroup,
           LOCAL_EXECUTION_HOST_ID
         )
+        const { row: drawn, hostContext } = itemOf(
+          worktree,
+          hostId,
+          row.projectGroup.name,
+          'folder-workspace'
+        )
         current().data.push({
-          ...rowOf(worktree, hostId, row.projectGroup.name, 'folder-workspace'),
-          isActive: isLastVisitedWorktreeRow(
-            { worktreeId: worktree.id, hostId },
-            sources.lastVisited
-          ),
-          sectionListKey: row.key,
-          lineageDepth: 0,
-          ...(row.groupDepth ? { projectGroupDepth: row.groupDepth } : {}),
-          ...(row.projectGroup.createdFrom === 'folder-scan' ? { inFolderScanGroup: true } : {})
+          row: {
+            ...drawn,
+            isActive: isLastVisitedWorktreeRow(
+              { worktreeId: worktree.id, hostId },
+              sources.lastVisited
+            )
+          },
+          view: {
+            ...hostContext,
+            sectionListKey: row.key,
+            lineageDepth: row.depth,
+            ...(row.groupDepth ? { projectGroupDepth: row.groupDepth } : {}),
+            ...(row.projectGroup.createdFrom === 'folder-scan' ? { inFolderScanGroup: true } : {}),
+            lineageChildCount: row.lineageChildCount ?? 0,
+            lineageCollapsed: row.lineageCollapsed === true,
+            ...(row.lineageGroupKey ? { lineageGroupKey: row.lineageGroupKey } : {})
+          }
         })
         break
       }
@@ -239,6 +266,7 @@ export function buildHostFeedSections(sources: HostFeedListSources): Section[] {
 // Older hosts with unreadable feeds still list filtered worktree.ps rows in served order without headers.
 export function buildPreFeedSections(sources: {
   rows: Worktree[]
+  hostContextOf: WorktreeHostContextOf
   view: MobileViewState
   search: string
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
@@ -250,9 +278,9 @@ export function buildPreFeedSections(sources: {
     sources.search,
     sources.repoHostIdByRepoId
   ).map((row) => ({
-    ...row,
     // Replaces worktree.ps's mark, which is the desktop's selection.
-    isActive: isLastVisitedWorktreeRow(row, sources.lastVisited)
+    row: { ...row, isActive: isLastVisitedWorktreeRow(row, sources.lastVisited) },
+    view: { ...sources.hostContextOf(row) }
   }))
   return rows.length > 0 ? [{ key: 'all', title: '', data: rows }] : []
 }
@@ -262,7 +290,7 @@ function narrowSections(sections: readonly Section[], query: string): Section[] 
     if (section.title.toLowerCase().includes(query)) {
       return [section]
     }
-    const data = section.data.filter((row) => matchesSearch(row, query))
+    const data = section.data.filter((item) => matchesSearch(item.row, query))
     // Only matching rows: a creation has no name to match yet.
     return data.length > 0
       ? [{ ...section, data, count: data.length, pendingCreations: undefined }]

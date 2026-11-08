@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import { withGitHubRepoExecution } from './github-repository-identity'
 import type { PRCheckDetail } from '../../shared/github/check-types'
 import type { GitHubPRFile, GitHubPRFileContents } from '../../shared/github/pull-request-types'
@@ -71,181 +72,206 @@ export async function getWorkItemDetails(
   preference?: IssueSourcePreference,
   repositoryOverride?: unknown,
   // Only an explicit Refresh asks for uncached reads whose required parts fail instead of collapsing to empty.
-  canonical = false
+  canonical = false,
+  expectedGhAccount?: GhAccountBinding | null
 ): Promise<GitHubWorkItemDetails | null> {
-  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
-    let issueRepositoryOverride: GitHubApiRepository | null = null
-    if (type === 'issue' && repositoryOverride != null) {
-      if (!isValidGitHubApiRepository(repositoryOverride)) {
-        return null
-      }
-      issueRepositoryOverride = (
-        await resolveGitHubRepoExecution(
-          repoPath,
-          repositoryOverride,
-          connectionId,
-          localGitOptions
-        )
-      ).ownerRepo
-      if (!issueRepositoryOverride) {
-        return null
-      }
-    }
-    const {
-      item,
-      repository: selectedRepository,
-      issueDetails
-    } = issueRepositoryOverride
-      ? {
-          item: await getWorkItemByOwnerRepo(
+  return withGitHubRepoExecution(
+    repoPath,
+    connectionId,
+    localGitOptions,
+    async () => {
+      let repositoryTarget: GitHubApiRepository | null = null
+      if (type && repositoryOverride != null) {
+        if (!isValidGitHubApiRepository(repositoryOverride)) {
+          return null
+        }
+        repositoryTarget = (
+          await resolveGitHubRepoExecution(
             repoPath,
-            issueRepositoryOverride,
-            number,
-            'issue',
+            repositoryOverride,
             connectionId,
             localGitOptions
-          ),
-          repository: issueRepositoryOverride,
-          issueDetails: undefined
+          )
+        ).ownerRepo
+        if (!repositoryTarget) {
+          return null
         }
-      : await getWorkItemWithRepository(
-          repoPath,
-          number,
-          type,
-          connectionId,
-          localGitOptions,
-          preference,
-          type === 'issue'
-        )
-    if (!item) {
-      return null
-    }
+      }
+      const {
+        item,
+        repository: selectedRepository,
+        issueDetails
+      } = repositoryTarget
+        ? {
+            item: await getWorkItemByOwnerRepo(
+              repoPath,
+              repositoryTarget,
+              number,
+              type === 'pr' ? 'pr' : 'issue',
+              connectionId,
+              localGitOptions
+            ),
+            repository: repositoryTarget,
+            issueDetails: undefined
+          }
+        : await getWorkItemWithRepository(
+            repoPath,
+            number,
+            type,
+            connectionId,
+            localGitOptions,
+            preference,
+            type === 'issue' && !canonical
+          )
+      if (!item) {
+        return null
+      }
 
-    // Keep the conversation in the same repository as the selected issue.
-    const resolvedRepository =
-      item.type === 'issue'
-        ? selectedRepository
-        : (await resolveGitHubRepoExecution(repoPath, item.prRepo, connectionId, localGitOptions))
-            .ownerRepo
+      // The clone selects execution; an addressed item selects every detail read.
+      const resolvedRepository =
+        repositoryTarget ??
+        (item.type === 'issue'
+          ? selectedRepository
+          : (await resolveGitHubRepoExecution(repoPath, item.prRepo, connectionId, localGitOptions))
+              .ownerRepo)
 
-    if (item.type === 'issue') {
-      return withWorkItemDetailsPermit(async () => {
-        const collapsed =
-          issueDetails === undefined
-            ? await getIssueDetailsViaGraphQL(
+      if (item.type === 'issue') {
+        return withWorkItemDetailsPermit(async () => {
+          const collapsed =
+            issueDetails === undefined
+              ? await getIssueDetailsViaGraphQL(
+                  repoPath,
+                  item.number,
+                  resolvedRepository,
+                  connectionId,
+                  localGitOptions,
+                  false,
+                  canonical
+                )
+              : issueDetails
+          if (collapsed) {
+            return {
+              item: enrichItemDisplayAvatars(item, [
+                ...collapsed.participants,
+                ...collapsed.assigneeUsers
+              ]),
+              body: collapsed.body,
+              bodyImageUrls: collapsed.bodyImageUrls,
+              comments: collapsed.comments,
+              assignees: item.assignees?.map((user) => user.login) ?? collapsed.assignees,
+              participants: collapsed.participants,
+              timelineItems: collapsed.timelineItems
+            }
+          }
+          const [{ body, bodyImageUrls, comments, assignees, timelineItems }, participants] =
+            await Promise.all([
+              getIssueBodyAndComments(
                 repoPath,
                 item.number,
                 resolvedRepository,
                 connectionId,
                 localGitOptions,
-                false,
-                canonical && !!issueRepositoryOverride
+                canonical
+              ),
+              getWorkItemParticipants(
+                repoPath,
+                item,
+                resolvedRepository,
+                connectionId,
+                localGitOptions
               )
-            : issueDetails
-        if (collapsed) {
+            ])
+          const mentionParticipants = await getMentionParticipants(
+            repoPath,
+            item,
+            comments,
+            participants,
+            resolvedRepository,
+            connectionId,
+            localGitOptions
+          )
           return {
-            item: enrichItemDisplayAvatars(item, [
-              ...collapsed.participants,
-              ...collapsed.assigneeUsers
-            ]),
-            body: collapsed.body,
-            comments: collapsed.comments,
-            assignees: item.assignees?.map((user) => user.login) ?? collapsed.assignees,
-            participants: collapsed.participants,
-            timelineItems: collapsed.timelineItems
+            item: enrichItemDisplayAvatars(item, mentionParticipants),
+            body,
+            bodyImageUrls,
+            comments,
+            assignees: item.assignees?.map((user) => user.login) ?? assignees,
+            participants: mentionParticipants,
+            timelineItems
           }
-        }
-        const [{ body, comments, assignees, timelineItems }, participants] = await Promise.all([
-          getIssueBodyAndComments(
+        })
+      }
+
+      // Nested client reads own their semaphore permits, so they stay outside these permits.
+      const [{ viewedStates, participants }, metadata, files, comments] = await Promise.all([
+        withWorkItemDetailsPermit(() =>
+          getPRDetailContext(
             repoPath,
             item.number,
             resolvedRepository,
             connectionId,
-            localGitOptions,
-            canonical && !!issueRepositoryOverride
-          ),
-          getWorkItemParticipants(repoPath, item, resolvedRepository, connectionId, localGitOptions)
-        ])
-        const mentionParticipants = await getMentionParticipants(
-          repoPath,
-          item,
-          comments,
-          participants,
-          resolvedRepository,
-          connectionId,
-          localGitOptions
-        )
-        return {
-          item: enrichItemDisplayAvatars(item, mentionParticipants),
-          body,
-          comments,
-          assignees: item.assignees?.map((user) => user.login) ?? assignees,
-          participants: mentionParticipants,
-          timelineItems
-        }
-      })
-    }
-
-    // Nested client reads own their semaphore permits, so they stay outside these permits.
-    const [{ viewedStates, participants }, metadata, files, comments] = await Promise.all([
-      withWorkItemDetailsPermit(() =>
-        getPRDetailContext(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
-      ),
-      withWorkItemDetailsPermit(() =>
-        getPRMetadata(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
-      ),
-      withWorkItemDetailsPermit(() =>
-        getPRFiles(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
-      ),
-      resolvedRepository
-        ? getPRComments(
-            repoPath,
-            item.number,
-            { prRepo: resolvedRepository },
-            connectionId,
-            ...localGitOptionArgs(localGitOptions)
+            localGitOptions
           )
-        : Promise.resolve([])
-    ])
+        ),
+        withWorkItemDetailsPermit(() =>
+          getPRMetadata(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
+        ),
+        withWorkItemDetailsPermit(() =>
+          getPRFiles(repoPath, item.number, resolvedRepository, connectionId, localGitOptions)
+        ),
+        resolvedRepository
+          ? getPRComments(
+              repoPath,
+              item.number,
+              // An explicit refresh must not join or reuse a read that started before it.
+              { prRepo: resolvedRepository, noCache: canonical },
+              connectionId,
+              ...localGitOptionArgs(localGitOptions)
+            )
+          : Promise.resolve([])
+      ])
 
-    const [mentionParticipants, checks] = await Promise.all([
-      withWorkItemDetailsPermit(() =>
-        getMentionParticipants(
+      const [mentionParticipants, checks] = await Promise.all([
+        withWorkItemDetailsPermit(() =>
+          getMentionParticipants(
+            repoPath,
+            item,
+            comments,
+            participants,
+            resolvedRepository,
+            connectionId,
+            localGitOptions
+          )
+        ),
+        getPRChecksForDetails(
           repoPath,
-          item,
-          comments,
-          participants,
+          item.number,
+          metadata.headSha,
           resolvedRepository,
           connectionId,
           localGitOptions
         )
-      ),
-      getPRChecksForDetails(
-        repoPath,
-        item.number,
-        metadata.headSha,
-        resolvedRepository,
-        connectionId,
-        localGitOptions
-      )
-    ])
+      ])
 
-    return {
-      item: enrichItemDisplayAvatars(
-        resolvedRepository ? { ...item, prRepo: resolvedRepository } : item,
-        mentionParticipants
-      ),
-      body: metadata.body,
-      comments,
-      headSha: metadata.headSha,
-      baseSha: metadata.baseSha,
-      pullRequestId: viewedStates?.pullRequestId,
-      checks,
-      files: files === null ? undefined : mergePRFileViewedStates(files, viewedStates),
-      filesUnavailable: files === null,
-      participants: mentionParticipants
-    }
-  })
+      return {
+        item: enrichItemDisplayAvatars(
+          resolvedRepository ? { ...item, prRepo: resolvedRepository } : item,
+          mentionParticipants
+        ),
+        body: metadata.body,
+        bodyImageUrls: metadata.bodyImageUrls,
+        comments,
+        headSha: metadata.headSha,
+        baseSha: metadata.baseSha,
+        pullRequestId: viewedStates?.pullRequestId,
+        checks,
+        files: files === null ? undefined : mergePRFileViewedStates(files, viewedStates),
+        filesUnavailable: files === null,
+        participants: mentionParticipants
+      }
+    },
+    expectedGhAccount
+  )
 }
 
 export async function getPRFileContents(args: {

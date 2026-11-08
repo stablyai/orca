@@ -1,11 +1,15 @@
-import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  isTerminalLeafId,
+  makePaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 import type {
   RuntimeTerminalListHostScope,
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../shared/runtime-types'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 /** The exact surface the execution host records as owning a live PTY. */

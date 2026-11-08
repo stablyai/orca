@@ -2,19 +2,25 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { projectRuntimePermission } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
 import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
+import type { AgentSessionRewindSupport } from '../../../src/shared/agent-session/lifecycle/agent-session-rewind'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/shared/agent-session/options/structured-agent-session-options-read-owner'
-import type { RpcClient } from '../transport/rpc-client'
+import { BoundedMap } from '../../../src/shared/bounded-map'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
-import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-model-catalog-ownership'
-import {
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionReportsAtFence
-} from '../../../src/shared/agent-session/options/structured-agent-session-options'
+import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
+import { structuredAgentSessionFirstFrameOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-first-frame'
+import type { HostModelCatalogCache } from './use-mobile-host-model-catalog-upgrade'
+import { structuredAgentSessionReportsAtFence } from '../../../src/shared/agent-session/options/structured-agent-session-runtime-reports'
+
+// Matches the transcripts this view retains per chat.
+const MAX_RETAINED_CHAT_READERS = 32
+const UNSUPPORTED_REWIND: AgentSessionRewindSupport = { supported: false, reason: 'unsupported' }
 
 export function useMobileStructuredOptionState(args: {
+  modelCatalogCache?: HostModelCatalogCache | null
   client: RpcClient | null
   optionStamp?: string
   sendSelection?: boolean
@@ -28,6 +34,7 @@ export function useMobileStructuredOptionState(args: {
   optionCatalog: AgentSessionOptionCatalog | null
   sessionId: string | null
   turnId: string | null
+  unloadedTurnRevisions: number | undefined
 }) {
   const {
     agent,
@@ -37,6 +44,8 @@ export function useMobileStructuredOptionState(args: {
     optionCatalog,
     sessionId,
     turnId,
+    unloadedTurnRevisions,
+    modelCatalogCache,
     client,
     optionStamp,
     sendSelection,
@@ -57,11 +66,32 @@ export function useMobileStructuredOptionState(args: {
   )
   const providerStarting = summary?.hostExecutionPhase === 'starting'
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
-  const [reader] = useState(() =>
-    createStructuredAgentSessionOptionsReadOwner(
-      createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
+  // The host's last list for this agent when this world holds one, else the quiet placeholder until the host answers.
+  const firstFrame = () =>
+    structuredAgentSessionFirstFrameOptionState(
+      agent ?? 'codex',
+      optionCatalog,
+      modelCatalogCache?.seed({ newLaunch, seedsModel: false, ...(worktree ? { worktree } : {}) }),
+      { newLaunch, coherentCatalog }
     )
+  // One view serves every chat tab, so each chat keeps its own reader and its last answer on return.
+  const [readers] = useState(
+    () =>
+      new BoundedMap<string, ReturnType<typeof createStructuredAgentSessionOptionsReadOwner>>({
+        maxEntries: MAX_RETAINED_CHAT_READERS
+      })
   )
+  const chatKey = JSON.stringify([agent, sessionId])
+  const reader = useMemo(() => {
+    const retained = readers.get(chatKey)
+    if (retained) {
+      return retained
+    }
+    const created = createStructuredAgentSessionOptionsReadOwner(firstFrame())
+    readers.set(chatKey, created)
+    return created
+  }, [readers, chatKey, agent, optionCatalog])
+  useEffect(() => () => reader.markAway(), [reader])
   // An older fence's report is stale from the render its fence changes in, before re-attach clears it.
   const projectRuntimeReports = <
     T extends { reportedPermissionMode?: string | null; reportedEffort?: string }
@@ -97,31 +127,51 @@ export function useMobileStructuredOptionState(args: {
     [contextKey, client]
   )
   // Projected once per accepted answer so consumers keep stable references between answers.
-  const { conversationSupport, imageSupport } = useMemo(
+  const { conversationSupport, imageSupport, threadGoalSupport, rewindSupport } = useMemo(
     () =>
       support && support.sessionId !== null
         ? {
             conversationSupport: {
               sessionId: support.sessionId,
-              commands: support.result.conversationCommands ?? []
+              commands: support.result.conversationCommands ?? [],
+              compactInstructions: support.result.compactInstructions === true,
+              forkSupport: support.result.forkSupport,
+              contextUsage: support.result.contextUsage
             },
             imageSupport: {
               sessionId: support.sessionId,
               acceptsImages: support.result.acceptsImages,
               statesPermissionMode: support.result.current?.permissionMode !== undefined
+            },
+            threadGoalSupport: {
+              sessionId: support.sessionId,
+              support: support.result.threadGoal,
+              reported: support.result.reportedThreadGoal
+            },
+            rewindSupport: {
+              sessionId: support.sessionId,
+              fence: support.fence,
+              support: support.result.rewind ?? UNSUPPORTED_REWIND,
+              contextFloor:
+                support.result.contextUsage?.contextFloor ?? support.result.threadGoal?.contextFloor
             }
           }
-        : { conversationSupport: null, imageSupport: null },
+        : {
+            conversationSupport: null,
+            imageSupport: null,
+            threadGoalSupport: null,
+            rewindSupport: null
+          },
     [support]
   )
   useEffect(
     () =>
       reader.attach({
-        owner: [agent, sessionId, client, controller],
+        owner: [agent, sessionId, client],
         reset: [contextKey, clientGeneration, enabled, optionCatalog],
         sessionId,
         fence,
-        seed: () => createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog),
+        seed: firstFrame,
         controller,
         eligible:
           !!client &&
@@ -167,7 +217,9 @@ export function useMobileStructuredOptionState(args: {
     ]
   )
   // A turn or host status change rereads within the same lease, as on desktop; it is not a new context.
-  const readStamp = JSON.stringify([optionStamp, turnId])
+  // So does a turn row leaving the loaded window, whose context facts only the host's answer still holds.
+  const contextRefresh = conversationSupport?.contextUsage ? (unloadedTurnRevisions ?? 0) : 0
+  const readStamp = JSON.stringify([optionStamp, turnId, contextRefresh])
   const seenReadStamp = useRef(readStamp)
   useEffect(() => {
     if (seenReadStamp.current !== readStamp) {
@@ -180,6 +232,10 @@ export function useMobileStructuredOptionState(args: {
     projectRuntimeReports,
     conversationSupport,
     imageSupport,
+    threadGoalSupport,
+    rewindSupport,
+    /** The host's in-doubt rewind latch, from its status feed. */
+    rewindBlockedReason: summary?.rewindBlockedReason ?? undefined,
     controller,
     reread,
     receiveCatalog,

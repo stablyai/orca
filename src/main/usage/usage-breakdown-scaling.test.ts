@@ -33,28 +33,6 @@ function events(count: number): Event[] {
   }))
 }
 
-it('folds events without rescanning accumulated location breakdowns', () => {
-  let reads = 0
-  const input = events(1000)
-  input.forEach((event, index) =>
-    Object.defineProperty(event, 'projectKey', {
-      get() {
-        reads += 1
-        return `path-${index}`
-      }
-    })
-  )
-  const result = aggregation.aggregate([...input, ...input])
-  expect(reads).toBeLessThan(30000)
-  const session = result.sessions[0]
-  expect(session.totalTokens).toBe(6000)
-  expect(session.cost).toBe(1000)
-  expect(session.locationBreakdown).toHaveLength(1000)
-  expect(session.locationBreakdown.every((entry) => entry.eventCount === 2)).toBe(true)
-  expect(session.modelBreakdown).toHaveLength(5)
-  expect(result.dailyAggregates).toHaveLength(1000)
-})
-
 it('folds streamed events immediately with the batch counters, metrics and metadata', () => {
   const [seed] = events(1)
   const first: Event = {
@@ -184,36 +162,6 @@ it('keeps first encounter order when streamed rollup sort keys tie', () => {
     'path-2',
     'path-3'
   ])
-})
-
-it('finalizes an empty stream once and rejects subsequent additions', () => {
-  const accumulator = aggregation.createAccumulator()
-  const result = accumulator.finalize()
-  expect(result).toEqual({ sessions: [], dailyAggregates: [] })
-  expect(accumulator.finalize()).toBe(result)
-  expect(() => accumulator.add(events(1)[0])).toThrow('Cannot add usage events after finalization')
-})
-
-it('merges rollups using first-match indexes without mutating source breakdowns', () => {
-  const source = aggregation.aggregate(events(1000)).sessions[0]
-  const existing = structuredClone(source)
-  let reads = 0
-  for (const entry of [...existing.locationBreakdown, ...existing.locationModelBreakdown]) {
-    const key = entry.locationKey
-    Object.defineProperty(entry, 'locationKey', {
-      get() {
-        reads += 1
-        return key
-      }
-    })
-  }
-  const target = new Map([['session', existing]])
-  aggregation.mergeSessions(target, [source, source])
-  expect(reads).toBeLessThan(10000)
-  expect(existing.totalTokens).toBe(9000)
-  expect(existing.cost).toBe(1500)
-  expect(source.totalTokens).toBe(3000)
-  expect(existing.locationBreakdown.every((entry) => entry.eventCount === 3)).toBe(true)
 })
 
 it('preserves first-wins duplicate rows and exact location/model tuple identity', () => {

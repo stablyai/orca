@@ -17,7 +17,7 @@ import type {
   MobileGitBranchCompareReply
 } from './git-compare-reply-schema'
 import type { MobileGitStatusHostPayload } from './git-status-reply-schema'
-import type { ConflictResolution } from '../../../src/shared/source-control-entry-actions'
+import type { ConflictResolution } from '../../../src/shared/source-control/listing/source-control-entry-actions'
 import {
   canOpenMobileGitStatusEntry,
   getMobileConflictResolutions,
@@ -34,16 +34,9 @@ export type ScreenState =
   | { kind: 'error'; message: string }
 
 export type LoadStatusOptions = {
-  preserveReadyOnFailure?: boolean
   clearActionErrorOnSuccess?: boolean
   force?: boolean
   rereadSettings?: boolean
-}
-
-export type StatusLoadInFlight = {
-  key: string
-  client: unknown
-  promise: Promise<boolean>
 }
 
 export type GitRequestError = Error & { code?: string }

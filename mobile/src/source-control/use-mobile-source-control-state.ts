@@ -1,9 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import { getWorktreeLabel } from '../session/worktree-label'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { getWorktreeLabel } from '../worktree/worktree-label'
 import { useMobileGitRequests } from './use-mobile-git-requests'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
 import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
@@ -68,6 +68,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   }, [recordCommitFailure])
 
   const loaders = useMobileSourceControlLoaders({
+    hostId,
     client,
     connState,
     statusIdentityKey,
@@ -204,7 +205,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     insets,
     router,
     setRootRef,
-    worktreeLabel,
+    worktreeLabel: status ? branchLabel : worktreeLabel,
     screenState,
     branchCompareState,
     busyAction,
@@ -242,6 +243,7 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
     createPrAction,
     loadStatus,
     rebaseBaseRef: loaders.rebaseBaseRef,
+    refreshing: loaders.refreshing,
     openDiffForFile,
     ...runners
   }

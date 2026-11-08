@@ -14,6 +14,19 @@ export type RuntimeOwnedSshConnectionResult = {
   environmentId: string
 }
 
+/** Saves the recipe's current SSH address for its VM without dialing it, so a later explicit
+ *  Connect reaches the VM where it now is. */
+export function refreshRuntimeOwnedSshTarget(args: {
+  runtimeId: string
+  connection: Extract<EphemeralVmRecipeConnection, { type: 'ssh' }>
+}): SshTarget {
+  const store = getSshConnectionStore()
+  if (!store) {
+    throw new Error('SSH handlers are not registered.')
+  }
+  return store.upsertRuntimeOwnedTarget(args.runtimeId, args.connection.target)
+}
+
 export async function connectRuntimeOwnedSshTarget(args: {
   runtimeId: string
   connection: Extract<EphemeralVmRecipeConnection, { type: 'ssh' }>

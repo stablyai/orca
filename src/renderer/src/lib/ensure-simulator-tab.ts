@@ -2,7 +2,7 @@ import { useAppStore } from '@/store'
 import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
-import { createBrowserUuid } from './browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   findAmbiguousWorktreeIds,
@@ -10,7 +10,7 @@ import {
   isUnifiedTabOwnedByWorktree
 } from './unified-tab-host-ownership'
 import { isExecutionHostAliasForWorktree } from './worktree-execution-host-alias'
-import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import {
   frameDrawnServerOfSimulatorTab,
@@ -18,7 +18,7 @@ import {
   openingSimulatorTabId,
   openSimulatorTabThroughLayoutOwner
 } from './simulator-tab-layout-owner'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { SIMULATOR_DEFAULT_TAB_LABEL } from './simulator-tab-label'
 
 type EnsureSimulatorTabOptions = {

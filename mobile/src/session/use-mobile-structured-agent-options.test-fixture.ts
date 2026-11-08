@@ -1,5 +1,6 @@
 import { createElement, useLayoutEffect } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
@@ -7,7 +8,7 @@ import type {
 } from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   StructuredAgentSessionMutate,
   StructuredAgentSessionMutationResult
@@ -145,7 +146,9 @@ type ProbeProps = {
   turnId?: string | null
   sendSelection?: boolean
   coherentCatalog?: boolean
+  modelEffortDiscovery?: boolean
   permissionOwn?: boolean
+  onOptionError?: (message: string) => void
   onRender: (controller: Controller) => void
 }
 
@@ -156,7 +159,9 @@ function Probe(props: ProbeProps): null {
     sessionId: props.sessionId,
     enabled: true,
     fence: props.fence,
+    unloadedTurnRevisions: undefined,
     mutate: props.mutate,
+    onOptionError: props.onOptionError,
     turnId: props.turnId ?? null,
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
     hostSupport: {
@@ -165,7 +170,8 @@ function Probe(props: ProbeProps): null {
       sendOptions: false,
       statusFeed: false,
       sendSelection: props.sendSelection,
-      coherentModelCatalog: props.coherentCatalog
+      coherentModelCatalog: props.coherentCatalog,
+      modelEffortDiscovery: props.modelEffortDiscovery
     }
   })
   useLayoutEffect(() => props.onRender(controller), [controller, props.onRender])
@@ -181,12 +187,14 @@ async function settle() {
 
 async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   let rendered: Controller | null = null
+  const commits: Controller[] = []
   const onRender = (controller: Controller) => {
     rendered = controller
+    commits.push(controller)
   }
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
-    renderer = create(createElement(Probe, { ...props, onRender }))
+    renderer = createWithQueryClient(createElement(Probe, { ...props, onRender }))
   })
   await settle()
   const current = (): Controller => {
@@ -197,6 +205,7 @@ async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   }
   return {
     current,
+    commits,
     rerender: async (next: Partial<Omit<ProbeProps, 'onRender'>>) => {
       await act(async () => {
         renderer?.update(createElement(Probe, { ...props, ...next, onRender }))

@@ -23,12 +23,12 @@ import type { MobileNativeChatSendOutcome } from '../mobile-native-chat-send'
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
-} from '../../../../../src/shared/native-chat-pty-session-options'
+} from '../../../../../src/shared/native-chat/input/native-chat-pty-session-options'
 import {
   clearNativeChatSessionOptionCacheForTests,
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
-} from '../../../../../src/shared/native-chat-session-option-cache'
+} from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
 import {
   createNativeChatSessionOptionRecord,
   matchNativeChatCatalogModelId
@@ -39,9 +39,14 @@ import { sayMobileNativeChatSessionOption } from './native-chat-session-option-c
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
   optionPickerRequest?: { id: string; sequence: number } | null
   snapshot: SessionOptionDescriptor[]
   pendingId: string | null
+  /** Structured picks are taken before the chat attaches and applied when it does. */
+  appliesOnAttach?: boolean
+  /** A pick waits for the chat to attach. */
+  heldPick?: boolean
   setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   invokeAction: (id: string) => Promise<boolean>
   recordCommand: (command: string) => void

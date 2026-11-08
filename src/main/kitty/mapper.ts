@@ -1,9 +1,9 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { TerminalColorOverrides } from '../../shared/terminal-color-overrides'
+import type { TerminalColorOverrides } from '../../shared/terminal-themes/terminal-color-overrides'
 import {
   normalizeTerminalHexColor,
   TERMINAL_ANSI_COLOR_KEYS
-} from '../../shared/terminal-custom-themes'
+} from '../../shared/terminal-themes/terminal-custom-themes'
 import type { KittyConfig } from './parser'
 
 // Maps, not object literals, so option names like `constructor` cannot hit prototype keys.

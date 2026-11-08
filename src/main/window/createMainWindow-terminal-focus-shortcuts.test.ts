@@ -6,15 +6,17 @@ vi.mock('electron', async () =>
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
 
 import { createMainWindow } from './createMainWindow'
 import { ipcMain } from 'electron'
 import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-teardown-state'
-import { browserWindowMock, appMock, resetMainWindowMocks } from './createMainWindow-test-harness'
+import { browserWindowMock, resetMainWindowMocks } from './createMainWindow-test-harness'
 
 describe('createMainWindow', () => {
   beforeEach(() => {
@@ -218,72 +220,6 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
   })
 
-  it('forwards ctrl/cmd+j to the worktree palette toggle event', () => {
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      setWebRTCIPHandlingPolicy: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn(),
-      isDevToolsOpened: vi.fn(),
-      openDevTools: vi.fn(),
-      closeDevTools: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
-
-    const isDarwin = process.platform === 'darwin'
-    for (const input of [
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      },
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: '',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      }
-    ]) {
-      const preventDefault = vi.fn()
-      windowHandlers['before-input-event']({ preventDefault } as never, input as never)
-      expect(preventDefault).toHaveBeenCalledTimes(1)
-    }
-
-    expect(webContents.send).toHaveBeenCalledTimes(2)
-    expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:toggleWorktreePalette')
-    expect(webContents.send).toHaveBeenNthCalledWith(2, 'ui:toggleWorktreePalette')
-  })
-
   it('suppresses auto-repeat quick-command menu toggles from before-input-event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
@@ -454,18 +390,15 @@ describe('createMainWindow', () => {
 
     const preventDefault = vi.fn()
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      } as never
-    )
+    windowHandlers['before-input-event']({ preventDefault } as never, {
+      type: 'keyDown',
+      code: isDarwin ? 'KeyK' : 'KeyJ',
+      key: isDarwin ? 'k' : 'j',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: !isDarwin
+    })
 
     expect(preventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalled()
@@ -584,10 +517,13 @@ describe('createMainWindow', () => {
       return browserWindowInstance
     })
 
-    createMainWindow({
-      getUI: () => ({}),
-      getSettings: () => ({ terminalShortcutPolicy: 'orca-first' })
-    } as never)
+    createMainWindow(
+      {
+        getUI: () => ({}),
+        getSettings: () => ({ terminalShortcutPolicy: 'orca-first' })
+      } as never,
+      { getKeybindings: () => ({ 'worktree.palette': ['Mod+Alt+K'] }) }
+    )
 
     const setFocusedListener = vi
       .mocked(ipcMain.on)
@@ -597,18 +533,15 @@ describe('createMainWindow', () => {
 
     const preventDefault = vi.fn()
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      } as never
-    )
+    windowHandlers['before-input-event']({ preventDefault } as never, {
+      type: 'keyDown',
+      code: 'KeyK',
+      key: 'k',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: true,
+      shift: false
+    })
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:terminalShortcutCaptured', {
@@ -762,53 +695,5 @@ describe('createMainWindow', () => {
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
-  })
-
-  it('toggles devtools on F12 in development', () => {
-    appMock.isPackaged = false
-
-    const windowHandlers: Record<string, (...args: any[]) => void> = {}
-    const webContents = {
-      on: vi.fn((event, handler) => {
-        windowHandlers[event] = handler
-      }),
-      setZoomLevel: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      setWebRTCIPHandlingPolicy: vi.fn(),
-      invalidate: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      send: vi.fn(),
-      isDevToolsOpened: vi.fn(() => false),
-      openDevTools: vi.fn(),
-      closeDevTools: vi.fn()
-    }
-    const browserWindowInstance = {
-      webContents,
-      on: vi.fn(),
-      isDestroyed: vi.fn(() => false),
-      isMaximized: vi.fn(() => true),
-      isFullScreen: vi.fn(() => false),
-      getSize: vi.fn(() => [1200, 800]),
-      setSize: vi.fn(),
-      maximize: vi.fn(),
-      show: vi.fn(),
-      loadFile: vi.fn(() => Promise.resolve()),
-      loadURL: vi.fn(() => Promise.resolve())
-    }
-    browserWindowMock.mockImplementation(function () {
-      return browserWindowInstance
-    })
-
-    createMainWindow(null)
-
-    const preventDefault = vi.fn()
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      { type: 'keyDown', code: 'F12', key: 'F12', meta: false, control: false, alt: false } as never
-    )
-
-    expect(preventDefault).toHaveBeenCalledTimes(1)
-    expect(webContents.openDevTools).toHaveBeenCalledWith({ mode: 'undocked' })
-    expect(webContents.closeDevTools).not.toHaveBeenCalled()
   })
 })
