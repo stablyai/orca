@@ -1,5 +1,6 @@
 import type { DiscoveredSkill } from '../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   addSelectableSkillResults,
   eligibleSkillSelectionCount,
@@ -14,28 +15,29 @@ export function isSkillShareEligible(skill: DiscoveredSkill, local: boolean): bo
 export function skillShareEligibilityReason(
   skill: DiscoveredSkill,
   local: boolean,
-  duplicateNameSelected = false
+  duplicateNameSelected = false,
+  t: Translate = translate
 ): string | null {
   if (!local) {
-    return translate(
+    return t(
       'auto.components.skills.SkillShareSelectionControls.01c5a15e06',
       'Open this skill on its owning machine to share it.'
     )
   }
   if (!skill.installed) {
-    return translate(
+    return t(
       'auto.components.skills.SkillShareSelectionControls.01c5a15e07',
       'Install this skill before sharing it.'
     )
   }
   if (skill.sourceKind !== 'home' && skill.sourceKind !== 'repo') {
-    return translate(
+    return t(
       'auto.components.skills.SkillShareSelectionControls.01c5a15e08',
       'Only home and workspace skills can be shared.'
     )
   }
   return duplicateNameSelected
-    ? translate(
+    ? t(
         'auto.components.skills.SkillShareSelectionControls.01c5a15e09',
         'A skill with this name is already selected from another source.'
       )

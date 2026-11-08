@@ -1,12 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type * as ChatTabLayoutQueueModule from '../../src/main/runtime/agent-session-tab-layout-queue'
+import type * as ChatTabLayoutQueueModule from '../../src/main/runtime/agent-session/agent-session-tab-layout-queue'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
 import {
   authorityProfile,
   openAuthorityRuntime
 } from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
-import type { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session-tab-layout-queue'
+import type { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session/agent-session-tab-layout-queue'
 import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
 import {
   loadChatTabLayout,
@@ -22,7 +22,7 @@ const queueProbe = vi.hoisted(() => {
     queues
   }
 })
-vi.mock('../../src/main/runtime/agent-session-tab-layout-queue', async (original) => {
+vi.mock('../../src/main/runtime/agent-session/agent-session-tab-layout-queue', async (original) => {
   const module = await original<typeof ChatTabLayoutQueueModule>()
   return {
     ...module,
@@ -153,7 +153,7 @@ it.each([10, 100])(
     const { buildMobileSessionTabSnapshots } =
       await import('../../src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots')
     const { makeState } =
-      await import('../../src/renderer/src/runtime/sync-runtime-graph-test-harness')
+      await import('../../src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness')
     const mappings =
       await import('../../src/renderer/src/runtime/web-session-tabs-sync/tracking-mappings')
     const { hostSessionTabIdByLocalKey } =

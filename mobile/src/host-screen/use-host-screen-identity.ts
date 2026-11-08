@@ -9,6 +9,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { HostScreenState } from './use-host-screen-state'
 import { storedHostDescriptor } from './host-stored-identity'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
+import { cachedHostView } from './host-view-memory'
 import { cachedHostWorktrees } from './host-list-queries'
 
 // The host as last read this launch, so the title's first frame shows its name, not "Host".
@@ -74,8 +75,9 @@ export function useHostScreenIdentity(args: {
     setError('')
     setRepoHostIdByRepoId(new Map())
     // Another desktop's Workspace options must not stand in until this one's are read.
-    viewRef.current = INITIAL_MOBILE_VIEW
-    setView(INITIAL_MOBILE_VIEW)
+    const seedView = cachedHostView(queryClient, hostId) ?? INITIAL_MOBILE_VIEW
+    viewRef.current = seedView
+    setView(seedView)
     setHostLabelById(new Map())
     setServedProjectSections(null)
     setDesktopRepos([])

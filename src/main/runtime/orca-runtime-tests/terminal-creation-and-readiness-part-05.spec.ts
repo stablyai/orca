@@ -23,7 +23,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from './orca-runtime-test-fixtures.spec'
-import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
+import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
 

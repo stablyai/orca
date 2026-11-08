@@ -4,7 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 const LOCAL_REPO: Repo = {
   id: 'repo-local',

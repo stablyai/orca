@@ -12,7 +12,7 @@ import {
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { toast } from 'sonner'
 import { getClaudeAccountErrorDescription } from '../settings/accounts/accounts-pane-action-errors'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
@@ -54,6 +54,7 @@ export function ClaudeSwitcherForOwner({
   chatAction,
   owner
 }: ClaudeSwitcherMenuProps & { owner: AccountOwner }): React.JSX.Element | null {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [isSwitching, setIsSwitching] = useState(false)
   const [signingInId, setSigningInId] = useState<string | null>(null)
@@ -77,8 +78,7 @@ export function ClaudeSwitcherForOwner({
     claudeAccountSyncKey
   } = useClaudeSwitcherState(chatAction, activeRuntimeEnvironmentId)
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
-    ? (ownHostName ??
-      translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
+    ? (ownHostName ?? t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
     : undefined
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
@@ -129,7 +129,7 @@ export function ClaudeSwitcherForOwner({
     try {
       if (chatAction && !(await chatAction.canSwitch())) {
         toast.error(
-          translate(
+          t(
             'components.native-chat.usageLimitActions.accountUnavailable',
             'This chat cannot move to another account. Hand it off to another agent instead.'
           )
@@ -161,10 +161,7 @@ export function ClaudeSwitcherForOwner({
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)
       toast.error(
-        translate(
-          'auto.components.settings.AccountsPane.2743cdc0af',
-          'Claude account update failed.'
-        ),
+        t('auto.components.settings.AccountsPane.2743cdc0af', 'Claude account update failed.'),
         { description: getClaudeAccountErrorDescription(error) }
       )
     } finally {
@@ -297,7 +294,7 @@ export function ClaudeSwitcherForOwner({
       asSubmenu={asSubmenu}
       triggerContent={triggerContent}
       trigger={accountControl?.button}
-      ariaLabel={translate(
+      ariaLabel={t(
         'auto.components.status.bar.StatusBar.3dd7ddfae1',
         'Open Claude details and account switcher'
       )}
@@ -305,7 +302,7 @@ export function ClaudeSwitcherForOwner({
       accountLabel={
         !hasActiveRuntimeEnvironment
           ? (selectedGroup?.targets.find((target) => target.active)?.label ??
-            translate('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
+            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
       }
       topContent={
@@ -314,10 +311,7 @@ export function ClaudeSwitcherForOwner({
             groups={switchGroups}
             value={selectedGroup?.key ?? selectedRuntimeKey}
             onChange={(group) => void handleSelectRuntime(group)}
-            ariaLabel={translate(
-              'auto.components.status.bar.StatusBar.11e2354daf',
-              'Claude usage runtime'
-            )}
+            ariaLabel={t('auto.components.status.bar.StatusBar.11e2354daf', 'Claude usage runtime')}
           />
         )
       }
@@ -325,7 +319,7 @@ export function ClaudeSwitcherForOwner({
       onOpenChange={handleOpenChange}
     >
       <AccountSwitchSection
-        heading={translate('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
+        heading={t('auto.components.status.bar.StatusBar.d450654fa2', 'Claude Account')}
         targets={selectedGroup?.targets ?? []}
         panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
         onOpenSettings={() => {

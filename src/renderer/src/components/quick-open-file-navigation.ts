@@ -5,7 +5,7 @@ import { joinPath, getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { RuntimeTerminalPathResolution } from '../../../shared/runtime-file-contracts'
 import { resolveWslRepoWorktreeBasePath } from '../../../shared/wsl-paths'
 import {

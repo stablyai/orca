@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
+import '../orca-runtime-test-mocks/setup.spec'
+import { RpcDispatcher } from '../rpc/dispatcher'
+import { TERMINAL_METHODS } from '../rpc/methods/terminal/terminal'
 import { makeRpcRequest, store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {

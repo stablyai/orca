@@ -9,7 +9,7 @@ import {
   RipgrepFilenameError
 } from '../../../shared/ripgrep-filename-decoder'
 import { sep } from 'node:path'
-import type { RuntimeStore as Store } from '../../runtime/runtime-store-contract'
+import type { RuntimeStore as Store } from '../../runtime/construction/runtime-store-contract'
 import { resolveAuthorizedPath } from './access/filesystem-auth'
 import { toWindowsWslPath } from '../../../shared/wsl-paths'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'

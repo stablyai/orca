@@ -39,8 +39,6 @@ export async function openCache(
   hostKey: string
 ): Promise<CachedGeneration | null> {
   try {
-    // Sweep lazily from mounted shells so disabling the feature leaves cache untouched; the store sweeps once per launch.
-    await store.sweepStagedGenerations()
     const active = await store.readActiveGeneration(hostKey)
     return active === null
       ? null
@@ -192,11 +190,23 @@ export async function stageUpdate(
     send({ type: 'download-failed', flow, cause: NO_CONNECTION })
     return
   }
-  // Another page on this host already staged it; restaging would rewrite the waiting tree.
-  if (store.hasDeferredCommit(hostKey, opened.manifest.buildId)) {
+  // Wait out another page fetching it, and skip it once staged; restaging would rewrite the waiting tree.
+  const leaving = new AbortController()
+  args.downloads.add(leaving)
+  const release = await store.claimUpdate(hostKey, opened.manifest.buildId)
+  args.downloads.delete(leaving)
+  if (release === null) {
     return
   }
-  await fetchAndStage({ ...args, client }, false, async (staged) => store.deferCommit(staged))
+  if (leaving.signal.aborted) {
+    release()
+    return
+  }
+  try {
+    await fetchAndStage({ ...args, client }, false, async (staged) => store.deferCommit(staged))
+  } finally {
+    release()
+  }
 }
 
 type ShellPageDeadline = ReturnType<typeof createShellPageDeadline>

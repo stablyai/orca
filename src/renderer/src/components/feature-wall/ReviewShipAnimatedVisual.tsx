@@ -13,10 +13,11 @@ import {
   SHIP_FILES
 } from './review-animated-visual-shared'
 import { ReviewShipVisualStyles } from './review-animated-visual-ship-styles'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { forceLayoutReflow } from '@/lib/force-layout-reflow'
 
 export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
+  const t = useTranslate()
   const { reducedMotion } = props
   const rootRef = useRef<HTMLDivElement | null>(null)
 
@@ -236,7 +237,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
 
     return () => {
       cancelled = true
-      timers.forEach((t) => window.clearTimeout(t))
+      timers.forEach((timer) => window.clearTimeout(timer))
     }
   }, [reducedMotion])
 
@@ -247,7 +248,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
           <div className="ravs-sc-header">
             <span className="ravs-sc-ahead">
               <ArrowUpIcon />{' '}
-              {translate(
+              {t(
                 'auto.components.feature.wall.ReviewShipAnimatedVisual.cd8a3a39d7',
                 '3 commits ahead'
               )}
@@ -259,7 +260,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
                 type="button"
                 className="ravs-sc-sparkle"
                 data-commit-sparkle
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.feature.wall.ReviewShipAnimatedVisual.d1a7f15876',
                   'Generate commit message with AI'
                 )}
@@ -267,10 +268,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
                 <Sparkles className="size-3.5" />
               </button>
               <span className="ravs-placeholder" data-commit-placeholder>
-                {translate(
-                  'auto.components.feature.wall.ReviewShipAnimatedVisual.7347fa5839',
-                  'Message'
-                )}
+                {t('auto.components.feature.wall.ReviewShipAnimatedVisual.7347fa5839', 'Message')}
               </span>
               <span data-commit-typed />
               <span className="ravs-caret" />
@@ -278,10 +276,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
             <div className="ravs-sc-split" data-sc-split>
               <span className="ravs-primary">
                 <CheckTinyIcon />{' '}
-                {translate(
-                  'auto.components.feature.wall.ReviewShipAnimatedVisual.a079083a6c',
-                  'Commit'
-                )}
+                {t('auto.components.feature.wall.ReviewShipAnimatedVisual.a079083a6c', 'Commit')}
               </span>
               <span className="ravs-chev">
                 <ChevDownIcon />
@@ -290,17 +285,11 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
           </div>
           <div className="ravs-sc-changes-header">
             <span>
-              {translate(
-                'auto.components.feature.wall.ReviewShipAnimatedVisual.e725000cd7',
-                'Changes'
-              )}{' '}
+              {t('auto.components.feature.wall.ReviewShipAnimatedVisual.e725000cd7', 'Changes')}{' '}
               <span className="ravs-sc-changes-count">{SHIP_FILES.length}</span>
             </span>
             <span className="ravs-sc-view-all">
-              {translate(
-                'auto.components.feature.wall.ReviewShipAnimatedVisual.ea0100dd15',
-                'View all'
-              )}
+              {t('auto.components.feature.wall.ReviewShipAnimatedVisual.ea0100dd15', 'View all')}
             </span>
           </div>
           <div className="ravs-sc-files">
@@ -319,7 +308,7 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
         <div className="ravs-pr-dialog">
           <div className="ravs-pr-head">
             <div className="ravs-pr-title-text">
-              {translate(
+              {t(
                 'auto.components.feature.wall.ReviewShipAnimatedVisual.c30cd930ff',
                 'Create Pull Request'
               )}
@@ -328,11 +317,11 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
               type="button"
               className="ravs-pr-gen-btn"
               data-pr-gen-btn
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.feature.wall.ReviewShipAnimatedVisual.e4473d438f',
                 'Generate with AI'
               )}
-              title={translate(
+              title={t(
                 'auto.components.feature.wall.ReviewShipAnimatedVisual.e4473d438f',
                 'Generate with AI'
               )}
@@ -343,29 +332,23 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
           <div className="ravs-pr-body">
             <div className="ravs-pr-field">
               <div className="ravs-pr-field-label">
-                {translate(
+                {t(
                   'auto.components.feature.wall.ReviewShipAnimatedVisual.ce7d5d3a18',
                   'Base branch'
                 )}
               </div>
               <span className="ravs-pr-base">
                 <GitBranch className="size-3" />{' '}
-                {translate(
-                  'auto.components.feature.wall.ReviewShipAnimatedVisual.3b9b96d6a6',
-                  'main'
-                )}
+                {t('auto.components.feature.wall.ReviewShipAnimatedVisual.3b9b96d6a6', 'main')}
               </span>
             </div>
             <div className="ravs-pr-field">
               <div className="ravs-pr-field-label">
-                {translate(
-                  'auto.components.feature.wall.ReviewShipAnimatedVisual.54a093c52d',
-                  'Title'
-                )}
+                {t('auto.components.feature.wall.ReviewShipAnimatedVisual.54a093c52d', 'Title')}
               </div>
               <div className="ravs-pr-input" data-pr-title>
                 <span className="ravs-placeholder">
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.ReviewShipAnimatedVisual.07da9245cc',
                     'Pull request title'
                   )}
@@ -375,14 +358,14 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
             </div>
             <div className="ravs-pr-field">
               <div className="ravs-pr-field-label">
-                {translate(
+                {t(
                   'auto.components.feature.wall.ReviewShipAnimatedVisual.3774b80eae',
                   'Description'
                 )}
               </div>
               <div className="ravs-pr-input is-body" data-pr-body>
                 <span className="ravs-placeholder">
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.ReviewShipAnimatedVisual.bcd5cae3c4',
                     'Pull request description'
                   )}
@@ -392,16 +375,10 @@ export function ReviewShipAnimatedVisual(props: { reducedMotion: boolean }): JSX
             </div>
             <div className="ravs-pr-footer">
               <button type="button" className="ravs-pr-btn is-outline">
-                {translate(
-                  'auto.components.feature.wall.ReviewShipAnimatedVisual.62544e0852',
-                  'Cancel'
-                )}
+                {t('auto.components.feature.wall.ReviewShipAnimatedVisual.62544e0852', 'Cancel')}
               </button>
               <button type="button" className="ravs-pr-btn is-solid" data-pr-create-btn>
-                {translate(
-                  'auto.components.feature.wall.ReviewShipAnimatedVisual.4d99496b8c',
-                  'Create PR'
-                )}
+                {t('auto.components.feature.wall.ReviewShipAnimatedVisual.4d99496b8c', 'Create PR')}
               </button>
             </div>
           </div>

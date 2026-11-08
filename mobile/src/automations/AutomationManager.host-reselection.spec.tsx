@@ -1,5 +1,5 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, type vi } from 'vitest'
 import { AutomationManager } from './AutomationManager'
 import { AutomationList } from './AutomationList'
@@ -11,6 +11,7 @@ import {
   savedAutomation,
   savedRun
 } from './automation-test-fixtures'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 
 export function registerAutomationHostReselectionTests({
   inventory,
@@ -73,7 +74,11 @@ export function registerAutomationHostReselectionTests({
       throw new Error(`Unexpected request: ${method}`)
     })
     await act(async () => {
-      setTree(create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' })))
+      setTree(
+        createWithQueryClient(
+          createElement(AutomationManager, { client: port.client, hostId: 'desktop' })
+        )
+      )
     })
     await act(async () => {
       const list = root().findByType(AutomationList)

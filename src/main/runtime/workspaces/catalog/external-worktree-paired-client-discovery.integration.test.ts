@@ -20,7 +20,7 @@ import {
   send,
   type PairedSession,
   type ResponseReader
-} from '../../paired-client-navigation-test-harness'
+} from '../../client/navigation/paired-client-navigation-test-harness'
 import { OrcaRuntimeRpcServer } from '../../rpc/server/runtime-rpc'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {

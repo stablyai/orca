@@ -11,7 +11,7 @@ import {
   getRuntimeTargetHostId,
   type HostRoute
 } from '../../../../runtime/rpc/targets/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { OWN_LINEAGE_STORE_KEY } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 import {
   lineageStoreKeyOfTarget,

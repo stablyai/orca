@@ -28,7 +28,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from './orca-runtime-test-fixtures.spec'
-import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
+import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
 
 describe('OrcaRuntimeService', () => {
   it('creates mobile session terminals for folder workspaces in a headless runtime server', async () => {

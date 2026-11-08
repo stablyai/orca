@@ -19,7 +19,7 @@ import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal
 import {
   closeFileExplorerWatcherInWatcherProcess,
   watchFileExplorerInWatcherProcess
-} from '../../file-watcher-host'
+} from './file-watcher-host'
 
 type RuntimeFileWatchHost = Pick<
   RuntimeFileCommandHost,

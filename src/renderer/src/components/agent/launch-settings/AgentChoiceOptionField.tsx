@@ -3,6 +3,7 @@ import { Label } from '../../ui/label'
 import { SelectTrigger, SelectValue } from '../../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SourceControlActionChoiceRoute } from '../../../../../shared/source-control/ai/recipes/source-control-action-options'
 
 export function SourceControlActionOptionField({
@@ -24,11 +25,14 @@ export function SourceControlActionOptionField({
 }
 
 /** Says which launches a saved choice reaches when it is not both. */
-export function sourceControlActionRouteHint(route: SourceControlActionChoiceRoute): string | null {
+export function sourceControlActionRouteHint(
+  route: SourceControlActionChoiceRoute,
+  t: Translate = translate
+): string | null {
   return route === 'chats'
-    ? translate('settings.sourceControl.actionModel.chatsOnly', 'Applies to chats only')
+    ? t('settings.sourceControl.actionModel.chatsOnly', 'Applies to chats only')
     : route === 'terminals'
-      ? translate('settings.sourceControl.actionModel.terminalsOnly', 'Applies to terminals only')
+      ? t('settings.sourceControl.actionModel.terminalsOnly', 'Applies to terminals only')
       : null
 }
 

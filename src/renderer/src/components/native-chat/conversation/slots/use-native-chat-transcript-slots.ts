@@ -5,9 +5,10 @@ import {
 } from '../../../../../../shared/native-chat/transcript/native-chat-live-line'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
 import {
-  buildNativeChatTranscriptSlots,
+  buildNativeChatTranscript,
   type NativeChatTranscriptSlot
 } from './native-chat-transcript-slots'
+import type { NativeChatSideChatForkPoint } from '../../messages/actions/native-chat-side-chat-fork-point'
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
@@ -16,7 +17,11 @@ export function useNativeChatTranscriptSlots({
   ...input
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId'> & {
   line: { draws: boolean; thinking: boolean; stopping?: boolean; activityText?: string | null }
-}): { slots: NativeChatTranscriptSlot[]; liveLine: NativeChatLiveLine | null } {
+}): {
+  slots: NativeChatTranscriptSlot[]
+  forkPoint: NativeChatSideChatForkPoint | null
+  liveLine: NativeChatLiveLine | null
+} {
   const {
     messages,
     unresolvedRowIds,
@@ -31,7 +36,8 @@ export function useNativeChatTranscriptSlots({
     isWorking,
     lifecycleWorking,
     subagentSections,
-    subagentChoices
+    subagentChoices,
+    forkOffer
   } = input
   const { draws, thinking, stopping = false, activityText } = line
   const liveLine = useMemo(
@@ -64,9 +70,9 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
-  const slots = useMemo(
+  const { slots, forkPoint } = useMemo(
     () =>
-      buildNativeChatTranscriptSlots({
+      buildNativeChatTranscript({
         messages,
         unresolvedRowIds,
         typography,
@@ -81,10 +87,12 @@ export function useNativeChatTranscriptSlots({
         lifecycleWorking,
         subagentSections,
         subagentChoices,
-        liveReasoningId
+        liveReasoningId,
+        forkOffer
       }),
     [
       expandedTurnKeys,
+      forkOffer,
       isWorking,
       lifecycleWorking,
       liveReasoningId,
@@ -101,5 +109,5 @@ export function useNativeChatTranscriptSlots({
       unresolvedRowIds
     ]
   )
-  return { slots, liveLine }
+  return { slots, forkPoint, liveLine }
 }

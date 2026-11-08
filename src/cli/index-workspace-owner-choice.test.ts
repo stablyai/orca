@@ -750,7 +750,9 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
         callMock.mockResolvedValue(okFixture('exact', { worktree: row }))
         await main(['worktree', 'show', '--worktree', data[0].selector, '--json'], row.path)
         expect(process.exitCode).toBe(prior)
-        expect(callMock.mock.calls).toEqual([['worktree.show', { worktree: `id:${row.id}` }]])
+        expect(callMock.mock.calls).toEqual([
+          ['worktree.show', { worktree: `id:${row.id}`, matchFolderWorkspaces: true }]
+        ])
         expect(JSON.parse(log.mock.calls.flat().join('')).result.worktree.id).toBe(row.id)
       }
     } finally {

@@ -8,7 +8,7 @@ import { agentSessionConversationView } from '../../src/shared/agent-session/lif
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
 
-import type * as RuntimeLayoutClient from '../../src/renderer/src/runtime/runtime-layout-client'
+import type * as RuntimeLayoutClient from '../../src/renderer/src/runtime/workspace-layout/frames/runtime-layout-client'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { useAppStore } from '../../src/renderer/src/store'
@@ -22,18 +22,18 @@ import { applyWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-
 import {
   suppressCancelledStructuredSessionTabs,
   retireStructuredAgentSessionTab
-} from '../../src/renderer/src/runtime/structured-agent-session-tab-retirement'
-import { isLocalSessionTabCloseOwned } from '../../src/renderer/src/runtime/local-session-tab-close-owner'
-import { clearHostSessionMirrorHydration } from '../../src/renderer/src/runtime/host-session-mirror-hydration'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '../../src/renderer/src/runtime/local-structured-session-owner'
+} from '../../src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
+import { isLocalSessionTabCloseOwned } from '../../src/renderer/src/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
+import { clearHostSessionMirrorHydration } from '../../src/renderer/src/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../../src/renderer/src/runtime/native-chat/local-sessions/local-structured-session-owner'
 import {
   isWebSessionCloseIntentPending,
   resetWebSessionCloseIntentForTests
-} from '../../src/renderer/src/runtime/web-session-close-intent'
+} from '../../src/renderer/src/runtime/web-session-tabs-sync/closing/web-session-close-intent'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../src/shared/layout-owner-switch'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { makeWorktree } from '../../src/renderer/src/store/slices/worktrees/worktree.test-fixture'
-import { layoutApplyTestTransport } from '../../src/renderer/src/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '../../src/renderer/src/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -80,7 +80,7 @@ const bridge = vi.hoisted((): ProcessBoundary => ({
 vi.mock('../../src/renderer/src/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   const { runtimeRpcClientWithLayoutApply } =
-    await import('../../src/renderer/src/runtime/layout-apply-test-transport.test-fixture')
+    await import('../../src/renderer/src/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   // An untyped mock: the runtime client's generic result type is the caller's to name.
   const callRuntimeRpc = vi.fn()
   callRuntimeRpc.mockImplementation(
@@ -112,10 +112,12 @@ vi.mock('../../src/renderer/src/runtime/rpc/calls/runtime-rpc-call', async (impo
   )
   return runtimeRpcClientWithLayoutApply({ ...actual, callRuntimeRpc })
 })
-vi.mock('../../src/renderer/src/runtime/runtime-layout-client', async (importOriginal) =>
-  (
-    await import('../../src/renderer/src/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeLayoutClientWithTestFrames(await importOriginal<typeof RuntimeLayoutClient>())
+vi.mock(
+  '../../src/renderer/src/runtime/workspace-layout/frames/runtime-layout-client',
+  async (importOriginal) =>
+    (
+      await import('../../src/renderer/src/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+    ).runtimeLayoutClientWithTestFrames(await importOriginal<typeof RuntimeLayoutClient>())
 )
 
 let main: TabsDrawnFromMain | undefined
@@ -136,14 +138,17 @@ function closeMain(): void {
   main = undefined
 }
 
-vi.mock('../../src/renderer/src/runtime/structured-agent-session-close', () => ({
-  closeStructuredAgentSession: async (_target: unknown, sessionId: string) => {
-    if (bridge.scenario === 'reopened') {
-      bridge.rendererSessionCloses.push(sessionId)
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-close',
+  () => ({
+    closeStructuredAgentSession: async (_target: unknown, sessionId: string) => {
+      if (bridge.scenario === 'reopened') {
+        bridge.rendererSessionCloses.push(sessionId)
+      }
+      return 'closed'
     }
-    return 'closed'
-  }
-}))
+  })
+)
 
 // After /clear, history reopens the first conversation under a suffixed tab id; real main close/focus must target that tab.
 // Connect real window store/mirror/IPC with only the process boundary stubbed.
@@ -602,7 +607,8 @@ describe('in-flight structured session close', () => {
         answerClose = resolve
       })
       onTestFinished(() => answerClose())
-      const snapshots = await import('../../src/renderer/src/runtime/web-runtime-session-snapshot')
+      const snapshots =
+        await import('../../src/renderer/src/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot')
       const reread = vi.spyOn(snapshots, 'refreshWebRuntimeSessionTabsSnapshot')
       const settledFrame = frame(3)
       settledFrame.tabs = settledFrame.tabs.filter((tab) => tab.id !== 'agent-session:chat-b')

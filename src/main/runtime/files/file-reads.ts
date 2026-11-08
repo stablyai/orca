@@ -1,12 +1,12 @@
 import { open, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeFileCommandHost } from './file-command-host'
 import type {
   RuntimeFileReadResult,
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-file-contracts'
 import { isMobileBinaryPath, isSafeMobileRelativePath } from './mobile-file-kind'
 import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
 import { truncateMobileFilePreview } from '../terminal/artifacts/artifact-integrity'

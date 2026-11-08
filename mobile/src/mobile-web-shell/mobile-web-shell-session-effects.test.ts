@@ -194,14 +194,14 @@ describe('a download that reuses the cached generation', () => {
     expect(writes.filter((uri) => uri.includes(`/tmp/${NEXT.manifest.buildId}/`))).toEqual([])
   })
 
-  it('commits whole when another mount sweeps the staging trees mid-download', async () => {
+  it('commits whole when another mount opens the cache and sweeps mid-download', async () => {
     const { fileSystem, store } = await cachedStore()
     doubles.fetch = async () => {
       fileSystem.seed(`${HOST}/tmp/${UPDATE.manifest.buildId}/app.js`, {
         kind: 'file',
         bytes: new Uint8Array(1)
       })
-      await store.sweepStagedGenerations()
+      await store.readActiveGeneration(HOST)
       return UPDATE
     }
 

@@ -12,6 +12,7 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   runKillAllTerminalSurfaces,
   snapshotKillAllTerminalSurfaceIds,
@@ -226,43 +227,37 @@ type DaemonActionCopy = {
   busyLabel: string
 }
 
-function getCopy(kind: DaemonActionKind): DaemonActionCopy {
+function getCopy(kind: DaemonActionKind, t: Translate = translate): DaemonActionCopy {
   if (kind === 'restart') {
     return {
-      title: translate(
+      title: t(
         'auto.components.shared.useDaemonActions.922548bc66',
         'Restart the terminal service?'
       ),
       description: (
         <>
-          {translate(
+          {t(
             'auto.components.shared.useDaemonActions.01d6b7c64e',
             'Open terminals and agents will restart. Terminals on remote hosts are not affected.'
           )}
         </>
       ),
-      confirmLabel: translate('auto.components.shared.useDaemonActions.confirmRestart', 'Restart'),
-      busyLabel: translate('auto.components.shared.useDaemonActions.busyRestarting', 'Restarting…')
+      confirmLabel: t('auto.components.shared.useDaemonActions.confirmRestart', 'Restart'),
+      busyLabel: t('auto.components.shared.useDaemonActions.busyRestarting', 'Restarting…')
     }
   }
   return {
-    title: translate(
-      'auto.components.shared.useDaemonActions.1bbea41a77',
-      'Kill all terminal sessions?'
-    ),
+    title: t('auto.components.shared.useDaemonActions.1bbea41a77', 'Kill all terminal sessions?'),
     description: (
       <>
-        {translate(
+        {t(
           'auto.components.shared.useDaemonActions.a702d4196e',
           "This closes every terminal tab across all workspaces and requests shutdown for its current terminal sessions. Any unsaved terminal work is lost. The daemon itself keeps running, and new terminals can be opened immediately. This can't be undone."
         )}
       </>
     ),
-    confirmLabel: translate(
-      'auto.components.shared.useDaemonActions.confirmKillAll',
-      'Kill all sessions'
-    ),
-    busyLabel: translate('auto.components.shared.useDaemonActions.busyKilling', 'Killing…')
+    confirmLabel: t('auto.components.shared.useDaemonActions.confirmKillAll', 'Kill all sessions'),
+    busyLabel: t('auto.components.shared.useDaemonActions.busyKilling', 'Killing…')
   }
 }
 
@@ -274,8 +269,9 @@ export function DaemonActionDialog({
   api: DaemonActionsApi
   extraDescription?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const { pending, setPending, busyKind, isBusy, runConfirmed } = api
-  const copy = pending ? getCopy(pending) : null
+  const copy = pending ? getCopy(pending, t) : null
   return (
     <Dialog
       open={pending !== null}
@@ -315,7 +311,7 @@ export function DaemonActionDialog({
             </DialogHeader>
             <DialogFooter>
               <Button variant="outline" onClick={() => setPending(null)} disabled={isBusy}>
-                {translate('auto.components.shared.useDaemonActions.01af244097', 'Cancel')}
+                {t('auto.components.shared.useDaemonActions.01af244097', 'Cancel')}
               </Button>
               <Button variant="destructive" onClick={runConfirmed} disabled={isBusy}>
                 {isBusy ? <LoaderCircle className="size-4 animate-spin" /> : null}

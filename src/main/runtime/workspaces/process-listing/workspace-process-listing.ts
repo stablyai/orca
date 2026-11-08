@@ -89,11 +89,11 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
 
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,
-      buildRuntimeWorktreeSummaryPathIndex(summaries, resolvedWorktrees, platformByRepoId)
+      buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
     )
     const session = this.store?.getWorkspaceSession?.()
     const countedPtyIds = new Set<string>()
-    const terminalTitleEvidenceByWorktreeId = applyRuntimeWorktreePsTerminalActivity({
+    const terminalTitleEvidenceByRow = applyRuntimeWorktreePsTerminalActivity({
       freshPtyLiveness,
       countedPtyIds,
       leaves: this.leaves.values(),
@@ -131,7 +131,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     })
     attachRuntimeWorktreeAgentRows({
       summaries,
-      terminalTitleEvidenceByWorktreeId,
+      terminalTitleEvidenceByRow,
       rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary,

@@ -10,8 +10,8 @@ import {
   store,
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
-import { InMemoryOrchestrationMessages } from '../orca-runtime-test-orchestration-messages.spec'
-import { MessageWake } from '../runtime-message-waiters'
+import { InMemoryOrchestrationMessages } from '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
+import { MessageWake } from '../orchestration/mailbox/runtime-message-waiters'
 
 describe('OrcaRuntimeService', () => {
   it('delivers pending mail via notifyMessageArrived when the recipient is already idle', async () => {

@@ -1,5 +1,5 @@
-// HostRelay control frames once a host is past the handshake: pongs, auth refresh and the host's
-// credential commands.
+// HostRelay control frames once a host is past the handshake: liveness, pongs, auth refresh and
+// the host's credential commands.
 import { AuthRefreshSchema, DeviceRevokeSchema, InviteCreateSchema } from '../../../packages/relay-contract/src/control-messages'
 import { DeviceCredentialInstallSchema, DeviceCredentialInstallStatusSchema, DeviceResumeConfirmSchema } from '../../../packages/relay-contract/src/credential-messages'
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
@@ -19,6 +19,14 @@ export abstract class HostRelayControl extends HostRelayHandshake {
       this.close(ws, MESSAGE_TOO_BIG, 'frame too large')
       return
     }
+    const now = Date.now()
+    // Liveness is any inbound frame from an active control, not only pongs: a host busy sending
+    // commands or refreshes is alive even when its pongs are late. `lastPongAt` keeps its name so
+    // attachments of controls hibernating across a deploy read the same field.
+    if (a.phase === 'active') {
+      a.lastPongAt = now
+      this.attach(ws, a)
+    }
     if (typeof message !== 'string') {
       if (a.phase !== 'active') { this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'binary hello') }
       return
@@ -36,9 +44,7 @@ export abstract class HostRelayControl extends HostRelayHandshake {
     if (a.phase === 'checking') { return }
     if (a.phase === 'proof') { return this.onHostProof(ws, a, type, body) }
     if (type === 'pong') {
-      a.lastPongAt = Date.now()
-      if (typeof body.t === 'number') { metric(this.env, 'pong_rtt_ms', a.lastPongAt - body.t, '', [], '', a.place) }
-      this.attach(ws, a)
+      if (typeof body.t === 'number') { metric(this.env, 'pong_rtt_ms', now - body.t, '', [], '', a.place) }
       return
     }
     if (type === 'auth-refresh') { return this.onAuthRefresh(ws, body) }
@@ -47,7 +53,10 @@ export abstract class HostRelayControl extends HostRelayHandshake {
 
   protected async onAuthRefresh(ws: WebSocket, body: Record<string, unknown>): Promise<void> {
     const parsed = AuthRefreshSchema.safeParse(body)
-    if (!parsed.success) { return }
+    if (!parsed.success) {
+      metric(this.env, 'auth_refresh', 1, 'invalid', [], '', this.attachment(ws)?.place)
+      return
+    }
     const claims = await verifyRelayJwt(this.env, parsed.data.relayJwt)
     // Re-read after the await: the attachment may have moved on (pongs, pings) meanwhile.
     const current = this.attachment(ws)
@@ -59,10 +68,16 @@ export abstract class HostRelayControl extends HostRelayHandshake {
       claims.organizationId === current.claims.organizationId &&
       claims.relayHostId === current.claims.relayHostId
     if (!same) {
+      metric(this.env, 'auth_refresh', 1, claims ? 'identity_changed' : 'invalid', [], '', current.place)
       this.close(ws, RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL, 'refresh identity changed')
       return
     }
-    if (claims.exp > current.claims.exp) { current.claims = claims }
+    const extended = claims.exp > current.claims.exp
+    if (extended) {
+      current.claims = claims
+      current.lastRefreshAt = Date.now()
+    }
+    metric(this.env, 'auth_refresh', 1, extended ? 'extended' : 'unchanged', [], '', current.place)
     this.attach(ws, current)
     await this.reschedule()
   }

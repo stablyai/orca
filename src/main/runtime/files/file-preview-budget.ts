@@ -1,5 +1,5 @@
 import { IMAGE_AND_PDF_PREVIEW_MIME_TYPES } from '../../../shared/file-preview-kind'
-import type { RuntimeFilePreviewResult } from '../../../shared/runtime-types'
+import type { RuntimeFilePreviewResult } from '../../../shared/runtime-file-contracts'
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
   remoteRpcResultExceedsContentBudget

@@ -296,7 +296,9 @@ export function useHostWorktreeCatalog(args: {
     // The other host-list reads follow the catalog's visibility.
     subscribed,
     // The first read after the list painted from memory; polls and pull-to-refresh show nothing here.
-    revalidating: catalog.isRefetching && !catalog.isFetchedAfterMount
+    revalidating: catalog.isRefetching && !catalog.isFetchedAfterMount,
+    // When the shown rows were read, possibly at an earlier launch.
+    readAt: catalog.data ? catalog.dataUpdatedAt : null
   }
 }
 

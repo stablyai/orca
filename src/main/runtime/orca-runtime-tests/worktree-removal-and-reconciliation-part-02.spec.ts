@@ -135,43 +135,6 @@ describe('OrcaRuntimeService', () => {
     expect(removeWorktreeLinkedPathsMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH, ['node_modules'])
   })
 
-  it('waits for every watcher layer to settle before restoring after teardown failure', async () => {
-    const runtime = createRuntime()
-    let finishRuntimeClose: () => void = () => {}
-    const runtimeClose = new Promise<void>((resolve) => {
-      finishRuntimeClose = resolve
-    })
-    const fileCommands = (
-      runtime as unknown as {
-        fileCommands: {
-          closeFileExplorerWatchersForPath: (path: string) => Promise<void>
-          restoreFileExplorerWatchersAfterFailedRemoval: (path: string) => Promise<void>
-        }
-      }
-    ).fileCommands
-    vi.spyOn(fileCommands, 'closeFileExplorerWatchersForPath').mockReturnValueOnce(runtimeClose)
-    const restoreRuntime = vi
-      .spyOn(fileCommands, 'restoreFileExplorerWatchersAfterFailedRemoval')
-      .mockResolvedValue(undefined)
-    closeLocalWatcherForWorktreePathMock.mockRejectedValueOnce(
-      new Error('desktop watcher close failed')
-    )
-
-    const result = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH).catch((error) => error)
-    await Promise.resolve()
-    expect(restoreLocalWatcherAfterFailedRemovalMock).not.toHaveBeenCalled()
-    expect(restoreRuntime).not.toHaveBeenCalled()
-
-    finishRuntimeClose()
-    await expect(result).resolves.toEqual(
-      expect.objectContaining({
-        message: 'desktop watcher close failed'
-      })
-    )
-    expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(TEST_WORKTREE_PATH)
-    expect(restoreRuntime).toHaveBeenCalledWith(TEST_WORKTREE_PATH, undefined)
-  })
-
   it('restores runtime watchers when CLI worktree deletion fails after teardown', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue(null)

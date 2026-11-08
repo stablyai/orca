@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type MutableRefObject } from 'react'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import {
   type BrowserReloadTrigger,
@@ -31,6 +31,7 @@ export function useBrowserPageReloadActions({
   reloadShortcut: string
   hardReloadShortcut: string
 } {
+  const t = useTranslate()
   const reloadShortcut = useShortcutLabel('browser.reload')
   const hardReloadShortcut = useShortcutLabel('browser.hardReload')
   const [reloadMenuOpen, setReloadMenuOpen] = useState(false)
@@ -94,10 +95,10 @@ export function useBrowserPageReloadActions({
   const reloadButtonLabelKind = resolveBrowserReloadButtonLabelKind(reloadState)
   const reloadButtonLabel =
     reloadButtonLabelKind === 'stop'
-      ? translate('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
+      ? t('auto.components.browser.pane.BrowserPane.b7e4d9c1a2', 'Stop')
       : reloadButtonLabelKind === 'retry'
-        ? translate('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
-        : translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
+        ? t('auto.components.browser.pane.BrowserPane.781d6459ad', 'Retry')
+        : t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')
 
   return {
     reloadWebviewOrRecoverGuest,

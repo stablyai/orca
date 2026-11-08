@@ -12,6 +12,9 @@
     "ACCOUNT_ID": "local",
     "DATASET": "orca_relay_edge_local",
     "ENVIRONMENT": "local",
-    "MIN_VOLUME": "200"
+    "MIN_VOLUME": "200",
+    // Optional: the edge origin probed each run (an unauthenticated control upgrade must get 401;
+    // any other status, a network error or over 5 s alerts, on every failing run). Omit to skip.
+    "EDGE_PROBE_URL": "http://127.0.0.1:8787"
   }
 }

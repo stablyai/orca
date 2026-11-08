@@ -15,7 +15,7 @@ import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connector-params'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
-import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
+import { COMPUTER_ERROR_CODES } from '../../../shared/computer-use-runtime-types'
 import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
 import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
@@ -119,6 +119,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
+  // A workspace selector's choices ride in data; a plain Error('selector_ambiguous') keeps the bare code.
+  'selector_ambiguous',
   'run_not_found',
   'run_home_unreachable',
   'run_required',
@@ -215,7 +217,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code, message))
+    return errorResponse(id, meta, code, message, computerUseErrorRecoveryData(code, message))
   }
   if (
     error instanceof Error &&
@@ -303,8 +305,6 @@ function agentSessionRefusalErrorResponse(
     { refusal: agentSessionRefusalReference(error.refusal) }
   )
 }
-
-export const computerErrorData = computerUseErrorRecoveryData
 
 // EmulatorError.code likewise uses its own namespace rather than generic runtime_error.
 export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

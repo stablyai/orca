@@ -11,7 +11,7 @@ import type {
   AddWorktreeOptions,
   AddWorktreeResult
 } from '../../../git/worktrees/worktree-operation-options'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type {
   RemoteFetchResult,

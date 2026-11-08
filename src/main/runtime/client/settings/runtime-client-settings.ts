@@ -23,7 +23,7 @@ import { recordManagedHookInstallFailure } from '../../../agent-hooks/install-te
 import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,

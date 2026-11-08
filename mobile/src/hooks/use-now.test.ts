@@ -20,7 +20,39 @@ vi.mock('react-native', () => ({
   }
 }))
 
-import { useNow } from './use-now'
+import { useNow, useSharedNow } from './use-now'
+
+describe('useSharedNow', () => {
+  let renderer: ReactTestRenderer | null = null
+  let latest = 0
+
+  function Harness(): null {
+    latest = useSharedNow(1_000)
+    return null
+  }
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  it('shows the current time when remounted soon after the last reader unmounted', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    appState.current = 'active'
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    act(() => renderer?.unmount())
+
+    vi.setSystemTime(1_500)
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    expect(latest).toBe(1_500)
+  })
+})
 
 describe('useNow', () => {
   let renderer: ReactTestRenderer | null = null

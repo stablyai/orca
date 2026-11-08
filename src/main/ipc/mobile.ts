@@ -7,12 +7,12 @@ import type { DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
 import {
   requestMobilePairingOffer,
   requestRuntimePairingOffer
-} from '../runtime/pairing-offer-requests'
+} from '../runtime/rpc/server/pairing/pairing-offer-requests'
 import {
   getPairingNetworkInterfaces,
   type DefaultRouteInterfaceLookup,
   type NetworkInterface
-} from '../runtime/pairing-network-interfaces'
+} from '../runtime/rpc/server/pairing/network/pairing-network-interfaces'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
 import {
@@ -24,13 +24,13 @@ import {
   MOBILE_PAIRING_OFFER_TTL_MS,
   RUNTIME_PAIRING_OFFER_TTL_MS
 } from '../runtime/rpc/server/pairing/pairing-offer-expiry'
-import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
+import { getWindowsDefaultRouteInterfaceNames } from '../runtime/rpc/server/pairing/network/windows-default-route-interfaces'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
   repairWindowsMobileFirewall,
   type WindowsMobileFirewallEnvironment
-} from '../runtime/windows-mobile-firewall'
+} from '../runtime/rpc/server/pairing/network/windows-mobile-firewall'
 
 function toRuntimeAccessGrant(
   device: DeviceEntry,
