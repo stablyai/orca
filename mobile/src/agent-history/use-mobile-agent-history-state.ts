@@ -105,7 +105,7 @@ async function readAgentHistory(
 function agentHistoryQuery(
   scan: ScanScope,
   force: boolean,
-  startRevision: (scope: AiVaultScope) => number
+  startRead: (scope: AiVaultScope, scan: ScanScope) => number
 ) {
   return defineHostQuery({
     family: HISTORY_FAMILY,
@@ -113,7 +113,7 @@ function agentHistoryQuery(
     // No desktop signal for new transcripts, so foreground revalidates once older than 30 s.
     refetchOnWindowFocus: true,
     fetch: (client, _target, input: { scope: AiVaultScope }) =>
-      readAgentHistory(client, input.scope, scan, force, startRevision(input.scope))
+      readAgentHistory(client, input.scope, scan, force, startRead(input.scope, scan))
   })
 }
 
@@ -159,19 +159,21 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     feed?.getAssociationRevision ?? noRevision,
     noRevision
   )
-  // The revision each scope's latest read started at, kept whether that read lands or fails.
-  const startedRef = useRef(new Map<AiVaultScope, number>())
-  const startRevision = useCallback(
-    (forScope: AiVaultScope) => {
+  // The revision and scope paths each scope's latest read started with, kept whether that read lands or fails.
+  const startedRef = useRef(
+    new Map<AiVaultScope, { revision: number; scopeFilterPaths: string[] }>()
+  )
+  const startRead = useCallback(
+    (forScope: AiVaultScope, scan: ScanScope) => {
       const revision = feed?.getAssociationRevision() ?? 0
-      startedRef.current.set(forScope, revision)
+      startedRef.current.set(forScope, { revision, scopeFilterPaths: scan.scopeFilterPaths })
       return revision
     },
     [feed]
   )
   const historyQuery = useMemo(
-    () => agentHistoryQuery(liveScan, false, startRevision),
-    [liveScan, startRevision]
+    () => agentHistoryQuery(liveScan, false, startRead),
+    [liveScan, startRead]
   )
   const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
   const input = useMemo(() => ({ scope }), [scope])
@@ -184,14 +186,36 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
 
   // A changed association moves rows between providers and chats: a scope whose last read started before it
   // reads again once nothing is out. Cached rows from an earlier visit carry their own start revision.
+  // Workspace and Project scan only their own paths, so a worktree that worktree.ps adds later also reads again.
   const cachedRevision = read?.kind === 'ready' ? read.associationRevision : undefined
+  const cachedPaths = read?.kind === 'ready' ? read.scopeFilterPaths : undefined
   useEffect(() => {
-    const started = startedRef.current.get(scope) ?? cachedRevision
+    const started = startedRef.current.get(scope)
+    const startedRevision = started?.revision ?? cachedRevision
+    const startedPaths = new Set(started?.scopeFilterPaths ?? cachedPaths)
+    const pathAdded =
+      scope !== 'all' &&
+      (started !== undefined || cachedPaths !== undefined) &&
+      liveScan.scopeFilterPaths.some((path) => !startedPaths.has(path))
     const canRead = enabled && connState === 'connected'
-    if (canRead && !isFetching && started !== undefined && started !== associationRevision) {
+    if (
+      canRead &&
+      !isFetching &&
+      ((startedRevision !== undefined && startedRevision !== associationRevision) || pathAdded)
+    ) {
       void refetch()
     }
-  }, [enabled, connState, isFetching, scope, cachedRevision, associationRevision, refetch])
+  }, [
+    enabled,
+    connState,
+    isFetching,
+    scope,
+    cachedRevision,
+    cachedPaths,
+    liveScan,
+    associationRevision,
+    refetch
+  ])
 
   const onSelectScope = useCallback((nextScope: AiVaultScope) => {
     setScope(nextScope)
@@ -205,7 +229,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     setRefreshing(true)
     try {
       // force:true bypasses the host's 15s TTL and joins its inflight scan; a cached result would show no change.
-      const forced = agentHistoryQuery(liveScan, true, startRevision)
+      const forced = agentHistoryQuery(liveScan, true, startRead)
       await readHostQueryLive(queryClient, forced, { hostId, client }, target, input, {
         replace: true
       })
@@ -214,17 +238,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     } finally {
       setRefreshing(false)
     }
-  }, [
-    client,
-    connState,
-    hostId,
-    input,
-    liveScan,
-    queryClient,
-    startRevision,
-    target,
-    worktreesLoaded
-  ])
+  }, [client, connState, hostId, input, liveScan, queryClient, startRead, target, worktreesLoaded])
 
   const retry = useMemo(
     () =>
