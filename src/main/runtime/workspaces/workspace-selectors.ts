@@ -24,10 +24,10 @@ import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 import { RuntimeProjectLaunchContext } from './startup/runtime-project-launch-context'
+import { folderIdOfSelector } from '../../../shared/workspace-scope'
 import {
   folderCandidate,
   folderCatalogOf,
-  folderIdOfSelector,
   matchFolderWorkspaceRows,
   resolveKeyedFolderWorkspace,
   selectWorkspaceCandidate,
