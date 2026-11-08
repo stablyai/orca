@@ -53,8 +53,12 @@ describe('worker-start onto a terminal another Dispatch holds', () => {
       code: 'terminal_busy',
       data: { effectsApplied: false, dispatchId }
     })
-    expect((refusal as Error).message).toContain(`send --to dispatch:${dispatchId}`)
-    expect((refusal as Error).message).toContain(`worker-stop --dispatch ${dispatchId}`)
+    expect(refusal).toMatchObject({
+      message: expect.stringContaining(`send --to dispatch:${dispatchId}`)
+    })
+    expect(refusal).toMatchObject({
+      message: expect.stringContaining(`worker-stop --dispatch ${dispatchId}`)
+    })
     expect(rows()).toEqual(before)
     expect(vi.mocked(h.runtime.waitForTerminal).mock.calls).toHaveLength(waits)
   })
@@ -78,7 +82,7 @@ describe('worker-start onto a terminal another Dispatch holds', () => {
   it('refuses the follow-up a send would start while worker-start is starting there', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
-    const { dispatches } = rows() as { dispatches: number }
+    const dispatches = h.db.db.prepare('SELECT * FROM dispatch_contexts').all().length
     const held = holdReadiness()
     const start = startOnWorker()
     await vi.waitFor(() => expect(rows()).toMatchObject({ dispatches: dispatches + 1 }))
