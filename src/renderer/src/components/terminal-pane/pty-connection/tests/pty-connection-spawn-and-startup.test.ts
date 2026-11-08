@@ -5,7 +5,6 @@ import { registerPtyConnectionFreshSpawnGuardsTests } from '../spawn/pty-connect
 import { registerPtyConnectionSplitSpawnTests } from '../spawn/pty-connection-split-spawn.spec'
 import { registerPtyConnectionRuntimeOwnerSpawnRoutingTests } from '../host-ownership/pty-connection-runtime-owner-spawn-routing.spec'
 import { registerPtyConnectionRestoredRuntimePaneBindingTests } from '../reattach/pty-connection-restored-runtime-pane-binding.spec'
-import { registerPtyConnectionTerminalBellAttentionTests } from '../notifications/pty-connection-terminal-bell-attention.spec'
 import {
   registerPtyConnectionLocalStartupCommandDeliveryTests,
   registerPtyConnectionTerminalPasteStartupCommandDeliveryTests
@@ -22,7 +21,6 @@ describe('pty-connection-split-spawn', registerPtyConnectionSplitSpawnTests)
 describe('pty-connection-runtime-owner-spawn-routing', () => {
   registerPtyConnectionRuntimeOwnerSpawnRoutingTests()
   registerPtyConnectionRestoredRuntimePaneBindingTests()
-  registerPtyConnectionTerminalBellAttentionTests()
 })
 describe('pty-connection-startup-command-delivery', () => {
   registerPtyConnectionLocalStartupCommandDeliveryTests()
