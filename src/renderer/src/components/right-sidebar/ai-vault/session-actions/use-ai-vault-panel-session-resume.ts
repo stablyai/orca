@@ -2,7 +2,8 @@ import { useCallback } from 'react'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { AppState } from '@/store/types'
+import { useAppStore } from '@/store/index'
+import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   resolveAiVaultHistorySessionResumeState,
   resolveAiVaultSessionResumeActions,
@@ -22,9 +23,8 @@ export function useAiVaultPanelSessionResume(args: {
   allWorktrees: readonly Worktree[]
   workspaceId: string | null
   resumeTargetState: AiVaultSessionResumeTargetState
-  settings: AppState['settings']
 }) {
-  const { sessions, repos, allWorktrees, workspaceId, resumeTargetState, settings } = args
+  const { sessions, repos, allWorktrees, workspaceId, resumeTargetState } = args
   // Folder workspaces also own sessions by cwd for resume and jump.
   const ownerWorkspaces = useAiVaultSessionOwnerWorkspaces(allWorktrees, resumeTargetState)
   const sessionWorktreeById = useAiVaultSessionWorktreeMap({
@@ -64,11 +64,15 @@ export function useAiVaultPanelSessionResume(args: {
     [getSessionRowResumeArgs]
   )
   // Chat resume must preserve the session’s workspace: Claude finds transcripts through launch-cwd-derived paths.
+  // Eligibility also reads host capabilities and agent lists from the store; this view changes with them.
+  const launchRoute = useAppStore(selectAgentLaunchRouteView)
   const getSessionResumeInChat = useCallback(
     (session: AiVaultSession): AiVaultResumeInChatEligibility =>
-      resolveAiVaultHistoryRowResume({ ...getSessionRowResumeArgs(session), settings })
-        .resumeInChat,
-    [getSessionRowResumeArgs, settings]
+      resolveAiVaultHistoryRowResume({
+        ...getSessionRowResumeArgs(session),
+        settings: launchRoute.settings
+      }).resumeInChat,
+    [getSessionRowResumeArgs, launchRoute]
   )
   return {
     getSessionWorktreeInfo,

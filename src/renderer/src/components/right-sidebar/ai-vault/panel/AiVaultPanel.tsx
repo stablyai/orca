@@ -204,8 +204,7 @@ export default function AiVaultPanel({
     repos,
     allWorktrees,
     workspaceId: effectiveActiveWorktreeId,
-    resumeTargetState,
-    settings
+    resumeTargetState
   })
   const launchActions = useAiVaultSessionLaunchActions({
     activeWorktree: activeWorktree ?? null,

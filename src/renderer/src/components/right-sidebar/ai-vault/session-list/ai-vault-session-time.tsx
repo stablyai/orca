@@ -2,6 +2,7 @@ import type React from 'react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useNow } from '@/hooks/use-now'
 
 export function SessionTime({
   value,
@@ -11,6 +12,8 @@ export function SessionTime({
   className?: string
 }): React.JSX.Element {
   const t = useTranslate()
+  // Rows are memoized, so the label ages on the shared minute tick rather than on parent renders.
+  useNow(60_000)
   const timestamp = Date.parse(value)
   if (!Number.isFinite(timestamp)) {
     return (
