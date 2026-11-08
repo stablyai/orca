@@ -1,8 +1,9 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useSyncExternalStore } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ChevronLeft, GitBranch, MoreHorizontal, PanelLeftOpen } from 'lucide-react-native'
-import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBar, NavBarRefreshLine } from '../components/nav-bar/NavBar'
+import { useRefreshHint } from '../query/refresh-hint'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileSessionHeaderMoreMenu } from './MobileSessionHeaderMoreMenu'
 import { MobileSessionTabStrip } from './MobileSessionTabStrip'
@@ -41,8 +42,13 @@ export function MobileSessionHeader({
     showConnectionRetry,
     connectionEscalated,
     terminalSummary,
-    handlePanelTap
+    handlePanelTap,
+    terminalResume
   } = controller
+  // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
+  const showRefreshLine = useRefreshHint(
+    useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
+  )
   const layout = useResponsiveLayout()
   const [headerWidth, setHeaderWidth] = useState<number | null>(null)
   const moreRef = useRef<View>(null)
@@ -161,6 +167,7 @@ export function MobileSessionHeader({
           )}
         </View>
         {tabsInTopBar ? null : tabStrip}
+        {showRefreshLine ? <NavBarRefreshLine /> : null}
       </SafeAreaView>
       <MobileSessionHeaderMoreMenu
         controller={controller}

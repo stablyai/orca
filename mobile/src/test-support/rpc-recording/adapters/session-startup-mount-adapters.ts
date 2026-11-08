@@ -43,7 +43,8 @@ export function sessionStartupMountAdapters(
         terminalPaneViewportsRef: { current: new Map() },
         clearPendingLiveInputCommit: () => effect('clear-pending-live-input-commit', {}),
         clearDelayedActionTimers: () => effect('clear-delayed-action-timers', {}),
-        clearTerminalCache: () => effect('clear-terminal-cache', {})
+        clearTerminalCache: () => effect('clear-terminal-cache', {}),
+        terminalResume: { holdsAny: () => false }
       }
 
       const hook = hookMount(() => {

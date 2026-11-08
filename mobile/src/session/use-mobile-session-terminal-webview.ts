@@ -23,7 +23,9 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalGestureInputInFlightRef,
     terminalRefs,
     terminalUnsubsRef,
+    leaseOnlyHandlesRef,
     initializedHandlesRef,
+    terminalResume,
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
@@ -129,10 +131,15 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
       if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
         // Reload loses the xterm buffer; request fresh scrollback.
         unsubscribeTerminal(handle)
+        terminalResume.forget(handle)
         if (visibleTerminalHandlesRef.current.includes(handle)) {
           subscribeToTerminal(handle)
         }
         return
+      }
+      if (wasAlreadyReady) {
+        // A hidden document that reloaded lost its buffer too.
+        terminalResume.forget(handle)
       }
       // Lagging snapshots can clear a new tab’s active handle; its pending marker still authorizes ready subscribe.
       const isIntendedActive =
@@ -142,7 +149,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         subscribeToTerminal(handle)
       }
     },
-    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+    [nativeChatStream, subscribeToTerminal, terminalResume, unsubscribeTerminal]
   )
 
   const notifyTerminalFrame = useCallback(
@@ -238,10 +245,17 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   )
 
   const visibleKey = visibleTerminalHandles.join('\0')
+  const connStateSeenRef = useRef(connState)
   useEffect(() => {
     const visible = visibleTerminalHandlesRef.current
+    // Cancel rendered streams on a lost connection, or the shell replays them as snapshots; connected resubscribes each from where its xterm stopped.
+    const lostConnection = connStateSeenRef.current === 'connected' && connState !== 'connected'
+    connStateSeenRef.current = connState
     for (const handle of terminalUnsubsRef.current.keys()) {
-      if (!visible.includes(handle)) {
+      if (
+        !visible.includes(handle) ||
+        (lostConnection && !leaseOnlyHandlesRef.current.has(handle))
+      ) {
         unsubscribeTerminal(handle)
       }
     }

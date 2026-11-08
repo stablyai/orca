@@ -17,6 +17,7 @@ import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contrac
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { terminalPaneViewport, type TerminalPaneViewport } from './mobile-terminal-pane-layout'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
+import { TerminalResumeState } from './terminal-stream-resume'
 import type { MobileSessionTerminalSubscriptionFoundationModel } from './use-mobile-session-terminal-subscription-foundation'
 import { useMobileSessionTerminalSubscription } from './use-mobile-session-terminal-subscription'
 import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-switching'
@@ -89,6 +90,7 @@ function subscriptionHarness(opts: {
     subscribingHandlesRef,
     leaseOnlyHandlesRef: { current: new Set<string>() },
     initializedHandlesRef,
+    terminalResume: new TerminalResumeState(),
     terminalDiagnosticsRef: { current: new MobileTerminalDiagnostics() },
     viewportResubscribeBudgetRef: { current: new TerminalViewportResubscribeBudget() },
     webReadyHandlesRef,
@@ -218,6 +220,10 @@ function subscriptionHarness(opts: {
       act(() => webReady!(HANDLE))
     },
     fields,
+    setConnState: (connState: ConnectionState) => {
+      Object.assign(fields, { connState })
+      act(() => renderer!.update(createElement(Probe)))
+    },
     terminalFrameRef,
     layOutFrame: (width: number, height = 751) => act(() => notifyFrame!({ width, height }))
   }
@@ -609,5 +615,61 @@ describe('terminal output credit', () => {
       vi.advanceTimersByTime(500)
     })
     expect(acks(harness)).toEqual([])
+  })
+})
+
+describe('a terminal resuming its stream', () => {
+  function appliedStream() {
+    const harness = subscriptionHarness({ fit: PHONE, webReady: true, viewport: PHONE })
+    const written: string[] = []
+    harness.replaceTerminal({
+      ...harness.terminal,
+      writeWithParseAck: vi.fn((data: string) => written.push(data))
+    })
+    harness.subscribe()
+    harness.event(0, { type: 'subscribed', outputAck: true, streamToken: 'token-1', streamId: 7 })
+    harness.event(0, {
+      type: 'scrollback',
+      streamId: 7,
+      seq: 1,
+      cols: 55,
+      rows: 44,
+      serialized: 'x'
+    })
+    harness.event(0, { type: 'data', streamId: 7, chunk: 'hello' })
+    harness.event(0, { type: 'data', streamId: 7, chunk: '\u23fa ok' })
+    return { harness, written }
+  }
+  const resumeParams = (harness: ReturnType<typeof subscriptionHarness>, call: number) =>
+    harness.fields.client.subscribe.mock.calls[call][1].resume
+
+  it('keeps the xterm on a switch back and writes only the missed output', () => {
+    const { harness, written } = appliedStream()
+    act(() => harness.fields.unsubscribeTerminal(HANDLE))
+    harness.subscribe()
+    expect(resumeParams(harness, 1)).toEqual({ streamToken: 'token-1', units: 9 })
+    harness.event(1, {
+      type: 'subscribed',
+      outputAck: true,
+      streamToken: 'token-2',
+      streamId: 8,
+      resumed: true
+    })
+    harness.event(1, { type: 'data', streamId: 8, chunk: 'missed' })
+    expect(harness.order.filter((step) => step.startsWith('init'))).toEqual(['init 55x44'])
+    expect(written).toEqual(['hello', '\u23fa ok', 'missed'])
+
+    act(() => harness.fields.unsubscribeTerminal(HANDLE))
+    harness.subscribe()
+    expect(resumeParams(harness, 2)).toEqual({ streamToken: 'token-2', units: 6 })
+  })
+
+  it('cancels its stream when the connection drops and resubscribes from where it stopped', () => {
+    const { harness } = appliedStream()
+    harness.setConnState('connected')
+    harness.setConnState('reconnecting')
+    expect(harness.stopStream).toHaveBeenCalledTimes(1)
+    harness.setConnState('connected')
+    expect(resumeParams(harness, 1)).toEqual({ streamToken: 'token-1', units: 9 })
   })
 })
