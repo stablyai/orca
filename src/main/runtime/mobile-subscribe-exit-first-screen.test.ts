@@ -148,4 +148,76 @@ describe('phone subscribe when the PTY exits while its first screen is publishin
     expect(stream.results).toEqual(['subscribed', 'end'])
     expect(runtime.hasHeadlessTerminalState(PTY_ID)).toBe(false)
   })
+
+  it('still sends the renderer screen but builds no model when the PTY exits while it is read', async () => {
+    let rendererReads = 0
+    let finishRead = (): void => {}
+    let readStarted = (): void => {}
+    const stableReadStarted = new Promise<void>((resolve) => (readStarted = resolve))
+    const { runtime, handle } = setup({
+      hasRendererSerializer: () => true,
+      getRendererSerializerGeneration: () => 1,
+      waitForRendererSerializer: async () => true,
+      serializeBuffer: async () => {
+        rendererReads += 1
+        // Hydration, the budgeted snapshot and the readiness probe come first; then the stable read.
+        if (rendererReads === 1) {
+          return { data: '', ...GRID }
+        }
+        if (rendererReads === 2) {
+          return null
+        }
+        if (rendererReads === 3) {
+          return { data: 'x', ...GRID }
+        }
+        readStarted()
+        await new Promise<void>((resolve) => (finishRead = resolve))
+        return { data: '$ make\r\nbuild failed\r\n', ...GRID, seq: 0 }
+      }
+    })
+    vi.spyOn(runtime, 'requestRendererTerminalTabMount').mockReturnValue(false)
+    vi.spyOn(runtime, 'handleMobileSubscribe').mockResolvedValue(true)
+    const messages: string[] = []
+    const frames: Uint8Array<ArrayBufferLike>[] = []
+    const done = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS }).dispatchStreaming(
+      {
+        id: 'req-phone',
+        authToken: 'tok',
+        method: 'terminal.subscribe',
+        params: {
+          terminal: handle,
+          client: { id: 'phone-1', type: 'mobile' },
+          viewport: GRID,
+          capabilities: { terminalBinaryStream: 1 }
+        }
+      },
+      (message) => messages.push(message),
+      {
+        connectionId: 'conn-phone',
+        sendBinary: (bytes) => {
+          frames.push(bytes)
+        },
+        registerBinaryStreamHandler: () => () => {}
+      }
+    )
+    await stableReadStarted
+    await runtime.onPtyExit(PTY_ID, 0)
+    finishRead()
+    await done
+
+    expect(messages.map((message) => JSON.parse(message).result?.type)).toEqual([
+      'subscribed',
+      'end'
+    ])
+    const snapshot = frames
+      .flatMap((bytes) => decodeTerminalStreamFrame(bytes) ?? [])
+      .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
+      .map((frame) => decodeTerminalStreamText(frame.payload))
+      .join('')
+    expect((await paintedRows(GRID.cols, GRID.rows, snapshot)).slice(0, 2)).toEqual([
+      '$ make',
+      'build failed'
+    ])
+    expect(runtime.hasHeadlessTerminalState(PTY_ID)).toBe(false)
+  })
 })

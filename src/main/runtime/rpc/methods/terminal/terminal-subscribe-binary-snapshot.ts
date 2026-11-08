@@ -159,17 +159,20 @@ async function publishSnapshot(
       (typeof stableRendererSnapshot.seq === 'number' || state.pendingOutput.length === 0)
     ) {
       serialized = stableRendererSnapshot
-      const trailingOutput = state.pendingOutput.flatMap((item) => {
-        const output = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
-        const seq = item.meta?.seq
-        return output && typeof seq === 'number' ? [{ data: output.data, seq }] : []
-      })
-      runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
-        ptyId,
-        stableRendererSnapshot,
-        trailingOutput
-      )
-      rendererSeed = stableRendererSnapshot
+      // The PTY may have exited during the awaits: the phone still gets this screen, but a seed would outlive the PTY.
+      if (seedsFromRenderer()) {
+        const trailingOutput = state.pendingOutput.flatMap((item) => {
+          const output = getOutputAfterSnapshotSeq(item, stableRendererSnapshot.seq)
+          const seq = item.meta?.seq
+          return output && typeof seq === 'number' ? [{ data: output.data, seq }] : []
+        })
+        runtime.replaceHeadlessTerminalFromRendererSnapshotForRecovery(
+          ptyId,
+          stableRendererSnapshot,
+          trailingOutput
+        )
+        rendererSeed = stableRendererSnapshot
+      }
     }
   }
   let initialOutputOverflowed = false
