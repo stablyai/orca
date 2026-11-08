@@ -16,9 +16,10 @@ import {
 } from '../../ratchet-baseline/ratchet-baseline.mjs'
 import {
   HAZARD_FIXES,
-  findMemoizedHookCalls,
+  findMemoizedCalls,
   findSourceHazards,
-  hookCallLines
+  hookCallLines,
+  renderStoreReadLines
 } from './react-compiler-hazards.mjs'
 
 // Runs React Compiler (analysis only, nothing is written) over the renderer so code that compiles
@@ -107,9 +108,20 @@ async function scanFile(rel, text, result) {
   for (const hazard of findSourceHazards(rel, text)) {
     addTo(result.hazards, `${rel}#${hazard.fn}:${hazard.kind}`, `${hazard.line}: ${hazard.text}`)
   }
-  for (const { fn, hook } of findMemoizedHookCalls(rel, output.code)) {
-    const lines = hookCallLines(rel, text, fn, hook)
-    addTo(result.hazards, `${rel}#${fn}:hook-in-memo-block`, `${lines.join(', ')}: ${hook}()`)
+  const storeReadFns = new Set()
+  for (const { fn, kind, name } of findMemoizedCalls(rel, output.code)) {
+    if (kind === 'store-read') {
+      storeReadFns.add(fn)
+      continue
+    }
+    const lines = hookCallLines(rel, text, fn, name)
+    addTo(result.hazards, `${rel}#${fn}:hook-in-memo-block`, `${lines.join(', ')}: ${name}()`)
+  }
+  for (const fn of storeReadFns) {
+    // A read inside the source's own useMemo keeps its written deps, so only render-level ones count.
+    for (const line of renderStoreReadLines(rel, text, fn)) {
+      addTo(result.hazards, `${rel}#${fn}:store-read-in-memo-block`, `${line}: getState()`)
+    }
   }
 }
 
