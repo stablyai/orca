@@ -53,6 +53,7 @@ export function AgentLaunchSetupPanel({
   getDraft,
   mode = 'launch',
   disabled,
+  terminalBlocked,
   onDraftChange,
   onUse
 }: AgentLaunchSetupPanelProps) {
@@ -291,9 +292,7 @@ export function AgentLaunchSetupPanel({
         </CommandList>
       </Command>
       <div className="grid min-w-0 grid-cols-1 gap-2.5 border-t border-border px-3 pt-2.5 pb-1">
-        {mode === 'launch'
-          ? renderOptions([...rowGroups.level, ...rowGroups.speed], 'inline')
-          : null}
+        {mode === 'launch' && renderOptions([...rowGroups.level, ...rowGroups.speed], 'inline')}
         {renderOptions(rowGroups.rest)}
         {editsDefaults ? (
           <div>
@@ -385,6 +384,7 @@ export function AgentLaunchSetupPanel({
         <AgentLaunchSetupFooter
           ref={footer}
           entry={entry}
+          terminalBlocked={terminalBlocked}
           disabled={disabled}
           onLaunch={(surface, prompt) => {
             const current = getDraft()

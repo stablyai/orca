@@ -1,4 +1,3 @@
-import './rpc/unused-default-rpc-methods.test-fixture'
 /** Reattached idle PTYs may never emit; hidden panes serialize at desktop size, but phones need a phone-grid snapshot. */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'

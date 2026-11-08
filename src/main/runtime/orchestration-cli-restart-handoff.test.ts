@@ -1,19 +1,15 @@
 import { spawn } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { buildOrcadCli } from '../../../config/scripts/orcad-distribution/server-bundle/orcad-entry-build.mjs'
 import { OrchestrationDb } from './orchestration/db/orchestration-db'
 import './orchestration/db/contract-constants'
 import './orchestration/db/messages/mailbox-routing-page'
 import './orchestration/db/dispatch-row-writer'
 import './orchestration/db/attempt-outcome-projection'
-
-const cliPath = join(process.cwd(), 'src/cli/index.ts')
-const tsxLoader = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href
 
 const entity = z.object({ id: z.string() })
 const check = z.object({
@@ -34,9 +30,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// Sequential source-CLI subprocesses and a disk-backed runtime restart exceed the default test budget.
+// Sequential packaged-CLI subprocesses and a disk-backed runtime restart exceed the default test budget.
 it("retains CLI work and mail across restart, refuses a worker's own Run, and completes a separate Run handoff", async () => {
   const home = mkdtempSync(join(tmpdir(), 'orca-cli-restart-handoff-'))
+  // One bundle of the real CLI avoids a TypeScript loader start in each of ~25 subprocesses.
+  const cliPath = join(home, 'cli', 'index.js')
+  await buildOrcadCli(cliPath)
   for (const name of [
     'HOME',
     'USERPROFILE',
@@ -93,36 +92,23 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
   let runtime = runtimeForDatabase()
   let server = new OrcaRuntimeRpcServer({ runtime, userDataPath: home })
   async function cli(handle: string, args: string[], exitCode = 0): Promise<unknown> {
-    const child = spawn(
-      process.execPath,
-      [
-        '--import',
-        tsxLoader,
-        '--conditions=orca-source',
-        cliPath,
-        'orchestration',
-        ...args,
-        '--json',
-        '--full'
-      ],
-      {
-        cwd: home,
-        env: {
-          ...process.env,
-          ORCA_TERMINAL_HANDLE: handle,
-          ORCA_PANE_KEY: runtime.getTerminalPaneKey(handle) ?? '',
-          ORCA_AGENT_LAUNCH_TOKEN:
-            handle === coord
-              ? fixture.LAUNCH_TOKEN
-              : handle === worker
-                ? fixture.SECOND_LAUNCH_TOKEN
-                : ''
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-        timeout: 15_000
-      }
-    )
+    const child = spawn(process.execPath, [cliPath, 'orchestration', ...args, '--json', '--full'], {
+      cwd: home,
+      env: {
+        ...process.env,
+        ORCA_TERMINAL_HANDLE: handle,
+        ORCA_PANE_KEY: runtime.getTerminalPaneKey(handle) ?? '',
+        ORCA_AGENT_LAUNCH_TOKEN:
+          handle === coord
+            ? fixture.LAUNCH_TOKEN
+            : handle === worker
+              ? fixture.SECOND_LAUNCH_TOKEN
+              : ''
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+      timeout: 15_000
+    })
     let stdout = ''
     let stderr = ''
     child.stdout.setEncoding('utf8').on('data', (chunk: string) => {

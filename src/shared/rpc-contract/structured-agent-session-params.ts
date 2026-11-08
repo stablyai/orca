@@ -41,6 +41,7 @@ export {
 } from './structured-agent-session-identifiers'
 
 export { ResumeSource } from './structured-agent-session-resume-params'
+export { SubscribeParams } from './structured-agent-session-subscribe-params'
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -334,12 +335,6 @@ export const HistoryParams = z
     limit: z.number().int().positive().max(AGENT_SESSION_HISTORY_MAX_LIMIT).optional()
   })
   .strict()
-
-export const SubscribeParams = OptionsParams.extend({
-  cursor: JournalCursor.optional(),
-  // Not strict: this host drops keys a newer client adds; a new value for a known key still needs a capability.
-  capabilities: z.object({ textAppend: z.literal(1).optional() }).optional()
-}).strict()
 
 // Not strict: an older host ignores these params entirely, and this host must ignore a newer client's.
 export const SubscribeTurnCompletionsParams = z.object({ includePrompts: z.boolean().optional() })

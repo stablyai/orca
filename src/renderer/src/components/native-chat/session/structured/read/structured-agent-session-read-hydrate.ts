@@ -10,8 +10,8 @@ import {
   type StructuredAgentSessionState
 } from '../../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../native-chat-pagination'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { NATIVE_CHAT_INITIAL_LIMIT } from '../../../viewport/history/native-chat-pagination'
 import { OLDER_PAGE_ANCHOR_ATTEMPTS } from './structured-agent-session-older-page-read'
 
 function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {

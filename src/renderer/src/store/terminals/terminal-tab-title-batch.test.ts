@@ -2,10 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
+import { layoutApplyTestDouble } from '@/runtime/workspace-layout/testing/layout-apply-test-double'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-dispatcher', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()

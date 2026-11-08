@@ -19,7 +19,6 @@ export function NativeChatPacedMarkdown({
       rowKey={rowKey}
       content={paced.text}
       streaming={streaming || paced.revealing}
-      growing={paced.revealing}
       fadeWords={paced.fading}
     />
   )

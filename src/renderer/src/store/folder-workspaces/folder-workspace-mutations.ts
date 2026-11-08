@@ -1,5 +1,5 @@
-import { launchDraftSource } from '@/components/native-chat/native-chat-launch-draft-source'
-import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/runtime-workspace-attachment-capabilities'
+import { launchDraftSource } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'

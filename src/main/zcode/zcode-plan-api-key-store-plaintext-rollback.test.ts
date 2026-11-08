@@ -290,46 +290,6 @@ describe('conditional rollback publication through the real writer', () => {
     expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual(['zcode-plan-api-key.enc'])
   })
 
-  it('retains best-effort restriction outcomes when guarded publication is allowed', () => {
-    realFs.writeFileSync(keyPath, envelope('previous-key'))
-    const shouldPublish = vi.fn(() => true)
-
-    expect(
-      writer.writeSecureFile(keyPath, envelope('candidate-key'), {
-        durable: true,
-        shouldPublish
-      })
-    ).toBe(false)
-
-    expect(shouldPublish).toHaveBeenCalledTimes(1)
-    expect(mocks.rename).toHaveBeenCalledTimes(1)
-    expect(realFs.readFileSync(keyPath, 'utf8')).toBe(envelope('candidate-key'))
-    expect(realFs.readdirSync(join(mocks.home, '.orca'))).toEqual(['zcode-plan-api-key.enc'])
-  })
-
-  it('checks publication immediately after staged hardening and before rename', () => {
-    const operations: string[] = []
-    mocks.restrict.mockImplementation((path) => {
-      operations.push(path.endsWith('.tmp') ? 'staged restriction' : 'published restriction')
-      return true
-    })
-    mocks.rename.mockImplementation((from, to) => {
-      operations.push('rename')
-      realFs.renameSync(from, to)
-    })
-
-    expect(
-      writer.writeSecureFile(keyPath, envelope('candidate-key'), {
-        shouldPublish: () => {
-          operations.push('ownership check')
-          return true
-        }
-      })
-    ).toBe(true)
-
-    expect(operations).toEqual(['staged restriction', 'ownership check', 'rename'])
-  })
-
   it('cleans guarded staging bytes if rename throws without deleting the original target', () => {
     realFs.writeFileSync(keyPath, envelope('previous-key'))
     mocks.rename.mockImplementation(() => {

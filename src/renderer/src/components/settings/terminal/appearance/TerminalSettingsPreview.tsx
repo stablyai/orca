@@ -19,7 +19,7 @@ import { normalizeTerminalLineHeight } from '../../../../../../shared/terminal/a
 import { PREVIEW_BUFFER } from './terminal-preview-content'
 import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Pin 36 columns for the 32-character sample plus margin; large fonts clip instead of wrapping.
 const PREVIEW_COLS = 36
@@ -62,6 +62,7 @@ export function TerminalSettingsPreview({
   modeOverride,
   showThemeToggle
 }: TerminalSettingsPreviewProps): React.JSX.Element {
+  const t = useTranslate()
   const containerRef = useRef<HTMLDivElement | null>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const ligaturesAddonRef = useRef<TerminalLigaturesAddon | null>(null)
@@ -264,15 +265,12 @@ export function TerminalSettingsPreview({
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2 py-1">
               <span className="text-xs font-medium text-muted-foreground">
-                {translate(
-                  'auto.components.settings.TerminalSettingsPreview.50419052fe',
-                  'Pane divider'
-                )}
+                {t('auto.components.settings.TerminalSettingsPreview.50419052fe', 'Pane divider')}
               </span>
               <SettingsSwitch
                 checked={previewPaneDividerVisible}
                 onChange={() => setPreviewPaneDividerVisible((visible) => !visible)}
-                ariaLabel={translate(
+                ariaLabel={t(
                   'auto.components.settings.TerminalSettingsPreview.f8931d407d',
                   'Show pane divider in preview'
                 )}
@@ -282,7 +280,7 @@ export function TerminalSettingsPreview({
               <div
                 className="flex gap-0.5 rounded-md border border-border/50 p-0.5"
                 role="group"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.TerminalSettingsPreview.2c248fcc27',
                   'Preview theme'
                 )}
@@ -293,12 +291,12 @@ export function TerminalSettingsPreview({
                     type="button"
                     onClick={() => setTogglePreviewMode(mode)}
                     aria-pressed={togglePreviewMode === mode}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.TerminalSettingsPreview.a63953a48a',
                       'Preview {{value0}} theme',
                       { value0: mode }
                     )}
-                    title={translate(
+                    title={t(
                       'auto.components.settings.TerminalSettingsPreview.a63953a48a',
                       'Preview {{value0}} theme',
                       { value0: mode }

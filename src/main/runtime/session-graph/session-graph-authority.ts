@@ -1,4 +1,3 @@
-import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
@@ -25,6 +24,11 @@ import {
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  folderCatalogOf,
+  resolveKeyedFolderWorkspace,
+  type WorkspaceSelectorOptions
+} from '../workspaces/catalog/workspace-selector-candidates'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type { BrowserExecutionHostKeyResolution } from '../browser/client-pages/runtime-browser-client-page-adoption'
 import { browserNetworkExecutionHostKey } from '../../browser/network/execution-routes/browser-network-execution-route'
@@ -187,44 +191,31 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     selector: string,
     requiredHostId?: ExecutionHostId
   ): FolderWorkspace | null {
-    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
-    const parsed = parseWorkspaceKey(workspaceSelector)
-    if (parsed?.type !== 'folder') {
-      return null
-    }
-    const result = resolveQualifiedFolderWorkspaceResult(
-      {
-        folderWorkspaces: this.store?.getFolderWorkspaces?.() ?? [],
-        projectGroups: this.store?.getProjectGroups?.() ?? [],
-        repos: this.store?.getRepos() ?? []
-      },
-      parsed.folderWorkspaceId,
-      requiredHostId
-    )
-    if (result.kind !== 'selected') {
-      throw new Error(result.kind === 'missing' ? 'selector_not_found' : 'selector_ambiguous')
-    }
-    const selected = result.value
-    return {
-      ...selected.workspace,
-      executionHostId: selected.hostId,
-      connectionId: selected.connectionId
-    }
+    return resolveKeyedFolderWorkspace(folderCatalogOf(this.store), selector, requiredHostId)
   }
 
   /** Folder workspaces first, then Git worktrees; project-group folders have no repo row (STA-12562). Launching needs the folder on disk; teardown must not. */
   protected async resolveWorkspaceSelector(
     selector: string,
-    options: { requireUsableFolderPath?: boolean; requiredHostId?: ExecutionHostId } = {}
+    options: WorkspaceSelectorOptions = {}
   ): Promise<ResolvedWorktree> {
-    const selectedFolder = this.resolveFolderWorkspaceSelector(selector, options.requiredHostId)
+    const candidate = await this.resolveWorkspaceCandidate(selector, options)
+    if (candidate.kind === 'worktree') {
+      return candidate.worktree
+    }
     const folderWorkspace = options.requireUsableFolderPath
-      ? (await this.resolveFolderWorkspaceLaunchScope(selector, {}, selectedFolder ?? undefined))
-          ?.folderWorkspace
-      : selectedFolder
-    return folderWorkspace
-      ? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
-      : this.resolveGitWorktreeSelector(selector, options.requiredHostId)
+      ? (
+          await this.resolveFolderWorkspaceLaunchScope(
+            folderWorkspaceKey(candidate.folder.id),
+            {},
+            candidate.folder
+          )
+        )?.folderWorkspace
+      : candidate.folder
+    if (!folderWorkspace) {
+      throw new Error('selector_not_found')
+    }
+    return this.folderWorkspaceToResolvedWorktree(folderWorkspace)
   }
 
   protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {

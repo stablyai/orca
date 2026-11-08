@@ -254,6 +254,14 @@ describe('a cached page opened before the verdict', () => {
     expect(staged.effects).toEqual([{ kind: 'stage-update' }])
   })
 
+  it('stages the newer build when the manifest answers after the page document starts', () => {
+    const opened = run(openedWhileDialling().session, { type: 'gates-changed', gates: gates() })
+    const asked = opened.session.flow
+    const started = run(opened.session, { type: 'document-started' })
+    const staged = run(started.session, { type: 'manifest-read', manifest: NEWER, flow: asked })
+    expect(staged.effects).toEqual([{ kind: 'stage-update' }])
+  })
+
   it('walls a page that already talked when a new connection puts it outside the window', () => {
     const talked = run(openedWhileDialling().session, { type: 'gates-changed', gates: gates() })
     const reconnected = run(

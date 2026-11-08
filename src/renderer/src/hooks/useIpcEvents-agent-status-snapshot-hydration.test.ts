@@ -5,7 +5,7 @@ import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../store/repos/repo.test-fixture'
-import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
+import { layoutApplyTestDouble } from '@/runtime/workspace-layout/testing/layout-apply-test-double'
 import type { AppState } from '../store/types'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {

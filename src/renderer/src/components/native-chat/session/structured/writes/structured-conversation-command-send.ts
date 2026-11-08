@@ -3,8 +3,8 @@ import type {
   AgentSessionConversationCommandResult
 } from '../../../../../../../shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
-import { sayAgentSessionFailureTranslated } from '../../../agent-session-failure-words-text'
-import { agentSessionWriteNoticeText } from '../../../agent-session-write-notice-text'
+import { sayAgentSessionFailureTranslated } from '../../../messages/notices/agent-session-failure-words-text'
+import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import { agentSessionVisibleFailureFacts } from '../../../../../../../shared/agent-session/failures/agent-session-visible-failures'
 import { pendingPromptsAllUnanswerableHere } from '../../../../../../../shared/agent-session/agent-session-approval-subject'
 import type { StructuredPromptItem } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'

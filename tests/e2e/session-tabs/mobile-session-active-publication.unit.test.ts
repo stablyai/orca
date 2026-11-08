@@ -16,7 +16,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../src/shared/runtime-session-contracts'
 import { buildMobileSessionTabSnapshots } from '../../../src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots'
-import { makeState } from '../../../src/renderer/src/runtime/sync-runtime-graph-test-harness'
+import { makeState } from '../../../src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness'
 import { getDefaultWorkspaceSession } from '../../../src/shared/constants'
 import { committingSpawn } from '../../../src/main/runtime/orca-runtime-tests/bind-first-pane.test-fixture'
 import { withMainSessionTabRows } from '../../../src/main/runtime/session-tabs/main-session-tab-rows'

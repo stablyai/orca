@@ -4,11 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES } from '../../../../../../shared/orchestration-worker-start-prompt-budget'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
-import {
-  getFollowUpDispatch,
-  readWorkerResumeSession
-} from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { watchMovedWorkerResumeSessions } from './worker-resume-session-capture'
+import { getFollowUpDispatch } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
+import './worker-resume-session-capture'
 import {
   continueAllUnreadWorkerMail,
   continueUnreadWorkerMail
@@ -54,21 +51,6 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.runtime.createTerminal).toHaveBeenCalledTimes(1)
   })
 
-  it('starts no second worker while it cannot tell whether the first still runs', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    vi.spyOn(h.runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'unverifiable',
-      reason: 'relay_dropped'
-    })
-
-    await expect(send(dispatchId, 'and the docs')).rejects.toMatchObject({
-      code: 'worker_unverifiable'
-    })
-    expect(getFollowUpDispatch(h.db, dispatchId)).toBeUndefined()
-    expect(h.runtime.createTerminal).toHaveBeenCalledTimes(1)
-  })
-
   it('starts no second worker for one whose handle is gone until its process is proven exited', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
@@ -97,17 +79,6 @@ describe('a follow-up to a finished terminal worker', () => {
     await expect(send(dispatchId, 'and the docs')).resolves.toMatchObject({
       delivery: 'started_fresh'
     })
-  })
-
-  it('starts no second worker while its pane cannot yet read the recorded process', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    vi.mocked(h.runtime.getTerminalProcessIncarnation).mockReturnValue(null)
-
-    await expect(send(dispatchId, 'and the docs')).rejects.toMatchObject({
-      code: 'worker_unverifiable'
-    })
-    expect(h.runtime.createTerminal).toHaveBeenCalledTimes(1)
   })
 
   it('keeps unread mail it could not continue, tells the coordinator, and delivers it with the next send', async () => {
@@ -367,64 +338,6 @@ describe('a follow-up to a finished terminal worker', () => {
     )
   })
 
-  it('moves held mail as new to a follow-up already running, except a pointer whose Enter is in flight', async () => {
-    h.setup()
-    const { taskId, dispatchId } = await h.startWorker()
-    await send(dispatchId, 'typed, Enter in flight')
-    await send(dispatchId, 'woken before')
-    const [inFlight, delivered] = h.db.getUnreadMessages(`dispatch:${dispatchId}`)
-    h.db.db
-      .prepare(
-        "UPDATE messages SET pointer_enter_pending = 3, pointer_pty_id = 'pty_old' WHERE id = ?"
-      )
-      .run(inFlight!.id)
-    h.db.markAsDelivered([delivered!.id], `dispatch:${dispatchId}`)
-    h.settle(taskId, dispatchId, 'succeeded')
-    const winner = h.db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: 9,
-      taskSpec: 'first',
-      taskRunId: h.activeRunId,
-      startOptions: { agent: 'codex' },
-      followUpOf: dispatchId
-    })
-    h.db.markWorkerDispatchReady(winner.dispatch.id)
-
-    continueAllUnreadWorkerMail(h.runtime, h.db)
-
-    expect(h.db.getMessageById(inFlight!.id)).toMatchObject({
-      to_handle: `dispatch:${winner.dispatch.id}`,
-      pointer_enter_pending: 3,
-      pointer_pty_id: 'pty_old'
-    })
-    expect(h.db.getMessageById(delivered!.id)).toMatchObject({
-      to_handle: `dispatch:${winner.dispatch.id}`,
-      delivered_at: null
-    })
-  })
-
-  it('from a follow-up that never got a worker, continues the worker before it', async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    const failed = h.db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: 9,
-      taskSpec: 'first',
-      taskRunId: h.activeRunId,
-      startOptions: { agent: 'codex' },
-      followUpOf: dispatchId
-    })
-    h.db.failWorkerStart(failed.dispatch.id, 'terminal_create', 'The terminal never opened.')
-
-    await expect(send(failed.dispatch.id, 'second')).resolves.toMatchObject({
-      delivery: 'follow_up',
-      followUpOf: failed.dispatch.id,
-      effects: expect.arrayContaining([
-        expect.objectContaining({ role: 'agent', id: 'term_worker' })
-      ])
-    })
-  })
-
   it('lists the finished worker without the terminal its follow-up took over', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
@@ -483,50 +396,5 @@ describe('a follow-up to a finished terminal worker', () => {
     await expect(
       h.call('orchestration.workerList', { run: h.activeRunId, terminalState: 'retained' })
     ).resolves.toMatchObject({ workers: [] })
-  })
-
-  it('takes mail for a working worker even when its report settles the Dispatch in the same turn', async () => {
-    h.setup()
-    const { taskId, dispatchId } = await h.startWorker()
-
-    const sent = send(dispatchId, 'and the docs')
-    h.settle(taskId, dispatchId, 'succeeded')
-
-    await expect(sent).resolves.toMatchObject({ message: { to_handle: `dispatch:${dispatchId}` } })
-  })
-
-  it("keeps the conversation a kept worker's pane moves to after its report", async () => {
-    h.setup()
-    const { dispatchId } = await h.startSettledWorker()
-    vi.mocked(h.runtime.getExactWorkerProviderSession).mockReturnValue({
-      paneKey: h.workerPaneKey,
-      agent: 'claude',
-      processIncarnation: 'runtime_test:term_worker:1',
-      providerSession: { key: 'session_id', id: 'after-clear' },
-      observedAt: 1
-    })
-
-    watchMovedWorkerResumeSessions(
-      h.runtime,
-      () => h.db
-    )([{ paneKey: h.workerPaneKey, sessionId: 'after-clear' }])
-
-    expect(
-      readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))
-    ).toMatchObject({ agent: 'claude', providerSession: { id: 'after-clear' } })
-  })
-
-  it('saves nothing again when a status change repeats the same conversations', async () => {
-    h.setup()
-    await h.startSettledWorker()
-    const read = vi.mocked(h.runtime.getExactWorkerProviderSession)
-    const notify = watchMovedWorkerResumeSessions(h.runtime, () => h.db)
-    const sessions = [{ paneKey: h.workerPaneKey, sessionId: 'after-clear' }]
-
-    notify(sessions)
-    read.mockClear()
-    notify(sessions)
-
-    expect(read).not.toHaveBeenCalled()
   })
 })

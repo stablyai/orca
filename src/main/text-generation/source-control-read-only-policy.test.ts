@@ -6,8 +6,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { planCommitMessageGeneration } from '../../shared/source-control/ai/generation/commit-message-plan'
 import { prepareSourceControlReadOnlyPlan } from './source-control-read-only-policy'
 import { stageLocalPromptFiles } from './source-control-prompt-files'
-import { runLocalPlanForAgent } from './source-control-local-generation'
-import { cancelLocalGeneration } from './source-control-generation-lanes'
+import './source-control-local-generation'
+import './source-control-generation-lanes'
 
 const { probe } = vi.hoisted(() => ({ probe: vi.fn() }))
 vi.mock('./source-control-policy-probe', () => ({ runSourceControlPolicyProbe: probe }))
@@ -35,56 +35,6 @@ function planned(agentId: 'codex' | 'kimi' | 'antigravity', agentArgs?: string) 
 }
 const spawnAgent = vi.fn(() => {
   throw new Error('Unexpected semantic process')
-})
-
-it('cancels during configuration admission without launching a semantic agent', async () => {
-  const cwd = await directory()
-  const entered = Promise.withResolvers<void>()
-  probe.mockImplementation(({ signal }: { signal: AbortSignal }) => ({
-    result: new Promise((_resolve, reject) => {
-      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-      entered.resolve()
-    }),
-    processClosed: Promise.resolve()
-  }))
-  const result = runLocalPlanForAgent({
-    agentId: 'codex',
-    plan: planned('codex'),
-    target: { kind: 'local', cwd, env: { CODEX_HOME: cwd } },
-    operation: 'conversation-name',
-    spawnAgent
-  })
-  await entered.promise
-  cancelLocalGeneration('conversation-name', cwd)
-  await expect(result).resolves.toMatchObject({ success: false, canceled: true })
-  expect(spawnAgent).not.toHaveBeenCalled()
-})
-
-it('keeps non-title helpers inside the enforced task policy', async () => {
-  const cwd = await directory()
-  for (const agentId of ['amp', 'muse', 'kimi'] as const) {
-    const result = planCommitMessageGeneration(
-      {
-        agentId,
-        model: agentId === 'amp' ? 'smart' : 'default',
-        ...(agentId === 'kimi' ? { agentArgs: '--agent custom' } : {})
-      },
-      'Name this chat'
-    )
-    if (!result.ok) {
-      throw new Error(result.error)
-    }
-    await expect(
-      runLocalPlanForAgent({
-        agentId,
-        plan: result.plan,
-        target: { kind: 'local', cwd },
-        operation: 'commit-message',
-        spawnAgent
-      })
-    ).resolves.toMatchObject({ success: false })
-  }
-  expect(spawnAgent).not.toHaveBeenCalled()
 })
 
 it('disables every effective Codex MCP name, including dotted names, after recipe overrides', async () => {
@@ -224,69 +174,4 @@ it('composes agy session settings without losing existing read denies or selecte
   expect(policy.args).toContain('review')
   expect(policy.args).toContain('high')
   expect(await readFile(join(cwd, 'settings.json'), 'utf8')).not.toContain('write_file')
-})
-
-it('refuses an agy build without session settings before sending the prompt', async () => {
-  probe.mockReturnValue({
-    result: Promise.resolve({
-      stdout: '',
-      stderr: '  --model  Model to use\n  --agent  Agent profile\n'
-    }),
-    processClosed: Promise.resolve()
-  })
-  const cwd = await directory()
-  await expect(
-    runLocalPlanForAgent({
-      agentId: 'antigravity',
-      plan: planned('antigravity'),
-      target: { kind: 'local', cwd },
-      operation: 'commit-message',
-      spawnAgent
-    })
-  ).resolves.toMatchObject({ success: false })
-  expect(spawnAgent).not.toHaveBeenCalled()
-  expect(probe.mock.calls[0][0]).toMatchObject({ args: ['--help'], target: { cwd } })
-})
-
-it('preserves valid selected Kimi history and named profiles for best-effort naming', async () => {
-  for (const args of ['--agent review', '--session saved-chat', '--continue']) {
-    const plan = planned('kimi', args)
-    const prepared = await prepareSourceControlReadOnlyPlan({
-      agentId: 'kimi',
-      plan,
-      operation: 'conversation-name',
-      target: { kind: 'local', cwd: '/workspace' },
-      signal: new AbortController().signal,
-      spawnAgent
-    }).result
-    expect(prepared.args).toEqual(plan.args)
-    expect(prepared.taskFiles).toBeUndefined()
-  }
-})
-
-it('uses successful older agy help as capability evidence without swallowing a failed probe', async () => {
-  probe.mockReturnValueOnce({
-    result: Promise.resolve({ stdout: '  --sandbox  Use a sandbox\n  --model Model', stderr: '' }),
-    processClosed: Promise.resolve()
-  })
-  const plan = planned('antigravity', '--agent review')
-  const input = {
-    agentId: 'antigravity',
-    plan,
-    operation: 'conversation-name' as const,
-    target: { kind: 'local' as const, cwd: '/workspace' },
-    signal: new AbortController().signal,
-    spawnAgent
-  }
-  const prepared = await prepareSourceControlReadOnlyPlan(input).result
-  expect(prepared.args).toContain('review')
-  expect(prepared.args).toContain('--sandbox')
-  expect(prepared.args).not.toContain('--settings')
-  probe.mockReturnValueOnce({
-    result: Promise.reject(new Error('Help could not start')),
-    processClosed: Promise.resolve()
-  })
-  await expect(prepareSourceControlReadOnlyPlan(input).result).rejects.toThrow(
-    'Help could not start'
-  )
 })

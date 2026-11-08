@@ -4,22 +4,20 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
-import { holdNativeChatStagedInput } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import { holdNativeChatStagedInput } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 import {
   pendingCreationChatDraftScopeKey,
   pendingCreationHeldChatMessage,
   type PendingWorktreeCreation
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
-import { NativeChatComposer } from '@/components/native-chat/NativeChatComposer'
-import type {
-  NativeChatComposerHandle,
-  NativeChatStructuredComposerTransport
-} from '@/components/native-chat/native-chat-composer-types'
-import { useNativeChatComposerError } from '@/components/native-chat/use-native-chat-composer-notice'
-import type { NativeChatComposerNotice } from '@/components/native-chat/native-chat-composer-notice'
+import { NativeChatComposer } from '@/components/native-chat/composer/NativeChatComposer'
+import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
+import { useNativeChatComposerError } from '@/components/native-chat/composer/controls/use-native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '@/components/native-chat/composer/controls/native-chat-composer-notice'
 import { NativeChatEmptyState } from '@/components/native-chat/host-access/NativeChatEmptyState'
-import { NativeChatUserMessageRow } from '@/components/native-chat/NativeChatUserMessageRow'
+import { NativeChatUserMessageRow } from '@/components/native-chat/messages/rows/NativeChatUserMessageRow'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS,
@@ -33,7 +31,7 @@ import { WorktreeSetupSteps } from './WorktreeSetupSteps'
 import { deriveWorktreeSetupSteps } from './worktree-setup-steps'
 import { useWorktreeCreationClock } from './worktree-creation-clock'
 import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
-import type { NativeChatComposerDraftImage } from '@/components/native-chat/native-chat-composer-draft-storage'
+import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { usePendingNativeChatOptions } from './use-pending-native-chat-options'
 

@@ -1,13 +1,11 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react'
 import { Pencil } from 'lucide-react'
-import { NativeChatComposer } from '../../NativeChatComposer'
-import type {
-  NativeChatComposerHandle,
-  NativeChatStructuredComposerTransport
-} from '../../native-chat-composer-types'
+import { NativeChatComposer } from '../../composer/NativeChatComposer'
+import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { QueuedMessageInlineEditor } from './native-chat-queued-edit-session'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type QueuedEditAttachTarget = {
   terminalTabId: string
@@ -27,6 +25,7 @@ export function NativeChatQueuedMessageComposer({
   images?: ReactNode
   attachTo?: QueuedEditAttachTarget
 }): React.JSX.Element {
+  const t = useTranslate()
   const composer = useRef<NativeChatComposerHandle>(null)
   const row = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
@@ -69,9 +68,7 @@ export function NativeChatQueuedMessageComposer({
     <div ref={row} data-queued-message-editor className="px-2.5 py-1.5">
       <div className="flex min-h-7 items-center gap-1.5 text-xs text-muted-foreground">
         <Pencil className="size-3.5" aria-hidden />
-        <span>
-          {translate('components.native-chat.queuedMessages.editingMessage', 'Editing message')}
-        </span>
+        <span>{t('components.native-chat.queuedMessages.editingMessage', 'Editing message')}</span>
         {sender}
         {!editor.imagesCapable ? images : null}
       </div>

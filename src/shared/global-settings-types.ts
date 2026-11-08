@@ -103,6 +103,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
+  /** One-shot Windows move from the old 500 default to Regular; pending until its notice is closed. */
+  terminalFontWeightWindowsRegular?: 'notice-pending' | 'done'
   terminalFontWeightBold: number
   terminalLineHeight: number
   terminalScrollSensitivity: number
@@ -127,6 +129,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
   terminalDividerColorLight: string
+  /** Mirror the terminal palette into Claude Code's theme; off restores the theme Orca replaced. */
+  claudeCodeThemeSync: boolean
+  /** Existing profiles get `pending` and an offer toast at their next Claude launch; `settled` once shown or for new profiles. */
+  claudeCodeThemeSyncOffer?: 'pending' | 'settled'
   terminalInactivePaneOpacity: number
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number

@@ -4,7 +4,7 @@ import { ChevronDown, ShieldQuestion, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { approvalDetailPreview } from '../../../../../shared/agent-session/agent-session-approval-detail-preview'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
 import { approvalBlockedPathToShow } from '../../../../../shared/agent-session/agent-session-approval-blocked-path'
 import {
@@ -38,6 +38,7 @@ export function NativeChatApprovalCard({
   isSubmitting = false,
   shouldFocus = false
 }: NativeChatApprovalCardProps): React.JSX.Element {
+  const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const neededPath = approvalBlockedPathToShow(approval)
@@ -84,7 +85,7 @@ export function NativeChatApprovalCard({
                 <button
                   type="button"
                   onClick={onCancel}
-                  aria-label={translate('components.native-chat.approval.cancel', 'Cancel')}
+                  aria-label={t('components.native-chat.approval.cancel', 'Cancel')}
                   className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <X className="size-4" />
@@ -110,7 +111,7 @@ export function NativeChatApprovalCard({
                 {approval.decisionReason ? (
                   <p className="whitespace-pre-wrap break-words">
                     <span className="font-medium text-foreground">
-                      {translate('components.native-chat.approval.reason', 'Reason')}:{' '}
+                      {t('components.native-chat.approval.reason', 'Reason')}:{' '}
                     </span>
                     {approval.decisionReason}
                   </p>
@@ -118,8 +119,7 @@ export function NativeChatApprovalCard({
                 {neededPath ? (
                   <p className="break-words">
                     <span className="font-medium text-foreground">
-                      {translate('components.native-chat.approval.needsAccess', 'Needs access to')}
-                      :{' '}
+                      {t('components.native-chat.approval.needsAccess', 'Needs access to')}:{' '}
                     </span>
                     <span className="font-mono">{neededPath}</span>
                   </p>
@@ -136,8 +136,7 @@ export function NativeChatApprovalCard({
                     {approval.subject.filePath ? (
                       <p className="mt-2 break-all">
                         <span className="font-medium text-foreground">
-                          {translate('components.native-chat.approval.plan.file', 'Plan file')}
-                          :{' '}
+                          {t('components.native-chat.approval.plan.file', 'Plan file')}:{' '}
                         </span>
                         <span className="font-mono">{approval.subject.filePath}</span>
                       </p>
@@ -151,7 +150,7 @@ export function NativeChatApprovalCard({
                 ) : null}
                 {newerSubject ? (
                   <p data-native-chat-approval-needs-newer-orca="true" className="break-words">
-                    {translate(
+                    {t(
                       'components.native-chat.approval.needsNewerOrca',
                       'This request needs a newer version of Orca.'
                     )}
@@ -191,6 +190,7 @@ function NativeChatApprovalDetail({
   detail: string
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [expanded, setExpanded] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const preview = approvalDetailPreview(detail)
@@ -216,7 +216,7 @@ function NativeChatApprovalDetail({
       <div className="space-y-2">
         {hasMore ? (
           <CollapsibleTrigger ref={triggerRef} variant="row">
-            {translate('components.native-chat.notices.details', 'Details')}
+            {t('components.native-chat.notices.details', 'Details')}
             <ChevronDown className="size-4 group-data-[state=open]:rotate-180" />
           </CollapsibleTrigger>
         ) : null}

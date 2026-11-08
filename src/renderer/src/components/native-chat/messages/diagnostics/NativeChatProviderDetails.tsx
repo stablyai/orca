@@ -1,5 +1,5 @@
 import { cn } from '../../../../lib/utils'
-import { translate } from '../../../../i18n/i18n'
+import { useTranslate } from '../../../../i18n/use-translate'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { nativeChatProviderFrameSummary } from '../../../../../../shared/native-chat/native-chat-provider-frame-summary'
 
@@ -12,6 +12,7 @@ export function ProviderFrameRow({
   summary?: string
   detail?: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (block.type !== 'text' || (!block.providerFrame && !detail)) {
     return null
   }
@@ -28,7 +29,7 @@ export function ProviderFrameRow({
         frame?.payload.truncated ? (
           <span>
             ·{' '}
-            {translate('components.native-chat.providerFrame.byteCount', '{{count}} bytes', {
+            {t('components.native-chat.providerFrame.byteCount', '{{count}} bytes', {
               count: frame.payload.byteLength,
               defaultValue_one: '{{count}} byte'
             })}

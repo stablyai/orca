@@ -19,7 +19,7 @@ import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-work
 import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
-} from '@/runtime/structured-chat-name-observation'
+} from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
@@ -52,7 +52,7 @@ import type { LaunchSource } from '../../../../../shared/telemetry-property-sche
 import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
-import { addQuoteToAgent } from '@/components/native-chat/native-chat-workspace-selection'
+import { addQuoteToAgent } from '@/components/native-chat/selection-quotes/native-chat-workspace-selection'
 import React, { useCallback, useMemo } from 'react'
 
 type OrderedSendTarget = {

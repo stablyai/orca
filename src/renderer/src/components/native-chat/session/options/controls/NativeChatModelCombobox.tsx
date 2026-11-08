@@ -9,7 +9,7 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { nativeChatModelDescription } from './native-chat-model-description'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SessionOptionSelectChoice } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
@@ -43,7 +43,8 @@ export function NativeChatModelCombobox({
   busy,
   onSelect
 }: NativeChatModelComboboxProps): React.JSX.Element {
-  const searchLabel = translate('components.native-chat.composer.searchModels', 'Search models…')
+  const t = useTranslate()
+  const searchLabel = t('components.native-chat.composer.searchModels', 'Search models…')
   const search = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   return (
@@ -69,10 +70,7 @@ export function NativeChatModelCombobox({
         }}
       >
         <CommandEmpty>
-          {translate(
-            'components.native-chat.composer.noModelsMatch',
-            'No models match your search.'
-          )}
+          {t('components.native-chat.composer.noModelsMatch', 'No models match your search.')}
         </CommandEmpty>
         <NativeChatSessionOptionWriteGroup busy={busy}>
           <CommandGroup>
@@ -97,7 +95,7 @@ export function NativeChatModelCombobox({
                   >
                     <NativeChatSessionOptionChoiceBody
                       label={label}
-                      description={nativeChatModelDescription(choice.value, choice.description)}
+                      description={nativeChatModelDescription(choice.value, choice.description, t)}
                     />
                     {/* Reserve the check slot so selecting a model cannot rewrap its label. */}
                     <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">

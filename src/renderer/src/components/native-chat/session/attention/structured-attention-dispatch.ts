@@ -25,7 +25,7 @@ import {
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
-import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { isCoordinatorOnlyChatNews } from '../../../../../../shared/dispatched-worker-attention'
 import { getNotificationWorkspaceLabels } from '../../../../attention/notification-workspace-labels'
 import { createStructuredAttentionSurface } from './structured-attention-surface'

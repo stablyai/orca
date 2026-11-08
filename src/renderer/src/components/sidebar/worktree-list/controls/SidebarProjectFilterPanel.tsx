@@ -12,7 +12,7 @@ import {
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { searchRepos } from '@/lib/repo-search'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function projectCommandFilter(_value: string, search: string, keywords?: string[]): number {
   const query = search.trim().toLowerCase()
@@ -50,6 +50,7 @@ export function SidebarProjectFilterPanel({
   filterRepoIds,
   setFilterRepoIds
 }: SidebarProjectFilterPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const [highlightedRepoId, setHighlightedRepoId] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
@@ -129,11 +130,11 @@ export function SidebarProjectFilterPanel({
         ref={inputRef}
         placeholder={
           selectedRepos.length > 0
-            ? translate(
+            ? t(
                 'auto.components.sidebar.SidebarRepositoryFilterSection.5a273fbfce',
                 'Add project...'
               )
-            : translate(
+            : t(
                 'auto.components.sidebar.SidebarRepositoryFilterSection.83a820fa71',
                 'Filter projects...'
               )
@@ -148,11 +149,11 @@ export function SidebarProjectFilterPanel({
       <CommandList className="max-h-48 py-1">
         <CommandEmpty className="py-4 text-[11px]">
           {hasRepoFilter
-            ? translate(
+            ? t(
                 'auto.components.sidebar.SidebarRepositoryFilterSection.bbbc6e8e3b',
                 'No unselected projects match'
               )
-            : translate(
+            : t(
                 'auto.components.sidebar.SidebarRepositoryFilterSection.4815c70605',
                 'No projects match'
               )}
@@ -174,10 +175,7 @@ export function SidebarProjectFilterPanel({
               {repo.connectionId && (
                 <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                   <Server className="size-2.5" />
-                  {translate(
-                    'auto.components.sidebar.SidebarRepositoryFilterSection.2656053db4',
-                    'SSH'
-                  )}
+                  {t('auto.components.sidebar.SidebarRepositoryFilterSection.2656053db4', 'SSH')}
                 </span>
               )}
             </span>
@@ -195,6 +193,7 @@ function SelectedProjectPills({
   selectedRepos: Repo[]
   onRemoveProject: (repoId: string) => void
 }) {
+  const t = useTranslate()
   if (selectedRepos.length === 0) {
     return null
   }
@@ -217,7 +216,7 @@ function SelectedProjectPills({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.sidebar.SidebarRepositoryFilterSection.f10ca29601',
               'Remove {{value0}} filter',
               { value0: repo.displayName }

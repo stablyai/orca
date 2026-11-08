@@ -153,7 +153,7 @@ it.each([10, 100])(
     const { buildMobileSessionTabSnapshots } =
       await import('../../src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots')
     const { makeState } =
-      await import('../../src/renderer/src/runtime/sync-runtime-graph-test-harness')
+      await import('../../src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness')
     const mappings =
       await import('../../src/renderer/src/runtime/web-session-tabs-sync/tracking-mappings')
     const { hostSessionTabIdByLocalKey } =

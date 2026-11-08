@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, screen } from '@testing-library/react'
-import { render } from '../native-chat-tooltip-test-harness'
+import { render } from '../messages/actions/native-chat-tooltip-test-harness'
 import { afterEach, describe, expect, it } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import type {
@@ -14,7 +14,7 @@ import { structuredQuestionTranscript } from '../../../../../shared/structured-a
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
-} from '../native-chat-disclosure-store'
+} from '../messages/disclosure/native-chat-disclosure-store'
 
 afterEach(async () => {
   cleanup()

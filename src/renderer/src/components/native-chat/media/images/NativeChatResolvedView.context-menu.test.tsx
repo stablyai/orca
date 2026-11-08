@@ -6,7 +6,7 @@ import type { NativeChatCrewFrame } from '../../../orchestration-crew/NativeChat
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ImageBlobPng from '@/lib/image-blob-png'
-import { NativeChatImageAttachmentPreview } from '../../NativeChatImageAttachmentPreview'
+import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
@@ -51,7 +51,7 @@ vi.mock('../../session/terminal/read/use-native-chat-retained-session', () => ({
     readPhase: 'ready'
   })
 }))
-vi.mock('../../NativeChatComposer', () => ({
+vi.mock('../../composer/NativeChatComposer', () => ({
   NativeChatComposer: () => (
     <>
       <NativeChatImageAttachmentPreview

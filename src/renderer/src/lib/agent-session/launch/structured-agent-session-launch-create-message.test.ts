@@ -44,7 +44,7 @@ import {
   holdStructuredAgentSessionLaunchOption,
   structuredLaunchOptionOverlay
 } from './structured-agent-session-launch-options'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
   resetStructuredAgentLaunchPersistenceForTests,
   readStructuredAgentLaunchRecord
@@ -59,8 +59,8 @@ import {
   getStructuredAgentSessionSendNotice
 } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 
-import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { writeNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 
 import {
   CreateIntentParams,

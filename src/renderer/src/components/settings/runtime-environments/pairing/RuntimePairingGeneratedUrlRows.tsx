@@ -1,7 +1,7 @@
 import { Check, Copy } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function GeneratedUrlRow({
   label,
@@ -16,6 +16,7 @@ export function GeneratedUrlRow({
   copied: boolean
   onCopy: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-1">
       <Label>{label}</Label>
@@ -29,7 +30,7 @@ export function GeneratedUrlRow({
           variant="ghost"
           size="icon-xs"
           onClick={onCopy}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.RuntimePairingGeneratedUrlRows.0495f68959',
             'Copy {{value0}}',
             { value0: label }

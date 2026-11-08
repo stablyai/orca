@@ -21,7 +21,7 @@ import {
   nativeChatFanoutWorkspace,
   repoFixture,
   worktreeFixture
-} from '../../native-chat-workspace-test-fixtures'
+} from '../../surfaces/integration/native-chat-workspace-test-fixtures'
 import type * as TerminalFileOpenRouting from '@/components/terminal-pane/links/files/terminal-file-open-routing'
 import type * as HttpLinkRouting from '@/lib/browser/navigation/http-link-routing'
 

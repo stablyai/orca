@@ -4,7 +4,7 @@ import { AlertCircle, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-rea
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   NativeChatQueuedMessageCard,
   queuedMessageCardCaption
@@ -45,6 +45,7 @@ export function NativeChatQueuedMessageList({
   /** The chat files added in a card's editor attach to, as its chat box attaches them. */
   editAttachTo?: QueuedEditAttachTarget
 }): React.JSX.Element {
+  const t = useTranslate()
   const regionRef = useRef<HTMLDivElement>(null)
   const queueRef = useRef<HTMLDivElement>(null)
   const { cards, pause } = controller
@@ -58,7 +59,7 @@ export function NativeChatQueuedMessageList({
   const steerableHead = controller.queueCapable ? headSteerableQueuedMessageCard(cards) : null
   const attentionCard = !expanded ? cards.find(queuedMessageCardNeedsAttention) : undefined
   const attentionCaption = attentionCard
-    ? queuedMessageCardCaption(attentionCard, agentName, statedFailures)
+    ? queuedMessageCardCaption(attentionCard, agentName, statedFailures, t)
     : null
   const listRef = useRef<HTMLUListElement>(null)
   const newestIsPersons = newest !== undefined && !newest.from
@@ -119,10 +120,7 @@ export function NativeChatQueuedMessageList({
               id={listId}
               // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
               hidden={!expanded}
-              aria-label={translate(
-                'components.native-chat.queuedMessages.listLabel',
-                'Queued messages'
-              )}
+              aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
               // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
               className={cn(
                 'scrollbar-sleek divide-y divide-border overflow-y-auto',
@@ -192,9 +190,10 @@ function NativeChatQueueHeader({
   onClearAll: () => void
   onResume: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const toggleLabel = expanded
-    ? translate('components.native-chat.queuedMessages.collapse', 'Collapse')
-    : translate('components.native-chat.queuedMessages.expand', 'Expand')
+    ? t('components.native-chat.queuedMessages.collapse', 'Collapse')
+    : t('components.native-chat.queuedMessages.expand', 'Expand')
   return (
     <div
       className={cn(
@@ -205,8 +204,8 @@ function NativeChatQueueHeader({
     >
       <p className={cn('truncate', pause && 'font-medium text-foreground')}>
         {pause
-          ? translate('components.native-chat.queuedMessages.paused', 'Paused')
-          : translate('components.native-chat.queuedMessages.queued', 'Queued')}
+          ? t('components.native-chat.queuedMessages.paused', 'Paused')
+          : t('components.native-chat.queuedMessages.queued', 'Queued')}
       </p>
       <span aria-hidden>·</span>
       <span className={cn('tabular-nums', attentionCaption ? 'shrink-0' : 'min-w-0 flex-1')}>
@@ -231,7 +230,7 @@ function NativeChatQueueHeader({
             <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
               <Trash2 className="size-3" />
             </NativeChatPendingIcon>
-            {translate('components.native-chat.queuedMessages.clearAll', 'Clear all')}
+            {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
           </Button>
           <Button
             type="button"
@@ -243,7 +242,7 @@ function NativeChatQueueHeader({
             <NativeChatPendingIcon pending={queuePending === 'resume'} className="size-3">
               <Play className="size-3" />
             </NativeChatPendingIcon>
-            {translate('components.native-chat.queuedMessages.resume', 'Resume')}
+            {t('components.native-chat.queuedMessages.resume', 'Resume')}
           </Button>
         </>
       ) : null}
@@ -253,10 +252,7 @@ function NativeChatQueueHeader({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate(
-              'components.native-chat.queuedMessages.listLabel',
-              'Queued messages'
-            )}
+            aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
             aria-expanded={expanded}
             aria-controls={listId}
             onClick={onToggle}

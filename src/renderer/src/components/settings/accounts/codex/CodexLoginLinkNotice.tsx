@@ -1,11 +1,12 @@
 import { Check, Copy, ExternalLink } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import { Button } from '../../../ui/button'
 import { useCodexPendingLoginUrl } from './use-codex-pending-login-url'
 
 /** Expose in-flight login links so users can finish in a different browser. */
 export function CodexLoginLinkNotice(): React.JSX.Element | null {
+  const t = useTranslate()
   const url = useCodexPendingLoginUrl()
   const { copyText, status } = useClipboardTextCopyFeedback(url ?? '')
   if (!url) {
@@ -14,7 +15,7 @@ export function CodexLoginLinkNotice(): React.JSX.Element | null {
   return (
     <div className="space-y-2 rounded-md border border-border/70 bg-muted/30 px-3 py-2">
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.AccountsPane.codexLoginLinkPending',
           'Codex opened this sign-in link in your browser. Copy it to finish signing in somewhere else — a private window, or another profile.'
         )}
@@ -26,17 +27,17 @@ export function CodexLoginLinkNotice(): React.JSX.Element | null {
         <Button variant="outline" size="xs" onClick={() => void copyText()}>
           {status === 'copied' ? <Check /> : <Copy />}
           {status === 'copied'
-            ? translate('auto.components.settings.AccountsPane.codexLoginLinkCopied', 'Copied')
-            : translate('auto.components.settings.AccountsPane.codexLoginLinkCopy', 'Copy link')}
+            ? t('auto.components.settings.AccountsPane.codexLoginLinkCopied', 'Copied')
+            : t('auto.components.settings.AccountsPane.codexLoginLinkCopy', 'Copy link')}
         </Button>
         <Button variant="ghost" size="xs" onClick={() => void window.api.shell.openUrl(url)}>
           <ExternalLink />
-          {translate('auto.components.settings.AccountsPane.codexLoginLinkOpen', 'Open')}
+          {t('auto.components.settings.AccountsPane.codexLoginLinkOpen', 'Open')}
         </Button>
       </div>
       {status === 'failed' ? (
         <p className="text-xs text-destructive">
-          {translate(
+          {t(
             'auto.components.settings.AccountsPane.codexLoginLinkCopyFailed',
             'Could not copy the link.'
           )}

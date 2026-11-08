@@ -22,7 +22,7 @@ import { useProjectHostSetupProjection } from '@/store/projects/use-project-host
 import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostQueuesMessages
-} from '@/runtime/structured-agent-session-host-capability'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
 import type { Repo } from '../../../shared/repo-types'
 import {

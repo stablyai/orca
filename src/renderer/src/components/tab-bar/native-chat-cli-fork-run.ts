@@ -17,7 +17,7 @@ import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault/session
 import {
   captureWebSessionIntentOwner,
   matchesWebSessionIntentOwner
-} from '@/runtime/web-runtime-session-environment'
+} from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import {
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged

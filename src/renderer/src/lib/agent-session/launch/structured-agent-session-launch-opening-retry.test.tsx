@@ -38,9 +38,9 @@ import {
 import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import { structuredSessionNotices } from '../../../components/native-chat/messages/notices/native-chat-structured-session-notices'
-import { NativeChatComposerNotices } from '@/components/native-chat/NativeChatComposerNotices'
-import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+import { NativeChatComposerNotices } from '@/components/native-chat/composer/controls/NativeChatComposerNotices'
+import { writeNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import { CreateIntentParams } from '../../../../../shared/rpc-contract/structured-agent-session-params'
 
 let restore: (() => void) | undefined

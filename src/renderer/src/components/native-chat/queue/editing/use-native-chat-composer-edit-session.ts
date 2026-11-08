@@ -1,5 +1,5 @@
-import { captureNativeChatEditDraftDestination } from '../../native-chat-composer-draft-memory'
-import { useNativeChatPickerCommandDispatch } from '../../use-native-chat-picker-command-dispatch'
+import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-composer-draft-memory'
+import { useNativeChatPickerCommandDispatch } from '../../composer/pickers/use-native-chat-picker-command-dispatch'
 import {
   useCallback,
   useImperativeHandle,
@@ -14,14 +14,14 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
 import { translate } from '@/i18n/i18n'
 import { registerDictationComposerTarget } from '../../../dictation/dictation-insertion-target'
-import { insertNativeChatComposerDraftText } from '../../native-chat-composer-draft-insertion'
-import { registerNativeChatComposerDestination } from '../../native-chat-composer-destination'
+import { insertNativeChatComposerDraftText } from '../../drafts/native-chat-composer-draft-insertion'
+import { registerNativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
+import type { NativeChatComposerSendIntent } from '../../composer/submit/native-chat-composer-send-intent'
 import type {
-  NativeChatComposerSendIntent,
   NativeChatComposerProps,
-  NativeChatComposerHandle,
-  NativeChatStructuredComposerTransport
-} from '../../native-chat-composer-types'
+  NativeChatComposerHandle
+} from '../../composer/native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../../composer/submit/native-chat-structured-composer-transport'
 
 export function useNativeChatComposerEditSession({
   editSession,

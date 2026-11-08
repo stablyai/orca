@@ -22,6 +22,7 @@ import {
 } from './resource-memory-metric-copy'
 import { formatMemory } from './resource-usage-metrics'
 import { findAmbiguousWorktreeIds, findDuplicateIds } from '../../lib/unified-tab-host-ownership'
+import { useTranslate } from '../../i18n/use-translate'
 
 export function useResourceUsageDerivedModel({
   open,
@@ -58,6 +59,7 @@ export function useResourceUsageDerivedModel({
   snapshot: MemorySnapshot | null
   spaceScanReady: boolean
 }) {
+  const t = useTranslate()
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
     for (const repo of repos) {
@@ -107,18 +109,23 @@ export function useResourceUsageDerivedModel({
   const unifiedRepos = useMemo(
     () =>
       open
-        ? mergeSnapshotAndSessions(resourceSnapshot, sessions, {
-            // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
-            ...resourceSessionBindings,
-            runtimePaneTitlesByTabId,
-            repoDisplayNameById,
-            repoConnectionIdById,
-            repoRuntimeHostIdById,
-            runtimeHostResources,
-            browserTabsByWorktree,
-            worktreeById,
-            ambiguousWorktreeIds
-          })
+        ? mergeSnapshotAndSessions(
+            resourceSnapshot,
+            sessions,
+            {
+              // Share all binding inputs with bulk selection so deferred SSH sessions also require single-row kill confirmation.
+              ...resourceSessionBindings,
+              runtimePaneTitlesByTabId,
+              repoDisplayNameById,
+              repoConnectionIdById,
+              repoRuntimeHostIdById,
+              runtimeHostResources,
+              browserTabsByWorktree,
+              worktreeById,
+              ambiguousWorktreeIds
+            },
+            t
+          )
         : [],
     [
       open,
@@ -132,7 +139,8 @@ export function useResourceUsageDerivedModel({
       runtimeHostResources,
       browserTabsByWorktree,
       worktreeById,
-      ambiguousWorktreeIds
+      ambiguousWorktreeIds,
+      t
     ]
   )
 
@@ -148,11 +156,12 @@ export function useResourceUsageDerivedModel({
   const triggerSessionCount = sessionCount
 
   const memoryMetricCopy = getResourceMemoryMetricCopy(
-    resourceSnapshot?.processMemoryMetric ?? 'rss'
+    resourceSnapshot?.processMemoryMetric ?? 'rss',
+    t
   )
   // Missing commit support on Unix/older hosts means unknown, not zero committed bytes.
   const commitMetricCopy = resourceSnapshot?.processCommitMetric
-    ? getResourceCommitMetricCopy()
+    ? getResourceCommitMetricCopy(t)
     : null
   const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
     useMemo(() => {
@@ -177,24 +186,30 @@ export function useResourceUsageDerivedModel({
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
   // Why: sessions IPC can fail while snapshot IPC works; flag it so the empty session list isn't mistaken for healthy.
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
-  const resourceManagerTooltipLines = getResourceManagerTooltipLines({
-    memoryLabel: resourceSnapshot
-      ? [
-          `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
-          commitBadgeLabel && commitMetricCopy
-            ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
-            : null
-        ]
-          .filter(Boolean)
-          .join(' · ')
-      : memBadgeLabel,
-    sessionCount: triggerSessionCount,
-    spaceScanReady
-  })
-  const resourceManagerAriaLabel = getResourceManagerAriaLabel({
-    sessionCount: triggerSessionCount,
-    spaceScanReady
-  })
+  const resourceManagerTooltipLines = getResourceManagerTooltipLines(
+    {
+      memoryLabel: resourceSnapshot
+        ? [
+            `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
+            commitBadgeLabel && commitMetricCopy
+              ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
+              : null
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : memBadgeLabel,
+      sessionCount: triggerSessionCount,
+      spaceScanReady
+    },
+    t
+  )
+  const resourceManagerAriaLabel = getResourceManagerAriaLabel(
+    {
+      sessionCount: triggerSessionCount,
+      spaceScanReady
+    },
+    t
+  )
 
   return {
     unifiedRepos,

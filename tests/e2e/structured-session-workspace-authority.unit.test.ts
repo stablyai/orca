@@ -9,7 +9,6 @@ import * as gitRemoval from '../../src/main/git/worktrees/removal/worktree-remov
 import * as pushTargetCleanup from '../../src/main/ipc/worktree-remote'
 import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal'
 import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/workspaces/catalog/runtime-folder-workspace'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'

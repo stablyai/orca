@@ -1,6 +1,6 @@
 import type { StructuredAgentSessionReadEffects } from './structured-agent-session-read-owner-contract'
 import { sameStructuredReadTarget } from '@/attention/agent-subject-read-actions'
-import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AgentSessionSubscribeEvent } from '../../../../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
 import { createTerminalGitHubPRLinkDetector } from '../../../../../../../shared/terminal/links/terminal-github-pr-link-detector'

@@ -3,12 +3,12 @@ import { act } from 'react'
 
 import { resetStructuredAgentSessionSendsForTests } from '../session/structured/delivery/structured-agent-session-message-sender'
 const rpc = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: rpc.call
 }))
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatStructuredComposerTransport } from '../native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { nativeChatPromptDismissals } from './native-chat-prompt-dismissals'

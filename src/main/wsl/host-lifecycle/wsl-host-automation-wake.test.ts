@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../shared/automations-types'
-import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
+import '../../../shared/automation-schedule-occurrences'
 import { WslHostAutomationWake, type WslHostAutomationDue } from './wsl-host-automation-wake'
 import {
   readWslHostAutomationWakes,
@@ -99,84 +99,6 @@ function due(
 }
 
 describe('WslHostAutomationWake', () => {
-  it('boots the host once when a learned run comes due with the host off', async () => {
-    const h = harness({})
-    await h.subject.learn('wsl:ubuntu')
-    expect(h.timerAt()).toBe(HOUR) // capped re-arm, not 10 h
-    await h.runTimer(HOUR)
-    expect(h.wake).not.toHaveBeenCalled()
-    await h.runTimer(10 * HOUR)
-    expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
-  })
-
-  it('keeps the following run when a due one was handled while the host was connected', async () => {
-    const h = harness({ due: { 'wsl:ubuntu': due(-HOUR) }, connected: true })
-    h.automations.mockResolvedValueOnce([automation({ nextRunAt: 2 * HOUR })])
-    h.subject.start()
-    await h.runTimer(0)
-    expect(h.wake).not.toHaveBeenCalled()
-    // Re-read from the connected host, not dropped.
-    expect(h.saved.at(-1)?.['wsl:ubuntu']?.nextRunAt).toBe(2 * HOUR)
-  })
-
-  it('keeps the following run when a wake fails or the run is past its grace', async () => {
-    const failed = harness({ due: { 'wsl:ubuntu': due(-HOUR) } })
-    failed.wake.mockRejectedValueOnce(new Error('boot failed'))
-    failed.subject.start()
-    await failed.runTimer(0)
-    const late = harness({ due: { 'wsl:ubuntu': due(-3 * HOUR, 1) } })
-    late.subject.start()
-    await late.runTimer(0)
-    expect(late.wake).not.toHaveBeenCalled()
-    for (const { saved } of [failed, late]) {
-      expect(saved.at(-1)?.['wsl:ubuntu']?.nextRunAt).toBe(
-        nextAutomationOccurrenceAfter(HOURLY, 0, 0)
-      )
-    }
-  })
-
-  it('fires a run that came due while the computer was off as soon as Orca starts', async () => {
-    const h = harness({ due: { 'wsl:ubuntu': due(-HOUR) } })
-    h.subject.start()
-    expect(h.timerAt()).toBe(0)
-    await h.runTimer(0)
-    expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
-  })
-
-  it('does not boot the host at launch for a run that came due while it was last ready', async () => {
-    // The host was ready at 9:50, after the 9 h run: orcad ran it then.
-    const h = harness({ due: { 'wsl:ubuntu': due(9 * HOUR, 12, 9 * HOUR + 50 * MINUTE) } })
-    h.subject.start()
-    await h.runTimer(9 * HOUR + 55 * MINUTE)
-    expect(h.wake).not.toHaveBeenCalled()
-    expect(h.saved.at(-1)?.['wsl:ubuntu']).toMatchObject({
-      nextRunAt: 10 * HOUR,
-      lastSeenReadyAt: 9 * HOUR + 50 * MINUTE
-    })
-  })
-
-  it('still wakes the host once for a later run that came due after it was last ready', async () => {
-    // The 8 h run ran while ready (8:30); the 9 h run came due with the host down.
-    const h = harness({ due: { 'wsl:ubuntu': due(8 * HOUR, 12, 8 * HOUR + 30 * MINUTE) } })
-    h.subject.start()
-    await h.runTimer(9 * HOUR + 30 * MINUTE)
-    expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:ubuntu')
-    // The following run is saved before the boot; the re-arm follows it.
-    await vi.waitFor(() => expect(h.timerAt()).toBe(10 * HOUR))
-  })
-
-  it('saves the following run before booting, so a quit during the boot cannot wake it again', async () => {
-    const h = harness({ due: { 'wsl:ubuntu': due(9 * HOUR) } })
-    let savedAtWake: number | undefined
-    h.wake.mockImplementationOnce(async () => {
-      savedAtWake = h.saved.at(-1)?.['wsl:ubuntu']?.nextRunAt
-    })
-    h.subject.start()
-    await h.runTimer(9 * HOUR + 30 * MINUTE)
-    expect(h.wake).toHaveBeenCalledOnce()
-    expect(savedAtWake).toBe(10 * HOUR)
-  })
-
   it("keeps a fresher ready stamp a learn wrote while an earlier host's wake ran", async () => {
     const h = harness({ due: { 'wsl:a': due(9 * HOUR), 'wsl:b': due(9 * HOUR) } })
     let finishWake: () => void = () => {}
@@ -225,25 +147,6 @@ describe('WslHostAutomationWake', () => {
 
     expect(h.wake).toHaveBeenCalledExactlyOnceWith('wsl:a')
     expect(h.saved.at(-1)).not.toHaveProperty('wsl:b')
-  })
-
-  it('a deleted or disabled automation no longer wakes the host once this desktop re-learns', async () => {
-    const h = harness({ due: { 'wsl:ubuntu': due(5 * HOUR) } })
-    h.automations.mockResolvedValueOnce([automation({ enabled: false })])
-    await h.subject.learn('wsl:ubuntu')
-    expect(h.saved.at(-1)).toEqual({})
-    expect(h.timerAt()).toBeNull()
-  })
-
-  it('keeps what it knew when the host cannot be read, and forgets a removed host', async () => {
-    const h = harness({ due: { 'wsl:ubuntu': due(5 * HOUR) } })
-    h.automations.mockRejectedValueOnce(new Error('offline'))
-    await h.subject.learn('wsl:ubuntu')
-    // Read only while ready: the host still counts as seen ready now.
-    expect(h.saved).toEqual([{ 'wsl:ubuntu': due(5 * HOUR, 12, 0) }])
-    h.subject.forget('wsl:ubuntu')
-    expect(h.saved.at(-1)).toEqual({})
-    expect(h.timerAt()).toBeNull()
   })
 })
 

@@ -1,5 +1,6 @@
 import { MessageSquare, TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../../shared/native-chat/native-chat-empty-state'
 import type { NativeChatSession } from '../../../../../shared/native-chat/native-chat-types'
@@ -19,7 +20,8 @@ export function NativeChatEmptyState({
   /** Structured reads retry automatically; show a loading failure without directing users back to a terminal. */
   retrying?: boolean
 }): React.JSX.Element {
-  const copy = emptyStateCopy(kind, { message, headline }, agent, retrying)
+  const t = useTranslate()
+  const copy = emptyStateCopy(kind, { message, headline }, agent, retrying, t)
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
       <div
@@ -47,16 +49,17 @@ function emptyStateCopy(
   kind: 'loading' | 'empty' | 'error' | 'not-agent',
   words: { message?: string; headline?: string },
   agent?: NativeChatSession['agent'],
-  retrying = false
+  retrying = false,
+  t: Translate = translate
 ): { title: string; subtitle: string | null } {
   switch (kind) {
     case 'loading':
       return {
-        title: translate(
+        title: t(
           'components.native-chat.state.loading.title',
           NATIVE_CHAT_EMPTY_STATE_COPY.loading.title
         ),
-        subtitle: translate(
+        subtitle: t(
           'components.native-chat.state.loading.subtitle',
           NATIVE_CHAT_EMPTY_STATE_COPY.loading.subtitle
         )
@@ -66,14 +69,14 @@ function emptyStateCopy(
         return { title: words.headline, subtitle: null }
       }
       return {
-        title: translate(
+        title: t(
           'components.native-chat.state.error.title',
           NATIVE_CHAT_EMPTY_STATE_COPY.error.title
         ),
         subtitle: retrying
           ? null
           : (words.message ??
-            translate(
+            t(
               'components.native-chat.state.error.subtitle',
               NATIVE_CHAT_EMPTY_STATE_COPY.error.subtitle
             ))
@@ -81,11 +84,11 @@ function emptyStateCopy(
     }
     case 'not-agent':
       return {
-        title: translate(
+        title: t(
           'components.native-chat.state.notAgent.title',
           NATIVE_CHAT_EMPTY_STATE_COPY.notAgent.title
         ),
-        subtitle: translate(
+        subtitle: t(
           'components.native-chat.state.notAgent.subtitle',
           NATIVE_CHAT_EMPTY_STATE_COPY.notAgent.subtitle
         )
@@ -93,12 +96,12 @@ function emptyStateCopy(
     case 'empty': {
       const agentName = agent ? formatAgentTypeLabel(agent) : 'the agent'
       return {
-        title: translate(
+        title: t(
           'components.native-chat.state.empty.title',
           NATIVE_CHAT_EMPTY_STATE_COPY.empty.title,
           { value0: agentName }
         ),
-        subtitle: translate(
+        subtitle: t(
           'components.native-chat.state.empty.subtitle',
           NATIVE_CHAT_EMPTY_STATE_COPY.empty.subtitle,
           { value0: agentName }

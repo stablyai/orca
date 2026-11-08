@@ -3,7 +3,7 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/exec
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { HostLiveTerminalProbeVerdict } from '@/runtime/hosted-terminals/inventory/host-live-terminal-probe'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/worktree-operation-catalog-route'
 import { resolveWorktreeOperationRouteResultForHost } from '@/lib/worktree-operation-route'
 import { getPairedWebClientEnvironmentId } from '@/lib/paired-web-client-host'

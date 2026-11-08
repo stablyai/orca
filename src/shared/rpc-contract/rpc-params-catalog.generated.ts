@@ -292,6 +292,7 @@ import {
   GitResolveConflict,
   GitStatusParams,
   GitSubmoduleStatus,
+  GitSwitchBranch,
   GitTargetedRemote,
   WorktreeSelector as WorktreeSelectorOfGitParams
 } from './git-params'
@@ -734,8 +735,8 @@ import {
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeRunApprovedSetup,
-  WorktreeSelector as WorktreeSelectorOfWorktreeParams,
   WorktreeSet,
+  WorktreeShow,
   WorktreeSleepParams,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
@@ -1108,6 +1109,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.stage': GitFilePath,
   'git.status': GitStatusParams,
   'git.submoduleStatus': GitSubmoduleStatus,
+  'git.switchBranch': GitSwitchBranch,
   'git.unstage': GitFilePath,
   'git.upstreamStatus': GitTargetedRemote,
   'github.addIssueComment': IssueComment,
@@ -1602,7 +1604,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.rm': WorktreeRemove,
   'worktree.runApprovedSetup': WorktreeRunApprovedSetup,
   'worktree.set': WorktreeSet,
-  'worktree.show': WorktreeSelectorOfWorktreeParams,
+  'worktree.show': WorktreeShow,
   'worktree.sleep': WorktreeSleepParams,
   'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
 } as const
