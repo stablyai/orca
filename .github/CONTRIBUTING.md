@@ -112,6 +112,10 @@ pnpm test --changed=origin/main --maxWorkers=2
 pnpm test src/shared/automation-cron-dialect.test.ts --maxWorkers=2
 ```
 
+Local runs default to two Vitest workers so concurrent agents and worktrees do not
+each claim every CPU. An explicit `--maxWorkers=<n>` overrides this limit; CI keeps
+its existing worker budgets.
+
 `test:changed` considers staged, unstaged, and untracked files. `--changed=origin/main`
 also includes committed changes since the branch's merge base. Update that ref when
 you need a newer baseline. Both accept the same path filters and options as `pnpm test`.
