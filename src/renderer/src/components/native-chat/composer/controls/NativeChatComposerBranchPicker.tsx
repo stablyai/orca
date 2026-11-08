@@ -1,8 +1,8 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import { GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import { useWorktreeGitOwnerTarget } from '@/components/right-sidebar/source-control/sync/worktree-git-owner-target'
 import { WorkspaceBranchPicker } from '@/components/right-sidebar/source-control/branches/WorkspaceBranchPicker'
 import { recordWorktreeBranchSwitchLanded } from '@/components/right-sidebar/source-control/branches/workspace-branch-switch-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -15,7 +15,8 @@ export function NativeChatComposerBranchPicker({
   branch,
   turnActive,
   textClassName,
-  onCopyBranch
+  onCopyBranch,
+  fallback
 }: {
   worktreeId: string
   worktreePath: string
@@ -26,15 +27,18 @@ export function NativeChatComposerBranchPicker({
   turnActive: boolean
   textClassName: string
   onCopyBranch: () => void
+  /** Shown while the copy's owner is unresolved, so no git call can reach another host's copy. */
+  fallback: React.ReactNode
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const target = useMemo(() => ipcOrRuntimeTargetForHostId(hostId), [hostId])
+  // The same owner resolution as the status read, so both reach one copy.
+  const target = useWorktreeGitOwnerTarget(worktreeId, hostId)
   const onLanded = useCallback(
     () => recordWorktreeBranchSwitchLanded(worktreeId, hostId, worktreePath),
     [worktreeId, hostId, worktreePath]
   )
   if (!target) {
-    return null
+    return <>{fallback}</>
   }
   return (
     <WorkspaceBranchPicker

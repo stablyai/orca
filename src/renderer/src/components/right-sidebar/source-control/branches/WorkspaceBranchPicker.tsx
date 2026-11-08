@@ -124,7 +124,9 @@ export function WorkspaceBranchPicker({
     [worktreeId, hostId, workspaceLabel, onLanded]
   )
   // Checking out moves HEAD under the agent, so creating a branch waits too; the host re-checks on switch.
-  const blocker = agentWorking
+  // The chat's own turn blocks even while the summary reads it as blocked on an approval.
+  const agentBlocked = agentWorking || agentNotice !== undefined
+  const blocker = agentBlocked
     ? (agentNotice ??
       t(
         'sourceControl.branchPicker.agentWorking',
@@ -162,7 +164,7 @@ export function WorkspaceBranchPicker({
       key={`${hostId}:${worktreeId}`}
       branch={branch}
       blocker={blocker}
-      dirtyOnlyBlocker={showDirtyBlocker && !agentWorking}
+      dirtyOnlyBlocker={showDirtyBlocker && !agentBlocked}
       trigger={trigger}
       onOpenChange={setOpen}
       onCopyBranch={onCopyBranch}

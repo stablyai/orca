@@ -74,6 +74,36 @@ export function NativeChatComposerWorkspace({
         ? t('components.native-chat.composerWorkspace.mainCheckout', 'Main checkout')
         : t('components.native-chat.composerWorkspace.worktree', 'Worktree')
 
+  const copyIdentityButton =
+    identity && label ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="h-5.5 min-w-0 flex-1 justify-start"
+            aria-label={t(
+              'components.native-chat.composerWorkspace.copyIdentity',
+              'Copy {{value0}}',
+              { value0: label }
+            )}
+            onClick={() => void copyValue(identityCopyValue)}
+          >
+            {identity.kind === 'branch' ? (
+              <GitBranch className="size-3" aria-hidden />
+            ) : (
+              <GitCommitHorizontal className="size-3" aria-hidden />
+            )}
+            <span className={`${FOOTER_TEXT} font-mono`}>{label}</span>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {identity.kind === 'detached' ? identity.tooltip : label}
+        </TooltipContent>
+      </Tooltip>
+    ) : null
+
   return (
     <div className="@container mt-1 flex h-5.5 shrink-0 min-w-0 items-center gap-1.5 px-3 text-2xs text-chat-foreground-faint">
       {hostId && (
@@ -141,37 +171,10 @@ export function NativeChatComposerWorkspace({
           turnActive={isWorking}
           textClassName={FOOTER_TEXT}
           onCopyBranch={() => void copyValue(identity.branchName)}
+          fallback={copyIdentityButton}
         />
       ) : (
-        identity &&
-        label && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                className="h-5.5 min-w-0 flex-1 justify-start"
-                aria-label={t(
-                  'components.native-chat.composerWorkspace.copyIdentity',
-                  'Copy {{value0}}',
-                  { value0: label }
-                )}
-                onClick={() => void copyValue(identityCopyValue)}
-              >
-                {identity.kind === 'branch' ? (
-                  <GitBranch className="size-3" aria-hidden />
-                ) : (
-                  <GitCommitHorizontal className="size-3" aria-hidden />
-                )}
-                <span className={`${FOOTER_TEXT} font-mono`}>{label}</span>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {identity.kind === 'detached' ? identity.tooltip : label}
-            </TooltipContent>
-          </Tooltip>
-        )
+        copyIdentityButton
       )}
     </div>
   )
