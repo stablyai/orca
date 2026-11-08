@@ -3,6 +3,7 @@ import { FolderGit2, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import { recomputeOn } from '@/lib/recompute-on'
 import { findIndexedProjectGroupOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import {
   getRepoExecutionHostId,
@@ -35,7 +36,10 @@ export const FolderWorkspaceEmptyState = memo(function FolderWorkspaceEmptyState
   const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const projectGroups = useAppStore((s) => s.projectGroups)
-  useSyncExternalStore(subscribeFolderRepoCreates, getFolderRepoCreatesVersion)
+  const createsVersion = useSyncExternalStore(
+    subscribeFolderRepoCreates,
+    getFolderRepoCreatesVersion
+  )
 
   const folder = showRepoActions ? folderWorkspace : null
   const projectGroupId = folder?.projectGroupId
@@ -59,7 +63,9 @@ export const FolderWorkspaceEmptyState = memo(function FolderWorkspaceEmptyState
         {folder && folderRepos.length > 0 ? (
           <ul className="mt-4 flex w-full max-w-72 flex-col gap-1 text-left">
             {folderRepos.map((repo) => {
-              const creating = isFolderRepoCreatePending(folder, repo)
+              const creating = recomputeOn([createsVersion], () =>
+                isFolderRepoCreatePending(folder, repo)
+              )
               return (
                 <li
                   key={repo.id}
