@@ -1,7 +1,7 @@
 import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
 import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { getJiraReadIdentity } from '@/store/slices/jira/jira-read-coordination'
 import {
   editedJiraIssueFields,

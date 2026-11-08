@@ -2,7 +2,7 @@ import { readTerminalStartFailure } from '../../../../shared/terminal/pty/lifecy
 import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
-} from '../../../runtime/terminal-model-query-authority'
+} from '../../../runtime/terminal/output/terminal-model-query-authority'
 import { registerPty } from '../../../memory/pty-registry'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/workspace-session/terminal-session-state-save-failure'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

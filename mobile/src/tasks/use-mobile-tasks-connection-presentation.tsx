@@ -2,7 +2,7 @@ import type { ProviderViewProjectionModel } from './use-mobile-tasks-provider-vi
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { classifyConnection } from './mobile-tasks-dependencies'
 import { PROVIDER_EMPTY_LABELS } from './mobile-task-view-options'
-import { getTaskPresetQuery } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
 
 export function useMobileTasksConnectionPresentation(model: ProviderViewProjectionModel) {
   const t = useMobileTranslation()

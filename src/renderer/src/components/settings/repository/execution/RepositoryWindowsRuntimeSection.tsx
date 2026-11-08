@@ -12,7 +12,7 @@ import { WslMoveRuntimeRow } from '../../../wsl-move/WslMoveRuntimeRow'
 import { WslDriveProjectGitRow } from '../../../wsl-drive-project/WslDriveProjectGitRow'
 import { WslDriveUncConversionRow } from '../../../wsl-drive-project/WslDriveUncConversionRow'
 import { useWslHostsAcceptNewWork } from '../../../sidebar/use-wsl-hosts-enabled'
-import { resolveProjectExecutionRuntime } from '../../../../../../shared/project-execution-runtime'
+import { resolveProjectExecutionRuntime } from '../../../../../../shared/execution-host/project-execution-runtime'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 
 type RepositoryWindowsRuntimeSectionProps = {

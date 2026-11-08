@@ -3,9 +3,9 @@ import {
   emptyCrew,
   type OrchestrationCrewSnapshot,
   type OrchestrationCrewRow
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
+import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'
 import type { CrewAssignmentRow } from './crew-query'
@@ -13,8 +13,8 @@ import type { CrewAssignmentRow } from './crew-query'
 import type { Party } from './crew-parties'
 import { crewParentRelations } from './crew-parent-relations'
 import { createCrewHostDerivation } from './crew-host-derivation'
-import { statusForFleetWorker } from '../../../../shared/orchestration-fleet-status-index'
-import { projectLiveness } from '../../../../shared/orchestration-fleet-worker-projection'
+import { statusForFleetWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-status-index'
+import { projectLiveness } from '../../../../shared/orchestration/fleet/orchestration-fleet-worker-projection'
 import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-report-mailbox'
 import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'

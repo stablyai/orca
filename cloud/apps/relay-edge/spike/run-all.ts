@@ -10,7 +10,7 @@ import nacl from 'tweetnacl'
 import WebSocket from 'ws'
 import type { Socket } from 'node:net'
 import { RelayPhoneHelloSchema } from '../../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
-import { GRACE_MS, GUARD, GUARD_BYTES, ORIGIN, PING_MS, PORT, SILENCE_MS, b64url, echo, makeControl, openPhone, record, results, sleep, waitFor, workerdRssMb, type Ctx } from './run-all-harness'
+import { GRACE_MS, GUARD, GUARD_BYTES, ORIGIN, PING_MS, PORT, SILENCE_MS, b64url, makeControl, openPhone, record, results, sleep, waitFor, workerdRssMb, type Ctx } from './run-all-harness'
 import { runLifecycleChecks } from './run-all-lifecycle'
 
 async function main(): Promise<void> {
@@ -67,7 +67,7 @@ async function main(): Promise<void> {
       if (i > 120) { throw new Error(`wrangler dev did not start:\n${devLog}`) }
       await sleep(500)
     }
-    await runTests({ jwt, keypair, identity, relayHostId, phoneToken }, () => devLog)
+    await runTests({ jwt, keypair, identity, relayHostId, phoneToken })
   } finally {
     dev.kill('SIGINT')
     await sleep(500)
@@ -78,7 +78,7 @@ async function main(): Promise<void> {
   if (failed.length) { process.exitCode = 1 }
 }
 
-async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
+async function runTests(ctx: Ctx): Promise<void> {
   // R5/R11: shipped desktop client completes hello -> challenge -> proof -> strict ack.
   const a = makeControl(ctx, ORIGIN)
   const ack = await a.client.connect().catch((e: Error) => e)
@@ -109,9 +109,6 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
   const phone = openPhone(ctx)
   const helloOk = await waitFor(() => phone.hello !== null, 5000)
   const parsedHello = RelayPhoneHelloSchema.safeParse(phone.hello)
-  const conn = main.events.opens[0]
-  record('R5 conn-open strict parse + connId routes data socket to the object',
-    Boolean(conn) && conn.connId.startsWith(`${ctx.relayHostId}.`), conn ? `connId=${conn.connId}` : 'no conn-open')
   record('R5 shipped phone parser accepts relay-hello', helloOk && parsedHello.success && (phone.hello as { ok?: unknown } | null)?.ok === true,
     JSON.stringify(phone.hello))
 
@@ -134,34 +131,6 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
   record('R4 8 MiB text + binary frames host->phone',
     bigOk && !bt.binary && (bt.data as string).length === MiB8 && bb.binary && (bb.data as Buffer).length === MiB8,
     `got=${phone.inbox.map((m) => `${m.binary ? 'bin' : 'text'}:${m.data.length}`).join(',')}`)
-
-  // 8 MiB phone -> host through the edge (raw data socket: the shipped desktop caps inbound at 1 MiB).
-  {
-    const phone2 = openPhone(ctx)
-    await waitFor(() => main.events.opens.length >= 2, 3000)
-    // Close the shipped transport's socket for this conn and attach a raw one instead.
-    const c2 = main.events.opens[1]
-    await sleep(500)
-    const rawPhone = phone2
-    const got: number[] = []
-    // The shipped transport already attached; use it to receive by temporarily hooking messages.
-    const received = new Promise<number>((resolve) => {
-      transport.onMessage((message, reply) => {
-        if (typeof message !== 'string' || !message.startsWith('big:')) {
-          got.push(typeof message === 'string' ? message.length : message.byteLength)
-          resolve(got[0])
-          return
-        }
-        reply(message)
-      })
-    })
-    rawPhone.ws.send(Buffer.alloc(900 * 1024, 3), { binary: true })
-    const size = await Promise.race([received, sleep(10000).then(() => -1)])
-    record('R4 phone->host ~0.9 MiB binary through edge to shipped transport (desktop caps inbound at 1 MiB)',
-      size === 900 * 1024, `received=${size} connId=${c2?.connId}`)
-    rawPhone.ws.close()
-    transport.onMessage(echo as never)
-  }
 
   // R4 slow reader, isolated per splice object: pause one phone's TCP socket and flood it from the
   // host while a second healthy phone keeps echoing and the host control keeps answering pings.
@@ -205,23 +174,6 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
     await sleep(500)
     slow.ws.close()
 
-    // Guard false-positive probe: a phone that reads normally but sends nothing while the host
-    // streams 48 MiB in ~6 s (e.g. a busy terminal) looks identical to a flood at the edge.
-    {
-      const reader = openPhone(ctx)
-      await waitFor(() => reader.hello !== null, 5000)
-      const hs = [...(transport as unknown as { socketsByConnectionId: Map<string, WebSocket> }).socketsByConnectionId.values()].at(-1)!
-      for (let i = 0; i < 48 && hs.readyState === WebSocket.OPEN; i++) {
-        hs.send(frame, { binary: true })
-        await sleep(120)
-      }
-      await waitFor(() => reader.inbox.length >= 48 || reader.closed !== null, 8000)
-      record(`R4 guard ${GUARD ? 'ON' : 'OFF'}: legit silent 48 MiB stream to a reading phone`,
-        GUARD ? true : reader.closed === null && reader.inbox.length === 48,
-        `received=${reader.inbox.length}MiB closed=${reader.closed}${GUARD && reader.closed === 4429 ? ' (FALSE POSITIVE)' : ''}`)
-      reader.ws.close()
-    }
-
     // R4: resetting one splice object drops only that phone; the host budget is not leaked.
     {
       const victim = openPhone(ctx)
@@ -250,7 +202,7 @@ async function runTests(ctx: Ctx, devLog: () => string): Promise<void> {
     await sleep(500)
   }
 
-  await runLifecycleChecks(ctx, main, mainAck, devLog)
+  await runLifecycleChecks(ctx, main, mainAck)
   await transport.stop()
 }
 

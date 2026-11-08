@@ -11,11 +11,11 @@ import {
 } from '../../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import type { WorkspaceLayoutChangeFrame } from '../../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { bootWindowFromPartitions } from '../../../app-shell/startup-window-view.test-fixture'
-import { provideLayoutFrameTerminalPanes } from '../../../runtime/layout-frame-terminal-panes'
+import { provideLayoutFrameTerminalPanes } from '../../../runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import {
   openWorkspaceLayoutFrameSync,
   type WorkspaceLayoutFrameSync
-} from '../../../runtime/workspace-layout-frame-sync'
+} from '../../../runtime/workspace-layout/frames/workspace-layout-frame-sync'
 
 import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
 import { createTestStore } from '../../../store/testing/app-store-test-fixture'
@@ -27,7 +27,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 
 type FrameDouble = { onFrame: ((frame: WorkspaceLayoutChangeFrame) => void) | null }
 const frames = vi.hoisted((): FrameDouble => ({ onFrame: null }))
-vi.mock('../../../runtime/runtime-layout-client', () => ({
+vi.mock('../../../runtime/workspace-layout/frames/runtime-layout-client', () => ({
   subscribeRuntimeLayout: (
     _target: unknown,
     _params: unknown,

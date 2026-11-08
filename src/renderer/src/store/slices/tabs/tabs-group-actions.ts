@@ -218,14 +218,17 @@ export function createTabsGroupActions(
 
     createEmptySplitGroup: (worktreeId, sourceGroupId, direction, opts) => {
       const newGroupId = createBrowserUuid()
-      set((state) =>
-        insertSplitGroup(
+      set((state) => ({
+        ...insertSplitGroup(
           state,
           worktreeId,
           { sourceGroupId, splitDirection: direction, activate: opts?.activate },
           emptySplitGroup(worktreeId, newGroupId)
-        )
-      )
+        ),
+        ...(opts?.landing
+          ? { splitLandingGroupIds: { ...state.splitLandingGroupIds, [newGroupId]: worktreeId } }
+          : {})
+      }))
       get().recordFeatureInteraction?.('terminal-panes')
       return newGroupId
     }

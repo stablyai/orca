@@ -23,7 +23,7 @@ import { translate } from '../i18n/mobile-i18n'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { mobileStructuredSendQueues } from './mobile-structured-send-queue-rule'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome

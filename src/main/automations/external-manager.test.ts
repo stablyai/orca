@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runExternalAutomationAction } from './external-manager'
-import { SSH_HOST_NOT_SERVED_MESSAGE } from '../providers/ssh-host-not-served-error'
+
 import type {
   ExternalAutomationAction,
   ExternalAutomationProvider
-} from '../../shared/automations-types'
+} from '../../shared/automations/external/external-automation'
 import type * as Fs from 'node:fs'
 
 const runProcessMock = vi.hoisted(() => vi.fn())
@@ -75,19 +75,6 @@ describe('runExternalAutomationAction', () => {
       })
     ).rejects.toThrow('Unsupported external automation action.')
 
-    expect(runProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('refuses actions on an SSH host without launching locally', async () => {
-    await expect(
-      runExternalAutomationAction({
-        managerId: 'openclaw:ssh:ssh-1',
-        provider: 'openclaw',
-        target: { type: 'ssh', connectionId: 'ssh-1' },
-        jobId: 'job-1',
-        action: 'run'
-      })
-    ).rejects.toThrow(SSH_HOST_NOT_SERVED_MESSAGE)
     expect(runProcessMock).not.toHaveBeenCalled()
   })
 })

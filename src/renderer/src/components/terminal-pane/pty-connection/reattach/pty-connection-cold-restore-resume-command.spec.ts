@@ -26,6 +26,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
@@ -42,7 +43,6 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -193,6 +193,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       const pendingTimeouts: (() => void)[] = []
       const originalSetTimeout = globalThis.setTimeout
       globalThis.setTimeout = vi.fn((fn: () => void) => {

@@ -12,6 +12,7 @@ import type { NativeChatOptionPickerRequest } from '../../session/options/contro
 import type { AgentSessionSlashCommand } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentContextUsage } from '../../../../../../shared/agent-session/structured-agent-session-context-usage'
 import type { NativeChatComposerErrorDetail } from '../controls/native-chat-composer-error-detail'
+import type { NativeChatSideChat } from '../../messages/actions/use-native-chat-side-chat'
 
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
@@ -44,6 +45,8 @@ export type NativeChatStructuredComposerTransport = {
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
+  /** `/btw`; absent where Orca can't fork this chat, so the command stays the agent's. */
+  sideChat?: NativeChatSideChat
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
   /** Present only where this chat can fork; `run` answers with a notice when it didn't fork. */

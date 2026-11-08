@@ -1,4 +1,4 @@
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 const readViews = new WeakMap<RpcClient, RpcClient>()
 const viewBases = new WeakMap<object, RpcClient>()

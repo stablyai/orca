@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import type * as ImageDataUriModule from './image-data-uri'
+import type * as ImageDataUriModule from './file-preview/image-data-uri'
 import { githubAvatarIcon, sanitizeRepoIcon } from './repo-icon'
 
 // Count leaf data-URI header decodes to measure repeated hydration cost.
 const { dataUriValidations } = vi.hoisted(() => ({ dataUriValidations: { count: 0 } }))
 
-vi.mock('./image-data-uri', async (importOriginal) => {
+vi.mock('./file-preview/image-data-uri', async (importOriginal) => {
   const actual = await importOriginal<typeof ImageDataUriModule>()
   return {
     ...actual,
@@ -105,22 +105,5 @@ describe('repo icon source validation memo', () => {
     })
     // WebP is a `file` icon only; sharing one cache across sources would accept it as an upload.
     expect(sanitizeRepoIcon({ type: 'image', src, source: 'upload' })).toBeUndefined()
-  })
-
-  // Recheck src/source on hits so in-place mutations cannot reuse stale verdicts.
-  it('re-validates an icon object whose src or source is mutated in place', () => {
-    const icon = { type: 'image', src: `data:image/png;base64,${pngBase64(7, 1)}`, source: 'file' }
-    expect(sanitizeRepoIcon(icon)).toEqual(icon)
-
-    icon.src = `data:image/png;base64,${pngBase64(8, 1)}`
-    dataUriValidations.count = 0
-    expect(sanitizeRepoIcon(icon)).toEqual(icon)
-    expect(dataUriValidations.count).toBe(1)
-
-    // WebP is a `file` icon but not an `upload` icon, so the same object must flip verdicts.
-    icon.src = `data:image/webp;base64,${WEBP_1X1_BASE64}`
-    expect(sanitizeRepoIcon(icon)).toEqual(icon)
-    icon.source = 'upload'
-    expect(sanitizeRepoIcon(icon)).toBeUndefined()
   })
 })

@@ -1,8 +1,8 @@
 import { isHostNotConnectedError } from '../query/host-query-errors'
-import { optionalSettingsRead } from '../transport/settings-read-operations'
-import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import { optionalSettingsRead } from '../settings/mobile-settings-read-operations'
+import type { RpcAcceptedResult } from '../transport/rpc/rpc-accepted-result'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { buildHostLabelById } from '../worktree/worktree-host-context-labels'
 import { hostSshTargetSummariesRead } from './host-screen-operations'
 

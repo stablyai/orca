@@ -18,7 +18,9 @@ import {
   reserveDeadManWindowMs
 } from './cell/reservations/cell-reserve-dead-man.js'
 import { createRelayApp } from './app.js'
-import { EdgeAssignments } from './edge-relay.js'
+import { EDGE_CELL_ID, EdgeAssignments } from './edge-relay.js'
+import { EdgeEvacuation } from './edge-relay-evacuation.js'
+import type { EdgeControl } from './edge-relay-control.js'
 import { createEdgeAdmin } from './edge-admin-client.js'
 import { classifyAssignmentLease } from './assignment/assignment-lease.js'
 import { defaultIntakePerSec, type CellFlags } from './cell/control-flags/cell-flags.js'
@@ -137,6 +139,8 @@ export function createRelayServer(
     connectionLedgerLimits?: { hardCap: number; controlReserve: number }
     cellIncarnation?: string
     cellFlags?: () => AppliedControlFlags<CellFlags>
+    // Runtime edge control (director/edge.json); absent, the edge runs on its boot config.
+    edgeControl?: EdgeControl
   } = {}
 ) {
   const cellIncarnation = options.cellIncarnation ?? randomUUID()
@@ -170,21 +174,28 @@ export function createRelayServer(
   })
   // Relay edge: directors with an edge URL seed the edge cell and then answer the cohort there.
   // Until the seed lands (or if it fails) the override answers nothing and today's path runs.
-  const edgeAssignments =
-    config.role === 'director' && config.edge
-      ? new EdgeAssignments(
-          observedDatabase,
-          config.edge,
-          options.now,
-          config.edge.adminSigningKey
-            ? createEdgeAdmin({
-                cellUrl: config.edge.cellUrl,
-                signingKey: config.edge.adminSigningKey,
-                issuer: config.publicUrl
-              })
-            : undefined
-        )
+  const edgeAdmin =
+    config.role === 'director' && config.edge?.adminSigningKey
+      ? createEdgeAdmin({
+          cellUrl: config.edge.cellUrl,
+          signingKey: config.edge.adminSigningKey,
+          issuer: config.publicUrl
+        })
       : undefined
+  const edgeConfig =
+    config.edge && options.edgeControl ? { ...config.edge, control: options.edgeControl.flags } : config.edge
+  const edgeAssignments =
+    config.role === 'director' && edgeConfig
+      ? new EdgeAssignments(observedDatabase, edgeConfig, options.now, edgeAdmin)
+      : undefined
+  // Hosts that left the cohort are drained off the edge, rather than waiting out their lease.
+  const edgeEvacuation =
+    config.role === 'director' && edgeConfig && edgeAdmin
+      ? new EdgeEvacuation(observedDatabase, edgeConfig, edgeAdmin, EDGE_CELL_ID, options.now, options.random)
+      : undefined
+  edgeEvacuation?.start()
+  // A rollback (mode off/down, a smaller share) starts draining within seconds.
+  options.edgeControl?.onChange(() => edgeEvacuation?.controlChanged())
   if (edgeAssignments) {
     void edgeAssignments.ensureEdgeCell().then(
       () => console.warn(JSON.stringify({ event: 'orca_relay_edge_cell_ready' })),
@@ -915,6 +926,7 @@ export function createRelayServer(
     dataSockets.close()
     store.resumeAudit.stop()
     rehomeSwitch?.stop()
+    edgeEvacuation?.stop()
   })
   const resumeAuditDropped = (): number => {
     const drops = store.resumeAudit.drops()

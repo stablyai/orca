@@ -29,7 +29,7 @@ import {
   SELF_LOCAL_AUTHORITY,
   type HostAuthority
 } from '../../../shared/host-authority'
-import type { ExecutionHostOwnerMatch } from '../../../shared/worktree-execution-host-resolution'
+import type { ExecutionHostOwnerMatch } from '../../../shared/execution-host/worktree-execution-host-resolution'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRouteResultForHost,

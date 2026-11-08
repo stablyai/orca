@@ -1,7 +1,7 @@
 import {
   AgentStatusObservedPaneIdentities,
   AgentStatusObservedPaneIdentityCapture
-} from '../runtime/agent-status-observed-pane-identity'
+} from '../runtime/terminal/identity/agent-status-observed-pane-identity'
 import { OPEN_CODE_WRITER_TOPOLOGY } from './server/cli-writer-observation'
 import { toAgentStatusIpcPayload } from './server/server-status-identity'
 import { buildRelayHookEnvelope } from '../../wsl-guest/agent-hook-envelope-build'

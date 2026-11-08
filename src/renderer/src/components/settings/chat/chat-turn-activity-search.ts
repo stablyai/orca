@@ -57,9 +57,9 @@ export const getChatTurnActivityEntriesByKey = createLocalizedCatalog(
     }) satisfies Record<string, SettingsSearchEntry>
 )
 
-export function getChatTurnActivitySearchEntries(): SettingsSearchEntry[] {
+export function getChatTurnActivitySearchEntries(t?: Translate): SettingsSearchEntry[] {
   return [
-    { title: getChatTurnActivityTitle() },
+    { title: getChatTurnActivityTitle(t) },
     ...Object.values(getChatTurnActivityEntriesByKey())
   ]
 }

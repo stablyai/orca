@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { bindJiraIssueSourceContext } from './use-jira-url-source'
 import { resolveWorkItemSourceRow } from './work-item-source-selection'
 

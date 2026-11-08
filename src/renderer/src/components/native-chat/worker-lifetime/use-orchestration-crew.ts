@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { OrchestrationCrewSnapshot } from '../../../../../shared/orchestration-crew'
+import type { OrchestrationCrewSnapshot } from '../../../../../shared/orchestration/orchestration-crew'
 import { observeCrew } from '../../orchestration-crew/orchestration-crew-follow'
 import { UNKNOWN_CREW } from '../../orchestration-crew/orchestration-crew-subscription'
 

@@ -31,9 +31,12 @@ export type ControlAttachment = {
   // Decided at hello, as the cells do: it is part of the proof transcript.
   rebind?: boolean
   generation?: number
+  // Last inbound frame of any kind once active (named for pongs, which used to be the only signal).
   lastPongAt?: number
   lastPingAt?: number
   leaseExpiresAt?: number
+  // Last auth-refresh that extended the token (absent on attachments from before this field).
+  lastRefreshAt?: number
   // Client ingress '<continent>/<colo>', for metrics.
   place?: string
 }

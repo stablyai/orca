@@ -165,6 +165,12 @@ const EnvSchema = z.object({
     (value) => (value === '' ? undefined : value),
     z.string().min(32).optional()
   ),
+  // Unset: EDGE_EXPORT_SKIP_AFTER_MS. How long the edge's export must keep failing before leaving
+  // hosts are placed without it (0: on the first failure).
+  ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    z.coerce.number().int().min(0).optional()
+  ),
   DATABASE_URL: z.string().optional(),
   ORCA_RELAY_DATA_DIR: z.string().default('./data/relay')
 })
@@ -489,6 +495,9 @@ function parseEdgeConfig(
     allowHosts: hostIdList(parsed.ORCA_RELAY_EDGE_ALLOW_HOSTS, 'ORCA_RELAY_EDGE_ALLOW_HOSTS'),
     allowUsers: userIdList(parsed.ORCA_RELAY_EDGE_ALLOW_USERS),
     denyHosts: hostIdList(parsed.ORCA_RELAY_EDGE_DENY_HOSTS, 'ORCA_RELAY_EDGE_DENY_HOSTS'),
-    regions: new Set(regions)
+    regions: new Set(regions),
+    ...(parsed.ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS === undefined
+      ? {}
+      : { exportSkipAfterMs: parsed.ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS })
   }
 }

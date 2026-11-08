@@ -1,4 +1,5 @@
-// Limits on sockets that have not authenticated yet (phone connects, host data sockets). Desktops
+// Limits on sockets that have not authenticated yet (phone connects, host data sockets), and on
+// the unauthenticated object health probe (health.ts). Desktops
 // authenticate with a relay JWT before the upgrade; phones and data sockets prove a credential in
 // their first frame, so until then they are only bounded here.
 import { RELAY_CLOSE_CODE } from '../../../packages/relay-contract/src/close-codes'
@@ -23,7 +24,7 @@ export function sourceKey(request: Request): string {
 
 // Counted per source per colo by the Rate Limiting binding. Fails open: a limiter outage must not
 // refuse live users. Without a binding (local spike runs) nothing is limited.
-export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | 'data'): Promise<boolean> {
+export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | 'data' | 'health'): Promise<boolean> {
   if (!env.PREAUTH_LIMITER) { return true }
   try {
     const { success } = await env.PREAUTH_LIMITER.limit({ key: `${kind}:${sourceKey(request)}` })

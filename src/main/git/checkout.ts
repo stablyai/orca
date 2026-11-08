@@ -19,7 +19,7 @@ export function assertValidBranchName(branch: string): void {
 export async function checkoutBranch(
   worktreePath: string,
   branch: string,
-  options: GitRuntimeOptions = {},
+  options: GitRuntimeOptions & { detached?: boolean } = {},
   creation?: BranchSwitchCreation
 ): Promise<{ skippedPaths: string[] }> {
   assertValidBranchName(branch)
@@ -28,7 +28,7 @@ export async function checkoutBranch(
       ? ['checkout', '--no-track', '-b', branch, '--']
       : creation?.kind === 'remote'
         ? ['checkout', '--track', '-b', branch, creation.startPoint, '--']
-        : ['checkout', branch, '--']
+        : ['checkout', ...(options.detached ? ['--detach', `${branch}^{commit}`] : [branch]), '--']
   const { stderr } = await runWithGitReadCacheInvalidation(() =>
     gitExecFileAsync(args, {
       ...gitOptionsForWorktree(worktreePath, options),

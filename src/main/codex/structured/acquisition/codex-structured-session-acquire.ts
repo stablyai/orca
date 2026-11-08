@@ -283,7 +283,7 @@ export async function acquireCodexStructuredSession(input: {
   } catch (error) {
     acquisitions.endings.retire(sessionId, acquisitionGeneration)
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
-      return closeFailedCodexAcquisition({
+      return await closeFailedCodexAcquisition({
         sessionId,
         registry: acquisitions,
         attempt,

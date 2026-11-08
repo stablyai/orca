@@ -11,7 +11,7 @@ import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 import { shouldShowEditorPanelHeader } from './editor-header'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
 import { useTranslate } from '@/i18n/use-translate'
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>

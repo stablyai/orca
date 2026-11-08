@@ -7,7 +7,8 @@ import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
-import { AssignBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
+import { objectHealth } from './health'
+import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
 
@@ -52,6 +53,9 @@ async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise
   if (request.method !== 'POST' || edgeConfig(env).backend !== 'object') { return reject(404) }
   const verified = await verifyAdminRequest(env, request, op)
   if (!verified) { return reject(401) }
+  // Transitional (admin.ts): counts the director's calls still made without a jti.
+  if (!verified.replay) { metric(env, 'admin_no_jti', 1, op, [], '', requestPlace(request)) }
+  const { replay } = verified
   const host = (relayHostId: string) => env.HOST_RELAY.get(env.HOST_RELAY.idFromName(relayHostId))
   if (op === 'assign') {
     const body = AssignBodySchema.safeParse(verified.body)
@@ -59,7 +63,7 @@ async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise
     try {
       const id = env.HOST_RELAY.idFromName(body.data.relayHostId)
       const stub = body.data.locationHint ? env.HOST_RELAY.get(id, { locationHint: body.data.locationHint }) : env.HOST_RELAY.get(id)
-      const result = await stub.adminAssign(body.data)
+      const result = await stub.adminAssign(body.data, replay)
       const ok = result.outcome === 'applied' || result.outcome === 'unchanged'
       return Response.json(result, { status: ok ? 200 : 409 })
     } catch (error) {
@@ -69,12 +73,18 @@ async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise
   if (op === 'export') {
     const body = ExportBodySchema.safeParse(verified.body)
     if (!body.success) { return reject(400) }
-    const result = await host(body.data.relayHostId).adminExport()
+    const result = await host(body.data.relayHostId).adminExport(replay)
     return Response.json(result, { status: result.outcome === 'exported' ? 200 : 409 })
+  }
+  if (op === 'drain') {
+    const body = DrainBodySchema.safeParse(verified.body)
+    if (!body.success) { return reject(400) }
+    const result = await host(body.data.relayHostId).adminDrain(replay)
+    return Response.json(result, { status: result.outcome === 'replay' || result.outcome === 'jti_full' ? 409 : 200 })
   }
   const body = EraseBodySchema.safeParse(verified.body)
   if (!body.success) { return reject(400) }
-  const { outcome } = await host(body.data.relayHostId).adminErase(body.data.userId)
+  const { outcome } = await host(body.data.relayHostId).adminErase(body.data.userId, replay)
   return Response.json({ outcome }, { status: outcome === 'erased' ? 200 : 409 })
 }
 
@@ -87,7 +97,8 @@ export default {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
     }
     if (url.search) { return reject(400) }
-    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase)$/)
+    if (url.pathname === '/__health/object') { return objectHealth(env, request) }
+    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase|drain)$/)
     if (admin) { return handleAdmin(env, request, admin[1] as AdminOp) }
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
@@ -137,11 +148,20 @@ export default {
     if (url.pathname === '/v1/host/control') {
       if (!isUpgrade) { return reject(426) }
       const token = readBearer(request.headers.get('authorization'))
-      const claims = token ? await verifyRelayJwt(env, token) : null
-      if (!claims) { return reject(401) }
-      return forward(env, request, claims.relayHostId, {
+      const verified = token ? await verifyRelayJwt(env, token) : null
+      if (!verified?.ok) {
+        // No keys to judge the token (cold isolate, auth unreachable): 503, not 401. Shipped
+        // desktops treat any refused upgrade the same (a network error, retried through the
+        // director), so this changes no client behavior; it keeps an outage out of the 401s.
+        if (verified?.reason === 'keys_unavailable') {
+          metric(env, 'control_upgrade', 1, 'keys_unavailable', [], '', requestPlace(request))
+          return reject(503, 5)
+        }
+        return reject(401)
+      }
+      return forward(env, request, verified.claims.relayHostId, {
         'x-edge-kind': 'control',
-        'x-edge-claims': JSON.stringify(claims)
+        'x-edge-claims': JSON.stringify(verified.claims)
       })
     }
 

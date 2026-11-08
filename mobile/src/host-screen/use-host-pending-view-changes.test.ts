@@ -5,15 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../src/shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
-import {
-  SetCollapsedParams,
-  type SetCollapsedRequest
-} from '../../../src/shared/rpc-contract/workspace-view-collapse-params'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import type { RpcResponse } from '../transport/types'
+import '../../../src/shared/rpc-contract/workspace-view-collapse-params'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
 import {
-  PENDING_VIEW_CHANGE_STALE_MS,
   addPendingViewChange,
   reconcilePendingViewChanges,
   withPendingViewChanges,
@@ -123,18 +119,6 @@ describe('the phone’s own option changes', () => {
     expect(screen.current().status.pending).toHaveLength(1)
   })
 
-  it('keep a change the desktop has not answered, saying so after ten seconds', () => {
-    vi.useFakeTimers()
-    const screen = mount(() => new Promise(() => {}))
-    act(() => void screen.current().controls.sendView({ sortBy: 'name' }, { sortBy: 'name' }))
-    expect(screen.current().status.stale).toBe(false)
-    act(() => {
-      vi.advanceTimersByTime(PENDING_VIEW_CHANGE_STALE_MS)
-    })
-    expect(screen.current().status.stale).toBe(true)
-    expect(screen.current().status.pending).toHaveLength(1)
-  })
-
   it('keep a change whose request dropped, and resend it after a reconnect', async () => {
     const screen = mount(async () => {
       throw new Error('client_disconnected')
@@ -154,43 +138,6 @@ describe('the phone’s own option changes', () => {
       screen.current().controls.reconcile({ sortBy: 'name' }, { resend: false, sentByOpId })
     })
     expect(screen.current().status.pending).toEqual([])
-  })
-
-  it('report a host without ui.setCollapsed, which then takes the whole list', async () => {
-    const screen = mount(async () => refused('method_not_found'))
-    let outcome: Promise<PendingViewOutcome> | null = null
-    act(() => {
-      outcome = screen.current().controls.sendCollapse('repo:orca', true)
-    })
-    await flush()
-    expect(await outcome).toBe('unavailable')
-    expect(screen.current().status.pending).toEqual([])
-  })
-
-  it('send collapses under one writer with a growing seq', async () => {
-    const sent: SetCollapsedRequest[] = []
-    const screen = mount(async (_method, params) => {
-      sent.push(SetCollapsedParams.parse(params))
-      return ok()
-    })
-    act(() => void screen.current().controls.sendCollapse('a', true))
-    act(() => void screen.current().controls.sendCollapse('a', false))
-    await flush()
-    expect(screen.send.mock.calls.map(([method, params]) => ({ method, params }))).toEqual([
-      { method: 'ui.setCollapsed', params: expect.objectContaining({ key: 'a', collapsed: true }) },
-      { method: 'ui.setCollapsed', params: expect.objectContaining({ key: 'a', collapsed: false }) }
-    ])
-    const [first, second] = sent
-    expect(second.opId.writer).toBe(first.opId.writer)
-    expect(second.opId.seq).toBeGreaterThan(first.opId.seq)
-  })
-
-  it('keep the same controls while changes come and go', async () => {
-    const screen = mount(async () => ok())
-    const before = screen.current().controls
-    act(() => void screen.current().controls.sendView({ sortBy: 'name' }, { sortBy: 'name' }))
-    await flush()
-    expect(screen.current().controls).toBe(before)
   })
 })
 

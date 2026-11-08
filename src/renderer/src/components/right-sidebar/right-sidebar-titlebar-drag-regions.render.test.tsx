@@ -24,7 +24,8 @@ const mockAppState = vi.hoisted(() => ({
   } | null,
   listeners: new Set<() => void>(),
   snapshotCache: new Map<(state: Record<string, unknown>) => unknown, unknown>(),
-  cachedWorktree: null as { id: string; repoId: string } | null
+  cachedWorktree: null as { id: string; repoId: string } | null,
+  vaultLoad: { promise: Promise.resolve(), pending: false }
 }))
 
 function notifyAppStore(): void {
@@ -181,6 +182,31 @@ vi.mock('./PortsPanel', () => ({
   default: () => <div data-ports-panel />
 }))
 
+vi.mock('./ai-vault/panel/AiVaultSidebarPanel', async () => {
+  const React = await vi.importActual<typeof ReactModule>('react')
+  return {
+    default: function MockAiVaultSidebarPanel({
+      focusSearch,
+      onFocusSearchHandled
+    }: {
+      focusSearch: boolean
+      onFocusSearchHandled: () => void
+    }) {
+      if (mockAppState.vaultLoad.pending) {
+        throw mockAppState.vaultLoad.promise
+      }
+      const inputRef = React.useRef<HTMLInputElement>(null)
+      React.useEffect(() => {
+        if (focusSearch) {
+          inputRef.current?.focus()
+          onFocusSearchHandled()
+        }
+      }, [focusSearch, onFocusSearchHandled])
+      return <input ref={inputRef} aria-label="Search sessions" />
+    }
+  }
+})
+
 function setRendererPlatform(platform: NodeJS.Platform): void {
   resetRendererAppPlatformCacheForTests()
   Object.defineProperty(window, 'api', {
@@ -217,6 +243,62 @@ describe('right sidebar panel routing', () => {
     mockAppState.listeners.clear()
     mockAppState.snapshotCache.clear()
     mockAppState.cachedWorktree = null
+    mockAppState.vaultLoad.pending = false
+  })
+
+  it('focuses session search on an explicit switch but not when restoring the tab', async () => {
+    mockAppState.rightSidebarTab = 'vault'
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await import('./ai-vault/panel/AiVaultSidebarPanel')
+      await act(async () => root.render(<RightSidebar />))
+      expect(container.querySelector('[aria-label="Search sessions"]')).not.toBeNull()
+      expect(document.activeElement).not.toBe(
+        container.querySelector('[aria-label="Search sessions"]')
+      )
+
+      await act(async () => mockAppState.setRightSidebarTab('explorer'))
+      await act(async () => mockAppState.setRightSidebarTab('vault'))
+      expect(document.activeElement).toBe(container.querySelector('[aria-label="Search sessions"]'))
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
+  it('does not move focus after the user types while session search is loading', async () => {
+    let finishLoad = (): void => {}
+    mockAppState.vaultLoad.pending = true
+    mockAppState.vaultLoad.promise = new Promise<void>((resolve) => {
+      finishLoad = resolve
+    })
+    const container = document.createElement('div')
+    const otherInput = document.createElement('input')
+    document.body.append(otherInput, container)
+    const root = createRoot(container)
+    try {
+      await import('./ai-vault/panel/AiVaultSidebarPanel')
+      await act(async () => root.render(<RightSidebar />))
+      otherInput.focus()
+      await act(async () => mockAppState.setRightSidebarTab('vault'))
+      await act(async () =>
+        otherInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true }))
+      )
+      await act(async () => {
+        mockAppState.vaultLoad.pending = false
+        finishLoad()
+      })
+      expect(container.querySelector('[aria-label="Search sessions"]')).not.toBeNull()
+      expect(document.activeElement).toBe(otherInput)
+    } finally {
+      mockAppState.vaultLoad.pending = false
+      finishLoad()
+      await act(async () => root.unmount())
+      container.remove()
+      otherInput.remove()
+    }
   })
 
   it('renders a visible fallback without overwriting a hidden folder-only tab', async () => {

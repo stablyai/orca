@@ -6,7 +6,7 @@ import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { cn } from '@/lib/utils'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { LinearStateCell } from './task-page-linear-issue-model'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '../task-page-source-context'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,8 @@ export function TaskPageLinearIssueTable({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const [collapsedSections, setCollapsedSections] = useState<ReadonlySet<string>>(() => new Set())
   const {
     selectedLinearWorkspaceId,
@@ -132,7 +134,7 @@ export function TaskPageLinearIssueTable({
                 {effectiveLinearDisplayProperties.has('assignee') ? (
                   <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                     {issue.assignee?.displayName ??
-                      translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                      t('auto.components.TaskPage.42a9160321', 'Unassigned')}
                   </span>
                 ) : null}
                 {effectiveLinearDisplayProperties.has('team') ? (
@@ -191,7 +193,7 @@ export function TaskPageLinearIssueTable({
                       className="flex size-5 shrink-0 items-center justify-center rounded-full border border-border/50 bg-muted/40 text-[10px] text-muted-foreground"
                       aria-label={
                         issue.assignee?.displayName ??
-                        translate('auto.components.TaskPage.42a9160321', 'Unassigned')
+                        t('auto.components.TaskPage.42a9160321', 'Unassigned')
                       }
                     >
                       {issue.assignee?.avatarUrl ? (
@@ -207,7 +209,7 @@ export function TaskPageLinearIssueTable({
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
                     {issue.assignee?.displayName ??
-                      translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                      t('auto.components.TaskPage.42a9160321', 'Unassigned')}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -221,7 +223,7 @@ export function TaskPageLinearIssueTable({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {new Date(issue.updatedAt).toLocaleString(getIntlLocale())}
+                  {new Date(issue.updatedAt).toLocaleString(intlLocale)}
                 </TooltipContent>
               </Tooltip>
             ) : null}
@@ -242,14 +244,14 @@ export function TaskPageLinearIssueTable({
                     className={attachedWorkspace ? 'shadow-xs' : undefined}
                     aria-label={
                       attachedWorkspace
-                        ? translate(
+                        ? t(
                             'auto.components.TaskPage.linearOpenAttachedWorkspace',
                             'Open workspace attached to {{value0}}',
                             {
                               value0: issue.identifier
                             }
                           )
-                        : translate(
+                        : t(
                             'auto.components.TaskPage.ff90d0abc7',
                             'Start workspace from {{value0}}',
                             {
@@ -267,9 +269,8 @@ export function TaskPageLinearIssueTable({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
                   {attachedWorkspace
-                    ? (attachedWorkspaceLabel ??
-                      translate('auto.components.TaskPage.606a85c774', 'Open'))
-                    : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                    ? (attachedWorkspaceLabel ?? t('auto.components.TaskPage.606a85c774', 'Open'))
+                    : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
                 </TooltipContent>
               </Tooltip>
               <Tooltip>
@@ -281,7 +282,7 @@ export function TaskPageLinearIssueTable({
                       event.stopPropagation()
                       openAppHttpLink(issue.url, { event })
                     }}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.TaskPage.246bd64aed',
                       'Open {{value0}} in Linear',
                       {
@@ -293,7 +294,7 @@ export function TaskPageLinearIssueTable({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate('auto.components.TaskPage.6244a02f46', 'Open in Linear')}
+                  {t('auto.components.TaskPage.6244a02f46', 'Open in Linear')}
                 </TooltipContent>
               </Tooltip>
             </div>

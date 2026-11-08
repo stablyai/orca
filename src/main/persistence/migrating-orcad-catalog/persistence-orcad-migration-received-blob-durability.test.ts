@@ -12,7 +12,7 @@ import { getOrcadMigrationReceivedBlobPath } from './orcad-migration-blob-stagin
 import {
   commitStagedOrcadMigrationCatalogDurably,
   getOrcadMigrationCatalogState
-} from '../../runtime/orcad-migration-catalog-import'
+} from '../../runtime/hosts/migration/orcad-migration-catalog-import'
 import {
   DORMANT_LEAF_ID,
   DORMANT_WORKTREE_ID,

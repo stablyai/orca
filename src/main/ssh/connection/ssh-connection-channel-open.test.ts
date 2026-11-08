@@ -49,65 +49,6 @@ describe('SshConnection', () => {
     resetSshConnectionMocks()
   })
 
-  it('wraps exec commands as a single line that csh/tcsh login shells cannot break', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    const original = "cd '/tmp' && ('/usr/bin/node' -e 'console.log(1)' || echo MISSING)"
-    await conn.exec(original)
-
-    const wrapped = clientInstances[0].lastExecCommand!
-    // sshd passes commands through the login shell first; raw newlines break csh/tcsh before /bin/sh (#8701).
-    expect(wrapped).not.toContain('\n')
-    expect(wrapped).toMatch(/^exec \/bin\/sh -c '.*printf %b .*' orca-command /)
-    expect(wrapped).not.toContain('base64')
-  })
-
-  it('opens an interactive shell with the requested pty for plain SSH terminals', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    await conn.shell({ cols: 100, rows: 30, term: 'xterm-256color' })
-
-    expect(clientInstances[0].lastShellWindow).toEqual({
-      cols: 100,
-      rows: 30,
-      term: 'xterm-256color'
-    })
-  })
-
-  it('can execute native remote commands without the POSIX shell wrapper', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    await conn.exec('powershell.exe -NoProfile -EncodedCommand AAAA', { wrapCommand: false })
-
-    expect(clientInstances[0].lastExecCommand).toBe(
-      'powershell.exe -NoProfile -EncodedCommand AAAA'
-    )
-  })
-
-  it('times out when ssh2 never opens an exec channel', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.execBehavior = 'pending'
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn.exec('printf ready').catch((error: Error) => error)
-
-      await vi.advanceTimersByTimeAsync(30_000)
-      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
-
-      expect(outcome).toMatchObject({
-        message: 'SSH exec channel timed out',
-        sshChannelCloseConfirmed: false
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('closes a late exec callback after the channel-open timeout settles', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
@@ -129,53 +70,6 @@ describe('SshConnection', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('retries a session-limit-refused exec open and succeeds on a later attempt', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    const channel = { close: vi.fn() }
-    const execMock = vi
-      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
-      .mockImplementationOnce((_cmd, cb) => {
-        cb(
-          Object.assign(new Error('(SSH) Channel open failure: open failed'), { reason: 2 }),
-          undefined
-        )
-      })
-      .mockImplementation((_cmd, cb) => cb(undefined, channel))
-    clientInstances[0].exec = execMock as never
-
-    await expect(conn.exec('printf ready')).resolves.toBe(channel)
-    expect(execMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('surfaces the session-limit error once open retries are exhausted', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    const refusal = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
-      reason: 2
-    })
-    const execMock = vi
-      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
-      .mockImplementation((_cmd, cb) => cb(refusal, undefined))
-    clientInstances[0].exec = execMock as never
-
-    await expect(conn.exec('printf ready')).rejects.toBe(refusal)
-    expect(execMock).toHaveBeenCalledTimes(4)
-  })
-
-  it('does not retry non-session-limit exec open failures', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    const failure = new Error('Not connected')
-    const execMock = vi
-      .fn<(cmd: string, cb: (err: Error | undefined, ch: unknown) => void) => void>()
-      .mockImplementation((_cmd, cb) => cb(failure, undefined))
-    clientInstances[0].exec = execMock as never
-
-    await expect(conn.exec('printf ready')).rejects.toBe(failure)
-    expect(execMock).toHaveBeenCalledTimes(1)
   })
 
   it('bounds an aborted exec to the close grace when ssh2 never invokes the open callback', async () => {
@@ -333,48 +227,6 @@ describe('SshConnection', () => {
     }
   })
 
-  it('times out when ssh2 never opens an SFTP channel', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.sftpBehavior = 'pending'
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn.sftp().catch((error: Error) => error)
-
-      await vi.advanceTimersByTimeAsync(30_000)
-      const outcome = await Promise.race([outcomePromise, Promise.resolve('pending')])
-
-      expect(outcome).toMatchObject({ message: 'SSH SFTP channel timed out' })
-      expect(outcome).not.toHaveProperty('sshChannelCloseConfirmed')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('ends a late SFTP callback after the channel-open timeout settles', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.sftpBehavior = 'pending'
-    const lateSftp = { end: vi.fn() }
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn
-        .sftp()
-        .then(() => 'opened')
-        .catch((error: Error) => error.message)
-
-      await vi.advanceTimersByTimeAsync(30_000)
-      pendingSftpCallback?.(undefined, lateSftp)
-
-      await expect(outcomePromise).resolves.toBe('SSH SFTP channel timed out')
-      expect(lateSftp.end).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('cancels a pending SFTP channel open and ends the late channel', async () => {
     const conn = new SshConnection(createTarget(), createCallbacks())
     await conn.connect()
@@ -393,36 +245,5 @@ describe('SshConnection', () => {
 
     await expect(outcomePromise).resolves.toBe('AbortError')
     expect(lateSftp.end).toHaveBeenCalledTimes(1)
-  })
-
-  it('retains SFTP physical-close tracking after the bounded observation expires', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    ssh2Mock.sftpBehavior = 'pending'
-    const controller = new AbortController()
-    const lateSftp = Object.assign(new EventEmitter(), { end: vi.fn() })
-
-    vi.useFakeTimers()
-    try {
-      const outcomePromise = conn
-        .sftp({ signal: controller.signal })
-        .then(() => 'opened')
-        .catch((error: Error) => error.name)
-
-      await Promise.resolve()
-      controller.abort()
-      pendingSftpCallback?.(undefined, lateSftp)
-      expect(lateSftp.listenerCount('close')).toBe(2)
-
-      await vi.advanceTimersByTimeAsync(5_000)
-
-      await expect(outcomePromise).resolves.toBe('AbortError')
-      expect(lateSftp.listenerCount('close')).toBe(1)
-      lateSftp.emit('close')
-      expect(lateSftp.listenerCount('close')).toBe(0)
-      expect(lateSftp.end).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { ExecutionHostHealth } from '../../../shared/execution-host-health'
+import type { ExecutionHostHealth } from '../../../shared/execution-host/execution-host-health'
 import type { RuntimeHostBlockedReason } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeCompatVerdict } from '../../../shared/protocol-compat'
 

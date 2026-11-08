@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

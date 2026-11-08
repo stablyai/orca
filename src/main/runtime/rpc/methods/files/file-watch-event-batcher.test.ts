@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { FsChangeEvent } from '../../../../../shared/filesystem-entry-types'
-import '../../../../../shared/filesystem-watch-batch-window'
+import type { FsChangeEvent } from '../../../../../shared/file-watch/filesystem-change-event'
+import '../../../../../shared/file-watch/filesystem-watch-batch-window'
 import { createFileWatchEventBatcher } from './file-watch-event-batcher'
 
 describe('createFileWatchEventBatcher', () => {

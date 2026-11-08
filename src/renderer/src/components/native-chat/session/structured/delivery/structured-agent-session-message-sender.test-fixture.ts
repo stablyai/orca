@@ -15,10 +15,16 @@ const mocks: MessageSenderFixtureMocks = vi.hoisted(() => ({
   handBack: vi.fn((): boolean => true)
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
-  structuredAgentSessionHostSupports: vi.fn(async () => true)
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
 }))
+
+vi.mock(
+  '../../../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    structuredAgentSessionHostSupports: vi.fn(async () => true)
+  })
+)
 vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: mocks.compatible
 }))

@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeSecureJsonFileWithinLimit } from '../../bounded-secure-json-file'
-import { readNodeFileSyncWithinLimit } from '../../node-bounded-file-reader'
+import { writeSecureJsonFileWithinLimit } from '../../secure-storage/bounded-secure-json-file'
+import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
 import { RuntimeEnvironmentReconciliationRecordSchema } from '../host-catalog/runtime-environment-reconciliation-record'
 import { readEnvironmentStoreRecords } from './runtime-environment-store-records'
 import {
@@ -15,7 +15,7 @@ import {
   type KnownRuntimeEnvironment,
   type PersistedRuntimeEnvironment
 } from '../host-catalog/runtime-environments'
-import { hardenExistingSecureFile } from '../../secure-file'
+import { hardenExistingSecureFile } from '../../secure-storage/secure-file'
 
 // Shipped builds strip unknown environment fields on routine writes; preserve newer state in this untouched sidecar.
 const SIDECAR_FILE = 'orca-environment-sidecar.json'
