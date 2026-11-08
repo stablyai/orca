@@ -25,31 +25,58 @@ function isScannedPath(rel) {
   return /\.[cm]?[jt]sx?$/.test(rel) && !rel.endsWith('.d.ts') && !isTestOnlySourcePath(rel)
 }
 
-function isHostIntervalCallee(node) {
+function isHostInterval(node) {
+  if (!ts.isIdentifier(node.expression) || !TIMER_HOSTS.has(node.expression.text)) {
+    return false
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    return node.name.text === 'setInterval'
+  }
   return (
-    ts.isPropertyAccessExpression(node) &&
-    node.name.text === 'setInterval' &&
-    ts.isIdentifier(node.expression) &&
-    TIMER_HOSTS.has(node.expression.text)
+    ts.isElementAccessExpression(node) &&
+    ts.isStringLiteralLike(node.argumentExpression) &&
+    node.argumentExpression.text === 'setInterval'
+  )
+}
+
+// A value reference to the identifier, not a declaration, member name, key or `typeof` probe.
+function isBareValueReference(node) {
+  const parent = node.parent
+  return !(
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node) ||
+    ts.isTypeOfExpression(parent) ||
+    ts.isImportSpecifier(parent) ||
+    ts.isExportSpecifier(parent) ||
+    (ts.isBindingElement(parent) && (parent.name === node || parent.propertyName === node)) ||
+    (ts.isVariableDeclaration(parent) && parent.name === node) ||
+    (ts.isParameter(parent) && parent.name === node) ||
+    ((ts.isFunctionDeclaration(parent) || ts.isMethodDeclaration(parent)) && parent.name === node)
   )
 }
 
 const SCOPE_OPTIONS = { noLib: true, noResolve: true, allowJs: true, types: [] }
 
-// Scope-aware per call: a bare call is the global timer when it binds to nothing declared in this
-// file. Module bindings (and their aliases) are the collector's to count, so they are skipped here.
-function countGlobalBareCalls(source) {
+// Counts references, not calls, to the global timer, so `const every = setInterval; every(f)` and
+// `window['setInterval']` are charged once. A bare name is the global when it binds to nothing
+// declared in this file (resolved per scope); module bindings and their aliases are the collector's.
+function countGlobalTimerReferences(source) {
   const host = ts.createCompilerHost(SCOPE_OPTIONS)
   host.getSourceFile = (name) => (name === source.fileName ? source : undefined)
   const checker = ts.createProgram([source.fileName], SCOPE_OPTIONS, host).getTypeChecker()
   let count = 0
   const visit = (node) => {
+    if (ts.isTypeNode(node) && !ts.isExpressionWithTypeArguments(node)) {
+      return
+    }
     if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === 'setInterval'
+      (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
+      isHostInterval(node) &&
+      !ts.isTypeOfExpression(node.parent)
     ) {
-      const declarations = checker.getSymbolAtLocation(node.expression)?.declarations ?? []
+      count += 1
+    } else if (ts.isIdentifier(node) && node.text === 'setInterval' && isBareValueReference(node)) {
+      const declarations = checker.getSymbolAtLocation(node)?.declarations ?? []
       if (!declarations.some((declaration) => declaration.getSourceFile() === source)) {
         count += 1
       }
@@ -65,15 +92,7 @@ export function countRecurringTimers(rel, source) {
     return 0
   }
   const file = ts.createSourceFile(rel, source, ts.ScriptTarget.Latest, true)
-  let hosted = 0
-  const visit = (node) => {
-    if (ts.isCallExpression(node) && isHostIntervalCallee(node.expression)) {
-      hosted += 1
-    }
-    ts.forEachChild(node, visit)
-  }
-  visit(file)
-  return countGlobalBareCalls(file) + hosted + timerImports.collectUses(rel, source).count
+  return countGlobalTimerReferences(file) + timerImports.collectUses(rel, source).count
 }
 
 export function collectRecurringTimerCounts(root = process.cwd()) {
@@ -95,7 +114,7 @@ export function main(root = process.cwd(), arg = undefined) {
       header: [
         '# setInterval calls (global, or imported from node:timers / node:timers/promises) in production src/main,',
         '# src/renderer, src/shared and src/cli, per file. Bare calls are resolved per scope; imported bindings follow the shared',
-        '# collector (file-wide). Not counted: global-object destructuring, a self-rescheduling setTimeout (it must back off or pause while hidden).',
+        '# collector (file-wide). Not counted: destructuring off a global object, a self-rescheduling setTimeout (it must back off or pause while hidden).',
         '# This is a RATCHET: counts may only go DOWN.',
         '# Prune after removing intervals: pnpm check:recurring-timer-ratchet --prune'
       ],

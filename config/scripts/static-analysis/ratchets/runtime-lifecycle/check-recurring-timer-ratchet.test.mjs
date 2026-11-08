@@ -25,7 +25,12 @@ describe('recurring-timer ratchet', () => {
     ['function configure(setInterval) {\n  return setInterval\n}\nsetInterval(poll, 1000)', 1],
     ['type Configure = (setInterval: number) => void\nsetInterval(poll, 1000)', 1],
     ['function a(setInterval) { setInterval(f) }\nfunction b() { setInterval(g, 1) }', 1],
-    ['function setInterval(f) {}\nsetInterval(poll)', 0]
+    ['function setInterval(f) {}\nsetInterval(poll)', 0],
+    // Aliases and bracket access of the global timer are charged at the reference.
+    ['const schedule = setInterval\nschedule(poll, 1000)', 1],
+    ["window['setInterval'](poll, 1000)", 1],
+    ['const every = window.setInterval\nevery(poll, 1)', 1],
+    ["if (typeof setInterval === 'function') {}\ntype T = typeof setInterval", 0]
   ])('counts %s', (source, count) => {
     expect(countRecurringTimers('src/main/example.ts', source)).toBe(count)
   })

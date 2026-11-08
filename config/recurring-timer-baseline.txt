@@ -1,6 +1,6 @@
 # setInterval calls (global, or imported from node:timers / node:timers/promises) in production src/main,
 # src/renderer, src/shared and src/cli, per file. Bare calls are resolved per scope; imported bindings follow the shared
-# collector (file-wide). Not counted: global-object destructuring, a self-rescheduling setTimeout (it must back off or pause while hidden).
+# collector (file-wide). Not counted: destructuring off a global object, a self-rescheduling setTimeout (it must back off or pause while hidden).
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing intervals: pnpm check:recurring-timer-ratchet --prune
 1 src/cli/handlers/orchestration/check-keepalive.ts
