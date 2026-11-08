@@ -27,15 +27,7 @@ import { queuedMessageUpdateDecision } from './queued-messages/queued-message-up
 
 type Target = { sessionId: string; epoch: string }
 
-type QueueInsert = Extract<JournalSqlQueueWrite, { kind: 'queue-insert' }>
-
-/** The host's admission also names delivery and attendance, which every saved card keeps. */
-export type JournalDomainQueueOperation =
-  | Exclude<JournalSqlQueueWrite, QueueInsert>
-  | {
-      kind: 'queue-insert'
-      input: QueueInsert['input'] & { deliveryMode?: 'queue' | 'steer'; unattended?: boolean }
-    }
+export type JournalDomainQueueOperation = JournalSqlQueueWrite
 
 export type JournalDomainQueueResult =
   | { kind: 'queue-insert'; card: QueuedMessageRow }

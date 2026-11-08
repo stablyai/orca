@@ -3,8 +3,9 @@ import type { SqliteBindings } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA } from './journal-domain-edit-lease-schema'
+import { migrateJournalDomainQueueSchema } from './journal-domain-queue-schema'
 
-const JOURNAL_DOMAIN_VERSION = 3
+const JOURNAL_DOMAIN_VERSION = 4
 
 /** journal_events.changes_json: identities only; readers load current rows for bodies. */
 export type JournalDomainEventChanges = {
@@ -36,9 +37,13 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
     if (version < 2) {
       migrateJournalDomainHistory(db)
     }
-    db.exec(JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA)
-    db.exec(`CREATE INDEX journal_events_saved_at ON journal_events(saved_at,session_id,epoch,sequence);
-      INSERT INTO journal_domain_migrations(version) VALUES (3)`)
+    if (version < 3) {
+      db.exec(JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA)
+      db.exec(`CREATE INDEX journal_events_saved_at ON journal_events(saved_at,session_id,epoch,sequence);
+        INSERT INTO journal_domain_migrations(version) VALUES (3)`)
+    }
+    migrateJournalDomainQueueSchema(db)
+    db.exec('INSERT INTO journal_domain_migrations(version) VALUES (4)')
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')

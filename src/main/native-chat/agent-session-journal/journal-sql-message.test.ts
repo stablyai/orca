@@ -129,7 +129,8 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
     queuedAt: null
   }
   db.prepare(
-    `INSERT INTO journal_card_versions VALUES('chat','epoch','card',1,0,1,'returned','orca:reported-command',?)`
+    `INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,version_index,current,state,command_turn_item_id,payload_json)
+      VALUES('chat','epoch','card',1,0,1,'returned','orca:reported-command',?)`
   ).run(JSON.stringify(card))
   db.exec(`CREATE TEMP TRIGGER durable_echo BEFORE UPDATE ON journal_submission_attempts
     WHEN (SELECT synchronous FROM pragma_synchronous)<>2 BEGIN SELECT RAISE(ABORT,'acceptance was not FULL'); END`)
@@ -167,8 +168,8 @@ it('accepts an optimistic echo once, preserving its local body and moved placeme
       .payload_json
   ).toBe(historical)
   expect(
-    db.prepare('SELECT payload_json FROM journal_card_versions WHERE current=0').get()!.payload_json
-  ).toBe(JSON.stringify(card))
+    db.prepare('SELECT payload_json FROM journal_card_versions WHERE current=0').get()
+  ).toBeUndefined()
   expect(
     db.prepare('SELECT candidate FROM journal_submission_attempts WHERE current=1').get()!.candidate
   ).toBe(0)

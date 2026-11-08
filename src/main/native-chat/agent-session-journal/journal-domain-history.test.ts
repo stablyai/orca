@@ -344,7 +344,7 @@ it('backfills history metadata once from saved v1 rows and refuses a newer domai
       payload_json: JSON.stringify(rows[2])
     }
   ])
-  db.exec('INSERT INTO journal_domain_migrations(version) VALUES (4)')
+  db.exec('INSERT INTO journal_domain_migrations(version) VALUES (5)')
   expect(() => migrateJournalDomainSchema(db)).toThrow(
     'journal domain schema is newer than this writer'
   )

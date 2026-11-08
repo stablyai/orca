@@ -155,6 +155,9 @@ function applyMessageSteps(
       result.cards.push(...commit.cards)
       result.inputChanged ||= commit.inputChanged
       result.acceptedInputs = commit.acceptedInputs ?? result.acceptedInputs
+      if (commit.editDeadline !== undefined) {
+        result.editDeadline = commit.editDeadline
+      }
     } catch (error) {
       db.exec('ROLLBACK TO journal_message_step; RELEASE journal_message_step')
       if (error instanceof JournalMessageNeedsFull) {

@@ -166,7 +166,8 @@ it('resets old cursors at the replay count and metadata budgets while preserving
       queuedAt: null
     }
     db.prepare(
-      `INSERT INTO journal_card_versions VALUES('chat','epoch',?,1,0,1,'returned','orca:command',?)`
+      `INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,version_index,current,state,command_turn_item_id,payload_json)
+        VALUES('chat','epoch',?,1,0,1,'returned','orca:command',?)`
     ).run(messageId, JSON.stringify(card))
   }
   await commit(message('wide withdrawal remains saved'))

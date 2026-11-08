@@ -12,7 +12,6 @@ import {
 } from '../agent-session-attachments/agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { migrateJournalDomainQueueSchema } from './journal-domain-queue-schema'
 import { applyJournalDomainEditLease } from './journal-domain-edit-leases'
 import {
   applyJournalDomainQueueCommand,
@@ -41,9 +40,6 @@ function fixture() {
   })
   migrateJournalDomainSchema(db)
   ensureAgentSessionAttachmentClaimTables(db)
-  db.exec('BEGIN IMMEDIATE')
-  migrateJournalDomainQueueSchema(db)
-  db.exec('COMMIT')
   db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
     VALUES('chat','epoch',10,1)`).run()
   const seed = (

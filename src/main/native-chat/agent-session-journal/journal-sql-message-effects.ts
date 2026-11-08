@@ -7,6 +7,11 @@ import type {
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDispatchRowApplies } from './projection/journal-dispatch-settlement'
+import {
+  readJournalDomainCard,
+  writeJournalDomainCardVersion
+} from './journal-domain-card-versions'
+import { applyJournalDomainEditLease } from './journal-domain-edit-leases'
 
 export function acceptJournalSqlMessageEcho(
   db: Database.Database,
@@ -60,22 +65,27 @@ export function spendJournalSqlCommandCards(
   db: Database.Database,
   prefix: readonly [string, string],
   sequence: number,
-  returned: readonly SqliteRow[]
-): QueuedMessageRow[] {
+  returned: readonly SqliteRow[],
+  savedAt: number
+): { cards: QueuedMessageRow[]; editDeadline?: number | null } {
   const cards: QueuedMessageRow[] = []
+  const target = { sessionId: prefix[0], epoch: prefix[1] }
+  let leasesChanged = false
+  let editDeadline: number | null = null
   for (const row of returned) {
-    const card: QueuedMessageRow = { ...JSON.parse(String(row.payload_json)), state: 'withdrawn' }
-    db.prepare(
-      `UPDATE journal_card_versions SET current=0 WHERE session_id=? AND epoch=? AND message_id=? AND current=1`
-    ).run(...prefix, card.messageId)
-    db.prepare(`INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,version_index,current,state,command_turn_item_id,payload_json)
-      VALUES(?,?,?,?,0,1,'withdrawn',NULL,?)`).run(
-      ...prefix,
-      card.messageId,
-      sequence,
-      JSON.stringify(card)
+    const prior = readJournalDomainCard(target.sessionId, row)
+    const card: QueuedMessageRow = { ...prior.card, state: 'withdrawn' }
+    writeJournalDomainCardVersion(db, target, prior, card, sequence)
+    const retired = applyJournalDomainEditLease(
+      db,
+      target,
+      '',
+      { kind: 'retire-card', messageId: card.messageId },
+      savedAt
     )
+    leasesChanged ||= retired.changed
+    editDeadline = retired.nextDeadline
     cards.push(card)
   }
-  return cards
+  return { cards, ...(leasesChanged ? { editDeadline } : {}) }
 }

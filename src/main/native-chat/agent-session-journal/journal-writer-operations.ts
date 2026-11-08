@@ -74,6 +74,8 @@ export type JournalWriterInputOperation =
         requireAttachments?: true
         holdReason?: QueuedMessageHoldReason
         options?: AgentSessionExecutionOptions
+        deliveryMode?: 'queue' | 'steer'
+        unattended?: boolean
       }
     }
   | { kind: 'queue-update'; input: QueuedMessageUpdate }
