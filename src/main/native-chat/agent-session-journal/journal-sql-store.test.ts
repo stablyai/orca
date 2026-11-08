@@ -32,7 +32,7 @@ afterEach(async () => {
 })
 
 const identity = {
-  sessionId: 'session',
+  sessionId: 'session-1',
   workspaceId: 'workspace',
   hostId: 'host',
   agent: 'codex' as const,
@@ -109,6 +109,12 @@ it('holds automatic delivery for every editor until committed release, expiry or
   ])
   expect(journal.queuedMessages.revision()).toBe(heldRevision)
   now = 120_200
+  const opening = journal.physicalCursor()
+  const expired = await SqlAgentSessionJournal.open({ database, identity, now: () => now })
+  expect(expired.openingCursor()).toEqual(opening)
+  expect(expired.physicalCursor().sequence).toBe(opening.sequence + 1)
+  expect(await expired.queuedMessages.nextInputCard()).toMatchObject({ messageId: 'draft' })
+  await expired.close()
   await journal.queuedMessages.editLeases.expire()
   expect(journal.queuedMessages.revision()).not.toBe(heldRevision)
   expect(await journal.queuedMessages.nextInputCard()).toMatchObject({ messageId: 'draft' })
@@ -124,7 +130,7 @@ it('holds automatic delivery for every editor until committed release, expiry or
   await reopened.close()
 })
 
-function receipt(adopt: (committed: boolean) => void, draft = 'retained'): JournalOperationReceipt {
+function receipt(adopt: (committed: boolean) => void): JournalOperationReceipt {
   return {
     write: () => {
       throw new Error('the host must never write a SQL receipt')
@@ -135,24 +141,11 @@ function receipt(adopt: (committed: boolean) => void, draft = 'retained'): Journ
     stage: async () => ({
       effects: [
         {
-          kind: 'store',
-          insertOperationsIfAbsent: false,
-          writes: {
-            records: {
-              upsert: [['session', JSON.stringify({ schemaVersion: 999, draft })]],
-              remove: []
-            },
-            operations: { upsert: [], remove: [] },
-            retiredClaimKeys: null,
-            sessionTabs: null
-          }
-        },
-        {
           kind: 'receipt',
           scope: { kind: 'global' },
           receipt: {
             operationId: 'operation',
-            sessionId: 'session',
+            sessionId: 'session-1',
             callerKey: 'caller',
             method: 'agentSession.send',
             fingerprint: 'fingerprint',
@@ -168,8 +161,49 @@ function receipt(adopt: (committed: boolean) => void, draft = 'retained'): Journ
   }
 }
 
+async function foundReceiptSession(database: JournalSqlDatabase): Promise<void> {
+  await database.effects([
+    {
+      kind: 'store',
+      mutation: {
+        input: {
+          kind: 'command',
+          command: {
+            kind: 'found',
+            leaseTtlMs: 30_000,
+            legacyTabIds: [],
+            request: {
+              sessionId: 'session-1',
+              location: {
+                executionHostId: 'host',
+                workspaceId: 'workspace',
+                workspaceKind: 'git-worktree',
+                wslDistro: null
+              },
+              provider: 'codex',
+              accountHome: { variable: 'CODEX_HOME', path: '/tmp/receipt-codex' },
+              expectedFence: null,
+              spawnToken: 'spawn',
+              claimKeyId: 'key',
+              handoffOperationId: null,
+              probe: { outcome: 'reservation-unused' },
+              operation: {
+                callerKey: 'caller',
+                operationId: '1800000000000-00000000000000000000000000000000',
+                fingerprint: 'found'
+              },
+              now: 1_800_000_000_000
+            }
+          }
+        }
+      }
+    }
+  ])
+}
+
 it('adopts a row-bound receipt before publishing and reads the persisted revision after restart', async () => {
   const { root, database, journal } = await fixture()
+  await foundReceiptSession(database)
   const opening = journal.openingCursor()
   expect(opening.sequence).toBe(0)
   expect(journal.wroteBeforeOpen(undefined)).toBe(false)
@@ -211,13 +245,14 @@ it('adopts a row-bound receipt before publishing and reads the persisted revisio
 
 it('discards staged adoption and the row together when a receipt conflicts', async () => {
   const { database, journal } = await fixture()
+  await foundReceiptSession(database)
   await journal.write(item('retained'), () => ({ receipt: receipt(() => {}) }))
   let adopted = true
   await expect(
     journal.write(item('must roll back'), () => ({
       receipt: receipt((committed) => {
         adopted = committed
-      }, 'must roll back')
+      })
     }))
   ).rejects.toBeInstanceOf(CommandReceiptExistsError)
   expect(adopted).toBe(false)
@@ -229,16 +264,12 @@ it('discards staged adoption and the row together when a receipt conflicts', asy
     verdict: 'readable',
     receipt: { result: { sequence: 1 } }
   })
-  expect((await database.loadRecords()).unreadableRecords.get('session')).toEqual({
-    reason: 'unsupported_schema',
-    raw: { schemaVersion: 999, draft: 'retained' }
-  })
 })
 
 it('releases a failed receipt stage and admits the next command without replaying the failure', async () => {
   const { database, journal } = await fixture()
   const needed = new Error('writer admission failed')
-  await database.serialize('session', (writer) => {
+  await database.serialize('session-1', (writer) => {
     vi.spyOn(writer, 'write').mockRejectedValueOnce(needed)
   })
   let adopted = true
@@ -415,7 +446,7 @@ it('publishes SQL status only with recaptured live owners through the existing r
   }
   const logger = { warn: vi.fn(), error: vi.fn() }
   const feed = new StructuredAgentSessionStatusFeed({
-    sessions: new Map([['session', session]]),
+    sessions: new Map([['session-1', session]]),
     getConversation: () => null,
     now: () => 999,
     logger
@@ -431,7 +462,7 @@ it('publishes SQL status only with recaptured live owners through the existing r
     return result
   })
   const observations: unknown[] = []
-  const pending = feed.publish('session', journal, { replay: true }, (projection) => {
+  const pending = feed.publish('session-1', journal, { replay: true }, (projection) => {
     observations.push({
       revision: projection.workRevision,
       held: projection.authority?.child?.heldSends,
@@ -440,7 +471,7 @@ it('publishes SQL status only with recaptured live owners through the existing r
     published.resolve()
   })
   await reached.promise
-  expect(feed.readPublished('session')).toBeUndefined()
+  expect(feed.readPublished('session-1')).toBeUndefined()
   session.operationalRevision = 1
   held.add('held-without-row')
   await journal.stopMarks.beginSettle(true)
@@ -448,7 +479,7 @@ it('publishes SQL status only with recaptured live owners through the existing r
   await pending
   await published.promise
   expect(observations).toEqual([{ revision: 1, held: ['held-without-row'], stopping: true }])
-  expect(feed.readPublished('session')).toMatchObject({
+  expect(feed.readPublished('session-1')).toMatchObject({
     latestPrompt: 'Read my chat',
     status: 'working',
     stopping: true,

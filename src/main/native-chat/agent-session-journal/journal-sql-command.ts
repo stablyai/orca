@@ -38,6 +38,7 @@ export class JournalSqlCommand {
           { ...command, operation },
           savedAt
         )
+      case 'open':
       case 'edit-lease':
         return applyJournalSqlEditLeaseCommand(
           this.db,

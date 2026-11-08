@@ -2,7 +2,11 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
-import { openJournalDomainDatabase } from './database/journal-domain-database'
+import {
+  initializeJournalDomainDatabase,
+  journalDomainDatabasePath,
+  openJournalDomainDatabase
+} from './database/journal-domain-database'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
@@ -34,23 +38,34 @@ let closing = false
 let scheduled = false
 const queue: JournalSqlRequest[] = []
 
-try {
-  mkdirSync(dirname(workerData.filename), { recursive: true })
-  const opened = openJournalDomainDatabase(workerData.filename)
-  db = opened.db
-  readOnly = opened.readOnly
-  commands = new JournalSqlCommand(db, stateDirectory)
-  if (!readOnly) {
-    checkpoint = new JournalCheckpointOwner(db, workerData.filename)
+async function open(): Promise<void> {
+  try {
+    mkdirSync(dirname(workerData.filename), { recursive: true })
+    if (workerData.filename === journalDomainDatabasePath(stateDirectory)) {
+      await initializeJournalDomainDatabase(stateDirectory)
+    }
+    const opened = openJournalDomainDatabase(workerData.filename)
+    db = opened.db
+    readOnly = opened.readOnly
+    commands = new JournalSqlCommand(db, stateDirectory)
+    if (!readOnly) {
+      checkpoint = new JournalCheckpointOwner(db, workerData.filename)
+    }
+    batch = new JournalSqlBatch(db, checkpoint)
+    reply({ type: 'ready', readOnly })
+  } catch (error) {
+    fault = error
+    reply({
+      type: 'failed',
+      outcome: 'not-dispatched',
+      fatal: true,
+      error: journalSqlFailure(error)
+    })
+    db?.close()
+    port.close()
   }
-  batch = new JournalSqlBatch(db, checkpoint)
-  reply({ type: 'ready', readOnly })
-} catch (error) {
-  fault = error
-  reply({ type: 'failed', outcome: 'not-dispatched', fatal: true, error: journalSqlFailure(error) })
-  db?.close()
-  port.close()
 }
+void open()
 
 port.on('message', (request: JournalSqlRequest) => {
   if (closing || !db) {

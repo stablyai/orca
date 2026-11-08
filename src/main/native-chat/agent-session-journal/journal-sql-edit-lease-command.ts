@@ -10,7 +10,7 @@ export function applyJournalSqlEditLeaseCommand(
   db: Database.Database,
   stateDirectory: string,
   command: JournalWriterCommand & {
-    operation: Extract<JournalWriterCommand['operation'], { kind: 'edit-lease' }>
+    operation: Extract<JournalWriterCommand['operation'], { kind: 'edit-lease' | 'open' }>
   },
   savedAt: number
 ): JournalWriterCommit {
@@ -28,7 +28,7 @@ export function applyJournalSqlEditLeaseCommand(
     db,
     target,
     target.ownerToken,
-    operation.operation,
+    operation.kind === 'open' ? { kind: 'expire' } : operation.operation,
     savedAt
   )
   const sequence = Number(head.last_sequence) + (outcome.changed ? 1 : 0)
@@ -52,7 +52,9 @@ export function applyJournalSqlEditLeaseCommand(
       inputChanged: outcome.changed,
       editDeadline: outcome.nextDeadline
     },
-    outcome,
+    operation.kind === 'open'
+      ? { epoch: target.epoch, sequence: Number(head.last_sequence) }
+      : outcome,
     []
   )
 }

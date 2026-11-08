@@ -85,6 +85,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the open command returns the physical cursor captured before recovery.
     this.openedThrough = { ...(opened.value as AgentJournalCursor) }
     this.acknowledged = { ...opened.cursor }
+    this.queuedMessages.editLeases.adoptDeadline(opened.publication?.editDeadline ?? null)
   }
 
   static async open(options: {
@@ -92,16 +93,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     identity: AgentSessionJournalIdentity
     now?: () => number
   }): Promise<SqlAgentSessionJournal> {
-    const { target, commit } = await options.database.openSession(options.identity)
-    const journal = new SqlAgentSessionJournal(
-      options.database,
-      options.identity,
-      target,
-      options.now ?? Date.now,
-      commit
-    )
-    await journal.queuedMessages.editLeases.expire()
-    return journal
+    const now = options.now ?? Date.now
+    const { target, commit } = await options.database.openSession(options.identity, now())
+    return new SqlAgentSessionJournal(options.database, options.identity, target, now, commit)
   }
 
   /** The immutable physical position this handle opened at; never the reopen floor. */

@@ -7,6 +7,7 @@ type Conversion = { promotion: AbortController; result: Promise<string | null> }
 /** One lock per chat, shared by background work and opens; promotion wakes a paused conversion. */
 export class JournalSqlConversions {
   private readonly pending = new Map<string, Conversion>()
+  private readonly ready = new Map<string, string>()
   private closed = false
 
   constructor(
@@ -19,6 +20,10 @@ export class JournalSqlConversions {
     if (this.closed) {
       throw new Error('journal conversions are closed')
     }
+    const ready = this.ready.get(sessionId)
+    if (ready !== undefined) {
+      return ready
+    }
     const pending = this.pending.get(sessionId)
     if (pending) {
       if (foreground) {
@@ -30,11 +35,23 @@ export class JournalSqlConversions {
     if (foreground) {
       promotion.abort()
     }
-    const result = this.convert(sessionId, promotion.signal).finally(() => {
-      this.pending.delete(sessionId)
-    })
+    const result = this.convert(sessionId, promotion.signal)
+      .then((epoch) => {
+        if (epoch !== null) {
+          this.rememberReady(sessionId, epoch)
+        }
+        return epoch
+      })
+      .finally(() => {
+        this.pending.delete(sessionId)
+      })
     this.pending.set(sessionId, { promotion, result })
     return result
+  }
+
+  /** A ready physical epoch survives context changes for the lifetime of the database owner. */
+  rememberReady(sessionId: string, epoch: string): void {
+    this.ready.set(sessionId, epoch)
   }
 
   async close(): Promise<void> {
@@ -43,6 +60,7 @@ export class JournalSqlConversions {
       promotion.abort()
     }
     await Promise.allSettled([...this.pending.values()].map(({ result }) => result))
+    this.ready.clear()
   }
 
   private async boundary(promotion: AbortSignal): Promise<void> {

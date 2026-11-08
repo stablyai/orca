@@ -13,10 +13,7 @@ import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-
 import type { CommandReceiptScope } from '../writing/command-receipt-schema'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 import { journalDatabasePath } from './journal-host-database'
-import {
-  initializeJournalDomainDatabase,
-  journalDomainDatabasePath
-} from './journal-domain-database'
+import { journalDomainDatabasePath } from './journal-domain-database'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */
 export class JournalSqlDatabase {
@@ -60,7 +57,7 @@ export class JournalSqlDatabase {
       onMaintenanceError: (error: unknown, sessionId?: string) => void
     }
   ): Promise<JournalSqlDatabase> {
-    const filename = await initializeJournalDomainDatabase(stateDirectory)
+    const filename = journalDomainDatabasePath(stateDirectory)
     const writer = new JournalSqlOwner(filename, stateDirectory, options.writerPath)
     try {
       return new JournalSqlDatabase(writer, stateDirectory, await writer.opened(), options)
@@ -131,7 +128,7 @@ export class JournalSqlDatabase {
     return this.serialize(sessionId, () => this.conversions.ensure(sessionId))
   }
 
-  openSession(identity: AgentSessionJournalIdentity) {
+  openSession(identity: AgentSessionJournalIdentity, savedAt = Date.now()) {
     return this.serialize(identity.sessionId, async () => {
       let epoch = await this.conversions.ensure(identity.sessionId)
       if (epoch === null) {
@@ -157,6 +154,12 @@ export class JournalSqlDatabase {
           throw new Error('founded journal has no physical epoch')
         }
         epoch = founded
+        this.conversions.rememberReady(identity.sessionId, epoch)
+      }
+      const target = { sessionId: identity.sessionId, epoch, ownerToken: randomUUID() }
+      if (!this.readOnly) {
+        const commit = await this.writer.write({ target, operation: { kind: 'open' }, savedAt })
+        return { target, commit }
       }
       const head = await this.readers.point({
         sessionId: identity.sessionId,
@@ -165,7 +168,6 @@ export class JournalSqlDatabase {
       if (head.kind !== 'metadata') {
         throw new Error('journal reader returned no opening head')
       }
-      const target = { sessionId: identity.sessionId, epoch, ownerToken: randomUUID() }
       const commit: JournalWriterCommit = {
         cursor: head.cursor,
         queueRevision: head.queueRevision,
