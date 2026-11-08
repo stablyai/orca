@@ -52,6 +52,7 @@ describe('remote terminal output cadence negotiation', () => {
     const stream = await getRemoteRuntimeTerminalMultiplexer('env-1').subscribeTerminal({
       terminal: 'terminal-1',
       client: { id: 'desktop-1', type: 'desktop' },
+      outputCadence: 'focused',
       callbacks: { onData: () => {}, onSnapshot: () => {} }
     })
     stream.setOutputCadence('background')

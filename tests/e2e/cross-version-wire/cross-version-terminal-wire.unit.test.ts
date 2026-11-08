@@ -123,11 +123,7 @@ describe('cross-version remote terminal wire', () => {
     expectJourneyActuallyRan(currentReference)
     expectWireCompatible(currentReference)
     for (const event of currentReference.subscribedEvents) {
-      expect(event.capabilities).toEqual({
-        outputPause: 1,
-        outputPauseDropNotice: 1,
-        outputCadence: 1
-      })
+      expect(event.capabilities).toEqual({ outputPause: 1, outputPauseDropNotice: 1 })
     }
     expect(currentReference.snapshotStarts).toEqual([
       expect.objectContaining({ alternateScreen: false, terminalOwner: 'shell' }),

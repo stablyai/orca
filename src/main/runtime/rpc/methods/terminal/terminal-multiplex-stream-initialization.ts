@@ -27,7 +27,10 @@ export async function initializeMultiplexStream(
   const { runtime, connectionId, streams, registerBinaryStreamHandler } = state
   const isMobile = request.client?.type === 'mobile'
   const remoteDesktopSubscriptionKey = `multiplex:${connectionId}:${request.streamId}`
-  const supportsOutputCadence = request.capabilities?.outputCadence === 1
+  const supportsOutputCadence =
+    request.capabilities?.outputCadence === 1 &&
+    // Field rollback without a release: clients then see a host without the capability.
+    process.env.ORCA_DISABLE_TERMINAL_OUTPUT_CADENCE !== '1'
   const stream: TerminalMultiplexStream = {
     streamId: request.streamId,
     terminal: request.terminal,

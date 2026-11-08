@@ -7,8 +7,8 @@ import { measureTerminalStreamByteLength } from '../../terminal-stream-byte-leng
 
 const TERMINAL_OUTPUT_FLUSH_MS: Record<TerminalOutputCadence, number> = {
   focused: 5,
-  // Why: collapses several TUI repaints into one frame; ~10fps is still live for a peripheral pane.
-  background: 100
+  // Why: collapses several TUI repaints into one frame; ~20fps is still live for a peripheral pane.
+  background: 50
 }
 export type TerminalOutputBatcher = {
   push: (data: string, meta?: TerminalOutputMeta) => void

@@ -24,6 +24,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
     inputSessionId?: string
     /** A terminal pane pauses output while hidden, so the host may count it as showing the terminal. */
     reportsPaneVisibility?: boolean
+    /** Set by callers that retune cadence via setOutputCadence; absent leaves the capability unadvertised. */
     outputCadence?: TerminalOutputCadence
     callbacks: RemoteRuntimeMultiplexedTerminalCallbacks
   }): Promise<RemoteRuntimeMultiplexedTerminal> {
@@ -163,7 +164,7 @@ export class RemoteRuntimeTerminalMultiplexer extends RemoteRuntimeTerminalBinar
               ? { desktopViewportClaims: 1, endpointLossNotice: 1 }
               : {}),
             ...(args.inputSessionId ? { inputAck: 1 } : {}),
-            outputCadence: 1
+            ...(args.outputCadence ? { outputCadence: 1 } : {})
           },
           ...(args.inputSessionId ? { inputSessionId: args.inputSessionId } : {}),
           ...(outputCadence !== 'focused' ? { outputCadence } : {})
