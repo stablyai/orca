@@ -31,6 +31,7 @@ export function NativeChatOlderHistoryRow({
     // Stay out of flow so adding or removing the history row cannot shift the transcript.
     <div
       ref={olderHistory.sentinelRef}
+      data-native-chat-older-history
       className="absolute inset-x-0 top-0 flex h-10 items-center justify-center"
     >
       {olderHistory.isAutoLoadEnabled ? (

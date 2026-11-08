@@ -1,3 +1,8 @@
+import { useState } from 'react'
+import { NativeChatMessageList } from '../../NativeChatMessageList'
+import { NativeChatEmptyState } from '../../host-access/NativeChatEmptyState'
+import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
+import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { NativeChatPaneHeader } from './NativeChatPaneHeader'
@@ -33,41 +38,111 @@ export const settings = defineFixture({
 const toolbarStore = {
   folderWorkspaces: [makeFolderWorkspace({ id: 'checkout', folderPath: '/projects/acme/app' })]
 }
-const toolbarRender = (focused = true) => (
-  <div className="native-chat-appearance relative h-40 overflow-hidden bg-chat-pane text-chat-foreground">
-    <NativeChatPaneHeader
-      tabId="checkout-chat"
-      worktreeId="folder:checkout"
-      groupId="checkout-group"
-      nativeChat={{ sessionId: 'codex-checkout', agent: 'codex' }}
-      focused={focused}
-      colorScheme={undefined}
-      handOff={{ open: () => {}, disabled: false }}
-    />
-    <div className="space-y-3 px-4 py-1">
-      <p role="status" className="text-sm text-chat-foreground-faint">
-        System: Offline checkout checks finished. Review the report before the next implementation
-        step.
-      </p>
-      <p className="text-sm">
-        The next step is ready for review. All existing owner decisions still apply.
-      </p>
+const firstMessage =
+  'Review every part of the checkout flow before implementation starts. The shipping address, payment method, order summary, confirmation step and retry path must remain readable in a narrow pane. Keep the first line visible when the conversation is at the top, including while the toolbar is active. The owner should be able to read this entire report without changing focus or moving the pointer away.'
+
+function toolbarMessage(index: number): NativeChatMessage {
+  return {
+    id: `checkout-message-${index}`,
+    role: 'assistant',
+    source: 'transcript',
+    timestamp: index,
+    blocks: [
+      {
+        type: 'text',
+        text:
+          index === 0
+            ? firstMessage
+            : `Checkpoint ${index}: checkout validation completed. The next review can continue without changing the current owner decisions.`
+      }
+    ]
+  }
+}
+
+function ToolbarTranscript({
+  focused = true,
+  history = false,
+  empty = false,
+  older = false,
+  header = true
+}: {
+  focused?: boolean
+  history?: boolean
+  empty?: boolean
+  older?: boolean
+  header?: boolean
+}) {
+  const [extra, setExtra] = useState(0)
+  const session: NativeChatLiveSession = {
+    messages: Array.from({ length: (history ? 80 : 2) + extra }, (_, index) =>
+      toolbarMessage(index)
+    ),
+    agent: 'codex',
+    sessionId: 'codex-checkout',
+    status: 'ready',
+    readPhase: 'ready',
+    hasMore: older,
+    loadingEarlier: false,
+    olderHistoryGeneration: 0,
+    loadEarlier: async () => 'unchanged'
+  }
+  return (
+    <div
+      data-native-chat-root="true"
+      className="native-chat-appearance relative flex h-[480px] min-h-0 flex-col overflow-hidden bg-chat-pane text-chat-foreground"
+    >
+      {header ? (
+        <NativeChatPaneHeader
+          tabId="checkout-chat"
+          worktreeId="folder:checkout"
+          groupId="checkout-group"
+          nativeChat={{ sessionId: 'codex-checkout', agent: 'codex' }}
+          focused={focused}
+          colorScheme={undefined}
+          handOff={{ open: () => {}, disabled: false }}
+        />
+      ) : null}
+      {empty ? (
+        <NativeChatEmptyState kind="empty" agent="codex" />
+      ) : (
+        <NativeChatMessageList session={session} isWorking={false} expandSignal={false} />
+      )}
+      {history ? (
+        <button type="button" className="sr-only" onClick={() => setExtra((value) => value + 1)}>
+          Append reply
+        </button>
+      ) : null}
     </div>
-  </div>
-)
+  )
+}
+
 export const toolbarWide = defineFixture({
   width: 800,
   store: toolbarStore,
-  render: () => toolbarRender()
+  render: () => <ToolbarTranscript />
 })
 export const toolbarNarrow = defineFixture({
-  width: 390,
-  store: toolbarStore,
-  render: () => toolbarRender()
+  ...toolbarWide,
+  width: 390
+})
+export const toolbarInactive = defineFixture({
+  ...toolbarWide,
+  render: () => <ToolbarTranscript focused={false} />
+})
+export const toolbarEmpty = defineFixture({
+  ...toolbarNarrow,
+  render: () => <ToolbarTranscript empty />
+})
+export const toolbarHistory = defineFixture({
+  ...toolbarNarrow,
+  render: () => <ToolbarTranscript history />
+})
+export const transcriptWithoutToolbar = defineFixture({
+  ...toolbarNarrow,
+  render: () => <ToolbarTranscript header={false} />
 })
 
-export const toolbarInactive = defineFixture({
-  width: 800,
-  store: toolbarStore,
-  render: () => toolbarRender(false)
+export const toolbarOlderHistory = defineFixture({
+  ...toolbarNarrow,
+  render: () => <ToolbarTranscript older />
 })

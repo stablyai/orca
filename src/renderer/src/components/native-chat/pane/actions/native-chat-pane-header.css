@@ -1,3 +1,12 @@
+.native-chat-appearance:has(> .native-chat-pane-header) .native-chat-transcript {
+  padding-top: calc(var(--spacing) * 10 + 2px);
+}
+
+.native-chat-appearance:has(> .native-chat-pane-header) [data-native-chat-older-history] {
+  justify-content: flex-start;
+  padding-inline: calc(var(--spacing) * 3);
+}
+
 .native-chat-pane-header.pane-title-bar[data-chromeless] {
   height: auto;
   align-items: flex-start;
