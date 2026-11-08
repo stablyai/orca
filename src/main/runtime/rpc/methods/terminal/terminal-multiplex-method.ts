@@ -14,6 +14,7 @@ import { installMultiplexCleanup } from './terminal-multiplex-cleanup'
 import { installMultiplexSlotFrames } from './terminal-multiplex-slot-frames'
 import { installMultiplexSubscribeFrame } from './terminal-multiplex-subscribe-frame'
 import { createMultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
+import { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
 
 export const TERMINAL_MULTIPLEX_METHODS = [
   defineStreamingMethod({
@@ -22,7 +23,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal },
+      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal, clientId },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -37,6 +38,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
       const state = {
         runtime,
         connectionId,
+        viewerDeviceId: clientId,
         sendBinary,
         registerBinaryStreamHandler,
         signal,
@@ -51,6 +53,8 @@ export const TERMINAL_MULTIPLEX_METHODS = [
         ),
         ackTotalInFlightBytes: 0,
         ackTotalWindowBytes: TERMINAL_MULTIPLEX_ACK_TOTAL_INITIAL_WINDOW_BYTES,
+        linkEstimate: new TerminalMultiplexLinkEstimate(),
+        ackTotalHoldbackBytes: 0,
         ackFlushCursorStreamId: null,
         resolveMultiplex,
         multiplexClosed,

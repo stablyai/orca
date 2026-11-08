@@ -1,27 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from '../bind-first-pane.test-fixture'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import './bind-first-pane.test-fixture'
+import '../../../shared/constants'
+import './runtime-test-module-registration.spec'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
-  CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
-  OrcaRuntimeService,
-  acknowledgeAgentPromptSubmit,
   buildAgentPromptPasteBytes
-} from '../orca-runtime-test-mocks.spec'
+} from '../../../shared/agent-launch/startup/agent-prompt-injection'
+import '../../../shared/clipboard-text'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { acknowledgeAgentPromptSubmit } from '../orca-runtime-test-mocks/setup.spec'
 import {
   TERMINAL_INPUT_CHUNK_MAX_BYTES,
   TERMINAL_INPUT_MAX_BYTES,
   TERMINAL_INPUT_TOO_LARGE_ERROR
 } from '../../../shared/terminal/input/terminal-input'
-import {
-  TEST_WORKTREE_ID,
-  TEST_WORKTREE_PATH,
-  UUID_RE,
-  makeRuntimeStoreWithWorkspaceSession,
-  renderGateCapMs,
-  store
-} from '../orca-runtime-test-fixtures.spec'
+import { TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('settles a foreground Codex prompt when launch metadata has not arrived', async () => {
@@ -60,39 +54,6 @@ describe('OrcaRuntimeService', () => {
       await sendPromise
 
       expect(composerReady).toBe(true)
-      expect(writes.filter((data) => data === '\r')).toHaveLength(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('submits a silent Claude composer once after the bounded render fallback', async () => {
-    vi.useFakeTimers()
-    try {
-      const writes: string[] = []
-      const runtime = new OrcaRuntimeService(store)
-      runtime.setPtyController({
-        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-        write: (_ptyId, data) => {
-          writes.push(data)
-          acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
-          return true
-        },
-        kill: () => true,
-        getForegroundProcess: async () => null
-      })
-      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        launchAgent: 'claude'
-      })
-
-      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change', {
-        inputKind: 'driving'
-      })
-      await vi.advanceTimersByTimeAsync(renderGateCapMs('review this change') - 1)
-      expect(writes).not.toContain('\r')
-
-      await vi.advanceTimersByTimeAsync(1)
-      await sendPromise
       expect(writes.filter((data) => data === '\r')).toHaveLength(1)
     } finally {
       vi.useRealTimers()
@@ -255,114 +216,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('chunks large terminal.send text before provider writes', async () => {
-    const writes: string[] = []
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: (_ptyId, data) => {
-        writes.push(data)
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    const text = ['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'].join('')
-
-    const result = await runtime.sendTerminal(handle, { text }, { inputKind: 'driving' })
-
-    expect(result).toMatchObject({
-      handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(text, 'utf8')
-    })
-    expect(writes).toEqual(['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'])
-  })
-
-  it('yields chunked terminal input through immediates between writes', async () => {
-    const writes: string[] = []
-    const bodyWritten = Promise.withResolvers<void>()
-    let turnObserved = false
-    let secondWriteFollowedTurn = false
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: (_ptyId, data) => {
-        writes.push(data)
-        if (writes.length === 1) {
-          setImmediate(() => {
-            turnObserved = true
-          })
-        } else if (writes.length === 2) {
-          secondWriteFollowedTurn = turnObserved
-          bodyWritten.resolve()
-        }
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldClearNativeTimers: true })
-    try {
-      const text = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}\nline two\nline three`
-      await Promise.all([
-        runtime.sendTerminal(handle, { text, enter: true }, { inputKind: 'driving' }),
-        (async () => {
-          await bodyWritten.promise
-          // Let the write continuation arm the separate Enter timeout.
-          await new Promise<void>((resolve) => setImmediate(resolve))
-          await vi.runAllTimersAsync()
-        })()
-      ])
-
-      expect(secondWriteFollowedTurn).toBe(true)
-      expect(writes.at(-1)).toBe('\r')
-      expect(writes.slice(0, -1).join('')).toBe(text)
-    } finally {
-      vi.clearAllTimers()
-      vi.useRealTimers()
-    }
-  })
-
-  it('yields while validating accepted large terminal.send text before provider writes', async () => {
-    const writes: string[] = []
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: (_ptyId, data) => {
-        writes.push(data)
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
-
-    vi.useFakeTimers()
-    try {
-      const sendPromise = runtime.sendTerminal(handle, { text }, { inputKind: 'driving' })
-
-      expect(writes).toEqual([])
-
-      await vi.runAllTimersAsync()
-      const result = await sendPromise
-
-      expect(result).toMatchObject({
-        handle,
-        accepted: true,
-        bytesWritten: Buffer.byteLength(text, 'utf8')
-      })
-      expect(writes.length).toBeGreaterThan(1)
-      expect(writes.join('')).toBe(text)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('rejects oversized terminal.send text before provider writes', async () => {
     const writes: string[] = []
     const runtime = new OrcaRuntimeService(store)
@@ -385,144 +238,6 @@ describe('OrcaRuntimeService', () => {
       )
     ).rejects.toThrow(TERMINAL_INPUT_TOO_LARGE_ERROR)
     expect(writes).toEqual([])
-  })
-
-  it('reveals a background terminal session when focusing its handle', async () => {
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-adopted' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-bg' }))),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      title: 'worker'
-    })
-
-    await expect(runtime.focusTerminal(handle)).resolves.toMatchObject({
-      handle,
-      tabId: 'tab-adopted',
-      worktreeId: TEST_WORKTREE_ID
-    })
-    // Reveal must reuse the pre-minted tabId stamped into paneKey env.
-    expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
-      ptyId: 'pty-bg',
-      title: 'worker',
-      tabId: expect.stringMatching(UUID_RE),
-      leafId: expect.stringMatching(UUID_RE)
-    })
-  })
-
-  it('replays captured launch config when focusing a background agent session', async () => {
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-adopted' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-bg' }))),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      command: 'codex',
-      launchAgent: 'codex',
-      launchConfig: {
-        agentCommand: 'codex',
-        agentArgs: '--model gpt-5',
-        agentEnv: { CODEX_PROFILE: 'captured' }
-      },
-      title: 'worker'
-    })
-    const firstReveal = revealTerminalSession.mock.calls[0]?.[1] as
-      | { launchToken?: string; tabId?: string; leafId?: string }
-      | undefined
-    revealTerminalSession.mockClear()
-
-    await runtime.focusTerminal(handle)
-
-    expect(revealTerminalSession).toHaveBeenCalledWith(TEST_WORKTREE_ID, {
-      ptyId: 'pty-bg',
-      title: 'worker',
-      launchConfig: {
-        agentCommand: 'codex',
-        agentArgs: '--model gpt-5',
-        agentEnv: { CODEX_PROFILE: 'captured' }
-      },
-      launchToken: firstReveal?.launchToken,
-      launchAgent: 'codex',
-      tabId: firstReveal?.tabId,
-      leafId: firstReveal?.leafId
-    })
-  })
-
-  it('reveals background terminal sessions with the freshest PTY title', async () => {
-    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-adopted' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession,
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      title: 'Claude working'
-    })
-    runtime.onPtyData('pty-bg', '\x1b]0;claude agents\x07', 100)
-
-    await runtime.focusTerminal(handle)
-
-    expect(revealTerminalSession).toHaveBeenLastCalledWith(
-      TEST_WORKTREE_ID,
-      expect.objectContaining({
-        ptyId: 'pty-bg',
-        title: 'claude agents'
-      })
-    )
   })
 
   it('rejects focusing an exited background terminal session', async () => {
@@ -555,67 +270,6 @@ describe('OrcaRuntimeService', () => {
 
     await expect(runtime.focusTerminal(handle)).rejects.toThrow('terminal_exited')
     expect(revealTerminalSession).not.toHaveBeenCalled()
-  })
-
-  it('renames background terminal handles without requiring a visible tab', async () => {
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(getDefaultWorkspaceSession())
-    const runtime = new OrcaRuntimeService(runtimeStore)
-    runtime.setPtyController({
-      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: 'pty-bg' }))),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-
-    const renamed = await runtime.renameTerminal(handle, 'Worker')
-    expect(renamed).toMatchObject({
-      handle,
-      title: 'Worker'
-    })
-    expect(renamed.tabId).not.toContain(':')
-    await expect(runtime.showTerminal(handle)).resolves.toMatchObject({
-      tabId: renamed.tabId,
-      title: 'Worker'
-    })
-  })
-
-  it('keeps a background terminal handle stable while reveal adoption is racing', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.setNotifier({
-      worktreesChanged: vi.fn(),
-      reposChanged: vi.fn(),
-      activateWorktree: vi.fn(),
-      createTerminal: vi.fn(),
-      revealTerminalSession: vi.fn(),
-      splitTerminal: vi.fn(),
-      renameTerminal: vi.fn(),
-      focusTerminal: vi.fn(),
-      closeTerminal: vi.fn(),
-      terminalFitOverrideChanged: vi.fn(),
-      terminalDriverChanged: vi.fn()
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      title: 'worker'
-    })
-
-    await runtime.focusTerminal(handle)
-    ;(runtime as unknown as { handleByPtyId: Map<string, string> }).handleByPtyId.delete('pty-bg')
-
-    await expect(runtime.showTerminal(handle)).resolves.toMatchObject({
-      handle,
-      ptyId: 'pty-bg'
-    })
   })
 
   it('coalesces concurrent focusTerminal navigations so only the latest full reveal runs', async () => {

@@ -40,6 +40,11 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     return this.agentActivity.beginCommand(browserPageId)
   }
 
+  /** Clears the agent marking from every page this SSH host was driving. */
+  endAgentCommandsFromHost(targetId: string): void {
+    this.agentActivity.endForController(targetId)
+  }
+
   /** Runs one queued page command so input it delivers is credited to its caller. */
   runPageCommand<T>(
     browserPageId: string,

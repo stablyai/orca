@@ -1,5 +1,5 @@
 import { DirectoryTransferBudget } from '../ssh-directory-transfer-budget'
-import { spawn, type ChildProcess } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { lstat, opendir } from 'node:fs/promises'
 import { join as pathJoin } from 'node:path'
 import { pipeline } from 'node:stream/promises'
@@ -25,7 +25,6 @@ import {
   throwIfAborted,
   waitForChannelClose,
   waitForProcess,
-  isHostAnsweredSystemSshExit,
   type ProcessResult
 } from './system-ssh-operation-lifecycle'
 import { uploadFileViaSystemSsh, writeBufferViaSystemSsh } from './system-ssh-file-binary-transfer'
@@ -86,7 +85,6 @@ export async function uploadDirectoryViaSystemSsh(
         killProcess(sshExtract)
       },
       settleUploadPipeline(
-        tarCreate,
         waitForProcess(tarCreate, 'local tar relay upload'),
         waitForProcess(sshExtract, 'system ssh relay upload', 'remote'),
         pipeline(tarCreate.stdout!, sshExtract.stdin!)
@@ -106,33 +104,15 @@ export async function uploadDirectoryViaSystemSsh(
   }
 }
 
-/** What local tar says when its output, not its input, failed: the far end went away. */
-const DOWNSTREAM_WRITE_FAILURE = /write error|cannot write|broken pipe|EPIPE/i
-
-/** Prefer the host exit over a downstream tar/pipe failure it caused; retain independent local input errors. */
+/** Local tar can fail downstream only after the far end stops reading, which rejects the pipe first; any other tar failure caused the remote EOF. */
 async function settleUploadPipeline(
-  tarProcess: ChildProcess,
   local: Promise<ProcessResult>,
   remote: Promise<ProcessResult>,
   pipe: Promise<void>
 ): Promise<readonly [ProcessResult, ProcessResult]> {
-  let settled = 0
-  let localAt = 0
-  let remoteAt = 0
-  const stamp = <T>(promise: Promise<T>, record: (at: number) => void): Promise<T> =>
-    promise.finally(() => record(++settled))
-  const [tar, ssh, piped] = await Promise.allSettled([
-    stamp(local, (at) => (localAt = at)),
-    stamp(remote, (at) => (remoteAt = at)),
-    pipe
-  ])
-  const remoteAnswered = ssh.status === 'rejected' && isHostAnsweredSystemSshExit(ssh.reason)
+  const [tar, ssh, piped] = await Promise.allSettled([local, remote, pipe])
   if (tar.status === 'rejected') {
-    const localFollowedRemote =
-      tarProcess.signalCode !== null ||
-      remoteAt < localAt ||
-      (tar.reason instanceof Error && DOWNSTREAM_WRITE_FAILURE.test(tar.reason.message))
-    throw remoteAnswered && localFollowedRemote ? ssh.reason : tar.reason
+    throw ssh.status === 'rejected' && piped.status === 'rejected' ? ssh.reason : tar.reason
   }
   if (ssh.status === 'rejected') {
     throw ssh.reason

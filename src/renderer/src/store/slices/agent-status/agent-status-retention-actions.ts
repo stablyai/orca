@@ -1,4 +1,4 @@
-import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'

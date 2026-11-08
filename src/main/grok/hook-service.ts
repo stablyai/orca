@@ -18,7 +18,7 @@ import {
   removeGrokHookBackupEntries,
   removeGrokHookBackupEntriesAsync
 } from './grok-hook-backup-cleanup'
-import { buildInstalledGrokConfig, GROK_EVENTS, GROK_TOOL_EVENT_MATCHER } from './grok-hook-config'
+import { buildInstalledGrokConfig, GROK_EVENTS } from './grok-hook-config'
 import { installRemoteGrokHook } from './grok-hook-remote-install'
 import {
   getGrokManagedCommand,
@@ -43,10 +43,6 @@ import {
   matchesRecordedGrokSymlinkCleanup,
   recordGrokSymlinkCleanup
 } from './grok-hook-symlink-cleanup-marker'
-
-export function getGrokToolEventMatcherForTests(): string {
-  return GROK_TOOL_EVENT_MATCHER
-}
 
 function getConfigPath(): string {
   // Use Grok's selected home and a dedicated managed file so unrelated user hook files stay untouched.

@@ -11,12 +11,12 @@ import {
 } from '../../shared/agent-session/failures/agent-session-failure-words'
 import { formatNativeChatFileReference } from '../../shared/agent-image-paste'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { IMAGE_FILE_MIME_TYPES } from '../../shared/image-file-extensions'
+import { IMAGE_FILE_MIME_TYPES } from '../../shared/file-preview/image-mime-types'
 import type { NativeChatImageRefBlock } from '../../shared/native-chat/native-chat-types'
 import {
   NodeFileReadTooLargeError,
   readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
+} from '../../shared/file-content/node-bounded-file-reader'
 import type { AcpLaunchSpec } from './acp-launch-specs'
 import { resolveAcpPeerOptions } from './acp-peer-limits'
 import { acpAgentName } from './acp-structured-agent-definitions'

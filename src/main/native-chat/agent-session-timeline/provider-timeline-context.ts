@@ -28,12 +28,17 @@ export function providerTimelinePlacement(
   join: ProviderTimelineJoin | undefined
 ): AgentJournalTurnScope {
   const thread = join?.thread ?? null
-  if (join?.turn === undefined) {
+  if (join?.turn === undefined && join?.scope === undefined) {
     return state.scope
   }
   const own = context.ownThread?.() ?? null
   if (thread !== null && own !== null && thread !== own) {
     return state.scope
   }
-  return { kind: 'turn', turnItemId: context.rows.turn(providerKey(join.turn)).itemId }
+  if (join?.scope) {
+    return join.scope
+  }
+  return join?.turn === undefined
+    ? state.scope
+    : { kind: 'turn', turnItemId: context.rows.turn(providerKey(join.turn)).itemId }
 }

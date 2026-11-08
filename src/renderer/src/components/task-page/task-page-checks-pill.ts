@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   getProviderChecksLabel,
   getProviderChecksOutcome
@@ -8,9 +9,9 @@ import type { ProviderCheckSummary } from '../../../../shared/github/pull-reques
 type ChecksPillItem = { checksSummary?: ProviderCheckSummary }
 
 /** Derive label and tone from the same summary so neutral checks cannot contradict a successful state. */
-export function getChecksLabel(item: ChecksPillItem): string {
+export function getChecksLabel(item: ChecksPillItem, t: Translate = translate): string {
   return getProviderChecksOutcome(item.checksSummary) === 'cancelled'
-    ? translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+    ? t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
     : getProviderChecksLabel(item.checksSummary)
 }
 

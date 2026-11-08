@@ -33,14 +33,14 @@ type GitHubProviderSelectionInput = Pick<
 
 import { useCallback } from 'react'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
   buildGitHubWorkspaceSource as toGitHubLinkedWorkItem,
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../shared/new-workspace/workspace-source'
 import { getLinkedItemDisplayName } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
 import { getForkPushWarning } from '../fork-push-warning'

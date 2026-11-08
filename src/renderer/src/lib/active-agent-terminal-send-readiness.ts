@@ -1,8 +1,8 @@
 import type { RuntimeTerminalAgentStatus } from '../../../shared/runtime-types'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 import type { ActiveAgentNotesSendFailureCode } from './active-agent-note-send-result'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   runtimeFailureCode,

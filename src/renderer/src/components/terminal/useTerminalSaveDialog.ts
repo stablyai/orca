@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { ORCA_EDITOR_SAVE_AND_CLOSE_EVENT } from '@/components/editor/autosave/editor-autosave'
 import { discardEditorFileChangesAndClose } from '@/components/editor/save/flush/discard-editor-file-changes'
 

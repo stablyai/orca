@@ -6,7 +6,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, type IpcMainInvokeEvent } from 'electron'
 import type { AppIdentity } from '../../shared/app-identity'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import { relaunchApp, runBeforeRelaunchCleanup } from '../startup/quit/app-relaunch'
 import { setWindowMaterialSuppressed } from '../window/window-material-suppression'
@@ -29,7 +29,7 @@ import {
 import {
   isMarkdownDocumentName,
   markdownDocumentFromFilePath
-} from '../../shared/markdown-document-paths'
+} from '../../shared/file-listing/markdown-document-paths'
 import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
 import {
   registerRendererShutdownCheckpointHandler,
@@ -40,6 +40,7 @@ import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-l
 import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
 import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
 import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
+import { getMacosUpgradeSupport } from '../macos-update-requirement/macos-upgrade-support'
 
 import type { ReconnectFactsFor } from '../persistence/window-save-view'
 
@@ -148,6 +149,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     return detection
   })
   ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
+  ipcMain.handle('app:getMacosUpgradeSupport', (_event, minimumMacosVersion: unknown) =>
+    getMacosUpgradeSupport(minimumMacosVersion)
+  )
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 

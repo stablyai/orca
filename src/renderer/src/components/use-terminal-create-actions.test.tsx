@@ -34,23 +34,25 @@ vi.mock('@/lib/client-creation-action-policy', () => ({
   })
 }))
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
-vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: () => false
 }))
 vi.mock('@/lib/open-mobile-emulator-tab', () => ({
   openMobileEmulatorTab: (...args: unknown[]) => mocks.openMobileEmulatorTab(...args)
 }))
-vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn() }))
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
+  launchAgentInNewTab: vi.fn()
+}))
 vi.mock('@/lib/duplicate-browser-tab-options', () => ({
   buildDuplicatedBrowserTabOptions: () => ({})
 }))
-vi.mock('@/runtime/remote-browser-tab-ownership', () => ({
+vi.mock('@/runtime/browser/ownership/remote-browser-tab-ownership', () => ({
   browserWorkspaceHasRemoteOwner: () => false
 }))
 vi.mock('./tab-bar/tab-create-entry-action', () => ({ openTabBarEntry: vi.fn() }))
@@ -107,6 +109,7 @@ describe('useTerminalCreateActions creation gates', () => {
     mocks.state = {
       ...mocks.state,
       tabsByWorktree: { [WORKTREE_ID]: terminals },
+      unifiedTabsByWorktree: {},
       openFiles: [],
       tabBarOrderByWorktree: { [WORKTREE_ID]: ['browser-1', 'term-a', 'browser-1'] },
       setTabBarOrder

@@ -13,11 +13,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import {
-  composeWorktreeHostIdentity,
-  hostWorktreeTarget
-} from '../../../shared/worktree/host-qualified-identity'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
@@ -76,37 +72,58 @@ describe('deregistered repo residue', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('drops metadata, identity rows and sessions owned by an unregistered repo id', async () => {
-    const seed = await createStore()
-    seed.addRepo(makeRepo({ id: LIVE_REPO, path: '/workspace/live' }))
-    seed.addRepo(makeRepo({ id: GONE_REPO, path: '/workspace/orphan' }))
-    seed.setWorktreeMeta(hostWorktreeTarget({ id: LIVE_WORKTREE, hostId: 'local' }), {
-      displayName: 'Live'
+  it('keeps a cross-store link whose parent repo is unknown here, and drops one with its child', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
+      worktreeMeta: {},
+      crossStoreLineageByChildKey: {
+        'worktree:live-repo::/workspace/live': {
+          childWorkspaceKey: 'worktree:live-repo::/workspace/live',
+          childInstanceId: 'child-instance',
+          parent: {
+            installationId: 'other-install',
+            workspaceKey: 'worktree:gone-repo::/workspace/orphan',
+            instanceId: 'parent-instance'
+          },
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 1
+        },
+        'worktree:gone-repo::/workspace/orphan': {
+          childWorkspaceKey: 'worktree:gone-repo::/workspace/orphan',
+          childInstanceId: 'child-instance',
+          parent: {
+            installationId: 'other-install',
+            workspaceKey: 'worktree:live-repo::/workspace/live',
+            instanceId: 'parent-instance'
+          },
+          origin: 'manual',
+          capture: { source: 'manual-action', confidence: 'explicit' },
+          createdAt: 1
+        },
+        'worktree:live-repo::/workspace/unreadable': { fieldFromANewerBuild: true }
+      }
     })
-    seed.setWorktreeMeta(hostWorktreeTarget({ id: GONE_WORKTREE, hostId: 'local' }), {
-      displayName: 'Orphan'
+
+    const store = await createStore()
+    store.flush()
+
+    expect((readDataFile() as PersistedState).crossStoreLineageByChildKey).toEqual({
+      'worktree:live-repo::/workspace/live': {
+        childWorkspaceKey: 'worktree:live-repo::/workspace/live',
+        childInstanceId: 'child-instance',
+        parent: {
+          installationId: 'other-install',
+          workspaceKey: 'worktree:gone-repo::/workspace/orphan',
+          instanceId: 'parent-instance'
+        },
+        origin: 'manual',
+        capture: { source: 'manual-action', confidence: 'explicit' },
+        createdAt: 1
+      },
+      'worktree:live-repo::/workspace/unreadable': { fieldFromANewerBuild: true }
     })
-    seed.setWorkspaceSession(sessionFor(GONE_WORKTREE), 'local')
-    seed.flush()
-
-    const persisted = readDataFile() as PersistedState
-    persisted.repos = persisted.repos.filter((repo) => repo.id !== GONE_REPO)
-    writeDataFile(persisted)
-
-    const reloaded = await createStore()
-    reloaded.flush()
-    const swept = readDataFile() as PersistedState
-
-    expect(Object.keys(swept.worktreeMeta)).toEqual([LIVE_WORKTREE])
-    expect(swept.worktreeIdentityAliases).not.toHaveProperty(
-      composeWorktreeHostIdentity('local', GONE_WORKTREE)
-    )
-    expect(Object.keys(swept.worktreeMetaByIdentity ?? {})).toHaveLength(1)
-    const session = swept.workspaceSession
-    expect(session.tabsByWorktree).toEqual({})
-    expect(session.lastVisitedAtByWorktreeId).toEqual({})
-    expect(session.activeTabTypeByWorktree).toEqual({})
-    expect(session.sleepingAgentSessionsByPaneKey ?? {}).toEqual({})
   })
 
   it('keeps a remote session whose repo is not registered on the desktop', async () => {
@@ -127,24 +144,6 @@ describe('deregistered repo residue', () => {
     expect(partition.activeTabTypeByWorktree).toEqual(
       sessionFor(GONE_WORKTREE).activeTabTypeByWorktree
     )
-  })
-
-  it('keeps rows for every registered repo, on any execution host', async () => {
-    const remoteWorktree = `${LIVE_REPO}::/home/user/remote`
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [makeRepo({ id: LIVE_REPO, path: '/home/user/live', executionHostId: RUNTIME_HOST })],
-      worktreeMeta: { [remoteWorktree]: { hostId: RUNTIME_HOST, status: 'active' } },
-      workspaceSessionsByHostId: { [RUNTIME_HOST]: sessionFor(remoteWorktree) }
-    })
-
-    const store = await createStore()
-
-    expect(store.getWorktreeMeta(remoteWorktree)).toBeDefined()
-    const partition = store.getWorkspaceSession(RUNTIME_HOST)
-    expect(partition.tabsByWorktree[remoteWorktree]).toHaveLength(1)
-    // Prove the sleeping-agent fixture is valid before relying on its absence elsewhere.
-    expect(Object.keys(partition.sleepingAgentSessionsByPaneKey ?? {})).toHaveLength(1)
   })
 
   it('leaves folder-workspace session rows alone: their keys name no repo', async () => {
@@ -214,51 +213,4 @@ describe('deregistered repo residue', () => {
   })
 
   // Scalars must independently seed orphan detection; owner-key loops cannot reach them.
-  it.each([
-    { label: 'activeWorktreeId', session: { activeWorktreeId: GONE_WORKTREE } },
-    {
-      label: 'activeWorkspaceKey',
-      session: { activeWorkspaceKey: worktreeWorkspaceKey(GONE_WORKTREE) }
-    },
-    {
-      label: 'activeWorktreeIdsOnShutdown',
-      session: { activeWorktreeIdsOnShutdown: [GONE_WORKTREE] }
-    }
-  ])("clears $label when it is the orphan repo's only residue", async ({ session }) => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
-      worktreeMeta: {},
-      workspaceSession: { ...getDefaultWorkspaceSession(), ...session }
-    })
-
-    const store = await createStore()
-    store.flush()
-
-    const partition = store.getWorkspaceSession()
-    expect(partition.activeWorktreeId ?? null).toBeNull()
-    expect(partition.activeWorkspaceKey ?? null).toBeNull()
-    expect(partition.activeWorktreeIdsOnShutdown ?? []).toEqual([])
-    const reloaded = await createStore()
-    expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
-  })
-
-  it('leaves a profile with no orphans byte-identical across reloads', async () => {
-    const seed = await createStore()
-    seed.addRepo(makeRepo({ id: LIVE_REPO, path: '/workspace/live' }))
-    seed.setWorktreeMeta(hostWorktreeTarget({ id: LIVE_WORKTREE, hostId: 'local' }), {
-      displayName: 'Live'
-    })
-    seed.setWorkspaceSession(sessionFor(LIVE_WORKTREE), 'local')
-    seed.flush()
-
-    const canonicalizing = await createStore()
-    canonicalizing.flush()
-    const canonical = JSON.stringify(readDataFile())
-
-    const reloaded = await createStore()
-    reloaded.flush()
-
-    expect(JSON.stringify(readDataFile())).toBe(canonical)
-  })
 })

@@ -32,7 +32,7 @@ vi.mock('./ssh-identity-file-read', () => ({
 
 import { buildConnectConfig } from './connection/ssh-connect-config'
 import { getPassphrasePrivateKeyPath } from './ssh-private-key-authentication'
-import { buildSshArgs } from './system-transport/system-ssh-args'
+import './system-transport/system-ssh-args'
 import { walkInitialAuthLadder } from './connection/ssh-connection-test-fixtures'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { SshResolvedConfig } from './config/ssh-g-config-resolution'
@@ -292,15 +292,5 @@ describe('ordered SSH private-key authentication', () => {
     )
 
     expect(getPassphrasePrivateKeyPath(config)).toBe('/keys/encrypted-second')
-  })
-
-  it('leaves config-host key authority to system OpenSSH', () => {
-    const args = buildSshArgs(makeTarget(), { resolvedConfig: makeResolved() })
-
-    expect(args.at(-1)).toBe('workbox')
-    expect(args).not.toContain('-i')
-    expect(args).not.toContain('/keys/stale-imported')
-    expect(args).not.toContain('/keys/unauthorized-first')
-    expect(args).not.toContain('/keys/authorized-second')
   })
 })

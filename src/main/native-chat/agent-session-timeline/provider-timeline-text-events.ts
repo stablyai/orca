@@ -1,6 +1,6 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
+import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ProviderTimelineDropRule } from './provider-timeline-decision'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'

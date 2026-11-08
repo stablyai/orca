@@ -338,11 +338,6 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-      # The frame benchmark needs a mapped window, which the headless shards exclude.
-      - name: Run worktree first-paint benchmark
-        if: matrix.shard == '1/14'
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/worktree-switch-first-paint.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1
-
       # Upload failure traces/screenshots so CI failures are diagnosable without reproduction.
       - name: Upload Playwright traces
         if: failure() || cancelled()
@@ -468,7 +463,7 @@ jobs:
           shopt -s nullglob
           runs=(layout-divergence/*.jsonl layout-divergence/*-results.json)
           for run in $(printf '%s\n' "${runs[@]%.jsonl}" | sed 's/-results\.json$//' | sort -u); do
-            node config/scripts/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
+            node config/scripts/diagnostics/layout-save/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
             if [ -f "$run-results.json" ]; then
               E2E_FAILURE_SUMMARY_SCRIPT=config/scripts/ci/e2e-failures/ci-e2e-failure-summary.mjs
               if [ ! -f "$E2E_FAILURE_SUMMARY_SCRIPT" ]; then

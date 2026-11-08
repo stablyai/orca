@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { requireWorkerAuthority } from './worker-topology'
 
 /** Record created PTY custody before boot so user input can revoke ownership before worker-release cleanup.

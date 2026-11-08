@@ -9,7 +9,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   normalizeMarkdownDefaultViewMode,
   type MarkdownDefaultViewMode
@@ -26,6 +26,7 @@ export function MarkdownDefaultViewContextMenu({
   onSelectView,
   children
 }: MarkdownDefaultViewContextMenuProps): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   const defaultViewMode = useAppStore((s) =>
     normalizeMarkdownDefaultViewMode(s.settings?.markdownDefaultViewMode)
@@ -41,7 +42,7 @@ export function MarkdownDefaultViewContextMenu({
       </ContextMenuTrigger>
       <ContextMenuContent>
         <ContextMenuLabel>
-          {translate(
+          {t(
             'auto.components.editor.MarkdownDefaultViewContextMenu.label',
             'Default Markdown View'
           )}
@@ -58,8 +59,8 @@ export function MarkdownDefaultViewContextMenu({
             (mode) => (
               <ContextMenuRadioItem key={mode} value={mode}>
                 {mode === 'source'
-                  ? translate('auto.components.editor.EditorViewToggle.4d6ccb7ba6', 'Source')
-                  : translate('auto.components.editor.EditorViewToggle.aff15f94f5', 'Rich Editor')}
+                  ? t('auto.components.editor.EditorViewToggle.4d6ccb7ba6', 'Source')
+                  : t('auto.components.editor.EditorViewToggle.aff15f94f5', 'Rich Editor')}
               </ContextMenuRadioItem>
             )
           )}

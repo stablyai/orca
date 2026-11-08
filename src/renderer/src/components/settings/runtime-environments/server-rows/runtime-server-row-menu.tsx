@@ -8,7 +8,7 @@ import {
   Trash2,
   Waypoints
 } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import type { UpdateCheckOptions } from '../../../../../../shared/update-status-types'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'
@@ -56,30 +56,31 @@ export function RuntimeServerRowMenuItems({
   onToggleDetails,
   onRemove
 }: RuntimeServerRowMenuProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {showUpdate ? (
         <DropdownMenuItem onSelect={onUpdate}>
           <ArrowUpCircle />
-          {translate('auto.components.settings.serverList.updateMenu', 'Update…')}
+          {t('auto.components.settings.serverList.updateMenu', 'Update…')}
         </DropdownMenuItem>
       ) : null}
       {showDisconnect ? (
         <DropdownMenuItem disabled={actionBusy} onSelect={onDisconnect}>
           <ServerOff />
-          {translate('auto.components.settings.RuntimeEnvironmentsPane.disconnect', 'Disconnect')}
+          {t('auto.components.settings.RuntimeEnvironmentsPane.disconnect', 'Disconnect')}
         </DropdownMenuItem>
       ) : null}
       {showConnect ? (
         <DropdownMenuItem disabled={actionBusy || connectDisabled} onSelect={onConnect}>
           <Server />
-          {translate('auto.components.settings.RuntimeEnvironmentsPane.connect', 'Connect')}
+          {t('auto.components.settings.RuntimeEnvironmentsPane.connect', 'Connect')}
         </DropdownMenuItem>
       ) : null}
       {showMakeDefault ? (
         <DropdownMenuItem disabled={isBusy} onSelect={onMakeDefault}>
           <Star />
-          {translate('auto.components.settings.serverList.makeDefault', 'Open new projects here')}
+          {t('auto.components.settings.serverList.makeDefault', 'Open new projects here')}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuSeparator />
@@ -87,8 +88,8 @@ export function RuntimeServerRowMenuItems({
         <DropdownMenuItem onSelect={onSshAccess}>
           <Waypoints />
           {sshAccessLinked
-            ? translate('auto.components.settings.serverList.sshAccessLinked', 'SSH route…')
-            : translate('auto.components.settings.serverList.sshAccess', 'Connect through SSH…')}
+            ? t('auto.components.settings.serverList.sshAccessLinked', 'SSH route…')
+            : t('auto.components.settings.serverList.sshAccess', 'Connect through SSH…')}
         </DropdownMenuItem>
       ) : null}
       {onCheckForUpdates ? (
@@ -97,20 +98,20 @@ export function RuntimeServerRowMenuItems({
           onClick={(event) => onCheckForUpdates(getUpdateCheckClickOptions(event))}
         >
           <RefreshCw />
-          {translate('auto.components.settings.serverList.checkForUpdates', 'Check for updates')}
+          {t('auto.components.settings.serverList.checkForUpdates', 'Check for updates')}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuItem onSelect={onToggleDetails}>
         <Info />
         {detailsExpanded
-          ? translate('auto.components.settings.serverList.hideDetails', 'Hide details')
-          : translate('auto.components.settings.serverList.details', 'Details')}
+          ? t('auto.components.settings.serverList.hideDetails', 'Hide details')
+          : t('auto.components.settings.serverList.details', 'Details')}
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       {managedItems}
       <DropdownMenuItem variant="destructive" disabled={isBusy} onSelect={onRemove}>
         <Trash2 />
-        {translate('auto.components.settings.serverList.remove', 'Remove…')}
+        {t('auto.components.settings.serverList.remove', 'Remove…')}
       </DropdownMenuItem>
     </>
   )

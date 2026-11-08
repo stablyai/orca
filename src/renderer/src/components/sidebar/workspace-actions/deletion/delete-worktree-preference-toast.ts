@@ -3,12 +3,12 @@ import { translate } from '@/i18n/i18n'
 import type { SettingsNavTarget } from '@/lib/settings-navigation-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
-export function persistDeleteWorktreeConfirmSkipPreference({
-  updateSettings,
+export async function persistDeleteWorktreeConfirmSkipPreference({
+  updateSettingsOrThrow,
   openSettingsPage,
   openSettingsTarget
 }: {
-  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
+  updateSettingsOrThrow: (updates: Partial<GlobalSettings>) => Promise<unknown>
   openSettingsPage: () => void
   openSettingsTarget: (target: {
     pane: SettingsNavTarget
@@ -16,8 +16,8 @@ export function persistDeleteWorktreeConfirmSkipPreference({
     sectionId?: string
     intent?: 'add-quick-command'
   }) => void
-}): void {
-  void updateSettings({ skipDeleteWorktreeConfirm: true })
+}): Promise<void> {
+  await updateSettingsOrThrow({ skipDeleteWorktreeConfirm: true })
   // Link the saved preference to its exact toggle so destructive confirmation can be restored quickly.
   toast.success(
     translate(

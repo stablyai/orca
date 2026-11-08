@@ -177,6 +177,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .max(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
     .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
     .optional(),
+  trustWorktreeId: z.string().min(1).max(32_768).optional(),
   // agent is the legacy preset; launchAgent preserves launch-plan identity/config across runtime boundaries.
   launchAgent: z
     .custom<TuiAgent>(isTuiAgent, {

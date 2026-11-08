@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
-import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('keeps ordinary terminal send suffix failures on the existing not-writable contract', async () => {

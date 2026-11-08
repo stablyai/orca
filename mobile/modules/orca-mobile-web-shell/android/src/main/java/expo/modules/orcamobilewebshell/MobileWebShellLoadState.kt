@@ -8,11 +8,18 @@ internal enum class MobileWebShellFailureReason(val wireName: String) {
   RENDER_PROCESS_GONE("render-process-gone")
 }
 
-internal data class MobileWebShellLoadEmission(val state: String, val reason: String?) {
-  fun toPayload(): Map<String, Any> = if (reason == null) {
-    mapOf("state" to state)
-  } else {
-    mapOf("state" to state, "reason" to reason)
+/** Renderer losses also say whether Orca was off screen and whether the renderer crashed or the OS reclaimed it. */
+internal data class MobileWebShellLoadEmission(
+  val state: String,
+  val reason: String?,
+  val background: Boolean? = null,
+  val crashed: Boolean? = null
+) {
+  fun toPayload(): Map<String, Any> = buildMap {
+    put("state", state)
+    reason?.let { put("reason", it) }
+    background?.let { put("background", it) }
+    crashed?.let { put("crashed", it) }
   }
 }
 
@@ -20,6 +27,7 @@ internal data class MobileWebShellLoadEmission(val state: String, val reason: St
 internal class MobileWebShellLoadStateMachine {
   private var terminal = false
   private var last: MobileWebShellLoadEmission? = null
+  private var rendererLoss: Pair<Boolean, Boolean>? = null
 
   /** Which load this machine is reporting on. Read before deferring work, checked on delivery. */
   @Volatile
@@ -57,12 +65,25 @@ internal class MobileWebShellLoadStateMachine {
     return emit(MobileWebShellLoadEmission("ready", null))
   }
 
-  fun failed(reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? {
-    val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName))
+  fun failed(
+    reason: MobileWebShellFailureReason,
+    background: Boolean? = null,
+    crashed: Boolean? = null
+  ): MobileWebShellLoadEmission? {
+    val emission = emit(MobileWebShellLoadEmission("failed", reason.wireName, background, crashed))
     terminal = true
     documentEnded()
     return emission
   }
+
+  /** A renderer loss, remembered across reset(): a prop update on the dead view reports the same loss, not a crash. */
+  fun rendererGone(background: Boolean, crashed: Boolean): MobileWebShellLoadEmission? {
+    rendererLoss = background to crashed
+    return failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE, background, crashed)
+  }
+
+  fun rendererStillGone(): MobileWebShellLoadEmission? =
+    failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE, rendererLoss?.first, rendererLoss?.second)
 
   /** Deferred failures belong to their original load; a prop update may replace it before delivery. */
   fun failedDuring(epoch: Int, reason: MobileWebShellFailureReason): MobileWebShellLoadEmission? =

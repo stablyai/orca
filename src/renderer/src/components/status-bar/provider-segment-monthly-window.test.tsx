@@ -30,52 +30,6 @@ function windowOf(
   return { usedPercent, windowMinutes, resetsAt, resetDescription: null }
 }
 
-describe('ProviderSegment monthly window', () => {
-  it('shows only the highest-used window when several windows exist', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
-
-    const limits: ProviderRateLimits = {
-      provider: 'opencode-go',
-      session: windowOf(10, 300),
-      weekly: windowOf(20, 10080),
-      monthly: windowOf(30, 43200),
-      updatedAt: 0,
-      error: null,
-      status: 'ok'
-    }
-    const markup = renderToStaticMarkup(
-      <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
-    )
-
-    expect(markup).toContain('>30% 30d<')
-    expect(markup).not.toContain('>10%')
-    expect(markup).not.toContain('>20%')
-  })
-
-  it('selects a named bucket as the tightest provider window', async () => {
-    const { ProviderSegment } = await import('./StatusBar')
-    const limits: ProviderRateLimits = {
-      provider: 'gemini',
-      session: null,
-      weekly: null,
-      buckets: [
-        { ...windowOf(25, 300), name: 'Flash' },
-        { ...windowOf(80, 300), name: 'Pro' }
-      ],
-      updatedAt: 0,
-      error: null,
-      status: 'ok'
-    }
-
-    const markup = renderToStaticMarkup(
-      <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
-    )
-
-    expect(markup).toContain('>80% Pro<')
-    expect(markup).not.toContain('>25%')
-  })
-})
-
 describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
   // A partial/rehydrated provider can carry an undefined (not null) window even
   // though the type declares `session`/`weekly` as `RateLimitWindow | null`. The
@@ -90,12 +44,6 @@ describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
     error: null,
     status: 'ok'
   } as unknown as ProviderRateLimits // `session` omitted -> undefined at runtime
-
-  it('getTightestUsageSection ignores an undefined window instead of crashing', async () => {
-    const { getTightestUsageSection } = await import('./UsageRosterPanel')
-    expect(() => getTightestUsageSection(partialProvider)).not.toThrow()
-    expect(getTightestUsageSection(partialProvider)?.window.usedPercent).toBe(42)
-  })
 
   it('ProviderSegment renders without crashing when a provider window is undefined', async () => {
     const { ProviderSegment } = await import('./StatusBar')

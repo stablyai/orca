@@ -11,6 +11,7 @@ import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 import type { RuntimeNavigationTarget } from './runtime-navigation'
 import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
+import type { BrowserClientHostRequestEvent } from './browser/client-hosting/browser-client-host-request-protocol'
 
 export type RuntimeClientEvent =
   | {
@@ -28,6 +29,8 @@ export type RuntimeClientEvent =
       // Why: lets a client patch an order save in place instead of refetching the repo (#27268).
       sortOrders?: WorktreeSortOrderUpdate[]
     }
+  /** An agent row changed (coalesced, no ids); phones re-read worktree.ps. Sent only while the sidebar feed is off. */
+  | { type: 'worktreeRowsChanged' }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */
@@ -77,6 +80,8 @@ export type RuntimeClientEventStreamMessage =
       }
     })
   | RuntimeClientEvent
+  // Addressed to this subscriber only, never broadcast.
+  | BrowserClientHostRequestEvent
   | { type: 'end' }
 
 export type RuntimeActivateWorktreeEvent = Extract<RuntimeClientEvent, { type: 'activateWorktree' }>

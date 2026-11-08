@@ -50,9 +50,9 @@ const ALWAYS_ON_CODE_JOBS = new Set(['static_analysis', 'typecheck', 'test'])
 const MOBILE_CI_TOOL_FILES = new Set([
   '.github/workflows/mobile.yml',
   'config/mobile-ci.vitest.config.mjs',
-  'config/scripts/run-mobile-ci-tests.mjs',
-  'config/scripts/mobile-release-check-scope.test.mjs',
-  'config/scripts/mobile-test-change-scope.test.mjs'
+  'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs',
+  'config/scripts/mobile-web/check-entry/mobile-release-check-scope.test.mjs',
+  'config/scripts/mobile-web/check-entry/mobile-test-change-scope.test.mjs'
 ])
 
 const GLOBAL_FORCE_PREFIXES = [
@@ -142,6 +142,7 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
   'pnpm-workspace.yaml',
   'config/pnpmfile.cjs',
   'config/scripts/undeclared-dependency-resolution',
+  'config/scripts/dependency-security/runtime-resolution/undeclared-dependency-resolution',
   'config/build-plugins/markdown-parser-exports',
   'config/tsconfig',
   'src/packages/',
@@ -160,6 +161,11 @@ const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/build/mobile-web-app/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
   'config/scripts/mobile-web-app/',
+  'config/scripts/mobile-web-app/shell/',
+  'config/scripts/mobile-web-app/session/',
+  'config/scripts/mobile-web-app/routing/',
+  'config/scripts/mobile-web-app/terminal/',
+  'config/scripts/mobile-web-app/workspace/',
   'config/scripts/mobile-web-bundle-',
   'config/scripts/build/mobile-web-app/mobile-web-bundle-',
   'config/scripts/verify-packaged-mobile-web-bundle',
@@ -188,13 +194,18 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   // COMPAT(legacy-relay-bridge): the bridge is proven against a real 1.4.224 relay here.
   'src/main/ssh/legacy-relay/',
   'config/scripts/stable-release-tags',
+  'config/scripts/release/versioning/stable-release-tags',
   // The R1 daemon protocol crossing gate runs in this job.
   'config/scripts/daemon-protocol-facts',
   'config/scripts/daemon-protocol/schema-facts/daemon-protocol-facts',
+  'config/scripts/daemon-protocol/schema-facts/daemon-protocol-revision-facts',
+  'config/scripts/runtime-verification/daemon-lifecycle/git-baseline-sources',
   'config/scripts/check-daemon-protocol-crossing',
+  'config/scripts/daemon-protocol/admission/check-daemon-protocol-crossing',
   // R3 runtime launcher protocol ratchet; a bump always routes here via the protocol file.
   'config/scripts/check-runtime-launcher-protocol-ratchet',
-  'src/main/daemon/daemon-protocol-version.ts',
+  'config/scripts/daemon-protocol/admission/check-runtime-launcher-protocol-ratchet',
+  'src/main/daemon/protocol/daemon-protocol-version.ts',
   'src/shared/protocol-version',
   'src/shared/terminal/stream/terminal-stream-protocol',
   'src/shared/browser/client-hosting/browser-client-host-protocol',
@@ -241,7 +252,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-listing-waiters.ts',
   'src/main/native-chat/agent-model-catalog/agent-model-catalog-probe-runner.ts',
   'src/main/claude/claude-model-catalog-probe.ts',
-  'src/main/runtime/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-record-store',
   'src/main/runtime/agent-session/records/agent-session-recovery-capsule',
   'src/shared/agent-session-resume-marker',
@@ -253,17 +263,25 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/orchestration-session-caller.ts',
   'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
   'src/main/runtime/rpc/orchestration-mutation-executor.ts',
-  'src/shared/orchestration-rpc-contract.ts',
-  'src/main/runtime/rpc/methods/agent-launch',
-  'src/main/runtime/rpc/methods/ai-vault.ts',
+  'src/shared/orchestration/orchestration-rpc-contract.ts',
+  'src/main/runtime/rpc/methods/agent-launch/agent-launch',
+  'src/main/runtime/rpc/methods/history/ai-vault.ts',
   'src/shared/rpc-contract/browser-tab-create-params',
-  'src/main/runtime/rpc/methods/session-tabs.ts',
-  'src/main/runtime/rpc/methods/structured-agent-session',
-  'src/main/runtime/rpc/methods/terminal',
+  'src/main/runtime/rpc/methods/session-tabs/session-tabs.ts',
+  'src/main/runtime/rpc/methods/structured-sessions/',
+  'src/shared/rpc-contract/structured-agent-session-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-continue-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-rename-params.ts',
+  'src/shared/rpc-contract/structured-agent-session-queued-edit-params.ts',
+  'src/main/runtime/rpc/methods/terminal/',
   'src/main/runtime/runtime-worktree-agent-',
-  'src/main/runtime/runtime-worktree-pty-agent-sources',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-',
+  'src/main/runtime/workspaces/startup/runtime-worktree-agent-startup',
+  'src/main/runtime/workspaces/process-listing/runtime-worktree-pty-agent-sources',
   'src/shared/runtime-worktree-contracts',
-  'src/renderer/src/runtime/remote-runtime-terminal-multiplexer',
+  'src/renderer/src/runtime/hosted-terminals/streams/',
+  'src/renderer/src/runtime/hosted-terminals/snapshots/',
+  'src/renderer/src/runtime/rpc/subscriptions/runtime-environment-subscription-handle.ts',
   // Turn-end status a newer host publishes and an older desktop reads (cross-version-host-observed-turn-end).
   'src/shared/agent-status/lifecycle/agent-turn-outcome',
   'src/shared/agent-status/contracts/agent-status-types',
@@ -275,18 +293,18 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/workspace-session/workspace-session-sleeping-agents',
   // A current desktop's launch route against a released server's capabilities (cross-version-paired-structured-launch).
   'src/shared/structured-native-chat-launch-route.ts',
-  'src/renderer/src/lib/agent-launch-routing.ts',
-  'src/renderer/src/runtime/paired-host-client-capabilities.ts',
+  'src/renderer/src/lib/agent-session/launch/routing/agent-launch-routing.ts',
+  'src/renderer/src/runtime/rpc/targets/paired-host-client-capabilities.ts',
   'src/shared/electron-remote-runtime-client-capabilities.ts',
   'src/shared/remote-runtime/remote-runtime-client-capabilities.ts',
   // An older app opening a newer orchestration database (orchestration-delivery-downgrade).
-  'src/main/runtime/orchestration/db.ts',
   'src/main/runtime/orchestration/db/',
-  'src/main/runtime/orchestration/orchestration-schema-version-skew'
+  'src/main/runtime/orchestration/db/schema/orchestration-schema-version-skew'
 ]
 
 const MANAGED_HOOK_PREFIXES = [
   'config/scripts/smoke-process-host-node18',
+  'config/scripts/desktop-distribution/runtime-verification/smoke-process-host-node18',
   'config/scripts/packaged-process-host-fixture',
   'config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture',
   'src/packages/process-host/',
@@ -427,12 +445,12 @@ export function needsMobileDependencies(changedFiles) {
   return changedFiles.length === 0 || changedFiles.some((file) => file.startsWith('mobile/'))
 }
 
-export const DAEMON_INIT_TEST_SUPPORT = 'src/main/daemon/daemon-init-dependency-mocks.ts'
+export const DAEMON_INIT_TEST_SUPPORT =
+  'src/main/daemon/providers/lifecycle/testing/daemon-init-dependency-mocks.ts'
 
 const DAEMON_INIT_TEST_SCOPE = new Set([
   DAEMON_INIT_TEST_SUPPORT,
-  'src/main/native-chat/agent-session-wire/structured-agent-session-claude-queued-stop.test.ts',
-  'config/scripts/process-host-build-dist.test.mjs'
+  'config/scripts/desktop-distribution/runtime-verification/process-host-build-dist.test.mjs'
 ])
 
 export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {
@@ -550,12 +568,17 @@ function isProductBundlePath(file, extraPrefixes) {
 // These shared fixtures are consumed only by unit tests.
 export function isUnitTestSupportSource(file) {
   return (
-    file === 'src/renderer/src/store/slices/editor-slice-test-harness.ts' ||
-    file === 'src/renderer/src/store/slices/browser-slice-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/web-runtime-session-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts' ||
-    file === 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts' ||
-    file === 'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+    file === 'src/renderer/src/store/slices/editor/editor-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/browser/browser-slice-test-harness.ts' ||
+    file === 'src/renderer/src/store/slices/linear/linear-slice-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts' ||
+    file ===
+      'src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts' ||
+    file ===
+      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
   )
 }
 

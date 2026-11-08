@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { parse as parseDomain } from 'tldts'
 import { classifySchemeLessLocalDevAddress } from '../../../../shared/browser-url'
 
@@ -38,24 +39,24 @@ export type HostUrlClassificationOptions = {
   requireListedDomain?: boolean
 }
 
-function invalidUrl(): { kind: 'blocked'; message: string } {
+function invalidUrl(t: Translate = translate): { kind: 'blocked'; message: string } {
   return {
     kind: 'blocked',
-    message: translate(
+    message: t(
       'auto.components.tab.bar.tab.create.entry.classifier.90eb94dc48',
       'Enter an http:// or https:// URL.'
     )
   }
 }
 
-function parseHttpUrl(query: string): ExplicitUrlClassification {
+function parseHttpUrl(query: string, t?: Translate): ExplicitUrlClassification {
   try {
     const url = new URL(query)
     return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname
       ? { kind: 'explicit-url', url: url.href }
-      : invalidUrl()
+      : invalidUrl(t)
   } catch {
-    return invalidUrl()
+    return invalidUrl(t)
   }
 }
 
@@ -120,12 +121,15 @@ function hasSourceExtensionBeforeColon(query: string): boolean {
   return HOST_FILE_EXTENSIONS.has(extension)
 }
 
-export function classifyExplicitUrl(query: string): ExplicitUrlClassification | null {
+export function classifyExplicitUrl(
+  query: string,
+  t?: Translate
+): ExplicitUrlClassification | null {
   if (HTTP_SCHEME_PATTERN.test(query)) {
-    return parseHttpUrl(query)
+    return parseHttpUrl(query, t)
   }
   if (SCHEME_WITH_SLASHES_PATTERN.test(query)) {
-    return invalidUrl()
+    return invalidUrl(t)
   }
   if (classifySchemeLessLocalDevAddress(query)) {
     return null
@@ -142,12 +146,13 @@ export function classifyExplicitUrl(query: string): ExplicitUrlClassification | 
   if (/\s/.test(query)) {
     return null
   }
-  return invalidUrl()
+  return invalidUrl(t)
 }
 
 export function classifyHostUrl(
   query: string,
-  options: HostUrlClassificationOptions = {}
+  options: HostUrlClassificationOptions = {},
+  t?: Translate
 ): HostUrlClassification | null {
   const candidate = splitHostCandidate(query, options.requireListedDomain)
   if (!candidate) {
@@ -155,7 +160,7 @@ export function classifyHostUrl(
     if (localDevUrl?.hostname) {
       return { kind: 'host-url', url: localDevUrl.href }
     }
-    return BRACKETED_IPV6_ATTEMPT_PATTERN.test(query) ? invalidUrl() : null
+    return BRACKETED_IPV6_ATTEMPT_PATTERN.test(query) ? invalidUrl(t) : null
   }
   if (candidate.port !== null && !/^\d+$/.test(candidate.port)) {
     // Non-numeric ports may be tags such as docker.io:latest; allow file/search fallbacks instead of blocking the query.
@@ -167,8 +172,8 @@ export function classifyHostUrl(
         ? 'http'
         : 'https'
     const url = new URL(`${scheme}://${query}`)
-    return url.hostname ? { kind: 'host-url', url: url.href } : invalidUrl()
+    return url.hostname ? { kind: 'host-url', url: url.href } : invalidUrl(t)
   } catch {
-    return invalidUrl()
+    return invalidUrl(t)
   }
 }

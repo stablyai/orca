@@ -1,12 +1,12 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { isPathOutsideAllowedDirectoriesError } from '../../../shared/local-file-access'
-import { isRemoteRuntimeFileOperation } from '@/runtime/runtime-file-routing'
-import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
-import { readRuntimeDirectory } from '@/runtime/runtime-file-mutation-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { isPathOutsideAllowedDirectoriesError } from '../../../shared/file-access/local-file-access'
+import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'
+import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
+import { readRuntimeDirectory } from '@/runtime/files/reads/runtime-directory-read'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { projectFolderLinkAccess, userNamedFileAccess } from './local-file-access'
 import { isPathInsideWorktree } from '../../../shared/terminal/links/terminal-links'
-import type { DirEntry } from '../../../shared/filesystem-entry-types'
+import type { DirEntry } from '../../../shared/file-listing/directory-entry'
 
 export type UserOpenedPathStat = {
   isDirectory: boolean
