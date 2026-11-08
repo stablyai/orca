@@ -27,6 +27,8 @@ export type RuntimeClientEvent =
   | { type: 'gitStatusChanged'; repoId: string; worktreeIds?: string[] }
   /** Top-level settings whose values changed; a phone re-reads only the settings it shows. */
   | { type: 'settingsChanged'; keys: string[] }
+  /** The desktop Agents list's verdicts changed; worktree.ps carries them. */
+  | { type: 'agentListChanged' }
   | {
       type: 'worktreesChanged'
       repoId: string
