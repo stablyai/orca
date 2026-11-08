@@ -200,6 +200,7 @@ export class PiRpcNativeWorkers {
 
   end(): void {
     this.closed = true
+    this.active = false
     this.instance = null
     this.pending = null
     this.replace([])

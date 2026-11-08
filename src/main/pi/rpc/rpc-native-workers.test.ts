@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { createAgentStatusStore } from '../../../shared/agent-status/store/agent-status-store'
 import { createAgentChildWorkAdmission } from '../../../shared/agent-status/child-work/agent-status-child-work-admission'
 import { reconcileAgentChildWorkEvidence } from '../../../shared/agent-status/child-work/agent-status-child-work-reconciliation'
@@ -23,7 +23,9 @@ async function workers() {
   const admission = createAgentChildWorkAdmission(store, {
     mintChildWorkId: () => `child-${++minted}`
   })
+  const logger = { warn: vi.fn(), error: vi.fn() }
   const h = await setup({}, undefined, undefined, {
+    logger,
     onChildWorkEvidence: (_id, evidence) =>
       reconcileAgentChildWorkEvidence({ store, admission, parent, provider: 'pi', evidence })
   })
@@ -63,6 +65,7 @@ async function workers() {
     )
   return {
     h,
+    logger,
     ready,
     snapshot,
     status,
@@ -208,6 +211,25 @@ it('keeps one visible inventory warning for unavailable or partial reads and rev
     }))
   ).toEqual([{ id: unavailable[0].itemId, kind: 'status', tone: 'info' }])
   expect(w.live()).toEqual([])
+})
+
+it('ends a session with known inventory without publishing an unavailable warning', async () => {
+  const w = await workers()
+  const tones = async () =>
+    (await w.h.rig.rows()).flatMap((row) => (row.body.kind === 'status' ? [row.body.tone] : []))
+  w.ready('runtime-a')
+  w.snapshot('runtime-a', 1, [scout], 1)
+  expect(w.live()).toHaveLength(1)
+  expect(await tones()).toEqual(['info'])
+  w.logger.warn.mockClear()
+  w.h.connection.exit()
+  await w.h.adapter.drainObservedExits()
+  expect(w.live()).toEqual([])
+  expect(await tones()).toEqual(['info'])
+  expect(w.logger.warn).not.toHaveBeenCalledWith(
+    'Pi background worker inventory unavailable or partial',
+    expect.anything()
+  )
 })
 
 it('revises persisted warning when replacement runtime receives complete empty inventory before activation', async () => {
