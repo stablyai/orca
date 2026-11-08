@@ -282,6 +282,11 @@ it.each([100, 1_000])(
           queries.set(sql, parameters)
           return get(...parameters)
         })
+        const all = statement.all.bind(statement)
+        vi.spyOn(statement, 'all').mockImplementation((...parameters: SqliteBindings) => {
+          queries.set(sql, parameters)
+          return all(...parameters)
+        })
       }
       return statement
     })
@@ -335,6 +340,31 @@ it.each([100, 1_000])(
     ).toEqual([])
   }
 )
+
+it('packs retired payload bytes across tables and lets one oversized row progress alone', () => {
+  const db = fixture()
+  const insert = db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
+    sequence,sequence_index,owner_fence,payload_json) VALUES('chat','before',?,1,1,1,0,1,?)`)
+  insert.run('first', JSON.stringify({ text: 'α'.repeat(150 * 1024) }))
+  insert.run('second', JSON.stringify({ text: 'α'.repeat(150 * 1024) }))
+  const receipt = db.prepare(`INSERT INTO journal_send_receipts VALUES('chat','before',?,?)`)
+  receipt.run('first', JSON.stringify({ text: 'x'.repeat(600 * 1024) }))
+  receipt.run('oversized', JSON.stringify({ text: 'x'.repeat(2 * 1024 * 1024) }))
+  const prune = () =>
+    maintain(db, { kind: 'domain-retired-prune', sessionId: 'chat', epoch: 'epoch' })
+  expect(prune()).toEqual({ kind: 'domain-retired', deleted: 2, more: true })
+  expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
+  expect(
+    db.prepare('SELECT message_id FROM journal_send_receipts ORDER BY message_id').all()
+  ).toEqual([{ message_id: 'first' }, { message_id: 'oversized' }])
+  expect(prune()).toEqual({ kind: 'domain-retired', deleted: 1, more: true })
+  expect(db.prepare('SELECT message_id FROM journal_send_receipts').all()).toEqual([
+    { message_id: 'oversized' }
+  ])
+  expect(prune()).toEqual({ kind: 'domain-retired', deleted: 1, more: true })
+  expect(db.prepare('SELECT message_id FROM journal_send_receipts').all()).toEqual([])
+  expect(prune()).toEqual({ kind: 'domain-retired', deleted: 0, more: false })
+})
 
 it('finishes a retired pass during activity while an already-started conversion is paused on idle', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] })
