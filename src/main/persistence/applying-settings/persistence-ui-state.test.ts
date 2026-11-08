@@ -87,6 +87,17 @@ describe('Store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('merges tab-width patches from concurrent clients and persists the result', async () => {
+    const store = await createStore()
+    store.updateUI({ tabWidthsById: { 'desktop-tab': 400, 'shared-tab': 300 } })
+    // A paired client that never saw the desktop resize patches only its own tabs.
+    store.updateUI({ tabWidthsById: { 'web-tab': 200, 'shared-tab': null } })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().tabWidthsById).toEqual({ 'desktop-tab': 400, 'web-tab': 200 })
+  })
+
   // Paired-client updates omit local ordering fields; omission must preserve the desktop’s own values.
 
   it('updateUI survives a throwing UI listener so the shutdown checkpoint is not vetoed', async () => {
