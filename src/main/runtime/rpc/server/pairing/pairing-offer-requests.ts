@@ -1,5 +1,8 @@
 /** Pairing offers requested by this host's owner: the desktop's Settings and `orca pair` mint the same offers. */
-import { isIP } from 'node:net'
+import {
+  isAllInterfacesBindHost,
+  isLoopbackBindHost
+} from '../../../../../shared/orcad-bind-address'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type {
   PairingCreateOfferParams,
@@ -60,11 +63,7 @@ async function pairingAddress(
   }
   const bindHost = server.getNetworkExposureBindHost()
   // A listener pinned to one interface answers only there, so another interface's address would be unreachable.
-  if (
-    isIP(bindHost) &&
-    !/^[0:.]+$/.test(bindHost) &&
-    classifyRemotePairingHostname(bindHost) !== 'loopback'
-  ) {
+  if (!isAllInterfacesBindHost(bindHost) && !isLoopbackBindHost(bindHost)) {
     return bindHost
   }
   return await getDefaultPairingAddress(bindHost, lookup)

@@ -15,6 +15,11 @@ describe('Electron serve listener pin', () => {
     expect(() =>
       getServeOptions(['/AppRun', '--serve', '--serve-bind', '127.0.0.1', '--serve-mobile-pairing'])
     ).toThrow(/--mobile-pairing needs a network --bind/)
+    for (const loopback of ['0:0:0:0:0:0:0:1', '::ffff:127.0.0.1']) {
+      expect(() =>
+        getServeOptions(['/AppRun', '--serve', '--serve-bind', loopback, '--serve-mobile-pairing'])
+      ).toThrow(/--mobile-pairing needs a network --bind/)
+    }
     expect(
       getServeOptions([
         '/AppRun',

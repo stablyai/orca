@@ -1,5 +1,5 @@
 import { levenshtein } from './edit-distance'
-import { classifyRemotePairingHostname } from './remote-runtime/pairing/remote-pairing-address'
+import { isLoopbackBindHost } from './orcad-bind-address'
 
 export type ServeOptionValidationInput = {
   /** Explicit --bind value; undefined/null means the host's default listener. */
@@ -17,11 +17,7 @@ export function getServeOptionValidationError(options: ServeOptionValidationInpu
   if (options.noPairing && options.mobilePairing) {
     return 'Use either --mobile-pairing or --no-pairing, not both.'
   }
-  if (
-    options.mobilePairing &&
-    options.bind &&
-    classifyRemotePairingHostname(options.bind) === 'loopback'
-  ) {
+  if (options.mobilePairing && options.bind && isLoopbackBindHost(options.bind)) {
     // A phone cannot reach a loopback listener; a network interface such as a Tailscale IP can serve the offer.
     return '--mobile-pairing needs a network --bind (0.0.0.0 or an interface address such as a Tailscale IP); a loopback --bind cannot serve the mobile pairing offer.'
   }
