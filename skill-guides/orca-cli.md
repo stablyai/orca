@@ -148,6 +148,7 @@ Lineage rules:
 - Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<repoId>::<worktreePath>` when a folder or worktree parent context should be explicit.
 - Use `--no-parent` only when the new work is independent.
 - A parent can be in a different project from its child, such as `worktree create --repo id:<otherRepoId> --name related-task --parent-worktree id:<parentRepoId>::<parentPath>`. A worktree parent and child must use the same execution host (local machine, SSH target, or paired server).
+- `--parent-worktree` is looked up in the child's environment. For a parent in another environment, add `--parent-environment <local|environment-id>`: to reuse a workspace from `ps`/`show` as a parent, pass its `address.environment` as `--parent-environment` and its `address.worktree` as `--parent-worktree`. Orca never searches other environments; a parent missing there is an error. `active`/`current` always mean this machine's own workspace, so they take only `--parent-environment local`.
 - To move an existing worktree under a different parent, or make it top-level, use `worktree set` with `--parent-worktree <selector>` or `--no-parent`.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 

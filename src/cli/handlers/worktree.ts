@@ -33,6 +33,7 @@ import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
+import { callNamingParentEnvironment } from './worktree-parent-environment'
 import { annotatePsRows, annotateShown } from './worktree-address-annotation'
 import { refuseCurrentForRemoval } from './worktree-removal-current-refusal'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
@@ -191,6 +192,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         explicitParent,
         inferredParent: envParentWorkspace,
         cwd,
+        flags,
         cwdContext,
         callerTerminalHandle,
         noParent
@@ -203,7 +205,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     const result = await withSetupDecisionRecovery(
-      client.call<RuntimeWorktreeCreateResult>('worktree.create', create)
+      callNamingParentEnvironment<RuntimeWorktreeCreateResult>(client, 'worktree.create', create)
     )
     printHookWarning(result.result, json)
     printLineageSummary(result.result, json)
@@ -226,7 +228,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     }
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
     const parentFields = await resolveSetParentFields(flags, cwd, client)
-    const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
+    const pending = callNamingParentEnvironment<RuntimeWorktreeSetResult>(client, 'worktree.set', {
       worktree,
       displayName: getOptionalStringFlag(flags, 'display-name'),
       ...reviewLinks,
