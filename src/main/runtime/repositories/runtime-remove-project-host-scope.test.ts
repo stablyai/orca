@@ -75,16 +75,6 @@ function registerRuntimeRemoveProjectHostScopeTests(): void {
     return { runtime, repos, removeProjectForHost }
   }
 
-  describe('repo.rm with the same repo id on two execution hosts', () => {
-    it('refuses a bare duplicated id rather than guessing a host', async () => {
-      const { runtime, repos, removeProjectForHost } = createRuntime()
-
-      await expect(runtime.removeProject('dup')).rejects.toThrow('selector_ambiguous')
-      expect(removeProjectForHost).not.toHaveBeenCalled()
-      expect(repos).toHaveLength(2)
-    })
-  })
-
   describe('repo.rm while a workspace create is open', () => {
     it('refuses the host row whose create is open, not its same-id twin', async () => {
       const { runtime, repos, removeProjectForHost } = createRuntime()

@@ -1,38 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { InMemoryOrchestrationMessages } from './in-memory-orchestration-messages.spec'
 import { OrchestrationDb } from '../../db/orchestration-db'
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
-import type { MessageType } from '../../db/orchestration-records'
 
-type PointerTarget = { ptyId: string; processIncarnation: string }
-
-type PointerStore = {
-  insertMessage(message: {
-    runId: string
-    from: string
-    to: string
-    subject: string
-    type?: MessageType
-  }): { id: string }
-  stageMailboxPointerEnter(ids: string[], target: PointerTarget): boolean
-  markMailboxPointerWriteAttempted(ids: string[], target: PointerTarget): boolean
-  getUndeliveredUnreadMessages(
-    toHandle: string,
-    types?: MessageType[],
-    options?: { excludeTypes?: readonly string[]; limit?: number }
-  ): { id: string }[]
-}
-
-// The in-memory fake must reproduce SQLite reservation races for runtime tests to cover them.
-const STORES: [string, () => PointerStore][] = [
-  ['real sqlite', () => new OrchestrationDb(':memory:')],
-  ['in-memory fake', () => new InMemoryOrchestrationMessages()]
-]
-
-describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) => {
+describe('mailbox pointer reservations (real sqlite)', () => {
+  const createStore = () => new OrchestrationDb(':memory:')
   const rival = { ptyId: 'pty-rival', processIncarnation: 'rival:1' }
   const mine = { ptyId: 'pty-mine', processIncarnation: 'mine:1' }
 

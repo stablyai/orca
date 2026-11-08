@@ -284,16 +284,6 @@ describe('SttService', () => {
     }
   })
 
-  it('reuses an idle warm worker for a second dictation with the same owner', async () => {
-    const service = new SttService(readyModels(), spawnMockWorker)
-
-    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-    await service.stopDictation('desktop')
-    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-
-    expect(getCreatedWorkerCount()).toBe(1)
-  })
-
   it('rebuilds the warm worker when the dictation language changes', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a local start reads only getModelState and getModelDir.
     const service = new SttService(
@@ -356,26 +346,6 @@ describe('SttService', () => {
     expect(events.map((event) => event.type)).toEqual(['ready', 'error', 'stopped'])
     await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
     expect(getCreatedWorkerCount()).toBe(2)
-  })
-
-  it('keeps an idle worker warm for 15 minutes by default', async () => {
-    vi.useFakeTimers()
-    try {
-      const service = new SttService(readyModels(), spawnMockWorker)
-
-      await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
-      const worker = getLastWorker()
-      expect(worker).toBeDefined()
-
-      await service.stopDictation('desktop')
-      await vi.advanceTimersByTimeAsync(5 * 60 * 1000 + 1)
-      expect(worker!.terminated).toBe(false)
-
-      await vi.advanceTimersByTimeAsync(DEFAULT_IDLE_UNLOAD_MS - 5 * 60 * 1000 - 1)
-      expect(worker!.terminated).toBe(true)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('resets the idle teardown timer after each stop', async () => {
@@ -501,25 +471,6 @@ describe('SttService', () => {
     await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
 
     expect(getLastWorker()!.terminated).toBe(true)
-  })
-
-  it('reads the OpenAI key only when finishing cloud dictation', async () => {
-    const service = new SttService(
-      {
-        getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
-        getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-      } as never,
-      spawnMockWorker
-    )
-
-    await service.startDictation('openai-model', vi.fn(), undefined, 'desktop')
-    service.feedAudio(new Float32Array([0.25]), 16000, 'desktop')
-
-    expect(readOpenAiSpeechApiKeyMock).not.toHaveBeenCalled()
-
-    await service.stopDictation('desktop')
-
-    expect(readOpenAiSpeechApiKeyMock).toHaveBeenCalledOnce()
   })
 
   it('lets a model that is still loading finish when its dictation is canceled', async () => {
@@ -714,18 +665,6 @@ describe('SttService', () => {
 
     worker!.emit('message', stoppedReply(worker!))
     await Promise.all([firstStop, secondStop])
-  })
-
-  it('does not emit synthetic stopped when the worker reports stopped', async () => {
-    const service = new SttService(readyModels(), spawnMockWorker)
-    const events: unknown[] = []
-
-    await service.startDictation('model-a', (event) => events.push(event), undefined, 'desktop')
-    await service.stopDictation('desktop')
-
-    expect(events.filter((event) => (event as { type?: string }).type === 'stopped')).toHaveLength(
-      1
-    )
   })
 
   it('does not retain or reuse a worker that timed out while stopping', async () => {

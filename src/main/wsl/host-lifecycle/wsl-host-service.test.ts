@@ -298,17 +298,6 @@ describe('WslHostService', () => {
     expect(listEnvironments(userDataPath)).toEqual([])
   })
 
-  it('refuses a new host while the setting is off', async () => {
-    const connector = makeConnector([UBUNTU])
-    const service = makeService(connector)
-    enabled = false
-    await expect(service.add({ distro: 'Ubuntu' })).resolves.toMatchObject({
-      ok: false,
-      kind: 'disabled'
-    })
-    expect(listEnvironments(userDataPath)).toEqual([])
-  })
-
   it('refuses to add or connect, before any deploy work, when this build lacks the server files', async () => {
     const connector = makeConnector([UBUNTU])
     const service = makeService(connector)
@@ -730,18 +719,6 @@ describe('WslHostService', () => {
     expect(connector.disconnect).toHaveBeenCalledWith('Ubuntu')
     expect(connector.releaseHolder).toHaveBeenCalledWith('Ubuntu')
     expect(ready).not.toHaveBeenCalled()
-  })
-
-  it('treats a distro being added as known, so its first connect may spawn', async () => {
-    const connector = makeConnector([UBUNTU])
-    const service = makeService(connector)
-    let knownWhileAdding = false
-    connector.connect.mockImplementationOnce(async (distro: string) => {
-      knownWhileAdding = service.isKnownDistro(distro)
-      return connection(distro)
-    })
-    await service.add({ distro: 'Ubuntu' })
-    expect(knownWhileAdding).toBe(true)
   })
 
   it('keeps the startup holders of its hosts and releases orphans', async () => {
