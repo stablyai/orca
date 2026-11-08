@@ -4,6 +4,7 @@ import {
 } from '../../../../../../shared/orchestration/orchestration-mutation-request'
 import { defineMethod } from '../../../core'
 import { RequestShowParams } from '../../../../../../shared/rpc-contract/orchestration-runs-mutation-request-show-params'
+import { externalCoordinatorReceiptCallerFingerprints } from '../../../external-coordinator-invocation'
 
 export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
   defineMethod({
@@ -11,15 +12,24 @@ export const ORCHESTRATION_MUTATION_REQUEST_METHODS = [
     permission: 'workspace',
     params: RequestShowParams,
     // Read durable receipts without writing/mutating again; keep this recovery query outside ORCHESTRATION_MUTATION_METHODS.
-    handler: (
-      params,
-      { runtime, authenticatedCallerFingerprint }
-    ): OrchestrationMutationRequestShowResult => {
+    handler: (params, context): OrchestrationMutationRequestShowResult => {
+      const { runtime, authenticatedCallerFingerprint, orchestrationCompatibilityEvidence } =
+        context
       const db = runtime.getOrchestrationDb()
       // Receipt caller keys come from the paired fingerprint or the local mutation identity.
       const callerFingerprint =
         authenticatedCallerFingerprint ?? db.getOrCreateLocalMutationCallerFingerprint()
-      const row = db.getMutationReceipt(callerFingerprint, params.request)
+      // The request names no Run, so search every partition this external coordinator's mutations used.
+      const row = [
+        callerFingerprint,
+        ...externalCoordinatorReceiptCallerFingerprints(
+          runtime,
+          orchestrationCompatibilityEvidence,
+          context
+        )
+      ]
+        .map((fingerprint) => db.getMutationReceipt(fingerprint, params.request))
+        .find((receipt) => receipt !== undefined)
       if (!row) {
         return {
           requestId: params.request,

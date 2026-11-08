@@ -4,9 +4,14 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { RUN_COLUMN_LIST } from '../row-column-lists'
 import { exposeRunTimestamps } from '../utc-timestamp'
 
+// External authority exists only from run-create; every bind or unbind, by any binary, bumps the generation,
+// so an older binary that never clears the fingerprint still ends it for good.
+const EXTERNAL_COORDINATOR_GENERATION = 1
+
 // Any terminal or session binding wins, so an older binary's run-use still fences the external coordinator.
 const RUNS_BOUND_TO_EXTERNAL_COORDINATOR_SQL = `SELECT ${RUN_COLUMN_LIST} FROM runs
          WHERE coordinator_client_fingerprint = ? AND legacy = 0
+           AND consumer_generation = ${EXTERNAL_COORDINATOR_GENERATION}
            AND coordinator_handle IS NULL AND coordinator_pane_key IS NULL
            AND coordinator_orca_session_id IS NULL
          ORDER BY rowid DESC`
@@ -20,9 +25,11 @@ export function currentRunExternalCoordinator(
     | 'coordinator_pane_key'
     | 'coordinator_orca_session_id'
     | 'legacy'
+    | 'consumer_generation'
   >
 ): string | null {
   return run.legacy === 0 &&
+    run.consumer_generation === EXTERNAL_COORDINATOR_GENERATION &&
     run.coordinator_handle === null &&
     run.coordinator_pane_key === null &&
     run.coordinator_orca_session_id === null
@@ -38,9 +45,9 @@ export function createExternalRun(
   this.db
     .prepare(
       `INSERT INTO runs (id, objective, coordinator_client_fingerprint, consumer_generation, legacy)
-       VALUES (?, ?, ?, 1, 0)`
+       VALUES (?, ?, ?, ?, 0)`
     )
-    .run(id, params.objective, params.clientFingerprint)
+    .run(id, params.objective, params.clientFingerprint, EXTERNAL_COORDINATOR_GENERATION)
   const run = this.getRun(id)
   if (!run) {
     throw new Error(`Run not found after insert: ${id}`)

@@ -1,6 +1,7 @@
 /** A paired runtime client outside any Orca terminal coordinates as its authenticated caller fingerprint, never a borrowed pane.
  * The boundary is the pairing: any same-user process holding that saved environment acts as the same coordinator. */
 import { createHash } from 'node:crypto'
+import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import { ORCHESTRATION_EXTERNAL_COORDINATOR_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { orchestrationSkillRecoveryData } from '../../../shared/orchestration/orchestration-rpc-contract'
 import type { RunRow } from '../orchestration/db/orchestration-records'
@@ -55,12 +56,14 @@ function mutationFingerprint(clientFingerprint: string, run?: RunRow): string {
     .digest('hex')
 }
 
+type ExternalCoordinatorTransport = Pick<
+  RpcContext,
+  'clientKind' | 'clientCapabilities' | 'pairedDeviceId' | 'authenticatedCallerFingerprint'
+>
+
 function eligibleClientFingerprint(
-  request: RpcRequest,
-  transport: Pick<
-    RpcContext,
-    'clientKind' | 'clientCapabilities' | 'pairedDeviceId' | 'authenticatedCallerFingerprint'
-  >
+  evidence: OrchestrationCompatibilityEvidence | undefined,
+  transport: ExternalCoordinatorTransport
 ): string | undefined {
   // Terminal, pane, launch, host or session evidence means an Orca-launched agent, which acts only as itself.
   if (
@@ -70,7 +73,7 @@ function eligibleClientFingerprint(
     !transport.clientCapabilities?.includes(
       ORCHESTRATION_EXTERNAL_COORDINATOR_RUNTIME_CAPABILITY
     ) ||
-    request.orchestrationCompatibilityEvidence !== undefined
+    evidence !== undefined
   ) {
     return undefined
   }
@@ -96,17 +99,17 @@ export function createExternalCoordinatorInvocation(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
   params: unknown,
-  transport: Pick<
-    RpcContext,
-    'clientKind' | 'clientCapabilities' | 'pairedDeviceId' | 'authenticatedCallerFingerprint'
-  >
+  transport: ExternalCoordinatorTransport
 ): ExternalCoordinatorAuthority | undefined {
   const candidate: CandidateParams =
     typeof params === 'object' && params !== null && !Array.isArray(params) ? { ...params } : {}
   if (!isExternalCoordinatorCandidate(request.method, candidate)) {
     return undefined
   }
-  const clientFingerprint = eligibleClientFingerprint(request, transport)
+  const clientFingerprint = eligibleClientFingerprint(
+    request.orchestrationCompatibilityEvidence,
+    transport
+  )
   if (!clientFingerprint) {
     if (request.method === 'orchestration.runCreate') {
       throw new OrchestrationError(
@@ -129,11 +132,8 @@ export function createExternalCoordinatorInvocation(
   const bound = db.runsBoundToExternalCoordinator(clientFingerprint)
   const run = runId ? bound.find((held) => held.id === runId) : bound[0]
   if (!run) {
-    return {
-      kind: 'unbound',
-      clientFingerprint,
-      mutationCallerFingerprint: mutationFingerprint(clientFingerprint)
-    }
+    // Not coordinating, so receipts stay where this client wrote them before external coordinators existed.
+    return { kind: 'unbound', clientFingerprint, mutationCallerFingerprint: clientFingerprint }
   }
   const revalidate = (): RunRow => {
     const current = db.getRun(run.id)
@@ -157,6 +157,25 @@ export function createExternalCoordinatorInvocation(
     mutationCallerFingerprint: mutationFingerprint(clientFingerprint, run),
     revalidate
   }
+}
+
+/** Partitions this client's external mutations wrote receipts under, so request-show finds what a retry would replay. */
+export function externalCoordinatorReceiptCallerFingerprints(
+  runtime: OrcaRuntimeService,
+  evidence: OrchestrationCompatibilityEvidence | undefined,
+  transport: ExternalCoordinatorTransport
+): string[] {
+  const clientFingerprint = eligibleClientFingerprint(evidence, transport)
+  if (!clientFingerprint) {
+    return []
+  }
+  return [
+    mutationFingerprint(clientFingerprint),
+    ...runtime
+      .getOrchestrationDb()
+      .runsBoundToExternalCoordinator(clientFingerprint)
+      .map((run) => mutationFingerprint(clientFingerprint, run))
+  ]
 }
 
 /** The Run an external coordinator's request acts on; `explicit` is the Run it named, if any. */

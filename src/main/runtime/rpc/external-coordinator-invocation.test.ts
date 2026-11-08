@@ -164,6 +164,69 @@ describe('external coordinator over a paired runtime client', () => {
     })
   })
 
+  it('keeps the Run fenced after an older binary binds and unbinds it', async () => {
+    const { db, call, result } = createHarness()
+    const daemon = pairedClient('fp_daemon')
+    const { run } = await result<{ run: { id: string } }>(
+      call('orchestration.runCreate', { objective: 'Old binary', external: true }, daemon)
+    )
+    // An older binary knows no fingerprint column, so its bind and unbind leave it set.
+    db.db
+      .prepare(
+        `UPDATE runs SET coordinator_handle = ?, consumer_generation = consumer_generation + 1
+         WHERE id = ?`
+      )
+      .run(TERMINAL, run.id)
+    db.db
+      .prepare(
+        `UPDATE runs SET coordinator_handle = NULL, consumer_generation = consumer_generation + 1
+         WHERE id = ?`
+      )
+      .run(run.id)
+
+    expect(await result(call('orchestration.runCurrent', {}, daemon))).toEqual({ run: null })
+    expect(await call('orchestration.check', { run: run.id }, daemon)).toMatchObject({
+      ok: false,
+      error: { code: 'consumer_fenced' }
+    })
+  })
+
+  it('shows external mutation receipts to request-show', async () => {
+    const { call, result } = createHarness()
+    const daemon = pairedClient('fp_daemon')
+    await result(
+      call('orchestration.runCreate', { objective: 'Recover', external: true }, daemon, {
+        orchestrationRequestId: 'create_request'
+      })
+    )
+    await result(
+      call('orchestration.taskCreate', { spec: 'Bump eslint' }, daemon, {
+        orchestrationRequestId: 'task_request'
+      })
+    )
+    expect(
+      await result(call('orchestration.requestShow', { request: 'create_request' }, daemon))
+    ).toMatchObject({ state: 'completed', method: 'orchestration.runCreate' })
+    expect(
+      await result(call('orchestration.requestShow', { request: 'task_request' }, daemon))
+    ).toMatchObject({ state: 'completed', method: 'orchestration.taskCreate' })
+  })
+
+  it('keeps an uncoordinating client on the receipts it wrote before upgrading', async () => {
+    const { call, result } = createHarness()
+    const { run } = await result<{ run: { id: string } }>(
+      call('orchestration.runCreate', { objective: 'Terminal Run', from: TERMINAL })
+    )
+    const send = (options: RpcDispatchStreamingOptions) =>
+      result<{ mutation?: { replayed?: boolean } }>(
+        call('orchestration.send', { to: `run:${run.id}`, subject: 'hello' }, options, {
+          orchestrationRequestId: 'pre_upgrade'
+        })
+      )
+    await send({ ...pairedClient('fp_daemon'), clientCapabilities: [] })
+    expect(await send(pairedClient('fp_daemon'))).toMatchObject({ mutation: { replayed: true } })
+  })
+
   it('partitions mutation replay by client, Run and consumer generation', async () => {
     const { call, result } = createHarness()
     const create = (fingerprint: string) =>
