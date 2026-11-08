@@ -19,7 +19,7 @@ import {
   orcadSlotDir,
   resolveOrcadSlotIdentity,
   type OrcadSlotOptions
-} from '../../ssh/orcad-recovery-slot'
+} from '../../managed-server/activation/orcad-recovery-slot'
 import { ORCAD_PID_FILENAME } from '../../managed-server/install/orcad-remote-host-support'
 import {
   parseOrcadReadinessWaitOutput,
@@ -33,7 +33,7 @@ import {
   remoteInstallVersionDirRegex
 } from '../../managed-server/install/remote-install-model'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   readWslGuestIdentity,
   wslGuestOrcadIncarnation,

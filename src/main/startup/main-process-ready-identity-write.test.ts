@@ -139,7 +139,7 @@ vi.mock('../browser/client-hosts/lifecycle/browser-client-host-id', () => ({
 vi.mock('../host/deferred-secret-protection-report', () => ({
   scheduleSecretProtectionGapReport: vi.fn()
 }))
-vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
+vi.mock('../ssh/host-keys/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
 vi.mock('../pty/shell-startup/legacy-terminal-shim-dir', () => ({
   neutralizeLegacyTerminalShimDir: vi.fn()
 }))

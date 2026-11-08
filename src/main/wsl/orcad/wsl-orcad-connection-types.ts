@@ -1,7 +1,7 @@
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { OrcadTunnelIdentity } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import type { WslOrcadConnectionStatus } from './wsl-orcad-connection-status'
@@ -9,7 +9,7 @@ import type {
   WslOrcadDeferredUpdate,
   WslOrcadDeployOptions,
   WslOrcadLaunch
-} from './wsl-orcad-deploy'
+} from './wsl-orcad-launch-contract'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 import type { WslOrcadPairingRecovery } from './wsl-orcad-pairing-identity'
 import type { WslOrcadStdioBridgeOptions } from './wsl-orcad-stdio-bridge'

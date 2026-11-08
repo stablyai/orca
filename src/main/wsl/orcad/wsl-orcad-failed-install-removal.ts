@@ -11,9 +11,12 @@ import {
   ORCAD_INSTALL_MODEL,
   remoteInstallDirName
 } from '../../managed-server/install/remote-install-model'
-import { readOrcadGcTransactionPins } from '../../ssh/orcad-gc-transaction-pins'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import type { OrcadDeployResult } from '../../ssh/orcad-remote-deploy'
+import { readOrcadGcTransactionPins } from '../../managed-server/activation/orcad-gc-transaction-pins'
+import {
+  orcadSlotDir,
+  type OrcadSlotOptions
+} from '../../managed-server/activation/orcad-recovery-slot'
+import type { OrcadDeployResult } from '../../managed-server/install/orcad-remote-deploy'
 import { isWslOrcadSlotInUse } from './wsl-orcad-slot-process-probe'
 
 export async function removeFailedFreshWslOrcadInstall(

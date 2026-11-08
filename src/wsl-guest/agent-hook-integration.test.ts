@@ -4,10 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import {
-  SshChannelMultiplexer,
-  type MultiplexerTransport
-} from '../main/ssh/ssh-channel-multiplexer'
+import { SshChannelMultiplexer } from '../main/ssh/protocol/ssh-channel-multiplexer'
+import type { MultiplexerTransport } from '../main/ssh/protocol/ssh-multiplexer-transport-writer'
 import { RelayDispatcher } from './dispatcher'
 import { RelayAgentHookServer } from './agent-hook-server'
 import {
