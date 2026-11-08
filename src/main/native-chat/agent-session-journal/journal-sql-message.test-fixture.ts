@@ -7,6 +7,7 @@ import type {
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { JournalSqlBatch } from './journal-sql-batch'
 import {
   commitJournalSqlMessages,
@@ -29,8 +30,7 @@ export function message(
   }
 }
 
-export function messageFixture() {
-  const db = new Database(':memory:')
+export function messageFixture(db = new Database(':memory:')) {
   db.pragma('user_version=4')
   migrateJournalDomainSchema(db)
   db.prepare(
@@ -54,21 +54,27 @@ export function messageFixture() {
     const row = db.prepare('SELECT payload_json FROM journal_items WHERE item_id=?').get(itemId)
     return row ? JSON.parse(String(row.payload_json)) : undefined
   }
-  const seedItem = (item: AgentJournalRenderItem) =>
-    db
-      .prepare(`INSERT INTO journal_items
-    (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json) VALUES(?,?,?,?,?,?,?,?,?)`)
-      .run(
-        target.sessionId,
-        target.epoch,
-        item.itemId,
-        item.sequence,
-        item.revision,
-        item.sequence,
-        item.sequenceIndex ?? 0,
-        1,
-        JSON.stringify(item)
-      )
+  const seedItem = (item: AgentJournalRenderItem) => {
+    const metadata = journalDomainHistoryMetadata(item)
+    db.prepare(`INSERT INTO journal_items
+    (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json,
+     root,subagent_row,subagent_group_key,named_subagent_ids,turn_marker) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+      target.sessionId,
+      target.epoch,
+      item.itemId,
+      item.sequence,
+      item.revision,
+      item.sequence,
+      item.sequenceIndex ?? 0,
+      1,
+      JSON.stringify(item),
+      metadata.root,
+      metadata.subagentRow,
+      metadata.subagentGroupKey,
+      metadata.namedSubagentIds,
+      metadata.turnMarker
+    )
+  }
   const seedSend = () => {
     const body: AgentJournalMessageItem = {
       kind: 'message',
