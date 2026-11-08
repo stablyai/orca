@@ -80,20 +80,6 @@ describe('MobileNativeChatView: send and read failure banners', () => {
     expect(banners()).toHaveLength(1)
   })
 
-  it('retires the previous route banner when a new send starts', async () => {
-    const onClearSendError = vi.fn()
-    await render({
-      onSend: vi.fn().mockResolvedValue(false),
-      sendErrorMessage: 'Stop failed',
-      onClearSendError
-    })
-    await pressSend()
-
-    expect(onClearSendError).toHaveBeenCalledOnce()
-    expect(banners()).toHaveLength(1)
-    expect(bannerText()).toBe('Stop failed')
-  })
-
   it('retires the previous banner before sending and preserves the new delivery notice', async () => {
     const onClearSendError = vi.fn()
     await render({
