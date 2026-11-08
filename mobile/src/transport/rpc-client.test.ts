@@ -561,7 +561,7 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
-    it('restarts a backed-off reconnect loop on foreground without waiting out the trickle', async () => {
+    it('redials a previously connected host on foreground without waiting out the trickle', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       openAndAuthenticate(mockSockets[0]!)
       mockSockets[0]!.close()
@@ -572,9 +572,10 @@ describe('mobile rpc-client connection timeout', () => {
       client.notifyForeground()
 
       expect(mockSockets.length).toBe(socketsBefore + 1)
-      expect(client.getReconnectAttempt()).toBe(0)
+      expect(client.getReconnectAttempt()).toBe(12)
       openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
       expect(client.getState()).toBe('connected')
+      expect(client.getReconnectAttempt()).toBe(0)
 
       client.close()
     })
