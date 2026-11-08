@@ -12,6 +12,7 @@ import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 import { settledNumstatCache } from './git-read-cache-invalidation'
 import { readStampedGitConfig, type StampedGitConfig } from './stamped-git-config'
+import { addGitattributesStampPaths } from './gitattributes-stamp-paths'
 import { readWorktreePathsDiffStamp } from './worktree-diff-stamp'
 
 async function runNumstat(
@@ -76,9 +77,7 @@ function numstatStampPaths(entries: readonly GitStatusEntry[], cached: boolean):
       if (!cached) {
         workingPaths.push(entryPath)
       }
-      for (let end = entryPath.indexOf('/'); end !== -1; end = entryPath.indexOf('/', end + 1)) {
-        attributePaths.add(`${entryPath.slice(0, end)}/.gitattributes`)
-      }
+      addGitattributesStampPaths(attributePaths, entryPath)
     }
     if (workingPaths.length + attributePaths.size > MAX_STAMPED_PATHS) {
       return null
