@@ -37,14 +37,18 @@ type TaskListInput = Pick<
   | 'provider'
   | 'selectedLinearTeamIds'
   | 'selectedLinearWorkspaceId'
-  | 'selectedRepoIds'
 >
 
-/** The key of the list these inputs read, or null for one with no read behind it (disconnected, Project mode). */
-export function taskListKey(hostId: string | undefined, input: TaskListInput): HostQueryKey | null {
+/**
+ * The key of the list these inputs read, or null for one with no read behind it (disconnected, Project mode).
+ * `repoKey` is the saved repo filter, not the reconciled one: it is known before the repo list loads.
+ */
+export function taskListKey(
+  hostId: string | undefined,
+  input: TaskListInput,
+  repoKey: string
+): HostQueryKey | null {
   const { appliedQuery: query, provider } = input
-  // The saved repo filter, not the reconciled one: it is known before the repo list loads.
-  const repoKey = [...input.selectedRepoIds].sort().join('\n')
   const params = ((): HostQueryParams | null => {
     switch (provider) {
       case 'github':

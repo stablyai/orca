@@ -75,6 +75,8 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
   const unsettledLoadRef = useRef(0)
   const { begin, remember, rememberPageCount, revalidating, setRevalidating } =
     useTaskListCache(model)
+  // By content, so re-picking the same repos (a new Set) does not re-read.
+  const savedRepoKey = [...selectedRepoIds].sort().join('\n')
   const loadTasks = useCallback(
     async (options: { silent?: boolean } = {}): Promise<void> => {
       if (!client || connState !== 'connected' || !tasksSupported || !taskStateHydrated) {
@@ -87,7 +89,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       const isCurrent = () =>
         loadGenerationRef.current === generation && clientRef.current === requestClient
       // Reads only inputs in this callback's dependencies.
-      const listKey = taskListKey(hostId, model)
+      const listKey = taskListKey(hostId, model, savedRepoKey)
       const rememberRows = (items: TaskListSnapshot['items']) =>
         remember(listKey, provider, { items })
       setError('')
@@ -334,7 +336,7 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
       provider,
       selectedLinearTeamIds,
       selectedLinearWorkspaceId,
-      selectedRepoIds,
+      savedRepoKey,
       effectiveRepoIds,
       taskStateHydrated,
       tasksSupported
