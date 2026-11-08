@@ -164,7 +164,10 @@ export function MobileSessionActiveContent({
       <View style={styles.markdownFrame}>
         <MarkdownReader
           documentId={activeMarkdownTab.id}
-          draftKey={markdownTabDraftKey(worktreeId, activeMarkdownTab.id)}
+          draftKey={markdownTabDraftKey(
+            { hostId, executionHost, worktreeId },
+            activeMarkdownTab.id
+          )}
           doc={controller.markdownDocs.get(activeMarkdownTab.id)}
           onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
           onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}

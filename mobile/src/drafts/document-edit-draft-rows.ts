@@ -26,12 +26,19 @@ type Slot = {
 }
 const slots = new Map<string, Slot>()
 
-export function markdownTabDraftKey(worktreeId: string, tabId: string): string {
-  return durableDraftRowKey('markdownTab', worktreeId, tabId)
+/** The host and remote runtime a worktree lives on, so two hosts' same-named documents never share edits. */
+export type DocumentEditScope = { hostId: string; executionHost?: string; worktreeId: string }
+
+function scopedId(scope: DocumentEditScope, id: string): string {
+  return `${scope.hostId}:${scope.executionHost ?? ''}:${id}`
 }
 
-export function fileEditDraftKey(worktreeId: string, path: string): string {
-  return durableDraftRowKey('fileEdit', worktreeId, path)
+export function markdownTabDraftKey(scope: DocumentEditScope, tabId: string): string {
+  return durableDraftRowKey('markdownTab', scope.worktreeId, scopedId(scope, tabId))
+}
+
+export function fileEditDraftKey(scope: DocumentEditScope, path: string): string {
+  return durableDraftRowKey('fileEdit', scope.worktreeId, scopedId(scope, path))
 }
 
 // A value past the store's cap would be refused and leave older edits behind, so it is not kept at all.
@@ -88,9 +95,11 @@ export function holdDocumentEditDraftOffer(key: string, offered: boolean): void 
   slotFor(key).offered = offered
 }
 
-// The user threw the editor's edits away; edits still on offer stay until that offer's own Discard.
+// The user threw the editor's edits away. Edits on offer stay until that offer's own Discard, and an unread row
+// holds nothing from this page.
 export function dropDocumentEditDraft(key: string): void {
-  if (!slotFor(key).offered) {
+  const slot = slotFor(key)
+  if (!slot.offered && slot.row.state() === 'loaded') {
     saveDocumentEditDraft(key, null)
   }
 }

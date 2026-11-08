@@ -23,16 +23,18 @@ type DraftState = {
 
 /**
  * Keeps an editable document's unsaved edits in its draft row, and offers back the ones a killed page left.
- * `base` is the host's content, or null while it is loading or not editable.
+ * `base` is the host's content, or null while it is loading. A document that can't be edited only offers a copy.
  */
 export function useDocumentEditDraft({
   draftKey,
   base,
+  editable,
   live,
   onRestore
 }: {
   draftKey: string | null
   base: string | null
+  editable: boolean
   live: string
   onRestore: (content: string) => void
 }) {
@@ -78,21 +80,28 @@ export function useDocumentEditDraft({
   }, [canDecide, draftKey, live])
 
   useEffect(() => {
-    if (state.phase !== 'ready' || state.offer || !draftKey || base === null || !baseHash) {
+    if (
+      state.phase !== 'ready' ||
+      state.offer ||
+      !editable ||
+      !draftKey ||
+      base === null ||
+      !baseHash
+    ) {
       return
     }
     saveDocumentEditDraft(
       draftKey,
       live === base ? null : { content: live, baseHash, savedAt: Date.now() }
     )
-  }, [base, baseHash, draftKey, live, state])
+  }, [base, baseHash, draftKey, editable, live, state])
 
   const offer: DocumentEditDraftOffer | null =
     state.key === draftKey && state.offer && base !== null
       ? {
           content: state.offer.content,
           savedAt: state.offer.savedAt,
-          baseMatches: state.offer.baseHash === baseHash
+          baseMatches: editable && state.offer.baseHash === baseHash
         }
       : null
 

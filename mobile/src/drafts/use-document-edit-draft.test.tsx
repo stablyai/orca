@@ -15,7 +15,7 @@ let latest: Draft | null = null
 const KEY = 'draft:markdownTab:wt:tab-1'
 
 function Editor(props: { base: string; live: string; onRestore: (content: string) => void }) {
-  latest = useDocumentEditDraft({ draftKey: KEY, ...props })
+  latest = useDocumentEditDraft({ draftKey: KEY, editable: true, ...props })
   return null
 }
 

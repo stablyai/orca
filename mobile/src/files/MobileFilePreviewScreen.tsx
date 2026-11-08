@@ -69,6 +69,7 @@ function WorkspaceFilePreviewScreen({ route }: Props) {
 
 function MobileFilePreviewDocument({ route }: Props) {
   const t = useMobileTranslation()
+  const executionHost = useWorkspaceExecutionHost()
   useMobileColorScheme()
   // Use the shared route handoff to keep this screen within the bundle asset budget.
   const router = useWorkspaceRouteHandoff()
@@ -243,8 +244,8 @@ function MobileFilePreviewDocument({ route }: Props) {
   const isEditableTerminalArtifact =
     previewSource?.source === 'terminalArtifact' &&
     isEditableMobileTerminalArtifactPreview(preview, previewSource.readOnly === true)
-  const canEditDraft = isEditableTerminalArtifact && draftSourceKeyRef.current === previewSourceKey
-  const canSaveArtifact = canEditDraft && draftContent !== savedContent
+  const draftLoaded = draftSourceKeyRef.current === previewSourceKey
+  const canSaveArtifact = isEditableTerminalArtifact && draftLoaded && draftContent !== savedContent
   const hasUnsavedTerminalArtifactDraft = hasUnsavedMobileTerminalArtifactDraft({
     source: previewSource?.source,
     draftSourceKey: draftSourceKeyRef.current,
@@ -304,7 +305,7 @@ function MobileFilePreviewDocument({ route }: Props) {
 
   // Unmount retires pending saves; a refused back keeps the document and its save alive.
   const leave = useCallback(() => router.back(), [router])
-  const editDraftKey = filePreviewEditDraftKey(previewSource)
+  const editDraftKey = filePreviewEditDraftKey(previewSource, previewParams?.hostId, executionHost)
   const { confirmingDiscard, requestBack, stay, discard } = useMobileFilePreviewBack({
     hasUnsavedDraft: hasUnsavedTerminalArtifactDraft,
     leave,
@@ -389,7 +390,8 @@ function MobileFilePreviewDocument({ route }: Props) {
       />
       <MobileFilePreviewEditDraft
         draftKey={editDraftKey}
-        base={canEditDraft ? savedContent : null}
+        base={draftLoaded ? savedContent : null}
+        editable={isEditableTerminalArtifact}
         live={draftContent}
         onRestore={setDraftContent}
       />

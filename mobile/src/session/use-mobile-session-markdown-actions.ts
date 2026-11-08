@@ -1,9 +1,10 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Keyboard, Platform } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useBackClaim } from '../navigation/use-back-claim'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useSessionLeaveGuard } from './session-leave-guard'
 import { markdownTabSave } from './mobile-session-write-operations'
 import { dropDocumentEditDraft, markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
@@ -51,6 +52,11 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     dictationLeaveHold: { hold: holdLeaveForDictation, holdsLeave: dictationHoldsLeave }
   } = scope
   const clipboard = useClipboardWriter()
+  const executionHost = useWorkspaceExecutionHost()
+  const draftScope = useMemo(
+    () => ({ hostId, executionHost, worktreeId }),
+    [executionHost, hostId, worktreeId]
+  )
   const updateMarkdownLocalContent = useCallback((tabId: string, content: string) => {
     setMarkdownDocs((prev) => {
       const current = prev.get(tabId)
@@ -129,11 +135,11 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
   const leaveSessionDroppingDrafts = useCallback(
     (drafts: readonly DirtyMarkdownDraft[]) => {
       for (const draft of drafts) {
-        dropDocumentEditDraft(markdownTabDraftKey(worktreeId, draft.tabId))
+        dropDocumentEditDraft(markdownTabDraftKey(draftScope, draft.tabId))
       }
       leaveSession()
     },
-    [leaveSession, worktreeId]
+    [draftScope, leaveSession]
   )
 
   const requestLeaveSession = useCallback(() => {
@@ -181,10 +187,10 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
     const target = discardMarkdownTarget
     setDiscardMarkdownTarget(null)
     if (target) {
-      dropDocumentEditDraft(markdownTabDraftKey(worktreeId, target.id))
+      dropDocumentEditDraft(markdownTabDraftKey(draftScope, target.id))
       void readMarkdownTab(target)
     }
-  }, [discardMarkdownTarget, readMarkdownTab, worktreeId])
+  }, [discardMarkdownTarget, draftScope, readMarkdownTab])
 
   const saveMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
@@ -240,7 +246,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         })
         markdownSaveSeqRef.current.delete(tab.id)
         // The reader may be gone by now (another tab is showing), so the saved edits leave the store here.
-        dropDocumentEditDraft(markdownTabDraftKey(worktreeId, tab.id))
+        dropDocumentEditDraft(markdownTabDraftKey(draftScope, tab.id))
         triggerSuccess()
         showToast(translate('session.useMarkdownActions.saved', 'Saved'))
       } catch (error) {
@@ -268,7 +274,7 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
         markdownSaveInFlightRef.current.delete(tab.id)
       }
     },
-    [client, markdownDocs, showToast, worktreeId]
+    [client, draftScope, markdownDocs, showToast, worktreeId]
   )
   return {
     updateMarkdownLocalContent,

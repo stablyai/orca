@@ -46,7 +46,8 @@ export function MarkdownReader({
   const ready = doc?.status === 'ready' ? doc : null
   const editDraft = useDocumentEditDraft({
     draftKey,
-    base: ready?.editable ? ready.content : null,
+    base: ready?.content ?? null,
+    editable: ready?.editable === true,
     live: ready?.localContent ?? '',
     onRestore: onChange
   })
