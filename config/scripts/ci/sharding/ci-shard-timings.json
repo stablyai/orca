@@ -7181,7 +7181,6 @@
       "src/renderer/src/store/repos/wsl-moved-project-chat-purge.test.ts": 1222,
       "src/renderer/src/store/diagnostics/store-identity-churn-probe.test.ts": 67,
       "src/renderer/src/store/terminals/restored-relay-session-identity.test.ts": 2196,
-      "src/renderer/src/store/terminals/restored-terminal-rebind-restarts.test.ts": 1886,
       "src/renderer/src/store/terminals/structured-chat-tab-rename.test.ts": 3154,
       "src/renderer/src/store/terminals/terminal-exited-pane-liveness.test.ts": 1721,
       "src/renderer/src/store/terminals/terminal-no-op-subscriber.test.ts": 1763,
