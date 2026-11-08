@@ -1,5 +1,9 @@
 import type Database from '../../sqlite/sync-database'
-import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
+import {
+  orchestrationMailNotice,
+  type AgentMessageSource
+} from '../../../shared/agent-session/agent-session-message-source'
+import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import { journalMailSenderKey } from './journal-writer-host-facts'
 import type { JournalWriterOperation } from './journal-writer-command'
 import type {
@@ -19,14 +23,24 @@ import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
 type Submission = Extract<JournalWriterOperation, { kind: 'submission' }>
 
-/** Current ordered cards and exact edit holds are selected on the same writer snapshot. */
-function nextJournalDomainSubmissionCard(
+export type JournalDomainQueueSelection = {
+  reopenFloor: AgentJournalCursor | null
+  /** Wall-clock milliseconds that decide which persisted edit holds are live. */
+  now: number
+  steer: boolean
+  /** Manual sends pass edit holds; automatic delivery waits behind them. */
+  automatic: boolean
+  /** Asked only for the first eligible mail card; past unavailable mail, later mail is skipped. */
+  mailUnavailable: (from: AgentMessageSource) => boolean
+}
+
+/** Current ordered cards and exact edit holds are selected on one snapshot, a bounded page at a time. */
+export function nextJournalDomainQueueCard(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,
-  facts: JournalDomainSubmissionFacts,
-  steer: boolean,
-  savedAt: number
+  selection: JournalDomainQueueSelection
 ): QueuedMessageRow | null {
+  const { steer, automatic } = selection
   let after: { position: number; messageId: string } | undefined
   let pastUnavailableMail = false
   for (;;) {
@@ -41,7 +55,7 @@ function nextJournalDomainSubmissionCard(
         ${after ? 'AND (card.position,card.message_id)>(?,?)' : ''}
       ORDER BY card.position,card.message_id LIMIT 64`)
       .all(
-        savedAt,
+        selection.now,
         target.sessionId,
         target.epoch,
         ...(after ? [after.position, after.messageId] : [])
@@ -52,11 +66,11 @@ function nextJournalDomainSubmissionCard(
     const context = readJournalDomainQueuePauseContext(
       db,
       target,
-      facts.reopenFloor ?? null,
+      selection.reopenFloor,
       rows.map((row) => String(row.message_id))
     )
     for (const row of rows) {
-      if (row.edit_held) {
+      if (automatic && row.edit_held) {
         return null
       }
       const { card } = readJournalDomainQueueRow(target.sessionId, row)
@@ -75,16 +89,9 @@ function nextJournalDomainSubmissionCard(
       if (pastUnavailableMail && mail) {
         continue
       }
-      if (mail && card.body.from) {
-        const key = journalMailSenderKey(card.body.from)
-        const authority = facts.mail?.find(([sender]) => sender === key)
-        if (!authority) {
-          throw new Error('journal automatic mail selection requires supplied sender authority')
-        }
-        if (authority[1]) {
-          pastUnavailableMail = true
-          continue
-        }
+      if (mail && card.body.from && selection.mailUnavailable(card.body.from)) {
+        pastUnavailableMail = true
+        continue
       }
       return card
     }
@@ -117,7 +124,21 @@ export function selectJournalDomainSubmissionCard(
       fingerprint: input.payloadFingerprint
     },
     current?.card ?? null,
-    () => nextJournalDomainSubmissionCard(db, target, facts, consume.steer === true, savedAt)
+    () =>
+      nextJournalDomainQueueCard(db, target, {
+        reopenFloor: facts.reopenFloor ?? null,
+        now: savedAt,
+        steer: consume.steer === true,
+        automatic: true,
+        mailUnavailable: (from) => {
+          const key = journalMailSenderKey(from)
+          const authority = facts.mail?.find(([sender]) => sender === key)
+          if (!authority) {
+            throw new Error('journal automatic mail selection requires supplied sender authority')
+          }
+          return authority[1]
+        }
+      })
   )
   const owed = consume.owed ? (facts.owed ?? 'unavailable') : 'owed'
   if (owed !== 'owed') {
