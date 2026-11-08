@@ -9,6 +9,7 @@ import {
 import { convertImageBlobToPng } from './image-blob-png'
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13])
+const WEBP_BYTES = new TextEncoder().encode('RIFF\u0000\u0000\u0000WEBPVP8 ')
 const originalCanvasGetContext = Object.getOwnPropertyDescriptor(
   HTMLCanvasElement.prototype,
   'getContext'
@@ -29,6 +30,25 @@ function stubDecodedSize(
     }
   )
   return decode
+}
+
+function stubCanvas() {
+  const png = new Blob([PNG_BYTES], { type: 'image/png' })
+  const dimensions = { width: 0, height: 0 }
+  const drawImage = vi.fn()
+  Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+    value: () => ({ drawImage }),
+    configurable: true
+  })
+  vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (
+    this: HTMLCanvasElement,
+    callback
+  ) {
+    dimensions.width = this.width
+    dimensions.height = this.height
+    callback(png)
+  })
+  return { dimensions, drawImage, png }
 }
 
 beforeEach(() => {
