@@ -2,15 +2,7 @@ import type { EditorFileTabProps } from './editor-file-tab-props'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import {
-  GitGraph,
-  GitCompareArrows,
-  Eye,
-  ShieldAlert,
-  Pin,
-  ListChecks,
-  Smartphone
-} from 'lucide-react'
+import { Eye, ShieldAlert, Pin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
@@ -35,14 +27,15 @@ import {
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
-import { translate } from '@/i18n/i18n'
+import { getEditorFileTabModeIcon } from './editor-file-tab-mode-icon'
+import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
-import { useTabCustomEditor } from '@/store/plugin-custom-editors'
+import { useTabCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 
 export default function EditorFileTab({
@@ -66,7 +59,8 @@ export default function EditorFileTab({
   dropIndicator,
   includeTopTabBorder = true
 }: EditorFileTabProps): React.JSX.Element {
-  const { worktree, repo, tabLabel } = useEditorTabTarget(file)
+  const t = useTranslate()
+  const { worktree, repo, tabLabel } = useEditorTabTarget(file, t)
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
@@ -74,26 +68,11 @@ export default function EditorFileTab({
     data: dragData
   })
 
-  const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
-  const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const customEditor = useTabCustomEditor(file)
   // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.
-  const ModeIcon =
-    file.mode === 'git-graph'
-      ? GitGraph
-      : isConflictReview
-        ? ShieldAlert
-        : isCheckDetails
-          ? ListChecks
-          : isDiff
-            ? GitCompareArrows
-            : isMarkdownPreviewTab
-              ? Eye
-              : file.language === 'simulator'
-                ? Smartphone
-                : null
+  const ModeIcon = getEditorFileTabModeIcon(file)
   const tabIcon = (className: string): React.ReactNode => (
     <PluginContributionIcon
       url={customEditor?.iconUrl}
@@ -278,7 +257,7 @@ export default function EditorFileTab({
             ref={setRenameInputElement}
             density="compact"
             data-tab-rename-input="true"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.tab.bar.EditorFileTab.3da7445c84',
               'Rename file {{value0}}',
               { value0: basename(file.filePath) }
@@ -374,7 +353,7 @@ export default function EditorFileTab({
           ) : (
             <TabHoverCard
               title={tabLabel}
-              programName={customEditor?.title ?? translate('tabHoverCard.editor', 'Editor')}
+              programName={customEditor?.title ?? t('tabHoverCard.editor', 'Editor')}
               icon={tabIcon('size-4')}
               description={file.relativePath}
             >

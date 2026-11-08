@@ -2,8 +2,10 @@ import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { getOpenFileExecutionHostId } from '@/lib/unified-tab-host-ownership'
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { useAppStore } from '@/store'
-import { useWorktreeById } from '@/store/selectors'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { usePerforceEditedTab } from '../right-sidebar/perforce/use-perforce-edited-tab'
 
@@ -13,7 +15,10 @@ import { usePerforceEditedTab } from '../right-sidebar/perforce/use-perforce-edi
  */
 // Why one hook: EditorFileTab sits at the .tsx max-lines limit, so the Perforce label rides on
 // the worktree/repo lookups the tab already needs.
-export function useEditorTabTarget(file: OpenFile & { tabId?: string }) {
+export function useEditorTabTarget(
+  file: OpenFile & { tabId?: string },
+  t: Translate = translate
+) {
   const placedElsewhere = useAppStore((state) =>
     file.tabId
       ? editorTabWorkspace(state.unifiedTabsByWorktree, file.tabId) !== file.worktreeId
@@ -25,6 +30,6 @@ export function useEditorTabTarget(file: OpenFile & { tabId?: string }) {
   )
   const isOpenedForEdit = usePerforceEditedTab(file, worktree?.path ?? null, repo)
   const repoSuffix = placedElsewhere && repo ? ` · ${repo.displayName}` : ''
-  const tabLabel = `${isOpenedForEdit ? 'E ' : ''}${getEditorDisplayLabel(file)}${repoSuffix}`
+  const tabLabel = `${isOpenedForEdit ? 'E ' : ''}${getEditorDisplayLabel(file, undefined, t)}${repoSuffix}`
   return { worktree, repo, tabLabel }
 }

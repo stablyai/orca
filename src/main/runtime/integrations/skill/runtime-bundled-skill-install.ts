@@ -8,15 +8,15 @@ import type {
 import {
   localBundledSkillInput,
   type BundledSkillSelection
-} from '../../../skills/bundled-skill-install/local-host'
+} from '../../../skills/bundled-skill-install/bundled-skill-local-host'
 import {
   autoUpdateInstalledBundledSkills,
   installBundledSkills,
   previewBundledSkillInstall,
   type BundledSkillServiceInput
-} from '../../../skills/bundled-skill-install/service'
-import { clearSkillDiscoveryCaches } from '../../../skills/skill-discovery-target'
-import { resolveSkillInstallDestination } from '../../../skills/skill-install-destinations'
+} from '../../../skills/bundled-skill-install/bundled-skill-installation'
+import { clearSkillDiscoveryCaches } from '../../../skills/discovery/skill-discovery-target'
+import { resolveSkillInstallDestination } from '../../../skills/install/skill-install-destinations'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import { createSkillInstallAuthority } from './runtime-skill-install-authority'
 

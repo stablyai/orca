@@ -1,6 +1,6 @@
 /** Moves carry automations disabled, which every server version accepts; re-enable those that ran here once the move commits. */
 import { z } from 'zod'
-import type { Automation } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
 import { isRetainedOrcadMigrationSourceCutover } from '../../shared/orcad-migration/orcad-migration-source-cutover'
 import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
 import {

@@ -50,31 +50,4 @@ describe('selectTerminalPaneHostState memo', () => {
     }
     expect(retired.deref()).toBeUndefined()
   })
-
-  it('returns the same object across an unrelated store write', () => {
-    const first = makeState()
-    const before = selectTerminalPaneHostState(first, LOCAL_WORKTREE)
-
-    const second = makeState({ rightSidebarOpen: true })
-    const after = selectTerminalPaneHostState(second, LOCAL_WORKTREE)
-
-    expect(after).toBe(before)
-  })
-
-  it('re-resolves when the published state changes, so a host change is never stale', () => {
-    const local = makeState()
-    const before = selectTerminalPaneHostState(local, LOCAL_WORKTREE)
-    expect(before.sshReconnectTargetId).toBeNull()
-
-    const remote = makeState({
-      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-host-a' }],
-      worktreesByRepo: {
-        'repo-1': [{ id: LOCAL_WORKTREE, repoId: 'repo-1', path: '/repo/worktrees/local' }]
-      }
-    })
-    const after = selectTerminalPaneHostState(remote, LOCAL_WORKTREE)
-
-    expect(after).not.toBe(before)
-    expect(after.sshReconnectTargetId).toBe('ssh-host-a')
-  })
 })

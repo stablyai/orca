@@ -2,7 +2,7 @@ import * as z from 'zod'
 import type { PersistedUIState } from '../../../src/shared/persisted-ui-state-types'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
-import { NODE_PLATFORM_NAMES } from '../transport/mobile-runtime-host-platform'
+import { NODE_PLATFORM_NAMES } from '../transport/connection/mobile-runtime-host-platform'
 
 export const WORKSPACE_GROUP_BY_ARMS = hostUnionArms<PersistedUIState['groupBy']>({
   none: true,
@@ -49,7 +49,7 @@ export function readMobileRepoIcon(value: unknown): MobileHostRepoIcon | null {
 // Drop catalog rows without id/displayName; salvage badgeColor and unknown icon arms to the renderer’s existing fallbacks. path labels older hosts’ repo sections.
 // Image icons read only src/label; leave source opaque so newer source arms do not erase usable images.
 // Keep host ids as strings: getRepoExecutionHostId already maps unknown spellings to local, preserving newer hosts’ rows.
-const hostRepoCatalogRepos = salvagingArray(
+export const hostRepoCatalogRepos = salvagingArray(
   z.looseObject({
     id: z.string(),
     displayName: z.string(),

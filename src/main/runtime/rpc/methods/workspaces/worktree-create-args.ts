@@ -116,12 +116,20 @@ export function buildManagedWorktreeCreateArgs(
     ...(params.startupAgent ? { startupAgent: params.startupAgent } : {}),
     ...(params.startupPrompt !== undefined ? { startupPrompt: params.startupPrompt } : {}),
     ...(launchSource ? { startupLaunchSource: launchSource } : {}),
+    ...(params.startupAgentArgs !== undefined ? { startupAgentArgs: params.startupAgentArgs } : {}),
+    ...(params.startupSessionOptions
+      ? { startupSessionOptions: params.startupSessionOptions }
+      : {}),
+    ...(params.startupLaunchPreferences
+      ? { startupLaunchPreferences: params.startupLaunchPreferences }
+      : {}),
     startupDraft: params.startupDraft,
     lineage: {
       parentWorkspace: params.parentWorkspace,
       ...(params.parentWorkspaceOrigin ? { parentWorkspaceOrigin: 'manual' as const } : {}),
       envParentWorkspace: params.envParentWorkspace,
       parentWorktree: params.parentWorktree,
+      ...(params.matchFolderWorkspaces ? { matchFolderWorkspaces: true as const } : {}),
       ...(params.crossStoreParent ? { crossStoreParent: params.crossStoreParent } : {}),
       ...(params.crossStoreParentInferredFrom
         ? { crossStoreParentInferredFrom: params.crossStoreParentInferredFrom }

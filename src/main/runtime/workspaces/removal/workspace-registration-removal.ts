@@ -1,5 +1,5 @@
 import type { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

@@ -1,8 +1,8 @@
 import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
-import { adoptFromEndpoint } from '../../store/adopt-from-endpoint'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { adoptFromEndpoint } from '../../store/host-catalog/endpoint-catalog-adoption'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],

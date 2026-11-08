@@ -1,4 +1,4 @@
-import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
+import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { exposeDispatchContext } from '../worker/dispatch-context-exposure'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'

@@ -42,7 +42,7 @@ import { useWindowVisibilityEffects } from './app-shell/use-window-visibility-ef
 import { SpaceWindowStatePublisher } from './components/workspace-space/SpaceWindowStatePublisher'
 import { PlainSshTerminalPanels } from './components/plain-ssh-terminal/PlainSshTerminalPanels'
 import { PluginShotReplayMount } from './components/plugins/view/PluginShotReplayMount'
-import { AddToChatPointMenuHost } from './components/native-chat/AddToChatMenu'
+import { AddToChatPointMenuHost } from './components/native-chat/selection-quotes/AddToChatMenu'
 import { installActiveWorktreeRemovalSuccessor } from './lib/active-worktree-removal-successor'
 import { setRuntimeFileWriteGuard } from './runtime/files/mutations/runtime-file-mutation-client'
 import { checkoutPerforceFileBeforeWrite } from './lib/perforce-checkout-before-write'

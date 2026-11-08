@@ -5,15 +5,19 @@ import { PerforcePane } from '../PerforcePane'
 import { TasksPane } from '../tasks/TasksPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 
-export function renderPerforceSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderPerforceSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="perforce"
-      title={translate('perforce.settings.navTitle', 'Perforce')}
-      description={translate(
+      title={t('perforce.settings.navTitle', 'Perforce')}
+      description={t(
         'perforce.settings.navDescription',
         'Connection, Source Control behavior, changelists, and shelves.'
       )}
@@ -26,13 +30,17 @@ export function renderPerforceSettingsSection(context: SettingsRenderContext): R
   )
 }
 
-export function renderGitSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderGitSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, interactions, navigation, view } = context
   return (
     <SettingsSection
       id="git"
-      title={translate('auto.components.settings.Settings.70100f94c7', 'Git & Source Control')}
-      description={translate(
+      grouped
+      title={t('auto.components.settings.Settings.70100f94c7', 'Git & Source Control')}
+      description={t(
         'auto.components.settings.Settings.cfa34f4465',
         'Branch naming, base refs, and Git AI Author.'
       )}
@@ -69,13 +77,17 @@ export function renderGitSettingsSection(context: SettingsRenderContext): React.
   )
 }
 
-export function renderTasksSettingsSection(context: SettingsRenderContext): React.JSX.Element {
+export function renderTasksSettingsSection(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.JSX.Element {
   const { model, navigation, view } = context
   return (
     <SettingsSection
       id="tasks"
-      title={translate('auto.components.settings.Settings.11faa2f7dd', 'Task Sources')}
-      description={translate(
+      grouped
+      title={t('auto.components.settings.Settings.11faa2f7dd', 'Task Sources')}
+      description={t(
         'auto.components.settings.Settings.tasksDescription',
         'Connect providers, install the Linear skill, and choose what appears in Tasks.'
       )}

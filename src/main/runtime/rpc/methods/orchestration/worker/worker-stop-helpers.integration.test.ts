@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { receipt, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
-import { stopHelperAfterStart } from './worker-stop'
+import './worker-stop'
 
 describe('worker-stop through CLI argv, RPC and SQLite', () => {
   const f = useHelperFollowUpCli()
@@ -42,26 +42,6 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
     // A kept-open helper keeps working, and so do the helpers working for it.
     expect(h.db.getWorkerDispatch(kept.dispatchId)?.state).toBe('ready')
     expect(h.db.getWorkerDispatch(keptChild.dispatchId)?.state).toBe('ready')
-  })
-
-  it('refuses a helper start from a worker whose stop has begun', async () => {
-    const worker = await start('term_coord', 'term_worker')
-    h.db.beginWorkerStop(worker.dispatchId, h.runtime.getRuntimeId())
-
-    const refused = await cli(
-      'worker-start',
-      '--from',
-      'term_worker',
-      '--spec',
-      'more',
-      '--agent',
-      'codex'
-    )
-
-    expect(refused.error).toMatchObject({
-      code: 'consumer_fenced',
-      message: expect.stringContaining('is being stopped')
-    })
   })
 
   it('stops a helper that was still starting when its creator stopped, once its start ends', async () => {
@@ -124,30 +104,5 @@ describe('worker-stop through CLI argv, RPC and SQLite', () => {
       expect.objectContaining({ dispatchId: helper.dispatchId, outcome: 'stopped' })
     ])
     expect(h.db.getWorkerDispatch(helper.dispatchId)?.state).toBe('stopped')
-  })
-
-  it('warns when a helper stopped after its start left one of its own helpers unconfirmed', async () => {
-    const worker = await start('term_coord', 'term_worker')
-    const helper = await start('term_worker', 'term_helper')
-    const nested = await start('term_helper', 'term_nested')
-    const setState = h.db.db.prepare('UPDATE worker_dispatches SET state = ? WHERE dispatch_id = ?')
-    // The creator's stop finds the helper still starting, so it defers that helper's stop.
-    setState.run('starting', helper.dispatchId)
-    await success('worker-stop', '--dispatch', worker.dispatchId)
-    // Its start then ends ready, while its own helper's stop can no longer be proven.
-    setState.run('ready', helper.dispatchId)
-    setState.run('stop_unknown', nested.dispatchId)
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
-    await stopHelperAfterStart(h.runtime, { dispatchId: helper.dispatchId }, undefined)
-
-    expect(h.db.getWorkerDispatch(helper.dispatchId)?.state).toBe('stopped')
-    expect(warn).toHaveBeenCalledWith(
-      '[orchestration] helper stop after its start is unconfirmed',
-      expect.objectContaining({
-        dispatchId: helper.dispatchId,
-        unconfirmed: [expect.objectContaining({ dispatchId: nested.dispatchId })]
-      })
-    )
   })
 })

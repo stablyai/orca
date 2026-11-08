@@ -32,8 +32,8 @@ const localReposList = vi.fn<() => Promise<Repo[]>>()
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: { repos: { list: localReposList } } }
 
-import { createTestStore, seedStore } from '../slices/store-test-helpers'
-import { TEST_REPO } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { TEST_REPO } from './repo.test-fixture'
 
 function env(id: string): PublicKnownRuntimeEnvironment {
   return { id } as unknown as PublicKnownRuntimeEnvironment

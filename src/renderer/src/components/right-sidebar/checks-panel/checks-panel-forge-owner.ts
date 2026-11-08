@@ -1,7 +1,7 @@
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
-import { forgeCredentialTarget } from '@/runtime/forge-credential-target'
+import { forgeCredentialTarget } from '@/runtime/source-control/forge/forge-credential-target'
 import { useAppStore } from '@/store'
 
 /** A failed checks/comments read, naming the machine that answered so a sign-in error is actionable. */

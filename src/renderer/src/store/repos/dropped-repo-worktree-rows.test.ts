@@ -7,7 +7,8 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore, makeWorktree, seedStore } from '../slices/store-test-helpers'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 
 const SERVER = toRuntimeExecutionHostId('env-1')
 

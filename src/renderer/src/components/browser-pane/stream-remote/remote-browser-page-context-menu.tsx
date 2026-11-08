@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
@@ -146,6 +146,7 @@ export function RemoteBrowserPageContextMenu({
   onOpenLinkInOrcaBrowser: () => void
   onNavigate: (method: 'browser.back' | 'browser.forward' | 'browser.reload') => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const contextMenuRef = useRef<HTMLDivElement>(null)
 
   useLayoutEffect(() => {
@@ -187,7 +188,7 @@ export function RemoteBrowserPageContextMenu({
               className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
               onClick={onOpenLinkInOrcaBrowser}
             >
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserPane.b5b87d6cbb',
                 'Open Link In Orca Browser'
               )}
@@ -203,7 +204,7 @@ export function RemoteBrowserPageContextMenu({
                 onDismiss()
               }}
             >
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserPane.8ce4f6b12e',
                 'Open Link In Default Browser'
               )}
@@ -216,10 +217,7 @@ export function RemoteBrowserPageContextMenu({
                 onDismiss()
               }}
             >
-              {translate(
-                'auto.components.browser.pane.BrowserPane.efb0e8f7f3',
-                'Copy Link Address'
-              )}
+              {t('auto.components.browser.pane.BrowserPane.efb0e8f7f3', 'Copy Link Address')}
             </button>
             <div className="my-1 h-px bg-border/70" />
           </>
@@ -234,7 +232,7 @@ export function RemoteBrowserPageContextMenu({
                 onDismiss()
               }}
             >
-              {translate('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
+              {t('auto.components.browser.pane.BrowserPane.2a4c4b8e1f', 'Copy')}
             </button>
             <div className="my-1 h-px bg-border/70" />
           </>
@@ -244,21 +242,21 @@ export function RemoteBrowserPageContextMenu({
           className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
           onClick={() => onNavigate('browser.back')}
         >
-          {translate('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back')}
+          {t('auto.components.browser.pane.BrowserPane.40edfa75cb', 'Back')}
         </button>
         <button
           role="menuitem"
           className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
           onClick={() => onNavigate('browser.forward')}
         >
-          {translate('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward')}
+          {t('auto.components.browser.pane.BrowserPane.250a9b3e42', 'Forward')}
         </button>
         <button
           role="menuitem"
           className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
           onClick={() => onNavigate('browser.reload')}
         >
-          {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+          {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
         </button>
         <div className="my-1 h-px bg-border/70" />
         <button
@@ -272,10 +270,7 @@ export function RemoteBrowserPageContextMenu({
             onDismiss()
           }}
         >
-          {translate(
-            'auto.components.browser.pane.BrowserPane.f7ab83f7ed',
-            'Open Page In Default Browser'
-          )}
+          {t('auto.components.browser.pane.BrowserPane.f7ab83f7ed', 'Open Page In Default Browser')}
         </button>
         <button
           role="menuitem"
@@ -285,7 +280,7 @@ export function RemoteBrowserPageContextMenu({
             onDismiss()
           }}
         >
-          {translate('auto.components.browser.pane.BrowserPane.1b179ab561', 'Copy Page URL')}
+          {t('auto.components.browser.pane.BrowserPane.1b179ab561', 'Copy Page URL')}
         </button>
       </div>
     </>,

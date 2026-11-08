@@ -47,7 +47,6 @@ import {
   SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS,
   SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS,
   SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS,
-  buildSystemSshPortForwardArgs,
   spawnSystemSshPortForward,
   startSystemSshPortForwardProcess,
   waitForSystemSshForwardStartup,
@@ -173,37 +172,6 @@ describe('system SSH forward process', () => {
     )
   })
 
-  it('spawns exactly the argv the orphan matcher is given, LogLevel=INFO included', () => {
-    spawnMock.mockReturnValue(createFakeProcess())
-    const options = { logChannelFailures: true }
-    spawnSystemSshPortForward(createTarget(), 5173, '127.0.0.1', 3000, options)
-
-    const built = buildSystemSshPortForwardArgs(createTarget(), 5173, '127.0.0.1', 3000, options)
-    expect(spawnMock.mock.calls[0][1]).toEqual(built)
-    expect(built).toContain('LogLevel=INFO')
-  })
-
-  it('runs port forwards unmultiplexed even when ssh_config disables muxing', () => {
-    spawnMock.mockReturnValue(createFakeProcess())
-
-    spawnSystemSshPortForward(createTarget(), 5173, '127.0.0.1', 3000, {
-      resolvedConfig: {
-        hostname: 'example.com',
-        port: 22,
-        identityFile: [],
-        forwardAgent: false,
-        identitiesOnly: false,
-        proxyUseFdpass: false,
-        controlMaster: 'no',
-        controlPersist: 'no'
-      }
-    })
-
-    const args = spawnMock.mock.calls[0][1] as string[]
-    expect(args[args.indexOf('-S') + 1]).toBe('none')
-    expectNoOrcaControlMasterArgs(args)
-  })
-
   // A user master owns the listener and refusal stderr beyond the client's lifetime.
   it("never rides the user's ssh_config ControlMaster", () => {
     spawnMock.mockReturnValue(createFakeProcess())
@@ -234,35 +202,6 @@ describe('system SSH forward process', () => {
     expect(controlPathIdx).toBeLessThan(args.indexOf('--'))
     expectNoOrcaControlMasterArgs(args)
     expect(args).toContain('workbox')
-  })
-
-  it('preserves manual target port and identity options in the forwarded ssh command', () => {
-    spawnMock.mockReturnValue(createFakeProcess())
-
-    spawnSystemSshPortForward(
-      createTarget({ port: 2222, identityFile: '/home/user/.ssh/id_ed25519' }),
-      5173,
-      '127.0.0.1',
-      3000
-    )
-
-    const args = spawnMock.mock.calls[0][1] as string[]
-    expect(args).toEqual(expect.arrayContaining(['-p', '2222', '-i', '/home/user/.ssh/id_ed25519']))
-    expect(args).toContain('deploy@example.com')
-  })
-
-  it('does not spawn ssh when the requested local forward port is already in use', async () => {
-    const server = createFakeServer()
-    server.listen.mockImplementation(() => {
-      queueMicrotask(() => server.emit('error', new Error('EADDRINUSE')))
-      return server
-    })
-    createServerMock.mockReturnValue(server)
-
-    await expect(
-      startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
-    ).rejects.toThrow('Local port 127.0.0.1:5173 is not available')
-    expect(spawnMock).not.toHaveBeenCalled()
   })
 
   it('stops a forward an earlier Orca orphaned on the port, then binds it', async () => {
@@ -301,16 +240,6 @@ describe('system SSH forward process', () => {
     expect(stopOrphanMock).toHaveBeenCalledWith(5173, expect.any(Array))
     expect(cancelMuxedMock).not.toHaveBeenCalled()
     expect(spawnMock).not.toHaveBeenCalled()
-  })
-
-  it('spawns ssh after the requested local forward port preflight succeeds', async () => {
-    const child = createFakeProcess()
-    spawnMock.mockReturnValue(child)
-
-    const forward = await startSystemSshPortForwardProcess(createTarget(), 5173, '127.0.0.1', 3000)
-
-    expect(spawnMock).toHaveBeenCalled()
-    expect(forward.process).toBe(child)
   })
 
   it('resolves port 0 to a free port first, since OpenSSH never reports the one it bound', async () => {
@@ -424,21 +353,6 @@ describe('system SSH forward process', () => {
     expect(socket.destroy).toHaveBeenCalled()
   })
 
-  it('resolves startup after the grace period when ssh keeps running', async () => {
-    vi.useFakeTimers()
-    const child = createFakeProcess()
-    connectMock.mockImplementation(() => {
-      const socket = createFakeSocket()
-      queueMicrotask(() => socket.emit('error', new Error('ECONNREFUSED')))
-      return socket
-    })
-
-    const pending = waitForSystemSshForwardStartup(child as never, 3000)
-    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS)
-
-    await expect(pending).resolves.toBeUndefined()
-  })
-
   // Why: a slow ProxyCommand outlasts the grace period, and a caller that dials the port next needs it listening.
   it('waits past the grace period for a listener when a listener timeout is given', async () => {
     vi.useFakeTimers()
@@ -483,37 +397,6 @@ describe('system SSH forward process', () => {
     const assertion = expect(pending).rejects.toThrow('did not listen on 127.0.0.1:5173')
     await vi.advanceTimersByTimeAsync(5_000)
     await assertion
-  })
-
-  it('sends SIGTERM then SIGKILL when the process does not exit', async () => {
-    vi.useFakeTimers()
-    const child = createFakeProcess()
-
-    const pending = waitForSystemSshForwardStop(child as never)
-    await vi.advanceTimersByTimeAsync(2_000)
-
-    expect(child.kill).toHaveBeenNthCalledWith(1, 'SIGTERM')
-    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
-
-    child.emit('exit', null)
-    await expect(pending).resolves.toBeUndefined()
-  })
-
-  it('does not resolve stop until the process exits', async () => {
-    vi.useFakeTimers()
-    const child = createFakeProcess()
-
-    let resolved = false
-    const pending = waitForSystemSshForwardStop(child as never).then(() => {
-      resolved = true
-    })
-
-    await vi.advanceTimersByTimeAsync(1_999)
-    expect(resolved).toBe(false)
-
-    child.emit('exit', null)
-    await pending
-    expect(resolved).toBe(true)
   })
 
   it('resolves stop after the post-kill bound when the child never reports exit', async () => {

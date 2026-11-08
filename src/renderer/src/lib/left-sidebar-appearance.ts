@@ -5,7 +5,8 @@ import {
   normalizeLeftSidebarTintOpacity
 } from '../../../shared/left-sidebar-appearance'
 import { pluginAppThemeCssFallback } from '../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
-import { hostPillOutlineMixOver, mix, type ColorProbe, type Rgba } from './plugin-theme-tokens'
+import { hostPillOutlineMixOver, type ColorProbe } from './plugin-theme-tokens'
+import { mix, type Rgba } from '../../../shared/color/rgba-contrast'
 
 type LeftSidebarAppearanceSettings = Pick<
   GlobalSettings,

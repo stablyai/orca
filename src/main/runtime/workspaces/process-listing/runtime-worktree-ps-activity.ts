@@ -5,12 +5,15 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getWorkspaceSessionTabActivityIds } from '../../../../shared/workspace-session/workspace-session-tab-activity'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
-import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
+import {
+  connectionEvidenceHostId,
+  type RuntimeWorktreePsSummaryLookup
+} from './runtime-worktree-summary-paths'
 import {
   getLatestPtyTitle,
   getLeafDisplayRecord,
@@ -44,8 +47,8 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
   paneOf: PtyPaneOf
   getTitleDisplayClear: (ptyId: string) => TitleDisplayClear | null
   getSummary: RuntimeWorktreePsSummaryLookup
-}): Map<string, RuntimeTerminalTitleEvidence[]> {
-  const titleEvidence = new Map<string, RuntimeTerminalTitleEvidence[]>()
+}): Map<RuntimeWorktreePsSummary, RuntimeTerminalTitleEvidence[]> {
+  const titleEvidence = new Map<RuntimeWorktreePsSummary, RuntimeTerminalTitleEvidence[]>()
   const savedTabOwnerById = new Map<string, { worktreeId: string; title: string }>()
   for (const [worktreeId, tabs] of Object.entries(args.session?.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
@@ -77,7 +80,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     ) {
       continue
     }
-    const summary = args.getSummary(leaf.worktreeId)
+    const summary = args.getSummary(leaf.worktreeId, ptyRecordHostId(freshOwner))
     if (!summary) {
       continue
     }
@@ -92,7 +95,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
       args.tabs.get(leaf.tabId)?.title ?? null
     )
     if (leafStatus === 'working' || leafStatus === 'permission') {
-      addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
+      addTerminalTitleEvidence(titleEvidence, summary, {
         status: leafStatus,
         paneKey: args.getPaneKey(leaf),
         ptyId: leaf.ptyId,
@@ -143,7 +146,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     if (!owner) {
       continue
     }
-    const summary = args.getSummary(owner.worktreeId)
+    const summary = args.getSummary(owner.worktreeId, ptyRecordHostId(pty))
     if (!summary) {
       continue
     }
@@ -155,7 +158,7 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
     summary.lastOutputAt = maxTimestamp(summary.lastOutputAt, pty.lastOutputAt)
     const ptyStatus = getSavedTabWorktreeStatus(owner.title, true)
     if (ptyStatus === 'working' || ptyStatus === 'permission') {
-      addTerminalTitleEvidence(titleEvidence, summary.worktreeId, {
+      addTerminalTitleEvidence(titleEvidence, summary, {
         status: ptyStatus,
         paneKey: recorded.paneKey,
         ptyId: pty.ptyId,
@@ -174,16 +177,23 @@ export function applyRuntimeWorktreePsTerminalActivity(args: {
 }
 
 function addTerminalTitleEvidence(
-  evidenceByWorktreeId: Map<string, RuntimeTerminalTitleEvidence[]>,
-  worktreeId: string,
+  evidenceByRow: Map<RuntimeWorktreePsSummary, RuntimeTerminalTitleEvidence[]>,
+  summary: RuntimeWorktreePsSummary,
   evidence: RuntimeTerminalTitleEvidence
 ): void {
-  const existing = evidenceByWorktreeId.get(worktreeId)
+  const existing = evidenceByRow.get(summary)
   if (existing) {
     existing.push(evidence)
   } else {
-    evidenceByWorktreeId.set(worktreeId, [evidence])
+    evidenceByRow.set(summary, [evidence])
   }
+}
+
+/** The host a PTY record proves: its SSH connection, else this Orca. A missing record proves none. */
+export function ptyRecordHostId(
+  pty: Pick<RuntimePtyWorktreeRecord, 'connectionId'> | undefined
+): ExecutionHostId | undefined {
+  return pty ? connectionEvidenceHostId(pty.connectionId) : undefined
 }
 
 export function applyRuntimeWorktreePsSessionActivity(args: {
@@ -208,12 +218,16 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
   const sessionsByHostId = new Map<ExecutionHostId, WorkspaceSessionState>()
   for (const summary of args.summaries.values()) {
     const repo = args.repoById.get(summary.repoId)
-    const session = args.store?.getWorkspaceSession?.(repo ? getRepoExecutionHostId(repo) : 'local')
+    // Same-id repos on two hosts share one repoById entry; the row's own host names its session.
+    const hostId = summary.hostId ?? (repo ? getRepoExecutionHostId(repo) : 'local')
+    const session = args.store?.getWorkspaceSession?.(hostId)
     if (session) {
-      sessionsByHostId.set(repo ? getRepoExecutionHostId(repo) : 'local', session)
+      sessionsByHostId.set(hostId, session)
     }
   }
-  for (const session of sessionsByHostId.values()) {
+  // Each host's session names that host's copy of a same-id workspace.
+  for (const [hostId, session] of sessionsByHostId) {
+    const getSummary = (worktreeId: string) => args.getSummary(worktreeId, hostId)
     for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
       for (const tab of tabs) {
         mirroredWorktreeIdByTabId.set(tab.id, worktreeId)
@@ -221,19 +235,19 @@ export function applyRuntimeWorktreePsSessionActivity(args: {
       if (tabs.length === 0) {
         continue
       }
-      const summary = args.getSummary(worktreeId)
+      const summary = getSummary(worktreeId)
       if (summary && tabs.some((tab) => tab.ptyId && args.ptysById.get(tab.ptyId)?.connected)) {
         summary.hasHostSidebarActivity = true
       }
     }
     for (const worktreeId of getWorkspaceSessionTabActivityIds(session)) {
-      const summary = args.getSummary(worktreeId)
+      const summary = getSummary(worktreeId)
       if (summary) {
         summary.hasHostSidebarActivity = true
       }
     }
     if (session.activeWorktreeId) {
-      const summary = args.getSummary(session.activeWorktreeId)
+      const summary = getSummary(session.activeWorktreeId)
       if (summary) {
         summary.isActive = true
       }

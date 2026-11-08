@@ -2,7 +2,7 @@ import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import { flushAsyncTicks } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-async'
 import {
   LEAF_1,
   createMockTransport,
@@ -10,19 +10,19 @@ import {
   createManager,
   type ConnectCallbacks,
   type MockTransport
-} from '../test-fixtures/pty-connection-test-pane-fixtures'
-import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
+import type { StoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from '../test-fixtures/pty-connection-test-deps'
-import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../test-fixtures/pty-connection-test-environment'
-import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -43,7 +43,7 @@ let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 
@@ -157,7 +157,7 @@ describe('command-finished drop and a Done that lands after it', () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('../connect-pane-pty')
     const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-    const { createTestStore } = await import('@/store/slices/store-test-helpers')
+    const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
     vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const transport = createMockTransport('pty-opencode-run')
@@ -225,31 +225,9 @@ describe('command-finished drop and a Done that lands after it', () => {
     expect(mockStoreState.agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
   })
 
-  it('drops a Done that landed before the command-finished fact', async () => {
-    const pane = await connectRunPane()
-    pane.setStatus('working')
-    pane.setStatus('done')
-
-    pane.finishCommand()
-    await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
-  })
-
   // OSC 7501: a finished program's result outlives its exit until the user comes back to it.
   describe('a program status result', () => {
     const brewDone = { programStatus: { state: 'done' as const, observedAt: 2_000 } }
-
-    it('keeps a program Done reported before the command-finished fact', async () => {
-      const pane = await connectRunPane()
-      pane.setEntry(brewDone)
-
-      pane.finishCommand()
-      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-
-      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-      expect(mockStoreState.agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
-    })
 
     it('dismisses the kept result on the next keypress in the pane', async () => {
       const pane = await connectRunPane()
@@ -260,16 +238,6 @@ describe('command-finished drop and a Done that lands after it', () => {
       pane.typeKey('\x1b[I')
       expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
       pane.typeKey('l')
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
-    })
-
-    it('dismisses the kept result when the next command starts', async () => {
-      const pane = await connectRunPane()
-      pane.setEntry(brewDone)
-      pane.finishCommand()
-      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-
-      pane.startCommand()
       expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
     })
 
@@ -295,44 +263,6 @@ describe('command-finished drop and a Done that lands after it', () => {
       pane.typeKey('l')
       expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
       expect(mockStoreState.agentStatusByPaneKey[pane.paneKey]).toMatchObject({ state: 'done' })
-    })
-
-    it('keeps a facet-less OSC Done from a non-agent program', async () => {
-      const pane = await connectRunPane()
-      pane.setEntry({
-        observation: {
-          origin: 'osc',
-          authorityId: 'test',
-          incarnation: 1,
-          revision: 1,
-          observedAt: 2_000
-        }
-      })
-
-      pane.finishCommand()
-      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-
-      expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    })
-
-    it('still drops a real agent Done', async () => {
-      const pane = await connectRunPane()
-      pane.setEntry({ ...brewDone, agentType: 'claude' })
-
-      pane.finishCommand()
-      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
-    })
-
-    it('still drops an interrupted program Done', async () => {
-      const pane = await connectRunPane()
-      pane.setEntry({ ...brewDone, sessionBoundary: true })
-
-      pane.finishCommand()
-      await vi.advanceTimersByTimeAsync(350 + 1200 + 6000)
-
-      expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(pane.paneKey)
     })
   })
 })

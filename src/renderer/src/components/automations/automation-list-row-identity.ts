@@ -1,10 +1,10 @@
 /** Qualify row IDs by incarnation-free host stableKey so colliding authorities stay distinct and re-pairs preserve React identity/selection. Freshness uses incarnation-bearing ownerKey separately. */
 
-import type { Automation } from '../../../../shared/automations-types'
-import type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
-import { findAutomationRepo } from '../../../../shared/automation-repo-target'
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
-import type { StableAutomationCatalogRef } from '../../../../shared/automation-owner-ref'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationUsageSummary } from '../../../../shared/automations/history/automation-usage-summary'
+import { findAutomationRepo } from '../../../../shared/automations/ownership/automation-repo-target'
+import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
+import type { StableAutomationCatalogRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import {
   getRepoExecutionHostId,
   getConnectionExecutionHostId,
@@ -20,12 +20,12 @@ import {
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
-} from '../../../../shared/worktree-execution-host-resolution'
+} from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import '../../store/workspace-record-selectors'
+
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type AutomationListRow = {

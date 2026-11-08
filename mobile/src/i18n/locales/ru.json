@@ -214,7 +214,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Задайте вопрос; @ — файлы, / — команды",
-      "reconnecting": "Восстановление соединения…",
       "waitingForTerminal": "Ожидание терминала…"
     },
     "diffCard": {
@@ -361,6 +360,13 @@
       "resume": "Продолжить",
       "resumeSending": "Возобновить отправку сообщений из очереди",
       "title": "Очередь сообщений"
+    },
+    "offlineQueue": {
+      "failed": "Не отправлено — нажмите «Отправить», чтобы повторить",
+      "waitingFor": "Отправится, когда {{host}} снова будет на связи",
+      "waiting": "Отправится, когда компьютер снова будет на связи",
+      "behind": "Ожидает — предыдущее сообщение требует внимания",
+      "closed": "Не отправлено до закрытия Orca"
     },
     "receipt": {
       "cancelled": "Отменено",
@@ -1385,10 +1391,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
       "loadFolderFailed": "Не удалось загрузить папку",
+      "loadedOfTotal": "{{loaded}} из {{total}}",
       "loading": "Загрузка…",
       "openFolder": "Открыть папку {{name}}",
       "previewFile": "Открыть предпросмотр файла {{name}}",
       "retryLoading": "Повторить загрузку {{path}}",
+      "searchAll": "Искать везде",
+      "searchAllIn": "Искать во всей папке {{folder}}",
+      "searched": "Просмотрено {{loaded}} из {{total}} в {{folder}}.",
+      "searching": "Поиск в {{folder}}… {{loaded}} из {{total}}",
+      "showMore": "Показать ещё {{rows}}",
       "unavailable": "Недоступно на мобильном устройстве"
     },
     "fileExplorerRowActions": {
@@ -1462,6 +1474,13 @@
       "openFailed": "Не удалось открыть этот PDF",
       "opening": "Открытие PDF…",
       "updateRequired": "Обновите Orca Mobile, чтобы открывать PDF"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Изменён на компьютере после ваших правок от {{time}}",
+      "copyMyEdits": "Скопировать мои правки",
+      "discard": "Отменить изменения",
+      "restore": "Восстановить",
+      "unsavedFrom": "Несохранённые правки от {{time}}"
     }
   },
   "home": {

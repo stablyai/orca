@@ -1,4 +1,3 @@
-import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GhUtils from './gh-utils'
 import type * as GitRunner from '../git/command-runner/git-exec-file'

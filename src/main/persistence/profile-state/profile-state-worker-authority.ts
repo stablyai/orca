@@ -1,4 +1,4 @@
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type {
   AsyncProfileStateAuthority,
   ProfileStateDomainReplacement,

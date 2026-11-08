@@ -1,11 +1,12 @@
 import { z } from 'zod'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
 import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
-import { TaskSourceContextSchema } from '../task-source-context-schema'
+import { TaskSourceContextSchema } from '../work-items/task-source-context-schema'
 import { workspaceSourceSchema } from '../telemetry-events'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-session-sleeping-agents'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { AgentArgs, LaunchPreferences } from './agent-session-params'
 import { LaunchSourceParam } from './launch-source-param'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 import {
@@ -17,6 +18,7 @@ import {
 import {
   AutomationWorkspaceProvenanceRequest,
   CliWorkspaceProvenanceRequest,
+  MatchFolderWorkspaces,
   OptionalExecutionHostId,
   OptionalTuiAgent,
   assertLinkedWorkItemSourceContextMatch
@@ -36,7 +38,9 @@ export const WorktreeCreate = z
     baseBranch: OptionalString,
     compareBaseRef: OptionalString,
     branchNameOverride: OptionalString,
-    branchIntent: z.enum(['open-existing', 'open-existing-v2', 'create-new']).optional(),
+    branchIntent: z
+      .enum(['open-existing', 'open-existing-v2', 'create-new', 'create-exact'])
+      .optional(),
     linkedIssue: TriStateLinkedIssue,
     linkedPR: TriStateLinkedIssue,
     linkedLinearIssue: z.string().optional(),
@@ -94,6 +98,7 @@ export const WorktreeCreate = z
     parentWorkspaceOrigin: z.literal('manual').optional(),
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
+    matchFolderWorkspaces: MatchFolderWorkspaces,
     /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
     crossStoreParent: CrossStoreParentRefSchema.optional(),
     // No parent flag: the caller's own workspace implied it.
@@ -140,6 +145,9 @@ export const WorktreeCreate = z
     // Quote agent launches on the execution host because SSH shells can differ from the client’s.
     startupAgent: OptionalTuiAgent,
     startupPrompt: OptionalString,
+    startupAgentArgs: AgentArgs.optional(),
+    startupSessionOptions: z.record(z.string(), z.string()).optional(),
+    startupLaunchPreferences: LaunchPreferences.optional(),
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),
     // Task-driven mobile creation uses desktop-equivalent host defaults and linked issue/PR draft URLs.

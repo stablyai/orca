@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 import { PluginFileTypeSuggestion } from './PluginFileTypeSuggestion'
 
 const suggestForFileType = vi.fn()

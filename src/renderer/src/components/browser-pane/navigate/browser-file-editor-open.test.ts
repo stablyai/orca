@@ -14,7 +14,7 @@ vi.mock('@/lib/user-opened-local-path', () => ({
 import { useAppStore } from '@/store'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 import { openBrowserFileSource } from './browser-file-editor-open'
 

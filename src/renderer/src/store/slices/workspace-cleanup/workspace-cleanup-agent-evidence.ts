@@ -1,4 +1,4 @@
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import type { AppState } from '../../types'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -25,7 +25,7 @@ import { getWorkspaceCleanupAgentStartedFailure } from './workspace-cleanup-pref
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../workspace-record-selectors'
+} from '../../workspaces/catalog/workspace-record-fields'
 
 export function assertWorkspaceCleanupAgentStopApproved(
   state: AppState,

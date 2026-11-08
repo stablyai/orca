@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { JSX, ReactNode } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   DEFAULT_FEATURE_WALL_WORKFLOW_ID,
   FEATURE_WALL_WORKFLOWS,
@@ -15,11 +15,7 @@ import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetr
 import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
-import { ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import {
-  GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+import { useFeatureWallTourSkills } from './use-feature-wall-tour-skills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { usePrefersReducedMotion } from './feature-wall-modal-helpers'
 import { toFeatureWallAssetUrl, useFeatureWallAssetBaseUrl } from './feature-wall-assets'
@@ -54,17 +50,25 @@ export function FeatureWallTourSurface({
   onDone,
   className,
   panelClassName,
-  doneLabel = translate('auto.components.feature.wall.FeatureWallTourSurface.done', 'Done'),
-  footerText = translate(
-    'auto.components.feature.wall.FeatureWallTourSurface.reopenHint',
-    'Reopen any time from Help > Explore Orca.'
-  ),
+  doneLabel: doneLabelOverride,
+  footerText: footerTextOverride,
   enableKeyboardShortcut = true,
   compactRail = false,
   detachedFooter = false,
   leadingFooterContent,
   onTourDepthSummaryChange
 }: FeatureWallTourSurfaceProps): JSX.Element | null {
+  const t = useTranslate()
+  const doneLabel =
+    doneLabelOverride ?? t('auto.components.feature.wall.FeatureWallTourSurface.done', 'Done')
+  // An explicit null hides the footer, so only an omitted prop falls back.
+  const footerText =
+    footerTextOverride === undefined
+      ? t(
+          'auto.components.feature.wall.FeatureWallTourSurface.reopenHint',
+          'Reopen any time from Help > Explore Orca.'
+        )
+      : footerTextOverride
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
@@ -110,16 +114,10 @@ export function FeatureWallTourSurface({
     }
   }
   // Read skills in the completion owner instead of reporting upward from child passive effects.
-  const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
-    enabled: isOpen,
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
-    enabled: isOpen,
-    discoveryTarget: activeSkillRuntime.discoveryTarget,
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
+  const { orchestrationSkill, browserUseSkill } = useFeatureWallTourSkills(
+    isOpen,
+    activeSkillRuntime.discoveryTarget
+  )
   const completion = useFeatureWallCompletion(
     isOpen,
     taskSourcePresentation.hasConnectedTaskSource,
@@ -276,7 +274,7 @@ export function FeatureWallTourSurface({
         : workbenchStepIndex < workbenchSteps.length - 1)) ||
     (selected.id === 'review' &&
       (reviewStepIndex < 0 ? reviewSteps.length > 0 : reviewStepIndex < reviewSteps.length - 1))
-  const continueLabel = tourContinueLabel(isLastWorkflow && !hasNextSubStep, doneLabel)
+  const continueLabel = tourContinueLabel(isLastWorkflow && !hasNextSubStep, doneLabel, t)
   const handleContinue = useCallback((): void => {
     markWorkflowVisited(selected.id)
     if (selected.id === 'agents-orchestration') {

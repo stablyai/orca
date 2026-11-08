@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { getSettingsFocusedExecutionHostId } from '../../../shared/execution-host'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'

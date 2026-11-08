@@ -12,7 +12,7 @@ import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../../shared/sourc
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { streamShortName } from '../../../../../../shared/perforce/workspace-copy/workspace-copy-name-rules'
-import { areTaskSourceContextsEqual } from '../../../../../../shared/task-source-context'
+import { areTaskSourceContextsEqual } from '../../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   getWorktreeCardPrDisplay,
@@ -20,6 +20,7 @@ import {
 } from '../review/worktree-card-pr-display'
 import type { WorktreeCardProps } from '../controller/worktree-card-model'
 import type { useWorktreeCardFoundation } from '../controller/use-worktree-card-foundation'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Foundation = ReturnType<typeof useWorktreeCardFoundation>
 
@@ -32,6 +33,7 @@ export function useWorktreeCardReviewDetails({
   newCardStyle
 }: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
   Pick<Foundation, 'settings' | 'projectGroups' | 'cardProps' | 'newCardStyle'>) {
+  const t = useTranslate()
   const gitIdentityDisplay = getWorktreeGitIdentityDisplay(worktree)
   const detachedHeadDisplay = gitIdentityDisplay?.kind === 'detached' ? gitIdentityDisplay : null
   const branch = gitIdentityDisplay?.kind === 'branch' ? gitIdentityDisplay.branchName : ''
@@ -200,7 +202,8 @@ export function useWorktreeCardReviewDetails({
           : hostedReviewEntry?.linkedReviewHintKey,
       branchLookupGitHubPRNumber,
       suppressedGitHubPR: worktree.suppressedGitHubPR ?? null
-    }
+    },
+    t
   )
 
   return {

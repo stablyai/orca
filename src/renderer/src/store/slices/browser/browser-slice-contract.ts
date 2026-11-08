@@ -23,11 +23,11 @@ import type {
   BrowserPageConversionLeg,
   BrowserPageConversionTarget
 } from './pages/browser-page-conversion'
-import type { RecentlyClosedTabPosition } from '../recently-closed-tab-position'
+import type { RecentlyClosedTabPosition } from '../tabs/recently-closed-tab-position'
 import type {
   ClientHostedBrowserCloseIntentsByEnvironment,
   PendingClientHostedBrowserClose
-} from '@/runtime/client-hosted-browser-close-intents'
+} from '@/runtime/browser/closing/client-hosted-browser-close-intents'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'

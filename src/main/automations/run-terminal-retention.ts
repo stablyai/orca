@@ -2,8 +2,8 @@ import {
   isFinalAutomationRunStatus,
   type AutomationRun,
   type AutomationRunStatus
-} from '../../shared/automations-types'
-import { automationRunRecency } from '../../shared/automation-session-reuse'
+} from '../../shared/automations/history/automation-run'
+import { automationRunRecency } from '../../shared/automations/history/automation-session-reuse'
 
 export const RUN_TERMINAL_GRACE_MS = 10 * 60_000
 export const RUN_TERMINALS_KEPT_PER_AUTOMATION = 3

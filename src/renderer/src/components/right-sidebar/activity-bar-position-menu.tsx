@@ -8,7 +8,7 @@ import {
   ContextMenuRadioGroup,
   ContextMenuRadioItem
 } from '@/components/ui/context-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ActivityBarPositionMenu({
   currentPosition,
@@ -19,20 +19,21 @@ export function ActivityBarPositionMenu({
   onChangePosition: (pos: ActivityBarPosition) => void
   onDetectPerforce?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ContextMenuContent>
       <ContextMenuLabel>
-        {translate('auto.components.right.sidebar.index.864111caa2', 'Activity Bar Position')}
+        {t('auto.components.right.sidebar.index.864111caa2', 'Activity Bar Position')}
       </ContextMenuLabel>
       <ContextMenuRadioGroup
         value={currentPosition}
         onValueChange={(v) => onChangePosition(v as ActivityBarPosition)}
       >
         <ContextMenuRadioItem value="top">
-          {translate('auto.components.right.sidebar.index.7b415c39e9', 'Top')}
+          {t('auto.components.right.sidebar.index.7b415c39e9', 'Top')}
         </ContextMenuRadioItem>
         <ContextMenuRadioItem value="side">
-          {translate('auto.components.right.sidebar.index.70893f017b', 'Side')}
+          {t('auto.components.right.sidebar.index.70893f017b', 'Side')}
         </ContextMenuRadioItem>
       </ContextMenuRadioGroup>
       {onDetectPerforce && (

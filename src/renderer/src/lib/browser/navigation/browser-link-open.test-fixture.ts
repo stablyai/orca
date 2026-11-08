@@ -1,6 +1,6 @@
-import { createTestStore, seedStore } from '@/store/slices/store-test-helpers'
-import { makeTabGroup, makeUnifiedTab } from '@/store/slices/store-session-test-harness'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { BrowserLinkDestination } from './browser-link-destination'
 
 export const WORKSPACE = 'repo1::/repo'

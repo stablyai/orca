@@ -2,7 +2,7 @@ import type { WorktreeCatalogVersion } from './catalog-version'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './archive-hook-removal-gate'
 import type { WorkspaceSource } from '../workspace-source'
-import type { TaskSourceContext } from '../task-source-context'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { WorkspaceKey } from '../workspace-scope'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type {
@@ -118,8 +118,9 @@ export type CreateWorktreeArgs = {
   compareBaseRef?: string
   /** Existing local branches may contain slashes that the filesystem-safe worktree name cannot. */
   branchNameOverride?: string
-  /** V1 open-existing retains legacy tip/collision policy; V2 pins explicit reuse regardless of remote divergence. */
-  branchIntent?: 'open-existing' | 'open-existing-v2' | 'create-new'
+  /** V1 open-existing retains legacy tip/collision policy; V2 pins explicit reuse regardless of remote divergence.
+   * create-exact makes only the unsuffixed new branch, or refuses before creating anything. */
+  branchIntent?: 'open-existing' | 'open-existing-v2' | 'create-new' | 'create-exact'
   setupDecision?: SetupDecision
   /** SHA-256 of the setup trust content the user approved; hosts run shared setup only if the created worktree's matches. Older clients omit it. */
   approvedSetupHash?: string

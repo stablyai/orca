@@ -20,9 +20,9 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
   }
 })
 
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 
 const FILE = '/repo/a.ts'
 let store: ReturnType<typeof createTestStore>

@@ -2,7 +2,7 @@ import {
   canonicalOrchestrationForRow,
   recordOrchestrationProducer,
   orchestrationProducer
-} from '@/runtime/visible-agent-orchestration'
+} from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import type {
   AgentStatusEntry,

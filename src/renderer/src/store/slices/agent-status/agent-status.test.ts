@@ -2,13 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { flushMicrotasks } from './agent-status-test-harness'
-import { createTestStore } from '../store-test-helpers'
-import {
-  makeTab,
-  makeTabGroup,
-  makeUnifiedTab,
-  createStoreSessionMockApi
-} from '../store-session-test-harness'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../tabs/tab-group.test-fixture'
+import { createStoreSessionMockApi } from '../../testing/app-store-session-api.test-fixture'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { RetainedAgentEntry } from './agent-status-contract'
 import {
@@ -16,20 +13,20 @@ import {
   structuredAgentSessionTabId
 } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { buildAgentStatusTabPrefixDropPatch } from './agent-status-drop-reducer'
-import { drawTabsFromMain } from '../tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain } from '../tabs/tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/runtime/structured-agent-session-tab-retirement', () => ({
+vi.mock('@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement', () => ({
   beginStructuredAgentSessionTabClose: vi.fn()
 }))
 // Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

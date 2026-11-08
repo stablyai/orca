@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { ownerKey } from '../../../../shared/automation-owner-key'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import { externalAutomationProbeOwners } from './external-automation-scope-gating'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 

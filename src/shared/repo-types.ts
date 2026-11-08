@@ -9,7 +9,7 @@ import type { RepoProjectHostSetupMethod } from './project-types'
 import type { JiraProjectReference } from './jira/jira-project-reference'
 import type { OrcadRetainedMarker } from './orcad-retained-marker'
 import type { EditorFormatter } from './editor-formatter'
-import type { AgentWorkspaceTrustDecision } from './agent-workspace-trust-decision'
+import type { AgentWorkspaceTrustDecision } from './agent-launch/permissions/agent-workspace-trust-decision'
 
 export type RepoKind = 'git' | 'folder'
 
