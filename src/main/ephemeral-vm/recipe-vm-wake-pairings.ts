@@ -2,10 +2,18 @@
  *  held to exactly that pairing, not to whatever is current after it. */
 export type RecipeVmWake = { readonly pairingRevision: number }
 
-/** One object per wake: a resume that kept the pairing still reads as a new wake. */
 const wakes = new Map<string, RecipeVmWake>()
 
-export function noteRecipeVmWakePairing(environmentId: string, pairingRevision: number): void {
+/** `restartedServer`: a resume that kept its pairing still restarted the server, so it reads as a
+ *  new wake; otherwise a wake that left the pairing as it was reads as no wake. */
+export function noteRecipeVmWakePairing(
+  environmentId: string,
+  pairingRevision: number,
+  restartedServer = false
+): void {
+  if (!restartedServer && wakes.get(environmentId)?.pairingRevision === pairingRevision) {
+    return
+  }
   wakes.set(environmentId, { pairingRevision })
 }
 

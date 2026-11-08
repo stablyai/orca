@@ -1,11 +1,9 @@
 import { refreshEnvironmentFromResumePairingCode } from '../../shared/remote-runtime/host-store/runtime-environment-resume-pairing'
 import {
-  resolveEnvironmentPairingOffer,
-  updateEnvironmentFromPairingCode
-} from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import type { KnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
+  getPreferredPairedRuntimeConnection,
+  type KnownRuntimeEnvironment
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
@@ -28,40 +26,44 @@ export async function applyResumedRuntimePairing(args: {
   environmentId: string
   pairingCode: string
   invalidateTransport: (environmentId: string) => unknown
-  probeSavedPairing?: (offer: PairingOffer) => Promise<unknown>
+  probeSavedPairing?: (connection: PairedRuntimeConnection) => Promise<unknown>
   now?: number
 }): Promise<ResumedRuntimePairingOutcome> {
-  const refreshed = refreshEnvironmentFromResumePairingCode(args.userDataPath, args.environmentId, {
-    pairingCode: args.pairingCode,
-    now: args.now
-  })
+  const { repairFromFreshOffer, ...refreshed } = refreshEnvironmentFromResumePairingCode(
+    args.userDataPath,
+    args.environmentId,
+    { pairingCode: args.pairingCode, now: args.now }
+  )
+  const outcome = refreshed.reusedPairing
+    ? await confirmSavedPairing(refreshed, repairFromFreshOffer, args.probeSavedPairing)
+    : refreshed
   // Why also on an unchanged endpoint: the VM restarted, so any open socket is already dead.
+  // Why after the probe: reconnecting first would dial with a token about to be replaced.
   void args.invalidateTransport(args.environmentId)
-  if (!refreshed.reusedPairing) {
-    return refreshed
-  }
-  const probe = args.probeSavedPairing ?? probeSavedPairing
+  return outcome
+}
+
+async function confirmSavedPairing(
+  refreshed: ResumedRuntimePairingOutcome,
+  repairFromFreshOffer: () => KnownRuntimeEnvironment,
+  probe: (connection: PairedRuntimeConnection) => Promise<unknown> = probeSavedPairing
+): Promise<ResumedRuntimePairingOutcome> {
   try {
-    await probe(resolveEnvironmentPairingOffer(args.userDataPath, args.environmentId))
+    await probe(getPreferredPairedRuntimeConnection(refreshed.environment))
+    return refreshed
   } catch (error) {
     // Only a rejected token falls back; an unreachable server would fail the fresh pairing too.
     if (!(error instanceof RemoteRuntimeClientError) || error.code !== 'unauthorized') {
       return refreshed
     }
     // The server kept its key but lost the saved device (e.g. its device list was reset).
-    const environment = updateEnvironmentFromPairingCode(args.userDataPath, args.environmentId, {
-      pairingCode: args.pairingCode,
-      now: args.now
-    })
-    void args.invalidateTransport(args.environmentId)
-    return { environment, reusedPairing: false, endpointChanged: refreshed.endpointChanged }
+    return { ...refreshed, environment: repairFromFreshOffer(), reusedPairing: false }
   }
-  return refreshed
 }
 
-async function probeSavedPairing(offer: PairingOffer): Promise<void> {
+async function probeSavedPairing(connection: PairedRuntimeConnection): Promise<void> {
   const response = await sendRemoteRuntimeRequest(
-    pairedRuntimeConnectionFromOffer(offer),
+    connection,
     'status.get',
     undefined,
     SAVED_PAIRING_PROBE_TIMEOUT_MS,

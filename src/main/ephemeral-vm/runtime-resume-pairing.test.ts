@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
-import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
@@ -16,6 +16,7 @@ import { applyResumedRuntimePairing } from './runtime-resume-pairing'
 
 const hostKey = Buffer.alloc(32, 7).toString('base64')
 const rotatedHostKey = Buffer.alloc(32, 9).toString('base64')
+const unpaddedHostKey = Buffer.alloc(32, 7).toString('base64url')
 
 /** Stands in for the VM's server: its state dir survives suspend, and each boot prints a startup offer. */
 function bootVm(serverDataPath: string, endpoint: string, publicKeyB64 = hostKey): string {
@@ -25,8 +26,8 @@ function bootVm(serverDataPath: string, endpoint: string, publicKeyB64 = hostKey
 
 /** The server's answer to a saved token, as the desktop's connection would see it. */
 function serverAuth(serverDataPath: string) {
-  return async (offer: PairingOffer): Promise<void> => {
-    if (!new DeviceRegistry(serverDataPath).validateToken(offer.deviceToken)) {
+  return async (connection: PairedRuntimeConnection): Promise<void> => {
+    if (!new DeviceRegistry(serverDataPath).validateToken(connection.credential.deviceToken)) {
       throw new RemoteRuntimeClientError('unauthorized', 'rejected', {
         pairingStage: 'access-grant'
       })
@@ -164,6 +165,10 @@ describe('resuming a recipe VM server', () => {
 
   it('re-pairs from the fresh code when the server kept its key but lost the saved device', async () => {
     const environmentId = provision()
+    const savedKeySpelling = resolveEnvironmentPairingOffer(
+      desktopDataPath,
+      environmentId
+    ).publicKeyB64
     const original = resolveEnvironmentPairingOffer(desktopDataPath, environmentId)
     const before = listEnvironments(desktopDataPath)[0]!
     rmSync(serverDataPath, { recursive: true, force: true })
@@ -172,17 +177,18 @@ describe('resuming a recipe VM server', () => {
 
     const outcome = await resume(
       environmentId,
-      bootVm(serverDataPath, 'wss://vm-1.example/runtime'),
+      // The same key, printed unpadded and URL-safe.
+      bootVm(serverDataPath, 'wss://vm-1.example/runtime', unpaddedHostKey),
       invalidateTransport
     )
 
     expect(outcome.reusedPairing).toBe(false)
-    expect(resolveEnvironmentPairingOffer(desktopDataPath, environmentId).deviceToken).not.toBe(
-      original.deviceToken
-    )
+    const next = resolveEnvironmentPairingOffer(desktopDataPath, environmentId)
+    expect(next.deviceToken).not.toBe(original.deviceToken)
+    expect(next.publicKeyB64).toBe(savedKeySpelling)
     expect(listEnvironments(desktopDataPath)[0]!.pairingRevision).not.toBe(before.pairingRevision)
-    // The re-pair retires anything that connected between the endpoint update and the probe.
-    expect(invalidateTransport).toHaveBeenCalledTimes(2)
+    // Only once, after the probe: reconnecting earlier would dial with the rejected token.
+    expect(invalidateTransport).toHaveBeenCalledTimes(1)
     connect(serverDataPath, desktopDataPath, environmentId)
   })
 

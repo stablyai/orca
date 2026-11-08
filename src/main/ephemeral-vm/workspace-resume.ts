@@ -60,7 +60,11 @@ export async function resumeEphemeralVmWorkspace(
       pairingCode,
       invalidateTransport: invalidateRuntimeEnvironmentTransport
     })
-    noteRecipeVmWakePairing(environment.id, environment.pairingRevision ?? environment.createdAt)
+    noteRecipeVmWakePairing(
+      environment.id,
+      environment.pairingRevision ?? environment.createdAt,
+      true
+    )
   }
   // Suspend tore down the runtime-owned SSH transport, so an SSH VM reconnects even when its
   // recipe had no resume step to run.

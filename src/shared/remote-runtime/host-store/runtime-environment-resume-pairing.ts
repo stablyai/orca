@@ -1,5 +1,12 @@
-import type { KnownRuntimeEnvironment } from '../host-catalog/runtime-environments'
-import { sameHostKeyB64 } from '../host-catalog/runtime-environment-host-key-match'
+import {
+  preferredEndpoint,
+  type KnownRuntimeEnvironment
+} from '../host-catalog/runtime-environments'
+import type { PairingOffer } from '../pairing/mobile-relay-pairing-offer'
+import {
+  sameHostKeyB64,
+  savedHostKeySpelling
+} from '../host-catalog/runtime-environment-host-key-match'
 import {
   readEnvironmentStore,
   readPersistedEnvironmentStore,
@@ -18,6 +25,8 @@ export type ResumePairingRefreshOutcome = {
   /** The saved device token was kept because the resumed server kept its host key. */
   reusedPairing: boolean
   endpointChanged: boolean
+  /** Adopts the resume's fresh pairing instead, for a saved token the server turns out to reject. */
+  repairFromFreshOffer: () => KnownRuntimeEnvironment
 }
 
 /**
@@ -35,20 +44,35 @@ export function refreshEnvironmentFromResumePairingCode(
   assertNoIndependentSshAccess(current)
   const store = readPersistedEnvironmentStore(userDataPath)
   const persisted = resolveEnvironmentFromStore(store, current.id)
-  const preferred =
-    persisted.endpoints.find((entry) => entry.id === persisted.preferredEndpointId) ??
-    persisted.endpoints[0]
+  const preferred = preferredEndpoint(persisted)
   const now = args.now ?? Date.now()
-  if (!preferred || !sameHostKeyB64(preferred.publicKeyB64, offer.publicKeyB64)) {
-    // A new identity (rebuilt VM, cleared state) can only be authenticated by its fresh pairing.
-    const environment = replaceEnvironmentPairing(userDataPath, current.id, offer, {
+  const repairWith = (next: PairingOffer) => () =>
+    replaceEnvironmentPairing(userDataPath, current.id, next, {
       now,
       connectionDependency: current.connectionDependency
     })
-    return { environment, reusedPairing: false, endpointChanged: true }
+  if (!sameHostKeyB64(preferred.publicKeyB64, offer.publicKeyB64)) {
+    // A new identity (rebuilt VM, cleared state) can only be authenticated by its fresh pairing.
+    const environment = repairWith(offer)()
+    return {
+      environment,
+      reusedPairing: false,
+      endpointChanged: true,
+      repairFromFreshOffer: () => environment
+    }
   }
+  // Retain the saved key spelling: the fingerprint hashes its text.
+  const repairFromFreshOffer = repairWith({
+    ...offer,
+    publicKeyB64: savedHostKeySpelling(persisted, offer)
+  })
   if (preferred.endpoint === offer.endpoint) {
-    return { environment: current, reusedPairing: true, endpointChanged: false }
+    return {
+      environment: current,
+      reusedPairing: true,
+      endpointChanged: false,
+      repairFromFreshOffer
+    }
   }
   // Why no pairingRevision bump: the credential is unchanged, so clients holding it stay valid.
   const { connectionDependency: _previousDependency, ...rest } = persisted
@@ -67,6 +91,7 @@ export function refreshEnvironmentFromResumePairingCode(
   return {
     environment: resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), current.id),
     reusedPairing: true,
-    endpointChanged: true
+    endpointChanged: true,
+    repairFromFreshOffer
   }
 }
