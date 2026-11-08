@@ -134,9 +134,8 @@ export function useMobileSessionTerminalSubscription(
         terminal: covered ? undefined : getTerminalRef(handle),
         isCurrent: lifetime.isCurrent
       })
-      // Resume needs a credited stream: the host records positions only for those.
-      const resumeInto = outputAck.capabilities.outputAck ? getTerminalRef(handle) : undefined
-      const resume = createTerminalStreamResumeCursor(terminalResume, handle, resumeInto)
+      const canResume = outputAck.capabilities.outputAck === 1
+      const resume = createTerminalStreamResumeCursor(terminalResume, handle, canResume)
 
       // A path switch replays this listener on a new stream whose snapshot covers output the old one never delivered.
       let snapshotStreamId: unknown
@@ -291,7 +290,9 @@ export function useMobileSessionTerminalSubscription(
 
       const unsub = lifetime.wrapUnsubscribe(() => {
         // Read the count once this stream stops applying; a caller that drops initialization first wants a snapshot.
-        resume.stop(initializedHandlesRef.current.has(handle) ? getTerminalRef(handle) : undefined)
+        resume.stop(
+          initializedHandlesRef.current.has(handle) && getTerminalRef(handle) !== undefined
+        )
         stopStream()
       })
       if (lifetime.isCurrent()) {

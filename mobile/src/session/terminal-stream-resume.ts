@@ -1,24 +1,18 @@
-import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
+type TerminalResumePosition = { streamToken: string; units: number }
 
-type TerminalResumePosition = {
-  terminal: TerminalWebViewHandle
-  streamToken: string
-  units: number
-}
-
-/** Where each mounted xterm stopped on its last credited stream, and which terminals still wait for their catch-up. */
+/**
+ * Where each mounted xterm stopped on its last credited stream, and which terminals still wait for their catch-up.
+ * A document that loses its buffer (reload, remount, iOS foreground repaint, cache clear) must be forgotten.
+ */
 export class TerminalResumeState {
   private readonly positions = new Map<string, TerminalResumePosition>()
   private readonly catchingUp = new Set<string>()
   private readonly listeners = new Set<() => void>()
 
-  /** Takes the handle's position for a subscribe into `terminal`; a replaced document no longer shows it. */
-  take(handle: string, terminal: TerminalWebViewHandle) {
-    const position = this.positions.get(handle)
+  take(handle: string): TerminalResumePosition | null {
+    const position = this.positions.get(handle) ?? null
     this.positions.delete(handle)
-    return position && position.terminal === terminal
-      ? { streamToken: position.streamToken, units: position.units }
-      : null
+    return position
   }
 
   save(handle: string, position: TerminalResumePosition): void {
@@ -76,10 +70,10 @@ export class TerminalResumeState {
 export function createTerminalStreamResumeCursor(
   state: TerminalResumeState,
   handle: string,
-  // The xterm a credited subscription writes into; undefined never resumes.
-  terminal: TerminalWebViewHandle | undefined
+  // Only a credited stream into a rendered xterm resumes: the host records positions only for those.
+  canResume: boolean
 ) {
-  const resume = terminal ? state.take(handle, terminal) : null
+  const resume = canResume ? state.take(handle) : null
   let streamToken: string | null = null
   let streamId: unknown
   let applying = false
@@ -122,11 +116,11 @@ export function createTerminalStreamResumeCursor(
     invalidate(): void {
       streamToken = null
     },
-    /** Keeps the position for the next subscribe when `terminal` still shows this stream's output. */
-    stop(terminal: TerminalWebViewHandle | undefined): void {
+    /** Keeps the position for the next subscribe when the xterm still shows this stream's output. */
+    stop(stillShown: boolean): void {
       state.setCatchingUp(handle, false)
-      if (applying && streamToken !== null && terminal) {
-        state.save(handle, { terminal, streamToken, units })
+      if (applying && streamToken !== null && stillShown) {
+        state.save(handle, { streamToken, units })
       }
     }
   }
