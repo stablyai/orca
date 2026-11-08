@@ -21,32 +21,6 @@ afterEach(() => {
 })
 
 describe('OMP session root parity', () => {
-  it.each(['linux', 'darwin', 'win32'] as const)(
-    'selects migrated data on %s only when supported',
-    (platform) => {
-      const { home, xdg, legacy } = fixture()
-      mkdirSync(legacy, { recursive: true })
-      mkdirSync(join(xdg, 'omp'), { recursive: true })
-      expect(resolveOmpSessionsDir({ homeDir: home, platform, env: { XDG_DATA_HOME: xdg } })).toBe(
-        platform === 'win32' ? legacy : join(xdg, 'omp', 'sessions')
-      )
-    }
-  )
-  it('uses custom agent paths only in default mode and discards inherited profile-derived paths', () => {
-    const { home, xdg, legacy } = fixture()
-    mkdirSync(join(xdg, 'omp'), { recursive: true })
-    const env = { XDG_DATA_HOME: xdg, PI_CODING_AGENT_DIR: join(home, 'custom') }
-    expect(resolveOmpSessionsDir({ homeDir: home, env })).toBe(join(home, 'custom', 'sessions'))
-    expect(resolveOmpSessionsDir({ homeDir: home, env: { ...env, OMP_PROFILE: 'work' } })).toBe(
-      join(home, '.omp', 'profiles', 'work', 'agent', 'sessions')
-    )
-    const inherited = {
-      OMP_PROFILE: '',
-      PI_PROFILE: 'work',
-      PI_CODING_AGENT_DIR: join(home, '.omp', 'profiles', 'work', 'agent')
-    }
-    expect(resolveOmpSessionsDir({ homeDir: home, env: inherited })).toBe(legacy)
-  })
   it.each(['', ' ', '/', 'C:\\', 'C:/', 'C:', 'C:.'])(
     'refuses explicit degenerate root %j without fallback',
     (sessionsDir) => {

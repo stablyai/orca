@@ -228,14 +228,14 @@ export function useAgentLaunchPickerInventorySource(
                     }))
                   : undefined
               },
-        catalog: async (entry) =>
-          await callStructuredAgentSession<AgentSessionModelCatalogResult>(
+        catalog: (entry, waitForListing) =>
+          callStructuredAgentSession<AgentSessionModelCatalogResult>(
             target,
             'agentSession.modelCatalog',
             {
               ...(selector ? { worktree: selector } : {}),
               agent: entry.agent,
-              waitForListing: true
+              ...(waitForListing ? { waitForListing } : {})
             }
           ),
         support: async (entry) => {

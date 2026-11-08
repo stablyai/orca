@@ -4,6 +4,7 @@ import type { MiniMaxCredentialsStatus } from '../../../../../../shared/minimax-
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   callMiniMaxCredentials,
   UsageCredentialsHostOutdatedError,
@@ -23,7 +24,10 @@ type MiniMaxCredentialActionContext = {
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
 }
 
-export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionContext): {
+export function createMiniMaxCredentialActions(
+  context: MiniMaxCredentialActionContext,
+  t: Translate = translate
+): {
   saveMiniMaxApiKey: () => Promise<void>
   clearMiniMaxApiKey: () => Promise<void>
   saveMiniMaxCookie: () => Promise<void>
@@ -72,11 +76,11 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
 
   const clearCookieDraft = (): void => context.setMiniMaxCookieDraft('')
   const clearApiKeyDraft = (): void => context.setMiniMaxApiKeyDraft('')
-  const cookieFailure = translate(
+  const cookieFailure = t(
     'auto.components.settings.AccountsPane.b43e761fe5',
     'MiniMax cookie update failed.'
   )
-  const apiKeyFailure = translate(
+  const apiKeyFailure = t(
     'auto.components.settings.AccountsPane.apiKeyUpdateFailed',
     'MiniMax API key update failed.'
   )
@@ -85,7 +89,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     const cookie = context.miniMaxCookieDraft.trim()
     if (!cookie) {
       toast.error(
-        translate('auto.components.settings.AccountsPane.2f24f244a4', 'MiniMax cookie is required.')
+        t('auto.components.settings.AccountsPane.2f24f244a4', 'MiniMax cookie is required.')
       )
       return
     }
@@ -95,11 +99,11 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
       failureMessage: cookieFailure,
       saved: {
         landed: (status) => status.cookieConfigured,
-        notSaved: translate(
+        notSaved: t(
           'auto.components.settings.AccountsPane.8e6f0cb1d8',
           'MiniMax cookie was not saved.'
         ),
-        ok: translate('auto.components.settings.AccountsPane.8d61637a77', 'MiniMax cookie saved.')
+        ok: t('auto.components.settings.AccountsPane.8d61637a77', 'MiniMax cookie saved.')
       }
     })
   }
@@ -108,10 +112,7 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
     const apiKey = context.miniMaxApiKeyDraft.trim()
     if (!apiKey) {
       toast.error(
-        translate(
-          'auto.components.settings.AccountsPane.d6f1b9b6a2',
-          'MiniMax API key is required.'
-        )
+        t('auto.components.settings.AccountsPane.d6f1b9b6a2', 'MiniMax API key is required.')
       )
       return
     }
@@ -121,11 +122,11 @@ export function createMiniMaxCredentialActions(context: MiniMaxCredentialActionC
       failureMessage: apiKeyFailure,
       saved: {
         landed: (status) => status.apiKeyConfigured,
-        notSaved: translate(
+        notSaved: t(
           'auto.components.settings.AccountsPane.7c5d8a4e1b',
           'MiniMax API key was not saved.'
         ),
-        ok: translate('auto.components.settings.AccountsPane.4d2c7b9e83', 'MiniMax API key saved.')
+        ok: t('auto.components.settings.AccountsPane.4d2c7b9e83', 'MiniMax API key saved.')
       }
     })
   }

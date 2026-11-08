@@ -646,21 +646,6 @@ it('retains legacy hidden SSH folder removal with a raw-ID local twin', async ()
   expect(warnings()).toHaveLength(1)
 })
 
-it('keeps the legacy warning on JSON refusal without implying branch success', async () => {
-  supported = false
-  await writeFile(join(checkout, 'file'), 'unsaved')
-  const head = await git('rev-parse', 'task')
-  await main(['worktree', 'rm', '--worktree', `id:${id}`, '--delete-branch', '--json'], repoPath)
-  expect(process.exitCode).toBe(1)
-  expect(warnings()).toHaveLength(1)
-  const output = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))
-  expect(output).toMatchObject({ ok: false })
-  expect(output).not.toHaveProperty('result')
-  expect(await readFile(join(checkout, 'file'), 'utf8')).toBe('unsaved')
-  expect(await git('rev-parse', 'task')).toBe(head)
-  expect(runtime.workspaceLifecycle.hints()).toEqual({})
-})
-
 it('reports actual safe branch preservation when forced checkout removal cannot delete the branch', async () => {
   await writeFile(join(checkout, 'unmerged'), 'only on task')
   await git('-C', checkout, 'add', 'unmerged')

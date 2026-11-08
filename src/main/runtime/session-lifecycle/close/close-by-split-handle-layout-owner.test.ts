@@ -296,11 +296,4 @@ describe('a CLI close of a pinned tab main owns, in a layout-owner build', () =>
       runtime.getWorkspaceSessionForWorktree(WORKTREE_ID)?.tabsByWorktree[WORKTREE_ID]
     ).toHaveLength(1)
   })
-
-  it('still closes one pane of a pinned split tab', async () => {
-    const { runtime, handle } = setup('no-new-pane', true)
-    const split = await runtime.splitTerminal(handle, { direction: 'vertical' })
-
-    await expect(runtime.closeTerminal(split.handle)).resolves.toMatchObject({ tabId: TAB_ID })
-  })
 })

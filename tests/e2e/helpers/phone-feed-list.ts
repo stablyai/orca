@@ -132,8 +132,7 @@ export async function openPhoneFeedList(
   const stop = startHostWorktreeRefresh({
     client: socketEventClient(socket),
     // The list reads rows and catalog from the feed alone; worktree.ps adds only card content.
-    fetchWorktrees: async () => {},
-    fetchRepoMetadata: async () => {},
+    refreshWorktrees: () => {},
     syncViewSettings,
     sidebarFeed: {
       refresh: () => reader.refresh(),

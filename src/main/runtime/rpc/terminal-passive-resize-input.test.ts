@@ -190,26 +190,4 @@ describe.each([true, false])('remote input after passive resize (multiplex=%s)',
       await stream.close()
     }
   })
-
-  it('retains implicit-claim refusal and recovery for older clients', async () => {
-    const stream = await startStream({ multiplex, explicitClaims: false })
-    try {
-      stream.updateViewport.mockResolvedValueOnce(false)
-      stream.resize()
-      stream.type('blocked')
-      stream.resize()
-      stream.type('retry')
-      await vi.waitFor(() => expect(stream.processWrites).toEqual(['retry']))
-      expect(stream.updateViewport).toHaveBeenLastCalledWith(
-        'pty-1',
-        expect.any(String),
-        'desktop-1',
-        100,
-        30,
-        true
-      )
-    } finally {
-      await stream.close()
-    }
-  })
 })

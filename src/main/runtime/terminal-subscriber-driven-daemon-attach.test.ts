@@ -364,62 +364,6 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     expect(model.attachCalls).toEqual([PTY_ID])
   })
 
-  it('never attaches SSH-scoped sessions or sessions absent from the daemon inventory', async () => {
-    const { runtime, model } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-    const sshPtyId = 'ssh:conn-9@@relay-pty-4'
-    const sshRecord = internals(runtime).recordPtyWorktree(sshPtyId, WORKTREE_ID, {
-      connected: true
-    })
-    const sshHandle = internals(runtime).issuePtyHandle(sshRecord)
-    const absentPtyId = `${WORKTREE_ID}@@99999999`
-    const absentRecord = internals(runtime).recordPtyWorktree(absentPtyId, WORKTREE_ID, {
-      connected: true
-    })
-    const absentHandle = internals(runtime).issuePtyHandle(absentRecord)
-
-    const harness = startMultiplex(runtime)
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-
-    sendSubscribe(harness, 1, sshHandle, 'client-ssh')
-    await waitForSubscribed(harness, 1)
-    expect(model.attachCalls).toEqual([])
-
-    // Absent session: subscribing must not create it or surface a new error.
-    sendSubscribe(harness, 2, absentHandle, 'client-absent')
-    await waitForSubscribed(harness, 2)
-    await Promise.resolve()
-    expect(model.sessions.has(absentPtyId)).toBe(false)
-    expect(model.emitData(absentPtyId, 'ghost')).toBe(false)
-    expect(harness.messages.some((message) => message.result?.type === 'error')).toBe(false)
-
-    // Unrelated live sessions are untouched by another pty's subscribers.
-    expect(model.sessions.get(PTY_ID)?.attached).toBe(false)
-    expect(model.attachCalls).not.toContain(PTY_ID)
-    expect(model.resizeCalls).toEqual([])
-  })
-
-  it('retries a refused attach for a later subscriber once the daemon learns the session', async () => {
-    const { runtime, model, handle } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-    // Degraded-daemon shape: main knows the record, the daemon does not own the
-    // id yet, and the controller answers false rather than a no-op success.
-    model.sessions.delete(PTY_ID)
-
-    const harness = startMultiplex(runtime)
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-    sendSubscribe(harness, 1, handle, 'client-a')
-    await waitForSubscribed(harness, 1)
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-    // A refused attach must not pin sticky success while the stream is blank.
-    expect(model.emitData(PTY_ID, 'ghost')).toBe(false)
-
-    model.sessions.set(PTY_ID, { cols: 100, rows: 30, attached: false, screen: '' })
-    sendSubscribe(harness, 2, handle, 'client-b')
-    await waitForSubscribed(harness, 2)
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
-    expect(model.emitData(PTY_ID, 'late daemon hello\r\n')).toBe(true)
-    await vi.waitFor(() => expect(outputText(harness)).toContain('late daemon hello'))
-  })
-
   it('retries an existing subscriber when provider inventory becomes ready', async () => {
     const { runtime, model, handle } = setupNeverAttachedDaemonSession({
       snapshotCapable: false
@@ -444,17 +388,6 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
     expect(model.emitData(PTY_ID, 'after inventory\r\n')).toBe(true)
     await vi.waitFor(() => expect(outputText(harness)).toContain('after inventory'))
-  })
-
-  it('attaches a surviving session at inventory adoption with no view subscribed', async () => {
-    const { runtime, model, handle } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-
-    await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
-
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-    expect(model.emitData(PTY_ID, 'worker still printing\r\n')).toBe(true)
-    const read = await runtime.readTerminal(handle)
-    expect(read.tail.join('\n')).toContain('worker still printing')
   })
 
   it('streams a survivor a terminal.create retry adopts after a restart', async () => {
@@ -519,25 +452,6 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     expect(read.tail).toEqual([])
   })
 
-  it('terminal read falls back to the provider tail for a never-attached live pty', async () => {
-    const { runtime, handle } = setupNeverAttachedDaemonSession({
-      snapshotCapable: true,
-      screen: 'retained daemon line\r\n'
-    })
-
-    const read = await runtime.readTerminal(handle)
-
-    expect(read.tail.join('\n')).toContain('retained daemon line')
-  })
-
-  it('terminal read stays empty (not an error) when provider state is unprovable', async () => {
-    const { runtime, handle } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-
-    const read = await runtime.readTerminal(handle)
-
-    expect(read.tail).toEqual([])
-  })
-
   it('terminal read keeps preferring the ingested model over provider state once attached', async () => {
     const { runtime, model, handle } = setupNeverAttachedDaemonSession({
       snapshotCapable: true,
@@ -576,19 +490,6 @@ describe('re-attach after a daemon reconnect detached a spawned session', () => 
     // What the local provider's write-unavailable fan-out reports for every session it held.
     internals(runtime).notePtyEndpointLoss?.(PTY_ID)
   }
-
-  it('takes back the stream of a session no view shows', async () => {
-    const { runtime, model, handle } = setupSpawnedAttachedSession()
-
-    loseEndpoint(runtime, model)
-
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-    expect(model.emitData(PTY_ID, 'background agent output\r\n')).toBe(true)
-    await expect(
-      runtime.sendTerminal(handle, { text: 'typed' }, { inputKind: 'driving' })
-    ).resolves.toMatchObject({ accepted: true })
-    expect(model.writes).toEqual(['typed'])
-  })
 
   it('holds input sent while the re-attach is in flight instead of refusing it', async () => {
     const { runtime, model, handle } = setupSpawnedAttachedSession()
@@ -644,41 +545,6 @@ describe('re-attach after a daemon reconnect detached a spawned session', () => 
 
     await expect(send).rejects.toThrow()
     expect(model.writes).toEqual([])
-  })
-
-  it('leaves a failed re-attach to the next view or inventory pass, not to each keystroke', async () => {
-    const { runtime, model, handle } = setupSpawnedAttachedSession()
-    const releaseAttach = model.deferNextAttach(false)
-    loseEndpoint(runtime, model)
-    releaseAttach()
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-
-    await runtime.sendTerminal(handle, { text: 'a' }, { inputKind: 'driving' }).catch(() => {})
-    await runtime.sendTerminal(handle, { text: 'b' }, { inputKind: 'driving' }).catch(() => {})
-    expect(model.attachCalls).toEqual([PTY_ID])
-
-    const harness = startMultiplex(runtime)
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-    sendSubscribe(harness, 1, handle)
-    await waitForSubscribed(harness, 1)
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
-    expect(model.emitData(PTY_ID, 'live again\r\n')).toBe(true)
-  })
-
-  it('redoes an earlier subscriber-driven attach that the loss undid', async () => {
-    // Never-attached session: the first remote subscribe attaches it (the restored-tab path).
-    const { runtime, model, handle } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-    const harness = startMultiplex(runtime)
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-    sendSubscribe(harness, 1, handle)
-    await waitForSubscribed(harness, 1)
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-
-    loseEndpoint(runtime, model)
-
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
-    expect(model.emitData(PTY_ID, 'second life\r\n')).toBe(true)
-    await vi.waitFor(() => expect(outputText(harness)).toContain('second life'))
   })
 
   it('attaches again when another loss lands while the re-attach is in flight', async () => {

@@ -4,7 +4,7 @@ import { OpenInMenuSetting } from './OpenInMenuSetting'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { GlobalWorktreeVisibilitySourcesSetting } from './GlobalWorktreeVisibilitySourcesSetting'
 import { GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -24,14 +24,12 @@ export function GeneralWorkspaceSettingsSection({
   defaultsSupported = true,
   sourceDefaultsSupported = true
 }: GeneralWorkspaceSettingsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SettingsGroup
       key="workspace"
-      title={translate(
-        'auto.components.settings.GeneralWorkspaceSettingsSection.7511097c5d',
-        'Workspace'
-      )}
-      description={translate(
+      title={t('auto.components.settings.GeneralWorkspaceSettingsSection.7511097c5d', 'Workspace')}
+      description={t(
         'auto.components.settings.GeneralWorkspaceSettingsSection.e2955d9ccb',
         'Configure where new workspaces are created.'
       )}
@@ -44,11 +42,11 @@ export function GeneralWorkspaceSettingsSection({
         className="scroll-mt-6"
       >
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.externalWorktrees',
             'External worktrees'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.externalWorktreesDescription',
             'Choose which worktrees created outside Orca appear by default on this host.'
           )}
@@ -78,22 +76,22 @@ export function GeneralWorkspaceSettingsSection({
       </div>
 
       <SearchableSetting
-        title={translate(
+        title={t(
           'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
           'Nest Workspaces'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
           'Create workspaces inside a repo-named subfolder.'
         )}
         keywords={['nested', 'subfolder', 'directory']}
       >
         <SettingsSwitchRow
-          label={translate(
+          label={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
             'Nest Workspaces'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.4fbf910ded',
             'Create workspaces inside a repo-named subfolder.'
           )}
@@ -105,22 +103,22 @@ export function GeneralWorkspaceSettingsSection({
       {/* Keep this ID stable: the delete-worktree Don’t ask again toast deep-links here. */}
       <div id="general-skip-delete-worktree-confirm" className="scroll-mt-6">
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.9f380934cf',
             'Ask Before Deleting Workspaces'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.5734db82af',
             'Show a confirmation dialog before deleting a workspace.'
           )}
           keywords={['delete', 'worktree', 'confirm', 'dialog', 'skip', 'prompt']}
         >
           <SettingsSwitchRow
-            label={translate(
+            label={t(
               'auto.components.settings.GeneralWorkspaceSettingsSection.9f380934cf',
               'Ask Before Deleting Workspaces'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.GeneralWorkspaceSettingsSection.28bc3d085e',
               'Show a confirmation before deleting a workspace from the context menu. Failed deletes still surface a Force Delete fallback.'
             )}
@@ -136,22 +134,22 @@ export function GeneralWorkspaceSettingsSection({
 
       <div id="general-skip-delete-automation-confirm" className="scroll-mt-6">
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.ea98373cd8',
             'Ask Before Deleting Automations'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.d2dd2ca2e3',
             'Show a confirmation dialog before deleting an automation and its run history.'
           )}
           keywords={['delete', 'automation', 'confirm', 'dialog', 'skip', 'prompt']}
         >
           <SettingsSwitchRow
-            label={translate(
+            label={t(
               'auto.components.settings.GeneralWorkspaceSettingsSection.ea98373cd8',
               'Ask Before Deleting Automations'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.GeneralWorkspaceSettingsSection.824b98a0d9',
               'Show a confirmation before deleting automations and their run history.'
             )}
@@ -167,22 +165,22 @@ export function GeneralWorkspaceSettingsSection({
 
       <div id="general-skip-delete-artifact-confirm" className="scroll-mt-6">
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.31e300af1c',
             'Ask Before Deleting Artifacts'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.fb29a73a17',
             'Show a confirmation dialog before deleting a shared artifact and breaking its public link.'
           )}
           keywords={['delete', 'artifact', 'share', 'link', 'confirm', 'dialog', 'skip', 'prompt']}
         >
           <SettingsSwitchRow
-            label={translate(
+            label={t(
               'auto.components.settings.GeneralWorkspaceSettingsSection.31e300af1c',
               'Ask Before Deleting Artifacts'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.GeneralWorkspaceSettingsSection.bf46474e33',
               'Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access.'
             )}
@@ -202,11 +200,11 @@ export function GeneralWorkspaceSettingsSection({
         className="scroll-mt-6"
       >
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.008f92085f',
             'Open In Apps'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.GeneralWorkspaceSettingsSection.3d538a98f7',
             "Choose apps available from a workspace's Open in menu."
           )}

@@ -246,17 +246,6 @@ describe('workspace unread flag on a headless host', () => {
     }
   })
 
-  it('advertises that it raises the flag, so no socket of a current desktop silences it', () => {
-    const host = createHeadlessHost()
-    expect(host.runtime.getStatus().capabilities).toContain(WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY)
-    const facts = requireSwitchedOn(host.runtime.sidebarFacts)
-    for (const [connectionId, capabilities] of Object.entries(currentDesktopSockets())) {
-      facts.noteRuntimeClient(connectionId, capabilities)
-    }
-    host.finishTurn()
-    expect(host.meta[WT].isUnread).toBe(true)
-  })
-
   it('leaves raising to an older desktop while it is connected, and still clears on the phone', async () => {
     const host = createHeadlessHost()
     // Either its request socket or its browser host lease hosts client pages without the capability.

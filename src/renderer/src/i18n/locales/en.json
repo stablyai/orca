@@ -20778,6 +20778,13 @@
         "settingsLink": "Settings > Chat UI > Turn activity",
         "failed": "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
       },
+      "ciResultLine": {
+        "failingLead": "CI failing on",
+        "greenLead": "CI green on",
+        "at": "at",
+        "hide": "Don't show CI result lines",
+        "hidden": "Orca won't show CI result lines anymore"
+      },
       "openedPullRequests": {
         "one": "Opened {{name}}",
         "hide": "Don't show opened pull requests",
@@ -21229,6 +21236,10 @@
         "openedPullRequestsCopy": "Shows the pull requests each turn opened, with titles and line counts, below the reply.",
         "openedPullRequestsSearchPr": "PR",
         "openedPullRequestsSearchCard": "pull request card",
+        "ciResultLinesTitle": "CI result lines",
+        "ciResultLinesCopy": "A line in the chat when CI finishes on a pull request the agent opened or pushed to.",
+        "ciResultLinesSearchChecks": "checks",
+        "ciResultLinesSearchPr": "PR",
         "turnActivityTitle": "Turn activity",
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
