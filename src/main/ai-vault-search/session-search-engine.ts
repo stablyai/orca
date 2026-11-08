@@ -153,9 +153,8 @@ export class SessionSearchEngine {
     const retrieved = this.retrieval.run(plan, scope)
     const best = new Map<number, MessageRow>(retrieved.rows.map((row) => [row.session_row_id, row]))
     const contentIds = new Set(retrieved.sessions.map((session) => session.id))
-    const titleOnly = this.retrieval
-      .titleMatches(plan.phrase, scope)
-      .filter((session) => !contentIds.has(session.id))
+    const titles = this.retrieval.titleMatches(plan.phrase, scope)
+    const titleOnly = titles.sessions.filter((session) => !contentIds.has(session.id))
     // Why: content hits rank first; title-only hits follow so a named session is never missing.
     const ranked =
       sort === 'newest'
@@ -167,7 +166,7 @@ export class SessionSearchEngine {
     return {
       ranked,
       retrieved,
-      incomplete: retrieved.incomplete
+      incomplete: retrieved.incomplete || titles.incomplete
     }
   }
 

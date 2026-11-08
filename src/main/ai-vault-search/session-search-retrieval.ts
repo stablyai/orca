@@ -141,31 +141,36 @@ export class SessionSearchRetrieval {
     return { sessions, incomplete: incomplete || sessions.length >= scope.candidateLimit }
   }
 
-  /** Sessions whose title contains every query token, case-insensitively. */
-  titleMatches(tokens: readonly string[], scope: RetrievalScope): SessionRow[] {
-    const needles = tokens.map((token) => token.toLowerCase())
+  /** Sessions whose title contains every query token, ignoring case and accents. */
+  titleMatches(
+    tokens: readonly string[],
+    scope: RetrievalScope
+  ): { sessions: SessionRow[]; incomplete: boolean } {
+    const needles = tokens.map(foldTitleText)
     if (needles.length === 0) {
-      return []
+      return { sessions: [], incomplete: false }
     }
     const { conditions, values } = scope.filter
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-    // Why: SQLite lower()/LIKE fold only ASCII, so match in JS to keep titles like "Gestión" findable.
     // Why: a linear title scan per query is cheap at sidebar scale; index titles in FTS if histories grow large.
     const rows = this.db
-      .prepare(`SELECT id, title FROM sessions ${where} ORDER BY updated_at DESC, id DESC`)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessions.id and sessions.title are NOT NULL columns of the private schema.
-      .all(...values) as { id: number; title: string }[]
-    const ids: number[] = []
+      .prepare(
+        `SELECT ${SESSION_COLUMN_LIST} FROM sessions ${where} ORDER BY updated_at DESC, id DESC`
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private sessions schema defines SessionRow; tests compare every projected column and value with that schema.
+      .all(...values) as SessionRow[]
+    const sessions: SessionRow[] = []
     for (const row of rows) {
-      if (ids.length >= scope.candidateLimit) {
-        break
-      }
-      const title = row.title.toLowerCase()
-      if (needles.every((needle) => title.includes(needle))) {
-        ids.push(row.id)
+      const title = foldTitleText(row.title)
+      // Why: operators must filter before the limit, or ineligible newer titles hide older eligible ones.
+      if (needles.every((needle) => title.includes(needle)) && scope.matchesOperators(row)) {
+        if (sessions.length >= scope.candidateLimit) {
+          return { sessions, incomplete: true }
+        }
+        sessions.push(row)
       }
     }
-    return this.loadSessions(ids, scope)
+    return { sessions, incomplete: false }
   }
 
   /** Bound SQL parameters independently of the configurable candidate limit. */
@@ -248,4 +253,9 @@ export class SessionSearchRetrieval {
       .prepare(sql)
       .all(scopedExpression(scope.scope, expression), ...filter.values) as MessageRow[]
   }
+}
+
+// Why: mirror the FTS unicode61 tokenizer, which folds case and strips diacritics ("gestion" finds "Gestión").
+function foldTitleText(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 }

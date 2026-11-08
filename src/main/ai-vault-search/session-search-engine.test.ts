@@ -194,5 +194,15 @@ describe('a session title is searched alongside its messages', () => {
     db.prepare('UPDATE sessions SET title = ? WHERE id = ?').run('PPP Gestión', 1)
     expect(ids(engine.search({ query: 'gestión' }))).toEqual(['2', '1'])
     expect(ids(engine.search({ query: 'PPP' }))).toEqual(['1'])
+    expect(ids(engine.search({ query: 'gestion' }))).toEqual(['2', '1'])
+  })
+
+  it('applies repo and path operators before the title-match limit', async () => {
+    const { db, engine } = await open('ss-engine-title-operators', { sessionCandidateLimit: 1 })
+    addSyntheticSession(db, { id: 1, text: 'alpha', cwd: '/repo/app' })
+    addSyntheticSession(db, { id: 2, text: 'beta', cwd: '/elsewhere/tool' })
+    db.prepare("UPDATE sessions SET title = 'Release notes'").run()
+    const result = engine.search({ query: 'release path:/repo/app' })
+    expect(ids(result)).toEqual(['1'])
   })
 })
