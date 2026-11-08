@@ -4,15 +4,15 @@ import type { JournalTransactionalDatabase } from '../database/journal-host-data
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
-import type { JournalWriteBody } from './journal-write-queue'
+import type { JournalWriteBody } from '../journal-store-contracts'
 import type Database from '../../../sqlite/sync-database'
 import type { JournalWriterEffect, JournalWriterEffectResult } from '../journal-writer-effects'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
   fold?: (draft: JournalReducerState) => void
-  write: (db: Database.Database, row?: JournalRow) => void
-  committed: () => void
+  write?: (db: Database.Database, row?: JournalRow) => void
+  committed?: () => void
   /** The worker writer's form of `write`/`committed`; absent where the receipt is writer-local. */
   stage?: (context: JournalReceiptStage) => Promise<JournalStagedReceipt>
 }
@@ -37,8 +37,8 @@ export function composeJournalOperationReceipts(
   const stages = receipts.flatMap((receipt) => (receipt.stage ? [receipt.stage] : []))
   return {
     fold: (draft) => receipts.forEach((receipt) => receipt.fold?.(draft)),
-    write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
-    committed: () => receipts.forEach((receipt) => receipt.committed()),
+    write: (db, row) => receipts.forEach((receipt) => receipt.write?.(db, row)),
+    committed: () => receipts.forEach((receipt) => receipt.committed?.()),
     ...(stages.length === receipts.length
       ? { stage: (context) => stageJournalOperationReceipts(stages, context) }
       : {})
@@ -72,6 +72,41 @@ async function stageJournalOperationReceipts(
   }
 }
 
+/** Preserve staged receipt adoption when a host action observes its acknowledgement. */
+export function onJournalReceiptCommitted(
+  receipt: JournalOperationReceipt,
+  committed: () => void
+): JournalOperationReceipt {
+  const stage = receipt.stage
+  return {
+    ...receipt,
+    ...(receipt.committed
+      ? {
+          committed: () => {
+            receipt.committed?.()
+            committed()
+          }
+        }
+      : {}),
+    ...(stage
+      ? {
+          stage: async (context) => {
+            const staged = await stage(context)
+            return {
+              effects: staged.effects,
+              settle: (results) => {
+                staged.settle(results)
+                if (results !== undefined) {
+                  committed()
+                }
+              }
+            }
+          }
+        }
+      : {})
+  }
+}
+
 export function writeReceiptIfChanged<T>(
   run: (db: Database.Database) => T,
   changed: (result: T) => boolean,
@@ -80,7 +115,7 @@ export function writeReceiptIfChanged<T>(
   return (db) => {
     const result = run(db)
     if (receipt && changed(result)) {
-      receipt.write(db)
+      receipt.write?.(db)
     }
     return result
   }
@@ -125,12 +160,12 @@ export class JournalRowWriter {
             insertJournalRow(db, this.deps.sessionId, row, savedAt)
           }
           const adopt = this.deps.prepare?.(db, [row], savedAt, receipt?.fold)
-          receipt?.write(db, this.project([row])[0])
+          receipt?.write?.(db, this.project([row])[0])
           return adopt
         },
         (adopt) => adopt?.()
       )
-      receipt?.committed()
+      receipt?.committed?.()
       this.deps.commit([row], savedAt, inputChanged)
       return this.project([row])[0]!
     })
@@ -171,12 +206,12 @@ export class JournalRowWriter {
           }
         }
         const adopt = this.deps.prepare?.(db, rows, ts, receipt?.fold)
-        receipt?.write(db, receiptRow?.(this.project(rows)))
+        receipt?.write?.(db, receiptRow?.(this.project(rows)))
         return adopt
       },
       (adopt) => adopt?.()
     )
-    receipt?.committed()
+    receipt?.committed?.()
     this.deps.commit(rows, ts, inputChanged)
     return this.project(rows)
   }

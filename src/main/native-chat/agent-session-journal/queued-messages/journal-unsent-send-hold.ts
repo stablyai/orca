@@ -20,7 +20,12 @@ import type { JournalRecoveryJournal } from '../submissions/journal-pending-subm
 import type { JournalQueueCardChange } from './journal-queue-events'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { ResolveDispatchInput } from '../journal-store-contracts'
-import type { JournalQueuePlan } from './journal-queued-messages'
+import type { JournalQueueRow } from './journal-queue-events'
+import type { JournalOperationReceipt } from '../writing/journal-row-writer'
+type JournalQueuePlan = {
+  rows: ((seq: number, ts: number) => JournalQueueRow)[]
+  receipt: JournalOperationReceipt
+}
 // Keep provably unhanded input under its own row; host-derived work is re-derived by its owner.
 
 export type UnsentSendHold =

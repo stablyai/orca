@@ -16,7 +16,7 @@ import {
   isJournalWrittenByNewerOrca,
   journalOpenRefusal
 } from '../../agent-session-journal/replay/journal-open-failure'
-import type { JournalStopAcceptanceInput } from '../../agent-session-journal/context-epochs/journal-stop-acceptance'
+import type { JournalStopAcceptanceInput } from '../../agent-session-journal/journal-store-contracts'
 import type { ChatStopTarget } from './structured-agent-session-chat-stop-target'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import {

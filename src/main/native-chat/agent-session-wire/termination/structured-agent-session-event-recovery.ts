@@ -1,6 +1,6 @@
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionLifecycleEvent } from '../providers/structured-agent-session-adapter'
-import type { JournalWriterSettled } from '../../agent-session-journal/journal-writer-operations'
+import type { JournalWriterSettled } from '../../agent-session-journal/journal-sql-failure'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
 import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
 import { stopAgentSessionProviderRoot } from './structured-agent-session-provider-exit-proof'

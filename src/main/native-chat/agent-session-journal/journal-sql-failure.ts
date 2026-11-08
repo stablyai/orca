@@ -98,3 +98,5 @@ export function restoreJournalSqlFailure(error: JournalSqlFailure): Error {
   }
   return Object.assign(new Error(error.message), error)
 }
+
+export type JournalWriterSettled<T = unknown> = { value: T } | { failure: JournalSqlFailure }

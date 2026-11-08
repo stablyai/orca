@@ -8,7 +8,11 @@ import {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { JournalResolvedItem } from './journal-item-appender'
+export type JournalResolvedItem = {
+  identity: AgentJournalItemIdentity
+  body: AgentJournalItemBody
+  turnScope?: AgentJournalTurnScope
+}
 import type { JournalTimelineView } from './journal-timeline-view'
 import { requiresTerminalSettlement } from '../item-lifecycle/journal-terminal-settlement'
 import { relightsProviderTimelineBackgroundTask } from '../../agent-session-timeline/provider-timeline-background-tasks'

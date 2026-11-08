@@ -3,7 +3,7 @@ import type {
   AgentJournalItemIdentity
 } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { JournalStopAcceptance } from './context-epochs/journal-stop-acceptance'
+import type { JournalStopAcceptance } from './journal-store-contracts'
 import type { JournalStopEvent } from './durable-rows/journal-row-schema'
 import type {
   JournalAppendResult,
@@ -31,8 +31,8 @@ import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import type { JournalWriterStep, JournalStepsResult } from './writing/journal-writer-step'
 import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
-import type { JournalWriterSettled } from './journal-writer-operations'
-import type { JournalCommandOpenResult } from './writing/journal-command-open'
+import type { JournalWriterSettled } from './journal-sql-failure'
+import type { JournalCommandOpenResult } from './journal-store-contracts'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 
 /**

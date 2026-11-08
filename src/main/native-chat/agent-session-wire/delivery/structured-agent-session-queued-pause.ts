@@ -1,5 +1,5 @@
 import type { JournalSubmissionSelector } from '../../agent-session-journal/journal-submission-selector'
-import type { JournalWriterSettled } from '../../agent-session-journal/journal-writer-operations'
+import type { JournalWriterSettled } from '../../agent-session-journal/journal-sql-failure'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type {

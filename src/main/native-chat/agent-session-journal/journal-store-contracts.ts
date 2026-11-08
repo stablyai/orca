@@ -18,17 +18,17 @@ import type {
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
-import type {
-  JournalHostDatabase,
-  JournalTransactionalDatabase
-} from './database/journal-host-database'
+import type { JournalTransactionalDatabase } from './database/journal-host-database'
+import type { JournalSqlDatabase } from './database/journal-sql-database'
 import type { JournalLifecycleMutationInput } from './writing/journal-lifecycle-mutation'
 import type { JournalRowsRead } from './replay/journal-read-row'
 import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalOperationReceipt, JournalRowWriter } from './writing/journal-row-writer'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import type { JournalAttachmentClaim } from './submissions/journal-submission-hook'
-import type { JournalWriteBody } from './writing/journal-write-queue'
+import type Database from '../../sqlite/sync-database'
+import type { JournalStopEvent } from './durable-rows/journal-row-schema'
+import type { AgentJournalTurnItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { StaleStructuredAgentSessionStateInput } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
 import type { StructuredAgentSessionExitSettlement } from '../agent-session-wire/termination/structured-agent-session-leftover-settlement'
@@ -68,7 +68,7 @@ export type JournalPromptMutationInput = {
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
-  database: JournalHostDatabase
+  database: JournalSqlDatabase
   now?: () => number
   mintEpoch?: () => string
   /** Saves a person's Stop of limited work in the same commit as the rows that reveal it. */
@@ -237,3 +237,33 @@ export type JournalQueuedMessagesDeps = {
   /** The SQL writer receives the host's edit holds as data; otherwise this handle's leases. */
   editHeld?: (messageId: string) => boolean
 }
+
+export type JournalStopAcceptanceInput = {
+  event: Omit<JournalStopEvent, 'at'>
+  fence: number
+  /** Read the live turn when the event is written. */
+  liveTurnId: () => string | null
+}
+
+export type JournalStopAcceptance = {
+  mark: AgentJournalCursor
+  withdrawn: string[]
+  /** Explicitly named turn, otherwise the turn live at write time. */
+  turnId: string | null
+}
+
+export type JournalCommandOpenResult = {
+  turn: ReturnType<typeof structuredAgentSessionCommandTurn>
+  running: AgentJournalTurnItem
+}
+
+export type JournalAttachmentClaim = (
+  db: Database.Database,
+  body: AgentJournalMessageItem,
+  required: boolean,
+  previous?: AgentJournalMessageItem,
+  goalId?: string
+) => (() => void) | void
+
+export type JournalWriteResult<T> = T extends PromiseLike<unknown> ? never : T
+export type JournalWriteBody<T> = () => JournalWriteResult<T>

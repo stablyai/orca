@@ -1,5 +1,5 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalWriterSettled } from './journal-writer-operations'
+import type { JournalWriterSettled } from './journal-sql-failure'
 import type {
   JournalDomainSubmissionCommit,
   JournalDomainSubmissionCoordinate
