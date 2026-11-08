@@ -1,5 +1,6 @@
 import { BoundedMap } from '../../../shared/bounded-map'
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
+import type { GitLineStats } from '../../../shared/git/status/git-uncommitted-line-stats'
 import {
   canProveUnchangedByStamp,
   isDiffStampClockSkewed,
@@ -42,6 +43,21 @@ export const FILE_DIFF_CACHE_LIMITS: SettledDiffCacheLimits<GitDiffResult> = {
   maxCharacters: MAX_SETTLED_DIFF_CACHE_TOTAL_CHARACTERS,
   maxEntryCharacters: MAX_SETTLED_DIFF_CACHE_RESULT_CHARACTERS,
   characterCount: (result) => result.originalContent.length + result.modifiedContent.length
+}
+
+/** Status numstat passes: two per worktree, each a path-keyed count map. */
+export const NUMSTAT_CACHE_LIMITS: SettledDiffCacheLimits<Map<string, GitLineStats>> = {
+  maxEntries: 256,
+  maxCharacters: 8_000_000,
+  maxEntryCharacters: 1_000_000,
+  // Paths dominate; the counts are a few digits each.
+  characterCount: (stats) => {
+    let characters = 0
+    for (const filePath of stats.keys()) {
+      characters += filePath.length + 16
+    }
+    return characters
+  }
 }
 
 type CacheEntry<T> = { stamp: string; result: T; characters: number }
