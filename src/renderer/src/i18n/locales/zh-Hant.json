@@ -23093,6 +23093,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "此主機上無法使用 {{agent}} 模型。你可以保留目前的選擇或使用引數。",
+    "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogFailed": "無法載入 {{agent}} 模型。請關閉並重新開啟代理選擇器以重試。",
     "catalogSignIn": "請登入 {{agent}} 以載入模型，然後重新開啟代理選擇器。",
     "catalogInstall": "請在此主機上安裝 {{agent}} 以載入模型，然後重新開啟代理選擇器。",

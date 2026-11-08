@@ -23408,6 +23408,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimlerinizi koruyabilir veya bağımsız değişkenleri kullanabilirsiniz.",
+    "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogFailed": "{{agent}} modelleri yüklenemedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
     "catalogSignIn": "Modelleri yüklemek için {{agent}} oturumu açın, ardından ajan seçiciyi yeniden açın.",
     "catalogInstall": "Modelleri yüklemek için bu sunucuya {{agent}} yükleyin, ardından ajan seçiciyi yeniden açın.",
