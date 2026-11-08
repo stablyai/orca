@@ -1,34 +1,23 @@
+import { holdSavedStatusLock, readSavedStatus } from './last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
-import { STATUS_PERSIST_MIN_INTERVAL_MS } from '../../server-constants'
 import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
-import { AtomicSnapshotWriter } from '../../../../persistence/atomic-snapshot-writer'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn(() => ({ nth_repo_added: 2 }))
 }))
 
-class ProbeServer extends AgentHookServer {
-  persistTimerArmed(): boolean {
-    return this.statusPersistTimer !== null
-  }
-
-  persistDueAt(): number {
-    return this.statusPersistDueAt
-  }
-}
-
-describe('last-status persist throttle', () => {
+describe('saved agent status cadence', () => {
   let userDataPath: string
-  let server: ProbeServer
+  let server: AgentHookServer
 
   const lastStatusPath = (): string => join(userDataPath, 'agent-hooks', 'last-status.json')
   const readPrompt = (): unknown =>
-    JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]?.payload?.prompt
+    JSON.parse(readSavedStatus(lastStatusPath())).entries[PANE]?.payload?.prompt
   const prompt = (text: string, launchToken?: string): Promise<Response> =>
     postHookEvent(
       server,
@@ -46,7 +35,7 @@ describe('last-status persist throttle', () => {
       toFake: ['setTimeout', 'clearTimeout', 'Date']
     })
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-persist-throttle-'))
-    server = new ProbeServer()
+    server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
   })
 
@@ -57,113 +46,45 @@ describe('last-status persist throttle', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  it('caps a steady stream at one write per window without pushing the timer back', async () => {
-    const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
-    let unchangedWhileArmed = 0
-    for (let i = 0; i < 60; i++) {
-      const armedBefore = server.persistTimerArmed()
-      const dueBefore = server.persistDueAt()
-      await prompt(`stream ${i}`)
-      if (armedBefore && server.persistTimerArmed()) {
-        expect(server.persistDueAt()).toBe(dueBefore)
-        unchangedWhileArmed++
-      }
-      if (server.persistTimerArmed()) {
-        expect(server.persistDueAt() - Date.now()).toBeLessThanOrEqual(
-          STATUS_PERSIST_MIN_INTERVAL_MS
-        )
-      }
-      await vi.advanceTimersByTimeAsync(500)
-    }
-    await vi.advanceTimersByTimeAsync(STATUS_PERSIST_MIN_INTERVAL_MS)
-    expect(write).toHaveBeenCalledTimes(7)
-    expect(unchangedWhileArmed).toBeGreaterThan(40)
-    await Promise.all(write.mock.results.map((result) => result.value))
-    expect(readPrompt()).toBe('stream 59')
-    expect(server.persistTimerArmed()).toBe(false)
-  })
-
-  it('writes an authority change immediately instead of waiting for the window', async () => {
-    const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
+  it('saves an authority change at once while a routine update waits for the window', async () => {
     await prompt('first')
     await vi.advanceTimersByTimeAsync(1)
-    expect(write).toHaveBeenCalledTimes(1)
+    expect(readPrompt()).toBe('first')
 
-    await vi.advanceTimersByTimeAsync(500)
     await prompt('second')
-    expect(server.persistTimerArmed()).toBe(true)
+    await vi.advanceTimersByTimeAsync(1)
+    expect(readPrompt()).toBe('first')
 
     await prompt('third', 'launch-token-new')
     await vi.advanceTimersByTimeAsync(1)
-    expect(write).toHaveBeenCalledTimes(2)
-    await write.mock.results[1]?.value
-    expect(JSON.parse(readFileSync(lastStatusPath(), 'utf8')).entries[PANE]).toMatchObject({
-      launchTokenHash: expect.any(String)
+    expect(JSON.parse(readSavedStatus(lastStatusPath())).entries[PANE]).toMatchObject({
+      launchTokenHash: expect.any(String),
+      payload: expect.objectContaining({ prompt: 'third' })
     })
   })
 
-  it('flushStatusPersistSync cancels the armed timer and writes synchronously', async () => {
-    const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
-    const writeSync = vi.spyOn(AtomicSnapshotWriter.prototype, 'writeSync')
+  it('saves the latest status at stop and a restart keeps it', async () => {
     await prompt('first')
     await vi.advanceTimersByTimeAsync(1)
-    await write.mock.results[0]?.value
-    await prompt('second')
-    expect(server.persistTimerArmed()).toBe(true)
-
-    server.flushStatusPersistSync()
-    expect(server.persistTimerArmed()).toBe(false)
-    expect(writeSync).toHaveBeenCalledTimes(1)
-    expect(readPrompt()).toBe('second')
-
-    await vi.advanceTimersByTimeAsync(STATUS_PERSIST_MIN_INTERVAL_MS * 2)
-    expect(write).toHaveBeenCalledTimes(1)
-  })
-
-  it('stop then start leaves no armed timer and never overwrites the file with stale state', async () => {
-    const write = vi.spyOn(AtomicSnapshotWriter.prototype, 'write')
-    await prompt('first')
-    await vi.advanceTimersByTimeAsync(1)
-    await write.mock.results[0]?.value
     await prompt('final before stop')
-    expect(server.persistTimerArmed()).toBe(true)
 
     server.stop()
-    const afterStop = readFileSync(lastStatusPath(), 'utf8')
     expect(readPrompt()).toBe('final before stop')
-    await server.start({ env: 'production', userDataPath })
-    expect(server.persistTimerArmed()).toBe(false)
 
-    await vi.advanceTimersByTimeAsync(STATUS_PERSIST_MIN_INTERVAL_MS * 2)
-    expect(write).toHaveBeenCalledTimes(1)
-    expect(readFileSync(lastStatusPath(), 'utf8')).toBe(afterStop)
+    await server.start({ env: 'production', userDataPath })
+    expect(server.getStatusSnapshot()[0]?.prompt).toBe('final before stop')
   })
 
-  it('warns once for a failing async write and retries in the next window', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const write = vi
-      .spyOn(AtomicSnapshotWriter.prototype, 'write')
-      .mockRejectedValueOnce(new Error('disk full'))
-      .mockRejectedValueOnce(new Error('disk full'))
-    const persistWarnings = (): number =>
-      warn.mock.calls.filter(([message]) =>
-        String(message).includes('failed to write last-status file')
-      ).length
-
+  it('saves an authority change within seconds once a held lock clears', async () => {
     await prompt('first')
     await vi.advanceTimersByTimeAsync(1)
-    expect(write).toHaveBeenCalledTimes(1)
-    expect(persistWarnings()).toBe(1)
-    expect(server.persistTimerArmed()).toBe(true)
+    const release = holdSavedStatusLock(lastStatusPath())
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    await prompt('new owner', 'launch-token-new')
+    await vi.advanceTimersByTimeAsync(1)
+    release()
 
-    await vi.advanceTimersByTimeAsync(STATUS_PERSIST_MIN_INTERVAL_MS)
-    expect(write).toHaveBeenCalledTimes(2)
-    expect(persistWarnings()).toBe(1)
-
-    await vi.advanceTimersByTimeAsync(STATUS_PERSIST_MIN_INTERVAL_MS)
-    expect(write).toHaveBeenCalledTimes(3)
-    await write.mock.results[2]?.value
-    expect(readPrompt()).toBe('first')
-    expect(persistWarnings()).toBe(1)
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(readPrompt()).toBe('new owner')
   })
 })

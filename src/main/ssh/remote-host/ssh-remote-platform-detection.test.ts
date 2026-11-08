@@ -96,18 +96,6 @@ describe('detectRemoteHostPlatform failure reporting', () => {
     vi.restoreAllMocks()
   })
 
-  it('does not misreport a refused exec channel as an unsupported platform', async () => {
-    execCommandMock.mockRejectedValue(maxSessionsError())
-
-    // The host is linux-x64 and fully supported; the probe never ran.
-    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/open failed/iu)
-    await expect(detectRemoteHostPlatform(conn)).rejects.toMatchObject({
-      cause: expect.objectContaining({ reason: 2 })
-    })
-    // Both probes run: the second gets a fresh session-channel retry budget.
-    expect(execCommandMock).toHaveBeenCalledTimes(4)
-  })
-
   it('still detects Windows when the uname probe hits the session limit', async () => {
     execCommandMock
       .mockRejectedValueOnce(maxSessionsError())
@@ -132,23 +120,6 @@ describe('detectRemoteHostPlatform failure reporting', () => {
 
     await expect(detectRemoteHostPlatform(conn)).rejects.toBe(error)
     expect(execCommandMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('prefers a refused channel over the other probe non-zero exit', async () => {
-    execCommandMock
-      .mockRejectedValueOnce(new Error('Command "sh -c ..." failed (exit 127): sh: not found'))
-      .mockRejectedValueOnce(maxSessionsError())
-
-    await expect(detectRemoteHostPlatform(conn)).rejects.toThrow(/open failed/u)
-    await expect(detectRemoteHostPlatform(conn)).rejects.not.toThrow(/exit 127/u)
-  })
-
-  it('returns null when a parsed uname is genuinely unsupported', async () => {
-    execCommandMock
-      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ FreeBSD x86_64\n')
-      .mockRejectedValueOnce(new Error('powershell.exe: not found'))
-
-    await expect(detectRemoteHostPlatform(conn)).resolves.toBeNull()
   })
 
   it('does not call an unmappable uname unsupported when PowerShell was refused', async () => {

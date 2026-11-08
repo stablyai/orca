@@ -6,7 +6,7 @@ import { AgentBrowserBridge } from '../browser/agent-browser/agent-browser-bridg
 import { EmulatorBridge } from '../emulator/emulator-bridge'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER, LOCAL_CLI_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { configureBrowserClientPageAutomationRuntime } from '../browser/client-pages/execution/browser-client-page-automation-runtime'
 import { BrowserExpectedUrlMismatch } from '../../shared/browser/client-hosting/browser-expected-url'
 import { BrowserClientPageCommandError } from '../browser/client-pages/execution/browser-client-page-command-failure'

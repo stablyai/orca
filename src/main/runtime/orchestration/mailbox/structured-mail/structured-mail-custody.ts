@@ -171,7 +171,7 @@ export async function settleStructuredMailSends(input: {
     switch (state.kind) {
       case 'accepted':
         // A pointer's handover shows the agent none of an oversized message; `check` still has it.
-        retire(unread !== undefined && structuredMailFitsWhole(unread, input.cliCommand))
+        retire(unread !== undefined && structuredMailFitsWhole(db, unread, input.cliCommand))
         continue
       case 'unknown':
         // It may have reached the agent: never sent again; `check` still returns it.

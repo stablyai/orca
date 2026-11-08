@@ -1,3 +1,4 @@
+import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { describe, expect, it } from 'vitest'
 import {
   appendFileSync,
@@ -138,7 +139,7 @@ describe('agent hook spool', () => {
       expect(snapshot).toHaveLength(1)
       expect(snapshot[0]!.subagents).toBeUndefined()
       restarted.flushStatusPersistSync()
-      expect(readFileSync(restarted.lastStatusPath!, 'utf8')).not.toContain('isReplay')
+      expect(readSavedStatus(restarted.lastStatusPath!)).not.toContain('isReplay')
     } finally {
       restarted.stop()
     }

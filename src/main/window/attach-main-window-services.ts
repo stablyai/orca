@@ -20,7 +20,7 @@ import type {
 } from '../ipc/pty/host-env/types'
 import { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
 import { registerSshHandlers } from '../ipc/ssh/ssh'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import {
   hasSystemMediaAccess,
   requestSystemMediaAccess

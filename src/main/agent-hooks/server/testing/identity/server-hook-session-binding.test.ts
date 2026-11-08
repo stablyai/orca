@@ -1,5 +1,6 @@
+import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import type { BrowserWindow } from 'electron'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -257,8 +258,9 @@ it.each([257, 512])(
     server.stop()
     // Exact legacy representation: a helper ID with no positive observation of its own.
     const path = join(dir, 'agent-hooks', 'last-status.json')
-    const saved = JSON.parse(readFileSync(path, 'utf8'))
+    const saved = JSON.parse(readSavedStatus(path))
     saved.entries[PANE].agentPresence.session = id
+    // An older build's file wins over the saved rows on the next start.
     writeFileSync(path, JSON.stringify(saved))
     await restart()
     await tool('different-session')

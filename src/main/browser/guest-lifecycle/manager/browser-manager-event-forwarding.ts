@@ -4,7 +4,10 @@ import type {
 } from '../../../../shared/browser-guest-events'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { BrowserManagerBindings } from './browser-manager-bindings'
-import type { PendingPermissionEvent, PendingPopupEvent } from './browser-manager-types'
+
+export type PendingPermissionEvent = Omit<BrowserPermissionDeniedEvent, 'browserPageId'>
+
+export type PendingPopupEvent = Omit<BrowserPopupEvent, 'browserPageId'>
 
 export abstract class BrowserManagerEventForwarding extends BrowserManagerBindings {
   protected forwardOrQueueGuestLoadFailure(

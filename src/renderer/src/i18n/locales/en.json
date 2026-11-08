@@ -22629,7 +22629,18 @@
       "confirm": "Delete all listed worktrees",
       "preservedBranches": "Some nested worktree branches were kept"
     },
-    "setupTerminalTitle": "Setup"
+    "setupTerminalTitle": "Setup",
+    "delete": {
+      "detachingChildren": "Detaching children...",
+      "childrenPreservedTitle": "Child workspaces will be kept",
+      "childrenCannotBeKeptTitle": "Child workspaces cannot be kept",
+      "childrenPreservedDescription": "Direct children will become top-level workspaces. Their files, terminals, and nested children will be kept.",
+      "detachChildren": "Detach and keep child workspaces",
+      "nestedChildrenCannotBeKept": "Child workspace folders inside this workspace must be moved outside it before they can be kept.",
+      "childrenChanged": "Child workspaces changed. Review the workspace list and try again.",
+      "childrenChangedClearPreserve": "Child workspaces changed. Clear this option to review deletion.",
+      "detachFailed": "Could not detach all child workspaces. The parent was not deleted. {{error}}"
+    }
   },
   "projectBoard": {
     "noColumnField": "This board view has no single-select or iteration field to group by, so Orca is listing items instead.",

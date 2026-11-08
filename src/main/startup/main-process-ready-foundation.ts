@@ -7,7 +7,10 @@ import { setNodeDistMirrorSettingReader } from '../node-runtime/node-dist-mirror
 import { handleBrowserGuestLogin } from '../browser/guest-lifecycle/prompts/browser-http-auth-prompt'
 import { installMainThreadHangWatchdog } from '../hang-watchdog/main-thread-hang-watchdog'
 import { preservePreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
-import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
+import {
+  browserCertificateTrustController,
+  browserManager
+} from '../browser/guest-lifecycle/manager/browser-manager'
 import { browserSiteDisplayController } from '../browser/site-settings/browser-site-display-controller'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
