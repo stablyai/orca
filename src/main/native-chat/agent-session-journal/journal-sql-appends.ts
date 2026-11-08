@@ -13,6 +13,7 @@ import type {
   JournalStaleSettlementInput,
   JournalDeadGenerationSettlementInput,
   JournalPromptMutationInput,
+  JournalUnheldTurnsSettlementInput,
   JournalSubmissionConsume,
   JournalSubmissionInput,
   JournalTombstoneInput,
@@ -97,6 +98,10 @@ export abstract class SqlJournalAppends {
 
   settleDeadGeneration(input: JournalDeadGenerationSettlementInput): Promise<number> {
     return this.answerOf(this.write({ kind: 'dead-generation-settle', input }))
+  }
+
+  settleUnheldTurns(input: JournalUnheldTurnsSettlementInput): Promise<void> {
+    return this.answerOf(this.write({ kind: 'unheld-turns-settle', input }))
   }
 
   mutatePrompt(

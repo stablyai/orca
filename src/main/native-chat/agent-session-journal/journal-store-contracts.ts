@@ -44,6 +44,14 @@ export type JournalDeadGenerationSettlementInput = Omit<
   finalizingInputs: readonly { clientMessageId: string; settlementOwner?: true }[]
 }
 
+/** Running root turns under `fence` other than `liveTurnId` are over; selected at the write. */
+export type JournalUnheldTurnsSettlementInput = {
+  sessionId: string
+  fence: number
+  generation: string
+  liveTurnId: string | null
+}
+
 export type JournalPromptMutationInput = {
   itemId: string
   expectedRevision: number
