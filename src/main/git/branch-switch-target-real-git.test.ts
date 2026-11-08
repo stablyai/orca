@@ -5,13 +5,14 @@ import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { BranchSwitchTarget } from '../../shared/git/branch-switch-target'
 import { installRealWorkerThreadChildProcesses } from '../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
-import { BranchSwitchLandedWithWarningError, switchBranchGuarded } from './branch-switch'
+import { switchBranchGuarded } from './branch-switch'
 import { BranchSwitchCollisionError } from './branch-switch-target'
 import { checkoutBranch, listLocalBranches } from './checkout'
 import { getStatus } from './source-control/status-read'
 import { searchRemoteRefPage } from './repo-remote-ref-search'
 
 let directory: string
+let initialHead: string
 async function git(...args: string[]): Promise<string> {
   const result = await runProcess({
     program: 'git',
@@ -56,6 +57,7 @@ beforeEach(async () => {
   await writeFile(join(directory, 'file.txt'), 'base\n')
   await git('add', 'file.txt')
   await git('commit', '-qm', 'base')
+  initialHead = await git('rev-parse', 'HEAD')
 })
 afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
@@ -66,7 +68,8 @@ it('switches an exact local target and records it', async () => {
   const recorded = vi.fn()
   expect(await switchTo({ kind: 'local', name: 'feature' }, null, recorded)).toEqual({
     branch: 'feature',
-    previousBranch: 'main'
+    previousBranch: 'main',
+    head: initialHead
   })
   expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('feature')
   expect(recorded).toHaveBeenCalledOnce()
@@ -84,12 +87,17 @@ it.each(['team/upstream', 'origin'])(
     expect(await git('rev-parse', `refs/heads/${name}/topic`)).toBe(await git('rev-parse', 'main'))
   }
 )
-it('reuses a differently named local tracker', async () => {
+it('returns the advanced HEAD when reusing a differently named local tracker', async () => {
   await remote('origin')
   await git('branch', '--track', 'my-topic', 'refs/remotes/origin/topic')
+  await git('checkout', '-q', 'my-topic')
+  await git('commit', '--allow-empty', '-qm', 'local advance')
+  const advanced = await git('rev-parse', 'HEAD')
+  await git('checkout', '-q', 'main')
   expect(await switchTo({ kind: 'remote', name: 'origin/topic' })).toEqual({
     branch: 'my-topic',
-    previousBranch: 'main'
+    previousBranch: 'main',
+    head: advanced
   })
   expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('my-topic')
   expect((await listLocalBranches(directory)).branches).not.toContain('topic')
@@ -130,6 +138,14 @@ it('carries uncommitted changes onto a new branch but refuses an existing branch
   expect(await git('ls-files', '--others', '--exclude-standard')).toBe('draft.txt')
   expect(await readFile(join(directory, 'draft.txt'), 'utf8')).toBe('draft\n')
 })
+it('refuses creation of the current branch without recording a switch', async () => {
+  const recorded = vi.fn()
+  await expect(switchTo({ kind: 'new', name: 'main' }, null, recorded)).rejects.toMatchObject({
+    data: { existingBranch: 'main' }
+  })
+  expect(recorded).not.toHaveBeenCalled()
+  expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('main')
+})
 it('offers direct local collision recovery without relying on discovery', async () => {
   await git('branch', 'topic')
   await expect(switchTo({ kind: 'new', name: 'topic' })).rejects.toMatchObject({
@@ -152,16 +168,15 @@ it('probes the resolved local name when a remote checkout lands with a hook fail
   const recorded = vi.fn()
   await expect(
     switchTo({ kind: 'remote', name: 'team/upstream/topic' }, null, recorded)
-  ).rejects.toThrow(
-    new BranchSwitchLandedWithWarningError(
-      'Switched to topic. A git hook in this repository failed afterwards and said: hook failed. The switch itself worked.',
-      'topic'
-    )
-  )
+  ).rejects.toMatchObject({
+    name: 'BranchSwitchLandedWithWarningError',
+    branch: 'topic',
+    head: initialHead
+  })
   expect(await git('symbolic-ref', '--short', 'HEAD')).toBe('topic')
   expect(recorded).toHaveBeenCalledOnce()
 })
-it("quotes git's own error without blaming a hook when a switch lands", async () => {
+it('reports the landed HEAD when git errors after checkout', async () => {
   await git('branch', 'topic')
   await expect(
     switchBranchGuarded(
@@ -179,12 +194,11 @@ it("quotes git's own error without blaming a hook when a switch lands", async ()
         getAgentBlocker: async () => null
       }
     )
-  ).rejects.toThrow(
-    new BranchSwitchLandedWithWarningError(
-      'Switched to topic, but git reported: error: unable to create file app.css: Permission denied',
-      'topic'
-    )
-  )
+  ).rejects.toMatchObject({
+    name: 'BranchSwitchLandedWithWarningError',
+    branch: 'topic',
+    head: initialHead
+  })
 })
 it('maps a remote not covered by its fetch settings to tracking recovery', async () => {
   await remote('origin')

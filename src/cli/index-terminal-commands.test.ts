@@ -47,6 +47,7 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import {
   buildWorktree,
+  noFolderWorkspacesFixture,
   okFixture,
   queueFixtures,
   queueNoFolderAtSelector,
@@ -206,13 +207,14 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', { terminals: [], totalCount: 0, truncated: false })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['terminal', 'list', '--worktree', 'active', '--json'], '/tmp/repo/feature/src')
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.list', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'terminal.list', {
       worktree: 'id:repo::/tmp/repo/feature',
       limit: undefined,
       includeVisualLayouts: false
@@ -223,6 +225,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', { terminals: [], totalCount: 0, truncated: false })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -230,7 +233,7 @@ describe('orca cli worktree awareness', () => {
     await main(['terminal', 'list', '--worktree', 'active'], '/tmp/repo/feature/src')
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'terminal.list',
       expect.objectContaining({ includeVisualLayouts: true })
     )
@@ -247,6 +250,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', {
         terminals: [],
         visualLayouts,
@@ -262,7 +266,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'terminal.list',
       expect.objectContaining({ includeVisualLayouts: true })
     )

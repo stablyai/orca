@@ -5,7 +5,7 @@ import {
 } from '../../../src/shared/mobile-browser-tunnel-protocol'
 import { OrcaProxiedBrowser } from '../../modules/orca-proxied-browser/src'
 import { translate } from '../i18n/mobile-i18n'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { bridgeProxiedBrowserToTunnel, proxiedBrowserStoreId } from './mobile-browser-local-proxy'
 import { MobileBrowserTunnelClient } from './mobile-browser-tunnel-client'
 

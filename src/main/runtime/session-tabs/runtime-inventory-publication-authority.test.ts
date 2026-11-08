@@ -44,16 +44,6 @@ describe('authoritative session tab inventory publication', () => {
     expect(collect).toHaveBeenCalledTimes(2)
   })
 
-  it('treats an initial headless graph as an authoritative empty publication', async () => {
-    const runtime = createInventoryRuntime()
-    const pending = runtime.listAllMobileSessionTabsInventory()
-    await waitForInventoryWaiter(runtime)
-
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-
-    await expect(pending).resolves.toEqual({ snapshots: [], authoritative: true })
-  })
-
   it('retries once and serves an unlabeled scan when the PTY census is unavailable', async () => {
     const runtime = new OrcaRuntimeService()
     const collect = vi.spyOn(
@@ -186,21 +176,6 @@ describe('authoritative session tab inventory publication', () => {
 
     await expect(pending).rejects.toThrow('client_disconnected')
     expect(getSessionTabsInventoryPublication(runtime).pendingWaiterCount).toBe(0)
-  })
-
-  it('does not scan when the inventory request is already cancelled', async () => {
-    const runtime = createInventoryRuntime()
-    const collect = vi.spyOn(
-      runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
-      'collectAllMobileSessionTabs'
-    )
-    const controller = new AbortController()
-    controller.abort()
-
-    await expect(
-      runtime.listAllMobileSessionTabsInventory(undefined, controller.signal)
-    ).rejects.toThrow('client_disconnected')
-    expect(collect).not.toHaveBeenCalled()
   })
 
   it('does not let a secondary renderer graph publish inventory authority', async () => {

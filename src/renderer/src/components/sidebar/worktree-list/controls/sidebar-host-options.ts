@@ -8,14 +8,12 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import {
-  buildExecutionHostRegistry,
-  type ExecutionHostHealth,
-  type ExecutionHostRegistryEntry
-} from '../../../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
+import type { ExecutionHostHealth } from '../../../../../../shared/execution-host/execution-host-health'
+import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 
 import { getExecutionHostHealthLabel } from '@/lib/runtime-host-copy'
-import { pickerExecutionHosts } from '../../../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import { getCheckedHostRows } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import type { RuntimeCompatVerdict } from '../../../../../../shared/protocol-compat'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../../../shared/ssh-types'

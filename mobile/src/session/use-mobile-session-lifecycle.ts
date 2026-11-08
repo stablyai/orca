@@ -4,14 +4,14 @@ import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { loadHosts } from '../transport/host-store'
+import { loadHosts } from '../transport/hosts/host-store'
 import { loadTerminalAccessoryLayout } from '../terminal/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
 } from '../terminal/terminal-foreground-recovery'
 import { loadCustomKeys, subscribeStoredCustomKeys } from '../terminal/terminal-custom-keys'
-import type { MobileSessionTabReconciliationModel } from './use-mobile-session-tab-reconciliation'
+import type { MobileSessionTabReconciliationModel } from './tabs/use-mobile-session-tab-reconciliation'
 
 export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationModel) {
   const shellStorage = useShellStorage()

@@ -5,7 +5,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'

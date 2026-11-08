@@ -11,7 +11,7 @@ import {
   getTaskSourceCacheScope,
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { parseJiraStatusError } from '../../../../../shared/jira/jira-status-error'
 import { defaultScopeSource } from '@/lib/default-creation-host'

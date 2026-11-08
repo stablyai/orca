@@ -1,10 +1,10 @@
 import { translate } from '../i18n/mobile-i18n'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
 import { repoBaseRefListRead, repoDefaultBaseRefRead } from './mobile-repo-base-ref-operations'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { RpcResponse } from '../transport/types'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { worktreeSummaryRead } from './mobile-worktree-metadata-operations'
 import {
   resolveSourceControlBaseRef,

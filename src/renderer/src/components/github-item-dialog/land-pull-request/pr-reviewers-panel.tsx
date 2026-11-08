@@ -13,7 +13,7 @@ import {
 } from '@/components/github/github-pr-reviewer-candidate-filter'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { useTranslate } from '@/i18n/use-translate'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'

@@ -1,4 +1,4 @@
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileBrowserLocalTunnel } from './use-mobile-browser-local-tunnel'
 
 // A served page has no native proxy, so the tunnel code stays out of its bundle.

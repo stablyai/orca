@@ -1,7 +1,7 @@
 import type { MicrophoneDataEvent } from '@orca/expo-two-way-audio'
 import { enqueueMobileDictationAudioChunk } from '../hooks/mobile-dictation-audio-chunk'
 import type { DictationCaptureChunk } from './dictation-capture-contract'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 // Pin capture chunks separately from raw microphone events so droppedBytes cannot disappear at the sender. Unused expect-error directives fail typecheck; this module never runs.
 

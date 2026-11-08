@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react'
 import { loadBrowserDrawing, type MobileLocalBrowserNetwork } from '../storage/preferences'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 import { PHONE_NETWORK_BROWSER_STORE_ID } from './mobile-browser-local-proxy'
 import { MobileLocalBrowserPane } from './MobileLocalBrowserPane'

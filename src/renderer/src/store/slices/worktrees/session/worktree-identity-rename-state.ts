@@ -224,6 +224,15 @@ export function buildWorktreeRenameState(
         ])
       )
     : s.sleepingAgentSessionsByPaneKey
+  // Groups keep their ids across the rename, so their chooser marks move with them.
+  const splitLandingGroupIds = Object.values(s.splitLandingGroupIds ?? {}).includes(oldWorktreeId)
+    ? Object.fromEntries(
+        Object.entries(s.splitLandingGroupIds).map(([groupId, worktreeId]) => [
+          groupId,
+          worktreeId === oldWorktreeId ? newWorktreeId : worktreeId
+        ])
+      )
+    : s.splitLandingGroupIds
 
   return {
     ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId),
@@ -241,6 +250,7 @@ export function buildWorktreeRenameState(
     ...(sleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
       ? { sleepingAgentSessionsByPaneKey }
       : {}),
+    ...(splitLandingGroupIds !== s.splitLandingGroupIds ? { splitLandingGroupIds } : {}),
     ...(closedTerminalTabTombstonesByTabId !== s.closedTerminalTabTombstonesByTabId
       ? { closedTerminalTabTombstonesByTabId }
       : {}),

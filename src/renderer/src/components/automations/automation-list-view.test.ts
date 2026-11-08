@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRunStatus } from '../../../../shared/automations/history/automation-run'
 import type {
-  Automation,
-  AutomationRunStatus,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 import {
   EMPTY_AUTOMATION_LIST_FILTER,
   filterAutomationListRows,
   filterExternalAutomationListEntries,
   type AutomationListFilter
 } from './automation-list-view'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 

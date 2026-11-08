@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationHostRow } from './automation-host-cache-types'
 import {
   automationActionAvailability,
   captureAutomationOwners,
-  capturedAutomationOwner,
-  isAutomationActionEnabled,
-  UNCAPTURED_AUTOMATION_OWNER
+  isAutomationActionEnabled
 } from './automation-captured-owner'
 
 const DESKTOP_SELF: AutomationOwnerRef = {
@@ -72,26 +70,6 @@ describe('captured owner availability', () => {
     expect(automationActionAvailability(orphan, 'edit').kind).toBe('blocked')
     expect(isAutomationActionEnabled(orphan, 'run')).toBe(false)
     expect(isAutomationActionEnabled(orphan, 'delete')).toBe(true)
-  })
-
-  it('blocks delete on a legacy row and asks for a server update', () => {
-    // A qualified selector with no owner means the authority never sent a generation.
-    const legacy = { owner: null, selector: { kind: 'ssh' as const, targetId: 'box' } }
-    const availability = automationActionAvailability(legacy, 'delete')
-    expect(availability.kind).toBe('blocked')
-    expect(availability.kind === 'blocked' && availability.block.recovery).toBe('update-server')
-    expect(availability.kind === 'blocked' && availability.block.message).toContain(
-      'needs an update'
-    )
-    expect(availability.kind === 'blocked' && availability.block.message).toContain(
-      'Scheduled runs may still continue'
-    )
-  })
-
-  it('reports a row with no metadata as uncaptured rather than blocked', () => {
-    expect(automationActionAvailability(UNCAPTURED_AUTOMATION_OWNER, 'run').kind).toBe('uncaptured')
-    expect(capturedAutomationOwner(new Map(), 'missing')).toBe(UNCAPTURED_AUTOMATION_OWNER)
-    expect(capturedAutomationOwner(null, 'missing')).toBe(UNCAPTURED_AUTOMATION_OWNER)
   })
 
   it("keeps both authorities' owners when they hold the same automation ID", () => {

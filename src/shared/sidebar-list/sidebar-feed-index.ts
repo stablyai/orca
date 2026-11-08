@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../execution-host'
-import { buildExecutionHostRegistry } from '../execution-host-registry'
+import { buildExecutionHostRegistry } from '../execution-host/execution-host-registry'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import {
   getRepoHostIdentity,

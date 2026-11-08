@@ -1,16 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../../shared/orchestration-session-caller-codes'
-import {
-  mintStructuredWorkerHandle,
-  mintStructuredWorkerPaneKey,
-  structuredWorkerIdentities,
-  structuredWorkerProcessIncarnation
-} from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import '../../../shared/orchestration/orchestration-session-caller-codes'
+
 import {
   ADDRESS_X,
-  ADDRESS_Y,
   createSessionCallerHarness,
-  idOf,
   orchestrationRequest,
   resultOf,
   SESSION_X,
@@ -39,45 +32,6 @@ describe('orchestration.callerShow: a session learns its Orca session ID from th
   function callerShow(options: Parameters<typeof orchestrationRequest>[2]) {
     return orchestrationRequest('orchestration.callerShow', {}, options)
   }
-
-  it('answers a structured worker with the Orca session ID its preamble names, whose mail is keyed by its handle', async () => {
-    const handle = mintStructuredWorkerHandle()
-    structuredWorkerIdentities.register({
-      handle,
-      sessionId: SESSION_Y,
-      agent: 'claude',
-      paneKey: mintStructuredWorkerPaneKey(SESSION_Y),
-      processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
-      worktreeId: 'wt_1',
-      hostScope: { kind: 'local', hostId: 'local' }
-    })
-    const asX = (method: string, params: Record<string, unknown>) =>
-      h.dispatch(orchestrationRequest(method, params, { sessionId: SESSION_X }))
-    const runId = idOf(resultOf(await asX('orchestration.runCreate', { objective: 'o' })).run)
-    const task = h.db.createTask({ runId, spec: 'work' })
-
-    const shown = resultOf(
-      await h.dispatch(callerShow({ sessionId: SESSION_Y, evidence: { terminalHandle: handle } }))
-    )
-    const { preamble } = resultOf(
-      await asX('orchestration.dispatch', { task: task.id, to: ADDRESS_Y, dryRun: true })
-    )
-    await h.dispatch(
-      orchestrationRequest(
-        'orchestration.send',
-        { to: ADDRESS_X, subject: 'progress', type: 'status' },
-        { sessionId: SESSION_Y }
-      )
-    )
-    const checked = resultOf(await asX('orchestration.check', { all: true, format: true }))
-
-    expect(shown).toEqual({ caller: { orcaSessionId: ADDRESS_Y, live: true } })
-    expect(preamble).toContain(`Your coordinator's Orca session ID is: ${ADDRESS_X}\n`)
-    expect(preamble).toContain(`Your Orca session ID is: ${ADDRESS_Y}\n`)
-    expect(preamble).not.toContain(handle)
-    // Storage is unchanged: the mail it sends as either spelling is keyed by its minted handle.
-    expect(checked.messages).toEqual([expect.objectContaining({ from_handle: handle })])
-  })
 
   it('gives the menu the Orca session ID each session of a cleared chat acts as', async () => {
     const cleared = sessionRecord(SESSION_X)

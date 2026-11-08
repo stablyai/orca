@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import { filterAvailableTaskProviders } from '../../../../shared/task-providers'
+import { filterAvailableTaskProviders } from '../../../../shared/work-items/task-providers'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getMrStateFilters, getSmartWorkspaceNameModes } from './smart-workspace-localized-options'
 import {

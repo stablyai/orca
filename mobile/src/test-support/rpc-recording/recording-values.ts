@@ -1,4 +1,4 @@
-import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
+import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
 
 export type RecordedValue =
   | null

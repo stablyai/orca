@@ -14,9 +14,11 @@ export type GitHistoryCommitAction = 'open-remote' | 'copy-hash' | 'copy-message
 
 export function GitHistoryCommitContextMenu({
   item,
+  children,
   onAction
 }: {
   item: GitHistoryItem
+  children?: React.ReactNode
   onAction: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -29,6 +31,7 @@ export function GitHistoryCommitContextMenu({
   )
   return (
     <ContextMenuContent className="w-56">
+      {children}
       {managedBrowserCreationEnabled ? (
         <ContextMenuItem onSelect={() => onAction('open-remote', item)}>
           <Globe className="size-3.5" />

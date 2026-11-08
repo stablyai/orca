@@ -1,6 +1,6 @@
 import { sha256 } from '@noble/hashes/sha256'
 import type { OrcaProxiedBrowserModule } from '../../modules/orca-proxied-browser/src'
-import { decodeBase64Bytes } from '../transport/base64-byte-codec'
+import { decodeBase64Bytes } from '../transport/encryption/base64-byte-codec'
 import type {
   MobileBrowserTunnelClient,
   MobileBrowserTunnelStream

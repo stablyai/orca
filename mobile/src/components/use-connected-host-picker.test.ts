@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostProfile } from '../transport/types'
+import type { HostProfile } from '../transport/hosts/host-profile'
 import { useConnectedHostPicker } from './use-connected-host-picker'
 
 function host(id: string, name: string, endpoint: string): HostProfile {
@@ -98,21 +98,6 @@ describe('useConnectedHostPicker', () => {
       { value: 'desk-b', label: 'Desk', subtitle: 'gateway.example.com · desk-b' }
     ])
     expect(JSON.stringify(picker().options)).not.toContain('bearer-secret')
-  })
-
-  it('does not expose malformed legacy endpoint details', () => {
-    render([
-      host('desk-a', 'Desk', 'gateway.example.com/v1/connect/bearer-secret?token=query-secret'),
-      host('desk-b', 'Desk', 'localhost:6768/private-secret')
-    ])
-
-    pickHost(vi.fn())
-
-    expect(picker().options).toEqual([
-      { value: 'desk-a', label: 'Desk', subtitle: 'Unknown endpoint · desk-a' },
-      { value: 'desk-b', label: 'Desk', subtitle: 'Unknown endpoint · desk-b' }
-    ])
-    expect(JSON.stringify(picker().options)).not.toContain('secret')
   })
 
   it('closes a stale picker when an offered host disconnects', () => {

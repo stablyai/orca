@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { useHostQuery } from '../query/host-query'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { buildRepoHostIdByRepoId } from '../worktree/worktree-host-context-labels'
 import { buildSshHostHealthById } from '../worktree/worktree-host-health'
 import type { SectionRepo } from '../worktree/workspace-list-types'

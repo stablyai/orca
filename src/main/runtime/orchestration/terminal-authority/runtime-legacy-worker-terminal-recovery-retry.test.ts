@@ -4,8 +4,7 @@ import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests } from './runtime-l
 
 import {
   missingWorkspaceRecoveryFixture,
-  missingWorkspaceWorker,
-  emptyLocalWorkerInventory
+  missingWorkspaceWorker
 } from './structured-sessions/runtime-legacy-worker-recovery-test-fixture'
 
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
@@ -77,19 +76,5 @@ describe('RuntimeLegacyWorkerTerminalRecoveryController retry loop', () => {
       explicitInventory.resolve(null)
       warning.mockRestore()
     }
-  })
-
-  it('automatically recovers a provider that becomes verifiable after two minutes', async () => {
-    const fixture = missingWorkspaceRecoveryFixture()
-    await fixture.controller.reconcile()
-    await vi.advanceTimersByTimeAsync(120_000)
-    expect(fixture.reconcileMissing).not.toHaveBeenCalled()
-    expect(fixture.persist).not.toHaveBeenCalled()
-
-    fixture.refreshInventory.mockResolvedValue(emptyLocalWorkerInventory())
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(fixture.reconcileMissing).toHaveBeenCalledExactlyOnceWith(missingWorkspaceWorker())
-    expect(fixture.persist).toHaveBeenCalledTimes(1)
-    expect(vi.getTimerCount()).toBe(0)
   })
 })

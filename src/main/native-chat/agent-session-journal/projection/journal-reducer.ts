@@ -46,7 +46,7 @@ import {
   createJournalQueuePauseMarks,
   foldJournalQueuePauseMark,
   type JournalQueuePauseMarks
-} from '../queued-messages/queued-message-pause'
+} from '../queued-messages/queued-message-pause-marks'
 import {
   createJournalQueueState,
   foldJournalQueueRow,

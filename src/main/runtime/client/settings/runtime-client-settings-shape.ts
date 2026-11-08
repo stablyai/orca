@@ -37,6 +37,7 @@ export type RuntimeClientSettings = Pick<
   | 'nativeChatPermissionMode'
   | 'nativeChatAutoContinueAfterUsageLimit'
   | 'nativeChatQueueFollowUps'
+  | 'nativeChatCiResultLines'
   | 'sourceControlGroupOrder'
   | 'sourceControlCompareAgainstUpstream'
   | 'diffShowWhitespace'

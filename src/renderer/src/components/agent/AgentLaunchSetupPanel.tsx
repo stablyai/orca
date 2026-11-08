@@ -53,6 +53,7 @@ export function AgentLaunchSetupPanel({
   getDraft,
   mode = 'launch',
   disabled,
+  autoFocus = true,
   terminalBlocked,
   onDraftChange,
   onUse
@@ -123,10 +124,7 @@ export function AgentLaunchSetupPanel({
     ) : null
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
-    if (current) {
-      return onUse({ ...acceptAgentPickerArguments(entry, current), surface })
-    }
-    return false
+    return current ? onUse({ ...acceptAgentPickerArguments(entry, current), surface }) : false
   }
   const use = (surface: AgentPickerSurface) =>
     mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
@@ -202,7 +200,7 @@ export function AgentLaunchSetupPanel({
         }}
       >
         <CommandInput
-          autoFocus
+          autoFocus={autoFocus}
           disabled={modelDisabled}
           aria-busy={catalogPending}
           value={modelQuery}
