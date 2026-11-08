@@ -73,6 +73,7 @@ export function readJournalSqlObserver(
   return {
     cursor: { epoch: context.epoch, sequence: context.sequence },
     physicalCursor: { epoch: context.scope.epoch, sequence: context.sequence },
+    lastActivityAt: context.lastActivityAt,
     authority,
     state: withStructuredAgentSessionDiedTurnVerdict(
       readJournalSqlStatusState(context, authority.record?.currentFence, work.scope),

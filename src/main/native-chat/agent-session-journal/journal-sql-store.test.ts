@@ -1,4 +1,6 @@
 import { StructuredAgentSessionJournalProjections } from '../agent-session-wire/observations/structured-agent-session-status-journal-projection'
+import { StructuredAgentSessionStatusFeed } from '../agent-session-wire/observations/structured-agent-session-status-feed'
+import type { StatusFeedSession } from '../agent-session-wire/observations/structured-agent-session-status-feed-deps'
 import type { JournalWorkAuthority } from './journal-observer-read'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -301,4 +303,63 @@ it('discards row-free authority changes before publishing an asynchronous observ
   expect(await projections.readSql(journal, capture, () => {})).toMatchObject({
     authority: { child: { heldSends: ['later-owner', 'new-live-owner'] } }
   })
+})
+
+it('publishes SQL status only with recaptured live owners through the existing refresh path', async () => {
+  const { journal } = await fixture()
+  await journal.write({
+    kind: 'item',
+    identity: { provider: 'orca', clientMessageId: 'prompt' },
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Read my chat' }] },
+    options: { fence: 0, turnScope: { kind: 'thread' } }
+  })
+  const held = new Set<string>()
+  const session: StatusFeedSession = {
+    journal,
+    params: {
+      provider: 'codex',
+      location: {
+        executionHostId: 'local',
+        wslDistro: null,
+        workspaceId: 'workspace',
+        workspaceKind: 'git-worktree'
+      }
+    },
+    child: { fence: 0, phase: 'ready', generation: 'generation', heldSends: () => held }
+  }
+  const logger = { warn: vi.fn(), error: vi.fn() }
+  const feed = new StructuredAgentSessionStatusFeed({
+    sessions: new Map([['session', session]]),
+    getConversation: () => null,
+    now: () => 999,
+    logger
+  })
+  const reached = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const published = Promise.withResolvers<void>()
+  const read = journal.reads.observer.bind(journal.reads)
+  vi.spyOn(journal.reads, 'observer').mockImplementationOnce(async (input) => {
+    const result = await read(input)
+    reached.resolve()
+    await release.promise
+    return result
+  })
+  const observations: unknown[] = []
+  const pending = feed.publish('session', journal, { replay: true }, (projection) => {
+    observations.push({
+      revision: projection.workRevision,
+      held: projection.authority?.child?.heldSends
+    })
+    published.resolve()
+  })
+  await reached.promise
+  expect(feed.readPublished('session')).toBeUndefined()
+  session.operationalRevision = 1
+  held.add('held-without-row')
+  release.resolve()
+  await pending
+  await published.promise
+  expect(observations).toEqual([{ revision: 1, held: ['held-without-row'] }])
+  expect(feed.readPublished('session')).toMatchObject({ prompt: 'Read my chat', updatedAt: 100 })
+  expect(logger.warn).not.toHaveBeenCalled()
 })

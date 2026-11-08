@@ -3,12 +3,16 @@ import { StructuredAgentSessionJournalObservers } from '../../observations/struc
 import type { StructuredAgentSessionConversations } from '../../host/structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from '../../observations/structured-agent-session-saved-status'
 import { createStructuredAgentSessionHostRequestFailures } from '../../observations/structured-agent-session-host-request-failures'
-import { AT_REST_COMMANDS_READ_BUDGET_MS } from '../../options/at-rest-command-catalog'
+import { createStructuredAgentSessionCommandReads } from '../../options/structured-agent-session-command-reads'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import { SqlAgentSessionJournal as SqlJournal } from '../../../agent-session-journal/journal-sql-store'
+import { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
+import type { StructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-current-work'
 import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import {
@@ -46,6 +50,7 @@ export class StructuredAgentSessionClientDelivery {
   private readonly turnCompletionFeed
   readonly requestFailures
   private readonly sendSettlement
+  private readonly commandReads = createStructuredAgentSessionCommandReads(() => this.deps())
   private readonly journalObservers = new StructuredAgentSessionJournalObservers(
     (sessionId, error) =>
       this.deps().logger.warn('observing a journal publication failed', {
@@ -91,7 +96,7 @@ export class StructuredAgentSessionClientDelivery {
       sessions,
       now,
       readStatusState: (sessionId, journal) =>
-        this.statusFeed.journalProjection(sessionId, journal)?.state ?? null,
+        this.journalProjection(sessionId, journal)?.state ?? null,
       readChildWork: (sessionId) => this.statusFeed.readChildWork(sessionId)
     })
     this.sendSettlement = new StructuredAgentSessionSendSettlement((sessionId) =>
@@ -128,51 +133,13 @@ export class StructuredAgentSessionClientDelivery {
       ) ?? (() => undefined)
   }
 
-  readCommands(sessionId: string, commandsOnRequest = false) {
-    const { adapter, store } = this.deps()
-    const live = adapter.readCommands?.(sessionId)
-    if (live !== undefined) {
-      return live
-    }
-    const record = store.getRecord(sessionId)
-    return record
-      ? commandsOnRequest
-        ? adapter.atRestCommands?.snapshot?.(record).commands
-        : adapter.atRestCommands?.read(record)
-      : undefined
-  }
+  readCommands = (sessionId: string, commandsOnRequest = false) =>
+    this.commandReads.read(sessionId, commandsOnRequest)
 
-  /** Wait briefly for scans because one-shot menu readers do not receive later updates. */
-  async readCommandsSettled(sessionId: string, commandsOnRequest = false) {
-    const { adapter, store } = this.deps()
-    const live = adapter.readCommands?.(sessionId)
-    const record = store.getRecord(sessionId)
-    if (live !== undefined || !record) {
-      return { commands: live, ...(commandsOnRequest ? { commandsPending: false } : {}) }
-    }
-    const commands = adapter.atRestCommands?.settled
-      ? await adapter.atRestCommands.settled(
-          record,
-          AT_REST_COMMANDS_READ_BUDGET_MS,
-          commandsOnRequest
-        )
-      : adapter.atRestCommands?.read(record)
-    const current = adapter.readCommands?.(sessionId)
-    const snapshot = commandsOnRequest ? adapter.atRestCommands?.snapshot?.(record) : undefined
-    if (current === undefined && snapshot?.retryableFailure) {
-      throw new Error('Command discovery unavailable')
-    }
-    return {
-      commands: current ?? (snapshot ? snapshot.commands : commands),
-      ...(commandsOnRequest
-        ? {
-            commandsPending: current === undefined && (snapshot?.commandsPending ?? false)
-          }
-        : {})
-    }
-  }
+  readCommandsSettled = (sessionId: string, commandsOnRequest = false) =>
+    this.commandReads.settled(sessionId, commandsOnRequest)
 
-  readUsageLimitCut = (id: string) => this.statusFeed.journalProjection(id)?.usageLimitCut ?? null
+  readUsageLimitCut = (id: string) => this.journalProjection(id)?.usageLimitCut ?? null
 
   drainStatusWrites = (): Promise<void> => this.savedStatus.drain()
 
@@ -180,7 +147,9 @@ export class StructuredAgentSessionClientDelivery {
     visit: Parameters<StructuredAgentSessionStatusFeed['publishSavedGroup']>[0]
   ): void => this.statusFeed.publishSavedGroup(visit)
 
-  publishStatus = (sessionId: string): void => this.statusFeed.publish(sessionId)
+  publishStatus = (sessionId: string): void => {
+    this.statusFeed.publish(sessionId)
+  }
 
   publishConversationName = (sessionId: string): void =>
     this.statusFeed.publishConversationName(sessionId)
@@ -192,13 +161,13 @@ export class StructuredAgentSessionClientDelivery {
     evidence: AgentChildWorkEvidence[],
     producer?: StructuredAgentSessionChildWorkProducer
   ): void => {
-    this.statusFeed.publishChildWork(sessionId, evidence, producer)
-    // A drain can be the moment a held turn becomes finished.
-    this.turnCompletionFeed.observe(sessionId)
+    this.statusFeed.publishChildWork(sessionId, evidence, producer, (projection) =>
+      this.turnCompletionFeed.observeProjection(sessionId, projection)
+    )
   }
 
   readStopping = (sessionId: string): boolean => {
-    const projection = this.statusFeed.journalProjection(sessionId)
+    const projection = this.journalProjection(sessionId)
     return projection?.stopping === true && projection.state.summary.status === 'working'
   }
 
@@ -254,15 +223,16 @@ export class StructuredAgentSessionClientDelivery {
     this.publishJournal(sessionId, journal, false)
   }
 
-  readCurrentWork = (sessionId: string) => {
+  readCurrentWork = async (sessionId: string) => {
     const journal = this.sessions.get(sessionId)?.journal
     return journal ? this.currentWork(sessionId, journal) : null
   }
 
   publishRestored = (sessionId: string): void => {
     this.publications?.publish(sessionId, 'reset')
-    this.statusFeed.publish(sessionId, undefined, { replay: true })
-    this.turnCompletionFeed.observe(sessionId, undefined, { historical: true })
+    this.statusFeed.publish(sessionId, undefined, { replay: true }, (projection) =>
+      this.turnCompletionFeed.observeProjection(sessionId, projection, { historical: true })
+    )
   }
 
   /** Observe every journal publication, including row-free wakes, without opening a client stream.
@@ -315,15 +285,39 @@ export class StructuredAgentSessionClientDelivery {
     activity = true,
     inputChanged = true
   ): void {
-    this.statusFeed.publish(sessionId, journal)
+    this.statusFeed.publish(sessionId, journal, undefined, (projection) =>
+      this.turnCompletionFeed.observeProjection(sessionId, projection)
+    )
     this.sendSettlement.publish(sessionId, this.settlementReading(sessionId, journal))
-    // Observe completion after status projection updates, even without subscribers for background chats.
-    this.turnCompletionFeed.observe(sessionId, journal)
     this.queue.onJournalActivity(sessionId, activity, inputChanged)
     this.journalObservers.publish(sessionId, journal)
   }
 
-  private currentWork(sessionId: string, journal: AgentSessionJournal) {
+  private journalProjection(sessionId: string, journal?: AgentSessionJournal) {
+    const source = journal ?? this.sessions.get(sessionId)?.journal
+    return source ? this.statusFeed.journalProjection(sessionId, source) : null
+  }
+
+  private currentWork(
+    sessionId: string,
+    journal: AgentSessionJournal
+  ): StructuredAgentSessionCurrentWork
+  private currentWork(
+    sessionId: string,
+    journal: SqlAgentSessionJournal
+  ): Promise<StructuredAgentSessionObservedWork | null>
+  private currentWork(sessionId: string, journal: AgentSessionJournal | SqlAgentSessionJournal) {
+    if (journal instanceof SqlJournal) {
+      return Promise.resolve(this.statusFeed.journalProjection(sessionId, journal)).then(
+        (projection) =>
+          projection?.work
+            ? new StructuredAgentSessionObservedWork(journal, projection.work, {
+                epoch: projection.epoch,
+                sequence: projection.sequence
+              })
+            : null
+      )
+    }
     const session = this.sessions.get(sessionId)
     return heldStructuredAgentSessionCurrentWork(this.deps().store, sessionId, journal, session)
   }

@@ -31,6 +31,7 @@ export type StructuredAgentSessionJournalProjection = {
   epoch: string
   contextId: string | null
   sequence: number
+  lastActivityAt: number
   fence: number | undefined
   /** Live authority may change without a journal row. */
   liveFence: number | null
@@ -64,10 +65,17 @@ export class StructuredAgentSessionJournalProjections {
   /** Discard an invalidated asynchronous answer before touching the existing publication cache. */
   async readSql(
     journal: SqlAgentSessionJournal,
-    capture: () => { authority: JournalWorkAuthority; contextId: string | null },
-    invalidated: () => void
+    capture: () => { authority: JournalWorkAuthority; contextId: string | null } | null,
+    invalidated: () => void,
+    observed?: (projection: StructuredAgentSessionJournalProjection) => void
   ): Promise<StructuredAgentSessionJournalProjection | null> {
     const captured = capture()
+    if (!captured) {
+      if (!journal.isClosed) {
+        invalidated()
+      }
+      return null
+    }
     const contextId = captured.contextId
     const authority = copyJournalWorkAuthority(captured.authority)
     const signature = JSON.stringify(authority)
@@ -80,6 +88,7 @@ export class StructuredAgentSessionJournalProjections {
       prior.contextId === contextId &&
       JSON.stringify(prior.authority) === signature
     ) {
+      observed?.(prior)
       return prior
     }
     const sameContext =
@@ -92,6 +101,7 @@ export class StructuredAgentSessionJournalProjections {
     })
     const current = capture()
     if (
+      !current ||
       journal.isClosed ||
       !sameJournalCursor(result.cursor, journal.cursor()) ||
       !sameJournalCursor(result.physicalCursor, journal.physicalCursor()) ||
@@ -106,6 +116,7 @@ export class StructuredAgentSessionJournalProjections {
     }
     const projection: StructuredAgentSessionJournalProjection = {
       ...result.cursor,
+      lastActivityAt: result.lastActivityAt,
       contextId,
       fence: authority.record?.currentFence,
       liveFence: result.work.liveFence,
@@ -118,6 +129,7 @@ export class StructuredAgentSessionJournalProjections {
       work: result.work
     }
     this.byJournal.set(journal, projection)
+    observed?.(projection)
     return projection
   }
 
@@ -191,6 +203,7 @@ export class StructuredAgentSessionJournalProjections {
       }
       projection = {
         ...cursor,
+        lastActivityAt: journal.lastActivityAt(),
         contextId,
         usageLimitCut: latestNativeChatUsageLimitCut(
           snapshot.items,

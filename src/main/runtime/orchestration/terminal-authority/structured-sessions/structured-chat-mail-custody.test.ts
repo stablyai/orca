@@ -260,7 +260,7 @@ describe('a queued mail card runs only while its chat still owes it', () => {
     })
     await settleTurn(COORDINATOR, 0)
     const journal = journalOf(COORDINATOR)
-    const work = host.currentWork(COORDINATOR)!
+    const work = (await host.currentWork(COORDINATOR))!
     // Idle with nothing to hand over: not working, so /clear and the person's sends go through.
     await vi.waitFor(() => expect(work.working()).toBe(false), WAIT)
     const record = host.deps.store.getRecord(COORDINATOR)

@@ -310,7 +310,7 @@ describe('the structured redrive publication edge', () => {
         { kind: 'turn', turnId: 'busy-turn', state: 'running' },
         { fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
-      expect(host.currentWork(worker.identity.sessionId)?.working()).toBe(true)
+      expect((await host.currentWork(worker.identity.sessionId))?.working()).toBe(true)
       await vi.advanceTimersByTimeAsync(300)
       dispatch.mockClear()
       notify.mockClear()

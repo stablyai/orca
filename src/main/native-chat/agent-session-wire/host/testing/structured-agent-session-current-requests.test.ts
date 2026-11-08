@@ -150,7 +150,7 @@ it('keeps full child requests answerable outside the bounded transcript and clea
       { fence: 1, ownerFence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
-  expect(current.host.currentWork(SESSION)?.requestProjection(SESSION).marker.version).toBe(
+  expect((await current.host.currentWork(SESSION))?.requestProjection(SESSION).marker.version).toBe(
     requestVersion
   )
   await current.host.subscribe({

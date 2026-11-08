@@ -3,10 +3,9 @@
 
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { UnopenedSendJournal } from './structured-agent-session-unopened-send-withdrawal'
 
 /** The chat's journal, which identifies the conversation for as long as it is held. */
-type HandoverJournal = Pick<UnopenedSendJournal, 'submissions'>
+type HandoverJournal = object
 
 type HandoverInput = {
   owner: () => void
@@ -52,6 +51,26 @@ export function structuredAgentSessionHandingOver(
   journal: HandoverJournal
 ): ReadonlyMap<string, Handover> {
   return handingOver.get(journal) ?? NONE
+}
+
+/** Pending submission membership is checked in the reader's snapshot, alongside these live owners. */
+export function structuredAgentSessionHandoverAuthority(journal: HandoverJournal): {
+  handingOver: string[]
+  continuingUnadmitted: string[]
+  finalizing: string[]
+} {
+  const sends = structuredAgentSessionHandingOver(journal)
+  const continuingUnadmitted: string[] = []
+  const finalizing: string[] = []
+  for (const [id, { input }] of sends) {
+    if (input?.unadmitted === true && input.signal?.aborted !== true) {
+      continuingUnadmitted.push(id)
+    }
+    if (input?.finalization !== undefined) {
+      finalizing.push(id)
+    }
+  }
+  return { handingOver: [...sends.keys()], continuingUnadmitted, finalizing }
 }
 
 /** Volatile proof owned by the live handover; a crash or cancellation restores ordinary doubt. */

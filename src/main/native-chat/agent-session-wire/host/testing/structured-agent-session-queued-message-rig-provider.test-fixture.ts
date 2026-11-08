@@ -123,7 +123,10 @@ export function createQueuedRigProvider(
     ...(options.windsDown
       ? {
           awaitStoppedRequestEnd: async (sessionId: string, stoppedAt: number) => {
-            while (Date.now() < stoppedAt + QUEUED_RIG_STOP_GRACE_MS && working(sessionId)) {
+            while (
+              Date.now() < stoppedAt + QUEUED_RIG_STOP_GRACE_MS &&
+              (await working(sessionId))
+            ) {
               await new Promise((resolve) => setTimeout(resolve, 5))
             }
           }
@@ -131,8 +134,8 @@ export function createQueuedRigProvider(
       : {})
   }
 
-  function working(sessionId: string): boolean {
-    return host().currentWork(sessionId)?.working() ?? false
+  async function working(sessionId: string): Promise<boolean> {
+    return (await host().currentWork(sessionId))?.working() ?? false
   }
 
   const adapter = options.starting ? scripted : startsWhenPublished(scripted, host)

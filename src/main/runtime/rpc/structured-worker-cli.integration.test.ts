@@ -613,7 +613,9 @@ it('worker-abandon settles and fences consumption, releases the existing binding
   })
   finishTurns = false
   const worker = await start()
-  await vi.waitFor(() => expect(host.currentWork(worker.identity.sessionId)?.working()).toBe(true))
+  await vi.waitFor(async () =>
+    expect((await host.currentWork(worker.identity.sessionId))?.working()).toBe(true)
+  )
   const mailbox = `dispatch:${worker.dispatchId}`
   const checked = db.insertMessage({
     from: `run:${runId}`,

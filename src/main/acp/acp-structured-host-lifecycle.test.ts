@@ -277,13 +277,13 @@ describe('a Grok send whose acceptance could not be written', () => {
     const sent = await send(host, 'hello')
     const prompt = await rig.frame('session/prompt')
     // The first provider frame supplies prompt identity and proves acceptance.
-    await waitFor(() => expect(host.currentWork(SESSION)?.working()).toBe(true))
+    await waitFor(async () => expect((await host.currentWork(SESSION))?.working()).toBe(true))
 
     rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'hi'))
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
     await rig.settle()
 
-    await waitFor(() => expect(host.currentWork(SESSION)?.working()).toBe(false))
+    await waitFor(async () => expect((await host.currentWork(SESSION))?.working()).toBe(false))
     // Rejected journal admission leaves the send pending.
     expect(
       (await host.journalSnapshot(SESSION)).submissions.find((row) => row.clientMessageId === sent)

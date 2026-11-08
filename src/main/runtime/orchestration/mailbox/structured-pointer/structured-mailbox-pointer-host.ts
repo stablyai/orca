@@ -38,7 +38,7 @@ export async function readStructuredSessionGateFacts(
     return null
   }
   // The host's projection of current work: an agent that ended is idle, whatever its rows say.
-  const work = getStructuredAgentSessionHost()?.currentWork(sessionId)
+  const work = await getStructuredAgentSessionHost()?.currentWork(sessionId)
   return structuredSessionGateFacts(snapshot.items, work?.scope)
 }
 

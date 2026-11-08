@@ -38,6 +38,7 @@ export type JournalObserverRead = {
 export type JournalObserverResult = {
   cursor: AgentJournalCursor
   physicalCursor: AgentJournalCursor
+  lastActivityAt: number
   authority: JournalWorkAuthority
   state: JournalStatusState
   indicators: JournalStatusIndicators

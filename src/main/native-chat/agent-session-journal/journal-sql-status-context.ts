@@ -24,6 +24,7 @@ export class JournalSqlStatusContext {
   private readonly seeds = new Map<number | undefined, AgentJournalSubmission[]>()
   readonly epoch: string
   readonly sequence: number
+  readonly lastActivityAt: number
   private recoverable: AgentJournalSubmission[] | undefined
   readonly submissionCount: number
   readonly stop: JournalLatestStop | null
@@ -33,6 +34,7 @@ export class JournalSqlStatusContext {
     const reducer = new JournalSqlScalars(scope, 'reducer')
     this.epoch = journalContextEpoch(scope.epoch, reducer.get('contextBoundary', 1))
     this.sequence = reducer.get('lastSequence', 0)
+    this.lastActivityAt = reducer.get('lastActivityAt', 0)
     this.submissionCount = new JournalSqlScalars(scope, 'evidence').get('nextOrdinal', 0)
     this.stop = new JournalSqlScalars(scope, 'pause-marks').get<{
       latestStop: JournalLatestStop | null

@@ -4,6 +4,7 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   StructuredChatNamingFailure,
   StructuredAgentSessionEndedChild,
@@ -16,13 +17,16 @@ import type { StructuredAgentSessionStatusSink } from './structured-agent-sessio
 import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
 
 export type StatusFeedSession = {
-  journal: AgentSessionJournal
+  journal: AgentSessionJournal | SqlAgentSessionJournal
   params: {
     location: AgentSessionConversationView['location']
     provider: AgentSessionConversationView['provider']
   }
-  child?: Pick<StructuredAgentSessionProviderChild, 'phase' | 'generation' | 'fence'> | null
-  lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone'>
+  child?: Pick<
+    StructuredAgentSessionProviderChild,
+    'phase' | 'generation' | 'fence' | 'heldSends'
+  > | null
+  lastEndedChild?: Pick<StructuredAgentSessionEndedChild, 'fence' | 'rootGone' | 'cause'>
   operationalRevision?: number
   restartResume?: AgentSessionStatusSummary['restartResume']
 }

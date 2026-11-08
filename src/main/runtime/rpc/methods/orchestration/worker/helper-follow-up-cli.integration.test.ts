@@ -219,7 +219,7 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
           { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
         )
       await current.host.flushStreamedEvents(sessionId)
-      expect(current.host.currentWork(sessionId)?.working()).toBe(false)
+      expect((await current.host.currentWork(sessionId))?.working()).toBe(false)
       current.dispatch.mockClear()
       vi.spyOn(current.host, 'isSessionTabVisible').mockReturnValue(visible)
       const sent = await acceptChat(follow('term_worker', helper.dispatchId))
