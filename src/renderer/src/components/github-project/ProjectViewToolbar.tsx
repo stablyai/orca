@@ -3,7 +3,7 @@ import { ExternalLink, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import ProjectPicker from './ProjectPicker'
 import type { ProjectViewTableState } from './useProjectViewTable'
 import { githubProjectHost } from '../../../../shared/github/project-identity'
@@ -11,6 +11,7 @@ import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-rout
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTableState }) {
+  const t = useTranslate()
   const {
     activeProject,
     table,
@@ -28,8 +29,8 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
     ? `${table.project.url}/views/${table.selectedView.number ?? ''}`
     : null
   const refreshLabel = loading
-    ? translate('auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5', 'Refreshing')
-    : translate('auto.components.github.project.ProjectViewWrapper.71fb69926c', 'Refresh')
+    ? t('auto.components.github.project.ProjectViewWrapper.a8fa0d2bf5', 'Refreshing')
+    : t('auto.components.github.project.ProjectViewWrapper.71fb69926c', 'Refresh')
   const refresh = (): void => {
     if (!activeProject || !viewId) {
       return
@@ -106,7 +107,7 @@ export function ProjectViewToolbar({ tableState }: { tableState: ProjectViewTabl
               size="icon"
               className="h-7 w-7"
               onClick={(event) => openAppHttpLink(selectedViewUrl, { event })}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.github.project.ProjectViewWrapper.fd15491034',
                 'Open view in GitHub'
               )}
@@ -141,6 +142,7 @@ function ProjectSearchInput({
   appliedOverride: string | undefined
   onApply: (nextOverride: string | undefined) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const applied = appliedOverride !== undefined ? appliedOverride : viewFilter
   const [value, setValue] = useState(applied)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -203,14 +205,14 @@ function ProjectSearchInput({
         }}
         placeholder={
           viewFilter ||
-          translate(
+          t(
             'auto.components.github.project.ProjectViewWrapper.067119985c',
             'GitHub search, e.g. assignee:@me is:open'
           )
         }
         title={
           viewFilter
-            ? translate(
+            ? t(
                 'auto.components.github.project.ProjectViewWrapper.c5bc7ec007',
                 'View filter: {{value0}}',
                 { value0: viewFilter }
@@ -225,7 +227,7 @@ function ProjectSearchInput({
       {value ? (
         <button
           type="button"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.github.project.ProjectViewWrapper.7245c3d7ac',
             'Clear search'
           )}
