@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import {
   getEditorExternalWatchTargetKey,
   selectEditorExternalWatchTargets,

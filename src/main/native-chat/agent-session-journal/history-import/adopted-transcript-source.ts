@@ -2,7 +2,7 @@ import { dirname, join } from 'node:path'
 import { sessionIdFromFileName } from '../../../ai-vault/session-scanner-accumulator'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
-import { readNodeFileWithinLimit } from '../../../../shared/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import { extractString, parseJsonObject } from '../../../ai-vault/session-scanner-values'
 import { asRecord } from '../../../ai-vault/session-scanner-record-value'
 

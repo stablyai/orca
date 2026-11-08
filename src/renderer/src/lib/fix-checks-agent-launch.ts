@@ -203,15 +203,6 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
     const launchPlatform = targetRepo
       ? resolveRepoWorktreeLaunchPlatform(latestStore, targetRepo, targetWorktree)
       : undefined
-    if (!launchPlatform) {
-      toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.822bf52295',
-          'Unable to resolve the workspace launch platform.'
-        )
-      )
-      return false
-    }
     const { commandInput: projectedPrompt, ...projection } = projectSourceControlActionLaunch(
       recipe,
       agent,
@@ -244,18 +235,13 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
         return !revealFailed
       }
     })
-    if (!result && !revealFailed) {
-      toast.error(
-        translate(
-          'auto.lib.fix.checks.agent.launch.fb6c294e85',
-          'Could not build the agent launch command.'
-        )
-      )
+    if (!result || 'refused' in result) {
+      return false
     }
-    if (result?.surface.kind === 'local-terminal') {
+    if (result.surface.kind === 'local-terminal') {
       focusTerminalTabSurface(result.surface.tabId)
     }
-    return result !== null
+    return true
   }
 
   if (!args.item || !args.openModalFallback) {

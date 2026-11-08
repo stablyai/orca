@@ -10,9 +10,10 @@ import {
   openGitGraph,
   probeGitGraphSupport
 } from '@/lib/git-graph-tab'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function GitGraphOpenButton({ worktreeId }: { worktreeId: string }) {
+  const t = useTranslate()
   // Hidden section bodies stop these subscriptions; a primitive key keeps unrelated writes from rendering.
   const owner = useSourceControlState((state) =>
     JSON.stringify([worktreeId, gitGraphScope(worktreeId, state)?.route])
@@ -45,7 +46,7 @@ export function GitGraphOpenButton({ worktreeId }: { worktreeId: string }) {
             variant="ghost"
             size="icon-xs"
             disabled={support !== true}
-            aria-label={translate('gitGraph.title', 'Git Graph')}
+            aria-label={t('gitGraph.title', 'Git Graph')}
             onClick={() => void openGitGraph(worktreeId)}
           >
             <GitGraph className="size-3.5" />
@@ -54,7 +55,7 @@ export function GitGraphOpenButton({ worktreeId }: { worktreeId: string }) {
       </TooltipTrigger>
       {support !== null && (
         <TooltipContent>
-          {support ? translate('gitGraph.title', 'Git Graph') : gitGraphUpdateMessage(worktreeId)}
+          {support ? t('gitGraph.title', 'Git Graph') : gitGraphUpdateMessage(worktreeId, t)}
         </TooltipContent>
       )}
     </Tooltip>

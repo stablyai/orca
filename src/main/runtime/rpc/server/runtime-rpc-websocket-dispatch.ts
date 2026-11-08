@@ -5,6 +5,7 @@ import type {
 } from '../../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
+import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
 import type { AuthenticatedMobileSocket } from '../mobile-socket-wiring'
 import type { RpcRequest, RpcResponse } from '../core'
 import type { WebSocketTransport } from '../ws-transport'
@@ -251,7 +252,9 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
           authenticatedSocket && this.deviceRegistry
             ? {
                 registerDeviceKey: (params) =>
-                  registerSocketDeviceKey(this.deviceRegistry!, authenticatedSocket, params)
+                  registerSocketDeviceKey(this.deviceRegistry!, authenticatedSocket, params),
+                exchangePairingTicket: (params) =>
+                  exchangeSocketPairingTicket(this.deviceRegistry!, authenticatedSocket, params)
               }
             : undefined,
         mobileRelayHosts: this.mobileRelayHostCatalog ?? undefined,

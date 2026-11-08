@@ -161,13 +161,12 @@ export function useLiveWorktreeName({
           return
         }
         if (event.type === 'ready') {
-          const replayedAfterReconnect = eventStreamReady
           eventStreamReady = true
           if (hasSuccessfulRefresh) {
             stopFallbackPoll()
           }
-          if (replayedAfterReconnect) {
-            // Reconnect must reread once because disconnected clients miss title invalidations.
+          if ('replayed' in event) {
+            // A reopened stream or path switch missed title notices.
             invalidateAndRefresh()
           }
           return

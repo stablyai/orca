@@ -62,6 +62,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   setupDecision?: 'run' | 'skip' | 'inherit'
   /** SHA-256 of the setup content the client approved; see CreateWorktreeArgs. */
   approvedSetupHash?: string
+  approvedSetupHashes?: string[]
   setupOnly?: boolean
   awaitTerminalProvisioning?: boolean
   observeSetupCompletion?: boolean
@@ -112,6 +113,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
     parentWorkspaceOrigin?: 'manual'
     envParentWorkspace?: string
     parentWorktree?: string
+    /** path: and name: in parentWorktree may name a folder workspace. */
+    matchFolderWorkspaces?: true
     crossStoreParent?: CrossStoreParentRef
     crossStoreParentInferredFrom?: CrossStoreInferredSource
     cwdParentWorktree?: string

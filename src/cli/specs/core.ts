@@ -59,7 +59,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca worktree activate --worktree <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
     notes: [
-      'With --environment naming a recipe VM that is asleep, Orca on this computer wakes the VM first and waits for it.'
+      'With --environment naming a recipe VM that is asleep, Orca on this computer wakes the VM first and waits for it.',
+      'Folder workspaces cannot be activated from the CLI yet; open them from the Orca sidebar.'
     ],
     examples: ['orca worktree activate --worktree branch:fix-login --environment sandbox']
   },
@@ -161,7 +162,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'allow-failed-archive-hook'
     ],
     notes: [
-      'For a non-root folder workspace, removes its Orca entry and stops its sessions without deleting the folder or touching Git. The folder project root cannot be removed with this command.',
+      'For a non-root folder workspace, removes its Orca entry and stops its sessions without deleting the folder or touching Git. The folder project root cannot be removed with this command. For a group folder workspace (folder:<id>, or a path:/name: selector that matches one), Orca forgets it and the folder stays on disk; --delete-branch, --run-hooks and --allow-failed-archive-hook are refused for it.',
       'Use --worktree "id:<full-instance-id>" with the full id from orca worktree list --json to select one folder workspace; several entries can share the same path.',
       'Repo-defined orca.yaml archive hooks are skipped unless --run-hooks is passed.',
       'With --run-hooks, a failed archive hook blocks the removal: nothing is stopped, deleted or deregistered, and the command exits non-zero with error code worktree_archive_hook_failed. --force does not waive this.',

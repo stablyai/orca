@@ -1,5 +1,6 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { AppState } from '@/store/types'
 import { isEditableTarget, isNativeChatPromptTarget } from '@/lib/editable-target'
 import {
@@ -81,7 +82,7 @@ export function resolveHoveredWorkspaceDeleteTarget(
       workspaceKey: hovered.workspaceId
     }
   }
-  const worktree = getAllWorktreesFromState(state).find(
+  const worktree = getIndexedAllWorktrees(selectWorktreesByRepo(state)).find(
     (candidate) =>
       candidate.id === hovered.workspaceId &&
       getWorktreeHostIdentity(candidate) === hovered.hostIdentity

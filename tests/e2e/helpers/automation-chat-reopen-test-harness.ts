@@ -11,18 +11,16 @@ import {
   codexProviderHandle,
   encodePersistedAgentSessionProviderHandle
 } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import {
-  createTestStore,
-  makeUnifiedTab,
-  makeWorktree
-} from '../../../src/renderer/src/store/slices/store-test-helpers'
-import { makeFolderWorkspace } from '../../../src/renderer/src/store/slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../../../src/renderer/src/store/testing/app-store-test-fixture'
+import { makeUnifiedTab } from '../../../src/renderer/src/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../../../src/renderer/src/store/slices/worktrees/worktree.test-fixture'
+import { makeFolderWorkspace } from '../../../src/renderer/src/store/folder-workspaces/folder-workspace.test-fixture'
 import { createAutomationRunWorkspaceAction } from '../../../src/renderer/src/components/automations/automation-run-workspace-action'
 import { getAutomationRunViewState } from '../../../src/renderer/src/components/automations/automation-run-view-state'
 import { createAutomationRunWriter } from '../../../src/main/automations/automation-run-writer'
 import { makeRepo } from '../../../src/main/persistence/persistence-test-harness'
 import { structuredAgentSessionTabId } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
-import { retireStructuredAgentSessionTab } from '../../../src/renderer/src/runtime/structured-agent-session-tab-retirement'
+import { retireStructuredAgentSessionTab } from '../../../src/renderer/src/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
 
 export const CHAT = 'claude_saved_reopen',
   SURVIVOR = 'codex_surviving_chat'

@@ -25,7 +25,7 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import '../../store/workspace-record-selectors'
+
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export type AutomationListRow = {
@@ -66,6 +66,19 @@ export function unscopedAutomationListRows(
     hostLabel: '',
     usageSummary: null
   }))
+}
+
+/** A project moved to its host's Orca server keeps its id, so a leftover still names it. */
+export function automationProjectName(
+  automation: Automation,
+  repo: Repo | null | undefined,
+  repoMap: ReadonlyMap<string, Repo>,
+  leftover: boolean
+): string | undefined {
+  return (
+    repo?.displayName ??
+    (leftover ? repoMap.get(getAutomationRunRepoId(automation))?.displayName : undefined)
+  )
 }
 
 export function automationRepoForRow(

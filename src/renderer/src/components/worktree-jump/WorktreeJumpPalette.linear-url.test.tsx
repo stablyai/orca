@@ -1,4 +1,4 @@
-import { linearIssueReadFixture } from '@/store/slices/linear-slice-test-harness'
+import { linearIssueReadFixture } from '@/store/slices/linear/linear-slice-test-harness'
 // @vitest-environment happy-dom
 
 import { act } from 'react'

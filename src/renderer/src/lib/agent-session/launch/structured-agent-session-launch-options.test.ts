@@ -5,7 +5,7 @@ import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/launch-structured-agent-session'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 type CallParams = {
   envelope?: { expectedRuntimeFence?: number | null }
@@ -21,9 +21,12 @@ const mocks = vi.hoisted(() => ({
   launch: vi.fn()
 }))
 
-vi.mock('@/components/native-chat/native-chat-session-option-settings-write', () => ({
-  enqueueSessionOptionSettingsWrite: mocks.settingsWrite
-}))
+vi.mock(
+  '@/components/native-chat/session/options/native-chat-session-option-settings-write',
+  () => ({
+    enqueueSessionOptionSettingsWrite: mocks.settingsWrite
+  })
+)
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
@@ -59,7 +62,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
 

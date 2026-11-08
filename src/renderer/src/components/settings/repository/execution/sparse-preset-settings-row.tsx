@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '../../../ui/button'
 import { formatSparsePresetUpdatedAt } from './sparse-preset-date'
 import { SparsePresetDirectoryPreview } from './sparse-preset-directory-preview'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 type SparsePresetSettingsRowProps = {
   preset: SparsePreset
@@ -25,12 +25,14 @@ export function SparsePresetSettingsRow({
   onDelete,
   onClearDeleteConfirm
 }: SparsePresetSettingsRowProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   // Older or hand-edited presets may have bad timestamps; keep Settings usable.
-  const updatedLabel = formatSparsePresetUpdatedAt(preset.updatedAt)
+  const updatedLabel = formatSparsePresetUpdatedAt(preset.updatedAt, intlLocale)
   const isDeleting = deletingPresetId === preset.id
 
   return (
-    <div className="rounded-xl border border-border/50 bg-background/70 px-4 py-3 shadow-sm">
+    <div data-settings-row="" className="py-3">
       <div className="flex items-start gap-3">
         <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/50 bg-muted/30">
           <Bookmark className="size-4 text-muted-foreground" />
@@ -40,11 +42,11 @@ export function SparsePresetSettingsRow({
             <h4 className="min-w-0 truncate text-sm font-medium">{preset.name}</h4>
             <span className="text-[11px] text-muted-foreground">
               {preset.directories.length === 1
-                ? translate(
+                ? t(
                     'auto.components.settings.SparsePresetSettingsSection.9d3c087fc0',
                     '1 directory'
                   )
-                : translate(
+                : t(
                     'auto.components.settings.SparsePresetSettingsSection.d7b3f0bdc3',
                     '{{value0}} directories',
                     { value0: preset.directories.length }
@@ -52,12 +54,12 @@ export function SparsePresetSettingsRow({
             </span>
             <span className="text-[11px] text-muted-foreground">
               {updatedLabel
-                ? translate(
+                ? t(
                     'auto.components.settings.SparsePresetSettingsSection.568d7e1e49',
                     'Updated {{value0}}',
                     { value0: updatedLabel }
                   )
-                : translate(
+                : t(
                     'auto.components.settings.SparsePresetSettingsSection.ba9ad2d4cd',
                     'Updated date unknown'
                   )}
@@ -70,7 +72,7 @@ export function SparsePresetSettingsRow({
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.SparsePresetSettingsSection.fe1f2c6572',
               'Edit {{value0}}',
               { value0: preset.name }
@@ -85,7 +87,7 @@ export function SparsePresetSettingsRow({
             type="button"
             variant={confirmingDeleteId === preset.id ? 'destructive' : 'ghost'}
             size="sm"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.SparsePresetSettingsSection.2ef2b2674b',
               'Delete {{value0}}',
               { value0: preset.name }
@@ -104,19 +106,10 @@ export function SparsePresetSettingsRow({
               <Trash2 className="size-3.5" />
             )}
             {isDeleting
-              ? translate(
-                  'auto.components.settings.SparsePresetSettingsSection.a7bcf206b1',
-                  'Deleting'
-                )
+              ? t('auto.components.settings.SparsePresetSettingsSection.a7bcf206b1', 'Deleting')
               : confirmingDeleteId === preset.id
-                ? translate(
-                    'auto.components.settings.SparsePresetSettingsSection.755c6a1a0d',
-                    'Confirm'
-                  )
-                : translate(
-                    'auto.components.settings.SparsePresetSettingsSection.6fa754d20f',
-                    'Delete'
-                  )}
+                ? t('auto.components.settings.SparsePresetSettingsSection.755c6a1a0d', 'Confirm')
+                : t('auto.components.settings.SparsePresetSettingsSection.6fa754d20f', 'Delete')}
           </Button>
         </div>
       </div>

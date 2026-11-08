@@ -6,7 +6,7 @@ import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-
 import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ClaudeActivity = { kind: 'tool'; tool: string; arg: string } | { kind: 'msg'; text: ReactNode }
 
@@ -23,6 +23,7 @@ const CLAUDE_ACTIVITIES: readonly ClaudeActivity[] = [
 ]
 
 export function StatusesPage(props: { active: boolean; reducedMotion: boolean }): JSX.Element {
+  const t = useTranslate()
   const { active, reducedMotion } = props
   const [revealed, setRevealed] = useState({ claude: false, opencode: false, codex: false })
   const [claudeIdx, setClaudeIdx] = useState(0)
@@ -75,7 +76,7 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
         <div className="grid grid-cols-[14px_minmax(0,1fr)] items-center gap-3 px-1.5">
           <span className="inline-block size-[9px] rounded-full bg-emerald-500" />
           <div className="truncate text-[15.5px] font-semibold leading-[1.2]">
-            {translate(
+            {t(
               'auto.components.feature.wall.agents.orchestration.StatusesPage.79971d1539',
               'redesign auth flow'
             )}
@@ -90,12 +91,12 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
           >
             {revealed.codex ? (
               <span>
-                {translate(
+                {t(
                   'auto.components.feature.wall.agents.orchestration.StatusesPage.78f0318ac1',
                   'Wants to run'
                 )}
                 <CodeChip>
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.agents.orchestration.StatusesPage.7b26349cb2',
                     'pnpm migrate latest'
                   )}
@@ -122,12 +123,12 @@ export function StatusesPage(props: { active: boolean; reducedMotion: boolean })
           <AgentRow icon={<AgentIcon agent="opencode" size={18} />} name="OpenCode" state="done">
             {revealed.opencode ? (
               <span>
-                {translate(
+                {t(
                   'auto.components.feature.wall.agents.orchestration.StatusesPage.139e3d7458',
                   'Updated'
                 )}
                 <CodeChip>
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.agents.orchestration.StatusesPage.2f549fc0ba',
                     'src/auth/session.test.ts'
                   )}

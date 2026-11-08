@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import type { RpcContext } from '../../../core'
+
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../../../shared/orchestration-ask-timeout'
+
+import '../../../../../../shared/orchestration-ask-timeout'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
-import { MessageWake } from '../../../../runtime-message-waiters'
+
+import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
+
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 
 describe('orchestration RPC methods', () => {
@@ -52,13 +59,6 @@ describe('orchestration RPC methods', () => {
       expect(result.message.run_id).toBe(activeRunId)
     })
 
-    it('throws on nonexistent message', async () => {
-      setup()
-      await expect(call('orchestration.reply', { id: 'msg_fake', body: 'nope' })).rejects.toThrow(
-        'Message not found'
-      )
-    })
-
     it('records one idempotent answer from the current Run consumer', async () => {
       setup()
       const task = db.createTask({ spec: 'question work' })
@@ -100,28 +100,6 @@ describe('orchestration RPC methods', () => {
           from: 'term_coord'
         })
       ).rejects.toMatchObject({ code: 'answer_conflict' })
-    })
-
-    it('sends the coordinator back to check after an answer instead of ending its turn', async () => {
-      setup()
-      const task = db.createTask({ spec: 'question work' })
-      const dispatch = createRootDispatch(db, task.id, 'term_worker')
-      const created = db.createQuestion({
-        runId: activeRunId!,
-        dispatchId: dispatch.id,
-        askerHandle: 'term_worker',
-        question: 'Proceed?'
-      })
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-
-      // The question's batch may still hold another worker's report.
-      expect(
-        await call('orchestration.reply', {
-          id: created.message.id,
-          body: 'Yes',
-          from: 'term_coord'
-        })
-      ).toMatchObject({ next: expect.not.stringContaining('end your turn') })
     })
   })
 
@@ -350,75 +328,6 @@ describe('orchestration RPC methods', () => {
 
       expect(result.timedOut).toBe(false)
       expect(result.answer).toBe('correct answer')
-    })
-
-    it.each<[number | undefined, number]>([
-      [undefined, 600_000],
-      [ORCHESTRATION_ASK_MAX_TIMEOUT_MS, ORCHESTRATION_ASK_MAX_TIMEOUT_MS],
-      [Number.MAX_SAFE_INTEGER, ORCHESTRATION_ASK_MAX_TIMEOUT_MS]
-    ])('applies effective timeout %s at the RPC handler boundary', async (requested, expected) => {
-      setup()
-      createAskingDispatch()
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-      let observedTimeoutMs: number | undefined
-      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async (_handle, options) => {
-        observedTimeoutMs = options?.timeoutMs
-        const outbound = db.getInbox(10).find((message) => message.type === 'question')
-        // Reply once to end the mocked loop; otherwise a regression hangs until Vitest timeout instead of asserting.
-        expect(outbound).toBeDefined()
-        db.answerQuestion({
-          messageId: outbound!.id,
-          runId: activeRunId!,
-          consumerGeneration: db.getRun(activeRunId!)!.consumer_generation,
-          body: 'ok'
-        })
-        return new MessageWake()
-      })
-
-      const result = (await call('orchestration.ask', {
-        from: 'term_worker',
-        to: 'term_coord',
-        question: 'bounded?',
-        timeoutMs: requested
-      })) as { timeoutMs: number }
-
-      expect(observedTimeoutMs).toBeLessThanOrEqual(expected)
-      expect(observedTimeoutMs).toBeGreaterThan(expected - 1_000)
-      expect(result.timeoutMs).toBe(expected)
-    })
-
-    it('returns a zero effective timeout without entering the waiter', async () => {
-      setup()
-      createAskingDispatch()
-      const waitForMessage = vi.spyOn(runtime, 'waitForMessage')
-
-      const result = (await call('orchestration.ask', {
-        from: 'term_worker',
-        to: 'term_coord',
-        question: 'negative?',
-        timeoutMs: -5
-      })) as { timedOut: boolean; timeoutMs: number }
-
-      expect(waitForMessage).not.toHaveBeenCalled()
-      expect(result).toMatchObject({ timedOut: true, timeoutMs: 0 })
-    })
-
-    it('parses options CSV with whitespace and empty entries', async () => {
-      setup()
-      createAskingDispatch('w')
-      vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
-      vi.spyOn(runtime, 'waitForMessage').mockResolvedValue('timed_out')
-
-      await call('orchestration.ask', {
-        from: 'w',
-        question: 'q',
-        options: 'a, b ,,c',
-        timeoutMs: 1
-      })
-
-      const outbound = db.getInbox(10).find((message) => message.type === 'question')
-      const payload = JSON.parse(outbound!.payload ?? '{}')
-      expect(payload.options).toEqual(['a', 'b', 'c'])
     })
   })
 

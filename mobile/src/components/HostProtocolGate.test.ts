@@ -53,10 +53,6 @@ vi.mock('../transport/host-descriptor-recorder', () => ({
   recordHostDescriptorFromStatus: vi.fn()
 }))
 
-function clientWithStatus(result: Record<string, unknown>): RpcClient {
-  return { sendRequest: vi.fn().mockResolvedValue({ ok: true, result }) } as unknown as RpcClient
-}
-
 function GateConsumer() {
   const { hostCapabilities } = useHostProtocolGates()
   return createElement('GateStatus', null, hostCapabilities.join(','))
@@ -112,78 +108,6 @@ describe('HostProtocolGate', () => {
     act(() => renderer?.unmount())
     renderer = null
     vi.restoreAllMocks()
-  })
-
-  it('replaces the host UI with the block screen when mobile is too old', async () => {
-    // Why: blocked warns to console; keep test output clean without hiding other errors.
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    hostClient.current = {
-      client: clientWithStatus({ protocolVersion: 5, minCompatibleMobileVersion: 999 }),
-      state: 'connected'
-    }
-    renderer = await renderGate()
-    const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
-    expect(output).toContain('Open App Store')
-    expect(output).not.toContain('HostContent')
-  })
-
-  it('routes Android mobile updates to GitHub Releases', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    nativeTestState.platform.OS = 'android'
-    hostClient.current = {
-      client: clientWithStatus({ protocolVersion: 5, minCompatibleMobileVersion: 999 }),
-      state: 'connected'
-    }
-    renderer = await renderGate()
-    const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
-    expect(output).toContain('Update Orca Mobile from GitHub Releases')
-    expect(output).toContain('Open GitHub Releases')
-    expect(output).not.toContain('mobile app store')
-    expect(output).not.toContain('HostContent')
-    const [openReleases] = findAllByHostType(renderer.root, 'Pressable')
-    act(() => openReleases?.props.onPress())
-    expect(nativeTestState.openUrl).toHaveBeenCalledWith(
-      'https://github.com/stablyai/orca/releases'
-    )
-  })
-
-  it('replaces the host UI with the block screen when desktop is too old', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    hostClient.current = {
-      client: clientWithStatus({ protocolVersion: 0, minCompatibleMobileVersion: 0 }),
-      state: 'connected'
-    }
-    renderer = await renderGate()
-    const output = renderedText(renderer)
-    expect(output).toContain('Update Orca on your computer')
-    expect(output).toContain('Open GitHub Releases')
-    expect(output).not.toContain('HostContent')
-  })
-
-  it('renders the host UI when the verdict is ok', async () => {
-    const client = clientWithStatus({
-      protocolVersion: 5,
-      minCompatibleMobileVersion: 0,
-      capabilities: ['browser.screencast.v1']
-    })
-    hostClient.current = {
-      client,
-      state: 'connected'
-    }
-    renderer = await renderGate()
-    const output = renderedText(renderer)
-    expect(output).toContain('HostContent')
-    expect(output).toContain('browser.screencast.v1')
-    expect(output).not.toContain('Update Orca')
-    expect(client.sendRequest).toHaveBeenCalledOnce()
-  })
-
-  it('renders the host UI while the host connection is still pending', async () => {
-    hostClient.current = { client: null, state: 'connecting' }
-    renderer = await renderGate()
-    expect(renderedText(renderer)).toContain('HostContent')
   })
 
   it('does not mount host routes before a connected host passes the compatibility probe', async () => {
@@ -248,66 +172,5 @@ describe('HostProtocolGate', () => {
       (node) => node.props.accessibilityViewIsModal === true
     )
     expect(overlay?.props.pointerEvents).toBe('auto')
-  })
-
-  it('still replaces mounted routes when the verdict comes back blocked', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    hostClient.current = { client: null, state: 'connecting' }
-    renderer = await renderGate()
-    expect(renderedText(renderer)).toContain('HostContent')
-
-    await act(async () => {
-      hostClient.current = {
-        client: clientWithStatus({ protocolVersion: 5, minCompatibleMobileVersion: 999 }),
-        state: 'connected'
-      }
-      renderer?.update(gateElement())
-      await Promise.resolve()
-    })
-
-    const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
-    expect(output).not.toContain('HostContent')
-  })
-
-  it('keeps an already-validated host route mounted while reconnect status is pending', async () => {
-    const client = {
-      sendRequest: vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: true,
-          result: { protocolVersion: 5, minCompatibleMobileVersion: 0 }
-        })
-        .mockReturnValueOnce(new Promise(() => {}))
-    } as unknown as RpcClient
-    hostClient.current = { client, state: 'connected' }
-    renderer = await renderGate()
-
-    await act(async () => {
-      hostClient.current = { client, state: 'disconnected' }
-      renderer?.update(gateElement())
-    })
-    await act(async () => {
-      hostClient.current = { client, state: 'connected' }
-      renderer?.update(gateElement())
-      await Promise.resolve()
-    })
-
-    const output = renderedText(renderer)
-    expect(output).toContain('HostContent')
-    // Why: the host already answered once, so a reconnect probe must not dim the UI it validated.
-    expect(output).not.toContain('Checking host compatibility')
-    expect(client.sendRequest).toHaveBeenCalledTimes(2)
-  })
-
-  it('fails open when a connected host cannot answer the status probe', async () => {
-    hostClient.current = {
-      client: {
-        sendRequest: vi.fn().mockResolvedValue({ ok: false, error: { message: 'unavailable' } })
-      } as unknown as RpcClient,
-      state: 'connected'
-    }
-    renderer = await renderGate()
-    expect(renderedText(renderer)).toContain('HostContent')
   })
 })

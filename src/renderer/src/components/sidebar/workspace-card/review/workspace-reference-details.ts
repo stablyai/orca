@@ -18,7 +18,7 @@ import { getWorkspaceAttachmentSourceContext } from './workspace-attachment-sour
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export type WorkspaceReferenceDetails = {
   stale?: boolean

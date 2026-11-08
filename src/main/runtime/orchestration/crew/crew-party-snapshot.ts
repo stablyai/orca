@@ -19,7 +19,6 @@ import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-repor
 import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import type { CrewReadDependencies } from './crew-read-dependencies'
-export type { CrewReadDependencies, CrewIdentityRead } from './crew-read-dependencies'
 
 function preview(body: string): string {
   // One extra UTF-16 unit distinguishes a full ASCII preview from a longer body.

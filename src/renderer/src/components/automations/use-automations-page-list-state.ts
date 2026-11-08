@@ -18,7 +18,7 @@ import {
   filterExternalAutomationListEntries,
   sortAutomationListViewItems
 } from './automation-list-view'
-import { getIntlLocale } from '@/i18n/i18n'
+import { useIntlLocale } from '@/i18n/use-translate'
 import { unscopedAutomationListRows } from './automation-list-row-identity'
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
 import { useAutomationListSearch } from './use-automation-list-search'
@@ -49,6 +49,7 @@ export function useAutomationsPageListState({
     | 'setRunHistoryAcquisitionToken'
   >
 }) {
+  const intlLocale = useIntlLocale()
   const { repoMap, worktreeMap, selectedId, setSelectedId } = store
   const {
     automations,
@@ -190,7 +191,7 @@ export function useAutomationsPageListState({
     [hostCatalog.entries, scopedExternal.failures]
   )
   // Pass locale into the sort memo because collation can change without row writes.
-  const sortLocale = getIntlLocale()
+  const sortLocale = intlLocale
   const sortedListItems = useMemo(
     () =>
       sortAutomationListViewItems(

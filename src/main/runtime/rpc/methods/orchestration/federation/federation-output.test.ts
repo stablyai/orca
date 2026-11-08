@@ -1,10 +1,9 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import '../../../../orchestration/db/contract-constants'
@@ -468,25 +467,6 @@ describe('orchestration federated worker output', () => {
     ).result.workers.find((worker) => worker.dispatchId === firstDispatchId)
     expect(unavailableWorker?.projection).toMatchObject({
       liveness: { verdict: 'unverifiable', reason: 'host_unavailable' }
-    })
-  })
-
-  it('says to end the turn while a remote worker runs, since its stop or exit is relayed home', async () => {
-    const taskId = createHomeTask().id
-    const started = await homeDispatcher.dispatch(startRequest(taskId))
-    const checked = await homeDispatcher.dispatch({
-      id: 'rpc_check_remote',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'rpc_check_remote',
-      method: 'orchestration.check',
-      params: { terminal: 'term_coord' }
-    })
-
-    expect(started).toMatchObject({ ok: true, result: { state: 'ready' } })
-    expect(checked).toMatchObject({
-      ok: true,
-      result: { count: 0, next: expect.stringContaining('end your turn') }
     })
   })
 

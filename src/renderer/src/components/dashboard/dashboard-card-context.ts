@@ -1,5 +1,5 @@
 import { branchName } from '@/lib/git-utils'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'
 import type { DashboardCardReview } from '../../../../shared/dashboard-snapshot'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/source-control/hosted-review/hosted-review-github'
@@ -15,6 +15,7 @@ import {
   getParentPrChecksGitHubPRCacheEntry
 } from '../right-sidebar/hosted-review/folder-checks/parent-pr-checks-github-pr-cache'
 import { canUseParentPrChecksHostedReviewCacheEntry } from '../right-sidebar/hosted-review/folder-checks/parent-pr-checks-hosted-review-cache'
+import type { Translate } from '@/i18n/use-translate'
 
 export type DashboardCardContextState = Partial<
   Pick<AppState, 'hostedReviewCache' | 'prCache' | 'settings' | 'workspaceStatuses'>
@@ -39,7 +40,8 @@ function hasLinkedReview(worktree: Worktree): boolean {
 function resolveReview(
   state: DashboardCardContextState,
   repo: Repo | null,
-  worktree: Worktree
+  worktree: Worktree,
+  t?: Translate
 ): DashboardCardReview | undefined {
   if (!repo || !state.hostedReviewCache || !state.prCache || repo.kind === 'folder') {
     return undefined
@@ -60,7 +62,7 @@ function resolveReview(
   const hostedReview = hostedReviewEntry?.data
   if (
     hostedReview &&
-    canUseParentPrChecksHostedReviewCacheEntry(worktree, hostedReview, hostedReviewEntry)
+    canUseParentPrChecksHostedReviewCacheEntry(worktree, hostedReview, hostedReviewEntry, t)
   ) {
     return { number: hostedReview.number, state: hostedReview.state }
   }
@@ -79,14 +81,15 @@ function resolveReview(
 export function resolveDashboardCardContext(
   state: DashboardCardContextState,
   repo: Repo | null,
-  worktree: Worktree
+  worktree: Worktree,
+  t?: Translate
 ): DashboardCardContext {
   const statuses =
     state.workspaceStatuses && state.workspaceStatuses.length > 0
       ? state.workspaceStatuses
       : DEFAULT_WORKSPACE_STATUSES
   const workspaceStatusId = getWorkspaceStatus(worktree, statuses)
-  const review = resolveReview(state, repo, worktree)
+  const review = resolveReview(state, repo, worktree, t)
   return {
     workspaceStatus:
       statuses.find((status) => status.id === workspaceStatusId) ?? DEFAULT_WORKSPACE_STATUSES[0],

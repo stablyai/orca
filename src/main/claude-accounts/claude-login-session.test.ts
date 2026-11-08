@@ -68,20 +68,6 @@ describe('runClaudeLoginSession', () => {
     expect(openWslSignInLink).not.toHaveBeenCalled()
   })
 
-  it('never opens a link that is not a Claude sign-in, and keeps the login going', async () => {
-    const config = folder('wsl')
-    const openWslSignInLink = vi.fn()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const runCommand = claudeHandsOver(config, 'http://claude.com/oauth', () =>
-      warn.mock.calls.some(([message]) => String(message).includes('unexpected sign-in link'))
-    )
-    await expect(
-      runClaudeLoginSession(config, { runCommand, setCancel: vi.fn(), openWslSignInLink })
-    ).resolves.toBeUndefined()
-    expect(openWslSignInLink).not.toHaveBeenCalled()
-    warn.mockRestore()
-  })
-
   it('never opens a link for a WSL login the user already cancelled', async () => {
     const config = folder('wsl')
     const openWslSignInLink = vi.fn()

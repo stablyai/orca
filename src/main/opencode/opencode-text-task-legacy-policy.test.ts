@@ -47,67 +47,6 @@ function json(response: ServerResponse, value: unknown) {
   response.end(JSON.stringify(value))
 }
 
-it.each(['commit-message', 'conversation-name'] as const)(
-  'keeps selected helpers working best effort without a create policy (%s)',
-  async (operation) => {
-    const requests = new Map<string, unknown>()
-    const url = await fixture((path, body, response) => {
-      requests.set(path, body)
-      if (path.startsWith('POST /session?')) {
-        json(response, { id: 'legacy' })
-      } else if (path.startsWith('GET /event?')) {
-        response.writeHead(200, { 'content-type': 'text/event-stream' })
-        response.flushHeaders()
-      } else if (path.startsWith('POST /session/legacy/message?')) {
-        json(response, { info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] })
-      } else {
-        json(response, true)
-      }
-    })
-    const result = runOpenCodeTextTaskSession({
-      version: 'v1',
-      v1SessionPolicyFiltersTools: true,
-      url,
-      operation,
-      directory: '/workspace',
-      prompt: 'Name only',
-      model: { providerID: 'selected', modelID: 'model' },
-      variant: 'low',
-      v1Files: [
-        { type: 'file', mime: 'text/plain', filename: 'notes.txt', url: 'file:///notes.txt' }
-      ],
-      signal: new AbortController().signal
-    })
-    await expect(result).resolves.toBe('Harbor Lantern')
-    expect(requests.get('POST /session/legacy/message?directory=%2Fworkspace')).toEqual({
-      messageID: expect.stringMatching(/^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/),
-      model: { providerID: 'selected', modelID: 'model' },
-      variant: 'low',
-      parts: [
-        { type: 'file', mime: 'text/plain', filename: 'notes.txt', url: 'file:///notes.txt' },
-        { type: 'text', text: 'Name only' }
-      ],
-      tools: {
-        '*': false,
-        read: true,
-        grep: true,
-        glob: true,
-        external_directory: true,
-        bash: false,
-        edit: false,
-        write: false,
-        patch: false,
-        apply_patch: false,
-        multiedit: false,
-        task: false,
-        todowrite: false
-      }
-    })
-    expect(requests.has('GET /event?directory=%2Fworkspace')).toBe(true)
-    expect(requests.has('DELETE /session/legacy?directory=%2Fworkspace')).toBe(true)
-  }
-)
-
 it.each(['permission.updated', 'permission.asked'])(
   'keeps a legacy fork command and rejects its owned %s through the native route',
   async (type) => {

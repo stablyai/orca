@@ -30,6 +30,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     connStateRef,
     terminalRefs,
     initializedHandlesRef,
+    terminalResume,
     activeHandleRef,
     visibleTerminalHandlesRef,
     scheduleDelayedAction,
@@ -158,6 +159,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
         visibleTerminalHandlesRef,
         terminalRefs,
         initializedHandlesRef,
+        terminalResume,
         connStateRef,
         unsubscribeTerminal,
         subscribeToTerminal,
@@ -168,7 +170,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     return () => {
       sub.remove()
     }
-  }, [scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+  }, [scheduleDelayedAction, subscribeToTerminal, terminalResume, unsubscribeTerminal])
 
   // Repeat resume recovery after reconnect or an iOS-blanked WebView can remain stale.
   useEffect(() => {
@@ -184,12 +186,13 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       visibleTerminalHandlesRef,
       terminalRefs,
       initializedHandlesRef,
+      terminalResume,
       connStateRef,
       unsubscribeTerminal,
       subscribeToTerminal,
       schedule: scheduleDelayedAction
     })
-  }, [connState, scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+  }, [connState, scheduleDelayedAction, subscribeToTerminal, terminalResume, unsubscribeTerminal])
   return {
     accessoryPreferencesReady: customKeysLoaded && accessoryLayoutLoaded,
     pendingForegroundRecoveryRef

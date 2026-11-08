@@ -6,7 +6,7 @@ import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import {
   jiraListProjectsForTarget,
   jiraStatusForTarget
-} from '@/runtime/runtime-jira-project-client'
+} from '@/runtime/jira/runtime-jira-project-client'
 
 type JiraProjectInventorySource = RuntimeClientTarget | TaskSourceContext
 

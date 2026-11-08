@@ -14,10 +14,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
-import { refreshRuntimeEnvironmentCatalog } from '@/runtime/runtime-environment-pairing-refresh'
-import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-compatibility-cache'
+import { refreshRuntimeEnvironmentCatalog } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { useAppStore } from '@/store/index'
 import {
   RuntimeHostAccessFailureAlert,
@@ -67,6 +67,7 @@ function RuntimeRepairForm({
   setBusy: (busy: boolean) => void
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [accessLink, setAccessLink] = useState('')
   const [failure, setFailure] = useState<RuntimeHostAccessFailure | null>(null)
   const mountedRef = useMountedRef()
@@ -94,13 +95,9 @@ function RuntimeRepairForm({
       await refreshRuntimeEnvironmentCatalog()
       await useAppStore.getState().readRuntimeHostStatusSnapshots()
       toast.success(
-        translate(
-          'auto.components.settings.RuntimeRepairDialog.success',
-          'Re-paired with {{name}}',
-          {
-            name
-          }
-        )
+        t('auto.components.settings.RuntimeRepairDialog.success', 'Re-paired with {{name}}', {
+          name
+        })
       )
       if (mountedRef.current) {
         onClose()
@@ -109,7 +106,7 @@ function RuntimeRepairForm({
       toast.error(
         error instanceof Error
           ? error.message
-          : translate('auto.components.settings.RuntimeRepairDialog.failed', 'Re-pair failed')
+          : t('auto.components.settings.RuntimeRepairDialog.failed', 'Re-pair failed')
       )
     } finally {
       setBusy(false)
@@ -126,12 +123,12 @@ function RuntimeRepairForm({
     >
       <DialogHeader>
         <DialogTitle>
-          {translate('auto.components.settings.RuntimeRepairDialog.title', 'Re-pair {{name}}', {
+          {t('auto.components.settings.RuntimeRepairDialog.title', 'Re-pair {{name}}', {
             name
           })}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.settings.RuntimeRepairDialog.descriptionShareComputer',
             '{{name}} no longer accepts this computer. On {{name}}, open Settings → Remote Orca Servers → Share this computer, create a link for another Orca, then paste it here.',
             { name }
@@ -140,7 +137,7 @@ function RuntimeRepairForm({
       </DialogHeader>
       <div className="space-y-2">
         <Label htmlFor="runtime-repair-access-link">
-          {translate('auto.components.settings.RuntimeHostAccessForm.accessLink', 'Access link')}
+          {t('auto.components.settings.RuntimeHostAccessForm.accessLink', 'Access link')}
         </Label>
         <Input
           id="runtime-repair-access-link"
@@ -159,7 +156,7 @@ function RuntimeRepairForm({
             setFailure(null)
             setAccessLink(event.target.value)
           }}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.RuntimeHostAccessForm.accessLinkPlaceholder',
             'orca://pair?code=...'
           )}
@@ -167,7 +164,7 @@ function RuntimeRepairForm({
         />
         {inputError && !parsed.ok ? (
           <p id="runtime-repair-access-link-error" className="text-xs text-destructive">
-            {translateHostAccessLinkError(parsed.kind)}
+            {translateHostAccessLinkError(parsed.kind, t)}
           </p>
         ) : null}
       </div>
@@ -180,11 +177,11 @@ function RuntimeRepairForm({
       ) : null}
       <DialogFooter>
         <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
-          {translate('auto.components.settings.RuntimeHostAccessForm.cancel', 'Cancel')}
+          {t('auto.components.settings.RuntimeHostAccessForm.cancel', 'Cancel')}
         </Button>
         <Button type="submit" disabled={!parsed.ok || busy}>
           {busy ? <Loader2 className="animate-spin" /> : <Link2 />}
-          {translate('auto.components.settings.RuntimeRepairDialog.submit', 'Re-pair')}
+          {t('auto.components.settings.RuntimeRepairDialog.submit', 'Re-pair')}
         </Button>
       </DialogFooter>
     </form>

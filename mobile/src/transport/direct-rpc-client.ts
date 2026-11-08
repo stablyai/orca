@@ -11,11 +11,8 @@ import { RpcClientRequestTracker } from './rpc-client-request-tracker'
 import { RpcClientSocketCloseController } from './rpc-client-socket-close-controller'
 import { RpcClientSocketFactory } from './rpc-client-socket-factory'
 import type { RpcClientSocketSession } from './rpc-client-socket-session'
-import {
-  RpcClientStreamRegistry,
-  type RpcStreamingListener,
-  type RpcStreamSubscribeOptions
-} from './rpc-client-stream-registry'
+import { RpcClientStreamRegistry } from './rpc-client-stream-registry'
+import type { RpcStreamingListener, RpcStreamSubscribeOptions } from './rpc-client-stream-request'
 import {
   DECISIVE_PROBE_TIMEOUT_MS,
   livenessProbeFrame,

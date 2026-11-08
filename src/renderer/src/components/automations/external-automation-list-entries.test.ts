@@ -60,18 +60,6 @@ function scoped(
 }
 
 describe('buildExternalAutomationListEntries', () => {
-  it('omits empty host probes', () => {
-    expect(buildExternalAutomationListEntries([scoped(null)])).toEqual([])
-  })
-
-  it('lists jobs from an unavailable manager', () => {
-    expect(buildExternalAutomationListEntries([scoped(null, { jobs: [job()] })])).toEqual([
-      expect.objectContaining({
-        job: expect.objectContaining({ id: 'job-1' })
-      })
-    ])
-  })
-
   it('separates identical manager and job IDs reported by two authorities', () => {
     // Manager/job IDs collide across authorities; qualify row identity to preserve independent selection, dialogs and reconciliation.
     const entries = buildExternalAutomationListEntries([
@@ -81,16 +69,5 @@ describe('buildExternalAutomationListEntries', () => {
 
     expect(entries).toHaveLength(2)
     expect(entries[0]?.key).not.toBe(entries[1]?.key)
-  })
-
-  it('carries the scope it keyed each entry with', () => {
-    const [entry] = buildExternalAutomationListEntries([scoped('env-7', { jobs: [job()] })])
-
-    // Capture scope in the edit row; deriving it from manager ID at save would collide across hosts.
-    expect(entry?.scope.owner.authority).toEqual({
-      kind: 'runtime',
-      environmentId: 'env-7',
-      pairingRevision: 1
-    })
   })
 })

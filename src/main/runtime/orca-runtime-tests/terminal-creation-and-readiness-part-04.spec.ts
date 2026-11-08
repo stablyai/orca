@@ -7,7 +7,8 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { electronMocks, setPlatform } from '../orca-runtime-test-mocks/setup.spec'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { ipcMain } from 'electron'
-import { RpcDispatcher, TERMINAL_METHODS } from '../orca-runtime-test-mocks/terminal-rpc.spec'
+import { RpcDispatcher } from '../rpc/dispatcher'
+import { TERMINAL_METHODS } from '../rpc/methods/terminal/terminal'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
@@ -15,7 +16,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   store
 } from './orca-runtime-test-fixtures.spec'
-import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
+import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
 import { wireHeadlessServeRuntime } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {

@@ -1,4 +1,3 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import assert from 'node:assert/strict'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'

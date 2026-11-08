@@ -4,7 +4,218 @@
   "family": "settings.repo-metadata",
   "namedDeltas": [],
   "values": {
-    "1006746b8523": {
+    "0c5e27e25c9d": {
+      "name": "repo.list#2",
+      "ordinal": 24,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "afterSnapshotId": {
+              "$rpc": "null"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 60000
+      }
+    },
+    "1681ec001eef": {
+      "name": "host.platform#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "host.platform"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "23e43ee36880": {
+      "name": "ssh.listTargetSummaries#1",
+      "ordinal": 3,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.listTargetSummaries"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "targets": [
+              {
+                "id": "ssh-1",
+                "label": "SSH"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "26d63e9c9a04": {
+      "name": "settings.get#2",
+      "ordinal": 26,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 60000
+      }
+    },
+    "2c7d0be09df6": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
+        }
+      }
+    },
+    "2ce49d24efc2": {
+      "name": "desktopRepos",
+      "ordinal": 19,
+      "value": [
+        {
+          "displayName": "Local",
+          "executionHostId": "local",
+          "id": "repo-1",
+          "path": "repo-1"
+        },
+        {
+          "displayName": "Remote",
+          "executionHostId": "ssh:ssh-1",
+          "id": "repo-2",
+          "path": "repo-2"
+        }
+      ]
+    },
+    "339b07cb7b7e": {
+      "name": "repoHostIdByRepoId",
+      "ordinal": 20,
+      "value": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ]
+    },
+    "36f133fb62a2": {
+      "name": "settings.get#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "4256aff920c3": {
       "name": "repo.list#1",
       "ordinal": 1,
       "args": [
@@ -23,7 +234,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -53,121 +264,35 @@
         }
       }
     },
-    "18762ff064ed": {
-      "name": "settings.get#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "settings": {
-              "defaultTuiAgent": "codex",
-              "disabledTuiAgents": ["claude"],
-              "hostSettingOverrides": {},
-              "prBotAuthorOverrides": ["bot-user"],
-              "visibleTaskProviders": ["github", "linear"]
-            }
-          }
-        }
-      }
-    },
-    "1a0e2c3ee678": {
+    "4da870f5dca2": {
       "name": "repo.list#2",
-      "ordinal": 15,
+      "ordinal": 33,
       "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\",\"params\":{\"afterSnapshotId\":null}}"
     },
-    "2544b7a5da61": {
-      "name": "repo.list#2",
-      "ordinal": 14,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "afterSnapshotId": {
-              "$rpc": "null"
-            }
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 60000
-      }
+    "530c928eaf8c": {
+      "name": "hostPlatform",
+      "ordinal": 18,
+      "value": "linux"
     },
-    "299d571abf13": {
-      "name": "ssh.listTargetSummaries#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "ssh.listTargetSummaries"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "targets": [
-              {
-                "id": "ssh-1",
-                "label": "SSH"
-              }
-            ]
-          }
-        }
-      }
+    "566e2e9dcb22": {
+      "name": "repoHostIdByRepoId",
+      "ordinal": 15,
+      "value": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ]
     },
-    "5248b37ec085": {
-      "name": "host.platform#1",
+    "6329121e40fe": {
+      "name": "repoHostIdByRepoId",
       "ordinal": 7,
+      "value": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ]
+    },
+    "63eb42c118e7": {
+      "name": "host.platform#1",
+      "ordinal": 5,
       "args": [
         {
           "name": "method",
@@ -176,13 +301,13 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -198,24 +323,6 @@
           }
         }
       }
-    },
-    "661b4721aec6": {
-      "name": "desktopRepos",
-      "ordinal": 3,
-      "value": [
-        {
-          "displayName": "Local",
-          "executionHostId": "local",
-          "id": "repo-1",
-          "path": "repo-1"
-        },
-        {
-          "displayName": "Remote",
-          "executionHostId": "ssh:ssh-1",
-          "id": "repo-2",
-          "path": "repo-2"
-        }
-      ]
     },
     "68916f125c3c": {
       "desktopRepos": [
@@ -260,75 +367,88 @@
         ["repo-2", "ssh:ssh-1"]
       ]
     },
-    "7c508088602c": {
-      "name": "host.platform#1",
-      "ordinal": 7,
-      "args": [
+    "6dfbe49d3992": {
+      "name": "hostHealthById",
+      "ordinal": 21,
+      "value": []
+    },
+    "7ea9898b5804": {
+      "name": "desktopRepos",
+      "ordinal": 14,
+      "value": [
         {
-          "name": "method",
-          "value": "host.platform"
+          "displayName": "Local",
+          "executionHostId": "local",
+          "id": "repo-1",
+          "path": "repo-1"
         },
         {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
+          "displayName": "Remote",
+          "executionHostId": "ssh:ssh-1",
+          "id": "repo-2",
+          "path": "repo-2"
         }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+      ]
     },
     "8b618db22116": {
       "name": "settings.get#1",
       "ordinal": 9,
       "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
-    "902c0b2ed3ce": {
-      "name": "settings.get#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
+    "9196fd1b065a": {
+      "name": "settings.get#2",
+      "ordinal": 35,
+      "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
     },
     "91e7f4ef9a77": {
       "name": "hostPlatform",
       "ordinal": 13,
       "value": "linux"
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
+    "99d1cce8a6d0": {
+      "name": "hostHealthById",
+      "ordinal": 16,
+      "value": []
+    },
+    "a004da5aa7f3": {
+      "name": "hostLabelById",
+      "ordinal": 17,
+      "value": [["ssh:ssh-1", "SSH"]]
+    },
+    "ba68ba6e96f2": {
+      "name": "ssh.listTargetSummaries#2",
+      "ordinal": 25,
+      "args": [
+        {
+          "name": "method",
+          "value": "ssh.listTargetSummaries"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 60000
+      }
     },
     "ba8a19e3e2b1": {
       "status": "pending",
       "startedAt": 60000
+    },
+    "bec3a38203a5": {
+      "name": "hostPlatform",
+      "ordinal": 32,
+      "value": "linux"
     },
     "c1246f5792ee": {
       "name": "ssh.listTargetSummaries#1",
@@ -340,9 +460,89 @@
       "ordinal": 10,
       "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
     },
+    "c9ba0a0019e6": {
+      "name": "hostPlatform",
+      "ordinal": 23,
+      "value": "linux"
+    },
+    "cd4a4ae5eeff": {
+      "name": "repoHostIdByRepoId",
+      "ordinal": 29,
+      "value": [
+        ["repo-1", "local"],
+        ["repo-2", "ssh:ssh-1"]
+      ]
+    },
+    "cd9f1e701ac7": {
+      "name": "desktopRepos",
+      "ordinal": 6,
+      "value": [
+        {
+          "displayName": "Local",
+          "executionHostId": "local",
+          "id": "repo-1",
+          "path": "repo-1"
+        },
+        {
+          "displayName": "Remote",
+          "executionHostId": "ssh:ssh-1",
+          "id": "repo-2",
+          "path": "repo-2"
+        }
+      ]
+    },
+    "d48e553742c5": {
+      "name": "host.platform#2",
+      "ordinal": 27,
+      "args": [
+        {
+          "name": "method",
+          "value": "host.platform"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 60000
+      }
+    },
     "d9c464d0dc78": {
       "name": "hostLabelById",
       "ordinal": 12,
+      "value": [["ssh:ssh-1", "SSH"]]
+    },
+    "da05e6ed1c69": {
+      "name": "desktopRepos",
+      "ordinal": 28,
+      "value": [
+        {
+          "displayName": "Local",
+          "executionHostId": "local",
+          "id": "repo-1",
+          "path": "repo-1"
+        },
+        {
+          "displayName": "Remote",
+          "executionHostId": "ssh:ssh-1",
+          "id": "repo-2",
+          "path": "repo-2"
+        }
+      ]
+    },
+    "db19db55c4b8": {
+      "name": "hostLabelById",
+      "ordinal": 31,
       "value": [["ssh:ssh-1", "SSH"]]
     },
     "e2881f748a46": {
@@ -350,13 +550,25 @@
       "ordinal": 11,
       "value": []
     },
-    "e49da3e1abca": {
-      "name": "repoHostIdByRepoId",
-      "ordinal": 4,
-      "value": [
-        ["repo-1", "local"],
-        ["repo-2", "ssh:ssh-1"]
-      ]
+    "e330efe298db": {
+      "name": "host.platform#2",
+      "ordinal": 36,
+      "json": "{\"id\":\"frame-8\",\"deviceToken\":\"recording-device\",\"method\":\"host.platform\"}"
+    },
+    "e4c373c1fb2b": {
+      "name": "ssh.listTargetSummaries#2",
+      "ordinal": 34,
+      "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"ssh.listTargetSummaries\"}"
+    },
+    "e54603beee59": {
+      "name": "hostLabelById",
+      "ordinal": 22,
+      "value": [["ssh:ssh-1", "SSH"]]
+    },
+    "eb02368caabd": {
+      "name": "hostHealthById",
+      "ordinal": 30,
+      "value": []
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -386,20 +598,20 @@
       {
         "id": "settings-pending",
         "observation": {
-          "sender": ["1006746b8523", "299d571abf13", "902c0b2ed3ce", "7c508088602c"],
+          "sender": ["4256aff920c3", "23e43ee36880", "36f133fb62a2", "1681ec001eef"],
           "payloads": ["f2274efe8aa6", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
           "settlements": {
             "mount": "eb79a9b3682a",
-            "load": "9270aeb7d9c6"
+            "load": "eb79a9b3682a"
           },
           "state": "68916f125c3c",
-          "effects": ["661b4721aec6", "e49da3e1abca"]
+          "effects": ["cd9f1e701ac7", "6329121e40fe"]
         }
       },
       {
         "id": "settled",
         "observation": {
-          "sender": ["1006746b8523", "299d571abf13", "18762ff064ed", "5248b37ec085"],
+          "sender": ["4256aff920c3", "23e43ee36880", "2c7d0be09df6", "63eb42c118e7"],
           "payloads": ["f2274efe8aa6", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -407,8 +619,8 @@
           },
           "state": "6d43117882f3",
           "effects": [
-            "661b4721aec6",
-            "e49da3e1abca",
+            "cd9f1e701ac7",
+            "6329121e40fe",
             "e2881f748a46",
             "d9c464d0dc78",
             "91e7f4ef9a77"
@@ -418,7 +630,7 @@
       {
         "id": "cache-hit",
         "observation": {
-          "sender": ["1006746b8523", "299d571abf13", "18762ff064ed", "5248b37ec085"],
+          "sender": ["4256aff920c3", "23e43ee36880", "2c7d0be09df6", "63eb42c118e7"],
           "payloads": ["f2274efe8aa6", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -427,18 +639,23 @@
           },
           "state": "6d43117882f3",
           "effects": [
-            "661b4721aec6",
-            "e49da3e1abca",
+            "cd9f1e701ac7",
+            "6329121e40fe",
             "e2881f748a46",
             "d9c464d0dc78",
-            "91e7f4ef9a77"
+            "91e7f4ef9a77",
+            "7ea9898b5804",
+            "566e2e9dcb22",
+            "99d1cce8a6d0",
+            "a004da5aa7f3",
+            "530c928eaf8c"
           ]
         }
       },
       {
         "id": "cache-warm",
         "observation": {
-          "sender": ["1006746b8523", "299d571abf13", "18762ff064ed", "5248b37ec085"],
+          "sender": ["4256aff920c3", "23e43ee36880", "2c7d0be09df6", "63eb42c118e7"],
           "payloads": ["f2274efe8aa6", "c1246f5792ee", "8b618db22116", "c1d6fc758acc"],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -448,11 +665,21 @@
           },
           "state": "6d43117882f3",
           "effects": [
-            "661b4721aec6",
-            "e49da3e1abca",
+            "cd9f1e701ac7",
+            "6329121e40fe",
             "e2881f748a46",
             "d9c464d0dc78",
-            "91e7f4ef9a77"
+            "91e7f4ef9a77",
+            "7ea9898b5804",
+            "566e2e9dcb22",
+            "99d1cce8a6d0",
+            "a004da5aa7f3",
+            "530c928eaf8c",
+            "2ce49d24efc2",
+            "339b07cb7b7e",
+            "6dfbe49d3992",
+            "e54603beee59",
+            "c9ba0a0019e6"
           ]
         }
       },
@@ -460,18 +687,24 @@
         "id": "cache-expired",
         "observation": {
           "sender": [
-            "1006746b8523",
-            "299d571abf13",
-            "18762ff064ed",
-            "5248b37ec085",
-            "2544b7a5da61"
+            "4256aff920c3",
+            "23e43ee36880",
+            "2c7d0be09df6",
+            "63eb42c118e7",
+            "0c5e27e25c9d",
+            "ba68ba6e96f2",
+            "26d63e9c9a04",
+            "d48e553742c5"
           ],
           "payloads": [
             "f2274efe8aa6",
             "c1246f5792ee",
             "8b618db22116",
             "c1d6fc758acc",
-            "1a0e2c3ee678"
+            "4da870f5dca2",
+            "e4c373c1fb2b",
+            "9196fd1b065a",
+            "e330efe298db"
           ],
           "settlements": {
             "mount": "eb79a9b3682a",
@@ -482,11 +715,26 @@
           },
           "state": "6d43117882f3",
           "effects": [
-            "661b4721aec6",
-            "e49da3e1abca",
+            "cd9f1e701ac7",
+            "6329121e40fe",
             "e2881f748a46",
             "d9c464d0dc78",
-            "91e7f4ef9a77"
+            "91e7f4ef9a77",
+            "7ea9898b5804",
+            "566e2e9dcb22",
+            "99d1cce8a6d0",
+            "a004da5aa7f3",
+            "530c928eaf8c",
+            "2ce49d24efc2",
+            "339b07cb7b7e",
+            "6dfbe49d3992",
+            "e54603beee59",
+            "c9ba0a0019e6",
+            "da05e6ed1c69",
+            "cd4a4ae5eeff",
+            "eb02368caabd",
+            "db19db55c4b8",
+            "bec3a38203a5"
           ]
         }
       }

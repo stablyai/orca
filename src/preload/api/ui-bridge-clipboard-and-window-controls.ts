@@ -201,6 +201,12 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.on('window:maximize-changed', listener)
     return () => ipcRenderer.removeListener('window:maximize-changed', listener)
   },
+  isWindowActive: (): Promise<boolean> => ipcRenderer.invoke('window:isActive'),
+  onWindowActiveChanged: (callback: (active: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, active: boolean) => callback(active)
+    ipcRenderer.on('window:active-changed', listener)
+    return () => ipcRenderer.removeListener('window:active-changed', listener)
+  },
   requestClose: (): void => {
     ipcRenderer.send('window:request-close')
   },

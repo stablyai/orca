@@ -36,9 +36,9 @@ import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mo
 import { createPaneManagerOptionsTestContext } from '../../mounting/terminal-pane-manager-options-test-context'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
@@ -46,7 +46,9 @@ const holder = vi.hoisted((): LaunchStoreHolder => ({ store: null }))
 vi.mock('@/store/index', async () =>
   (await import('@/lib/launch-parity-renderer.test-fixture')).launchStoreModuleMock(holder)
 )
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')

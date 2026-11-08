@@ -1,7 +1,7 @@
 import type { WebSocket } from 'ws'
 import type { TerminalStreamFrame } from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import { DeviceRegistry } from './pairing/device-registry'
-import { loadOrCreateE2EEKeypair, type E2EEKeypair } from '../../e2ee-keypair'
+import { loadOrCreateE2EEKeypair, type E2EEKeypair } from './pairing/e2ee-keypair'
 import { RuntimeRpcState } from './runtime-rpc-state'
 import {
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,

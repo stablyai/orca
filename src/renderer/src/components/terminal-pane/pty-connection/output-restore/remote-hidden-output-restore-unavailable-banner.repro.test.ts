@@ -66,7 +66,7 @@ let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: Record<string, unknown>) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 
@@ -82,16 +82,28 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('../../../../../../shared/agent-status/title/agent-title-core', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   const isGeminiTerminalTitle = actual.isGeminiTerminalTitle as (title: string) => boolean
   return {
     ...actual,
-    isGeminiTerminalTitle: vi.fn((title: string) => isGeminiTerminalTitle(title)),
-    isClaudeAgent: vi.fn(() => false),
-    detectAgentStatusFromTitle: vi.fn(() => null)
+    isGeminiTerminalTitle: vi.fn((title: string) => isGeminiTerminalTitle(title))
   }
 })
+vi.mock(
+  '../../../../../../shared/agent-status/title/agent-title-identity',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    isClaudeAgent: vi.fn(() => false)
+  })
+)
+vi.mock(
+  '../../../../../../shared/agent-status/title/agent-title-status',
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    detectAgentStatusFromTitle: vi.fn(() => null)
+  })
+)
 
 vi.mock('../../titles/cache-timer-seeding', () => ({
   shouldSeedCacheTimerOnInitialTitle
@@ -372,7 +384,19 @@ async function connectHiddenRemoteAgentPane(
   serializeBuffer: ReturnType<typeof vi.fn>
 ): Promise<RemotePaneDrive> {
   const { connectPanePty } = await import('../connect-pane-pty')
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const [{ isGeminiTerminalTitle }, { isClaudeAgent }, { detectAgentStatusFromTitle }] =
+    await Promise.all([
+      vi.importMock<Pick<PtyConnectionAgentTitleMocks, 'isGeminiTerminalTitle'>>(
+        '../../../../../../shared/agent-status/title/agent-title-core'
+      ),
+      vi.importMock<Pick<PtyConnectionAgentTitleMocks, 'isClaudeAgent'>>(
+        '../../../../../../shared/agent-status/title/agent-title-identity'
+      ),
+      vi.importMock<Pick<PtyConnectionAgentTitleMocks, 'detectAgentStatusFromTitle'>>(
+        '../../../../../../shared/agent-status/title/agent-title-status'
+      )
+    ])
+  const agentTitleMocks = { isGeminiTerminalTitle, isClaudeAgent, detectAgentStatusFromTitle }
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = serializeBuffer
   const capturedDataCallback: {

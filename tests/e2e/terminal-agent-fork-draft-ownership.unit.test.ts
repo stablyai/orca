@@ -2,17 +2,17 @@
 import { mocks, store } from './launch-agent-web-terminal.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import { retainedPrefillHost } from './terminal-agent-fork-retained-prefill.test-fixture'
 import { AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
-import type * as SessionSnapshot from '@/runtime/web-runtime-session-snapshot'
+import type * as SessionSnapshot from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 const actualSnapshots = await vi.importActual<typeof SessionSnapshot>(
-  '@/runtime/web-runtime-session-snapshot'
+  '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 )
 
 it.each(['local', 'web'] as const)(
@@ -83,7 +83,8 @@ it.skipIf(process.platform === 'win32')(
   'keeps the actual POSIX inline fork input after binding failure, lost reply and same-process reclaim',
   async () => {
     const host = await retainedPrefillHost()
-    const snapshots = await import('@/runtime/web-runtime-session-snapshot')
+    const snapshots =
+      await import('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot')
     vi.mocked(snapshots.refreshWebRuntimeSessionTabsSnapshot).mockImplementationOnce(
       actualSnapshots.refreshWebRuntimeSessionTabsSnapshot
     )

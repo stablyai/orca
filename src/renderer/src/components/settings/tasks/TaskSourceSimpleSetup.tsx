@@ -3,7 +3,7 @@ import { JiraConnectDialog } from '@/components/jira-connect-dialog'
 import { Button } from '@/components/ui/button'
 import { TaskSourceShowInTasksStep } from './TaskSourceShowInTasksStep'
 import { TaskSourceStepRow } from './TaskSourceStepRow'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ConnectStepProps = {
   visible: boolean
@@ -28,12 +28,13 @@ export function CodeHostSetupSteps(
     onRetryConnection: () => void
   }
 ): React.JSX.Element {
+  const t = useTranslate()
   const connectionDescription = props.unavailable
-    ? translate(
+    ? t(
         'auto.components.settings.TasksPane.connectionCheckUnavailable',
         "Orca couldn't check this connection. Try again, or open Integrations for setup details."
       )
-    : translate(
+    : t(
         'auto.components.settings.TasksPane.connectCodeHostDescription',
         'Install and authenticate the CLI under Integrations so Orca can load issues.'
       )
@@ -43,7 +44,7 @@ export function CodeHostSetupSteps(
       <TaskSourceStepRow
         index={1}
         state={getConnectStepState(props)}
-        title={translate(
+        title={t(
           'auto.components.settings.TasksPane.connectProviderTitle',
           'Connect {{provider}}',
           { provider: props.providerLabel }
@@ -57,10 +58,10 @@ export function CodeHostSetupSteps(
             onClick={props.unavailable ? props.onRetryConnection : props.onOpenIntegrations}
           >
             {props.unavailable
-              ? translate('auto.components.settings.TasksPane.retryConnection', 'Try again')
+              ? t('auto.components.settings.TasksPane.retryConnection', 'Try again')
               : props.connected
-                ? translate('auto.components.settings.TasksPane.openIntegrations', 'Integrations')
-                : translate(
+                ? t('auto.components.settings.TasksPane.openIntegrations', 'Integrations')
+                : t(
                     'auto.components.settings.TasksPane.connectInIntegrations',
                     'Set up in Integrations'
                   )}
@@ -81,6 +82,7 @@ export function CodeHostSetupSteps(
 export function JiraSetupSteps(
   props: ConnectStepProps & { onConnected: () => void; onOpenIntegrations: () => void }
 ): React.JSX.Element {
+  const t = useTranslate()
   const [dialogOpen, setDialogOpen] = useState(false)
 
   return (
@@ -89,8 +91,8 @@ export function JiraSetupSteps(
         <TaskSourceStepRow
           index={1}
           state={getConnectStepState(props)}
-          title={translate('auto.components.settings.TasksPane.connectJiraTitle', 'Connect Jira')}
-          description={translate(
+          title={t('auto.components.settings.TasksPane.connectJiraTitle', 'Connect Jira')}
+          description={t(
             'auto.components.settings.TasksPane.connectJiraDescription',
             'Add a Jira Cloud site or self-hosted instance with an API token or PAT.'
           )}
@@ -102,14 +104,14 @@ export function JiraSetupSteps(
               onClick={props.connected ? props.onOpenIntegrations : () => setDialogOpen(true)}
             >
               {props.connected
-                ? translate('auto.components.settings.TasksPane.manageJira', 'Manage keys')
-                : translate('auto.components.settings.TasksPane.addJira', 'Add Jira access')}
+                ? t('auto.components.settings.TasksPane.manageJira', 'Manage keys')
+                : t('auto.components.settings.TasksPane.addJira', 'Add Jira access')}
             </Button>
           }
         />
         <TaskSourceShowInTasksStep
           index={2}
-          providerLabel={translate('auto.components.settings.TasksPane.6b23a34f6d', 'Jira')}
+          providerLabel={t('auto.components.settings.TasksPane.6b23a34f6d', 'Jira')}
           visible={props.visible}
           canHide={props.canHide}
           onToggleVisible={props.onToggleVisible}

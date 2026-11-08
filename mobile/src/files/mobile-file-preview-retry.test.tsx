@@ -56,6 +56,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 
 import { MobileFilePreviewScreen } from './MobileFilePreviewScreen'
 import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
+import { resetDocumentEditDraftsForTests } from '../drafts/document-edit-draft-rows'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
 let tree: ReactTestRenderer | null = null
@@ -63,6 +64,8 @@ let tree: ReactTestRenderer | null = null
 afterEach(() => {
   act(() => tree?.unmount())
   tree = null
+  // A page keeps unsaved edits for its whole life; each test is a fresh page.
+  resetDocumentEditDraftsForTests()
   transport.connection = { client: null, state: 'reconnecting' }
 })
 

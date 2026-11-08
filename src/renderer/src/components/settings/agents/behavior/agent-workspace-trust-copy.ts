@@ -1,16 +1,17 @@
 // @protected-copy: folder trust setting copy.
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { searchKeywords } from '../../search/settings-search-keywords'
 
-export function getAgentWorkspaceTrustTitle(): string {
-  return translate(
+export function getAgentWorkspaceTrustTitle(t: Translate = translate): string {
+  return t(
     'auto.components.settings.agent-workspace-trust-copy.title',
     'Trust the folder when Orca starts an agent'
   )
 }
 
-export function getAgentWorkspaceTrustDescription(): string {
-  return translate(
+export function getAgentWorkspaceTrustDescription(t: Translate = translate): string {
+  return t(
     'auto.components.settings.agent-workspace-trust-copy.description',
     'Agents Orca starts can skip their "Do you trust this folder?" prompt, so the project\'s agent hooks and settings run right away. Orca asks once per repository the first time you start an agent there, and you can change the answer in that repository\'s settings. Turn this off to let agents always ask. An agent that asks while running without you watching, such as an orchestration worker, an automation or an agent started from your phone, waits until you answer in its terminal. Folders already trusted stay trusted.'
   )

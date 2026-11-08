@@ -75,6 +75,7 @@ function socketEventClient(socket: PairedMobileSocket): SharedClientEventsClient
     // One socket for the helper's life: always connected, no reconnects to tell apart.
     getState: () => 'connected',
     getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
     subscribe: (method: string, params: unknown, onData: (payload: unknown) => void) => {
       const id = 'phone-list-events'
       socket.send(id, method, params)
@@ -132,8 +133,7 @@ export async function openPhoneFeedList(
   const stop = startHostWorktreeRefresh({
     client: socketEventClient(socket),
     // The list reads rows and catalog from the feed alone; worktree.ps adds only card content.
-    fetchWorktrees: async () => {},
-    fetchRepoMetadata: async () => {},
+    refreshWorktrees: () => {},
     syncViewSettings,
     sidebarFeed: {
       refresh: () => reader.refresh(),

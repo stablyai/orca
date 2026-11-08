@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type * as VisibleReviewTargets from '@/store/github/visible-hosted-review-refresh-targets'
+import type * as VisibleReviewTargets from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets'
 import { useWorkspaceReferenceDetails } from './use-workspace-reference-details'
 import { useVisibleHostedReviewRefresh } from '@/app-shell/use-visible-hosted-review-refresh'
 import { readWorkspaceReferenceDetails } from './workspace-reference-detail-read'
@@ -12,8 +12,8 @@ import {
   getTaskSourceCacheScope
 } from '../../../../../../shared/task-source-context'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
-import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review-request-state'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
+import { _clearHostedReviewRequestGenerationsForTest } from '@/store/slices/hosted-review/hosted-review-request-state'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import {
   referenceAttachment,
   referenceRepo,
@@ -24,16 +24,19 @@ import {
 
 vi.mock('@/store', async () => {
   const browserWindow = globalThis.window
-  const { createTestStore } = await import('@/store/slices/github-slice-test-harness')
+  const { createTestStore } = await import('@/store/github/github-slice-test-harness')
   globalThis.window = browserWindow
   return { useAppStore: createTestStore() }
 })
 // Branch refresh has its own integration suite; this suite exercises the additional exact targets.
-vi.mock('@/store/github/visible-hosted-review-refresh-targets', async (original) => ({
-  ...(await original<typeof VisibleReviewTargets>()),
-  getVisibleHostedReviewRefreshTargets: () => [],
-  visibleHostedReviewRefreshInputsChanged: () => true
-}))
+vi.mock(
+  '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets',
+  async (original) => ({
+    ...(await original<typeof VisibleReviewTargets>()),
+    getVisibleHostedReviewRefreshTargets: () => [],
+    visibleHostedReviewRefreshInputsChanged: () => true
+  })
+)
 const mocks = vi.hoisted(() => ({ web: false }))
 vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.web }))
 const read = vi.fn<(...args: unknown[]) => Promise<ReturnType<typeof referenceReview> | null>>()

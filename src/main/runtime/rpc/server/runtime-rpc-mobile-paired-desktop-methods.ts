@@ -15,6 +15,7 @@ export const PAIRED_DESKTOP_METHODS = [
   'pairing.getEndpoints',
   'pairing.provisionRelay',
   'pairing.registerDeviceKey',
+  'pairing.exchangeTicket',
   // The configured servers the desktop shows, and their workspace lists as it last fetched them.
   'mobileRelay.hosts.list',
   'mobileRelay.hosts.worktrees',

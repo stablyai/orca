@@ -2,7 +2,7 @@ import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registr
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setRuntimeBrowserCommandsFactory } from '../../../src/main/runtime/browser/installation/runtime-browser-commands-factory'
 import { RuntimeBrowserCommands } from '../../../src/main/runtime/browser/commands/browser-commands'
-import { withOpenedServeBrowserTab } from '../../../src/main/runtime/serve-browser-tab-layout'
+import { withOpenedServeBrowserTab } from '../../../src/main/runtime/browser/headless/serve-browser-tab-layout'
 import type { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import { TEST_WORKTREE_ID as WT } from '../../../src/main/runtime/orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { createRuntimeFixture } from './active-tab-publication.test-fixture'

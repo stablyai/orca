@@ -12,8 +12,9 @@ import { createStableLogicalRpcClient } from '../transport/stable-logical-rpc-cl
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { useMobileTasksHostedCommentReviewActions } from './use-mobile-tasks-hosted-comment-review-actions'
 import React, { useState, useRef } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, expect, it, vi } from 'vitest'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
+import { afterEach, expect, it, onTestFinished, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { DetailPayload, GitHubDetailFile } from './mobile-tasks-provider-detail-types'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
@@ -126,6 +127,7 @@ async function mount() {
       resetGitHubItemsState: noop,
       selectedLinearTeamIds: effectiveRepoIds,
       selectedLinearWorkspaceId: null,
+      selectedRepoIds: effectiveRepoIds,
       effectiveRepoIds,
       serverRepoList: repos,
       setError,
@@ -279,7 +281,7 @@ async function mount() {
     )
   }
   await act(async () => {
-    renderers.push(create(<Probe />))
+    renderers.push(createWithQueryClient(<Probe />))
   })
   await act(async () => select(a))
   return {
@@ -470,7 +472,13 @@ it.each(['comment', 'status'] as const)(
   }
 )
 
-it('keeps an unconfirmed comment with a notice until the reloaded thread shows it posted', async () => {
+it('keeps an unconfirmed comment with a notice until the reloaded thread shows the viewer posted it', async () => {
+  // The send records Date.now() as its start; pin it so "after the send" is a fixed time.
+  const now = '2026-11-07T09:00:00.000Z'
+  vi.setSystemTime(now)
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
   const f = await mount()
   await act(async () => f.read().setItemCommentDraft('Ship it'))
   let pending!: Promise<void>
@@ -490,10 +498,28 @@ it('keeps an unconfirmed comment with a notice until the reloaded thread shows i
       text: 'Not confirmed. Check the thread before sending again.'
     }
   })
+  const theirs = { id: 40, body: 'Ship it', createdAt: now, author: 'alice' }
+  // Mine, from long before the send, that the refresh read for the first time.
+  const myOlder = {
+    id: 39,
+    body: 'Ship it',
+    createdAt: '2026-01-01T00:00:00Z',
+    author: 'me',
+    viewerDidAuthor: true
+  }
+  await act(async () => f.read().setDetailPayload({ ...details(f.a), comments: [myOlder, theirs] }))
+  expect(f.read()).toMatchObject({
+    itemCommentDraft: 'Ship it',
+    commentSendNotice: { slot: 'comment' }
+  })
   await act(async () =>
     f.read().setDetailPayload({
       ...details(f.a),
-      comments: [{ id: 41, body: 'Ship it', createdAt: '', author: 'me' }]
+      comments: [
+        myOlder,
+        theirs,
+        { id: 41, body: 'Ship it', createdAt: now, author: 'me', viewerDidAuthor: true }
+      ]
     })
   )
   expect(f.read()).toMatchObject({ itemCommentDraft: '', commentSendNotice: null })

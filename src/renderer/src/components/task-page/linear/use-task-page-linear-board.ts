@@ -8,8 +8,8 @@ import {
   writeLinearBoardIssueDragData,
   readLinearBoardIssueDragData
 } from '@/lib/linear-board-drag-payload'
-import { linearTeamStates } from '@/runtime/runtime-linear-project-client'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { linearTeamStates } from '@/runtime/linear/runtime-linear-project-client'
+import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'

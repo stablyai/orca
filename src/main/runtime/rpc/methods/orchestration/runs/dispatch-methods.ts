@@ -9,7 +9,10 @@ import {
   taskNotStartableError
 } from '../../../../orchestration/coordinator/dispatch/task-dispatch-refusal'
 import { resolveRunScope } from './run-scope'
-import { DispatchParams, DispatchShowParams } from '../schemas'
+import {
+  DispatchParams,
+  DispatchShowParams
+} from '../../../../../../shared/rpc-contract/orchestration-params'
 import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty

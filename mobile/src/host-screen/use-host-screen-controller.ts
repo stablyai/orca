@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useLocalSearchParams, usePathname } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { visibleHostRouteNotice } from '../host-route-notice'
 import { useActiveWorktreeScroll } from '../hooks/use-active-worktree-scroll'
-import { useNow } from '../hooks/use-now'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import {
   useForgetHostClient,
@@ -22,7 +21,7 @@ import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-dis
 import { useHostListSections } from './use-host-list-sections'
 import { useSwitchedHostSidebarFeed } from './use-host-sidebar-feed'
 import { useHostProjectSections } from './use-host-project-sections'
-import { useHostRepoMetadata, type FetchHostRepoMetadata } from './use-host-repo-metadata'
+import { useHostRepoMetadata } from './use-host-repo-metadata'
 import { peekStoredHost, useHostScreenIdentity } from './use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './use-host-view-settings'
@@ -61,7 +60,6 @@ export function useHostScreenController({
   const relayRecovery = useRelayRecoveryStatus(hostId)
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
-  const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled, hostInstallationId } = useHostProtocolGates()
   const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
@@ -79,41 +77,25 @@ export function useHostScreenController({
   )
 
   useHostScreenIdentity({ client, hostId, state })
-  const fetchRepoMetadataOnly = useHostRepoMetadata({ client, connState, hostId, state })
   const sidebarFeed = useSwitchedHostSidebarFeed(client, hostId)
-  // Read through a ref so the metadata refresh keeps its identity across installs.
-  const feedRef = useRef(sidebarFeed?.feed)
-  useEffect(() => {
-    feedRef.current = sidebarFeed?.feed
-  }, [sidebarFeed?.feed])
-  const feedCarriesCatalog = useCallback(
-    () => feedRef.current?.kind === 'ready' && feedRef.current.domains.projectCatalog !== null,
-    []
-  )
-  const fetchProjectSections = useHostProjectSections({
-    client,
-    connState,
-    hostId,
-    state,
-    feedCarriesCatalog
-  })
-  const fetchRepoMetadata = useCallback<FetchHostRepoMetadata>(
-    (options) => {
-      void fetchProjectSections(options)
-      return fetchRepoMetadataOnly(options)
-    },
-    [fetchProjectSections, fetchRepoMetadataOnly]
-  )
   const catalog = useHostWorktreeCatalog({
     client,
     connState,
     embedded,
-    fetchRepoMetadata,
     hostCapabilities,
     hostId,
     sidebarFeed: sidebarFeed?.triggers ?? null,
     state,
     syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop
+  })
+  useHostRepoMetadata({ client, hostId, state, subscribed: catalog.subscribed })
+  const feed = sidebarFeed?.feed ?? null
+  useHostProjectSections({
+    client,
+    hostId,
+    state,
+    subscribed: catalog.subscribed,
+    feedCarriesCatalog: feed?.kind === 'ready' && feed.domains.projectCatalog !== null
   })
   const actions = useHostWorktreeActions({
     client,
@@ -134,7 +116,6 @@ export function useHostScreenController({
     state,
     hostPlatform
   )
-  const feed = sidebarFeed?.feed ?? null
   const sectionsResult = useHostListSections({
     client,
     hostId,
@@ -183,7 +164,6 @@ export function useHostScreenController({
     isWideLayout,
     lastConnectedAt,
     noticeParam,
-    now,
     onHideSidebar,
     reconnectAttempts,
     relayRecovery,

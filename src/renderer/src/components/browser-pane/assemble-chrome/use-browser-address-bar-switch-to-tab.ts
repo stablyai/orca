@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser-page-records'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import {
   buildOpenTabSearchBrowserPages,
   selectOpenTabSearchBrowserPageState

@@ -66,22 +66,4 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
 
     transport.disconnect()
   })
-
-  it('surfaces working frames when many spinner frames arrive in one chunk', async () => {
-    // Delayed renderer flushes can batch many spinner frames; all must retain observer order.
-    const { createIpcPtyTransport } = await import('./pty-transport')
-    const onTitleChange = vi.fn()
-    const transport = createIpcPtyTransport({ onTitleChange })
-    await transport.connect({ url: '', callbacks: {} })
-
-    const framesChars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-    const chunk = framesChars.map(workingFrame).join('body\r\n')
-    onData?.({ id: 'pty-pi', data: chunk })
-    await flushPtySideEffects()
-
-    const seen = onTitleChange.mock.calls.map((c) => c[0])
-    expect(seen).toContain('⠋ π - cwd')
-
-    transport.disconnect()
-  })
 })

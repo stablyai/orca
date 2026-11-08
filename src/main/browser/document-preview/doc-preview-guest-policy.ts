@@ -2,7 +2,7 @@ import {
   DOC_PREVIEW_EXTERNAL_LINK_CHANNEL,
   parseDocPreviewUrl,
   type DocPreviewExternalLink
-} from '../../../shared/doc-preview-scheme'
+} from '../../../shared/document-preview/doc-preview-scheme'
 import { normalizeExternalBrowserUrl } from '../../../shared/browser-url'
 import { enforceBrowserRouteWebRtcPolicy } from '../network/egress/browser-route-webrtc-policy'
 import { getDocPreviewGrant } from './doc-preview-grant-registry'

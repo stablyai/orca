@@ -1,4 +1,4 @@
-import { buildImageDataUri } from '../../../../../src/shared/image-data-uri'
+import { buildImageDataUri } from '../../../../../src/shared/file-preview/image-data-uri'
 import { isAgentSessionAttachmentStorePath } from '../../../../../src/shared/agent-session/agent-session-attachments'
 import { PrioritySemaphore } from '../../../../../src/shared/priority-semaphore'
 import { filePreviewImageSchema } from '../../../files/file-preview-reply-schema'

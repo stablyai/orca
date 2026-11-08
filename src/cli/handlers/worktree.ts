@@ -9,6 +9,7 @@ import type {
 import type { CommandHandler } from '../dispatch'
 import { printHookWarning, printPreservedBranchWarning } from './worktree-removal-warnings'
 import { requestWorktreeRemoval } from './worktree-removal-request'
+import { removeIfFolderWorkspace, setIfFolderWorkspace } from './folder-workspace-mutations'
 import { formatWorktreeList, formatWorktreePs, formatWorktreeShow, printResult } from '../format'
 import {
   annotateOmittedHostScope,
@@ -113,7 +114,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree show': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      matchFolderWorkspaces: true
     })
     printResult(result, json, formatWorktreeShow)
   },
@@ -229,6 +231,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       allowNull: true
     })
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    if (await setIfFolderWorkspace(client, flags, worktree, json)) {
+      return
+    }
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
     const parentFields = await resolveSetParentFields(flags, cwd, client)
     const pending = client.call<RuntimeWorktreeSetResult>('worktree.set', {
@@ -262,6 +267,9 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree rm': async ({ flags, client, cwd, json }) => {
     const worktree = await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+    if (await removeIfFolderWorkspace(client, flags, worktree, json)) {
+      return
+    }
     const resolved = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
       worktree
     })

@@ -17,7 +17,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from '@/lib/workspace/persistence/workspace-session-host-hydration'
 import { collectFolderWorkspaceKeysFromSession } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { AppState } from '../store/types'
-import type { createTestStore } from '../store/slices/store-test-helpers'
+import type { createTestStore } from '../store/testing/app-store-test-fixture'
 import { reconcileHydratedWorkspaceTabModels } from './reconcile-hydrated-workspace-tab-models'
 
 /** One stored session partition and the host it is stored under. */
