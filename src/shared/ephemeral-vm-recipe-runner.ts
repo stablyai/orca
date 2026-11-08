@@ -40,6 +40,8 @@ export type EphemeralVmRecipeStartArgs = {
   env?: NodeJS.ProcessEnv
   maxCaptureBytes?: number
   signal?: AbortSignal
+  /** Called once the create process has actually started. */
+  onSpawn?: () => void
   onStdout?: (chunk: string) => void
   onStderr?: (chunk: string) => void
   spawnCommand?: typeof spawn

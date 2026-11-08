@@ -124,6 +124,9 @@ export async function provisionEphemeralVmRuntime(
         instanceId: writeAhead.instanceId
       },
       signal: args.signal,
+      onSpawn: () => {
+        writeAhead.launched = true
+      },
       onStdout: args.onStdout,
       onStderr: args.onStderr
     })

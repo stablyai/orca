@@ -217,6 +217,41 @@ describe('ephemeral VM runtime service', () => {
     expect(readFileSync(countPath, 'utf8')).toBe('xx')
   })
 
+  it('keeps no record when create is cancelled before its script starts', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-service-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-service-repo-')
+    const startedPath = join(repoPath, 'started.txt')
+    const startPath = join(repoPath, 'start.js')
+    writeFileSync(startPath, `require('fs').writeFileSync(${JSON.stringify(startedPath)}, 'x')\n`)
+    const controller = new AbortController()
+    controller.abort()
+
+    const provisioned = await provisionEphemeralVmRuntime({
+      userDataPath,
+      repoPath,
+      recipe: { id: 'cloud-sandbox', name: 'Cloud Sandbox', create: nodeCommand(startPath) },
+      signal: controller.signal
+    })
+
+    expect(provisioned).toMatchObject({ ok: false, start: { exitCode: null } })
+    expect(existsSync(startedPath)).toBe(false)
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([])
+  })
+
+  it('keeps no record when create fails validation before its script starts', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-service-user-data-')
+    const missingRepoPath = join(makeDir('orca-ephemeral-vm-service-repo-'), 'missing')
+
+    await expect(
+      provisionEphemeralVmRuntime({
+        userDataPath,
+        repoPath: missingRepoPath,
+        recipe: { id: 'cloud-sandbox', name: 'Cloud Sandbox', create: 'unused' }
+      })
+    ).rejects.toThrow()
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([])
+  })
+
   it('keeps a result-less failed record when recipe output cannot be parsed', async () => {
     const userDataPath = makeDir('orca-ephemeral-vm-service-user-data-')
     const repoPath = makeDir('orca-ephemeral-vm-service-repo-')

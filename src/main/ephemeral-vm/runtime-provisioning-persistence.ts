@@ -25,6 +25,8 @@ import { cleanupFailedEphemeralVmStart } from './failed-start-cleanup'
 export type EphemeralVmWriteAhead = {
   instanceId: string
   createdAt: number
+  /** Set once the create command's process started; before that no VM can exist. */
+  launched: boolean
 }
 
 // Creates owned by this process; any other `provisioning` record was orphaned by a crash or quit.
@@ -38,9 +40,10 @@ export function isEphemeralVmProvisionLive(instanceId: string): boolean {
 export function beginEphemeralVmProvisioning(
   args: ProvisionEphemeralVmRuntimeArgs
 ): EphemeralVmWriteAhead {
-  const writeAhead = {
+  const writeAhead: EphemeralVmWriteAhead = {
     instanceId: `orca-${randomUUID()}`,
-    createdAt: args.now ?? Date.now()
+    createdAt: args.now ?? Date.now(),
+    launched: false
   }
   if (args.recipe.checkoutMode) {
     assertEphemeralVmRuntimeCheckoutModeCanPersist(args.userDataPath, {
@@ -70,7 +73,9 @@ export function endEphemeralVmProvisioning(
   }
   try {
     const record = findRuntime(args.userDataPath, writeAhead.instanceId)
-    if (record?.status === 'provisioning') {
+    if (record?.status === 'provisioning' && !writeAhead.launched) {
+      removeEphemeralVmRuntime(args.userDataPath, record.id)
+    } else if (record?.status === 'provisioning') {
       markProvisionFailed(args.userDataPath, record.id, ephemeralVmFailureFromError(error))
     }
   } catch {
@@ -83,6 +88,11 @@ export async function persistFailedEphemeralVmStart(
   writeAhead: EphemeralVmWriteAhead,
   start: EphemeralVmRecipeStartFailure
 ): Promise<void> {
+  if (!start.recipeResult && !writeAhead.launched) {
+    // Why: create never ran (validation failed or it was cancelled first), so no VM can exist.
+    removeIfPresent(args.userDataPath, writeAhead.instanceId)
+    return
+  }
   if (!start.recipeResult) {
     // Why: create may have allocated resources before failing; keep the row so the user can destroy it.
     markProvisionFailed(args.userDataPath, writeAhead.instanceId, {
