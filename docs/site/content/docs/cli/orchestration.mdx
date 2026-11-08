@@ -110,9 +110,11 @@ Later commands route by Dispatch ID; do not repeat `--on`.
 
 A process that is not an Orca terminal, such as a daemon, an MCP server, or a CI supervisor, can coordinate a Run without borrowing a pane. Its identity is a saved runtime environment: the pairing's caller fingerprint, not a token of its own. Device keys forked from one legacy pairing token share that fingerprint, so authority belongs to the pairing lineage, not to one device.
 
-Pair it once. To pair with the Orca on this computer, generate a pairing link in Settings for **This computer** (or run `orca pair` on the host, which also opens network access), then save it:
+Pair it once: make an access link on the Orca host with `orca pair` (which also opens network access), then save it where the coordinator runs. On the same computer, the coordinator keeps a profile of its own, because Orca does not save a pairing code into the profile of the runtime it points at:
 
 ```bash
+orca pair --address 127.0.0.1 --json   # prints pairingUrl; Orca still listens on every interface
+export ORCA_USER_DATA_PATH=~/.orca-coordinator   # same computer only, for every command below
 orca environment add --name this-mac --pairing-code "orca://pair?code=..."
 orca orchestration run-create --objective "Nightly dependency bumps" --external --environment this-mac --json
 orca orchestration worker-start --spec "Bump eslint and fix lint" --worktree id:<worktreeId> --agent codex --environment this-mac

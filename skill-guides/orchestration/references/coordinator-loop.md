@@ -31,7 +31,10 @@ ORCA orchestration worker-start --spec "<task>" --worktree id:<worktree_id> --ag
 ORCA orchestration check --wait --types worker_done,escalation,question --environment <name>
 ```
 
-No pane wakes it, so `check --wait` is its loop. It has no workspace, so name
+On the Orca host itself it pairs from a profile of its own
+(`ORCA_USER_DATA_PATH`), since Orca does not save a pairing into its own
+runtime's profile; keep that variable set for every later `--environment`
+command. No pane wakes it, so `check --wait` is its loop. It has no workspace, so name
 one with `--worktree`. A terminal that runs `run-use` on its Run takes it over.
 Inside an Orca terminal these commands act as that terminal, not as the
 environment.
