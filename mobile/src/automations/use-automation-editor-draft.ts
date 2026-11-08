@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MobileAutomation } from './automation-reply-schema'
-import {
-  automationDraftChanged,
-  newAutomationDraft,
-  type AutomationDraft
-} from './automation-draft'
+import { newAutomationDraft, type AutomationDraft } from './automation-draft'
 import {
   automationDraftEdits,
-  loadAutomationEditorDraft,
+  discardAutomationEditorDraft,
+  laySavedEdits,
   readAutomationEditorDraft,
-  saveAutomationEditorDraft
+  saveAutomationEditorDraft,
+  watchAutomationEditorDraft
 } from './automation-editor-draft-row'
 
 /** The editor's form, with the user's unsaved edits kept in a draft row and laid back over it on reopen. */
@@ -28,22 +26,13 @@ export function useAutomationEditorDraft(
   const retired = useRef(false)
 
   useEffect(() => {
-    if (restored.current || initialDraft) {
+    if (initialDraft) {
       return
     }
-    let active = true
-    void loadAutomationEditorDraft(draftKey).then((edits) => {
-      if (!active || !edits) {
-        return
-      }
+    return watchAutomationEditorDraft(draftKey, (edits) => {
       restored.current = edits
-      setDraft((form) =>
-        automationDraftChanged(original.current, form) ? form : { ...form, ...edits }
-      )
+      setDraft((form) => laySavedEdits(form, original.current, edits))
     })
-    return () => {
-      active = false
-    }
   }, [draftKey, initialDraft])
 
   useEffect(() => {
@@ -60,7 +49,7 @@ export function useAutomationEditorDraft(
     withSavedEdits: (form: AutomationDraft): AutomationDraft => ({ ...form, ...restored.current }),
     discard: () => {
       retired.current = true
-      saveAutomationEditorDraft(draftKey, null)
+      discardAutomationEditorDraft(draftKey)
     }
   }
 }

@@ -62,13 +62,13 @@ export function AutomationManager(props: {
     catalog.rows,
     view.kind === 'editor' && !view.row,
     (saved, initialDraft) => {
-      dropAutomationEditorDraft(props.executionHost)
       catalog.setError(null)
       setView(
         initialDraft ? { kind: 'editor', row: saved, initialDraft } : { kind: 'detail', row: saved }
       )
     },
-    catalog.isCurrentSnapshot
+    catalog.isCurrentSnapshot,
+    () => dropAutomationEditorDraft(props.executionHost)
   )
   const setupConsent = useAutomationSetupConsent(props.client, props.executionHost)
   const disabled = !catalog.connected || catalog.busy

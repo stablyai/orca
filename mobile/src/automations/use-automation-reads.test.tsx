@@ -234,7 +234,8 @@ describe('host-owned automation reads', () => {
           catalog.rows,
           true,
           reconciled,
-          catalog.isCurrentSnapshot
+          catalog.isCurrentSnapshot,
+          vi.fn()
         )
         state = { catalog, attempt }
         return null
@@ -314,7 +315,7 @@ describe('host-owned automation reads', () => {
       const port = automationClient(() => ({ automation: savedAutomation() }))
       let state: ReturnType<typeof useAutomationCreateAttempt> | null = null
       function Probe() {
-        state = useAutomationCreateAttempt([], true, vi.fn(), () => true)
+        state = useAutomationCreateAttempt([], true, vi.fn(), () => true, vi.fn())
         return null
       }
       await act(async () => {
@@ -367,7 +368,7 @@ describe('host-owned automation reads', () => {
       const port = automationClient(() => ({}))
       let state: ReturnType<typeof useAutomationCreateAttempt> | null = null
       function Probe() {
-        state = useAutomationCreateAttempt([], true, vi.fn(), () => true)
+        state = useAutomationCreateAttempt([], true, vi.fn(), () => true, vi.fn())
         return null
       }
       await act(async () => {
