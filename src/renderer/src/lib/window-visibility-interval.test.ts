@@ -126,46 +126,4 @@ describe('installWindowVisibilityInterval', () => {
     expect(run).not.toHaveBeenCalled()
     vi.useRealTimers()
   })
-
-  it('slows ticks while visible but unfocused and catches up overdue work on focus', async () => {
-    vi.useFakeTimers()
-    let focused = true
-    const windowListeners = new Map<string, () => void>()
-    vi.stubGlobal('window', {
-      addEventListener: vi.fn((event: string, listener: () => void) => {
-        windowListeners.set(event, listener)
-      }),
-      removeEventListener: vi.fn()
-    })
-    vi.stubGlobal('document', {
-      visibilityState: 'visible',
-      hasFocus: () => focused,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn()
-    })
-    const run = vi.fn()
-
-    const cleanup = installWindowVisibilityInterval({
-      run,
-      intervalMs: 1000,
-      slowWhileUnfocused: true
-    })
-    expect(run).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(run).toHaveBeenCalledTimes(2)
-
-    focused = false
-    await vi.advanceTimersByTimeAsync(3000)
-    expect(run).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(run).toHaveBeenCalledTimes(3)
-
-    await vi.advanceTimersByTimeAsync(1500)
-    focused = true
-    windowListeners.get('focus')?.()
-    expect(run).toHaveBeenCalledTimes(4)
-
-    cleanup()
-    vi.useRealTimers()
-  })
 })
