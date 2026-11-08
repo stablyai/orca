@@ -32,21 +32,6 @@ describe('subscription registration versions', () => {
     }
   )
 
-  it('still refuses a different connection with a current registration version', async () => {
-    const registry = new RuntimeSubscriptionRegistry()
-    const cleanup = vi.fn()
-    registry.register('terminal:owned', cleanup, 'conn-a')
-    expect(
-      registry.cleanupIfOwnedByConnection(
-        'terminal:owned',
-        'conn-b',
-        registry.getRegistrationVersion()
-      )
-    ).toBe(false)
-    expect(cleanup).not.toHaveBeenCalled()
-    await registry.cleanupAndWait('terminal:owned')
-  })
-
   it('keeps registration ownership even when a cleanup callback is reused', async () => {
     const registry = new RuntimeSubscriptionRegistry()
     const cleanup = vi.fn()

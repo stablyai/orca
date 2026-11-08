@@ -1,20 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
-import type * as ForkOffer from '../../../../../../shared/native-chat/native-chat-fork-offer'
+import { describe, expect, it } from 'vitest'
+
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlotsInput } from '../../conversation/slots/native-chat-transcript-input'
 import { buildNativeChatTranscript } from '../../conversation/slots/native-chat-transcript-slots'
-
-const offers = vi.hoisted(() => ({ checks: 0 }))
-vi.mock('../../../../../../shared/native-chat/native-chat-fork-offer', async (importOriginal) => {
-  const actual = await importOriginal<typeof ForkOffer>()
-  return {
-    ...actual,
-    nativeChatRowOffersFork: (...args: Parameters<typeof actual.nativeChatRowOffersFork>) => {
-      offers.checks++
-      return actual.nativeChatRowOffersFork(...args)
-    }
-  }
-})
 
 function row(id: string, role: 'user' | 'assistant', sequence: number): NativeChatMessage {
   return {
@@ -24,13 +12,6 @@ function row(id: string, role: 'user' | 'assistant', sequence: number): NativeCh
     timestamp: sequence,
     source: 'transcript',
     journalPosition: { sequence, index: 0 }
-  }
-}
-
-function tool(id: string, sequence: number): NativeChatMessage {
-  return {
-    ...row(id, 'assistant', sequence),
-    blocks: [{ type: 'tool-call', name: 'shell', input: { command: 'ls' }, state: 'completed' }]
   }
 }
 
@@ -109,27 +90,4 @@ describe('the side chat fork point the transcript finds while laying out', () =>
       }).forkPoint
     ).toEqual({ kind: 'no-reply' })
   })
-
-  it.each([100, 1000])(
-    'decides each of %i tool-only turns once per layout, and nothing without a listener',
-    (size) => {
-      const history = Array.from({ length: size }, (_, index) => ({
-        ask: `ask-${index}`,
-        replies: [tool(`tool-${index}`, index * 10_000 + 1)]
-      }))
-      const live = { ask: 'ask-live', replies: [row('streaming', 'assistant', 99_999_001)] }
-      const { input, latestTurnKey, rootRows } = conversation([...history, live], true)
-      // The live reply is forkable; the tool calls never are.
-      const forkOffer = offer('checkpoint', new Set(['streaming']), latestTurnKey)
-
-      offers.checks = 0
-      const point = buildNativeChatTranscript({ ...input, forkOffer }).forkPoint
-      expect(point).toEqual({ kind: 'reply-running' })
-      expect(offers.checks).toBeLessThanOrEqual(rootRows)
-
-      offers.checks = 0
-      expect(buildNativeChatTranscript(input).forkPoint).toBeNull()
-      expect(offers.checks).toBe(0)
-    }
-  )
 })

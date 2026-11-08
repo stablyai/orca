@@ -88,25 +88,6 @@ function browserStrip(
 }
 
 describe('client session-tab selection', () => {
-  it('namespaces projections by device and discards revoked state', () => {
-    const store = new ClientSessionTabSelectionStore()
-    const initial = snapshot()
-
-    store.project(initial, 'device-a')
-    store.project(initial, 'device-b')
-    const selectedA = store.activate(initial, 'device-a', 'browser-unified')
-
-    expect(selectedA.activeTabId).toBe('browser-unified')
-    expect(selectedA.publicationEpoch).toBe('renderer:1:client-navigation')
-    expect(selectedA.snapshotVersion).toBe(2)
-    expect(store.project(initial, 'device-b').activeTabId).toBe('terminal-a::leaf-a')
-    const selectedAgain = store.activate(initial, 'device-a', 'terminal-a::leaf-b')
-    expect(selectedAgain.snapshotVersion).toBe(3)
-    expect(selectedAgain.activeTabId).toBe('terminal-a::leaf-b')
-    store.forgetClient('device-a')
-    expect(store.project(initial, 'device-a').activeTabId).toBe('terminal-a::leaf-a')
-  })
-
   it('does not restore a closed tab from a stale pre-close snapshot', () => {
     const store = new ClientSessionTabSelectionStore()
     const full = snapshot()

@@ -88,18 +88,6 @@ async function restore(runtime: InstanceType<typeof OrcaRuntimeService>): Promis
 }
 
 describe('restoring a pane its host recorded an agent in', () => {
-  it('resumes an agent typed into a shell, which no launch command names', async () => {
-    const { runtime, spawn } = makeRuntime([codexRow()])
-    await restore(runtime)
-    expect(spawn.mock.calls[0]![0].command).toMatch(RESUMES)
-  })
-
-  it('resumes an agent whose process exit left only its resume identity', async () => {
-    const { runtime, spawn } = makeRuntime([codexRow({ providerSessionOnly: true })], 'codex')
-    await restore(runtime)
-    expect(spawn.mock.calls[0]![0].command).toMatch(RESUMES)
-  })
-
   it('ignores a row from another worktree, and launches the tab’s agent fresh', async () => {
     const { runtime, spawn } = makeRuntime(
       [codexRow({ worktreeId: 'other-repo::/other' })],

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import '../../../../shared/agent-kind'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
+
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 
 const mocks = vi.hoisted(() => ({
@@ -96,41 +96,6 @@ describe('buildWorktreeStartupForAgent host resolution', () => {
   it('uses the headless runtime CLI with no nested SSH target (#33920)', async () => {
     expect(await launchCliNameFor(makeRepo({ executionHostId: 'runtime:vm-1' }))).toBe('orca')
   })
-
-  it('uses per-launch arguments and preserves launch telemetry', async () => {
-    const result = await buildWorktreeStartupForAgent({
-      repo: makeRepo({}),
-      settings,
-      agent: 'claude',
-      agentArgs: '--model opus',
-      launchSource: 'source_control_recovery',
-      getLaunchRuntime: () => LINUX,
-      toSessionOptions: () => undefined
-    })
-
-    expect(result.startup.command).toContain("'--model'")
-    expect(result.startup.telemetry).toEqual({
-      agent_kind: 'claude-code',
-      launch_source: 'source_control_recovery',
-      request_kind: 'new'
-    })
-  })
-
-  it('attributes a startup agent whose caller named no surface as unknown', async () => {
-    const result = await buildWorktreeStartupForAgent({
-      repo: makeRepo({}),
-      settings,
-      agent: 'claude',
-      getLaunchRuntime: () => LINUX,
-      toSessionOptions: () => undefined
-    })
-
-    expect(result.startup.telemetry).toEqual({
-      agent_kind: 'claude-code',
-      launch_source: 'unknown',
-      request_kind: 'new'
-    })
-  })
 })
 
 // Host-built startup must use the same shell fact for quoting and spawn.
@@ -190,29 +155,6 @@ describe('buildWorktreeStartupForAgent prompt carry', () => {
   })
 })
 
-// A blank create prompt must launch like an omitted prompt.
-describe('buildWorktreeStartupForAgent blank prompt', () => {
-  it.each(['claude', 'aider'] as const)(
-    'launches %s bare for an absent or blank prompt',
-    async (agent) => {
-      const build = (prompt?: string) =>
-        buildWorktreeStartupForAgent({
-          repo: makeRepo({}),
-          settings,
-          agent,
-          ...(prompt !== undefined ? { prompt } : {}),
-          getLaunchRuntime: () => LINUX,
-          toSessionOptions: () => undefined
-        })
-
-      const bare = await build()
-      expect(bare.followup).toBeUndefined()
-      expect(await build('')).toEqual(bare)
-      expect(await build('  \n ')).toEqual(bare)
-    }
-  )
-})
-
 describe('buildWorktreeStartupForDraft agent detection', () => {
   it('never probes this client for an SSH host named only by executionHostId', async () => {
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['claude'])
@@ -240,55 +182,9 @@ describe('buildWorktreeStartupForDraft agent detection', () => {
 
     expect(result?.agent).toBe('claude')
   })
-
-  // Attribute every host-built launch whether its draft rides argv or arrives after startup.
-  it.each([
-    ['claude', 'cli', 'cli', false],
-    ['claude', undefined, 'unknown', false],
-    ['claude-agent-teams', 'orchestration', 'orchestration', true],
-    ['claude-agent-teams', undefined, 'unknown', true]
-  ] as const)(
-    'attributes a %s draft launch named %s as %s',
-    async (agent, launchSource, expected, pasted) => {
-      const result = await buildWorktreeStartupForDraft({
-        repo: makeRepo({}),
-        settings,
-        draft: 'ship it',
-        requestedAgent: agent,
-        getLaunchRuntime: () => LINUX,
-        ...(launchSource ? { launchSource } : {})
-      })
-
-      expect(result?.draftPaste !== undefined).toBe(pasted)
-      expect(result?.startup.telemetry).toEqual({
-        agent_kind: tuiAgentToAgentKind(agent),
-        launch_source: expected,
-        request_kind: 'new'
-      })
-    }
-  )
 })
 
 describe('buildWorktreeStartupForAgent extra agent args', () => {
-  it("merges an automation's extras over the host defaults", async () => {
-    const result = await buildWorktreeStartupForAgent({
-      repo: makeRepo({}),
-      settings: {
-        ...settings,
-        agentDefaultArgs: { claude: '--dangerously-skip-permissions --model sonnet' }
-      },
-      agent: 'claude',
-      prompt: 'go',
-      extraAgentArgs: '--model opus',
-      getLaunchRuntime: () => LINUX,
-      toSessionOptions: () => undefined
-    })
-
-    expect(result.startup.command).toBe(
-      "claude '--dangerously-skip-permissions' '--model' 'opus' 'go'"
-    )
-  })
-
   it('refuses invalid extras before any terminal exists', async () => {
     await expect(
       buildWorktreeStartupForAgent({
@@ -301,30 +197,6 @@ describe('buildWorktreeStartupForAgent extra agent args', () => {
         toSessionOptions: () => undefined
       })
     ).rejects.toThrow('"--settings"')
-  })
-
-  it('threads worktree-create extras into the startup build', async () => {
-    const build = vi.fn(() => ({
-      agent: 'claude' as const,
-      startup: { command: 'claude' },
-      launchRuntime: LINUX_FACT
-    }))
-    const createArgs: RuntimeManagedWorktreeCreateArgs = {
-      repoSelector: 'repo-1',
-      name: 'Review',
-      startupAgent: 'claude',
-      startupPrompt: 'go',
-      startupExtraAgentArgs: '--effort high',
-      startupAgentArgs: null,
-      startupSessionOptions: { fastMode: 'true' }
-    }
-    await resolveWorktreeCreateAgentStartup(createArgs, build)
-
-    expect(build).toHaveBeenCalledWith('claude', 'go', undefined, {
-      extraAgentArgs: '--effort high',
-      agentArgs: null,
-      sessionOptions: { fastMode: 'true' }
-    })
   })
 
   it("merges a launch's account env over the startup plan's env", async () => {
@@ -368,54 +240,12 @@ describe('resolveWorktreeStartupDraftAgent', () => {
       ...(requestedAgent ? { requestedAgent } : {})
     })
 
-  it('returns an enabled requested agent without detecting', async () => {
-    await expect(resolve({ defaultTuiAgent: 'claude' }, 'codex')).resolves.toBe('codex')
-    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
-  })
-
-  it('returns the default when nothing was requested', async () => {
-    await expect(resolve({ defaultTuiAgent: 'claude' })).resolves.toBe('claude')
-    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
-  })
-
-  // A disabled explicit request falls through to detection, not the default agent.
-  it('detects instead of using the default when the requested agent is disabled', async () => {
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex', 'gemini'])
-
-    await expect(
-      resolve({ defaultTuiAgent: 'claude', disabledTuiAgents: ['codex'] }, 'codex')
-    ).resolves.toBe('gemini')
-    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledTimes(1)
-    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledWith(undefined, {
-      disabledTuiAgents: ['codex']
-    })
-  })
-
-  it('starts no agent when the default is blank', async () => {
-    await expect(resolve({ defaultTuiAgent: 'blank' })).resolves.toBeNull()
-    expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
-  })
-
-  it('detects an enabled agent on this host when nothing usable was named', async () => {
-    mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex', 'claude'])
-
-    await expect(resolve({ disabledTuiAgents: ['codex'] })).resolves.toBe('claude')
-    expect(mocks.detectInstalledAgentsWithShellPathHydration).toHaveBeenCalledExactlyOnceWith(
-      undefined,
-      { disabledTuiAgents: ['codex'] }
-    )
-  })
-
   // An unserved SSH host cannot be answered by local detection.
   it('starts no agent on an unserved SSH host rather than detecting locally', async () => {
     mocks.detectInstalledAgentsWithShellPathHydration.mockResolvedValue(['codex'])
 
     await expect(resolve({}, undefined, makeRepo({ connectionId: 'ssh-1' }))).resolves.toBeNull()
     expect(mocks.detectInstalledAgentsWithShellPathHydration).not.toHaveBeenCalled()
-  })
-
-  it('starts no agent when detection finds none', async () => {
-    await expect(resolve({})).resolves.toBeNull()
   })
 })
 

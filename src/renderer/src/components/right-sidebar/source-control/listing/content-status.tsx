@@ -1,3 +1,4 @@
+import { SequencerRecoveryControls } from './sequencer-recovery-controls'
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
@@ -84,7 +85,15 @@ export function SourceControlContentStatus({
             onAbortOperation={onAbortOperation}
             onResolveWithAI={onResolveWithAi}
             onReview={onReviewConflicts}
-          />
+          >
+            {(conflictOperation === 'cherry-pick' || conflictOperation === 'revert') && (
+              <SequencerRecoveryControls
+                worktreeId={worktreeId}
+                operation={conflictOperation}
+                disabled={isRecoveryBusy || isAbortingOperation || isCompletingMerge}
+              />
+            )}
+          </ConflictSummaryCard>
         </div>
       )}
       {unresolvedConflictCount === 0 && conflictOperation !== 'unknown' && (
@@ -98,7 +107,15 @@ export function SourceControlContentStatus({
             onCompleteMerge={onCompleteMerge}
             sourceControlAiActionsVisible={sourceControlAiActionsVisible}
             onResolveWithAI={onResolveWithAi}
-          />
+          >
+            {(conflictOperation === 'cherry-pick' || conflictOperation === 'revert') && (
+              <SequencerRecoveryControls
+                worktreeId={worktreeId}
+                operation={conflictOperation}
+                disabled={isRecoveryBusy || isAbortingOperation || isCompletingMerge}
+              />
+            )}
+          </OperationBanner>
         </div>
       )}
       {repositoryHuge && (

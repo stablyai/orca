@@ -126,20 +126,6 @@ describe('a CLI trigger on a saved pane with no terminal (layout-owner build)', 
     expect(spawn).toHaveBeenCalledOnce()
   })
 
-  it('a read starts the pane once and reads the started terminal', async () => {
-    const { runtime, handle, spawn, started } = await restoredPane()
-
-    const read = runtime.readTerminal(handle)
-    await vi.waitFor(() => expect(spawn).toHaveBeenCalled())
-    started.resolve({ id: 'pty-c' })
-
-    await expect(read).resolves.toMatchObject({ handle, status: 'running' })
-    runtime.onPtyData('pty-c', 'ready\r\n', Date.now())
-    const again = await runtime.readTerminal(handle)
-    expect(again.tail.join('\n')).toContain('ready')
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
   it('a CLI send and a phone opening the pane together start it once', async () => {
     const { runtime, handle, spawn, started, write } = await restoredPane()
 

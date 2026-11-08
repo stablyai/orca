@@ -43,6 +43,9 @@ it('checks its own Run with A identity but refuses ambiguous identity before cho
     if (method === 'worktree.list') {
       return okFixture('req_list', { worktrees: [] })
     }
+    if (method === 'folderWorkspace.list') {
+      return okFixture('req_folders', { folderWorkspaces: [] })
+    }
     if (method === 'terminal.resolveActive') {
       try {
         const handle = await runtime.resolveActiveTerminal(

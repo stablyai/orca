@@ -32,6 +32,9 @@ export async function prepareAdoptedTranscript(
   | { ok: true; items: JournalReplacementItem[] | null }
   | { ok: false; refusal: AgentSessionWireRefusal }
 > {
+  if (params.fork) {
+    return { ok: true, items: params.fork.prepared }
+  }
   if (!params.adopt) {
     return { ok: true, items: null }
   }
@@ -96,9 +99,12 @@ export async function importAdoptedTranscript(
     // Rolled-back creates may leave unowned imported history.
     if (prepared || attached.journal.cursor().sequence > 1) {
       await attached.journal.replaceEpochItems(
-        params.adopt ? 'legacy_import' : 'session_created',
+        params.adopt && !params.fork ? 'legacy_import' : 'session_created',
         record.lease.runtimeFence,
-        prepared ?? []
+        prepared ?? [],
+        undefined,
+        params.fork?.historyOrigin?.providerHandle,
+        params.fork?.historyOrigin
       )
     }
     return
@@ -134,10 +140,12 @@ async function applyAdoptedTranscript(
           })
         : undefined
     await attached.journal.replaceEpochItems(
-      'legacy_import',
+      fork ? 'session_created' : 'legacy_import',
       record.lease.runtimeFence,
       prepared,
-      receipt ? () => receipt : undefined
+      receipt ? () => receipt : undefined,
+      undefined,
+      fork?.historyOrigin
     )
     return
   }

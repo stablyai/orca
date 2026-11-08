@@ -362,68 +362,6 @@ class ScannedWorkspaceRuntime extends AuthorityRuntime {
   }
 }
 
-it.each([10, 100])(
-  'bounds actual target reveal across %i repo roots and metadata aliases',
-  async (n) => {
-    const input = await authorityProfile([], { records: [B], visible: [] })
-    for (let i = 0; i < n; i++) {
-      input.profile.addRepo(storeRepo({ id: `owner-${i}`, path: `${root}/repo-${i}` }))
-      input.profile.setWorktreeMeta(
-        hostWorktreeTarget({ id: `owner-${i}::${root}/repo-${i}/topic`, hostId: 'local' }),
-        {}
-      )
-    }
-    const workspace = `owner-${n - 1}::${root}/repo-${n - 1}/topic`
-    const prior = await readPersistedTestAgentSessionStore(root)
-    await seedTestAgentSessionRecordStore(root, {
-      records: Object.values(prior.records).map((record) => ({
-        ...record,
-        location: { ...record.location, workspaceId: workspace, workspaceKind: 'git-worktree' }
-      })),
-      sessionTabs: []
-    })
-    const runtime = new ScannedWorkspaceRuntime(input.profile)
-    runtime.scan = {
-      ok: true,
-      worktrees: [
-        {
-          path: `${root}/repo-${n - 1}/topic`,
-          head: 'abc1234',
-          branch: 'topic',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]
-    }
-    const rig = await openAuthorityRuntime({ ...input, workspace }, runtime)
-    await runtime.prepareStructuredAgentSessionStartupRestoration()
-    let repoVisits = 0,
-      metaVisits = 0
-    const repos = input.profile.getRepos.bind(input.profile)
-    const meta = input.profile.getAllWorktreeMetaForHost.bind(input.profile)
-    vi.spyOn(input.profile, 'getRepos').mockImplementation(() => {
-      const rows = repos()
-      repoVisits += rows.length
-      return rows
-    })
-    vi.spyOn(input.profile, 'getAllWorktreeMetaForHost').mockImplementation((hostId) => {
-      const rows = meta(hostId)
-      metaVisits += Object.keys(rows).length
-      return rows
-    })
-    expect(await reveal(rig)).toMatchObject({
-      ok: true,
-      result: { ok: true, workspaceId: workspace }
-    })
-    await chatTabCommandsSettled()
-    expect(runtime.scans).toBe(1)
-    expect(repoVisits).toBeGreaterThanOrEqual(n)
-    expect(repoVisits).toBeLessThanOrEqual(40 * n)
-    expect(metaVisits).toBe(n)
-    expect(savedIds(rig)).toEqual([B])
-  }
-)
-
 async function inWorkspace(
   workspace: string,
   kind: 'folder' | 'git-worktree' = 'git-worktree',

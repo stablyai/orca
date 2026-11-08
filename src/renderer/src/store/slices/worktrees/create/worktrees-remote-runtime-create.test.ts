@@ -176,6 +176,27 @@ describe('worktree remote runtime mutations', () => {
     }
   )
 
+  // The shortcut already checked the host; a store await would let the active parent drift.
+  it('sends create-exact without its own capability check and never under another name', async () => {
+    setLocalRuntimeCapabilitiesForTests([])
+    try {
+      const store = createRepoTestStore()
+      const create = store.getState().createWorktree
+      const args: Parameters<typeof create> = ['repo1', 'Login fix', undefined, 'inherit']
+      args[25] = { branchIntent: 'create-exact' }
+      mockApi.worktrees.create.mockRejectedValueOnce(
+        new Error('Branch "Login-fix" already exists locally.')
+      )
+      await expect(create(...args)).rejects.toThrow('already exists locally')
+      expect(mockApi.worktrees.create).toHaveBeenCalledTimes(1)
+      expect(mockApi.worktrees.create).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Login fix', branchIntent: 'create-exact' })
+      )
+    } finally {
+      setLocalRuntimeCapabilitiesForTests(null)
+    }
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()

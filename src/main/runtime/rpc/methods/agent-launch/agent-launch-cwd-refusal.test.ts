@@ -225,6 +225,9 @@ describe('CLI cwd refusal through production creation and durable failed receipt
       if (method === 'worktree.list') {
         return worktreeListFixture(catalog)
       }
+      if (method === 'folderWorkspace.list') {
+        return okFixture('folders', { folderWorkspaces: [] })
+      }
       if (method === 'status.get') {
         return route === 'legacy'
           ? okFixture('status', { capabilities: [] })
@@ -498,6 +501,9 @@ describe('CLI cwd refusal through production creation and durable failed receipt
     callMock.mockImplementation(async (method, params) => {
       if (method === 'worktree.list') {
         return worktreeListFixture(rows)
+      }
+      if (method === 'folderWorkspace.list') {
+        return okFixture('folders', { folderWorkspaces: [] })
       }
       if (method === 'status.get') {
         return agentLaunchHostFixture()

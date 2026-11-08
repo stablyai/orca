@@ -6278,25 +6278,25 @@
           "removeBatchMixed_other": "Remove <target>{{count}} workspaces</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeBatchGit_one": "Remove <target>{{count}} workspace</target> from git and delete its workspace folder.",
           "removeBatchGit_other": "Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.",
-          "removeSingleFolder": "Remove <target/> from Orca. The project folder on disk will not be deleted.",
-          "removeSingleGit": "Remove <target/> from git and delete its workspace folder.",
           "removeWithChildrenFolder_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Project folders on disk will not be deleted.",
           "removeWithChildrenFolder_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Project folders on disk will not be deleted.",
           "removeWithChildrenMixed_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeWithChildrenMixed_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
-          "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders."
+          "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
+          "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",
           "loadedPathsNotice": "Loaded paths may be incomplete or out of date.",
           "loadedChangedPaths": "Loaded changed paths",
           "unresolvedConflict": "Unresolved conflict",
-          "changeCount_one": "{{count}} uncommitted or untracked change",
-          "changeCount_other": "{{count}} uncommitted or untracked changes",
-          "changes": "Uncommitted or untracked changes",
           "moreLoadedPaths_one": "and {{count}} more loaded path",
-          "moreLoadedPaths_other": "and {{count}} more loaded paths"
+          "moreLoadedPaths_other": "and {{count}} more loaded paths",
+          "changesLost_one": "{{count}} uncommitted change will be lost",
+          "changesLost_other": "{{count}} uncommitted changes will be lost",
+          "uncountedChangesLost": "Uncommitted changes will be lost"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "Child workspaces will be deleted",
@@ -6304,9 +6304,6 @@
           "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
           "moreChildren_one": "+{{count}} more",
           "moreChildren_other": "+{{count}} more"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Don't ask again"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "This is the <strong>main worktree</strong> (the original clone directory)."
@@ -7586,7 +7583,8 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
-        }
+        },
+        "projectOrderSaveFailed": "Could not save the complete project order"
       },
       "shared": {
         "useDaemonActions": {
@@ -9264,18 +9262,10 @@
           "b661b034ec": "· Default:",
           "builtin_themes": "Built-in",
           "ceefb9d7f1": "No themes found.",
-          "imported_from": "Imported from {{value0}}",
           "imported_themes": "Imported",
-          "9119fb2268": "Current",
-          "4e11f87ca6": "Showing",
-          "fbb428db98": "Selected:",
           "search_terminal_themes": "Search terminal themes",
-          "cb330ef7f8": " of {{value0}}",
-          "c822571b2e": " matching \"{{value0}}\"",
           "plugin_themes": "Plugins",
-          "from_plugin": "From {{value0}}",
-          "delete_imported_theme": "Delete {{value0}}",
-          "delete_theme": "Delete theme"
+          "delete_imported_theme": "Delete {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
@@ -12769,6 +12759,12 @@
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
               "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
               "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
+              "scopesTitle": "Select these Bitbucket API token scopes:",
+              "scopeUser": "Verify your account",
+              "scopeRepository": "Read build statuses",
+              "scopeReadPullRequest": "Read pull requests",
+              "scopeWritePullRequest": "Create pull requests",
+              "scopesWriteNote": "For read-only use, omit the write scope. Write does not include read; select each scope separately.",
               "docsLink": "Bitbucket API token docs",
               "storageNote": "Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.",
               "cancel": "Cancel",
@@ -13118,6 +13114,7 @@
         "SettingsHostScopePicker": {
           "label": "Host",
           "unavailable": "{{value0}} (unavailable)",
+          "loading": "Loading hosts…",
           "description": "Accounts, detected agents and terminal options below are for this host.",
           "unavailableNotice": "This server is no longer saved, so nothing can be shown for it. Choose another host at the top of Settings."
         },
@@ -13397,6 +13394,7 @@
           },
           "lightTheme": "Light theme",
           "darkTheme": "Dark theme",
+          "languageUnavailable": "{{value0}} (unavailable)",
           "themeSlot": {
             "description": "App colors for this mode."
           }
@@ -13821,7 +13819,9 @@
           "kitty_not_found": "No kitty.conf found on this computer. Choose a config file to import one from another location."
         },
         "SettingsSearchableSelect": {
-          "noMatches": "No matches."
+          "noMatches": "No matches.",
+          "searchHosts": "Search hosts…",
+          "searchLanguages": "Search languages…"
         }
       },
       "right": {
@@ -18726,6 +18726,11 @@
         "FolderWorkspaceSourceControl": {
           "openWorktree": "Open this worktree",
           "reconnect": "Reconnect to see this worktree’s changes."
+        },
+        "FolderWorkspaceEmptyState": {
+          "createWorktree": "Create worktree",
+          "created": "Created worktree {{name}} in {{repo}}",
+          "createFailed": "Could not create a worktree in {{repo}}."
         }
       },
       "link": {
@@ -20808,6 +20813,8 @@
         "many_other": "Opened {{count}} pull requests"
       },
       "explicitChatWindows": "This agent's chat isn't available on Windows yet. Open it in a terminal instead.",
+      "splitRight": "Split Right",
+      "splitDown": "Split Down",
       "sideChat": {
         "description": "Ask a side question in a fork beside this chat",
         "argumentHint": "<question>",
@@ -21118,11 +21125,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Any uncommitted or untracked changes in Git workspaces will be permanently deleted.",
-          "clean": "No uncommitted or untracked changes",
           "unavailable": "Changes could not be checked",
           "checking": "Checking for changes…",
           "checkingDetails": "Checking…",
-          "unavailableDetails": "Details unavailable"
+          "unavailableDetails": "Details unavailable",
+          "none": "No uncommitted changes"
         },
         "unsavedEdits": {
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
@@ -21492,6 +21499,10 @@
         },
         "split": {
           "bodyWithoutShortcut": "Right-click the pane for split options."
+        },
+        "splitChatPane": {
+          "title": "Open a pane beside the chat",
+          "action": "Split pane"
         }
       },
       "badgeNew": "New",
@@ -21502,6 +21513,11 @@
           "bodyWithoutShortcut": "Click this button, or {{modifier}}-click any project header.",
           "action": "Got it"
         }
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "New Agent"
       }
     }
   },
@@ -22580,7 +22596,10 @@
     "alwaysForceDeleteTooltip": "Applies to all future workspace deletions.",
     "moreBranchActions": "More branch delete options",
     "alwaysForceDeleteBranches": "Always delete preserved branches",
-    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions."
+    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions.",
+    "moreDeleteOptions": "More delete options",
+    "alwaysDelete": "Always delete",
+    "alwaysDeleteTooltip": "Skip this confirmation for future deletions."
   },
   "worktree": {
     "setupTrust": {
@@ -24300,7 +24319,42 @@
     "historyChanged": "History changed again. Refresh the Git Graph to try again.",
     "loadFailed": "Failed to load Git history",
     "updateHost": "Update Orca on {{host}} to open the Git Graph",
-    "title": "Git Graph"
+    "title": "Git Graph",
+    "revertConflicts": "Revert conflicts",
+    "revertInProgress": "Revert in progress",
+    "abortOperationTitle": "Abort {{operation}}?",
+    "abortOperationDescription": "This cancels the operation in progress and can discard conflict resolutions made during it.",
+    "abortOperation": "Abort {{operation}}",
+    "recoveryFailed": "Could not finish the operation. Refresh Source Control and try again.",
+    "continueOperation": "Continue {{operation}}",
+    "reverting": "Reverting",
+    "updateActionsHost": "Update Orca on {{host}} to act on commits",
+    "thisHost": "this host",
+    "cannotApplyMerge": "Can't cherry-pick/revert a merge commit from here",
+    "confirmCommitAction": "{{action}} {{commit}}?",
+    "cancelAction": "Cancel",
+    "checkoutCommit": "Check out commit",
+    "cherryPick": "Cherry-pick",
+    "revert": "Revert",
+    "actionLanded": "Now at {{commit}} on {{branch}}",
+    "detachedHead": "detached HEAD",
+    "actionWarning": "The action completed, but Git reported a problem.",
+    "actionConflicted": "Resolve the conflicts in Source Control, then continue or abort the operation.",
+    "alreadyApplied": "Already applied, nothing to cherry-pick",
+    "nothingToRevert": "Nothing to revert; the changes are already undone.",
+    "actionRefused": "The action did not complete.",
+    "actionUnavailable": "This workspace is no longer available for the action. Reopen the Git Graph and try again.",
+    "ownerChanged": "The workspace host changed. Reopen the Git Graph and try again.",
+    "showAllBranches": "Show all branches",
+    "actionDirty": "Commit or stash your changes, then try again.",
+    "actionFailed": "Git did not create a commit. Check the checkout and try again.",
+    "operationInProgress": "Finish or abort the {{operation}} in progress before trying again.",
+    "checkoutBranch": "Check out branch",
+    "createBranch": "Create branch here",
+    "branchCreated": "Created {{branch}} at {{commit}}",
+    "branchName": "Branch name",
+    "invalidBranchName": "This branch name is invalid. Choose a different name.",
+    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again."
   },
   "macosUpdateRequirement": {
     "title": "Orca updates now need macOS {{macos}}",

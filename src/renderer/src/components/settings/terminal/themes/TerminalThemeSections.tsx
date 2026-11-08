@@ -1,6 +1,6 @@
 import { usePluginTerminalThemes } from '@/store/plugins/appearance/plugin-themes'
 import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from 'react'
+import { useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
@@ -89,8 +89,6 @@ function getInitialTerminalThemeTarget(
 type TerminalThemeCatalogSectionProps = {
   settings: GlobalSettings
   systemPrefersDark: boolean
-  themeSearch: string
-  setThemeSearch: Dispatch<SetStateAction<string>>
   updateSettings: (updates: Partial<GlobalSettings>) => void
   previewFontFamily: string | null
   importedHighlightSignal: number
@@ -103,8 +101,6 @@ type TerminalThemeCatalogSectionProps = {
 export function TerminalThemeCatalogSection({
   settings,
   systemPrefersDark,
-  themeSearch,
-  setThemeSearch,
   updateSettings,
   previewFontFamily,
   importedHighlightSignal,
@@ -289,8 +285,6 @@ export function TerminalThemeCatalogSection({
                   description={pickerDescription}
                   selectedTheme={selectedTheme}
                   themeOptions={themeOptions}
-                  query={themeSearch}
-                  onQueryChange={setThemeSearch}
                   onSelectTheme={(theme) => {
                     rememberTerminalThemeTarget(target)
                     // A selected theme must replace its slot's overrides or they mask the picker.
@@ -308,7 +302,7 @@ export function TerminalThemeCatalogSection({
                     )
                   }}
                   onDeleteImportedTheme={deleteImportedTheme}
-                  importedHighlightSignal={importedHighlightSignal}
+                  importedHighlightSignal={showCustomControls ? importedHighlightSignal : undefined}
                 />
               </SearchableSetting>
 
