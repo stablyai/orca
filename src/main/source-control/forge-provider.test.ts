@@ -392,7 +392,7 @@ describe('forge provider interface', () => {
       repoPath: '/repo',
       executionHostId: 'local',
       branch: 'feature/x',
-      githubCurrentHeadOid: 'abc1234'
+      currentHeadOid: 'abc1234'
     })
 
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledWith('/repo', 'feature/x', null, null, null, {

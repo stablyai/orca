@@ -125,6 +125,45 @@ describe('gitlab client — MR operations', () => {
       expect(releaseMock).toHaveBeenCalledTimes(3)
     })
 
+    it('shows a merged branch MR only while the checkout still sits on its head (#39554)', async () => {
+      const merged = {
+        iid: 12,
+        title: 'Release develop',
+        state: 'merged',
+        sha: 'merged-head-oid',
+        head_pipeline: { status: 'success' }
+      }
+      getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+      mockBranchLookup(merged)
+      await expect(
+        getMergeRequestForBranch('/repo', 'develop', null, null, { currentHeadOid: 'develop-tip' })
+      ).resolves.toBeNull()
+
+      mockBranchLookup(merged)
+      await expect(
+        getMergeRequestForBranch('/repo', 'develop', null, null, {
+          currentHeadOid: 'merged-head-oid'
+        })
+      ).resolves.toMatchObject({ number: 12, state: 'merged' })
+    })
+
+    it('prefers the open MR over a newer merged one from the same branch', async () => {
+      const open = { iid: 21, title: 'Next release', state: 'opened', sha: 'develop-tip' }
+      getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([{ iid: 12, title: 'Release', state: 'merged' }, open])
+        })
+        .mockResolvedValueOnce({ stdout: JSON.stringify(open) })
+
+      await expect(
+        getMergeRequestForBranch('/repo', 'develop', null, null, { currentHeadOid: 'develop-tip' })
+      ).resolves.toMatchObject({ number: 21, state: 'opened' })
+      expect(glabExecFileAsyncMock.mock.calls[1]?.[0]).toContain(
+        'projects/g%2Fp/merge_requests/21?with_merge_status_recheck=true'
+      )
+    })
+
     it('hides a stale closed MR whose source branch is the repo default branch (#9171)', async () => {
       getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
       mockBranchLookup({

@@ -20,6 +20,14 @@ import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-d
 
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
 
+export type GitLabBranchLookupOptions = HostedReviewExecutionOptions & {
+  /** The worktree HEAD; a merged branch match counts only while the checkout still sits on its head. */
+  currentHeadOid?: string | null
+}
+
+// Why: sorted by update time, a page of one lets a newer closed or merged MR hide the open one.
+const BRANCH_MR_LOOKUP_PAGE_SIZE = 10
+
 function hostedReviewLocalGitOptionArgs(
   options: HostedReviewExecutionOptions = {}
 ): [] | [HostedReviewLocalGitOptions] {
@@ -79,7 +87,7 @@ export async function getMergeRequestForBranch(
   branch: string,
   linkedMRIid?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {},
+  options: GitLabBranchLookupOptions = {},
   // Strict callers need failures distinguished from confirmed missing reviews.
   throwOnFailure = false
 ): Promise<MRInfo | null> {
@@ -119,15 +127,23 @@ export async function getMergeRequestForBranch(
           'api',
           ...glabHostnameArgs(projectRef, connectionId),
           // List endpoints need asynchronous merge-status recheck; GitLab may restrict this to Developers.
-          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true`
+          `projects/${encodedProject(projectRef.path)}/merge_requests?source_branch=${encodeURIComponent(branchName)}&order_by=updated_at&sort=desc&per_page=${BRANCH_MR_LOOKUP_PAGE_SIZE}&with_merge_status_recheck=true`
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch-list endpoint returns MR summaries; only their identity is used.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch-list endpoint returns MR summaries; only their identity and state are used.
       const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0][]
-      if (Array.isArray(data) && data.length > 0) {
+      const match = Array.isArray(data)
+        ? (data.find((mr) => mr.state?.toLowerCase() === 'opened') ?? data[0])
+        : undefined
+      if (match) {
         // List summaries omit head_pipeline; only detail can supply an authoritative check result.
-        const info = await fetchByIid(data[0].iid ?? data[0].number ?? 0)
+        const info = await fetchByIid(match.iid ?? match.number ?? 0)
+        const headOid = options.currentHeadOid?.trim() || null
+        // A merged match is history once the checkout moves past its head, e.g. a long-lived branch.
+        if (info.state === 'merged' && headOid !== null && info.headSha !== headOid) {
+          return null
+        }
         const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
           state: info.state,
           reviewNumber: info.number,
@@ -158,7 +174,7 @@ export function getMergeRequestForBranchOrThrow(
   branch: string,
   linkedMRIid?: number | null,
   connectionId?: string | null,
-  options: HostedReviewExecutionOptions = {}
+  options: GitLabBranchLookupOptions = {}
 ): Promise<MRInfo | null> {
   return getMergeRequestForBranch(repoPath, branch, linkedMRIid, connectionId, options, true)
 }
