@@ -28,7 +28,7 @@
     },
     {
       "id": "composer_ready_custom_status_line",
-      "why": "A custom statusLine paints its own rows where the hint row was, so `esc to cancel` never shows. agy 1.5.2 then marks a turn only with a braille spinner row right above the composer. Status rows may hold no rule run, hint or busy hint, so hint-row layouts and garbled grids cannot match, and pickers drawn between the composer and the status rows break the run of rows.",
+      "why": "A custom statusLine replaces the hint row, so `esc to cancel` never shows; agy 1.5.2 then marks a turn only with a braille spinner row above the composer. Status rows may not hold a rule run, a hint, or agy's own `[mode · ]model · effort` footer, which drops its hint while the composer holds a draft. Pickers between the composer and status rows break the run. A custom row shaped like that footer holds; a mode-shaped draft above a custom statusLine still reads idle.",
       "priority": 400,
       "when": {
         "region": "screen",
@@ -41,7 +41,8 @@
             "optional": {
               "none": [
                 { "regex": "──" },
-                { "regex": "esc to cancel|for shortcuts", "ignoreCase": true }
+                { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
+                { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
               ]
             }
           },
@@ -49,14 +50,16 @@
             "optional": {
               "none": [
                 { "regex": "──" },
-                { "regex": "esc to cancel|for shortcuts", "ignoreCase": true }
+                { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
+                { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
               ]
             }
           },
           {
             "none": [
               { "regex": "──" },
-              { "regex": "esc to cancel|for shortcuts", "ignoreCase": true }
+              { "regex": "esc to cancel|for shortcuts", "ignoreCase": true },
+              { "regex": "^(?:[a-z][a-z-]* · )?[^·]+ · (?:low|medium|high)$" }
             ]
           }
         ]

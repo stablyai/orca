@@ -1,16 +1,19 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type * as WebRuntimeTerminalCreationModule from './web-runtime-terminal-creation'
-import type * as WebSessionTerminalHandleEventsModule from './web-session-terminal-handle-events'
-vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
-  const actual = await importOriginal<typeof WebSessionTerminalHandleEventsModule>()
-  const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
-  return {
-    ...actual,
-    queueAcceptedWebSessionTerminalSnapshot: frameOrderingMocks.queueAcceptedSnapshot
+import type * as WebRuntimeTerminalCreationModule from './hosted-terminals/creation/web-runtime-terminal-creation'
+import type * as WebSessionTerminalHandleEventsModule from './web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
+vi.mock(
+  './web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof WebSessionTerminalHandleEventsModule>()
+    const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
+    return {
+      ...actual,
+      queueAcceptedWebSessionTerminalSnapshot: frameOrderingMocks.queueAcceptedSnapshot
+    }
   }
-})
+)
 
 vi.mock('./use-runtime-session-mirror-environment-key', async () => {
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
@@ -22,15 +25,18 @@ vi.mock('./use-runtime-session-mirror-environment-key', async () => {
   }
 })
 
-vi.mock('./web-session-terminal-orphan-recovery', async () => {
+vi.mock('./hosted-terminals/recovery/web-session-terminal-orphan-recovery', async () => {
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
   return { recoverWebSessionTerminalOrphansBeforeApply: frameOrderingMocks.recoverSnapshot }
 })
 
-vi.mock('./web-runtime-terminal-creation', async (importOriginal) => {
+vi.mock('./hosted-terminals/creation/web-runtime-terminal-creation', async (importOriginal) => {
   const actual = await importOriginal<typeof WebRuntimeTerminalCreationModule>()
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
-  return { ...actual, createWebRuntimeSessionTerminal: frameOrderingMocks.createTerminal }
+  return {
+    ...actual,
+    createWebRuntimeSessionTerminal: frameOrderingMocks.createTerminal
+  }
 })
 
 import { useAppStore } from '@/store'
@@ -54,7 +60,7 @@ import {
   setDocumentVisibility
 } from './host-session-mirror-frame-ordering-test-harness'
 import { useWebSessionTabsSync } from './web-session-tabs-sync/use-web-session-tabs-sync'
-import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
+import { WINDOW_HIDE_PARK_GRACE_MS as WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from '../lib/window-park-visibility'
 
 const NOW = 1_000_000
 

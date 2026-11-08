@@ -15,6 +15,7 @@ import { AutomationButton, AutomationChoice, AutomationTabs } from './Automation
 import { AutomationList } from './AutomationList'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationEditor } from './AutomationEditor'
+import { leaveThrough, type AutomationLeaveSlot } from './AutomationEditorNavigation'
 import { AutomationRunList } from './AutomationRunList'
 import { AutomationRunDetails } from './AutomationRunDetails'
 import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
@@ -44,6 +45,8 @@ export function AutomationManager(props: {
   startInEditor?: boolean
   /** The screen's bar; it carries the Automations / Runs switch as its accessory. */
   renderHeader?: (tabs: ReactNode) => ReactNode
+  /** Filled while the editor is open, so tab and host switches ask before dropping its edits. */
+  leaveGuard?: AutomationLeaveSlot
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -100,14 +103,16 @@ export function AutomationManager(props: {
       })
     }
   }
-  function allAutomations() {
-    setTab('automations')
+  function showList(next: 'automations' | 'runs') {
+    setTab(next)
     setView({ kind: 'list' })
+  }
+  function allAutomations() {
+    showList('automations')
   }
   function allRuns(automationId = '') {
     selectFilter(automationId)
-    setTab('runs')
-    setView({ kind: 'list' })
+    showList('runs')
   }
   function toggle(selected: MobileAutomationRow, enabled: boolean) {
     void catalog.perform(
@@ -243,10 +248,7 @@ export function AutomationManager(props: {
   const tabs = (
     <AutomationTabs
       selected={tab}
-      onSelect={(next) => {
-        setTab(next)
-        setView({ kind: 'list' })
-      }}
+      onSelect={(next) => leaveThrough(props.leaveGuard, () => showList(next))}
       disabled={catalog.busy}
     />
   )
@@ -285,6 +287,7 @@ export function AutomationManager(props: {
             current={view.row?.automation}
             initialDraft={view.initialDraft}
             onDraftChange={createAttempt.observeDraft}
+            leaveGuard={props.leaveGuard}
             capabilities={catalog.capabilities}
             busy={catalog.busy}
             connected={catalog.connected}
@@ -327,10 +330,7 @@ export function AutomationManager(props: {
             executionHost={props.executionHost}
             connected={catalog.connected}
             history={history}
-            onBack={() => {
-              setTab('runs')
-              setView({ kind: 'list' })
-            }}
+            onBack={() => showList('runs')}
           />
         ) : null}
         {view.kind === 'list' && tab === 'automations' ? (

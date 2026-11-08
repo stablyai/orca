@@ -1,3 +1,4 @@
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import {
   formatKeybinding,
   formatKeybindingList,
@@ -6,7 +7,6 @@ import {
   type KeybindingActionId,
   type KeybindingOverrides
 } from '../../../shared/keybindings'
-import { useAppStore } from '../store'
 import { getShortcutPlatform } from '../lib/shortcut-platform'
 
 export { getShortcutPlatform }
@@ -71,7 +71,7 @@ export function formatPrimaryShortcutLabel(
 }
 
 export function useShortcutLabel(actionId: KeybindingActionId): string {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatShortcutLabel(actionId, keybindings)
 }
 
@@ -102,7 +102,7 @@ export function formatOptionalPrimaryShortcutLabel(
 }
 
 export function useOptionalShortcutLabel(actionId: KeybindingActionId): string | null {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatOptionalShortcutLabel(actionId, keybindings)
 }
 
@@ -123,7 +123,7 @@ export function formatShortcutKeyComboDetails(
 export function useShortcutKeyComboDetails(
   actionId: KeybindingActionId
 ): ShortcutKeyComboDetails[] {
-  const keybindings = useAppStore((state) => state.keybindings)
+  const keybindings = useAppStateValue((state) => state.keybindings)
   return formatShortcutKeyComboDetails(actionId, keybindings)
 }
 

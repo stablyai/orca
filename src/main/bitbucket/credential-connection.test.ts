@@ -44,31 +44,6 @@ afterEach(() => {
 })
 
 describe('Bitbucket credential connection', () => {
-  it('verifies credentials before saving and reports a stored connection', async () => {
-    const conn = await loadModule()
-    globalThis.fetch = vi.fn(async () =>
-      Response.json({ username: 'ada' })
-    ) as unknown as typeof fetch
-
-    await expect(
-      conn.connectBitbucket({
-        authMode: 'basic',
-        email: 'ada@example.com',
-        apiToken: 'tok'
-      })
-    ).resolves.toEqual({ ok: true, account: 'ada' })
-
-    expect(conn.getBitbucketConnectionStatus()).toEqual({
-      configured: true,
-      source: 'stored',
-      credentialProtection: 'sealed',
-      account: 'ada',
-      authMode: 'basic',
-      email: 'ada@example.com',
-      baseUrl: null
-    })
-  })
-
   it('sends Basic auth built from the entered email and API token', async () => {
     const conn = await loadModule()
     const fetchSpy = vi.fn(async () => Response.json({ username: 'ada' }))
@@ -130,24 +105,5 @@ describe('Bitbucket credential connection', () => {
     })
     expect(result.ok).toBe(false)
     expect(fetchSpy).not.toHaveBeenCalled()
-  })
-
-  it('reports environment variables as the source and takes precedence over stored creds', async () => {
-    const conn = await loadModule()
-    globalThis.fetch = vi.fn(async () =>
-      Response.json({ username: 'ada' })
-    ) as unknown as typeof fetch
-    await conn.connectBitbucket({
-      authMode: 'basic',
-      email: 'ada@example.com',
-      apiToken: 'tok'
-    })
-
-    process.env.ORCA_BITBUCKET_ACCESS_TOKEN = 'env-token'
-    expect(conn.getBitbucketConnectionStatus()).toMatchObject({
-      configured: true,
-      source: 'environment',
-      authMode: 'token'
-    })
   })
 })

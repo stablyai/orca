@@ -1,4 +1,4 @@
-import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import * as Lineage from '../lineage/runtime-worktree-lineage-resolution'
 import type { Repo } from '../../../../shared/repo-types'
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
@@ -12,11 +12,13 @@ import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-er
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
-import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
+import {
+  buildRuntimeSetupReceipt,
+  prepareRuntimeLocalWorktreeSetup
+} from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import type { RuntimeWorkspaceCreateEvents } from '../../../workspaces/creation/workspace-create-telemetry'
 import {
   createdWorkspaceActivationCallbacks,
@@ -31,7 +33,7 @@ import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
-  protected abstract resolveLineageForWorktreeCreate(
+  abstract resolveLineageForWorktreeCreate(
     input?: Lineage.WorktreeLineageInput,
     childRepo?: Repo
   ): Promise<Lineage.WorktreeLineageResolution>
@@ -58,10 +60,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     this.requireStore()
 
     assertOpenCodeModelLaunchPreferencesAbsent(
-      args.startupAgent ?? args.createdWithAgent,
-      args.startupSessionOptions && args.startupAgent
-        ? toAgentLaunchPreferences(args.startupSessionOptions, args.startupAgent)
-        : args.startupLaunchPreferences
+      args.startup ? (args.startupAgent ?? args.createdWithAgent) : undefined,
+      args.startupSessionOptions ?? args.startupLaunchPreferences
     )
 
     const repo = await this.resolveRepoSelector(args.repoSelector)
@@ -187,15 +187,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       localCreate
     const { lineage, workspaceLineage } = metadataResult
 
-    let {
-      setup,
-      defaultTabs,
-      warning,
-      effectiveDecision,
-      hookFound,
-      shouldRunSetup,
-      didStartInProcessSetupHook
-    } = await prepareRuntimeLocalWorktreeSetup({
+    const preparedSetup = await prepareRuntimeLocalWorktreeSetup({
       request: args,
       repo,
       worktreePath,
@@ -208,6 +200,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning:
         [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
     })
+    const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
+    let { warning } = preparedSetup
 
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repo.id)
@@ -271,25 +265,15 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       ...(returnedSetup ? { setup: returnedSetup } : {}),
       ...(args.awaitTerminalProvisioning
         ? {
-            setupReceipt: {
-              requested: effectiveDecision,
-              hookFound,
-              startupPolicy: setup?.waitForAgentStartup
-                ? ('wait-for-setup' as const)
-                : ('start-immediately' as const),
-              state: !hookFound
-                ? ('not_configured' as const)
-                : effectiveDecision === 'skip' || !shouldRunSetup
-                  ? ('skipped' as const)
-                  : // The in-process setup hook already started; spawn_failed would strand retrying callers.
-                    didSpawnSetup || didStartInProcessSetupHook
-                    ? ('running' as const)
-                    : ('spawn_failed' as const),
-              ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
-            }
+            setupReceipt: buildRuntimeSetupReceipt(
+              preparedSetup,
+              didSpawnSetup,
+              setupTerminalHandle
+            )
           }
         : {}),
       ...(defaultTabs ? { defaultTabs } : {}),
+      ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
       ...(warning ? { warning } : {}),
       ...(localCreate.baseFallback ? { baseFallback: localCreate.baseFallback } : {}),
       ...(addResult.localBaseRefRefresh

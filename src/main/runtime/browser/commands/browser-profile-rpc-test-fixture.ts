@@ -2,7 +2,7 @@ import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../../rpc/dispatcher'
-import { BROWSER_PROFILE_METHODS } from '../../rpc/methods/browser-profile-rpc-methods'
+import { BROWSER_PROFILE_METHODS } from '../../rpc/methods/browser/browser-profile-rpc-methods'
 import { RuntimeBrowserProfiles } from './browser-profiles'
 
 export function browserProfileRpcFixture(executorRuntimeId: string, outerRuntimeId = 'D') {

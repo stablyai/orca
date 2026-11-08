@@ -23,7 +23,7 @@ import { createStructuredSessionObservationClock } from '../../../native-chat/ag
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
+import { mintAgentSessionOperationId } from '../../orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
 import { journalIdentityFor } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import { attachParamsForRecord } from '../../../native-chat/agent-session-wire/host/structured-agent-session-conversation-open'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'

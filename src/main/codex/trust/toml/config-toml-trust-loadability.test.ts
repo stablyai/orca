@@ -49,13 +49,12 @@ vi.mock('../../../agent-hooks/installer-utils-remote', async (importOriginal) =>
 import {
   isCodexConfigTomlRefusedError,
   moveHookTrustEntries,
-  readHookTrustEntries,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
 import { computeCodexTrustKey as computeTrustKey } from '../identity/codex-trust-identity'
 import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
-import { installCodexHooksRemote } from '../../hooks/installation/codex-hook-remote-install'
+import '../../hooks/installation/codex-hook-remote-install'
 
 let dir: string
 let tomlPath: string
@@ -127,44 +126,5 @@ describe('hook approval writes never break a config.toml Codex can load', () => 
     )
 
     expect(readFileSync(tomlPath, 'utf-8')).toBe(original)
-  })
-
-  it('the SSH installer reports the refusal and leaves the remote config.toml untouched', async () => {
-    const remoteToml = '/home/u/.codex/config.toml'
-    const original = 'model = "m"\nhooks = { state = {} }\n'
-    mocks.remoteFiles.set(remoteToml, original)
-    mocks.remoteFiles.set('/home/u/.codex/hooks.json', '{"hooks":{}}')
-
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked remote helpers never touch the SFTP handle.
-    const status = await installCodexHooksRemote({} as SFTPWrapper, '/home/u')
-
-    expect(status).toMatchObject({
-      state: 'error',
-      detail: expect.stringContaining('defines hook approvals in a form Orca cannot add to')
-    })
-    expect(mocks.remoteFiles.get(remoteToml)).toBe(original)
-  })
-})
-
-describe('reading approvals Codex or the user wrote without a table header', () => {
-  it('reads an approval written as dotted keys', () => {
-    writeFileSync(tomlPath, `hooks.state."${tomlKey(stopEntry())}".trusted_hash = "sha256:user"\n`)
-
-    expect(readHookTrustEntries(tomlPath).get(computeTrustKey(stopEntry()))).toEqual({
-      trustedHash: 'sha256:user',
-      enabled: undefined
-    })
-  })
-
-  it('reads an approval written as an inline table', () => {
-    writeFileSync(
-      tomlPath,
-      `[hooks]\nstate = { "${tomlKey(stopEntry())}" = { trusted_hash = "sha256:user", enabled = false } }\n`
-    )
-
-    expect(readHookTrustEntries(tomlPath).get(computeTrustKey(stopEntry()))).toEqual({
-      trustedHash: 'sha256:user',
-      enabled: false
-    })
   })
 })

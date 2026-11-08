@@ -1,4 +1,4 @@
-import { readForkMarker, withForkMarker } from '../agent-session-fork-marker'
+import { readForkMarker, withForkMarker } from '../publication/history/agent-session-fork-marker'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   settlePostAcquisitionAttachFailure,

@@ -4,7 +4,7 @@ import { measureTerminalGroupGridSizes } from './terminal-group-grid-sizes'
 
 type FakePane = { terminal: unknown; container: HTMLElement }
 const panes = vi.hoisted((): { list: FakePane[] } => ({ list: [] }))
-vi.mock('../mounted-terminal-tab-registry', () => ({
+vi.mock('../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
   mountedTerminalTabEntries: () => [
     ['tab-1', { getManager: () => ({ getPanes: () => panes.list }) }]
   ]

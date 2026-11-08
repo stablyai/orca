@@ -1,4 +1,7 @@
-import { diffCommentOwnerKey, type DiffCommentOwner } from '@/store/diff-comment-owner'
+import {
+  diffCommentOwnerKey,
+  type DiffCommentOwner
+} from '@/store/slices/diff-comments/diff-comment-owner'
 import { Check, Copy } from 'lucide-react'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import { DiffCommentCard } from '../../../diff-comments/DiffCommentCard'
@@ -9,7 +12,7 @@ import {
   type MarkdownReviewNote
 } from '@/lib/markdown-review-notes'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function isRichMarkdownReviewNoteNavigationClick(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -51,10 +54,11 @@ export function RichMarkdownReviewNoteLayer({
   onContentResize,
   onDelivered
 }: RichMarkdownReviewNoteLayerProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="rich-markdown-review-note-layer"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.editor.RichMarkdownReviewNoteLayer.3ababd949d',
         'Review notes'
       )}
@@ -92,22 +96,22 @@ export function RichMarkdownReviewNoteLayer({
                   className="rich-markdown-review-note-action"
                   title={
                     copiedCommentId === comment.id
-                      ? translate(
+                      ? t(
                           'auto.components.editor.RichMarkdownReviewNoteLayer.117432e2c6',
                           'Copied note'
                         )
-                      : translate(
+                      : t(
                           'auto.components.editor.RichMarkdownReviewNoteLayer.9cde7ad994',
                           'Copy note for agent'
                         )
                   }
                   aria-label={
                     copiedCommentId === comment.id
-                      ? translate(
+                      ? t(
                           'auto.components.editor.RichMarkdownReviewNoteLayer.117432e2c6',
                           'Copied note'
                         )
-                      : translate(
+                      : t(
                           'auto.components.editor.RichMarkdownReviewNoteLayer.9cde7ad994',
                           'Copy note for agent'
                         )
@@ -133,7 +137,7 @@ export function RichMarkdownReviewNoteLayer({
                   scopes={[
                     {
                       id: 'note',
-                      label: translate(
+                      label: t(
                         'auto.components.editor.RichMarkdownReviewNoteLayer.f3ef92952b',
                         'This note'
                       ),
@@ -142,12 +146,9 @@ export function RichMarkdownReviewNoteLayer({
                         formatMarkdownReviewNotes(notes, markdownReviewContent)
                     }
                   ]}
-                  targetModeLabel={translate(
-                    'auto.components.editor.NotesSendMenu.thisNote',
-                    'This note'
-                  )}
+                  targetModeLabel={t('auto.components.editor.NotesSendMenu.thisNote', 'This note')}
                   triggerClassName="rich-markdown-review-note-action"
-                  disabledTooltip={translate(
+                  disabledTooltip={t(
                     'auto.components.editor.NotesSendMenu.noteAlreadySent',
                     'Note already sent'
                   )}

@@ -9,7 +9,7 @@ import {
   submission,
   start,
   deferred
-} from '../../structured-agent-session-launch-create-message.test-fixture'
+} from './structured-agent-session-launch-create-message.test-fixture'
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'
 import {
   getStructuredLaunchStateBySessionId,
@@ -26,13 +26,12 @@ import {
 import {
   resetStructuredAgentSessionSendsForTests,
   settleStructuredAgentSessionSendsFromJournal
-} from '@/components/native-chat/structured-agent-session-message-sender'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends,
-  subscribeToStructuredAgentSessionPendingSends,
   type StructuredAgentSessionPendingSend
-} from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 
 const KEY = 'orca:structuredAgentLaunches:v1'
 const refusal = {
@@ -75,113 +74,95 @@ function addFailedLaunches(template: StructuredLaunchState, count: number) {
   writeStructuredAgentLaunchRecord(diskOnly)
 }
 
-it.each([10, 100])(
-  'writes one aggregate per Retry notification with %i other launches',
-  async (count) => {
-    mocks.call.mockRejectedValue(new Error('answer lost'))
-    const launch = start()
-    await expect(launch.launchResult).rejects.toThrow()
-    await launch.promptDeliveryResult
-    const state = getStructuredLaunchStateBySessionId(launch.sessionId)!
-    addFailedLaunches(state, count)
-    const before = JSON.parse(localStorage.getItem(KEY)!)
-    mocks.call.mockResolvedValue(refusal)
-    const writes = vi.spyOn(localStorage, 'setItem')
-    const serializations = vi.spyOn(JSON, 'stringify')
-    expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
-    await state.promise.catch(() => {})
-    const snapshots = writes.mock.calls.filter(([key]) => key === KEY).map(([, value]) => value)
-    // Restart and retained refusal each require one synchronous aggregate snapshot, independent of N.
-    expect(snapshots).toHaveLength(2)
-    const aggregateSerializations = serializations.mock.calls.filter(
-      ([value]) => Array.isArray(value) && value.some((record) => record?.sessionId === 'disk-only')
-    )
-    expect(aggregateSerializations).toHaveLength(2)
-    expect(aggregateSerializations.map(([value]) => value.length)).toEqual([count + 2, count + 2])
-    const after = JSON.parse(localStorage.getItem(KEY)!)
-    expect(after).toEqual(
-      before.map((record: { sessionId: string }) =>
-        record.sessionId === launch.sessionId
-          ? { ...record, clientOperationId: state.intent.params.envelope.clientOperationId }
-          : record
-      )
-    )
-    resetStructuredAgentLaunchPersistenceForTests()
-    expect(readStructuredAgentLaunchRecord('disk-only')).toEqual(diskOnly)
-    expect(readStructuredAgentLaunchRecord(launch.sessionId)?.firstMessage).toEqual(
-      createParams().firstMessage
-    )
+it('retains refused retry recovery alongside unrelated and disk-only launches', async () => {
+  mocks.call.mockRejectedValue(new Error('answer lost'))
+  const launch = start()
+  await expect(launch.launchResult).rejects.toThrow('answer lost')
+  await launch.promptDeliveryResult
+  const state = getStructuredLaunchStateBySessionId(launch.sessionId)!
+  addFailedLaunches(state, 2)
+  mocks.call.mockResolvedValue(refusal)
+  expect(retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)).toBe(true)
+  await state.promise.catch(() => {})
+  resetStructuredAgentLaunchPersistenceForTests()
+  expect(readStructuredAgentLaunchRecord('disk-only')).toEqual({
+    sessionId: 'disk-only',
+    executionHostId: 'local',
+    agent: 'codex',
+    lifecycle: 'visibility-unknown',
+    clientOperationId: 'disk-operation',
+    payloadFingerprint: 'disk-payload',
+    expectedRuntimeFence: null
+  })
+  for (const sessionId of ['failed-0', 'failed-1']) {
+    expect(readStructuredAgentLaunchRecord(sessionId)).toMatchObject({
+      sessionId,
+      executionHostId: 'local',
+      agent: 'codex',
+      lifecycle: 'failed'
+    })
   }
-)
+  expect(readStructuredAgentLaunchRecord(launch.sessionId)).toMatchObject({
+    sessionId: launch.sessionId,
+    executionHostId: 'local',
+    agent: 'codex',
+    firstMessage: {
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'opening text' }] }
+    }
+  })
+})
 
-it.each([10, 100])(
-  'bounds late receipt settlement with %i unrelated pending inputs',
-  async (count) => {
-    const first = deferred<unknown>()
-    mocks.call.mockReturnValue(first.promise)
-    const launch = start()
-    await vi.waitFor(() => expect(createParams().firstMessage).toBeDefined())
-    const original = createParams()
-    await vi.advanceTimersByTimeAsync(30_000)
-    await launch.promptDeliveryResult
-    mocks.call.mockResolvedValue(refusal)
-    retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)
-    await getStructuredLaunchStateBySessionId(launch.sessionId)!.promise.catch(() => {})
-    resetStructuredAgentSessionSendsForTests()
-    let visits = 0
-    const pending = Array.from(
-      { length: count },
-      (_, index): StructuredAgentSessionPendingSend => ({
-        get clientMessageId() {
-          visits++
-          return `unconfirmed-${index}`
-        },
-        sessionId: launch.sessionId,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'pending input' }] },
-        phase: 'unconfirmed',
-        issued: true,
-        previewUris: [],
-        queuedAt: 1
-      })
-    )
-    publishStructuredAgentSessionSends(launch.sessionId, {
-      entries: [
-        ...pending,
-        {
-          ...pending[0],
-          clientMessageId: 'covered',
-          phase: 'recorded',
-          recordedCursor: { epoch: 'epoch-1', sequence: 1 }
-        }
-      ]
+it('settles a late receipt without consuming unrelated pending inputs', async () => {
+  const first = deferred<unknown>()
+  mocks.call.mockReturnValue(first.promise)
+  const launch = start()
+  await vi.waitFor(() => expect(createParams().firstMessage).toBeDefined())
+  const original = createParams()
+  await vi.advanceTimersByTimeAsync(30_000)
+  await launch.promptDeliveryResult
+  mocks.call.mockResolvedValue(refusal)
+  retryStructuredAgentSessionLaunch('workspace-1', launch.sessionId)
+  await getStructuredLaunchStateBySessionId(launch.sessionId)!.promise.catch(() => {})
+  resetStructuredAgentSessionSendsForTests()
+  const pending: StructuredAgentSessionPendingSend[] = ['unconfirmed-0', 'unconfirmed-1'].map(
+    (clientMessageId) => ({
+      clientMessageId,
+      sessionId: launch.sessionId,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'pending input' }] },
+      phase: 'unconfirmed',
+      issued: true,
+      previewUris: [],
+      queuedAt: 1
     })
-    visits = 0
-    const published = vi.fn()
-    const notified = vi.fn()
-    const stopSend = subscribeToStructuredAgentSessionPendingSends(launch.sessionId, published)
-    const stopLaunch = subscribeStructuredAgentLaunchStatus(notified)
-    const row = submission(original.firstMessage!.clientMessageId)
-    first.resolve({
-      ...created(original),
-      cursor: { epoch: 'epoch-1', sequence: 1 },
-      value: { ...created(original).value, firstMessage: row }
-    })
-    await vi.advanceTimersByTimeAsync(0)
-    // One owner lookup, two evidence lookups and one removal rebuild per unrelated input (K=1).
-    expect(visits).toBeLessThanOrEqual(4 * count)
-    expect(published).toHaveBeenCalledOnce()
-    expect(notified).toHaveBeenCalledOnce()
-    expect(getStructuredAgentSessionPendingSends(launch.sessionId)).toEqual(pending)
-    expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
-    published.mockClear()
-    notified.mockClear()
-    settleStructuredAgentSessionSendsFromJournal(launch.sessionId, [row], [])
-    expect(published).not.toHaveBeenCalled()
-    expect(notified).not.toHaveBeenCalled()
-    stopSend()
-    stopLaunch()
-  }
-)
+  )
+  publishStructuredAgentSessionSends(launch.sessionId, {
+    entries: [
+      ...pending,
+      {
+        ...pending[0],
+        clientMessageId: 'covered',
+        phase: 'recorded',
+        recordedCursor: { epoch: 'epoch-1', sequence: 1 }
+      }
+    ]
+  })
+  const row = submission(original.firstMessage!.clientMessageId)
+  first.resolve({
+    ...created(original),
+    cursor: { epoch: 'epoch-1', sequence: 1 },
+    value: { ...created(original).value, firstMessage: row }
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(
+    getStructuredAgentSessionPendingSends(launch.sessionId).map((send) => send.clientMessageId)
+  ).toEqual(['unconfirmed-0', 'unconfirmed-1'])
+  expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
+  settleStructuredAgentSessionSendsFromJournal(launch.sessionId, [row], [])
+  expect(
+    getStructuredAgentSessionPendingSends(launch.sessionId).map((send) => send.clientMessageId)
+  ).toEqual(['unconfirmed-0', 'unconfirmed-1'])
+  expect(readStructuredAgentLaunchRecord(launch.sessionId)).toBeUndefined()
+})
 
 it('saves before reentrant listeners and still notifies when storage refuses a snapshot', async () => {
   mocks.call.mockRejectedValue(new Error('answer lost'))

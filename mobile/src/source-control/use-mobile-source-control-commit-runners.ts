@@ -107,7 +107,7 @@ export function useMobileSourceControlCommitRunners(params: Params) {
         }
         setCommitMessage('')
         triggerSuccess()
-        await loadStatus({ preserveReadyOnFailure: true, force: true })
+        await loadStatus({ force: true })
         return true
       } catch (err) {
         if (!mountedRef.current) {
@@ -124,7 +124,6 @@ export function useMobileSourceControlCommitRunners(params: Params) {
         if (didCommit) {
           setCommitMessage('')
           await loadStatus({
-            preserveReadyOnFailure: true,
             clearActionErrorOnSuccess: false,
             force: true
           })

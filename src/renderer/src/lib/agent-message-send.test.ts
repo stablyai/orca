@@ -30,9 +30,12 @@ vi.mock('./agent-session/launch/structured-agent-session-launch-registry', () =>
   structuredAgentSessionLaunchHasRetainedInput: () => false
 }))
 vi.mock('./active-agent-note-send', () => ({ sendNotesToActiveAgentSession: vi.fn() }))
-vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
-  sendStructuredAgentSessionMessage: mocks.send
-}))
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender',
+  () => ({
+    sendStructuredAgentSessionMessage: mocks.send
+  })
+)
 
 function sendNotes() {
   return sendMessageToAgent({

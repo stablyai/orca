@@ -10,7 +10,10 @@ import type {
 } from '../agent-session-wire'
 
 export type AgentSessionAcceptedInputSources = Partial<
-  Record<'model' | 'effort' | 'fastMode' | 'serviceTier', 'saved' | 'seeded' | 'policy'>
+  Record<
+    'model' | 'effort' | 'fastMode' | 'serviceTier' | 'interactionMode',
+    'saved' | 'seeded' | 'policy'
+  >
 >
 
 /** Provider-reported choices and effective next-turn values. Additive read-only
@@ -58,6 +61,8 @@ export type AgentSessionOptionsResult = {
     fastMode?: boolean
     /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */
     serviceTier?: string
+    /** Present only on hosts offering native Build/Plan; display alone is not accepted intent. */
+    interactionMode?: 'default' | 'plan'
     /** The permission mode a start runs now; absent from a host or agent with no picker. */
     permissionMode?: string
     /** Current startup report or accepted fresh-turn policy: null means reported but not a named Orca mode. */

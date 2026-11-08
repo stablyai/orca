@@ -1,15 +1,15 @@
+import { useAppStore } from '@/store'
 import { projectSelectedSourceControlActionLaunch } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { LaunchSource } from '../../../../../../shared/telemetry-events'
 import type {
   SourceControlLaunchActionId,
   SourceControlActionRecipe
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
@@ -36,10 +36,11 @@ type UseSourceControlAgentActionStartArgs = {
   actionId: SourceControlLaunchActionId
   repoId?: string | null
   agentLaunchPreferences: AgentLaunchPreferences
-  settings: GlobalSettings | null
   repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   worktreeId?: string | null
   groupId?: string | null
+  placementWorkspaceId?: string
+  initialCwd?: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
   launchPlatform?: NodeJS.Platform
   /** SSH uses plain orca; omit the local Linux orca-ide rename in its preview. */
@@ -59,7 +60,7 @@ type UseSourceControlAgentActionStartArgs = {
   ) => void | Promise<void>
   onLaunchAccepted?: () => void
   onLaunchAborted?: () => void
-  onLaunched?: () => void
+  onLaunched?: RunSourceControlAgentActionStartArgs['onLaunched']
   onClose: () => void
 }
 
@@ -92,11 +93,12 @@ export function useSourceControlAgentActionStart({
   saveTargetValue,
   actionId,
   repoId,
-  settings,
   agentLaunchPreferences,
   repo,
   worktreeId,
   groupId,
+  placementWorkspaceId,
+  initialCwd,
   promptDelivery,
   launchPlatform,
   isRemote,
@@ -138,7 +140,7 @@ export function useSourceControlAgentActionStart({
       submitted: SelectedSourceControlActionRecipe
     ): SourceControlAgentActionDeliveryPlanState =>
       buildSourceControlAgentDeliveryPlan({
-        settings,
+        settings: useAppStore.getState().settings,
         agentLaunchPreferences,
         selectedAgent,
         commandInput,
@@ -147,7 +149,7 @@ export function useSourceControlAgentActionStart({
           agentArgsApply && selectedAgent
             ? projectSelectedSourceControlActionLaunch(submitted, selectedAgent, {
                 renderedPrompt: commandInput,
-                settings
+                settings: useAppStore.getState().settings
               }).agentArgs
             : undefined,
         detectedAgents: currentDetectedAgents,
@@ -156,7 +158,6 @@ export function useSourceControlAgentActionStart({
         isRemote
       }),
     [
-      settings,
       agentLaunchPreferences,
       agentArgsApply,
       commandInput,
@@ -197,11 +198,12 @@ export function useSourceControlAgentActionStart({
           saveTargetValue: saveLaunchRecipe ? saveTargetValue : 'none',
           actionId,
           repoId,
-          settings,
           agentLaunchPreferences,
           repo,
           worktreeId,
           groupId,
+          placementWorkspaceId,
+          initialCwd,
           promptDelivery,
           launchPlatform,
           launchSource,
@@ -241,6 +243,8 @@ export function useSourceControlAgentActionStart({
       prepareRecipe,
       connectionUnavailable,
       groupId,
+      placementWorkspaceId,
+      initialCwd,
       launchSource,
       recoveryContext,
       launchPlatform,
@@ -257,7 +261,6 @@ export function useSourceControlAgentActionStart({
       repoId,
       saveLaunchRecipe,
       saveTargetValue,
-      settings,
       selectedAgent,
       trimmedCommandInput,
       worktreeId

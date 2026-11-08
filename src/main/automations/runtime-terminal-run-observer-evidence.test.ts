@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
 import type { AutomationRun } from '../../shared/automations-types'
+import type { TerminalExitCause } from '../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { AGENT_START_GRACE_MS } from './automation-run-agent-evidence'
 import {
   createRuntimeAutomationRunTerminalObserver,
@@ -17,6 +18,7 @@ type StatusRow = {
   stateStartedAt: number
   sessionBoundary?: boolean
   interrupted?: boolean
+  lastAssistantMessage?: string
 }
 
 function createPane(initial: {
@@ -25,24 +27,39 @@ function createPane(initial: {
   idleEdgeOnly?: boolean
   /** Model status cleanup landing while the observer reads the screen. */
   clearRowsOnRead?: boolean
+  exitCause?: TerminalExitCause
 }) {
   let idle = initial.idle
   // Model runtimes that satisfy tui-idle only once per idle edge.
   let edgeSpent = false
   let tail = initial.tail
   let rows: StatusRow[] = []
+  const statusListeners = new Set<(paneKey: string) => void>()
+  const setRows = (next: StatusRow[]): void => {
+    rows = next
+    for (const listener of statusListeners) {
+      listener(PANE_KEY)
+    }
+  }
+  const acceptedReplies = new Map<number, string>()
   const waiters = new Set<() => void>()
   const runtime: AutomationRunTerminalHost = {
     getTerminalHandleForPaneKey: () => HANDLE,
+    canOpenRunTerminals: () => true,
     readTerminal: async () => {
       if (initial.clearRowsOnRead) {
-        rows = []
+        setRows([])
       }
       return { tail }
     },
     waitForTerminal: (_handle, options) => {
       if (options?.signal?.aborted) {
         return Promise.reject(new Error('request_aborted'))
+      }
+      if (initial.exitCause) {
+        return Promise.reject(
+          Object.assign(new Error('terminal_exited'), { terminalExitCause: initial.exitCause })
+        )
       }
       if (idle && !(initial.idleEdgeOnly && edgeSpent)) {
         edgeSpent = true
@@ -69,8 +86,16 @@ function createPane(initial: {
   return {
     runtime,
     agentRows: () => rows,
+    subscribeStatusChanges: (listener: (paneKey: string) => void) => {
+      statusListeners.add(listener)
+      return () => {
+        statusListeners.delete(listener)
+      }
+    },
+    clearRows: () => setRows([]),
+    acceptedReplies,
     report: (row: Partial<StatusRow> = {}) =>
-      (rows = [{ state: 'done', receivedAt: Date.now(), stateStartedAt: Date.now(), ...row }]),
+      setRows([{ state: 'done', receivedAt: Date.now(), stateStartedAt: Date.now(), ...row }]),
     setTail: (next: string[]) => (tail = next),
     becomeBusy: () => {
       idle = false
@@ -95,6 +120,9 @@ function observe(
 ) {
   const observer = createRuntimeAutomationRunTerminalObserver(pane.runtime, {
     getAgentStatusRowsForPane: (paneKey) => (paneKey === PANE_KEY ? pane.agentRows() : []),
+    getAcceptedReply: (paneKey, leadTurnKey) =>
+      paneKey === PANE_KEY ? pane.acceptedReplies.get(leadTurnKey) : undefined,
+    subscribeStatusChanges: pane.subscribeStatusChanges,
     agentCommandsForRun: () => ['goose']
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the observer reads only these run fields.
@@ -119,8 +147,6 @@ afterEach(() => {
 })
 
 describe('observing a run with agent evidence', () => {
-  // Why: headless runs have no renderer writer, so the observer must fail a cut-off turn (STA-12638).
-
   it('keeps a held interrupted verdict when its row is cleared during the screen read', async () => {
     const pane = createPane({ idle: false, tail: ['working'], clearRowsOnRead: true })
     const run = observe(pane)

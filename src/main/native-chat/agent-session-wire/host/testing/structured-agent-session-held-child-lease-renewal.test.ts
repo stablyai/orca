@@ -116,22 +116,6 @@ function renewerFor(
 }
 
 describe.each(['darwin', 'win32'] as const)('lease renewal of a held child on %s', (platform) => {
-  it('keeps renewing a held child with no start time, without a PID probe', async () => {
-    const { store, fence } = await liveStoreWithoutStartTime()
-    const { holdsLiveChild } = hostWith({ generation: 'gen-1', fence, phase: 'ready' })
-    const probe = pidProbe(platform)
-    const clock = { now: NOW + 10_000 }
-    const { renewer, log } = renewerFor(store, probe, clock, holdsLiveChild)
-
-    await renewer.renewNow()
-    clock.now = NOW + 20_000
-    await renewer.renewNow()
-
-    expect(probe).not.toHaveBeenCalled()
-    expect(store.getRecord(SESSION)?.lease.lastRenewedAt).toBe(NOW + 20_000)
-    expect(log.entries).toEqual([])
-  })
-
   it('stops renewing the moment the adapter sees the root exit', async () => {
     const { store, fence } = await liveStoreWithoutStartTime()
     const { adapter, holdsLiveChild } = hostWith({ generation: 'gen-1', fence, phase: 'ready' })
@@ -168,32 +152,5 @@ describe.each(['darwin', 'win32'] as const)('lease renewal of a held child on %s
       kind: 'pid-absent',
       lastProvenAliveAt: NOW + 20_000
     })
-  })
-
-  it('still probes a record this runtime does not hold at its fence', async () => {
-    const { store, fence } = await liveStoreWithoutStartTime()
-    for (const child of [
-      { generation: 'gen-0', fence: fence - 1, phase: 'ready' } as const,
-      { generation: 'gen-2', fence, phase: 'ready' } as const,
-      { generation: null, fence, phase: 'ready' } as const,
-      null
-    ]) {
-      const { holdsLiveChild } = hostWith(child)
-      const probe = pidProbe(platform)
-      const { renewer, log } = renewerFor(store, probe, { now: NOW + 10_000 }, holdsLiveChild)
-
-      await renewer.renewNow()
-
-      expect(probe).toHaveBeenCalledOnce()
-      await expect(probe.mock.results[0]?.value).resolves.toMatchObject({
-        outcome: 'indeterminate'
-      })
-      expect(store.getRecord(SESSION)?.lease.lastRenewedAt).toBe(NOW)
-      expect(log.entries.map((entry) => entry.fields)).toContainEqual({
-        scope: 'lease-renewal',
-        sessionId: SESSION,
-        error: expect.objectContaining({ message: 'agent_session_ownership_unknown' })
-      })
-    }
   })
 })

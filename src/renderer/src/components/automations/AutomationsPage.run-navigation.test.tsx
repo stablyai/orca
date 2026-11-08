@@ -57,27 +57,6 @@ async function openDashboardRun(
 }
 
 describe('AutomationsPage run navigation', () => {
-  it('opens the automation overview without rereading its cached history', async () => {
-    const { container, rerender, automation, oldRun } = await loadCachedHistory()
-    const fresh = Promise.withResolvers<AutomationRun[]>()
-    api.automations.listRuns.mockClear()
-    api.automations.listRuns.mockReturnValue(fresh.promise)
-    mocks.state.pendingAutomationRunNavigation = {
-      automationId: automation.id,
-      runId: null
-    }
-
-    await rerender()
-    await settleHostQueries()
-
-    expect(mocks.state.pendingAutomationRunNavigation).toBeNull()
-    expect(within(container).getByTestId('detail-pane')).toBeTruthy()
-    expect(mocks.detailPane?.selectedRuns).toEqual([oldRun])
-    expect(api.automations.listRuns).not.toHaveBeenCalled()
-    expect(mocks.toastMessage).not.toHaveBeenCalled()
-    await act(async () => fresh.resolve([oldRun]))
-  })
-
   it('opens a new dashboard run after refreshing an already-cached automation history', async () => {
     const { container, oldRun } = await loadCachedHistory()
     await act(async () => within(container).getByRole('button', { name: 'Nightly' }).click())

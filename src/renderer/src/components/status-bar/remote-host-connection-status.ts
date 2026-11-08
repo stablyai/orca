@@ -5,7 +5,7 @@ import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime
 import type { RuntimePairingRepairRoute } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
-import '@/runtime/runtime-host-connection-state'
+import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   runtimeStatusForOverall,
   type HostStatus,

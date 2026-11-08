@@ -1,9 +1,12 @@
 import { useEffect } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../../shared/execution-host'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import { AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  agentsWithSavedModelPick,
+  HOST_MODEL_CATALOG_ACCOUNT_SETTINGS,
+  hostReadsSavedModelCatalogsOnly
+} from '../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {
@@ -19,35 +22,12 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown,
   subscribeLocalRuntimeCapabilitiesKnown
-} from './local-runtime-capabilities'
+} from './hosts/capabilities/local-runtime-capabilities'
 import { localStructuredChatsInUse } from './local-structured-chats'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
-
-// The settings that change which account (or binary) a new chat lists under, as the host reads them.
-const ACCOUNT_SETTINGS = [
-  'activeCodexManagedAccountId',
-  'activeCodexManagedAccountIdsByRuntime',
-  'codexManagedAccounts',
-  'activeClaudeManagedAccountId',
-  'activeClaudeManagedAccountIdsByRuntime',
-  'claudeManagedAccounts',
-  'agentDefaultEnv',
-  'agentCmdOverrides'
-] as const satisfies readonly (keyof GlobalSettings)[]
+import { subscribeRuntimeHostContactRegained } from './hosts/connections/runtime-host-contact-regained'
 
 const LOCAL = { kind: 'local' } as const
-
-/** Agents this machine's chats were used with: a saved pick says so without starting any CLI. */
-function localAgentsInUse(settings: AppState['settings']): string[] {
-  return Object.entries(settings?.nativeChatSessionOptions ?? {})
-    .filter(([, entry]) => typeof entry?.model === 'string' && entry.model.trim() !== '')
-    .map(([agent]) => agent)
-}
-
-function readsSavedOnly(capabilities: readonly string[] | null | undefined): boolean {
-  return capabilities?.includes(AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY) === true
-}
 
 // The registered-agent list each host was last preloaded from; a new list preloads again.
 const preloadedFrom = new Map<string, unknown>()
@@ -78,11 +58,13 @@ async function preloadLocal(again: boolean): Promise<void> {
     return
   }
   const capabilities = await ensureLocalRuntimeCapabilities()
-  if (readsSavedOnly(capabilities)) {
+  if (hostReadsSavedModelCatalogsOnly(capabilities)) {
     await preloadRegisteredAgents(LOCAL, LOCAL_EXECUTION_HOST_ID, null, again)
   } else if (capabilities && !again) {
-    // An older runtime lists when nothing is saved: only agents with a saved pick.
-    await preloadHostModelCatalogSnapshots(LOCAL, localAgentsInUse(settings))
+    await preloadHostModelCatalogSnapshots(
+      LOCAL,
+      agentsWithSavedModelPick(settings?.nativeChatSessionOptions)
+    )
   }
 }
 
@@ -99,7 +81,7 @@ function reloadPairedHost(environmentId: string): void {
   const answered = hostModelCatalogSnapshotAgents(target)
   forgetHostModelCatalogSnapshots(target)
   const status = pairedHostStatus(environmentId)
-  if (status && readsSavedOnly(status.capabilities)) {
+  if (status && hostReadsSavedModelCatalogsOnly(status.capabilities)) {
     const executionHostId = toRuntimeExecutionHostId(environmentId)
     void preloadRegisteredAgents(target, executionHostId, status.runtimeId, true)
   } else {
@@ -109,13 +91,13 @@ function reloadPairedHost(environmentId: string): void {
 
 /** Preloads each host whose registered agents arrived (or changed) since its last preload. */
 function preloadHostsWithNewAgents(): void {
-  if (readsSavedOnly(readLocalRuntimeCapabilitiesOrUnknown())) {
+  if (hostReadsSavedModelCatalogsOnly(readLocalRuntimeCapabilitiesOrUnknown())) {
     void preloadRegisteredAgents(LOCAL, LOCAL_EXECUTION_HOST_ID, null, false)
   }
   for (const environmentId of useAppStore.getState().runtimeStatusByEnvironmentId.keys()) {
     const executionHostId = toRuntimeExecutionHostId(environmentId)
     const status = pairedHostStatus(environmentId)
-    if (!status || !readsSavedOnly(status.capabilities)) {
+    if (!status || !hostReadsSavedModelCatalogsOnly(status.capabilities)) {
       continue
     }
     const target = { kind: 'environment', environmentId } as const
@@ -126,7 +108,9 @@ function preloadHostsWithNewAgents(): void {
 function accountSettingsChanged(state: AppState, previous: AppState): boolean {
   return (
     state.settings !== previous.settings &&
-    ACCOUNT_SETTINGS.some((key) => state.settings?.[key] !== previous.settings?.[key])
+    HOST_MODEL_CATALOG_ACCOUNT_SETTINGS.some(
+      (key) => state.settings?.[key] !== previous.settings?.[key]
+    )
   )
 }
 

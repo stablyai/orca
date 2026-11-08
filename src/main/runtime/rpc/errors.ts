@@ -1,3 +1,8 @@
+import { BranchSwitchCollisionError } from '../../git/branch-switch-target'
+import {
+  RECIPE_VM_REFUSAL_CODES,
+  RecipeVmWakeUnavailableError
+} from '../../../shared/remote-runtime/recipe-vm-wake'
 import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-surface'
@@ -111,6 +116,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  ...RECIPE_VM_REFUSAL_CODES,
   WORKTREE_CREATE_COLLISION_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
@@ -192,7 +198,11 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
   }
+  if (error instanceof RecipeVmWakeUnavailableError) {
+    return errorResponse(id, meta, error.code, message)
+  }
   if (
+    error instanceof BranchSwitchCollisionError ||
     error instanceof TerminalSplitOutcomeError ||
     error instanceof WslHostWindowsDriveRefusalError
   ) {

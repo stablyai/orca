@@ -19,12 +19,11 @@ import { getPluginsDataDir } from '../plugins/plugin-discovery'
 import { bundledPluginRootForApp } from '../plugins/plugin-bundled-bootstrap'
 import { approveBundledPluginsFromStore } from '../plugins/plugin-bundled-approval'
 import { resolvePluginHostEntryPath } from '../plugins/workers/plugin-host-process'
-import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
+import { applyPluginConsent, revokePluginConsent } from '../plugins/plugin-enablement'
 import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
 import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
-import { setPluginServiceForRpc } from '../runtime/rpc/methods/plugins'
+import { bindPluginRpcServices } from './main-process-plugin-rpc'
 import { bindPluginDesktopViews } from '../plugins/view/plugin-view-desktop-binding'
-import { openPluginFrameGuestDevTools } from '../plugins/panels/plugin-frame-guest-diagnostics'
 import {
   normalizePluginConsents,
   normalizePluginIdList
@@ -103,7 +102,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     userDataPath: app.getPath('userData'),
     hostVersion: pluginHostVersion(app.getVersion()),
     blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null,
-    imageCache: pluginImageCache
+    imageCache: pluginImageCache,
+    revokeConsent: (pluginKey) =>
+      revokePluginConsent({ store, pluginService: state.pluginService, pluginKey })
   })
   const bundledPluginRoot = bundledPluginRootForApp(app)
   state.pluginService = new PluginService({
@@ -179,7 +180,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   }
   installPluginImageProtocolHandler({
     cache: pluginImageCache,
-    findValidPlugin: (pluginKey) => state.pluginService?.findValidPlugin(pluginKey) ?? null
+    findValidPlugin: (pluginKey) => state.pluginService?.findValidPlugin(pluginKey) ?? null,
+    findApprovedPlugin: (pluginKey) =>
+      state.pluginService?.findApprovedPlugin(pluginKey, true) ?? null
   })
   const bundledPluginBootstrap = new PluginBundledBootstrapCoordinator({
     root: bundledPluginRoot,
@@ -238,17 +241,9 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
   })
   // Bound here, not in the IPC handlers: a headless serve never opens a window to register them.
   const pluginDelegate = bindPluginRuntime(pluginService, runtime, agentHookServer)
-  // Headless RPC resolves this service too; consent shares the desktop hash-keyed write path.
-  setPluginServiceForRpc(state.pluginService, {
-    applyConsent: (request) =>
-      applyPluginConsent({ store, pluginService: state.pluginService!, ...request }),
-    applyEnablement: (pluginKey, enabled) =>
-      applyPluginEnablement({ store, pluginService: state.pluginService!, pluginKey, enabled }),
-    setPluginSystemEnabled: (pluginSystemEnabled) =>
-      store.updateSettings({ pluginSystemEnabled }, { notifyListeners: true }),
-    setDevPluginPaths: (devPluginPaths) =>
-      store.updateSettings({ devPluginPaths }, { notifyListeners: true }),
-    openFrameDevTools: openPluginFrameGuestDevTools
+  bindPluginRpcServices(store, pluginService, {
+    marketplace: state.pluginMarketplaceService,
+    installer: state.pluginMarketplaceInstaller
   })
   bindPluginDesktopViews(state.isServeMode, pluginService, () => state.mainWindow)
   // Initialization discovers manifests only; workers/panel reads wait for explicit triggers.

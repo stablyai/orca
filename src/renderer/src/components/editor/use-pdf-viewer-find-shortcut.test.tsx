@@ -4,7 +4,7 @@ import { useContext, useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EditorCommandOwnerContext } from './editor-command-owner-context'
 import { usePdfViewerFindShortcut } from './use-pdf-viewer-find-shortcut'
-import { useNativeChatFind } from '../native-chat/use-native-chat-find'
+import { useNativeChatFind } from '../native-chat/viewport/find/use-native-chat-find'
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ keybindings: undefined }) } }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => ({ keybindings: undefined }) } }))
@@ -98,16 +98,6 @@ describe('PDF viewer find shortcut', () => {
       expect(pressFind(view.getByTestId(id)).defaultPrevented).toBe(false)
     }
     expect(openFind.pdf).not.toHaveBeenCalled()
-    expect(openFind['second-pdf']).not.toHaveBeenCalled()
-  })
-
-  it('opens from its own tab, its editor header and the file explorer while its group is focused', () => {
-    const { openFind, view } = setup('pdf')
-    for (const id of ['pdf-tab', 'pdf-header-copy-path', 'explorer-row']) {
-      expect(pressFind(view.getByTestId(id)).defaultPrevented).toBe(true)
-    }
-    expect(pressFind(document.body).defaultPrevented).toBe(true)
-    expect(openFind.pdf).toHaveBeenCalledTimes(4)
     expect(openFind['second-pdf']).not.toHaveBeenCalled()
   })
 

@@ -30,6 +30,8 @@ export type DesktopBrowserBridgeAuditEntry = {
 
 export type DesktopBrowserBridgeExecutorDeps = {
   environmentId: string
+  /** The SSH host the bridge serves; its tabs say it is controlling them. */
+  targetId: string
   hostLabel: string
   /** Resolve host ownership via the renderer, which also knows unmounted pages. */
   resolveWorkspace(scope: {
@@ -98,7 +100,8 @@ export async function executeDesktopBrowserBridgeRequest(
       signal,
       (webContentsId) =>
         deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId),
-      hostRevoked
+      hostRevoked,
+      { targetId: deps.targetId, hostLabel: deps.hostLabel }
     )
     if (!response.ok) {
       deps.audit({ ...audit, outcome: 'failed', code: response.error.code })

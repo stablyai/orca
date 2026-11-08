@@ -1,8 +1,8 @@
 import { expect, it, vi } from 'vitest'
 import { materializeReleaseCheckout, importReleaseCheckoutModule } from './release-checkout'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
-import { AI_VAULT_METHODS } from '../../../src/main/runtime/rpc/methods/ai-vault'
-import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs'
+import { AI_VAULT_METHODS } from '../../../src/main/runtime/rpc/methods/history/ai-vault'
+import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
 import { listResult } from '../../../src/main/ai-vault/structured-session-ownership.test-support'
 import {
   HOST_TEST_SESSION,
@@ -15,7 +15,7 @@ import {
   runtime,
   host,
   store
-} from '../../../src/main/runtime/rpc/methods/structured-chat-tab-table.test-fixture'
+} from '../../../src/main/runtime/rpc/methods/session-tabs/structured-chat-tab-table.test-fixture'
 
 // Cold CI may materialize the pinned release checkout before importing its client modules.
 it('a released client reads the current saved name from tabs and each fresh History query', async () => {

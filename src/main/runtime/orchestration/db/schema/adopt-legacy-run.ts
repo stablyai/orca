@@ -1,5 +1,5 @@
-import type { LegacyAdoptionRow } from '../../types'
-import { LEGACY_RUN_ID } from '../contract-constants'
+import type { LegacyAdoptionRow } from '../orchestration-records'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 

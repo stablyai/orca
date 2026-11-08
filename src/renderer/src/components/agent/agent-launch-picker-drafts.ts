@@ -7,7 +7,7 @@ import {
   useRef,
   useSyncExternalStore
 } from 'react'
-import { sameSourceControlSetupSelection } from '../../lib/source-control-agent-launch-picker'
+import { sameSourceControlSetupSelection } from '../../lib/source-control/ai/source-control-agent-launch-picker'
 import { shallow } from 'zustand/shallow'
 import {
   agentPickerDraft,
@@ -24,11 +24,9 @@ import { retireAgentPickerSetups } from './agent-launch-picker-retirement'
 import {
   launchDraftSource,
   nativeChatLaunchPromptDraftScopeKey
-} from '../native-chat/native-chat-launch-draft-source'
-import {
-  subscribeToNativeChatComposerDraft,
-  writeLaunchSetupOptions
-} from '../native-chat/native-chat-composer-draft-store'
+} from '../native-chat/drafts/native-chat-launch-draft-source'
+import { subscribeToNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
+import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-composer-draft-memory'
 
 export type AgentPickerSetupIdentity = { model: string; effort?: string }
 const appSession: AgentPickerDraftOwner = {}

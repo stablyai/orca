@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import {

@@ -29,7 +29,7 @@ import {
   openHost,
   closeSession,
   send
-} from '../../src/main/runtime/rpc/methods/structured-chat-tab-table.test-fixture'
+} from '../../src/main/runtime/rpc/methods/session-tabs/structured-chat-tab-table.test-fixture'
 
 const logical = `agent-session:${HOST_TEST_SESSION}`
 const phone = (pairedDeviceId: string) => ({

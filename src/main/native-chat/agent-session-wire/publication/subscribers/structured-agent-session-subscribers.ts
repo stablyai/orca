@@ -1,6 +1,6 @@
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
-import type { ForkMarker } from '../../agent-session-fork-marker'
-import { ForkMarkerSubscriptions } from '../../agent-session-fork-marker-delivery'
+import type { ForkMarker } from '../history/agent-session-fork-marker'
+import { ForkMarkerSubscriptions } from './agent-session-fork-marker-delivery'
 import type { AgentSessionSubscribeInput, Subscriber } from './agent-session-subscribe-input'
 
 import type {

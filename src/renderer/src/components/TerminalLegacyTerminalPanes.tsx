@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom'
 import TerminalPane from './terminal-pane/TerminalPane'
-import { TerminalRestoringPlaceholder } from './terminal-pane/TerminalRestoringPlaceholder'
+import { TerminalRestoringPlaceholder } from './terminal-pane/mounting/TerminalRestoringPlaceholder'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
 import { shouldMountBackgroundWorktreeTab } from './terminal/background-terminal-worktree-mount'
 import type { TerminalController } from './use-terminal-controller'

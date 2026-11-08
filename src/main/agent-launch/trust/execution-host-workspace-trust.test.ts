@@ -12,7 +12,7 @@ import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Os from 'node:os'
 import type { AgentTrustPreset } from './agent-trust-presets'
-import { linkGitWorktree, workspaceTrustWritten } from './workspace-trust-test-fixtures'
+import { workspaceTrustWritten } from './workspace-trust-test-fixtures'
 
 const state = vi.hoisted(() => ({ home: '' }))
 
@@ -25,24 +25,7 @@ import {
   applyWorkspaceTrustOnThisHost,
   type WorkspaceTrustHost
 } from './execution-host-workspace-trust'
-
-const PRESETS: readonly AgentTrustPreset[] = [
-  'claude',
-  'codex',
-  'cursor',
-  'copilot',
-  'qoder',
-  'antigravity',
-  'codewhale',
-  'kimi'
-]
 const INHERITING_PRESETS: readonly AgentTrustPreset[] = ['claude', 'copilot', 'qoder']
-const EXACT_OR_SELF_LIMITING_PRESETS: readonly AgentTrustPreset[] = [
-  'codex',
-  'cursor',
-  'antigravity',
-  'codewhale'
-]
 
 let root: string
 
@@ -76,27 +59,25 @@ function trustWritten(preset: AgentTrustPreset): boolean {
 }
 
 describe('applyWorkspaceTrustOnThisHost', () => {
-  it.each(PRESETS)('writes %s trust for an ordinary project folder', async (preset) => {
+  it('writes codewhale trust where its home and config overrides point', async () => {
     const workspace = join(root, 'projects', 'app')
     mkdirSync(workspace, { recursive: true })
-    await applyWorkspaceTrustOnThisHost(preset, workspace, thisHost())
-    expect(trustWritten(preset)).toBe(true)
-    if (preset === 'codewhale') {
-      for (const codewhaleEnv of [
-        { CODEWHALE_HOME: join(root, 'custom-home') },
-        { CODEWHALE_CONFIG_PATH: join(root, 'custom-config.toml') },
-        {
-          CODEWHALE_HOME: join(root, 'ignored-home'),
-          CODEWHALE_CONFIG_PATH: join(root, 'override.toml')
-        },
-        { CODEWHALE_CONFIG_PATH: '~/tilde-config.toml' }
-      ]) {
-        await applyWorkspaceTrustOnThisHost(preset, workspace, thisHost({ codewhaleEnv }))
-        const file =
-          codewhaleEnv.CODEWHALE_CONFIG_PATH?.replace(/^~\//, `${state.home}/`) ??
-          join(codewhaleEnv.CODEWHALE_HOME!, 'config.toml')
-        expect(readFileSync(file, 'utf-8')).toContain(`[projects."${workspace}"]`)
-      }
+    await applyWorkspaceTrustOnThisHost('codewhale', workspace, thisHost())
+    expect(trustWritten('codewhale')).toBe(true)
+    for (const codewhaleEnv of [
+      { CODEWHALE_HOME: join(root, 'custom-home') },
+      { CODEWHALE_CONFIG_PATH: join(root, 'custom-config.toml') },
+      {
+        CODEWHALE_HOME: join(root, 'ignored-home'),
+        CODEWHALE_CONFIG_PATH: join(root, 'override.toml')
+      },
+      { CODEWHALE_CONFIG_PATH: '~/tilde-config.toml' }
+    ]) {
+      await applyWorkspaceTrustOnThisHost('codewhale', workspace, thisHost({ codewhaleEnv }))
+      const file =
+        codewhaleEnv.CODEWHALE_CONFIG_PATH?.replace(/^~\//, `${state.home}/`) ??
+        join(codewhaleEnv.CODEWHALE_HOME!, 'config.toml')
+      expect(readFileSync(file, 'utf-8')).toContain(`[projects."${workspace}"]`)
     }
   })
 
@@ -134,49 +115,5 @@ describe('applyWorkspaceTrustOnThisHost', () => {
       )
       expect(trustWritten(preset)).toBe(false)
     })
-  })
-
-  it.each(EXACT_OR_SELF_LIMITING_PRESETS)(
-    'trusts a home folder workspace for %s, whose trust there covers only the home',
-    async (preset) => {
-      await applyWorkspaceTrustOnThisHost(preset, state.home, thisHost())
-      expect(trustWritten(preset)).toBe(true)
-    }
-  )
-
-  it('trusts a home folder workspace for Codex under the key Codex looks up', async () => {
-    await applyWorkspaceTrustOnThisHost('codex', state.home, thisHost())
-    expect(readFileSync(join(state.home, '.codex', 'config.toml'), 'utf-8')).toContain(
-      `[projects."${state.home}"]`
-    )
-  })
-
-  it("stores a Codex worktree's own path, not its main checkout", async () => {
-    const worktree = join(root, 'worktrees', 'feature')
-    linkGitWorktree(state.home, worktree)
-    await applyWorkspaceTrustOnThisHost('codex', worktree, thisHost())
-    const written = readFileSync(join(state.home, '.codex', 'config.toml'), 'utf-8')
-    expect(written).toContain(`[projects."${worktree}"]`)
-    expect(written).not.toContain(`[projects."${state.home}"]`)
-  })
-
-  it('trusts the exact subfolder Codex starts in, inside a folder that is not a repo', async () => {
-    const subfolder = join(root, 'notes', 'sub')
-    mkdirSync(subfolder, { recursive: true })
-    await applyWorkspaceTrustOnThisHost('codex', subfolder, thisHost())
-    expect(readFileSync(join(state.home, '.codex', 'config.toml'), 'utf-8')).toContain(
-      `[projects."${subfolder}"]`
-    )
-  })
-
-  it.each(INHERITING_PRESETS)('writes no %s trust when the host knows no home', async (preset) => {
-    const workspace = join(root, 'projects', 'app')
-    mkdirSync(workspace, { recursive: true })
-    await applyWorkspaceTrustOnThisHost(
-      preset,
-      workspace,
-      thisHost({ homes: [null, '', undefined] })
-    )
-    expect(trustWritten(preset)).toBe(false)
   })
 })

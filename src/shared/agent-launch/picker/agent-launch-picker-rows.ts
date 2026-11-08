@@ -16,6 +16,8 @@ export type HostChatAnswer =
   | 'wsl'
   | 'subfolder'
   | 'not-on-host'
+  /** The host is Windows, where this agent has no chat. */
+  | 'windows'
   | 'no-chats'
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
 const chatProgramOffered = (program: ChatProgramObservation) =>
@@ -40,6 +42,7 @@ export type ChatUnavailableReason =
   | 'wsl'
   | 'subfolder'
   | 'not-on-host'
+  | 'windows'
 
 export type NewTabAgentMenuRow = (
   | { kind: 'chat'; agent: TuiAgent }

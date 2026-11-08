@@ -1,5 +1,7 @@
 import {
   evaluateMobileWebBundleCompat,
+  MOBILE_WEB_PAGE_VERSION_FLOOR,
+  SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS,
   type MobileWebBundleCompatManifest
 } from '../transport/web-bundle/mobile-web-bundle-compat'
 import type {
@@ -53,7 +55,7 @@ export function gateVerdict(gates: MobileWebShellGates): MobileWebShellGateVerdi
   return verdict.kind === 'blocked' ? { kind: 'wall', verdict } : { kind: 'open' }
 }
 
-// Share entry/refusal gate decisions: gates may change during fetching. Offline/open still consult cache; only open checks it against the host.
+// Share entry/refusal gate decisions: gates may change during fetching. Every other verdict consults cache; only open checks it against the host.
 export function gateState(
   verdict: MobileWebShellGateVerdict,
   retriedOnce: boolean
@@ -65,7 +67,6 @@ export function gateState(
       return { kind: 'failed', reason: 'status-unreadable', retriedOnce }
     case 'dialling':
     case 'pending':
-      return CHECKING
     case 'offline':
     case 'open':
       return null
@@ -87,6 +88,23 @@ export function cachedGenerationWall(
     manifest
   })
   return blocked.kind === 'blocked' ? blocked : null
+}
+
+// The shell-only half of the compat check: what this build can run before any host has answered.
+export function shellRunsGeneration(compat: MobileWebBundleCompatManifest): boolean {
+  return (
+    SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS.some((known) => known === compat.schemaVersion) &&
+    (compat.pageVersion ?? 0) >= MOBILE_WEB_PAGE_VERSION_FLOOR
+  )
+}
+
+// The bridge's hold: talk only while these gates open and leave the document inside the host's window.
+export function documentMayTalk(
+  compat: MobileWebBundleCompatManifest,
+  gates: MobileWebShellGates
+): boolean {
+  const verdict = gateVerdict(gates)
+  return verdict.kind === 'open' && cachedGenerationWall(verdict, gates, compat) === null
 }
 
 // Compare verdicts instead of rebuilt gate objects so unchanged reconnect/status events cannot resweep cache and flicker the spinner.

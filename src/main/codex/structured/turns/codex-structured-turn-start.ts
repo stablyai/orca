@@ -117,7 +117,17 @@ export async function startCodexTurn(
         host.options.set(key, value)
       }
     }
-    requested = codexTurnRequestOptions(host)
+    requested = { interactionMode: 'default', ...codexTurnRequestOptions(host) }
+    const { interactionMode, ...nativeOptions } = requested
+    const collaborationMode = {
+      mode: interactionMode,
+      settings: {
+        model: nativeOptions.model ?? previousApplied?.model ?? host.reportedOptions?.model,
+        reasoning_effort:
+          nativeOptions.effort ?? previousApplied?.effort ?? host.reportedOptions?.effort ?? null,
+        developer_instructions: null
+      }
+    }
     const known = { ...previousApplied }
     for (const key of Object.keys(requested)) {
       delete known[key]
@@ -145,7 +155,8 @@ export async function startCodexTurn(
             clientUserMessageId: input.clientMessageId,
             input: turnInputFor(host, body),
             ...permission,
-            ...requested
+            ...nativeOptions,
+            collaborationMode
           },
           {
             timeoutMs: input.timeoutMs,
