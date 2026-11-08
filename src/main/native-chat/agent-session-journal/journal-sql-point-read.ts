@@ -1,3 +1,9 @@
+import {
+  readJournalGeneration,
+  type JournalGenerationRead,
+  type JournalGenerationResult
+} from './journal-generation-read'
+import { readJournalDomainAcceptedSendUnopened } from './journal-domain-accepted-unopened'
 import { readJournalDomainEntity } from './journal-domain-entity-read'
 import { readJournalDomainLifecycle } from './journal-sql-lifecycle-reads'
 import type Database from '../../sqlite/sync-database'
@@ -29,11 +35,7 @@ import type {
   JournalStatusIndicators
 } from './journal-status-indicators'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
-import {
-  latestAcceptedSendUnopened,
-  type JournalLatestStop
-} from './context-epochs/journal-stop-turn-end'
-import { JournalSqlReducer } from './journal-sql-reducer'
+import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import {
   readJournalSqlQueue,
   type JournalSqlQueueRead,
@@ -48,6 +50,7 @@ import {
 export type JournalSqlPointRead = {
   sessionId: string
   operation:
+    | { kind: 'generation'; input: JournalGenerationRead }
     | { kind: 'observer'; input: JournalObserverRead }
     | { kind: 'work'; input: JournalSqlWorkRead }
     | { kind: 'status-indicators'; input: JournalStatusIndicatorRead }
@@ -74,6 +77,7 @@ export type JournalSqlPointRead = {
 }
 
 export type JournalSqlPointReadResult =
+  | { kind: 'generation'; generation: JournalGenerationResult }
   | { kind: 'observer'; observation: JournalObserverResult }
   | { kind: 'work'; answer: JournalSqlWorkResult }
   | { kind: 'status-indicators'; indicators: JournalStatusIndicators }
@@ -122,6 +126,8 @@ function read(
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
+    case 'generation':
+      return { kind: 'generation', generation: readJournalGeneration(scope, operation.input) }
     case 'work':
       return {
         kind: 'work',
@@ -197,7 +203,7 @@ function read(
     case 'accepted-send-unopened':
       return {
         kind: 'accepted-send-unopened',
-        unopened: latestAcceptedSendUnopened(new JournalSqlReducer(scope, scope.epoch).state)
+        unopened: readJournalDomainAcceptedSendUnopened(scope)
       }
     case 'queue':
       return { kind: 'queue', result: readJournalSqlQueue(scope, operation.operation) }

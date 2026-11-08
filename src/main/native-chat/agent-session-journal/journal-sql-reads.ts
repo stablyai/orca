@@ -1,3 +1,4 @@
+import type { JournalGenerationRead, JournalGenerationResult } from './journal-generation-read'
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
 import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-read'
 import type { AgentSessionJournalReads } from './journal-reads'
@@ -12,6 +13,7 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  generation(input?: JournalGenerationRead): Promise<JournalGenerationResult>
   observer(input: JournalObserverRead): Promise<JournalObserverResult>
   work(input: JournalSqlWorkRead): Promise<JournalSqlWorkResult>
   /** The saved latest Stop, without the host's settlement overlay. */
@@ -61,6 +63,7 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    generation: async (input = {}) => (await read({ kind: 'generation', input })).generation,
     work: async (input) => (await read({ kind: 'work', input })).answer,
     observer: async (input) => (await read({ kind: 'observer', input })).observation,
     latestStop: async () => (await read({ kind: 'latest-stop' })).stop,
