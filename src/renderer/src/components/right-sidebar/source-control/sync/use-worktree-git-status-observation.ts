@@ -11,6 +11,7 @@ import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 import { useRefreshOnHostContact } from './use-refresh-on-host-contact'
+import { useGitStatusWindowPresence } from './use-git-status-window-presence'
 import {
   hasInteractiveActiveGitStatusConsumer,
   shouldPollActiveGitStatus
@@ -236,35 +237,11 @@ export function useWorktreeGitStatusObservation(
     // Target changes must invalidate in-flight results captured against an old remote/branch.
   }, [activeExecutionHostId, activePushTarget, activeWorktreeId, worktreePath])
 
-  useEffect(() => {
-    const reconcile = (catchUp: boolean): void => {
-      const scheduler = statusSchedulerRef.current
-      if (!scheduler) {
-        return
-      }
-      if (!canFetchActiveWorktreeGitStatus || !isWindowVisible()) {
-        scheduler.pause()
-        return
-      }
-      if (activeStatusPollScope) {
-        scheduler.resumeSafety()
-        return
-      }
-      scheduler.suspendSafety()
-      if (catchUp) {
-        scheduler.refreshNow()
-      }
-    }
-    reconcile(false)
-    if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') {
-      return
-    }
-    const handleVisibilityChange = (): void => reconcile(isWindowVisible())
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [activeStatusPollScope, canFetchActiveWorktreeGitStatus])
+  useGitStatusWindowPresence(
+    statusSchedulerRef,
+    canFetchActiveWorktreeGitStatus,
+    activeStatusPollScope
+  )
 
   useRefreshOnHostContact(activeExecutionHostId, statusSchedulerRef, canApplyScheduledStatusRef)
 
