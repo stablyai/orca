@@ -61,12 +61,22 @@ export async function resolveOrchestrationTerminalHandle(
   return await resolveImplicitOrchestrationCaller(cwd, client, flagName)
 }
 
+// One status.get per client: a command may resolve several caller flags against the same runtime.
+const externalCoordinatorSupport = new WeakMap<RuntimeClient, Promise<boolean>>()
+
 /** Only a saved environment carries the paired-device identity an external coordinator is bound to. */
 export async function supportsExternalCoordinator(client: RuntimeClient): Promise<boolean> {
-  return (
-    Boolean(client.environmentSelector && client.isRemote) &&
-    !(await runtimeLacks(client, ORCHESTRATION_EXTERNAL_COORDINATOR_RUNTIME_CAPABILITY))
-  )
+  if (!client.environmentSelector || !client.isRemote) {
+    return false
+  }
+  let support = externalCoordinatorSupport.get(client)
+  if (!support) {
+    support = runtimeLacks(client, ORCHESTRATION_EXTERNAL_COORDINATOR_RUNTIME_CAPABILITY).then(
+      (lacks) => !lacks
+    )
+    externalCoordinatorSupport.set(client, support)
+  }
+  return await support
 }
 
 // terminal.show requires a PTY; resolveIdentity also recognizes structured workers without panes.
