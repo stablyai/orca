@@ -68,16 +68,25 @@ function options(query: string): Parameters<typeof useAgentPaneThreads>[0] {
 }
 
 describe('Activity search query in the real hook', () => {
-  it('excludes acknowledged rows from an unread search', () => {
+  it('keeps live rows but excludes acknowledged finished rows from an unread search', () => {
     const panes = installThreads(12)
+    const entries = useAppStore.getState().agentStatusByPaneKey
     useAppStore.setState({
+      agentStatusByPaneKey: Object.fromEntries(
+        panes.map((paneKey, index) => [
+          paneKey,
+          index === 0 ? entries[paneKey] : { ...entries[paneKey], state: 'done' as const }
+        ])
+      ),
       acknowledgedAgentsByPaneKey: Object.fromEntries(panes.map((paneKey) => [paneKey, 100_000]))
     })
     const activity = renderHook(() =>
       useAgentPaneThreads({ ...options(' PROJECT ☃ '), readFilter: 'unread' })
     )
     expect(activity.result.current.allThreads).toHaveLength(12)
-    expect(activity.result.current.visibleThreads).toEqual([])
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      panes[0]
+    ])
   })
 
   it('keeps selection, child classification and scoped row order', () => {
