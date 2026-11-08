@@ -7,6 +7,7 @@ import { guardSupervisedProviderGroup } from '../provider-process/provider-group
 import { SOURCE_CONTROL_KILL_SITE } from './source-control-agent-termination'
 import { wslAwareSpawn } from '../git/runner'
 import { guestNativeSpawnEnv } from '../ipc/wsl-guest-windows-drive-path'
+import { AGENT_PANE_HOOK_ENV_KEYS } from '../ipc/pty/host-env/spawn-env-keys'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
@@ -24,6 +25,8 @@ const WSL_LAUNCHER_ENV_KEYS = [
   'TMP',
   'WINDIR'
 ] as const
+
+const PANE_HOOK_ENV_KEYS = new Set<string>(AGENT_PANE_HOOK_ENV_KEYS)
 
 function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {}
@@ -45,7 +48,13 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
   const wslDistro = input.preparation
     ? wslDistroForCommand(input.cwd, input.wslDistro)
     : input.wslDistro
-  const spawnEnv = input.env ?? process.env
+  // Background agents cannot report hooks against the terminal that launched Orca.
+  const spawnEnv = { ...(input.env ?? process.env) }
+  for (const key of Object.keys(spawnEnv)) {
+    if (PANE_HOOK_ENV_KEYS.has(process.platform === 'win32' ? key.toUpperCase() : key)) {
+      delete spawnEnv[key]
+    }
+  }
   if (process.platform === 'win32' && wslDistro) {
     // Apply command assignments after guest login-shell setup, never to the Windows launcher.
     const assignments = Object.entries(input.commandEnv ?? {}).map(
@@ -57,7 +66,7 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
       assignments.length ? [...assignments, input.binary, ...input.args] : input.args,
       {
         cwd: input.cwd,
-        env: buildWslLauncherEnv(input.env),
+        env: buildWslLauncherEnv(spawnEnv),
         stdio: [input.stdinMode, 'pipe', 'pipe'],
         windowsHide: true,
         wslDistro,
