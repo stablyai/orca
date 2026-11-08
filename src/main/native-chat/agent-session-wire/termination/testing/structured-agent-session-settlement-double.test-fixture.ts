@@ -1,3 +1,7 @@
+import {
+  settleJournalStaleState,
+  settleJournalDeadGeneration
+} from '../../../agent-session-journal/writing/journal-generation-settlement'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
@@ -38,7 +42,7 @@ export function exitJournalDouble(fields: {
   submissions?: () => readonly Partial<AgentJournalSubmission>[]
 }): StructuredAgentSessionChildExitSession['journal'] {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a settlement reads only these members; the rest of the journal is unreachable from it.
-  return {
+  const journal = {
     cursor: () => NO_CURSOR,
     itemBody: () => null,
     itemFence: fields.itemFence ?? (() => undefined),
@@ -49,4 +53,13 @@ export function exitJournalDouble(fields: {
     stopMarks: { latest: () => null, personStopDecides: () => false },
     appendPlannedLifecycleBatch: plannedBatchThrough(fields.appendLifecycleBatch)
   } as unknown as StructuredAgentSessionChildExitSession['journal']
+  journal.settleStaleState = (input) =>
+    settleJournalStaleState(journal, { appendPlanned: journal.appendPlannedLifecycleBatch }, input)
+  journal.settleDeadGeneration = (input) =>
+    settleJournalDeadGeneration(
+      journal,
+      { appendPlanned: journal.appendPlannedLifecycleBatch },
+      input
+    )
+  return journal
 }

@@ -3,7 +3,10 @@
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  refuse,
+  AgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionCancelResult } from '../../../../shared/agent-session/agent-session-wire'
 import '../providers/structured-agent-session-adapter'
 import { AgentSessionPromptUnavailableError } from '../providers/structured-agent-session-adapter-errors'
@@ -108,7 +111,7 @@ async function dismissPrompt(
   pending: PendingPrompt,
   answer: boolean | null
 ): Promise<TurnOutcome<null>> {
-  const { item, prompt } = pending
+  const { item } = pending
   const identity = parseAgentJournalItemKey(item.itemId)
   if (!identity) {
     return {
@@ -123,19 +126,21 @@ async function dismissPrompt(
   let committed = false
   const receipt = ctx.operationReceipt?.isCommitted() ? undefined : ctx.operationReceipt
   const commit = async (): Promise<void> => {
-    await ctx.journal.appendItem(
-      identity,
+    await ctx.journal.mutatePrompt(
       {
-        ...prompt,
+        itemId: item.itemId,
+        expectedRevision: item.revision,
         resolution: {
           state: 'cancelled',
           selectedOptionId: null,
           resolvedBy: ctx.resolvedBy,
           resolvedAt: ctx.now()
+        },
+        options: {
+          fence: ctx.fence,
+          turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope()
         }
       },
-      // Revision must preserve the prompt’s original turn.
-      { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() },
       receipt
     )
     committed = true
@@ -152,7 +157,9 @@ async function dismissPrompt(
     }
   } catch (error) {
     if (!committed && !(error instanceof AgentSessionPromptUnavailableError)) {
-      return dismissalNotSaved(ctx, error)
+      return error instanceof AgentSessionRefusalError
+        ? { ok: false, refusal: error.refusal }
+        : dismissalNotSaved(ctx, error)
     }
     if (committed) {
       // Log adapter details locally; journal only the user-facing failure.
@@ -173,7 +180,9 @@ async function dismissPrompt(
     try {
       await commit()
     } catch (error) {
-      return dismissalNotSaved(ctx, error)
+      return error instanceof AgentSessionRefusalError
+        ? { ok: false, refusal: error.refusal }
+        : dismissalNotSaved(ctx, error)
     }
   }
   return { ok: true, value: null }

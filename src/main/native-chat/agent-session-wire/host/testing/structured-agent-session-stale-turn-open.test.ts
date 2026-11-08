@@ -45,10 +45,22 @@ async function exitWithUnwrittenSettlement(
       { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   await rig.host.flushStreamedEvents(SESSION)
-  const append = vi.spyOn(open.journal, 'appendPlannedLifecycleBatch')
-  for (let refused = 0; refused < refusedWrites; refused += 1) {
-    append.mockRejectedValueOnce(new Error('disk full'))
+  let refused = 0
+  const refuse = () => {
+    if (refused++ < refusedWrites) {
+      throw new Error('disk full')
+    }
   }
+  const settleDead = open.journal.settleDeadGeneration
+  const settleStale = open.journal.settleStaleState
+  vi.spyOn(open.journal, 'settleDeadGeneration').mockImplementation(async (input) => {
+    refuse()
+    return settleDead(input)
+  })
+  vi.spyOn(open.journal, 'settleStaleState').mockImplementation(async (input) => {
+    refuse()
+    return settleStale(input)
+  })
   await rig.host.handleAdapterEvent({
     type: 'ended',
     sessionId: SESSION,

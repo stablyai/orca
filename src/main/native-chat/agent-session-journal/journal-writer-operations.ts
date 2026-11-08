@@ -50,6 +50,10 @@ import {
 } from './journal-submission-selector'
 import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
 import type { QueuedMessageUpdate } from './queued-messages/queued-message-update'
+import {
+  runJournalWriterSettlementOperation,
+  type JournalWriterSettlementOperation
+} from './writing/journal-writer-settlement-operation'
 
 /** Operations that run today's collaborator code; every host callback became data. */
 export type JournalWriterInputOperation =
@@ -110,6 +114,7 @@ export type JournalWriterInputOperation =
     }
   | { kind: 'open' }
   | JournalWriterContextOperation
+  | JournalWriterSettlementOperation
 
 /** Recovery tries every send; earlier settlements stay committed when a later one fails, as they
  *  do on the host, so a failure is part of the answer rather than a rollback. */
@@ -146,6 +151,10 @@ export async function runJournalWriterOperation(
       return settled(submissionWriter.openCommand(operation.input))
     case 'handover':
       return submissionWriter.prepareHandover(operation.input)
+    case 'stale-settle':
+    case 'dead-generation-settle':
+    case 'prompt-mutate':
+      return runJournalWriterSettlementOperation(session, operation, receipt)
     case 'command-settle':
       return settled(submissionWriter.settleCommand(operation.input))
     case 'queue-insert':

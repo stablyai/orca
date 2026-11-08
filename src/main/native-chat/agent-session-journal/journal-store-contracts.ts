@@ -3,6 +3,7 @@ import type { AgentJournalDispatchRejection } from '../../../shared/agent-sessio
 import type {
   AgentJournalAnsweredTurnIdentity,
   AgentJournalItemBody,
+  AgentJournalResolution,
   AgentJournalMessageItem,
   AgentJournalProducerLinkage,
   AgentJournalResetReason,
@@ -28,6 +29,27 @@ import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/l
 import type { JournalAttachmentClaim } from './submissions/journal-submission-hook'
 import type { JournalWriteBody } from './writing/journal-write-queue'
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
+import type { StaleStructuredAgentSessionStateInput } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
+import type { StructuredAgentSessionExitSettlement } from '../agent-session-wire/termination/structured-agent-session-leftover-settlement'
+
+export type JournalStaleSettlementInput = Omit<StaleStructuredAgentSessionStateInput, 'journal'>
+
+export type JournalDeadGenerationSettlementInput = Omit<
+  JournalStaleSettlementInput,
+  'acquisitionGeneration'
+> & {
+  exit?: StructuredAgentSessionExitSettlement
+  continuingInputs: readonly string[]
+  finalizingInputs: readonly { clientMessageId: string; settlementOwner?: true }[]
+}
+
+export type JournalPromptMutationInput = {
+  itemId: string
+  expectedRevision: number
+  kind?: 'approval' | 'question'
+  resolution: AgentJournalResolution
+  options: JournalItemAppendOptions
+}
 
 export type AgentSessionJournalOptions = {
   identity: AgentSessionJournalIdentity
