@@ -35,6 +35,7 @@ export const ORCHESTRATION_CALLER_PARAM: Readonly<Record<string, CallerParam>> =
   'orchestration.runUse': 'from',
   'orchestration.runCurrent': 'from',
   'orchestration.check': 'terminal',
+  'orchestration.events': 'terminal',
   'orchestration.send': 'from',
   'orchestration.reply': 'from',
   'orchestration.ask': 'from',

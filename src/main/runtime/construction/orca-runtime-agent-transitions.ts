@@ -100,6 +100,13 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
     this.agentTransitions.subscribe((change) => this.terminalWorkerTurnStops.observe(change))
     this.agentTransitions.subscribe((change) => this.workerAutoReleaseActivity.observePane(change))
+    this.agentTransitions.subscribe(({ paneKey }) =>
+      this.runEventObservers.noteWorkerState(
+        paneKey,
+        this.agentTransitions.latestRow(paneKey),
+        () => this.getAgentStatusOrchestrationContextForPaneKey(paneKey)
+      )
+    )
     const saveMovedWorkerSessions = watchMovedWorkerResumeSessions(
       this,
       () => this._orchestrationDb

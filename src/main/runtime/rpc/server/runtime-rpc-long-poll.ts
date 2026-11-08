@@ -69,6 +69,9 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'orchestration.ask') {
     return 'ask'
   }
+  if (request.method === 'orchestration.events') {
+    return 'wait'
+  }
   if (request.method === 'orchestration.check') {
     const params = request.params as { wait?: unknown } | undefined
     return params?.wait === true ? 'wait' : null
