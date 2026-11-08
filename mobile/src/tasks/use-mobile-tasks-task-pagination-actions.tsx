@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { patchTaskHydration } from './task-queries'
 import {
   applyEmptyPageClamp,
   applyWindowPageLimit,
@@ -42,6 +44,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     githubPages,
     githubPaginationLoading,
     githubCountedTotalPages,
+    hostId,
     linearApiKeyDraft,
     linearConnectState,
     loadGenerationRef,
@@ -67,6 +70,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
     taskUiReady,
     tasksSupported
   } = model
+  const queryClient = useQueryClient()
   const connectLinearAccount = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !taskUiReady) {
       return
@@ -87,6 +91,7 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       setLinearConnectState('idle')
       setShowLinearConnect(false)
       setLinearConnected(true)
+      patchTaskHydration(queryClient, hostId, (kept) => ({ ...kept, linearConnected: true }))
       setVisibleProviders((current) =>
         current.includes('linear') ? current : [...current, 'linear']
       )
@@ -96,7 +101,16 @@ export function useMobileTasksTaskPaginationActions(model: TaskListLoadingModel)
       setLinearConnectState('error')
       setLinearConnectError(err instanceof Error ? err.message : 'Connection failed')
     }
-  }, [client, connState, linearApiKeyDraft, linearConnectState, loadLinearContext, taskUiReady])
+  }, [
+    client,
+    connState,
+    hostId,
+    linearApiKeyDraft,
+    linearConnectState,
+    loadLinearContext,
+    queryClient,
+    taskUiReady
+  ])
 
   const retryGitHubIssueSourceFetch = useCallback(
     async (repoPath: string): Promise<void> => {

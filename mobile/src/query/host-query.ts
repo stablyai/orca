@@ -101,14 +101,15 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
     await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
   }
   const { fetch } = query
-  const read =
-    options.read ?? (fetch && (() => fetch(hostReadClient(client), target, input, undefined)))
-  if (!read) {
+  const { read } = options
+  const live = fetch && (() => fetch(hostReadClient(client), target, input, undefined))
+  if (!read && !live) {
     throw new Error(`${query.family} is read by its screen`)
   }
   const data = await queryClient.query({
     ...hostQueryOptions(query, client, hostId, target, input),
-    queryFn: ({ signal }) => read(signal),
+    // Only a call-site reader takes the signal: taking it lets TanStack cancel the read once no screen observes it.
+    queryFn: read ? ({ signal }) => read(signal) : live,
     staleTime: 0
   })
   await new Promise<void>((resolve) => notifyManager.schedule(resolve))

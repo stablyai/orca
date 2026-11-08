@@ -239,18 +239,22 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       void readTaskJiraStatus(queryClient, hostId, client)
         .then((connection) => {
           if (!stale && jiraStatusRequestIdRef.current === jiraRequestId) {
-            setJiraConnection(connection)
+            // Unchanged keeps its identity, so the list read it feeds is not restarted.
+            setJiraConnection((current) => replaceEqualDeep(current, connection))
           }
         })
         .catch(() => {})
       const writes = taskHydrationWrites(queryClient, hostId)
       const fresh = await readTaskHydration(queryClient, hostId, client)
-      if (stale || (applied && replaceEqualDeep(applied, fresh) === applied)) {
+      if (stale) {
         return
       }
       if (applied && taskHydrationWrites(queryClient, hostId) !== writes) {
         // This phone changed a setting while the read was out; keep its view and re-read so the kept copy has the write.
         void readTaskHydration(queryClient, hostId, client).catch(() => {})
+        return
+      }
+      if (applied && replaceEqualDeep(applied, fresh) === applied) {
         return
       }
       applyHydration(fresh)

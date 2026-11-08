@@ -184,6 +184,7 @@ export function taskListMountAdapters(
         githubPages: [[]],
         githubPaginationLoading: false,
         githubCountedTotalPages: null,
+        hostId: 'host-1',
         linearApiKeyDraft: 'lin_api_key',
         linearConnectState: 'idle',
         loadGenerationRef: { current: 0 },

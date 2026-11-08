@@ -10,7 +10,7 @@ import {
 import type { GitHubPreset, RepoSummary, TaskResumeState } from './mobile-tasks-legacy-foundation'
 import { taskSettingsWrite, taskUiStateWrite } from './mobile-task-runtime-operations'
 import { patchTaskHydration, type TaskHydration } from './task-queries'
-import { useQueryClient } from '@tanstack/react-query'
+import { replaceEqualDeep, useQueryClient } from '@tanstack/react-query'
 
 export function useMobileTasksClientSettingsActions(model: ProjectRepositoryResolutionModel) {
   const {
@@ -111,6 +111,10 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
         return
       }
       const next = { ...taskResumeRef.current, ...updates }
+      // Restoring a view re-runs its persistence effects; writing back what is already saved could overwrite a newer desktop copy.
+      if (replaceEqualDeep(taskResumeRef.current, next) === taskResumeRef.current) {
+        return
+      }
       taskResumeRef.current = next
       keepUi({ taskResumeState: next })
       void taskUiStateWrite.request(client, { taskResumeState: next }).catch(() => {
