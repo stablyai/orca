@@ -57,6 +57,48 @@ it('reroutes a first snapshot to FULL and publishes exact committed revisions in
   expect(db.pragma('user_version', { simple: true })).toBe(4)
 })
 
+it('commits ready revisions from different chats atomically before publishing either payload', async () => {
+  const { db, batch, commit } = fixture()
+  await commit(message('first', 'assistant', 'item'))
+  db.exec(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
+    VALUES('other','epoch',0,1)`)
+  const other = { sessionId: 'other', epoch: 'epoch' }
+  await commitJournalSqlMessages(
+    db,
+    batch,
+    [
+      prepareJournalSqlMessages({
+        target: other,
+        steps: [message('other first', 'assistant', 'item')],
+        savedAt: 100
+      })
+    ],
+    () => {}
+  )
+  db.exec(`PRAGMA foreign_keys=ON;
+    CREATE TABLE published_pair (id TEXT PRIMARY KEY);
+    CREATE TABLE pending_pair (id TEXT REFERENCES published_pair(id) DEFERRABLE INITIALLY DEFERRED);
+    CREATE TEMP TRIGGER pair_first AFTER UPDATE ON journal_items WHEN NEW.session_id='chat'
+      BEGIN INSERT INTO pending_pair VALUES ('paired'); END;
+    CREATE TEMP TRIGGER pair_second AFTER UPDATE ON journal_items WHEN NEW.session_id='other'
+      BEGIN INSERT INTO published_pair VALUES ('paired'); END`)
+  const delivered: string[] = []
+  const result = await commitJournalSqlMessages(
+    db,
+    batch,
+    [target, other].map((target) =>
+      prepareJournalSqlMessages({ target, steps: [message('last')], savedAt: 200 })
+    ),
+    (commit, index) => {
+      expect(db.isTransaction).toBe(false)
+      expect(db.prepare('SELECT id FROM published_pair').get()).toEqual({ id: 'paired' })
+      delivered.push(`${index}:${commit.cursor.sequence}`)
+    }
+  )
+  expect(result.outcomes.map((outcome) => outcome.committed)).toEqual([true, true])
+  expect(delivered).toEqual(['0:12', '1:2'])
+})
+
 it('accepts an optimistic echo once, preserving its local body and moved placement', async () => {
   const { db, commit, item, seedSend, seedItem } = fixture()
   seedSend()

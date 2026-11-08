@@ -37,48 +37,61 @@ export function prepareJournalSqlMessages(command: MessageCommand): JournalSqlMe
   }
 }
 
+/** Select one ready prefix; controls and repeated chats keep their serialization boundary. */
+export function journalSqlMessageBatchSize<T>(
+  ready: readonly T[],
+  jobFor: (entry: T) => JournalSqlMessageJob | undefined,
+  at = 0
+): number {
+  const sessions = new Set<string>()
+  let bytes = 0
+  let events = 0
+  let count = 0
+  for (let next = at; next < ready.length; next++) {
+    const job = jobFor(ready[next]!)
+    if (!job) {
+      break
+    }
+    const size = Math.max(1, job.command.steps.length)
+    if (
+      count &&
+      (!job.normal ||
+        sessions.has(job.command.target.sessionId) ||
+        bytes + job.bytes > 1024 * 1024 ||
+        events + size > 64)
+    ) {
+      break
+    }
+    count++
+    bytes += job.bytes
+    events += size
+    sessions.add(job.command.target.sessionId)
+    if (!job.normal || bytes >= 1024 * 1024 || events >= 64) {
+      break
+    }
+  }
+  return count
+}
+
 /** Called by the existing writer admission lane; publication completes before the next drain. */
 export async function commitJournalSqlMessages(
   db: Database.Database,
   batch: JournalSqlBatch,
   jobs: readonly JournalSqlMessageJob[],
-  publish: (commit: JournalSqlMessagesCommit) => void
+  publish: (commit: JournalSqlMessagesCommit, index: number) => void
 ): Promise<JournalSqlBatchResult<JournalSqlMessagesCommit>> {
   const outcomes: JournalSqlBatchOutcome<JournalSqlMessagesCommit>[] = []
   let at = 0
   while (at < jobs.length) {
-    const ready: JournalSqlMessageJob[] = []
-    const sessions = new Set<string>()
-    let bytes = 0
-    let events = 0
-    for (let next = at; next < jobs.length; next++) {
-      const job = jobs[next]!
-      const count = Math.max(1, job.command.steps.length)
-      if (
-        ready.length &&
-        (!job.normal ||
-          sessions.has(job.command.target.sessionId) ||
-          bytes + job.bytes > 1024 * 1024 ||
-          events + count > 64)
-      ) {
-        break
-      }
-      ready.push(job)
-      bytes += job.bytes
-      events += count
-      sessions.add(job.command.target.sessionId)
-      if (!job.normal || bytes >= 1024 * 1024 || events >= 64) {
-        break
-      }
-    }
+    const ready = jobs.slice(at, at + journalSqlMessageBatchSize(jobs, (job) => job, at))
     const result = await batch.run(
       ready.map((job) => ({ command: job, normal: job.normal })),
       (job) => applyMessageSteps(db, job)
     )
-    for (const outcome of result.outcomes) {
+    for (const [index, outcome] of result.outcomes.entries()) {
       if (outcome.committed) {
         // Payloads are owned by this just-committed result, never reloaded through a reader.
-        publish(outcome.value)
+        publish(outcome.value, at + index)
       }
     }
     for (let index = 0; index < result.outcomes.length; index++) {
@@ -94,7 +107,7 @@ export async function commitJournalSqlMessages(
         )
         outcome = rerouted.outcomes[0]!
         if (outcome.committed) {
-          publish(outcome.value)
+          publish(outcome.value, at + index)
         }
         if (rerouted.postcommit) {
           outcomes.push(outcome)

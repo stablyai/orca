@@ -33,7 +33,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
-import type { JournalDomainEventChanges } from './journal-domain-schema'
+import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import {
   readJournalSqlAcceptedInputs,
   type JournalSqlAcceptedInputs
@@ -266,19 +266,10 @@ export function applyJournalSqlMessage(
   }
   db.prepare(`UPDATE journal_chat_state SET last_sequence=?,highest_fence=MAX(highest_fence,?),last_activity_at=MAX(last_activity_at,?)
     WHERE session_id=? AND epoch=?`).run(sequence, row.fence, row.ts, ...prefix)
-  db.prepare(
-    `INSERT INTO journal_events(session_id,epoch,sequence,saved_at,changes_json) VALUES(?,?,?,?,?)`
-  ).run(
-    ...prefix,
-    sequence,
-    savedAt,
-    JSON.stringify({
-      items: [
-        { itemId, revision, sequence: next.sequence, sequenceIndex: next.sequenceIndex ?? 0 }
-      ],
-      submissions: result.receipts.map((receipt) => receipt.clientMessageId),
-      cards: result.cards.map((card) => card.messageId)
-    } satisfies JournalDomainEventChanges)
-  )
+  appendJournalSqlEvent(db, target, sequence, savedAt, {
+    items: [{ itemId, revision, sequence: next.sequence, sequenceIndex: next.sequenceIndex ?? 0 }],
+    submissions: result.receipts.map((receipt) => receipt.clientMessageId),
+    cards: result.cards.map((card) => card.messageId)
+  })
   return result
 }

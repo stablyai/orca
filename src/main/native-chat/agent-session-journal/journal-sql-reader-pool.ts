@@ -20,6 +20,7 @@ import type {
   JournalSqlDatabaseReadResult
 } from './journal-sql-database-read'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
+import type { JournalDomainHistoryRequest } from './journal-domain-history-page'
 
 /** Four WAL readers isolate slow pages; each request executes entirely on its assigned connection. */
 export class JournalSqlReaderPool {
@@ -40,6 +41,14 @@ export class JournalSqlReaderPool {
     const response = await this.slot().request({ kind: 'history', request })
     if (response.type !== 'page') {
       throw new Error('journal reader returned no history page')
+    }
+    return response.result
+  }
+
+  async domainHistory(request: JournalDomainHistoryRequest): Promise<AgentSessionHistoryResult> {
+    const response = await this.slot().request({ kind: 'domain-history', request })
+    if (response.type !== 'page') {
+      throw new Error('journal reader returned no domain history page')
     }
     return response.result
   }

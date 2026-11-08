@@ -1,6 +1,40 @@
 import type Database from '../../sqlite/sync-database'
+import type { JournalDomainEventChanges } from './journal-domain-schema'
 
 export const JOURNAL_EVENT_HISTORY_MS = 24 * 60 * 60 * 1000
+const MAX_EVENT_SEQUENCES = 4096
+const MAX_EVENT_BYTES = 16 * 1024
+
+/** Metadata beyond the replay budget uses the existing snapshot reset, never truncates saved content. */
+export function appendJournalSqlEvent(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string },
+  sequence: number,
+  savedAt: number,
+  changes: JournalDomainEventChanges
+): void {
+  const prefix = [target.sessionId, target.epoch] as const
+  const json = JSON.stringify(changes)
+  const oversized = Buffer.byteLength(json, 'utf8') > MAX_EVENT_BYTES
+  db.prepare(`UPDATE journal_chat_state SET retained_sequence=MAX(retained_sequence,?)
+    WHERE session_id=? AND epoch=?`).run(
+    oversized ? sequence : Math.max(0, sequence - MAX_EVENT_SEQUENCES),
+    ...prefix
+  )
+  db.prepare(`INSERT INTO journal_events(session_id,epoch,sequence,saved_at,changes_json)
+    VALUES(?,?,?,?,?)`).run(
+    ...prefix,
+    sequence,
+    savedAt,
+    oversized ? '{"items":[],"submissions":[],"cards":[]}' : json
+  )
+  // One append creates at most one obsolete row; a reset can leave at most one bounded tail of debt.
+  db.prepare(`DELETE FROM journal_events WHERE session_id=? AND epoch=? AND sequence IN (
+    SELECT sequence FROM journal_events WHERE session_id=? AND epoch=?
+    AND sequence<=(SELECT retained_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?)
+    ORDER BY sequence LIMIT 50
+  )`).run(...prefix, ...prefix, ...prefix)
+}
 
 export type JournalSqlEventTailResult = {
   kind: 'event-tail'

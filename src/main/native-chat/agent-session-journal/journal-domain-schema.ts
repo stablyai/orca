@@ -2,8 +2,9 @@ import type Database from '../../sqlite/sync-database'
 import type { SqliteBindings } from '../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
+import { JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA } from './journal-domain-edit-lease-schema'
 
-const JOURNAL_DOMAIN_VERSION = 2
+const JOURNAL_DOMAIN_VERSION = 3
 
 /** journal_events.changes_json: identities only; readers load current rows for bodies. */
 export type JournalDomainEventChanges = {
@@ -32,7 +33,12 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
     if (version < 1) {
       db.exec(JOURNAL_DOMAIN_V1)
     }
-    migrateJournalDomainHistory(db)
+    if (version < 2) {
+      migrateJournalDomainHistory(db)
+    }
+    db.exec(JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA)
+    db.exec(`CREATE INDEX journal_events_saved_at ON journal_events(saved_at,session_id,epoch,sequence);
+      INSERT INTO journal_domain_migrations(version) VALUES (3)`)
     db.exec('COMMIT')
   } catch (error) {
     db.exec('ROLLBACK')
@@ -79,9 +85,7 @@ CREATE INDEX journal_items_named_subagents ON journal_items(session_id, epoch, s
     const last = rows.at(-1)!
     after = [last.session_id, last.epoch, last.item_id]
   }
-  db.prepare('INSERT INTO journal_domain_migrations(version) VALUES (?)').run(
-    JOURNAL_DOMAIN_VERSION
-  )
+  db.prepare('INSERT INTO journal_domain_migrations(version) VALUES (2)').run()
 }
 
 const JOURNAL_DOMAIN_V1 = `

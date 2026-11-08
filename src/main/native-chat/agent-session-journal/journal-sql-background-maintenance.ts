@@ -4,13 +4,14 @@ import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 
-/** Startup, requested sweeps and due work share one idle maintenance lane. */
+/** Conversion and sweeps wait for idle; finite replay pruning shares this lane without starvation. */
 export class JournalSqlBackgroundMaintenance {
   private readonly stopped = new AbortController()
   private running: Promise<void> | undefined
   private discover = false
   private sweep = false
   private due = false
+  private dueWake = new AbortController()
   private deadline: { at: number; timer: NodeJS.Timeout } | undefined
 
   constructor(
@@ -41,6 +42,8 @@ export class JournalSqlBackgroundMaintenance {
       () => {
         this.deadline = undefined
         this.due = true
+        this.dueWake.abort()
+        this.dueWake = new AbortController()
         void this.requestRun()
       },
       Math.max(0, Math.min(at - Date.now(), 2_147_483_647))
@@ -71,9 +74,20 @@ export class JournalSqlBackgroundMaintenance {
   }
 
   private async boundary(): Promise<boolean> {
-    await this.activity.waitForIdle(this.stopped.signal)
-    await setImmediate()
-    return !this.stopped.signal.aborted
+    while (!this.stopped.signal.aborted) {
+      if (this.due) {
+        await this.runDueWork()
+      }
+      if (this.due) {
+        continue
+      }
+      await this.activity.waitForIdle(AbortSignal.any([this.stopped.signal, this.dueWake.signal]))
+      await setImmediate()
+      if (!this.due) {
+        return !this.stopped.signal.aborted
+      }
+    }
+    return false
   }
 
   private async run(): Promise<void> {
@@ -99,19 +113,27 @@ export class JournalSqlBackgroundMaintenance {
         }
       }
       if (this.due) {
-        this.due = false
-        try {
-          await this.pruneEventTail()
-        } catch (error) {
-          this.report(error)
-          this.requestDueWork(Date.now() + 60_000)
-        }
+        await this.runDueWork()
       }
     }
   }
 
+  private async runDueWork(): Promise<void> {
+    this.due = false
+    try {
+      await this.pruneEventTail()
+    } catch (error) {
+      this.report(error)
+      this.requestDueWork(Date.now() + 60_000)
+    }
+  }
+
   private async pruneEventTail(): Promise<void> {
-    while (await this.boundary()) {
+    while (!this.stopped.signal.aborted) {
+      await setImmediate()
+      if (this.stopped.signal.aborted) {
+        return
+      }
       const now = Date.now()
       const result = await this.writer.maintain({ kind: 'event-tail-prune', now })
       if (!result || typeof result !== 'object' || !('kind' in result)) {

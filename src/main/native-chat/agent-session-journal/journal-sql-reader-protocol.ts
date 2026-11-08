@@ -7,11 +7,13 @@ import type {
   JournalSqlDatabaseReadResult
 } from './journal-sql-database-read'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
+import type { JournalDomainHistoryRequest } from './journal-domain-history-page'
 
 export type JournalSqlConversionHeader = Omit<JournalSqlConversion, 'tables'>
 
 export type JournalSqlReaderOperation =
   | { kind: 'history'; request: JournalSqlHistoryRequest }
+  | { kind: 'domain-history'; request: JournalDomainHistoryRequest }
   | { kind: 'database'; operation: JournalSqlDatabaseRead }
   | { kind: 'point'; request: JournalSqlPointRead }
   | { kind: 'conversion-prepare'; sessionId: string }

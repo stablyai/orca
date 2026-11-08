@@ -271,7 +271,9 @@ it('backfills history metadata once from saved v1 rows and refuses a newer domai
     ALTER TABLE journal_items DROP COLUMN subagent_group_key;
     ALTER TABLE journal_items DROP COLUMN named_subagent_ids;
     ALTER TABLE journal_items DROP COLUMN turn_marker;
-    DELETE FROM journal_domain_migrations WHERE version=2`)
+    DROP TABLE journal_edit_leases;
+    DROP INDEX journal_events_saved_at;
+    DELETE FROM journal_domain_migrations WHERE version>=2`)
   const rows: AgentJournalRenderItem[] = [
     {
       ...text(1, ''),
@@ -342,7 +344,7 @@ it('backfills history metadata once from saved v1 rows and refuses a newer domai
       payload_json: JSON.stringify(rows[2])
     }
   ])
-  db.exec('INSERT INTO journal_domain_migrations(version) VALUES (3)')
+  db.exec('INSERT INTO journal_domain_migrations(version) VALUES (4)')
   expect(() => migrateJournalDomainSchema(db)).toThrow(
     'journal domain schema is newer than this writer'
   )

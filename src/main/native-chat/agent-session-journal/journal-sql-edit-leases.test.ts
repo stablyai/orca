@@ -2,7 +2,6 @@ import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA } from './journal-domain-edit-lease-schema'
 import {
   applyJournalDomainEditLease,
   journalDomainEditLeaseDeadline,
@@ -22,7 +21,6 @@ function fixture() {
   const db = new Database(':memory:')
   databases.push(db)
   migrateJournalDomainSchema(db)
-  db.exec(JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA)
   let version = 0
   const seed = (fields: Partial<QueuedMessageRow> = {}) => {
     const card: QueuedMessageRow = {
