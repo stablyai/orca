@@ -116,7 +116,7 @@ vi.mock('../hang-watchdog/hang-detection-marker', () => ({
   consumeHangDetectionMarker: vi.fn(() => null),
   hangDetectionMarkerPath: vi.fn(() => '/test-marker')
 }))
-vi.mock('../browser/browser-manager', () => ({
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserCertificateTrustController: {},
   browserManager: {
     installCertificateRequestGuard: vi.fn(),

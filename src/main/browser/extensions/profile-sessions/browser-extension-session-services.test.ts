@@ -30,7 +30,7 @@ vi.mock('../../sessions/browser-session-registry', () => ({
     getPinnedExtensionIds: () => []
   }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: { setUnownedDownloadOwnerResolver: vi.fn() }
 }))
 vi.mock('../api/cookies', () => ({ observeBrowserExtensionCookieChanges: vi.fn() }))
