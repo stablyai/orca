@@ -10,6 +10,8 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
+import { settledNumstatCache } from './git-read-cache-invalidation'
+import { readWorktreePathsDiffStamp } from './worktree-diff-stamp'
 
 async function runNumstat(
   worktreePath: string,
@@ -46,6 +48,54 @@ async function runNumstat(
   }
 }
 
+// Statting more working files than this costs about as much as the numstat it would skip.
+const MAX_STAMPED_UNSTAGED_PATHS = 256
+
+/** Unstaged numstat stamps each listed working file; unlisted files are unchanged or status would list them. */
+function unstagedStampPaths(entries: readonly GitStatusEntry[]): string[] | null {
+  const paths: string[] = []
+  for (const entry of entries) {
+    if (entry.area !== 'unstaged') {
+      continue
+    }
+    // A gitlink's numstat follows the submodule's HEAD, which no parent file stamps.
+    if (entry.submodule) {
+      return null
+    }
+    paths.push(entry.path)
+    if (entry.oldPath !== undefined) {
+      paths.push(entry.oldPath)
+    }
+  }
+  return paths.length <= MAX_STAMPED_UNSTAGED_PATHS ? paths : null
+}
+
+/** Reuse a numstat pass while HEAD, index and the stamped working files are provably unchanged. */
+async function readNumstatThroughSettledCache(
+  worktreePath: string,
+  cached: boolean,
+  detectRenames: boolean,
+  entries: readonly GitStatusEntry[],
+  options: GitRuntimeOptions
+): Promise<Map<string, GitLineStats> | null> {
+  const stampPaths = cached ? [] : unstagedStampPaths(entries)
+  if (!stampPaths) {
+    return runNumstat(worktreePath, cached, detectRenames, options)
+  }
+  const readGeneration = settledNumstatCache.beginRead()
+  const stamp = await readWorktreePathsDiffStamp(worktreePath, stampPaths, options)
+  const readKey = JSON.stringify([worktreePath, options.wslDistro ?? '', cached, detectRenames])
+  const reused = settledNumstatCache.get(readKey, stamp)
+  if (reused) {
+    return reused
+  }
+  const stats = await runNumstat(worktreePath, cached, detectRenames, options)
+  if (stats) {
+    settledNumstatCache.set(readKey, stamp, stats, readGeneration)
+  }
+  return stats
+}
+
 /** Returns false when a numstat pass failed, so callers skip caching it. */
 export async function attachLineStats(
   worktreePath: string,
@@ -61,10 +111,10 @@ export async function attachLineStats(
   // Approximates status's rename policy: -M only for areas where status reported a rename.
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged
-      ? runNumstat(worktreePath, true, hasStagedRenames, options)
+      ? readNumstatThroughSettledCache(worktreePath, true, hasStagedRenames, entries, options)
       : Promise.resolve(emptyStats),
     hasUnstaged
-      ? runNumstat(worktreePath, false, hasUnstagedRenames, options)
+      ? readNumstatThroughSettledCache(worktreePath, false, hasUnstagedRenames, entries, options)
       : Promise.resolve(emptyStats),
     // Node reads need host paths even when Git runs in WSL.
     collectUntrackedAdditions(
