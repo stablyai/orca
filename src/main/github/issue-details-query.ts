@@ -28,6 +28,7 @@ export const ISSUE_DETAILS_QUERY = `query($owner: String!, $repo: String!, $numb
           body
           createdAt
           url
+          viewerDidAuthor
           author {
             login
             avatarUrl(size: 48)
@@ -70,6 +71,7 @@ export type GraphQLIssueDetailsResponse = {
             body?: string | null
             createdAt?: string | null
             url?: string | null
+            viewerDidAuthor?: boolean | null
             author?: {
               login?: string | null
               avatarUrl?: string | null

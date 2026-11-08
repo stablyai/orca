@@ -103,7 +103,7 @@ function getLastMockServer() {
 
 vi.mock('net', () => {
   return {
-    createServer: vi.fn().mockImplementation((connectionHandler) => {
+    createServer: vi.fn().mockImplementation((_options, connectionHandler) => {
       const listeners = new Map<string, (...args: unknown[]) => void>()
       let boundPort = 0
       const server = {

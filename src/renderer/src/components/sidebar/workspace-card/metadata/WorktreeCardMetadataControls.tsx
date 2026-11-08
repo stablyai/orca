@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Plus } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 
 function AddReferenceAction({
@@ -9,12 +9,13 @@ function AddReferenceAction({
 }: {
   onClick?: (event: React.MouseEvent) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!onClick) {
     return null
   }
   return (
     <MetadataActionIcon
-      label={translate('workspace.links.addReference', 'Add reference')}
+      label={t('workspace.links.addReference', 'Add reference')}
       onClick={onClick}
     >
       <Plus className="size-3" />

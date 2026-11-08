@@ -1,6 +1,6 @@
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalTabColdParkCandidate } from './terminal-hidden-view-parking'
-import type { TerminalTabActivationOrder } from '../../terminal-tab-activation-order'
+import type { TerminalTabActivationOrder } from './terminal-tab-activation-order'
 
 export function buildTerminalTabColdParkCandidates(args: {
   terminalTabs: readonly TerminalTab[]

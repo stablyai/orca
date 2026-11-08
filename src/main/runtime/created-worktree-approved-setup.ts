@@ -42,7 +42,7 @@ export async function runApprovedCreatedWorktreeSetup(
     return { status: 'not_configured' }
   }
   const yamlHooks = loadHooks(worktree.path)
-  const mismatch = checkCreatedWorktreeSetupTrust(repo, yamlHooks, 'run', approvedSetupHash)
+  const mismatch = checkCreatedWorktreeSetupTrust(repo, yamlHooks, 'run', { approvedSetupHash })
   if (mismatch) {
     return { status: 'mismatch', setupTrustMismatch: mismatch }
   }

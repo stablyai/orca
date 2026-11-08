@@ -23,6 +23,7 @@ import {
   savedAutomation,
   savedRun
 } from './automation-test-fixtures'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 
 vi.mock('react-native', () => ({
   View: 'View',
@@ -185,7 +186,9 @@ async function mount(
     throw new Error(`Unexpected request: ${method}`)
   })
   await act(async () => {
-    tree = create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' }))
+    tree = createWithQueryClient(
+      createElement(AutomationManager, { client: port.client, hostId: 'desktop' })
+    )
   })
   return {
     ...port,
@@ -200,7 +203,7 @@ async function mount(
 }
 
 describe('mobile automation navigation and setup', () => {
-  registerAutomationRunHistoryTests({ mount, root, press, setTree })
+  registerAutomationRunHistoryTests({ root, setTree })
   registerAutomationPresentationTests({ inventory, root, press, setTree, mount })
   registerAutomationHostReselectionTests({
     inventory,

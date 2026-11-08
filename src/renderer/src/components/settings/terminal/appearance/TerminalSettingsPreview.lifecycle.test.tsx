@@ -41,6 +41,7 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
+    useContext: () => null,
     useEffect: (effect: () => void | Cleanup) => {
       const cleanup = effect()
       if (typeof cleanup === 'function') {
@@ -113,6 +114,11 @@ vi.mock('@/components/ui/card', () => ({
   CardDescription: 'CardDescription',
   CardHeader: 'CardHeader',
   CardTitle: 'CardTitle'
+}))
+
+vi.mock('@/store/plugins/appearance/plugin-fonts', () => ({
+  pluginFontFamilyWhenLoaded: (fontFamily: string) => fontFamily,
+  usePluginFontReady: () => true
 }))
 
 vi.mock('@/lib/pane-manager/pane-terminal-options', () => ({

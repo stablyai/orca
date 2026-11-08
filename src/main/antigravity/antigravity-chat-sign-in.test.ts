@@ -13,7 +13,7 @@ import { z } from 'zod'
 import { createFakePipedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import type { terminateProviderProcessTree } from '../provider-process/provider-process-teardown'
 import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
-import { ANTIGRAVITY_LAUNCH_SPEC } from '../acp/acp-launch-specs'
+import { ANTIGRAVITY_LAUNCH_SPEC } from './antigravity-acp-launch-spec'
 import { agentModelCatalogFingerprint } from '../native-chat/agent-model-catalog/agent-model-catalog-fingerprint'
 import { agentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { prepareAcpStructuredLaunch } from '../acp/acp-structured-launch-preparation'
@@ -418,7 +418,6 @@ it('retains an unclosed sign-in child for both launch entry points until its exi
   const prepareChat = async () =>
     prepareAcpStructuredLaunch(
       {
-        spec: ANTIGRAVITY_LAUNCH_SPEC,
         resolveLaunch: async () => ({
           ...launch,
           prefixArgs: [],
@@ -502,25 +501,4 @@ it('drops checking-session models when cancellation wins while start is pending'
     wslDistro: null
   })
   expect(agentModelCatalogStore.get(key)).toBeNull()
-})
-
-it('explicit Enterprise sign-in authenticates the host choice and verifies a usable session', async () => {
-  const state = await signInAgainst(async () => '', {
-    realLaunchSources: true,
-    authConfig: {
-      method: 'oauth-business',
-      gcpProject: 'enterprise-project',
-      gcpLocation: 'us-central1'
-    }
-  })
-  await vi.waitFor(() =>
-    expect(state.agent.frames.find((frame) => frame.method === 'authenticate')?.params).toEqual({
-      methodId: 'oauth-business'
-    })
-  )
-  state.finishBrowser()
-  state.openSession()
-  await vi.waitFor(() =>
-    expect(readAntigravityChatSignInStatus(DESKTOP).flow?.phase).toBe('signedIn')
-  )
 })

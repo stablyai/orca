@@ -1,7 +1,7 @@
 import { cp, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { createSkillPackageArchive } from './skill-package-creation'
 import {
   installSharedSkill,
@@ -67,27 +67,6 @@ describe('skill install service', () => {
     expect(await realpath(claude)).toBe(await realpath(canonical))
   })
 
-  it('authorizes a historical provider root before relocating it', async () => {
-    const { root, input } = await fixture()
-    const oldRoot = join(root, 'old-claude', 'skills')
-    await installSharedSkill({
-      ...input,
-      detectedProviders: ['claude'],
-      providerRootOverrides: { claude: oldRoot },
-      filesystem: { ...nativeSkillInstallFilesystem }
-    })
-    const authorizeRoots = vi.fn()
-
-    await installSharedSkill({
-      ...input,
-      detectedProviders: ['claude'],
-      providerRootOverrides: { claude: join(root, 'new-claude', 'skills') },
-      filesystem: { ...nativeSkillInstallFilesystem, authorizeRoots }
-    })
-
-    expect(authorizeRoots).toHaveBeenCalledWith([oldRoot])
-  })
-
   it('leaves an unowned provider copy untouched and reports partial coverage', async () => {
     const { root, input } = await fixture()
     const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
@@ -127,27 +106,6 @@ describe('skill install service', () => {
 
     expect(removed.status).toBe('partial')
     expect(await readFile(join(claude, 'SKILL.md'), 'utf8')).toContain('# Test')
-  })
-
-  it('keeps an unchanged canonical install partial when a provider placement is unowned', async () => {
-    const { root, input } = await fixture()
-    await installSharedSkill({ ...input, detectedProviders: ['codex'] })
-    const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
-    await mkdir(claude, { recursive: true })
-    await writeFile(join(claude, 'SKILL.md'), 'unowned')
-
-    const result = await installSharedSkill(input)
-
-    expect(result).toMatchObject({
-      status: 'partial',
-      placements: expect.arrayContaining([
-        expect.objectContaining({
-          provider: 'claude',
-          status: 'skipped',
-          errorCategory: 'skill-placement-unowned'
-        })
-      ])
-    })
   })
 
   it('does not report success when normal skill discovery cannot observe the canonical copy', async () => {

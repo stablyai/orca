@@ -1,5 +1,7 @@
-import { automationCanonicalLaunchSetup } from './automation-launch-setup'
-import { automationLaunchInputs } from './automation-launch-setup-source'
+import {
+  automationCanonicalLaunchSetup,
+  automationLaunchInputs
+} from './automation-launch-setup-source'
 import type { Automation } from './automations-types'
 import {
   EXTRA_AGENT_ARGS_REQUIRE_FRESH_SESSION,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, type MutableRefObject } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { useAppStore } from '@/store'
 import type { DiffContent } from './editor-panel-content-types'
 import {

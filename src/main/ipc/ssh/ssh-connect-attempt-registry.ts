@@ -13,6 +13,15 @@ export const credentialRequestedForTarget = new Set<string>()
 export type ConnectAttempt = {
   authority: DirectSshAuthority
   promise: Promise<SshConnectionState>
+  /** A retry no user asked for, while `active`: no setup progress, and refusal keeps the host. */
+  quiet?: QuietConnect
+}
+
+/** A user's connect joining the attempt clears `active`, making it an ordinary connect. */
+export type QuietConnect = {
+  active: boolean
+  /** The attempt rotated its authority only once its move succeeded. */
+  rotated: (authority: DirectSshAuthority) => void
 }
 
 export const connectInFlight = new Map<string, ConnectAttempt>()

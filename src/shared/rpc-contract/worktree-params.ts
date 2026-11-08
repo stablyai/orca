@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from '../execution-host'
 import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../automation-workspace-provenance'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
@@ -107,6 +107,13 @@ export const WorktreeSelector = z.object({
     .pipe(z.string().min(1, 'Missing worktree selector'))
 })
 
+/** Opt-in: path: and name: also match folder workspaces. Absent keeps older clients' repo-only meaning. */
+export const MatchFolderWorkspaces = z.literal(true).optional()
+
+export const WorktreeShow = WorktreeSelector.extend({
+  matchFolderWorkspaces: MatchFolderWorkspaces
+})
+
 export const WorktreeRunApprovedSetup = WorktreeSelector.extend({
   approvedSetupHash: z.string().min(1).max(128)
 })
@@ -201,6 +208,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   diffCommentsBase: z.array(DiffCommentSchema).optional().catch(undefined),
   mobileDiffReview: MobileDiffReviewSchema.optional().catch(undefined),
   parentWorktree: OptionalString,
+  matchFolderWorkspaces: MatchFolderWorkspaces,
   /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
   crossStoreParent: CrossStoreParentRefSchema.optional(),
   noParent: OptionalBoolean

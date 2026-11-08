@@ -1,11 +1,11 @@
 import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
-import { waitForTerminalReplayWritesParsed } from '../../replay-guard'
+import { waitForTerminalReplayWritesParsed } from '../../snapshots/replay-guard'
 import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { enforceTerminalCurrentScrollIntent } from '@/lib/pane-manager/terminal-scroll-intent'
 import {
   MAX_DEFERRED_REATTACH_LIVE_CHARS,
   DeferredReattachLiveDataQueue
-} from '../../deferred-reattach-live-data-queue'
+} from './deferred-reattach-live-data-queue'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindReattachLiveDataDeferral(session: ConnectPanePtySession): void {

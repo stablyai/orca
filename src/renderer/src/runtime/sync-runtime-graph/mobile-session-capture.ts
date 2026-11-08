@@ -6,7 +6,7 @@ import { EMPTY_NARROWED_BY_KEY, jsonContentEquals } from './graph-state'
 import {
   findRegisteredTerminalTab,
   type RegisteredTerminalTab
-} from '../mounted-terminal-tab-registry'
+} from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export function narrowRecordByKeys<T>(

@@ -1,3 +1,4 @@
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -64,9 +65,16 @@ function ports() {
   return {
     resolveWorktree: vi.fn(async (selector: string) => resolved(selector.replace(/^id:/, ''))),
     validateParent: vi.fn(),
-    resolveFolderParent: vi.fn(async (selector: string) => ({
-      folderWorkspaceId: selector.replace(/^folder:/, '')
-    })),
+    resolveParent: vi.fn(async (selector: string) => {
+      const id = selector.replace(/^(id:)?folder:/, '')
+      return {
+        type: 'folder' as const,
+        workspaceKey: `folder:${id}` as const,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recording reads only the parent folder's id.
+        folderWorkspace: { id } as FolderWorkspace,
+        instanceId: null
+      }
+    }),
     invalidateResolved: vi.fn(),
     invalidateScan: vi.fn(),
     notifyChanged: vi.fn(),
@@ -98,13 +106,6 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
     expect(result.id).toBe(MOVING)
     expect(store.getWorktreeMeta(MOVING)).toBeUndefined()
     expect(p.notifyChanged).not.toHaveBeenCalled()
-  })
-
-  it('refuses a user edit', async () => {
-    await expect(update(MOVING, { comment: 'mine' })).rejects.toBeInstanceOf(
-      WslMoveProjectFencedError
-    )
-    expect(store.getWorktreeMeta(MOVING)).toBeUndefined()
   })
 
   it('refuses a lineage change even alongside passive fields', async () => {

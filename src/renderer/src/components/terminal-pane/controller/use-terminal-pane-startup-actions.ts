@@ -11,7 +11,7 @@ import { useTerminalPaneStoreActions } from './use-terminal-pane-store-actions'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
 import type { MacOptionAsAlt } from '../input/keyboard/terminal-option-shortcut-policy'
 import { useSystemPrefersDark } from '../../../hooks/theme/use-system-prefers-dark'
-import { useNotificationDispatch } from '../use-notification-dispatch'
+import { useNotificationDispatch } from '../notifications/use-notification-dispatch'
 import type { TerminalPaneStoreController } from './use-terminal-pane-store-bindings'
 
 export function useTerminalPaneStartupActions(controller: TerminalPaneStoreController) {

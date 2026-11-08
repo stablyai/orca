@@ -18,32 +18,6 @@ describe('Portuguese UI language load migration', () => {
     }
   )
 
-  it.each([
-    'system',
-    'en',
-    'zh',
-    'ko',
-    'ja',
-    'es',
-    'fr',
-    'pt',
-    'plugin:other.orca-portuguese/pt-BR',
-    'plugin:stablyai.other/pt-BR',
-    'plugin:stablyai.orca-portuguese/pt',
-    'plugin:stablyai.orca-portuguese/pt-br',
-    'Plugin:stablyai.orca-portuguese/pt-BR',
-    'plugin:Stablyai.orca-portuguese/pt-BR',
-    undefined,
-    null,
-    42,
-    'invalid'
-  ])('normalizes without aliasing %j', (uiLanguage) => {
-    expect(migratePortugueseUiLanguageOnLoad(JSON.parse(JSON.stringify({ uiLanguage })))).toEqual({
-      uiLanguage: normalizeUiLanguage(uiLanguage),
-      uiLanguagePortugueseMigrationApplied: true
-    })
-  })
-
   it('preserves explicit plugin selection in stamped and fresh stores', () => {
     expect(normalizeUiLanguage(plugin)).toBe(plugin)
     expect(

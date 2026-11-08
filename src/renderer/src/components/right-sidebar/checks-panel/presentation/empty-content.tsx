@@ -11,7 +11,7 @@ import {
 import { openChecksPanelHostedReviewUrl } from '../review-actions/checks-panel-hosted-review-click-routing'
 import { isRateLimitRefresh } from '../checks-panel-review-state-model'
 import { isMacPlatform } from '../../../terminal-pane/links/terminal-link-open-hints'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
@@ -22,6 +22,8 @@ export function ChecksPanelEmptyContent({
 }: {
   model: ChecksPanelEmptyContentModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   // Tick only for GitHub retry timing; idle/folder composers must not rerender every second.
   const now = useNow(
     1000,
@@ -101,13 +103,10 @@ export function ChecksPanelEmptyContent({
     return (
       <div className="px-4 py-6">
         <div className="text-sm font-medium text-foreground">
-          {translate(
-            'auto.components.right.sidebar.ChecksPanel.a4ef4e0832',
-            'No workspace selected'
-          )}
+          {t('auto.components.right.sidebar.ChecksPanel.a4ef4e0832', 'No workspace selected')}
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.ChecksPanel.b5dd73a105',
             'Select a workspace to view checks'
           )}
@@ -119,10 +118,10 @@ export function ChecksPanelEmptyContent({
     return (
       <div className="px-4 py-6">
         <div className="text-sm font-medium text-foreground">
-          {translate('auto.components.right.sidebar.ChecksPanel.976cefd02f', 'Checks unavailable')}
+          {t('auto.components.right.sidebar.ChecksPanel.976cefd02f', 'Checks unavailable')}
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.ChecksPanel.dda5924a40',
             'Checks require a Git branch and hosted review context'
           )}
@@ -137,17 +136,17 @@ export function ChecksPanelEmptyContent({
     return (
       <div className="px-4 py-6">
         <div className="text-sm font-medium text-foreground">
-          {translate('checksPanel.unlinked.title', 'Pull request unlinked')}
+          {t('checksPanel.unlinked.title', 'Pull request unlinked')}
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'checksPanel.unlinked.description',
             'PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.',
             { number: suppressedGitHubPR }
           )}
         </div>
         <Button size="xs" className="mt-3" onClick={handleLinkSuppressedPullRequest}>
-          {translate('checksPanel.unlinked.relink', 'Link PR #{{number}}', {
+          {t('checksPanel.unlinked.relink', 'Link PR #{{number}}', {
             number: suppressedGitHubPR
           })}
         </Button>
@@ -158,10 +157,10 @@ export function ChecksPanelEmptyContent({
   if (!activeReview) {
     // Detached HEAD during Git operations does not mean the original branch lost its PR.
     const operationInProgress = conflictOperation !== 'unknown'
-    const operationLabel = checksPanelOperationLabel(conflictOperation)
+    const operationLabel = checksPanelOperationLabel(conflictOperation, t)
     const emptyReviewIsGitLab =
       linkedGitLabMR !== null || hostedReviewCreation?.provider === 'gitlab'
-    const emptyReviewCopy = localizedHostedReviewCopy(emptyReviewIsGitLab ? 'gitlab' : 'github')
+    const emptyReviewCopy = localizedHostedReviewCopy(emptyReviewIsGitLab ? 'gitlab' : 'github', t)
     const canPushCreate = hostedReviewCreation?.blockedReason === 'needs_push'
     const shouldPushBeforeCreateReview = createPrPushFirst || canPushCreate
     const canPublishBranch =
@@ -192,23 +191,26 @@ export function ChecksPanelEmptyContent({
         : gitStatusProbeErrorContextKey === panelContextKey
           ? 'error'
           : 'loading'
-    const reviewState = getChecksPanelReviewState({
-      operationLabel,
-      reviewLabel: emptyReviewCopy.reviewLabel,
-      reviewShortLabel: emptyReviewCopy.shortLabel,
-      providerName: hostedReviewCreateCopy.providerName,
-      isGitHubProvider: hostedReviewCreateProvider === 'github',
-      reviewLookup: checksPanelReviewLookup,
-      openReviewUrl: checksPanelReviewLookupResult.openReviewUrl,
-      eligibilityBlockedReason: hostedReviewCreation?.blockedReason,
-      // Preserved-composer mode uses confirmed readiness rather than the live create gate.
-      confirmedReadiness: confirmedReadiness.confirmed,
-      confirmedNeedsPush: confirmedReadiness.needsPush,
-      refresh: emptyRefreshInput,
-      gitStatusPhase: emptyGitStatusPhase,
-      hasUpstream: publishActionRemoteStatus?.hasUpstream,
-      hasCurrentBranch: Boolean(branch)
-    })
+    const reviewState = getChecksPanelReviewState(
+      {
+        operationLabel,
+        reviewLabel: emptyReviewCopy.reviewLabel,
+        reviewShortLabel: emptyReviewCopy.shortLabel,
+        providerName: hostedReviewCreateCopy.providerName,
+        isGitHubProvider: hostedReviewCreateProvider === 'github',
+        reviewLookup: checksPanelReviewLookup,
+        openReviewUrl: checksPanelReviewLookupResult.openReviewUrl,
+        eligibilityBlockedReason: hostedReviewCreation?.blockedReason,
+        // Preserved-composer mode uses confirmed readiness rather than the live create gate.
+        confirmedReadiness: confirmedReadiness.confirmed,
+        confirmedNeedsPush: confirmedReadiness.needsPush,
+        refresh: emptyRefreshInput,
+        gitStatusPhase: emptyGitStatusPhase,
+        hasUpstream: publishActionRemoteStatus?.hasUpstream,
+        hasCurrentBranch: Boolean(branch)
+      },
+      t
+    )
     // Classified GitHub states carry the next step (sign in, or wait for the limit), so they win.
     const refreshFailure =
       emptyRefreshInput?.status === 'error' || isRateLimitRefresh(emptyRefreshInput)
@@ -216,16 +218,16 @@ export function ChecksPanelEmptyContent({
         : manualRefreshError
     const emptyStateCopy = refreshFailure
       ? {
-          title: translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed'),
+          title: t('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed'),
           description: refreshFailure
         }
       : { title: reviewState.title, description: reviewState.description }
     const reviewStateAutoRetryText =
       reviewState.autoRetryAt !== undefined && reviewState.autoRetryAt > now
-        ? translate(
+        ? t(
             'auto.components.right.sidebar.ChecksPanel.review.auto_retry',
             'Orca will retry at {{time}}.',
-            { time: new Date(reviewState.autoRetryAt).toLocaleTimeString(getIntlLocale()) }
+            { time: new Date(reviewState.autoRetryAt).toLocaleTimeString(intlLocale) }
           )
         : null
     const reviewRecoveryRetryDisabled =
@@ -301,16 +303,14 @@ export function ChecksPanelEmptyContent({
               primaryAction={{
                 disabled: isCreatingPr || isPublishingBranch || isRemoteOperationActive,
                 title: shouldPushBeforeCreateReview
-                  ? translate(
+                  ? t(
                       'auto.components.right.sidebar.ChecksPanel.98f4c37b33',
                       'Push & Create {{value0}}',
                       { value0: emptyReviewCopy.shortLabel }
                     )
-                  : translate(
-                      'auto.components.right.sidebar.ChecksPanel.889cdfba04',
-                      'Create {{value0}}',
-                      { value0: emptyReviewCopy.shortLabel }
-                    )
+                  : t('auto.components.right.sidebar.ChecksPanel.889cdfba04', 'Create {{value0}}', {
+                      value0: emptyReviewCopy.shortLabel
+                    })
               }}
               onGenerate={() => void handleGeneratePullRequestFields()}
               onCancelGenerate={handleCancelGeneratePullRequestFields}
@@ -327,11 +327,8 @@ export function ChecksPanelEmptyContent({
                 onClick={handlePublishBranch}
               >
                 {isPublishingBranch
-                  ? translate('auto.components.right.sidebar.ChecksPanel.fdb27637f2', 'Publishing…')
-                  : translate(
-                      'auto.components.right.sidebar.ChecksPanel.6633c7a1fb',
-                      'Publish Branch'
-                    )}
+                  ? t('auto.components.right.sidebar.ChecksPanel.fdb27637f2', 'Publishing…')
+                  : t('auto.components.right.sidebar.ChecksPanel.6633c7a1fb', 'Publish Branch')}
               </Button>
             )}
             {reviewShowSyncBranch && (
@@ -341,11 +338,8 @@ export function ChecksPanelEmptyContent({
                 onClick={() => void handleSyncBranch()}
               >
                 {isSyncingBranch
-                  ? translate('auto.components.right.sidebar.ChecksPanel.sync.pending', 'Syncing…')
-                  : translate(
-                      'auto.components.right.sidebar.ChecksPanel.sync.branch',
-                      'Sync Branch'
-                    )}
+                  ? t('auto.components.right.sidebar.ChecksPanel.sync.pending', 'Syncing…')
+                  : t('auto.components.right.sidebar.ChecksPanel.sync.branch', 'Sync Branch')}
               </Button>
             )}
             {reviewShowOpenReview && reviewState.openReviewUrl ? (
@@ -362,10 +356,7 @@ export function ChecksPanelEmptyContent({
                   })
                 }
               >
-                {translate(
-                  'auto.components.right.sidebar.ChecksPanel.review.open_review',
-                  'Open Review'
-                )}
+                {t('auto.components.right.sidebar.ChecksPanel.review.open_review', 'Open Review')}
               </Button>
             ) : null}
             {reviewShowRetryOrRefresh ? (
@@ -389,10 +380,10 @@ export function ChecksPanelEmptyContent({
                 }}
               >
                 {emptyRefreshing
-                  ? translate('auto.components.right.sidebar.ChecksPanel.71026ca2cb', 'Refreshing…')
+                  ? t('auto.components.right.sidebar.ChecksPanel.71026ca2cb', 'Refreshing…')
                   : reviewRecoveryLabelIsRefresh
-                    ? translate('auto.components.right.sidebar.ChecksPanel.7f4489f370', 'Refresh')
-                    : translate('auto.components.right.sidebar.ChecksPanel.review.retry', 'Retry')}
+                    ? t('auto.components.right.sidebar.ChecksPanel.7f4489f370', 'Refresh')
+                    : t('auto.components.right.sidebar.ChecksPanel.review.retry', 'Retry')}
               </Button>
             ) : null}
           </div>

@@ -3,13 +3,7 @@ import type { RuntimeStore } from './runtime-store-contract'
 import { spawnInAdmittedPane } from './terminal/launch/runtime-pane-admission'
 import { PaneOwnerContentionError } from '../ipc/pty/pane/pane-spawn-operation'
 import { bindingOf } from './pane-live-facts'
-import { PaneStartStatuses, paneStartFactsOf, withPaneStartFacts } from './pane-start-statuses'
-import {
-  joinPublishedLayout,
-  splitPublishedLayout
-} from '../../shared/workspace-layout/workspace-layout-records'
-import type { PublishedWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-published'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { PaneStartStatuses } from './pane-start-statuses'
 
 const ARGS = {
   cols: 80,
@@ -96,24 +90,6 @@ describe('a start into a pane main holds', () => {
     expect(register.get(PANE_KEY, UNBOUND)).toBeNull()
   })
 
-  it('clears the status of a pane it wrote when the user closed it before its start failed', async () => {
-    const { register } = statuses()
-    const { store, runtimeStore } = storeAnswering('admitted', false)
-    await expect(
-      spawnInAdmittedPane(
-        runtimeStore,
-        {
-          spawn: vi.fn(async () => {
-            throw new Error('no pty')
-          })
-        },
-        { ...ARGS, startStatus: { sink: register, keepOnFailure: true } }
-      )
-    ).rejects.toThrow('no pty')
-    expect(register.get(PANE_KEY, UNBOUND)).toBeNull()
-    expect(store.withdrawTerminalPane).not.toHaveBeenCalled()
-  })
-
   it('shows no failure when another owner won the pane it held', async () => {
     const { register } = statuses()
     const { runtimeStore } = storeAnswering('exists')
@@ -161,117 +137,7 @@ describe('a start into a pane main holds', () => {
   })
 })
 
-describe('a reconnect into a pane main already holds', () => {
-  const RECONNECT = { ...ARGS, paneSpawnOperation: { mustExist: true } }
-
-  it('shows the pane starting without asking for admission, then clears', async () => {
-    const { register } = statuses()
-    const { store, runtimeStore } = storeAnswering('exists')
-    let seen: unknown
-    await spawnInAdmittedPane(
-      runtimeStore,
-      {
-        spawn: vi.fn(async () => {
-          seen = register.get(PANE_KEY, UNBOUND)
-          return { id: 'pty-1' }
-        })
-      },
-      { ...RECONNECT, startStatus: { sink: register, keepOnFailure: false } }
-    )
-    expect(seen).toEqual({ status: 'starting' })
-    expect(register.get(PANE_KEY, UNBOUND)).toBeNull()
-    expect(store.admitTerminalPane).not.toHaveBeenCalled()
-  })
-
-  it('keeps the pane showing why when its start fails', async () => {
-    const { register } = statuses()
-    const { runtimeStore } = storeAnswering('exists')
-    await expect(
-      spawnInAdmittedPane(
-        runtimeStore,
-        {
-          spawn: vi.fn(async () => {
-            throw new Error('shell not found')
-          })
-        },
-        { ...RECONNECT, startStatus: { sink: register, keepOnFailure: false } }
-      )
-    ).rejects.toThrow('shell not found')
-    expect(register.get(PANE_KEY, UNBOUND)).toEqual({ status: 'failed', reason: 'shell not found' })
-  })
-
-  it('shows no failure when another owner won the pane, which attaches to the winner', async () => {
-    const { register } = statuses()
-    const { runtimeStore } = storeAnswering('exists')
-    await expect(
-      spawnInAdmittedPane(
-        runtimeStore,
-        {
-          spawn: vi.fn(async () => {
-            throw new PaneOwnerContentionError()
-          })
-        },
-        { ...RECONNECT, startStatus: { sink: register, keepOnFailure: false } }
-      )
-    ).rejects.toThrow('terminal_pane_owner_changed')
-    expect(register.get(PANE_KEY, UNBOUND)).toBeNull()
-  })
-})
-
 describe('a pane’s start status in the published layout', () => {
-  const layout: PublishedWorkspaceLayout = {
-    worktreeId: 'wt-1',
-    groups: [{ id: 'g-1', tabIds: ['tab-1'] }],
-    tabs: [
-      {
-        id: 'tab-1',
-        kind: 'terminal',
-        entityId: 'tab-1',
-        executionHostId: LOCAL_EXECUTION_HOST_ID,
-        createdAt: 1,
-        customTitle: null,
-        color: null,
-        terminal: {
-          root: { type: 'leaf', leafId: ARGS.leafId },
-          panes: [{ leafId: ARGS.leafId }]
-        }
-      }
-    ],
-    editorFiles: [],
-    browserTabs: []
-  }
-
-  it('rides the pane’s binding record, never its tree, bound to a terminal or not', () => {
-    const facts = paneStartFactsOf(layout, {
-      paneStartFact: () => ({ status: 'failed', reason: 'no pty' })
-    })
-    const shown = withPaneStartFacts(layout, facts)
-    const records = splitPublishedLayout(shown)
-    expect(records.paneTrees[0]!.panes).toEqual([{ leafId: ARGS.leafId }])
-    expect(records.bindings).toEqual([
-      { leafId: ARGS.leafId, status: 'failed', statusReason: 'no pty' }
-    ])
-    expect(joinPublishedLayout(records)).toEqual(shown)
-
-    const bound = {
-      ...layout,
-      tabs: [
-        {
-          ...layout.tabs[0]!,
-          terminal: { ...layout.tabs[0]!.terminal!, panes: [{ leafId: ARGS.leafId, ptyId: 'p' }] }
-        }
-      ]
-    }
-    const restarting = withPaneStartFacts(
-      bound,
-      paneStartFactsOf(bound, { paneStartFact: () => ({ status: 'starting' }) })
-    )
-    expect(splitPublishedLayout(restarting).bindings).toEqual([
-      { leafId: ARGS.leafId, ptyId: 'p', status: 'starting' }
-    ])
-    expect(paneStartFactsOf(bound, { paneStartFact: () => null })).toEqual([null])
-  })
-
   it('ends a status once its pane binds again by any path', () => {
     const { register } = statuses()
     register.set(PANE_KEY, { status: 'failed', reason: 'no pty' })

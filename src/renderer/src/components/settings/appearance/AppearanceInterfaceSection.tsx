@@ -24,7 +24,7 @@ import {
 } from './appearance-search'
 import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
 import { SHOW_UI_LANGUAGE_SETTING, UI_LANGUAGE_CHOICES } from '@/i18n/supported-languages'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { UiLanguage } from '../../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
@@ -56,6 +56,7 @@ export function AppearanceInterfaceSection({
   onRequestFontSuggestions,
   forceVisiblePrimary = false
 }: AppearanceInterfaceSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const iconThemes = useIconThemePickerLabels()
   const pluginIconThemes = iconThemes.themes
@@ -63,39 +64,33 @@ export function AppearanceInterfaceSection({
   const themeSlots = [
     {
       base: 'light' as const,
-      title: translate(
-        'auto.components.settings.AppearanceInterfaceSection.lightTheme',
-        'Light theme'
-      )
+      title: t('auto.components.settings.AppearanceInterfaceSection.lightTheme', 'Light theme')
     },
     {
       base: 'dark' as const,
-      title: translate(
-        'auto.components.settings.AppearanceInterfaceSection.darkTheme',
-        'Dark theme'
-      )
+      title: t('auto.components.settings.AppearanceInterfaceSection.darkTheme', 'Dark theme')
     }
   ]
   const editorThemeEntry = getCodeEditorThemeEntries()[0]
   const editorThemeSlots = [
     {
       base: 'light' as const,
-      title: translate('settings.appearance.editorTheme.light', 'Light editor theme'),
-      description: translate(
+      title: t('settings.appearance.editorTheme.light', 'Light editor theme'),
+      description: t(
         'settings.appearance.editorTheme.lightDescription',
         'Code editor, diff and notebook colors while the app is light.'
       )
     },
     {
       base: 'dark' as const,
-      title: translate('settings.appearance.editorTheme.dark', 'Dark editor theme'),
-      description: translate(
+      title: t('settings.appearance.editorTheme.dark', 'Dark editor theme'),
+      description: t(
         'settings.appearance.editorTheme.darkDescription',
         'Code editor, diff and notebook colors while the app is dark.'
       )
     }
   ]
-  const iconThemeTitle = translate(
+  const iconThemeTitle = t(
     'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
     'Icon theme'
   )
@@ -106,7 +101,7 @@ export function AppearanceInterfaceSection({
   const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
   const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
-  const themeLabel = translate('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
+  const themeLabel = t('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
@@ -118,7 +113,7 @@ export function AppearanceInterfaceSection({
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
-  const languageTitle = translate('settings.appearance.language.title', 'Language')
+  const languageTitle = t('settings.appearance.language.title', 'Language')
 
   return (
     <div className="divide-y divide-border/40">
@@ -145,7 +140,7 @@ export function AppearanceInterfaceSection({
         <SearchableSetting
           key={slot.base}
           title={slot.title}
-          description={translate(
+          description={t(
             'auto.components.settings.AppearanceInterfaceSection.themeSlot.description',
             'App colors for this mode.'
           )}
@@ -156,7 +151,9 @@ export function AppearanceInterfaceSection({
             slot.base,
             ...translateSearchKeyword(
               'auto.components.settings.appearance.search.matchTerminal',
-              'match terminal'
+              'match terminal',
+              undefined,
+              t
             )
           ]}
           forceVisible={forceVisiblePrimary}
@@ -201,7 +198,7 @@ export function AppearanceInterfaceSection({
       {pluginIconThemes.length > 0 ? (
         <SearchableSetting
           title={iconThemeTitle}
-          description={translate(
+          description={t(
             'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.description',
             'File and folder icons from an enabled plugin.'
           )}
@@ -223,7 +220,7 @@ export function AppearanceInterfaceSection({
                       pluginIconThemes.find((theme) => theme.id === value)?.id ?? null
                   })
                 }
-                searchPlaceholder={translate(
+                searchPlaceholder={t(
                   'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.search',
                   'Search icon themes…'
                 )}
@@ -281,19 +278,19 @@ export function AppearanceInterfaceSection({
       ) : null}
 
       <SearchableSetting
-        title={translate('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
+        title={t('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
         description={zoomEntry?.description}
         keywords={zoomEntry?.keywords ?? ['zoom', 'scale', 'shortcut']}
         forceVisible={forceVisiblePrimary}
       >
         <SettingsRow
-          label={translate('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
+          label={t('auto.components.settings.AppearancePane.5e6d7aba8d', 'UI Zoom')}
           // Explain the shortcut and terminal exception; the zoom buttons already explain scaling.
           description={
             <>
               <ShortcutHintList combos={zoomInKeyCombos} /> /{' '}
               <ShortcutHintList combos={zoomOutKeyCombos} />{' '}
-              {translate(
+              {t(
                 'auto.components.settings.AppearancePane.ef89200c1f',
                 'when not in a terminal pane.'
               )}
@@ -304,13 +301,13 @@ export function AppearanceInterfaceSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={translate('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
+        title={t('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
         description={typographyEntry?.description}
         keywords={typographyEntry?.keywords ?? ['font', 'typeface', 'typography']}
         forceVisible={forceVisiblePrimary}
       >
         <SettingsRow
-          label={translate('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
+          label={t('auto.components.settings.AppearancePane.102d6b5f9b', 'IDE Font')}
           control={
             <FontAutocomplete
               value={settings.appFontFamily}
@@ -329,18 +326,12 @@ export function AppearanceInterfaceSection({
         <AppearanceAdvancedDisclosure showTopBorder={false}>
           <div className="divide-y divide-border/40">
             <SearchableSetting
-              title={translate(
-                'auto.components.settings.AppearancePane.9868f39007',
-                'Titlebar App Name'
-              )}
+              title={t('auto.components.settings.AppearancePane.9868f39007', 'Titlebar App Name')}
               description={titlebarEntry?.description}
               keywords={titlebarEntry?.keywords ?? ['titlebar', 'orca', 'app', 'name']}
             >
               <SettingsSwitchRow
-                label={translate(
-                  'auto.components.settings.AppearancePane.9868f39007',
-                  'Titlebar App Name'
-                )}
+                label={t('auto.components.settings.AppearancePane.9868f39007', 'Titlebar App Name')}
                 checked={settings.showTitlebarAppName}
                 onChange={() =>
                   updateSettings({ showTitlebarAppName: !settings.showTitlebarAppName })
@@ -356,7 +347,7 @@ export function AppearanceInterfaceSection({
 
             {isDesktopWindows ? (
               <SearchableSetting
-                title={translate(
+                title={t(
                   'auto.components.settings.AppearancePane.2edf606c46',
                   'Minimize to Tray on Close'
                 )}
@@ -364,12 +355,12 @@ export function AppearanceInterfaceSection({
                 keywords={systemTrayEntry?.keywords ?? ['tray', 'minimize', 'close']}
               >
                 <SettingsSwitchRow
-                  label={translate(
+                  label={t(
                     'auto.components.settings.AppearancePane.2edf606c46',
                     'Minimize to Tray on Close'
                   )}
                   // Explain the non-obvious platform restriction and keep-running consequence.
-                  description={translate(
+                  description={t(
                     'auto.components.settings.AppearancePane.b707773a0d',
                     'When enabled, closing the window keeps Orca running in the system tray instead of quitting.'
                   )}
@@ -383,14 +374,14 @@ export function AppearanceInterfaceSection({
 
             {isDesktopMac ? (
               <SearchableSetting
-                title={translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
+                title={t('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
                 description={menuBarIconEntry?.description}
                 keywords={menuBarIconEntry?.keywords ?? ['menu bar', 'status item', 'activity']}
               >
                 <SettingsSwitchRow
-                  label={translate('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
+                  label={t('settings.appearance.menuBarIcon.title', 'Show Menu Bar Icon')}
                   // Hiding the status item preserves Dock activation and close-keeps-running behavior.
-                  description={translate(
+                  description={t(
                     'settings.appearance.menuBarIcon.description',
                     'Keep an Orca shortcut and activity indicator in the macOS menu bar.'
                   )}

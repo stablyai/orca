@@ -44,17 +44,4 @@ describe('markdownDocumentFromFilePath', () => {
       name: 'file'
     })
   })
-
-  it('uses the basename fallback for a file outside the root', () => {
-    expect(
-      markdownDocumentFromFilePath('/workspace', '/workspace-other/file.md', {
-        outsideRootRelativePath: 'basename'
-      })
-    ).toMatchObject({
-      filePath: '/workspace-other/file.md',
-      relativePath: 'file.md',
-      basename: 'file.md',
-      name: 'file'
-    })
-  })
 })

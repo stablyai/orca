@@ -2,15 +2,19 @@ import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { getSetupTrustContent } from '../../../shared/orca-hook-setup-config'
-import { canUseRepoWideTrust } from '../../../shared/orca-hook-trust-entries'
+import {
+  canUseRepoWideTrust,
+  isOrcaHookContentApproved
+} from '../../../shared/orca-hook-trust-entries'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
 import { getVmRecipeTrustContent } from './vm-recipe-trust-content'
+import { getIssueCommandTrustContent, isUserOwnedIssueCommand } from './issue-command-trust-content'
 import {
   checkRuntimeHooks,
   readRuntimeIssueCommand,
   type IssueCommandReadResult
-} from '@/runtime/runtime-hooks-client'
-import { MODAL_DISMISSED_KEY } from '@/store/slices/modal-slot-dismissal'
+} from '@/runtime/repo-hooks/runtime-hooks-client'
+import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
 import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
@@ -78,7 +82,7 @@ async function confirmScriptContent(
   hostId?: ExecutionHostId,
   isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK,
   signal?: AbortSignal,
-  createdBranchReview = false
+  skippedSetupReview?: SkippedSetupReview
 ): Promise<HookTrustApproval> {
   if (isCancelled() || signal?.aborted) {
     return SKIP
@@ -93,7 +97,10 @@ async function confirmScriptContent(
   }
   const approved: HookTrustApproval = { decision: 'run', approvedContentHash: contentHash }
   const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
-  if (!scriptContent || existingHash === contentHash) {
+  if (
+    !scriptContent ||
+    isOrcaHookContentApproved(state.trustedOrcaHooks, repoId, scriptKind, contentHash)
+  ) {
     return approved
   }
 
@@ -127,28 +134,13 @@ async function confirmScriptContent(
       scriptContent,
       contentHash,
       previouslyApproved,
-      ...(createdBranchReview ? { createdBranchReview: true } : {}),
+      ...(skippedSetupReview ? { skippedSetupReview } : {}),
       onResolve: settle,
       // Why: eviction must fail closed without stranding the singleton trust queue.
       [MODAL_DISMISSED_KEY]: () => settle('skip')
     })
   })
   return decision === 'run' ? approved : SKIP
-}
-
-function getIssueCommandTrustContent(result: IssueCommandReadResult): string {
-  if (result.source === 'local') {
-    return (result.localContent ?? '').trim()
-  }
-  if (result.source === 'shared') {
-    return (result.sharedContent ?? '').trim()
-  }
-  return ''
-}
-
-// A committed .orca/issue-command came from the repo, so it needs the same trust as orca.yaml.
-function isUserOwnedIssueCommand(result: IssueCommandReadResult): boolean {
-  return result.source === 'local' && result.localUntracked === true
 }
 
 async function confirmIssueCommandReadResult(
@@ -229,16 +221,19 @@ export async function ensureHooksConfirmed(
   return (await ensureHooksApproved(...args)).decision
 }
 
+/** Which skipped setup the user is reviewing; picks the dialog copy. */
+export type SkippedSetupReview = 'created-branch' | 'automation'
+
 /**
- * Re-prompt with a created worktree's setup content that differs from what was approved.
- * Approving runs it for this workspace only; recording it would replace the primary checkout's
- * approval and re-prompt for that on the next create.
+ * Re-prompt with setup content that a create or automation run skipped because it differs from
+ * what was approved. Approving adds it to the repo's approved setup history.
  */
 export function confirmCreatedWorktreeSetupContent(
   getState: () => AppState,
   repoId: string,
   scriptContent: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  review: SkippedSetupReview = 'created-branch'
 ): Promise<HookTrustApproval> {
   return enqueueTrustPrompt(async () => {
     const approval = await confirmScriptContent(
@@ -249,7 +244,7 @@ export function confirmCreatedWorktreeSetupContent(
       hostId,
       undefined,
       undefined,
-      true
+      review
     )
     // Repo-wide trust approves any content, but the host runs only content it can match.
     return approval.decision === 'run' && approval.approvedContentHash === undefined

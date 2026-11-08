@@ -34,20 +34,46 @@ export async function recordHostGoodPath(hostId: string, path: HostGoodPath): Pr
   }
 }
 
-// iOS gives no SSID without an entitlement, so the local /24 stands in for it. Cellular uses the type
-// alone because carrier addresses churn; so does any network without a Wi-Fi address (Android VPN on cellular).
+// The fingerprint of a network a LAN host can be on (one with a local /24), else null.
+export async function readLocalNetworkFingerprint(): Promise<string | null> {
+  return (await readNetwork())?.local ?? null
+}
+
 async function readNetworkFingerprint(): Promise<string | null> {
+  const network = await readNetwork()
+  return network ? (network.local ?? network.type) : null
+}
+
+type NetworkReading = { type: string; local: string | null } | null
+
+// Paired hosts read in one synchronous nudge fan-out, so share that tick's read; a later caller reads again
+// because a read started before its event can report the network the phone just left.
+let networkRead: Promise<NetworkReading> | null = null
+
+function readNetwork(): Promise<NetworkReading> {
+  if (!networkRead) {
+    networkRead = readNetworkNow()
+    queueMicrotask(() => {
+      networkRead = null
+    })
+  }
+  return networkRead
+}
+
+// iOS gives no SSID without an entitlement, so the local /24 stands in for it. Cellular has no local
+// fingerprint because carrier addresses churn; neither does any network without a Wi-Fi address (Android VPN on cellular).
+async function readNetworkNow(): Promise<NetworkReading> {
   const [state, ip] = await Promise.all([getNetworkStateAsync(), getIpAddressAsync()])
   const type = state.type
   // iOS reports UNKNOWN while a VPN such as Tailscale is up, so it still gets a fingerprint.
   if (!type || type === NetworkStateType.NONE) {
     return null
   }
-  if (type === NetworkStateType.CELLULAR) {
-    return type
-  }
-  const subnet = /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(ip)?.[1]
-  return subnet && ip !== '0.0.0.0' ? `${type}:${subnet}` : type
+  const subnet =
+    type === NetworkStateType.CELLULAR || ip === '0.0.0.0'
+      ? undefined
+      : /^(\d{1,3}\.\d{1,3}\.\d{1,3})\.\d{1,3}$/.exec(ip)?.[1]
+  return { type, local: subnet ? `${type}:${subnet}` : null }
 }
 
 function parseRecord(stored: string | null): HostPathRecord | null {

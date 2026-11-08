@@ -26,7 +26,11 @@ export const queuedCardHoldsImage = (card: Pick<AgentSessionQueuedMessage, 'body
 // Publication arrays are immutable; retain their derived source relation for the sent baseline.
 const relations = new WeakMap<
   object,
-  { ids: ReadonlyMap<string, boolean>; imageIds: ReadonlySet<string> }
+  {
+    ids: ReadonlyMap<string, boolean>
+    imageIds: ReadonlySet<string>
+    fingerprints: ReadonlyMap<string, string>
+  }
 >()
 function sourceIds(
   journal: AgentSessionJournal,
@@ -38,6 +42,7 @@ function sourceIds(
   }
   const ids = new Map<string, boolean>()
   const imageIds = new Set<string>()
+  const fingerprints = new Map<string, string>()
   for (const card of cards) {
     if (!queuedCardHoldsImage(card)) {
       continue
@@ -49,6 +54,10 @@ function sourceIds(
     imageIds.add(card.messageId)
     const id = row?.recovers ?? row?.consumedAs ?? card.messageId
     const send = journal.submission(id)
+    fingerprints.set(id, row.fingerprint)
+    if (!send) {
+      ids.set(id, true)
+    }
     if (
       send &&
       (row?.recovers === id ||
@@ -58,7 +67,7 @@ function sourceIds(
       ids.set(id, send.payloadFingerprint === row.fingerprint)
     }
   }
-  const result = { ids, imageIds }
+  const result = { ids, imageIds, fingerprints }
   relations.set(cards, result)
   return result
 }
@@ -76,6 +85,17 @@ function sourceItem(journal: AgentSessionJournal, id: string): AgentJournalRende
   const key = agentJournalSubmissionKey(id)
   const state = journal.queuedMessages.displayState()
   const source = state.inputs.sources.get(id)
+  const row = journal.queuedMessages.get(id)
+  if (!source && row && !journal.item(key)) {
+    return {
+      itemId: key,
+      revision: 0,
+      body: row.body,
+      sequence: row.queuedAt?.sequence ?? 0,
+      observedAt: 0,
+      turnScope: AGENT_JOURNAL_THREAD_SCOPE
+    }
+  }
   if (source?.kind === 'outcome-admission') {
     const handover = state.inputs.handovers.get(id)
     return (
@@ -178,8 +198,9 @@ export function queuedImageReaderEvent(
   if (!current || event.type !== 'batch') {
     return event
   }
-  const { ids: now, imageIds } = sourceIds(journal, current.queuedMessages)
-  const before = sourceIds(journal, previous?.queuedMessages ?? []).ids
+  const { ids: now, imageIds, fingerprints } = sourceIds(journal, current.queuedMessages)
+  const prior = sourceIds(journal, previous?.queuedMessages ?? [])
+  const before = prior.ids
   if (
     before === now &&
     !event.batch.submissions.some(
@@ -189,7 +210,9 @@ export function queuedImageReaderEvent(
     return event
   }
   const changed = new Set(
-    [...before.keys(), ...now.keys()].filter((id) => before.get(id) !== now.get(id))
+    [...before.keys(), ...now.keys()].filter(
+      (id) => before.get(id) !== now.get(id) || prior.fingerprints.get(id) !== fingerprints.get(id)
+    )
   )
   for (const send of event.batch.submissions) {
     if (
@@ -211,7 +234,10 @@ export function queuedImageReaderEvent(
     const original = submissions.get(id) ?? journal.submission(id)
     const send = original && work ? work.publishedSubmission(original) : original
     const active = now.get(id) === true && send?.dispatchState !== 'accepted'
-    if (!journal.item(key) && (before.get(id) === true) !== active) {
+    if (
+      !journal.item(key) &&
+      ((before.get(id) === true) !== active || prior.fingerprints.get(id) !== fingerprints.get(id))
+    ) {
       const item = active ? sourceItem(journal, id) : null
       if (item) {
         items.set(key, boundedFrameItem(agentJournalItemForWire(item)).item)

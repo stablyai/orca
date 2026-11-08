@@ -7,7 +7,7 @@ import {
 import {
   reconcileMissingSessions,
   type ReconcilableBinding
-} from '../../terminal-dead-session-reconcile'
+} from '../../pty-connection/lifecycle/terminal-dead-session-reconcile'
 import type { UseTerminalPaneLifecycleDeps } from '../../mounting/terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from '../../mounting/use-terminal-pane-lifecycle-refs'
 

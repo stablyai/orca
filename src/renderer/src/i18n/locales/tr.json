@@ -1,5 +1,11 @@
 {
   "agentLaunch": {
+    "connectSsh": "Bu çalışma alanının SSH ana bilgisayarına bağlanıp tekrar deneyin.",
+    "sshUnavailable": "Bu SSH ana bilgisayarında terminalden başlatma kullanılamıyor. Çalışma alanında bir terminal açıp aracıyı orada başlatın.",
+    "reconnectServer": "Bu çalışma alanının Orca sunucusuna yeniden bağlanıp tekrar deneyin.",
+    "updateServer": "Bu çalışma alanının sunucusunda Orca’yı güncelleyip tekrar deneyin.",
+    "checkSettings": "Aracının başlatma ayarlarını kontrol edip tekrar deneyin.",
+    "invalidArgs": "{{value0}} için CLI bağımsız değişkenlerinde kapatılmamış bir tırnak var. Düzeltip yeniden deneyin.",
     "opencode": {
       "updateRequired": "OpenCode bu sürümde seçilen modelle güvenli biçimde başlatılamıyor. OpenCode'u desteklenen bir sürüme güncelleyin veya model seçimini kaldırın.",
       "invalidConfig": "Bu model seçimi OpenCode başlatma yapılandırmasına uygulanamadı. OpenCode başlatma yapılandırmasını kontrol edip yeniden deneyin veya model seçimini kaldırın.",
@@ -510,10 +516,7 @@
         "searchAgents": "ajanlar",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "antigravityDescription": "Antigravity sohbetleri, Orca'nın bu ana makineye indirdiği ve agy CLI'dan ayrı olan bir sunucuyu çalıştırır.",
-        "antigravityNotSignedIn": "Oturum açılmadı. Sohbetler için agy terminal hesabınızdan ayrı bir Antigravity oturumu gerekir.",
-        "antigravityAccount": "Hesap",
-        "antigravitySignInNeeded": "Sohbetler için agy terminal hesabınızdan ayrı bir Antigravity oturumu gerekir."
+        "antigravityAccount": "Hesap"
       },
       "permissionsDescriptionOwnAgents": "Yeni sohbetlerde her ajanın Ayarlar → Ajanlar bölümündeki izni geçerlidir.",
       "launch": {
@@ -858,7 +861,6 @@
       "actionModel": {
         "on": "Açık",
         "off": "Kapalı",
-        "invalidArgs": "{{value0}} için CLI argümanları geçersiz. Bunları Ayarlar → Kaynak kontrolü yapay zekâsı bölümünde düzeltin.",
         "model": "Model",
         "agentDefault": "Ajan varsayılanı",
         "effortDefault": "Varsayılan",
@@ -1183,7 +1185,7 @@
         "insecureOrigin": "Orca bu sayfadan eşleştirmeyi reddetti: sayfa başka bir makinede şifrelenmemiş http kullanıyor, dolayısıyla ağ yolu üzerindeki herhangi biri sayfayı değiştirebilir ve eşleştirme kodunu ele geçirebilir. Web istemcisini https üzerinden, bu bilgisayarda localhost üzerinden veya bir SSH tüneli aracılığıyla açın. Yine de izin vermek için sunucu yöneticisi Orca'yı ORCA_ALLOW_INSECURE_WEB_PAIRING=1 ile yeniden başlatabilir.",
         "deviceDowngraded": "Bu Orca sunucusu artık bu tarayıcının oturum açma anahtarını desteklemiyor (sunucunun sürümü düşürülmüş olabilir). Sunucuyu güncelleyin veya bu tarayıcıyı tekrar eşleştirin.",
         "unauthorized": "Yetkisiz erişim. Bu web istemcisini tekrar eşleştirin.",
-        "unauthorizedNewLink": "Yetkisiz erişim. Yeni bir eşleştirme bağlantısı isteyin."
+        "unauthorizedLinkUsedOrExpired": "Yetkisiz erişim. Bu eşleştirme bağlantısının süresi dolmuş veya bağlantı zaten kullanılmış olabilir. Orca'da yeni bir eşleştirme bağlantısı oluşturup açın."
       }
     },
     "store": {
@@ -1464,9 +1466,7 @@
           "agent": {
             "launch": {
               "027228a06b": "Bu kontroller için bir çalışma alanı bulunamadı.",
-              "fb6c294e85": "Ajan başlatma komutu oluşturulamadı.",
               "03c1d61f83": "Bu kontrollere bağlı çalışma alanı açılamadı.",
-              "822bf52295": "Çalışma alanı başlatma platformu belirlenemedi.",
               "dfb4dd7c00": "Bu kontrollere bağlı çalışma alanı bulunamadı.",
               "9f00d7df0c": "Kontrolleri düzeltme istemi boş. Kaynak Kontrolü AI ayarlarını güncelleyin.",
               "2ebf794906": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",
@@ -1505,8 +1505,8 @@
             "direct": {
               "3de6371df3": "Ajan başlatma komutu oluşturulamadı.",
               "67e103dd60": "Çalışma alanı oluşturuldu ancak etkinleştirilemedi.",
-              "19c7683acf": "Seçilen ajan, oluşturulan çalışma alanında kullanılamıyor.",
-              "8bc45efdbc": "PR head'i belirlenemedi.",
+              "19c7683acf": "Seçilen aracı kullanılamıyor. Çalışma alanının aracı ayarlarını kontrol edin ve tekrar deneyin.",
+              "8bc45efdbc": "Çekme isteği okunamadı. Açabildiğinizden emin olun ve tekrar deneyin.",
               "agent": {
                 "ceeeb509b5": "Ajanın başlaması çok uzun sürdü. Çalışma alanı hazır; ajan boşta olduğunda {{value0}} öğesini yapıştırın."
               }
@@ -1886,13 +1886,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "Hedef çalışma alanı artık kullanılamıyor.",
-        "16a21d6413": "SSH'yi yeniden bağlamak etkileşimli kimlik bilgileri gerektirir.",
-        "386db94f3e": "Hedef proje artık kullanılamıyor.",
-        "3ad7d77f57": "Hedef çalışma alanı, bu otomasyon çalıştırma hedefinden farklı bir sunucuda.",
-        "workspaceHostUnresolved": "Hedef çalışma alanı birden fazla sunucuya yayılıyor, bu yüzden bu çalıştırmanın kullanacağı tek bir sunucu yok."
-      },
       "useComposerState": {
         "b2ead86962": "PR tabanı belirlenemedi.",
         "3db83fc58a": "Bu sunucuda ekler için kullanılabilir bir proje yolu yok.",
@@ -3153,7 +3146,6 @@
         "a2a279b32a": "Kaydetme zaman aşımına uğradı veya başarısız oldu. Kapatmadan önce hataları düzeltin.",
         "46e08bc5c8": "Bu dosyada kaydedilmemiş değişiklikler var.",
         "61ed600d29": "\"{{value0}}\" dosyasında kaydedilmemiş değişiklikler var. Kapatmadan önce kaydetmek ister misiniz?",
-        "e57db40c11": "{{value0}} için başlatma komutu oluşturulamadı.",
         "5b2c1a9e44": "Ajan CLI'sı tespit edilemedi, birini yükleyin veya Ayarlar'dan varsayılan bir ajan seçin.",
         "quitSnapshotSaveFailed": "Çıkış iptal edildi: oturum anlık görüntüsü kaydedilemedi ({{value0}}).",
         "reloadSnapshotSaveFailed": "Yeniden yükleme iptal edildi: oturumun anlık görüntüsü kaydedilemedi ({{value0}})."
@@ -4237,7 +4229,6 @@
           "QuickLaunchButton": {
             "348a04c1ad": "Ajan ayarları…",
             "ec2adf093e": "{{value0}} öğesini yeni bir terminalde başlat",
-            "465e432ef1": "{{value0}} için başlatma komutu oluşturulamadı.",
             "e518f544b1": "Ajan bulunamadı",
             "8dea9b5cdf": "Etkinleştirilmiş ajan yok",
             "terminalListNeedsServerUpdate": "Terminal ajanlarını listelemek için bu sunucudaki Orca'yı güncelleyin",
@@ -6490,14 +6481,11 @@
           "c39c37676a": "Bir grup oluşturun ve bu projeyi içine taşıyın.",
           "6664418e98": "Yeni Proje Grubu",
           "e091caab15": "Proje bulunamadı",
-          "439fa94d53": "Güncelle",
           "579b1a8e61": "Üst Öğeden Kaldır",
           "8d9cd19d09": "Üst Worktree'yi Aç",
           "d35dfeae58": "Gruptan kaldır",
           "76865d827f": "Gruba taşı",
           "503ec0f8e6": "Projeden yeni grup",
-          "3350101edb": "Yolu Kopyala",
-          "copyWorktreeName": "Worktree Adını Kopyala",
           "f4475537d8": "Sil",
           "f5ac91531d": "Projeyi Orca'dan Kaldır",
           "b42391d8bf": "Siliniyor…",
@@ -6515,9 +6503,16 @@
           "workspaceSection": "Çalışma Alanı",
           "primaryDeleteDisabled": "Birincil worktree, silinemez. Bunun yerine projeyi kaldırın.",
           "deleteWorktree": "Worktree'yi Sil",
-          "sleepWithDescendants": "Alt Öğelerle Birlikte Uyut ({{value0}})",
           "sleepWithDescendantsDescription": "Bellek ve CPU'yu boşaltmak için bu çalışma alanındaki ve tüm iç içe alt öğelerindeki etkin panelleri kapatın.",
-          "deleteWithDescendants": "Alt Öğelerle Birlikte Sil…"
+          "sleepThisWorkspace": "Bu Çalışma Alanı",
+          "sleepDescendantsOption": "Alt Öğelerle Birlikte ({{value0}})",
+          "deleteWithDescendants": "Alt Öğelerle Birlikte Sil…",
+          "editDetails": "Ayrıntıları Düzenle…",
+          "copySubmenu": "Kopyala",
+          "copyPathOption": "Yol",
+          "copyNameOption": "Worktree Adı",
+          "lineageSubmenu": "Üst ve Alt Öğeler",
+          "projectGroupSubmenu": "Proje Grubu"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Güncelleme gerekli",
@@ -8352,7 +8347,8 @@
           "diagnosticsCopyFailed": "Tanılama bilgileri kopyalanamadı",
           "5e2c7a1f84": "Telefonunuzda terminal kullanırken Orca, terminali telefon ekranına sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için bildirim çubuğundaki Geri yükle veya Tümünü geri yükle seçeneklerini her zaman kullanabilirsiniz.",
           "codeRefreshesAutomatically": "Kod otomatik olarak yenilenir. Kopyalanan kod en fazla 10 dakika çalışır.",
-          "legacyEncryption": "Eski şifreleme kullanıyor. Bu cihazdaki Orca uygulamasını güncelleyin."
+          "legacyEncryption": "Eski şifreleme kullanıyor. Bu cihazdaki Orca uygulamasını güncelleyin.",
+          "olderPairingMethod": "Eski bir eşleştirme yöntemi kullanıyor. Bu telefondaki Orca uygulamasını güncelleyin."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8759,6 +8755,7 @@
           "6f6d5188ed": "{{value0}} öğesini iptal et",
           "434e4a6af6": "Geçerli bağlantı",
           "df142657a5": "Henüz kullanılmadı",
+          "olderPairingMethod": "Eski bir eşleştirme yöntemi kullanıyor. Bu bağlantıyı kullanan cihazda Orca'yı güncelleyin.",
           "b18d1764ef": "Son kullanım: {{value0}}",
           "linkName": "Bağlantı · {{value0}}",
           "activeLinks": "Etkin bağlantılar",
@@ -11286,7 +11283,11 @@
               "micDefault": "sistem varsayılanı",
               "dictationLanguageTitle": "Dikte dili",
               "dictationLanguageDescription": "Konuşma modeline hangi dili konuştuğunuzu söyleyin.",
-              "dictationLanguageKeyword": "dil"
+              "dictationLanguageKeyword": "dil",
+              "modelUnloadTitle": "Konuşma modelini bellekten kaldır",
+              "modelUnloadDescription": "Yerel konuşma modelinin bellekten ne zaman kaldırılacağını seçin.",
+              "modelUnloadKeyword": "kaldır",
+              "modelMemoryKeyword": "bellek"
             }
           }
         },
@@ -13542,7 +13543,6 @@
           },
           "GitHistoryPanel": {
             "cf7cad58d2": "Henüz commit yok",
-            "781a8bcf7b": "Grafik yükleniyor...",
             "d0fb0f4bf2": "Commit'leri yenile",
             "9f7535d22b": "Ref'ler, tam olarak o commit'i işaret eden branch veya tag adlarıdır. Yalnızca Git'in commit için adlandırılmış bir ref'i olduğu yerlerde görünürler.",
             "9289ba0cb9": "Ref nedir?",
@@ -14312,7 +14312,6 @@
                     },
                     "d481ab22f9": "Kaydedilmiş AI ajanı kullanılamıyor. Başka bir ajan seçmek için Başlatmayı Özelleştir'i kullanın.",
                     "9bbd9077a2": "Etkin AI ajanı yok. Ajanları Ayarlar'dan yapılandırın.",
-                    "5540ff50cc": "Ajan başlatma komutu oluşturulamadı.",
                     "216f762bd7": "Çalışma alanı bağlantısı çözülemedi.",
                     "success": "{{value0}} hatası için bir AI ajanı başlatıldı."
                   }
@@ -14724,6 +14723,7 @@
             "openLog": "Logu Aç",
             "revealLog": "Logu Göster",
             "openWorkingDirectory": "Çalışma Dizinini Aç",
+            "revealArtifactsFolder": "Yapıt Klasörünü Göster",
             "copySessionId": "Oturum Kimliğini Kopyala",
             "copyLogPath": "Log Yolunu Kopyala",
             "messageCount": "{{value0}} mesaj",
@@ -14767,7 +14767,6 @@
             "f8a2c4d1e0": "Gezgin arama modu"
           },
           "GitHistoryCommitFiles": {
-            "a1b2c3d4e5": "Dosyalar yükleniyor…",
             "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok",
             "c3d4e5f6a7": "Tüm değişiklikleri birlikte aç"
           },
@@ -15528,7 +15527,6 @@
             "3f4ca29961": "Yüzen çalışma alanını büyüt",
             "1c79cba25d": "Yüzen çalışma alanını geri yükle",
             "648352c51f": "{{value0}} öğesini yüzen çalışma alanında aç",
-            "82da3701e7": "{{value0}} için başlatma komutu oluşturulamadı.",
             "109870e023": "Büyüt",
             "b5686fee1e": "Geri Yükle"
           }
@@ -17541,7 +17539,10 @@
           "reuseLiveSession": "Etkin oturumu yeniden kullan",
           "freshEachRun": "Her çalıştırmada yeni",
           "precheckEnabled": "Etkin, {{timeout}}",
-          "precheckNone": "Yok"
+          "precheckNone": "Yok",
+          "migrate": "Taşı",
+          "migrateNotice": "{{host}} yeni bir uzak ana bilgisayara yükseltildi. Çalışmaya devam etmesi için bu otomasyonu taşıyın.",
+          "needsMigration": "Taşınması gerekiyor"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "İptal",
@@ -19176,17 +19177,6 @@
           "reviewStatus": "Her worktree'de sorun durumunu, inceleme durumunu ve CI kontrollerini görün",
           "managePullRequests": "Orca'dan çıkmadan pull request'leri okuyun, yorum yapın ve merge edin"
         }
-      },
-      "agyInstall": {
-        "open": "Yükle",
-        "thisDevice": "Bu cihaz",
-        "title": "Antigravity’yi yükle",
-        "description": "Resmî yükleyiciyi çalıştırmak için terminalde Enter’a basın. Bu terminali kapatmak hâlâ çalışan komutları durdurur.",
-        "target": "Yükleme konumu: {{location}}",
-        "terminal": "Antigravity yükleyicisi",
-        "detected": "Antigravity PATH üzerinde algılandı. Yükleyici tamamlandığında terminali kapatın.",
-        "close": "Terminali kapat",
-        "recheck": "Ajanları yeniden kontrol et"
       }
     },
     "jiraIssueAssigneeField": {
@@ -19951,7 +19941,6 @@
       "visualLoading": "Görselleştirme yükleniyor",
       "visualOpenInNewTab": "Yeni sekmede aç",
       "queuedMessages": {
-        "behindReturnedHold": "Bekliyor — önceki bir mesajın ele alınması gerekiyor",
         "steer": "Yönlendir",
         "send": "Gönder",
         "steerHint": "Modeli kesintiye uğratmadan gönder",
@@ -20642,6 +20631,13 @@
           "description": "Konuştuğunuz dil. Otomatik algılama seçiliyse model dili her seferinde kendisi belirler.",
           "title": "Dikte dili",
           "auto": "Otomatik algıla"
+        },
+        "modelUnload": {
+          "title": "Konuşma modelini bellekten kaldır",
+          "description": "Dikteyi bitirdikten sonra yerel modelin bellekte ne kadar kalacağı. Yüklü olduğu sürece dikte hemen başlar; \"Hemen\" belleği boşaltır, bu yüzden her dikte modelin yüklenmesini bekler.",
+          "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz.",
+          "never": "Asla",
+          "immediately": "Hemen"
         }
       }
     },
@@ -21269,6 +21265,29 @@
       "loading": "Alt modül değişiklikleri yükleniyor…",
       "empty": "Alt modülde değişiklik yok",
       "loadFailed": "Alt modül değişiklikleri yüklenemedi"
+    },
+    "branchPicker": {
+      "switch": "Dal değiştir: {{branch}}",
+      "search": "Dallarda ara",
+      "recover": "{{branch}} dalına geç",
+      "create": "{{branch}} dalından {{name}} dalını oluştur",
+      "open": "Çalışma alanını aç",
+      "occupied": "{{path}} konumunda kullanımda",
+      "remote": "uzak",
+      "statusFailed": "Orca bu çalışma kopyasındaki değişiklikleri okuyamadı. Değiştirmeden önce Kaynak Denetimi'ni yenileyin.",
+      "statusUnknown": "Değiştirmeden önce bu çalışma kopyasındaki değişiklikleri okuyun.",
+      "conflict": "Dal değiştirmeden önce {{operation}} işlemini bitirin veya iptal edin.",
+      "dirty_one": "Dal değiştirmeden önce {{count}} değişmiş dosyayı commit edin veya atın.",
+      "dirty_other": "Dal değiştirmeden önce {{count}} değişmiş dosyayı commit edin veya atın.",
+      "agentWorking": "Bu çalışma alanında bir ajan çalışıyor. Bitirdiğinde dal değiştirin veya durduysa sekmesini kapatın.",
+      "listFailed": "Orca yerel dalları listeleyemedi. Seçiciyi yeniden açmayı deneyin.",
+      "discoveryFailed": "Orca uzak dal bulamadı. Yine de yerel dallara geçebilir veya bir dal oluşturabilirsiniz.",
+      "switchFailed": "Orca dal değiştiremedi. Tekrar deneyin.",
+      "switchFailedTitle": "Dal değiştirilemedi",
+      "switchFailedIn": "{{workspace}} içinde dal değiştirilemedi",
+      "switchedIn": "{{workspace}} içinde",
+      "thisComputer": "bu bilgisayar",
+      "updateHost": "Buradan dal değiştirmek için {{host}} üzerindeki Orca'yı güncelleyin."
     }
   },
   "agentsSidebarIntro": {
@@ -21639,7 +21658,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity sohbetleri",
-      "chatDescription": "Sohbetler, yukarıdaki agy hesabınızdan ayrı bir Antigravity oturumu kullanır. Bu cihazda bir kez oturum açın.",
       "chatSignIn": "Oturum aç",
       "chatChangeAccount": "Hesabı değiştir",
       "chatRetry": "Oturum açmayı yeniden dene",
@@ -21652,14 +21670,11 @@
       "chatVerifying": "Oturum açma tamamlanıyor…",
       "chatPasteHelp": "Oturum açtıktan sonra son sayfa yüklenmezse tarayıcınızdan tam adresini kopyalayıp buraya yapıştırın.",
       "chatContinue": "Devam et",
-      "chatSignedInOn": "{{host}} üzerinde oturum açıldı.",
       "chatCancelled": "Oturum açma iptal edildi.",
       "chatExpired": "Oturum açma zaman aşımına uğradı. Yeniden deneyin.",
       "chatFailed": "Oturum açılamadı. Yeniden deneyin.",
-      "chatNotSignedIn": "{{host}} üzerinde oturum açılmamış.",
       "chatOtherClient": "Başka bir istemcide oturum açma işlemi devam ediyor.",
       "chatReadFailed": "{{host}} üzerindeki oturum durumu kontrol edilemedi.",
-      "scope": "{{host}} üzerindeki agy'nin kendi hesabını yönetin.",
       "signIn": "Bu ana makinede agy'yi başlatıp tarayıcıda oturum açma işlemini tamamlayın, ardından mevcut hesabı kaydedin. Farklı bir hesap eklemek için agy'de /logout kullanıp yeniden oturum açın.",
       "docs": "Oturum açma talimatları",
       "retry": "Tekrar dene",
@@ -21690,11 +21705,9 @@
       "personal": "Google hesabı",
       "gcpProject": "Google Cloud projesi",
       "gcpLocation": "Google Cloud konumu",
-      "signInAgainWith": "{{method}} kullanmak için yeniden oturum açın.",
       "settingsIncomplete": "Bir Antigravity hesap türü seçin ve Google Cloud projesini ve konumunu girin.",
       "settingsLoadFailed": "Orca Antigravity oturum açma ayarlarınızı yükleyemedi. Tekrar deneyin.",
       "settingsSaveFailed": "Orca Antigravity oturum açma ayarlarınızı kaydedemedi. Tekrar deneyin.",
-      "signInWith": "{{host}} üzerinde {{method}} ile oturum açar.",
       "lastReading": "{{reading}} · Okunma zamanı: {{time}}",
       "noReading": "Kullanım bilinmiyor: henüz okunmadı"
     },
@@ -23012,6 +23025,7 @@
       "noRunnableHost": "Bu otomasyonun çalışacağı bir sunucu yok.",
       "wslMoveInProgress": "Bu otomasyonun projesi WSL ana makinesine taşınıyor. Bu nedenle Orca bu çalıştırmayı atladı. Taşıma tamamlandığında çalıştırmalar devam edecek.",
       "wslMoveOwnedByHost": "Bu otomasyonun projesi artık WSL ana makinesinde çalışıyor ve bu otomasyon da orada ana makine tarafından çalıştırılıyor. Orca artık bu yerel kopyayı çalıştırmıyor.",
+      "managedHostServer": "{{host}} üzerine taşınması gerekiyor",
       "missedGraceWindow": "Orca'nın bir sonraki kontrolünde bu çalıştırma, kaçırılan çalıştırmalar için tanınan tolerans süresini aşmıştı.",
       "targetMissing": "Otomasyon sunucusu artık kayıtlı olmadığından bu otomasyonun çalışacağı bir yer yok.",
       "targetReplaced": "Otomasyon sunucusu kaldırılıp yeniden kaydedildiği için bu otomasyonun çalıştırılmadan önce yeniden ilişkilendirilmesi gerekiyor.",
@@ -23053,6 +23067,17 @@
         "effortRepeated": "Ek argümanlar çabayı birden fazla kez belirtiyor."
       },
       "hostUpdateRequired": "Ek argümanları kullanmak için bu ana makinedeki Orca'yı güncelleyin."
+    },
+    "setupTrust": {
+      "reviewTitle": "Bu otomasyonun yeni kurulum komutları onaylansın mı?",
+      "reviewBody": "Dalının <code>orca.yaml</code> kurulum komutları değiştiği için bir çalıştırma kurulumu atladı. Onaylarsanız sonraki çalıştırmalar bu komutları kullanır. Yalnızca <repo/> deposuna güveniyorsanız onaylayın.",
+      "approve": "Onayla",
+      "approved": "Kurulum onaylandı. Bu otomasyonun sonraki çalıştırmaları onu çalıştıracak.",
+      "skippedSinceApproved": "Dalının orca.yaml kurulum komutları değiştiği için bu çalıştırmada kurulum çalışmadı. Komutlar o zamandan beri onaylandı; sonraki çalıştırmalar onları çalıştıracak.",
+      "skippedReview": "Kurulum çalışmadı: bu çalıştırmanın dalındaki orca.yaml kurulum komutları bu otomasyon için onaylananlardan farklı. Sonraki çalıştırmalarda kurulumun çalışması için onları inceleyin.",
+      "reviewAction": "Kurulumu incele ve onayla",
+      "listSkipped": "Kurulum atlandı",
+      "listSkippedTitle": "Dalının orca.yaml kurulum komutları değiştiği için son çalıştırma kurulumu atladı. Eylemler menüsünden inceleyin."
     }
   },
   "codeHost": {
@@ -23440,5 +23465,32 @@
     "discussionAction": "Tartışmaya katıl",
     "checkAction": "Uyumluluğu kontrol et",
     "settingsStatus": "Orca {{version}}, macOS {{macos}} veya sonraki bir sürümü gerektirir. Bu, Mac’iniz için en son sürümdür."
+  },
+  "gitGraph": {
+    "copyHash": "Commit karmasını kopyala",
+    "parents": "Üst commitler",
+    "files": "Dosyalar",
+    "currentBranch": "Geçerli dal",
+    "allBranches": "Tüm dallar",
+    "chosenBranches": "Seçilen dallar",
+    "searchRefs": "Dal ve etiket ara",
+    "oldServer": "Bu sunucunun Orca sürümü yalnızca geçerli dalı gösterir",
+    "copyBranch": "Dal adını kopyala",
+    "switchWorkspace": "Çalışma alanına geç",
+    "workspaceClosed": "Bu dal artık başka bir çalışma alanında açık değil.",
+    "workspaceCheckFailed": "Bu çalışma alanı kontrol edilemedi. Bağlandıktan sonra tekrar deneyin.",
+    "refresh": "Commitleri yenile",
+    "branchTag": "Dal / Etiket",
+    "graph": "Grafik",
+    "resizeColumn": "Grafik sütununu yeniden boyutlandır",
+    "message": "Mesaj",
+    "author": "Yazar",
+    "date": "Tarih",
+    "loadMore": "Daha fazla yükle",
+    "noCommits": "Henüz commit yok",
+    "historyChanged": "Geçmiş yeniden değişti. Tekrar denemek için Git grafiğini yenileyin.",
+    "loadFailed": "Git geçmişi yüklenemedi",
+    "updateHost": "Git grafiğini açmak için {{host}} üzerindeki Orca’yı güncelleyin",
+    "title": "Git Grafiği"
   }
 }

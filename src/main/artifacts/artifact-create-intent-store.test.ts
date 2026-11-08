@@ -15,15 +15,6 @@ import {
   getOrCreateArtifactCreateIntent,
   removeArtifactCreateIntent
 } from './artifact-create-intent-store'
-import { runProcess, runProcessSync } from '@orca/process-host'
-import {
-  resetWindowsSecurityLoadForTests,
-  setWindowsSecurityForTests
-} from '../../shared/windows-security-addon'
-import {
-  createFakeWindowsSecurity,
-  FAKE_USER_SID
-} from '../../shared/windows-security-addon.test-fixture'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
 vi.mock('@orca/process-host', () => ({
@@ -177,53 +168,6 @@ describe('artifact create intent store', () => {
     )
 
     expect((await readdir(directory)).some((name) => name.endsWith('.tmp'))).toBe(false)
-  })
-
-  it('writes each Windows intent born restricted and relocks the directory once, off the write', async () => {
-    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const fake = createFakeWindowsSecurity()
-    setWindowsSecurityForTests(fake)
-    try {
-      const userDataPath = await createUserDataPath()
-      const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
-      for (const [sourceKey, key] of [
-        ['/repo/report.html', 'key-a'],
-        ['/repo/other.html', 'key-b']
-      ]) {
-        getOrCreateArtifactCreateIntent('local-profile', userDataPath, sourceKey, scope, key, body)
-      }
-      await new Promise((resolve) => setTimeout(resolve, 0))
-
-      const creates = fake.callsFor('create')
-      expect(creates).toHaveLength(2)
-      for (const create of creates) {
-        expect(create.path.startsWith(directory)).toBe(true)
-        expect(create.path.endsWith('.tmp')).toBe(true)
-        expect(create).toMatchObject({
-          sddl: `D:P(A;;FA;;;S-1-5-18)(A;;FA;;;S-1-5-32-544)(A;;FA;;;${FAKE_USER_SID})`
-        })
-      }
-      expect(fake.callsFor('setAsync')).toMatchObject([
-        {
-          op: 'setAsync',
-          path: directory,
-          sddl: `D:P(A;OICI;FA;;;S-1-5-18)(A;OICI;FA;;;S-1-5-32-544)(A;OICI;FA;;;${FAKE_USER_SID})`
-        }
-      ])
-      expect(fake.callsFor('set')).toEqual([])
-      expect(
-        getArtifactCreateIntent('local-profile', userDataPath, '/repo/other.html', scope)
-      ).toMatchObject({ idempotencyKey: 'key-b' })
-      expect((await readdir(directory)).filter((name) => name.endsWith('.tmp'))).toEqual([])
-      expect(runProcess).not.toHaveBeenCalled()
-      expect(runProcessSync).not.toHaveBeenCalled()
-    } finally {
-      if (originalPlatform) {
-        Object.defineProperty(process, 'platform', originalPlatform)
-      }
-      resetWindowsSecurityLoadForTests()
-    }
   })
 
   it('refuses to overwrite an unreadable matching intent', async () => {

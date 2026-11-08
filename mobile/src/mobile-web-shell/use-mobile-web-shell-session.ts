@@ -8,13 +8,10 @@ import {
 } from './download-progress-feed'
 import type { GenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
-import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
-import {
-  createMobileWebShellRuntime,
-  DOCUMENT_LOAD_DEADLINE_MS,
-  PAGE_READY_DEADLINE_MS,
-  type MobileWebShellRuntime
-} from './mobile-web-shell-runtime'
+import { runShellEffect, type FlowManifest } from './mobile-web-shell-session-effects'
+import { documentMayTalk } from './mobile-web-shell-gates'
+import { readMobileWebShellReachability } from './mobile-web-shell-reachability'
+import { createMobileWebShellRuntime, type MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useMobileWebShellGates } from './use-mobile-web-shell-gates'
 import { shellPageBackClaimed } from './shell-page-back-claim'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
@@ -47,11 +44,12 @@ export type MobileWebShellSessionView = {
   readonly pageRouteGrants: readonly { pathname: string; grants: readonly string[] }[]
   readonly routeGrants: readonly string[]
   readonly ownsHostArea: boolean
+  // Null until this connection's status opened the shown document's window; the bridge holds desktop-bound frames until then.
   readonly hostStatus: ReturnType<typeof useMobileWebShellGates>
   // Explain fallback beside the running page without replacing it.
   readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly retry: () => void
-  readonly reportShellFailure: (reason: MobileWebShellReportedFailure) => void
+  readonly reportShellFailure: (reason: MobileWebShellReportedFailure, reclaimed?: boolean) => void
   readonly reportDocumentStarted: () => void
   readonly reportDocumentLoaded: () => void
   readonly reportPageReady: () => void
@@ -97,6 +95,10 @@ export function useMobileWebShellSession(args: {
   const downloadsRef = useRef<Set<AbortController>>(new Set())
   const [deadline] = useState(() => createShellPageDeadline(runtime.setForegroundTimer))
   const hostIdRef = useRef(hostId)
+  // The flow's manifest reply, so its download reads windows without asking for the manifest again.
+  const manifestRef = useRef<FlowManifest | null>(null)
+  // Held while this shell shows a generation, so no update commits under it.
+  const releaseHoldRef = useRef<(() => void) | null>(null)
   const logTraceRef = useRef(EMPTY_SHELL_LOG_TRACE)
   const runEffectRef = useRef<
     ((epoch: number, flow: number, effect: MobileWebShellSessionEffect) => void) | null
@@ -107,6 +109,11 @@ export function useMobileWebShellSession(args: {
     downloadsRef.current.clear()
     deadline.cancel()
   }, [deadline])
+
+  const releaseHold = useCallback((): void => {
+    releaseHoldRef.current?.()
+    releaseHoldRef.current = null
+  }, [])
 
   const dispatch = useCallback(
     (epoch: number, event: MobileWebShellSessionEvent): void => {
@@ -125,6 +132,13 @@ export function useMobileWebShellSession(args: {
         cancelPending()
       }
       const next = stepped.session.state
+      // Take the hold before any effect runs, so another shell's open-cache cannot commit under this one.
+      if (next.kind === 'ready' || next.kind === 'activating') {
+        releaseHoldRef.current ??=
+          storeRef.current?.holdGeneration(deriveHostCacheKey(hostIdRef.current)) ?? null
+      } else {
+        releaseHold()
+      }
       if (next.kind === 'fetching') {
         downloadProgress.publish(downloadFraction(next.receivedBytes, next.totalBytes))
       }
@@ -137,75 +151,34 @@ export function useMobileWebShellSession(args: {
         runEffectRef.current?.(epoch, stepped.session.flow, effect)
       }
     },
-    [cancelPending, downloadProgress]
+    [cancelPending, downloadProgress, releaseHold]
   )
 
   const invalidate = useCallback((): void => {
     epochRef.current += 1
     cancelPending()
-  }, [cancelPending])
+    releaseHold()
+    // A rebuilt session restarts flow numbers, so an old reply could otherwise match.
+    manifestRef.current = null
+  }, [cancelPending, releaseHold])
 
   const runEffect = useCallback(
     async (epoch: number, flow: number, effect: MobileWebShellSessionEffect): Promise<void> => {
       const store = storeRef.current
-      if (store === null) {
-        return
-      }
-      const send = (event: MobileWebShellSessionEvent) => dispatch(epoch, event)
-      switch (effect.kind) {
-        case 'delete-cache':
-          // No completion event needed: the store queue orders the following sweep/read after deletion.
-          await store.deleteHostCache(hostKey).catch(() => undefined)
-          return
-        case 'record-update-failure':
-          // The runner owns host/time; best-effort store failures must not affect the decision.
-          await store.recordUpdateFailure({ ...effect.failure, hostId, at: runtime.now() })
-          return
-        case 'forget-update-failures':
-          await store.forgetHostUpdateFailures(hostId)
-          return
-        case 'open-cache':
-          send({ type: 'cache-read', flow, generation: await openCache(store, hostKey) })
-          return
-        case 'read-manifest':
-          await readManifest(client, flow, send)
-          return
-        case 'download':
-          await download({
-            client,
-            store,
-            hostKey,
-            flow,
-            runtime,
-            startedAt: startedAtRef.current,
-            downloads: downloadsRef.current,
-            send
-          })
-          return
-        case 'open-generation':
-          send({
-            type: 'activated',
-            flow,
-            generationDirectory: effect.directory,
-            sessionId: runtime.mintSessionId(),
-            buildId: effect.buildId,
-            totalBytes: effect.totalBytes,
-            elapsedMs: runtime.now() - startedAtRef.current
-          })
-          return
-        case 'cancel-deadlines':
-          deadline.cancel()
-          return
-        case 'remount':
-          send({ type: 'remounted', flow, sessionId: runtime.mintSessionId() })
-          return
-        case 'await-page-ready':
-          deadline.arm(PAGE_READY_DEADLINE_MS, () => send({ type: 'page-ready-deadline', flow }))
-          return
-        case 'await-document-load':
-          deadline.arm(DOCUMENT_LOAD_DEADLINE_MS, () =>
-            send({ type: 'document-load-deadline', flow })
-          )
+      if (store !== null) {
+        await runShellEffect(effect, {
+          store,
+          client,
+          hostId,
+          hostKey,
+          runtime,
+          flow,
+          startedAt: startedAtRef.current,
+          downloads: downloadsRef.current,
+          deadline,
+          manifest: manifestRef,
+          send: (event) => dispatch(epoch, event)
+        })
       }
     },
     [client, deadline, dispatch, hostId, hostKey, runtime]
@@ -246,8 +219,9 @@ export function useMobileWebShellSession(args: {
     dispatch(epochRef.current, { type: 'layout-changed', wide })
   }, [dispatch, wide])
 
-  const hostStatus = useMobileWebShellGates({
-    gates: useHostProtocolGates(),
+  const liveGates = useHostProtocolGates()
+  const provenStatus = useMobileWebShellGates({
+    gates: liveGates,
     connState,
     client,
     rearmKey: `${hostId}\0${routePathname}`,
@@ -256,6 +230,19 @@ export function useMobileWebShellSession(args: {
       [dispatch]
     )
   })
+
+  // Judge the live gates against the shown document's own window in this render, so no commit trusts gates the reducer has not seen.
+  const hostStatus =
+    state.kind === 'ready' &&
+    documentMayTalk(state.compat, {
+      statusPending: liveGates.statusPending,
+      statusReadable: liveGates.statusReadable,
+      reachability: readMobileWebShellReachability(connState, client),
+      hostCapabilities: liveGates.hostCapabilities,
+      hostStatus: liveGates.hostProtocolWindow
+    })
+      ? provenStatus
+      : null
 
   const retry = useCallback(() => {
     invalidate()
@@ -276,8 +263,8 @@ export function useMobileWebShellSession(args: {
   )
 
   const reportShellFailure = useCallback(
-    (reason: MobileWebShellReportedFailure) => {
-      const event = { type: 'shell-failed', reason } as const
+    (reason: MobileWebShellReportedFailure, reclaimed = false) => {
+      const event = { type: 'shell-failed', reason, reclaimed } as const
       // Profile reads come from the screen, not the view, so no retired document can send one.
       return reason === 'host-profile-unreadable'
         ? dispatch(epochRef.current, event)

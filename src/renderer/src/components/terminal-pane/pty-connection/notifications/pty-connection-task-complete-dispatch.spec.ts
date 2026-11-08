@@ -12,7 +12,7 @@ import {
   type ConnectCallbacks,
   type MockTransport
 } from '../test-fixtures/pty-connection-test-pane-fixtures'
-import type * as UseNotificationDispatchModule from '../../use-notification-dispatch'
+import type * as UseNotificationDispatchModule from '../../notifications/use-notification-dispatch'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
@@ -52,7 +52,6 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -438,7 +437,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
-      >('../../use-notification-dispatch')
+      >('../../notifications/use-notification-dispatch')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -496,7 +495,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
-      >('../../use-notification-dispatch')
+      >('../../notifications/use-notification-dispatch')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -558,7 +557,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
-      >('../../use-notification-dispatch')
+      >('../../notifications/use-notification-dispatch')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -618,7 +617,7 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
-      >('../../use-notification-dispatch')
+      >('../../notifications/use-notification-dispatch')
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 

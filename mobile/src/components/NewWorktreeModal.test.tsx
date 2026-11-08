@@ -53,7 +53,15 @@ vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 
-import { setCachedRepos } from '../cache/repo-cache'
+// The form seeds from the host list's repo.list rows in this document's query cache.
+const cachedRepos = new Map<string, unknown[]>()
+const setCachedRepos = (hostId: string, rows: unknown[]) => cachedRepos.set(hostId, rows)
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => null }))
+vi.mock('../host-screen/host-list-queries', () => ({
+  cachedHostRepos: (_queryClient: unknown, hostId: string | undefined) =>
+    (hostId && cachedRepos.get(hostId)) || null
+}))
+
 import { recordHostDescriptor } from '../transport/host-descriptor-store'
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import {

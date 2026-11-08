@@ -2,7 +2,7 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { Square } from 'lucide-react'
@@ -12,6 +12,7 @@ import { useDictationMeter } from './dictation-meter-store'
 
 // captureLive: the mic is recording (and buffering) while the speech engine is still starting.
 export function DictationIndicator({ captureLive }: { captureLive: boolean }) {
+  const t = useTranslate()
   const dictationState = useAppStore((state) => state.dictationState)
   const partialTranscript = useAppStore((state) => state.partialTranscript)
   const dictationMeter = useDictationMeter()
@@ -28,23 +29,20 @@ export function DictationIndicator({ captureLive }: { captureLive: boolean }) {
   const isClipping = isListening && dictationMeter.isClipping
   const isSpeaking = isListening && dictationMeter.isSpeaking && !isClipping
   const lifecycleLabel = isListening
-    ? translate('auto.components.dictation.DictationIndicator.3de5a129e7', 'Listening')
+    ? t('auto.components.dictation.DictationIndicator.3de5a129e7', 'Listening')
     : dictationState === 'starting'
-      ? translate('auto.components.dictation.DictationIndicator.7f3660a7ba', 'Starting mic…')
-      : translate('auto.components.dictation.DictationIndicator.f082d0cb9d', 'Processing…')
+      ? t('auto.components.dictation.DictationIndicator.7f3660a7ba', 'Starting mic…')
+      : t('auto.components.dictation.DictationIndicator.f082d0cb9d', 'Processing…')
   const label = isClipping
-    ? translate('auto.components.dictation.DictationIndicator.4977162383', 'Too loud')
+    ? t('auto.components.dictation.DictationIndicator.4977162383', 'Too loud')
     : isSpeaking
-      ? translate('auto.components.dictation.DictationIndicator.25f2b7a6a5', 'Speaking')
+      ? t('auto.components.dictation.DictationIndicator.25f2b7a6a5', 'Speaking')
       : lifecycleLabel
   const announcedLabel = isClipping ? label : lifecycleLabel
   const canStop = dictationState !== 'stopping'
   const showShortcut = !isHoldMode && shortcut.keys.length > 0
   const transcript = partialTranscript.trim()
-  const stopLabel = translate(
-    'auto.components.dictation.DictationIndicator.335e1bc6cb',
-    'Stop dictation'
-  )
+  const stopLabel = t('auto.components.dictation.DictationIndicator.335e1bc6cb', 'Stop dictation')
 
   return (
     <div
@@ -70,7 +68,7 @@ export function DictationIndicator({ captureLive }: { captureLive: boolean }) {
         </span>
         {isLoadingModel ? (
           <span aria-hidden className="min-w-0 truncate text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.dictation.DictationIndicator.loadingModel',
               'Loading speech model…'
             )}

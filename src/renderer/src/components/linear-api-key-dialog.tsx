@@ -26,7 +26,7 @@ import {
   createLinearApiKeyDialogState,
   resolveLinearApiKeyDialogState
 } from './linear-api-key-dialog-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type LinearApiKeyDialogProps = {
   open: boolean
@@ -51,6 +51,7 @@ export function LinearApiKeyDialog({
   overlayClassName,
   contentClassName
 }: LinearApiKeyDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const connectLinear = useAppStore((s) => s.connectLinear)
   const mountedRef = useMountedRef()
@@ -65,8 +66,8 @@ export function LinearApiKeyDialog({
   const submitLabel =
     connectLabel ??
     (workspace
-      ? translate('taskProviders.linear.updateAccess', 'Update access')
-      : translate('taskProviders.linear.connect', 'Connect'))
+      ? t('taskProviders.linear.updateAccess', 'Update access')
+      : t('taskProviders.linear.connect', 'Connect'))
   const resolvedDialogState = resolveLinearApiKeyDialogState(dialogState, open)
   if (resolvedDialogState !== dialogState) {
     // Reset hidden drafts/errors before paint because parent closure can race a connect request.
@@ -114,7 +115,7 @@ export function LinearApiKeyDialog({
           connectError:
             error instanceof Error
               ? taskProviderErrorText(error.message)
-              : translate('taskProviders.linear.connectionFailed', 'Connection failed')
+              : t('taskProviders.linear.connectionFailed', 'Connection failed')
         }))
       }
     }
@@ -123,31 +124,29 @@ export function LinearApiKeyDialog({
   const resolvedTitle =
     title ??
     (workspace
-      ? translate(
-          'taskProviders.linear.updateWorkspaceAccess',
-          'Update Linear access for {{workspace}}',
-          { workspace: workspace.organizationName }
-        )
-      : translate('taskProviders.linear.addAccess', 'Add Linear access'))
+      ? t('taskProviders.linear.updateWorkspaceAccess', 'Update Linear access for {{workspace}}', {
+          workspace: workspace.organizationName
+        })
+      : t('taskProviders.linear.addAccess', 'Add Linear access'))
   const resolvedDescription =
     description ??
     (workspace
-      ? translate(
+      ? t(
           'taskProviders.linear.workspaceApiKeyHint',
           'Paste a Personal API key for {{workspace}}. If this workspace is already connected, Orca replaces its stored key.',
           { workspace: workspace.organizationName }
         )
-      : translate(
+      : t(
           'taskProviders.linear.apiKeyHint',
           'Paste a Personal API key for the Linear workspace you want Orca to use. If that workspace is already connected, Orca replaces its stored key.'
         ))
   const storageCopy =
     runtimeTarget.kind === 'environment'
-      ? translate(
+      ? t(
           'taskProviders.linear.remoteKeyStorage',
           'This key is stored by the active remote runtime.'
         )
-      : translate(
+      : t(
           'taskProviders.linear.localKeyStorage',
           'Local runtime keys are stored on this device using Electron encrypted storage when available.'
         )
@@ -173,16 +172,13 @@ export function LinearApiKeyDialog({
         <div className="space-y-3">
           <div className="space-y-2">
             <Label htmlFor={apiKeyInputId} className="text-xs">
-              {translate('auto.components.linear.api.key.dialog.7d498f653c', 'Personal API key')}
+              {t('auto.components.linear.api.key.dialog.7d498f653c', 'Personal API key')}
             </Label>
             <Input
               id={apiKeyInputId}
               autoFocus
               type="password"
-              placeholder={translate(
-                'auto.components.linear.api.key.dialog.edec49dfae',
-                'lin_api_...'
-              )}
+              placeholder={t('auto.components.linear.api.key.dialog.edec49dfae', 'lin_api_...')}
               value={apiKeyDraft}
               onChange={(event) => {
                 const nextDraft = event.target.value
@@ -204,25 +200,25 @@ export function LinearApiKeyDialog({
           ) : null}
           <div className="space-y-2 text-xs leading-relaxed text-muted-foreground">
             <p>
-              {translate(
+              {t(
                 'auto.components.linear.api.key.dialog.af52a6227f',
                 'Create a Personal API key from Account > Security & Access.'
               )}{' '}
               {!workspace
-                ? translate(
+                ? t(
                     'auto.components.linear.api.key.dialog.c9889a09f8',
                     'Use Linear to choose the intended workspace before creating the key.'
                   )
                 : null}
             </p>
             <p>
-              {translate(
+              {t(
                 'auto.components.linear.api.key.dialog.d56d3629f4',
                 'Prefer full access when Orca should show every team the account can access in that workspace. Restricted keys only expose permitted teams, and private teams require the key owner to have access.'
               )}
             </p>
             <p>
-              {translate(
+              {t(
                 'auto.components.linear.api.key.dialog.e3100b36b9',
                 'If member API keys are blocked, ask a workspace admin to allow them from workspace API settings.'
               )}
@@ -234,7 +230,7 @@ export function LinearApiKeyDialog({
                 onClick={() => window.api.shell.openUrl(personalKeyUrl)}
               >
                 <ExternalLink className="size-3" />
-                {translate('auto.components.linear.api.key.dialog.dc7ccb0f7c', 'Personal API keys')}
+                {t('auto.components.linear.api.key.dialog.dc7ccb0f7c', 'Personal API keys')}
               </button>
               <span className="text-muted-foreground/60">|</span>
               <button
@@ -243,10 +239,7 @@ export function LinearApiKeyDialog({
                 onClick={() => window.api.shell.openUrl(workspaceApiUrl)}
               >
                 <ExternalLink className="size-3" />
-                {translate(
-                  'auto.components.linear.api.key.dialog.e603ee9156',
-                  'Workspace API settings'
-                )}
+                {t('auto.components.linear.api.key.dialog.e603ee9156', 'Workspace API settings')}
               </button>
             </div>
           </div>
@@ -261,7 +254,7 @@ export function LinearApiKeyDialog({
             onClick={() => onOpenChange(false)}
             disabled={connectState === 'connecting'}
           >
-            {translate('auto.components.linear.api.key.dialog.f8f704a019', 'Cancel')}
+            {t('auto.components.linear.api.key.dialog.f8f704a019', 'Cancel')}
           </Button>
           <Button
             onClick={() => void handleConnect()}
@@ -270,7 +263,7 @@ export function LinearApiKeyDialog({
             {connectState === 'connecting' ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                {translate('auto.components.linear.api.key.dialog.834a52c084', 'Verifying...')}
+                {t('auto.components.linear.api.key.dialog.834a52c084', 'Verifying...')}
               </>
             ) : (
               submitLabel

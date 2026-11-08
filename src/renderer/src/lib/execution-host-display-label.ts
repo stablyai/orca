@@ -7,7 +7,7 @@ import {
 import { getHostSettingOverride } from '../../../shared/host-setting-overrides'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/runtime-environment-ssh-selectors'
+import { selectRuntimeAwareSshTargetLabel } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import type { AppState } from '@/store/types'
 
 /** Prefer the user rename, then published machine/SSH label, then raw host ID. */

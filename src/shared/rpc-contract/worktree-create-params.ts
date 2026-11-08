@@ -6,6 +6,7 @@ import { workspaceSourceSchema } from '../telemetry-events'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-session-sleeping-agents'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { AgentArgs, LaunchPreferences } from './agent-session-params'
 import { LaunchSourceParam } from './launch-source-param'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
 import {
@@ -17,6 +18,7 @@ import {
 import {
   AutomationWorkspaceProvenanceRequest,
   CliWorkspaceProvenanceRequest,
+  MatchFolderWorkspaces,
   OptionalExecutionHostId,
   OptionalTuiAgent,
   assertLinkedWorkItemSourceContextMatch
@@ -90,6 +92,7 @@ export const WorktreeCreate = z
     parentWorkspaceOrigin: z.literal('manual').optional(),
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
+    matchFolderWorkspaces: MatchFolderWorkspaces,
     /** Sent only to hosts advertising worktree.lineage.crossMachine; older hosts strip it. */
     crossStoreParent: CrossStoreParentRefSchema.optional(),
     // No parent flag: the caller's own workspace implied it.
@@ -119,6 +122,15 @@ export const WorktreeCreate = z
       .optional(),
     // A malformed hash never matches, so the host skips setup rather than running unapproved content.
     approvedSetupHash: z.string().max(128).optional(),
+    // Lenient: a longer list from a newer client is trimmed instead of failing the create.
+    approvedSetupHashes: z
+      .array(z.unknown())
+      .transform((hashes) =>
+        hashes
+          .filter((hash): hash is string => typeof hash === 'string' && hash.length <= 128)
+          .slice(0, 64)
+      )
+      .optional(),
     // Desktop can prequote startup commands; clients unable to quote for the host send startupAgent.
     startupCommand: OptionalString,
     startupEnv: z.record(z.string(), z.string()).optional(),
@@ -127,6 +139,9 @@ export const WorktreeCreate = z
     // Quote agent launches on the execution host because SSH shells can differ from the client’s.
     startupAgent: OptionalTuiAgent,
     startupPrompt: OptionalString,
+    startupAgentArgs: AgentArgs.optional(),
+    startupSessionOptions: z.record(z.string(), z.string()).optional(),
+    startupLaunchPreferences: LaunchPreferences.optional(),
     // Which surface asked for the agent the host launches from `startupAgent` or `startupDraft`.
     launchSource: LaunchSourceParam.optional(),
     // Task-driven mobile creation uses desktop-equivalent host defaults and linked issue/PR draft URLs.

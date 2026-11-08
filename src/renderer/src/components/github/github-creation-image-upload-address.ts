@@ -1,4 +1,4 @@
-import { hostedReviewRepoOwnerTarget } from '@/store/slices/hosted-review-cache-state'
+import { hostedReviewRepoOwnerTarget } from '@/store/slices/hosted-review/hosted-review-cache-state'
 import type { GitHubImageIntake } from './use-github-image-uploads'
 
 export function githubCreationImageUploadAddress(

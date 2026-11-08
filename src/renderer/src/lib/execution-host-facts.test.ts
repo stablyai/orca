@@ -97,7 +97,6 @@ describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
       { ...nested, activeWorktreeId: 'folder:folder' },
       'folder:folder',
       'C:\\project',
-      undefined,
       'runtime:linux-box'
     )
     expect(ordinary).toMatchObject({ kind: 'known', platform: 'win32', hostKind: 'ssh' })
@@ -108,7 +107,6 @@ describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
         nested,
         'folder:folder',
         'C:\\project',
-        undefined,
         'runtime:linux-box'
       )
     ).toEqual(ordinary)

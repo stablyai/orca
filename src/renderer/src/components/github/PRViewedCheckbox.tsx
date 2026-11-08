@@ -2,7 +2,7 @@ import React from 'react'
 import { Check, LoaderCircle } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function PRViewedCheckbox({
   checked,
@@ -15,6 +15,7 @@ export function PRViewedCheckbox({
   filePath: string
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -24,10 +25,10 @@ export function PRViewedCheckbox({
           aria-checked={checked}
           aria-label={
             checked
-              ? translate('github.viewed.unmarkFile', 'Unmark {{path}} as viewed', {
+              ? t('github.viewed.unmarkFile', 'Unmark {{path}} as viewed', {
                   path: filePath
                 })
-              : translate('github.viewed.markFile', 'Mark {{path}} as viewed', { path: filePath })
+              : t('github.viewed.markFile', 'Mark {{path}} as viewed', { path: filePath })
           }
           disabled={pending}
           onClick={(event) => {
@@ -54,13 +55,13 @@ export function PRViewedCheckbox({
               <Check className="size-3" strokeWidth={3} />
             ) : null}
           </span>
-          <span>{translate('auto.components.GitHubItemDialog.af924014f8', 'Viewed')}</span>
+          <span>{t('auto.components.GitHubItemDialog.af924014f8', 'Viewed')}</span>
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={4}>
         {checked
-          ? translate('auto.components.GitHubItemDialog.ba8e329d92', 'Unmark viewed')
-          : translate('auto.components.GitHubItemDialog.16c1abe76c', 'Mark viewed')}
+          ? t('auto.components.GitHubItemDialog.ba8e329d92', 'Unmark viewed')
+          : t('auto.components.GitHubItemDialog.16c1abe76c', 'Mark viewed')}
       </TooltipContent>
     </Tooltip>
   )

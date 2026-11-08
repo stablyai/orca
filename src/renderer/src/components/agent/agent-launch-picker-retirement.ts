@@ -1,6 +1,6 @@
 import type { AgentPickerRetainedSetup } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import { launchDraftSources } from '../native-chat/native-chat-launch-draft-source'
+import { launchDraftSources } from '../native-chat/drafts/native-chat-launch-draft-source'
 
 export function retireAgentPickerSetups(
   entries: readonly AgentPickerEntry[],

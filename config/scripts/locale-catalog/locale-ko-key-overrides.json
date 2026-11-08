@@ -4733,9 +4733,6 @@
   "auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable": {
     "ko": "요금제 자격 증명 세부 정보는 Orca를 실행 중인 컴퓨터에서만 볼 수 있습니다."
   },
-  "accounts.antigravity.scope": {
-    "ko": "{{host}}의 agy 자체 계정을 관리합니다."
-  },
   "accounts.antigravity.signIn": {
     "ko": "이 호스트에서 agy를 실행하고 브라우저 로그인을 완료한 후 현재 계정을 저장하세요. 다른 계정을 추가하려면 agy에서 /logout 명령을 실행하고 다시 로그인하세요."
   },

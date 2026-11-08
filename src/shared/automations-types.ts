@@ -1,5 +1,5 @@
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-import type { SetupDecision } from './worktree/create-types'
+import type { SetupDecision, SetupTrustMismatch } from './worktree/create-types'
 import type { TaskSourceContext, WorkspaceRunContext } from './task-source-context'
 import type {
   AutomationLaunchSetup,
@@ -185,6 +185,8 @@ export type AutomationRun = {
   lastOccurrenceAt?: number
   /** Setup was skipped: the new workspace's branch has different setup than the automation approved. */
   setupSkippedReason?: AutomationRunSetupSkippedReason
+  /** The skipped setup content, so it can be reviewed and approved for later runs. Older hosts omit it. */
+  setupSkippedContent?: SetupTrustMismatch
 }
 
 export type AutomationRunSetupSkippedReason = 'setup-changed'
@@ -248,12 +250,6 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
   >
 >
 
-export type AutomationDispatchRequest = {
-  automation: Automation
-  run: AutomationRun
-  dispatchToken: string
-}
-
 export type AutomationDispatchResult = {
   runId: string
   sessionKind?: 'terminal' | 'chat'
@@ -273,6 +269,7 @@ export type AutomationDispatchResult = {
   /** With `dispatched`: when the agent was handed the run, if not now. */
   dispatchedAt?: number
   setupSkippedReason?: AutomationRunSetupSkippedReason
+  setupSkippedContent?: SetupTrustMismatch
 }
 
 export type ExternalAutomationProvider = 'openclaw'

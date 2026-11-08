@@ -65,6 +65,7 @@ export const mobileApi = {
       pairedAt: number
       lastSeenAt: number
       usesLegacyEncryption?: boolean
+      olderPairingMethod?: true
     }[]
   }> => ipcRenderer.invoke('mobile:listDevices'),
 

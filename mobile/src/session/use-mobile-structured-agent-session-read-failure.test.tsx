@@ -1,7 +1,8 @@
 // Preserve typed final read refusals beside their words so unreadable history cannot render a sendable composer.
 
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
@@ -63,7 +64,7 @@ function refusedRead(reason: string) {
 
 async function readFailedWith(reason: string) {
   act(() => {
-    renderer = create(createElement(Harness))
+    renderer = createWithQueryClient(createElement(Harness))
   })
   await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
   act(() => listener?.(refusedRead(reason)))

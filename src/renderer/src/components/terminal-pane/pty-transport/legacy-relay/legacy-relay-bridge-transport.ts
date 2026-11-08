@@ -9,12 +9,12 @@
  */
 import type { LegacyRelayBridgeAttachResult } from '../../../../../../shared/legacy-relay-bridge-contract'
 import type { PtyConnectResult, PtyTransport } from '../pty-transport-types'
-import type { RemoteRuntimeSnapshotRequestOptions } from '../../../../runtime/remote-runtime-terminal-multiplexer-types'
+import type { RemoteRuntimeSnapshotRequestOptions } from '../../../../runtime/hosted-terminals/snapshots/remote-terminal-snapshot-contracts'
 import { SSH_SESSION_EXPIRED_ERROR } from '../host-ownership/ssh-session-gone-verdict'
 import {
   legacyRelayBridgedPane,
   onLegacyRelayBridgedPanesChanged
-} from '../../legacy-relay-bridge-panes'
+} from './legacy-relay-bridge-panes'
 
 type Callbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 

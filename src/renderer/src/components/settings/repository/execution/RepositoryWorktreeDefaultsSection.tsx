@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { BaseRefPicker } from '../../../source-control/BaseRefPicker'
 import { RepoSettingsDraftInput } from '../RepositorySettingsDraftInput'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   effectiveExternalWorktreeVisibility,
@@ -35,6 +35,7 @@ export function RepositoryWorktreeDefaultsSection({
   refreshRepo,
   forceVisible
 }: RepositoryWorktreeDefaultsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const isLegacyRepo = isLegacyRepoForExternalWorktreeVisibility(repo)
   const globalVisibility =
     settings?.worktreeVisibilityDefaults?.external ?? (isLegacyRepo ? 'show' : 'hide')
@@ -56,46 +57,40 @@ export function RepositoryWorktreeDefaultsSection({
   return (
     <>
       <SearchableSetting
-        title={translate(
-          'auto.components.settings.RepositoryPane.externalWorktrees',
-          'External worktrees'
-        )}
-        description={translate(
+        title={t('auto.components.settings.RepositoryPane.externalWorktrees', 'External worktrees')}
+        description={t(
           'auto.components.settings.RepositoryPane.externalWorktreesDescription',
           'Override whether worktrees created outside Orca appear for this project.'
         )}
         keywords={[repo.displayName, 'external', 'non-Orca', 'visibility', 'sidebar']}
-        className="space-y-2"
+        className="space-y-2 py-3"
         forceVisible={forceVisible}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 space-y-1">
             <Label className="text-sm font-semibold">
-              {translate(
-                'auto.components.settings.RepositoryPane.externalWorktrees',
-                'External worktrees'
-              )}
+              {t('auto.components.settings.RepositoryPane.externalWorktrees', 'External worktrees')}
             </Label>
             <p className="text-xs text-muted-foreground">
               {repo.externalWorktreeVisibility === undefined
-                ? translate(
+                ? t(
                     'auto.components.settings.RepositoryPane.externalWorktreesInherited',
                     'Using global: {{value0}}',
                     {
                       value0:
                         effectiveVisibility === 'show'
-                          ? translate('auto.components.settings.RepositoryPane.show', 'Show')
-                          : translate('auto.components.settings.RepositoryPane.hide', 'Hide')
+                          ? t('auto.components.settings.RepositoryPane.show', 'Show')
+                          : t('auto.components.settings.RepositoryPane.hide', 'Hide')
                     }
                   )
-                : translate(
+                : t(
                     'auto.components.settings.RepositoryPane.externalWorktreesGlobal',
                     'Global default: {{value0}}',
                     {
                       value0:
                         globalVisibility === 'show'
-                          ? translate('auto.components.settings.RepositoryPane.show', 'Show')
-                          : translate('auto.components.settings.RepositoryPane.hide', 'Hide')
+                          ? t('auto.components.settings.RepositoryPane.show', 'Show')
+                          : t('auto.components.settings.RepositoryPane.hide', 'Hide')
                     }
                   )}
             </p>
@@ -109,13 +104,13 @@ export function RepositoryWorktreeDefaultsSection({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="global">
-                {translate('auto.components.settings.RepositoryPane.useGlobal', 'Use global')}
+                {t('auto.components.settings.RepositoryPane.useGlobal', 'Use global')}
               </SelectItem>
               <SelectItem value="show">
-                {translate('auto.components.settings.RepositoryPane.show', 'Show')}
+                {t('auto.components.settings.RepositoryPane.show', 'Show')}
               </SelectItem>
               <SelectItem value="hide">
-                {translate('auto.components.settings.RepositoryPane.hide', 'Hide')}
+                {t('auto.components.settings.RepositoryPane.hide', 'Hide')}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -123,20 +118,17 @@ export function RepositoryWorktreeDefaultsSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={translate(
-          'auto.components.settings.RepositoryPane.f88db4fece',
-          'Default Worktree Base'
-        )}
-        description={translate(
+        title={t('auto.components.settings.RepositoryPane.f88db4fece', 'Default Worktree Base')}
+        description={t(
           'auto.components.settings.RepositoryPane.8984d06520',
           'Default base branch or ref when creating worktrees.'
         )}
         keywords={[repo.displayName, 'base ref', 'branch']}
-        className="space-y-3"
+        className="space-y-3 py-3"
         forceVisible={forceVisible}
       >
         <Label className="text-sm font-semibold">
-          {translate('auto.components.settings.RepositoryPane.f88db4fece', 'Default Worktree Base')}
+          {t('auto.components.settings.RepositoryPane.f88db4fece', 'Default Worktree Base')}
         </Label>
         <BaseRefPicker
           repoId={repo.id}
@@ -148,8 +140,8 @@ export function RepositoryWorktreeDefaultsSection({
       </SearchableSetting>
 
       <SearchableSetting
-        title={translate('auto.components.settings.RepositoryPane.e9bd57a336', 'Worktree Location')}
-        description={translate(
+        title={t('auto.components.settings.RepositoryPane.e9bd57a336', 'Worktree Location')}
+        description={t(
           'auto.components.settings.RepositoryPane.e63bb96a9b',
           'Project-specific directory for new worktrees.'
         )}
@@ -161,12 +153,12 @@ export function RepositoryWorktreeDefaultsSection({
           'relative',
           '../worktrees'
         ]}
-        className="space-y-2"
+        className="space-y-2 py-3"
         forceVisible={forceVisible}
       >
         <div className="flex items-center justify-between gap-3">
           <Label className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryPane.e9bd57a336', 'Worktree Location')}
+            {t('auto.components.settings.RepositoryPane.e9bd57a336', 'Worktree Location')}
           </Label>
           {repo.worktreeBasePath ? (
             <Button
@@ -175,7 +167,7 @@ export function RepositoryWorktreeDefaultsSection({
               size="sm"
               onClick={() => updateRepo(repo.id, { worktreeBasePath: undefined })}
             >
-              {translate('auto.components.settings.RepositoryPane.8ccacbeb5a', 'Use Global')}
+              {t('auto.components.settings.RepositoryPane.8ccacbeb5a', 'Use Global')}
             </Button>
           ) : null}
         </div>
@@ -195,7 +187,7 @@ export function RepositoryWorktreeDefaultsSection({
           className="h-9 text-sm"
         />
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryPane.15a99d9b9f',
             'Relative paths resolve from this project root.'
           )}

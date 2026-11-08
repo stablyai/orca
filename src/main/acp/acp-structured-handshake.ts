@@ -55,7 +55,7 @@ export async function initializeAcpStructuredSession(
   input: AcpHandshakeInput
 ): Promise<StructuredAgentSessionProviderOpenResult> {
   const { acquire, deps, launch, connection, options, prompts, child, onSettled } = input
-  const { spec } = deps
+  const { spec } = launch
   const sessionId = acquire.identity.sessionId
   const now = deps.now ?? Date.now
   const assertStarting = () => assertAcpStartingSession(child, input.abandoned)
@@ -152,7 +152,11 @@ export async function initializeAcpStructuredSession(
   const mode = spec.permissionModeConfig
   if (mode && acquire.permissionMode !== 'own') {
     // Fail startup rather than silently use a different permission mode.
-    const requested = mode.values[acquire.permissionMode ?? 'ask'] ?? mode.values.ask
+    const wanted = acquire.permissionMode ?? 'ask'
+    const requested = child.permissionModes?.[wanted]
+    if (requested === undefined) {
+      throw new Error(`${agentName} on this host cannot run in the ${wanted} permission mode`)
+    }
     const configId = options.modeConfigId()
     await connection.setConfigOption(configId, requested, undefined, ({ configOptions }) => {
       assertStarting()
@@ -218,7 +222,7 @@ export async function initializeAcpStructuredSession(
   }
   return {
     link,
-    reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+    reportedOptions: options.observedCurrent(child.permissionModes),
     catalogListing: options.startListing()
   }
 }

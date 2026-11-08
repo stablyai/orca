@@ -2,13 +2,13 @@ import * as unhideCoverage from './hidden-unhide-snapshot-coverage'
 import { useAppStore } from '@/store/index'
 import { isTerminalWritePipelineCertifiedDead } from '@/lib/pane-manager/terminal-write-pipeline-health'
 import { requestTerminalPaneRecovery } from '../../render-health/recovery/terminal-pane-recovery'
-import { registerStaleDocumentVisibilityRecovery } from '../../stale-document-visibility'
-import { warnTerminalLifecycleAnomaly } from '../../terminal-lifecycle-diagnostics'
+import { registerStaleDocumentVisibilityRecovery } from '../../viewport/visibility/stale-document-visibility'
+import { warnTerminalLifecycleAnomaly } from '../../layout/reconciliation/terminal-lifecycle-diagnostics'
 import { registerTerminalBacklogRecovery } from '@/lib/pane-manager/pane-terminal-output-queue-registry'
 import {
   cancelScheduledHiddenOutputRestore,
   scheduleHiddenOutputRestore
-} from '../../hidden-output-restore-scheduler'
+} from './hidden-output-restore-scheduler'
 import { resolveHiddenRestoreScrollbackRows } from '../../snapshots/terminal-hidden-restore-scrollback'
 
 import {
@@ -17,7 +17,7 @@ import {
   HIDDEN_OUTPUT_RESTORE_LOCAL_GATE_MAX_ATTEMPTS
 } from './hidden-output-restore-limits'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
-import { restoredSnapshotPaintsPrintableContent } from '../../restored-snapshot-coverage'
+import { restoredSnapshotPaintsPrintableContent } from '../../snapshots/restored-snapshot-coverage'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import {

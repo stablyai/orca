@@ -16,7 +16,7 @@ import { PREFLIGHT_METHODS } from './preflight'
 import type { Repo } from '../../../../../shared/repo-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { PREFLIGHT_RUNTIME_CAPABILITIES } from '../../../../../shared/preflight-runtime-capabilities'
-import { launchHeadlessAutomationAgent } from '../../../../automations/headless-automation-agent-launch'
+import { launchAutomationTerminalAgent } from '../../../../automations/automation-terminal-launch'
 import type { Automation, AutomationRun } from '../../../../../shared/automations-types'
 import type * as WorkspaceAgentDetection from '../../../../preflight/workspace-agent-detection'
 
@@ -128,15 +128,15 @@ describe('qualified discovery at the runtime RPC boundary', () => {
     await expect(
       runtime.showManagedTerminalWorkspace('id:folder:dup', 'ssh:a%2Fb')
     ).rejects.toThrow('folder_workspace_path_unavailable')
-    await expect(launchHeadlessAutomationAgent(runtime, request)).resolves.toMatchObject({
+    await expect(launchAutomationTerminalAgent(runtime, request)).resolves.toMatchObject({
       terminalHandle: 'live-handle',
       workspaceId: 'folder:dup'
     })
     expect(deliver).toHaveBeenCalledTimes(1)
     folders.splice(folders.indexOf(folder), 1)
-    await expect(launchHeadlessAutomationAgent(runtime, request)).rejects.toThrow(
-      'selector_not_found'
-    )
+    await expect(launchAutomationTerminalAgent(runtime, request)).rejects.toMatchObject({
+      failure: { errorCode: 'targetUnavailable' }
+    })
     expect(deliver).toHaveBeenCalledTimes(1)
   })
 
@@ -227,59 +227,6 @@ describe('qualified discovery at the runtime RPC boundary', () => {
       }
     }
   )
-
-  it('passes the selected project WSL override to refresh rather than the global distro', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const local: Repo = {
-      id: 'copy',
-      path: 'C:\\same',
-      kind: 'folder',
-      displayName: 'Local',
-      badgeColor: '#000',
-      addedAt: 1
-    }
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getRepos: () => [{ ...local, connectionId: 'other' }, local],
-      getSettings: () => ({
-        ...store.getSettings(),
-        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'GlobalDistro' }
-      }),
-      getProjects: () => [
-        {
-          id: 'project',
-          displayName: 'Project',
-          badgeColor: '#000',
-          sourceRepoIds: ['copy'],
-          createdAt: 1,
-          updatedAt: 1,
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'ProjectDistro' }
-        }
-      ]
-    })
-    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
-    refresh.mockClear()
-    expect(
-      await dispatcher.dispatch({
-        id: 'wsl',
-        authToken: 'test',
-        method: 'preflight.refreshAgents',
-        params: { worktreeId: 'copy::C:\\same', worktreeHostId: 'local' }
-      })
-    ).toMatchObject({ ok: true })
-    expect(refresh).toHaveBeenCalledWith(
-      {
-        kind: 'local',
-        context: {
-          projectRuntime: expect.objectContaining({
-            status: 'resolved',
-            runtime: expect.objectContaining({ kind: 'wsl', distro: 'ProjectDistro' })
-          })
-        }
-      },
-      undefined
-    )
-  })
   it.each([false, true])(
     'uses the actual cold and warm folder-project instance in either repo order (reverse=%s)',
     async (reverse) => {

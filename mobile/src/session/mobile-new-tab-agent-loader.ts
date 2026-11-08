@@ -59,7 +59,12 @@ type MobileAgentLaunchContextArgs = {
   /** Whether the host refuses, rather than answers for, a workspace another runtime owns. */
   hostRefusesOtherRuntime?: boolean
   /** Re-reads the host's login-shell PATH before probing, as desktop's refresh does. */
-  refresh?: boolean
+  refresh?: MobileAgentRefresh
+}
+
+export type MobileAgentRefresh = {
+  /** Runs as the refresh request goes out; reads that fail before it never asked the host to refresh. */
+  onSent?: () => void
 }
 
 export async function loadMobileAgentLaunchContext(
@@ -78,35 +83,25 @@ export async function loadMobileAgentLaunchContext(
   return { settings: readSettings(), detectedAgents: detected, repo: detectedAgents.repo }
 }
 
-export type MobileNewTabAgentInventory = Pick<MobileAgentLaunchContext, 'detectedAgents'> & {
-  options: MobileNewTabAgentOption[]
+export async function loadMobileDetectedAgents(
+  args: MobileAgentLaunchContextArgs
+): Promise<Pick<MobileAgentLaunchContext, 'detectedAgents' | 'repo'>> {
+  const detected = await loadDetectedAgents(args.client, args.worktreeId, args)
+  return { detectedAgents: interpretDetectedAgents(detected), repo: detected.repo }
 }
 
-export async function loadMobileNewTabAgentOptions(
-  args: MobileAgentLaunchContextArgs & { settled?: MobileNewTabAgentInventory | null }
-): Promise<MobileNewTabAgentInventory> {
-  // Settings remain live; settled detection is reused until explicitly refreshed.
-  if (args.settled) {
-    const reply = await newTabSettingsRead.request(args.client)
-    return newTabAgentInventory(newTabSettingsRead.interpret(reply)(), args.settled.detectedAgents)
-  }
-  const context = await loadMobileAgentLaunchContext(args)
-  return newTabAgentInventory(context.settings, context.detectedAgents)
-}
-
-function newTabAgentInventory(
+export function newTabAgentOptionsFrom(
   settings: unknown,
   detectedAgents: unknown[]
-): MobileNewTabAgentInventory {
-  return {
-    options: buildMobileNewTabAgentOptions(
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-      settings as MobileNewTabAgentSettings | undefined,
-      detectedAgents
-    ),
+): MobileNewTabAgentOption[] {
+  return buildMobileNewTabAgentOptions(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    settings as MobileNewTabAgentSettings | undefined,
     detectedAgents
-  }
+  )
 }
+
+type HostProbeOptions = Omit<MobileAgentLaunchContextArgs, 'client' | 'worktreeId'>
 
 type DetectedAgentsReply = {
   reply: RpcResponse
@@ -117,14 +112,14 @@ type DetectedAgentsReply = {
 async function loadDetectedAgents(
   client: RpcClient,
   worktreeId: string,
-  host: Pick<MobileAgentLaunchContextArgs, 'hostRefusesOtherRuntime' | 'refresh'>
+  probe: HostProbeOptions
 ): Promise<DetectedAgentsReply> {
   // Floating workspaces belong to the paired host and have no repo connection.
   if (isFloatingWorkspaceWorktreeId(worktreeId)) {
-    return { ...(await probeHostAgents(client, undefined, host.refresh)), repo: null }
+    return { ...(await probeHostAgents(client, undefined, probe.refresh)), repo: null }
   }
   if (worktreeId.startsWith('folder:')) {
-    return loadFolderDetectedAgents(client, worktreeId, host)
+    return loadFolderDetectedAgents(client, worktreeId, probe)
   }
   const repoResponse = await newTabRepoListRead.request(client)
   const repos: MobileRuntimeRepoSummary[] = newTabRepoListRead.interpret(repoResponse)
@@ -138,10 +133,10 @@ async function loadDetectedAgents(
     .map((candidate) => candidate.executionHostId?.startsWith('runtime:') === true)
   if (runtimeOwned.includes(true)) {
     // Repo ids can collide across hosts; only a host that refuses other-runtime workspaces can disambiguate them.
-    if (!host.hostRefusesOtherRuntime || !runtimeOwned.includes(false)) {
+    if (!probe.hostRefusesOtherRuntime || !runtimeOwned.includes(false)) {
       throw new MobileWorkspaceOnOtherRuntimeError()
     }
-    return { ...(await probeHostAgents(client, { worktreeId }, host.refresh)), repo }
+    return { ...(await probeHostAgents(client, { worktreeId }, probe.refresh)), repo }
   }
   const connectionId = repo.connectionId?.trim() || null
   return connectionId
@@ -152,7 +147,7 @@ async function loadDetectedAgents(
       }
     : {
         // Send workspace identity for WSL/runtime resolution; older hosts ignore it and keep their default.
-        ...(await probeHostAgents(client, { worktreeId }, host.refresh)),
+        ...(await probeHostAgents(client, { worktreeId }, probe.refresh)),
         repo
       }
 }
@@ -161,12 +156,12 @@ async function loadDetectedAgents(
 async function probeHostAgents(
   client: RpcClient,
   params: { worktreeId: string } | undefined,
-  refresh: boolean | undefined
+  refresh: MobileAgentRefresh | undefined
 ): Promise<Omit<DetectedAgentsReply, 'repo'>> {
   if (refresh) {
-    const reply = await (params
-      ? preflightRefreshAgentsRead.request(client, params)
-      : preflightRefreshAgentsRead.request(client))
+    const reply = await preflightRefreshAgentsRead.request(client, params, {
+      beforeSend: refresh.onSent
+    })
     // Do not repeat work after disconnects or host failures.
     if (reply.ok || !isMobileMethodUnavailableError(reply.error.code, reply.error.message)) {
       return { reply, interpret: preflightRefreshAgentsRead.interpret }
@@ -194,13 +189,10 @@ function interpretDetectedAgents(detected: DetectedAgentsReply): unknown[] {
 async function loadFolderDetectedAgents(
   client: RpcClient,
   worktreeId: string,
-  {
-    hostRefusesOtherRuntime,
-    refresh
-  }: Pick<MobileAgentLaunchContextArgs, 'hostRefusesOtherRuntime' | 'refresh'>
+  probe: HostProbeOptions
 ): Promise<DetectedAgentsReply> {
-  if (hostRefusesOtherRuntime) {
-    return { ...(await probeHostAgents(client, { worktreeId }, refresh)), repo: null }
+  if (probe.hostRefusesOtherRuntime) {
+    return { ...(await probeHostAgents(client, { worktreeId }, probe.refresh)), repo: null }
   }
   // Older hosts ignore worktreeId during detection, so resolve their folder catalog first.
   const [folders, groups, repos] = await Promise.all([
@@ -253,5 +245,5 @@ async function loadFolderDetectedAgents(
         interpret: preflightDetectRemoteAgentsRead.interpret,
         repo: null
       }
-    : { ...(await probeHostAgents(client, { worktreeId }, refresh)), repo: null }
+    : { ...(await probeHostAgents(client, { worktreeId }, probe.refresh)), repo: null }
 }

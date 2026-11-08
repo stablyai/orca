@@ -3,9 +3,10 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-
 import { isRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { useAppStore } from '../../store'
 import { recoverMirroredTerminalOrphansBeforeApply } from './mirror-terminal-orphan-recovery'
-import { sessionTabsFreshnessKey, shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
+import { sessionTabsFreshnessKey, acceptReplayedWebSessionTabsSnapshot } from './state'
+import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import { decideWebSessionTabsSnapshot } from './tracking-decisions'
-import { acceptReplayedWebSessionTabsSnapshot } from './tracking-lifecycle'
+
 import {
   acceptSessionTabsRuntimeId,
   getSessionTabsRuntimeIdFromResponse,

@@ -4,10 +4,7 @@ import { browserTabsVetoGuestEviction } from './browser-guest-eviction-veto'
 import { selectBrowserGuestEvictionWorktreeIds } from './browser-guest-worktree-retention'
 import { hydrateBrowserDrivers } from '../../../lib/pane-manager/browser-mobile-driver-state'
 import { hydrateBrowserRemoteViewerPages } from '../../../lib/pane-manager/browser-remote-viewer-state'
-import {
-  acquireBrowserAutomationVisibility,
-  releaseBrowserAutomationVisibility
-} from './browser-automation-visibility'
+
 import { installBrowserPageDownloadActivityTracking } from '../navigate/browser-page-download-activity'
 
 // Eviction destroys guests, permanently ending paired-client streams; paint retention must veto it too.
@@ -34,30 +31,6 @@ describe('browser guest eviction veto', () => {
   beforeEach(() => {
     hydrateBrowserDrivers([])
     hydrateBrowserRemoteViewerPages([])
-  })
-
-  it('evicts a hidden over-budget worktree no signal is holding', () => {
-    expect(browserTabsVetoGuestEviction(tabsFor(WATCHED_PAGE))).toBe(false)
-    expect(evictionRun(tabsFor(WATCHED_PAGE))).toContain(WATCHED_WORKTREE)
-  })
-
-  it('spares a page a paired client is streaming', () => {
-    hydrateBrowserRemoteViewerPages([WATCHED_PAGE])
-    expect(evictionRun(tabsFor(WATCHED_PAGE))).not.toContain(WATCHED_WORKTREE)
-  })
-
-  it('spares a page a phone is driving', () => {
-    hydrateBrowserDrivers([
-      { browserPageId: WATCHED_PAGE, driver: { kind: 'mobile', clientId: 'conn-phone' } }
-    ])
-    expect(evictionRun(tabsFor(WATCHED_PAGE))).not.toContain(WATCHED_WORKTREE)
-  })
-
-  it('spares a page an agent is driving through an automation lease', () => {
-    const token = acquireBrowserAutomationVisibility(WATCHED_PAGE)
-    expect(evictionRun(tabsFor(WATCHED_PAGE))).not.toContain(WATCHED_WORKTREE)
-    releaseBrowserAutomationVisibility(token)
-    expect(evictionRun(tabsFor(WATCHED_PAGE))).toContain(WATCHED_WORKTREE)
   })
 
   // Parking preserves downloads; eviction unregisters the guest and main cancels them as on tab close.

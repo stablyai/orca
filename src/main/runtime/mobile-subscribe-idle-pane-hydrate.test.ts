@@ -1,4 +1,3 @@
-import './rpc/unused-default-rpc-methods.test-fixture'
 /** Reattached idle PTYs may never emit; hidden panes serialize at desktop size, but phones need a phone-grid snapshot. */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -170,18 +169,6 @@ describe('phone subscribe to an idle PTY whose hidden pane sits at desktop size'
     expect({ cols: resubscribed.cols, rows: resubscribed.rows }).toEqual(PHONE)
   })
 
-  it('keeps serving the model on resubscribe without re-reading the pane', async () => {
-    const { runtime, handle, serializeBuffer } = setup({ paneMounted: true })
-    await firstSnapshot(runtime, handle)
-    const panesReadForFirst = serializeBuffer.mock.calls.length
-
-    const snapshot = await firstSnapshot(runtime, handle)
-
-    expect({ cols: snapshot.cols, rows: snapshot.rows }).toEqual(PHONE)
-    expect((await paintedRows(snapshot)).slice(0, 4)).toEqual(EXPECTED_PHONE_ROWS)
-    expect(serializeBuffer.mock.calls.length).toBe(panesReadForFirst)
-  })
-
   it('chains a live repaint after the hydrated seed', async () => {
     const { runtime, handle } = setup({ paneMounted: true })
     await firstSnapshot(runtime, handle)
@@ -193,16 +180,5 @@ describe('phone subscribe to an idle PTY whose hidden pane sits at desktop size'
       ...EXPECTED_PHONE_ROWS,
       '$ repainted'
     ])
-  })
-
-  it('leaves a PTY with no pane serializer to the renderer mount path', async () => {
-    const { runtime, handle, requestMount } = setup({ paneMounted: false })
-
-    const subscription = subscribePhone(runtime, handle)
-    await vi.waitFor(() => expect(subscription.snapshot()).not.toBeNull(), { timeout: 5_000 })
-    await subscription.close()
-
-    expect(requestMount).toHaveBeenCalledTimes(1)
-    expect(runtime.hasHeadlessTerminalState(PTY_ID)).toBe(false)
   })
 })

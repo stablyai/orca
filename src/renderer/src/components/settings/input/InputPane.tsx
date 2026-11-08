@@ -3,7 +3,7 @@ import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { isDefaultPrimarySelectionMiddleClickPasteUserAgent } from '@/hooks/usePrimarySelectionPaste'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type InputPaneProps = {
   settings: GlobalSettings
@@ -11,6 +11,7 @@ type InputPaneProps = {
 }
 
 export function InputPane({ settings, updateSettings }: InputPaneProps): React.JSX.Element {
+  const t = useTranslate()
   const enabled =
     settings.primarySelectionMiddleClickPaste ??
     isDefaultPrimarySelectionMiddleClickPasteUserAgent()
@@ -18,11 +19,11 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
   return (
     <section className="space-y-4">
       <SearchableSetting
-        title={translate(
+        title={t(
           'auto.components.settings.InputPane.ad31c3c5fb',
           'Middle-click Paste from Selection'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.InputPane.db15068196',
           'Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer.'
         )}
@@ -43,20 +44,20 @@ export function InputPane({ settings, updateSettings }: InputPaneProps): React.J
       >
         <div className="space-y-0.5">
           <Label>
-            {translate(
+            {t(
               'auto.components.settings.InputPane.ad31c3c5fb',
               'Middle-click Paste from Selection'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.InputPane.db15068196',
               'Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer.'
             )}
           </p>
         </div>
         <Switch
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.InputPane.ad31c3c5fb',
             'Middle-click Paste from Selection'
           )}

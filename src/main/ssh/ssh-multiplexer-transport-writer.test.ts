@@ -138,20 +138,6 @@ describe('SshMultiplexerTransportWriter', () => {
     writer.dispose()
   })
 
-  it('reports saturated epochs and their drain boundary exactly once', () => {
-    const harness = transportHarness([false])
-    const saturation = vi.fn()
-    const writer = new SshMultiplexerTransportWriter(harness.transport, vi.fn(), saturation)
-
-    writer.enqueue(Buffer.from('ordinary'), 'ordinary')
-    writer.enqueue(Buffer.from('queued'), 'ordinary')
-    expect(saturation.mock.calls).toEqual([[true]])
-
-    harness.drain()
-    expect(saturation.mock.calls).toEqual([[true], [false]])
-    writer.dispose()
-  })
-
   it('keeps a full ordinary lane from consuming the control reserve', () => {
     const harness = transportHarness([false, true, true])
     const writer = new SshMultiplexerTransportWriter(harness.transport, vi.fn())

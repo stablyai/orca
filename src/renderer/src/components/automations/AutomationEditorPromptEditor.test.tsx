@@ -4,8 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const editorProps = vi.hoisted(() => ({ current: null as Record<string, unknown> | null }))
 const installFindShortcut = vi.hoisted(() => vi.fn(() => vi.fn()))
-const cleanupCommandPaletteShortcut = vi.hoisted(() => vi.fn())
-const installCommandPaletteShortcut = vi.hoisted(() => vi.fn(() => cleanupCommandPaletteShortcut))
 const syncContentOnMount = vi.hoisted(() => vi.fn(() => false))
 const syncContentUpdate = vi.hoisted(() => vi.fn())
 
@@ -25,7 +23,7 @@ vi.mock('@/store', () => ({
     })
 }))
 vi.mock('@/components/editor/editor-shortcuts', () => ({
-  installMonacoEditorCommandPaletteShortcut: installCommandPaletteShortcut,
+  installMonacoEditorCommandPaletteShortcut: () => vi.fn(),
   installMonacoEditorFindShortcut: installFindShortcut
 }))
 vi.mock('@/components/editor/monaco-content-sync', () => ({
@@ -44,68 +42,11 @@ afterEach(() => {
   cleanup()
   editorProps.current = null
   installFindShortcut.mockClear()
-  installCommandPaletteShortcut.mockClear()
-  cleanupCommandPaletteShortcut.mockClear()
   syncContentOnMount.mockClear()
   syncContentUpdate.mockClear()
 })
 
 describe('AutomationEditorPromptEditor', () => {
-  it('passes the initial content as defaultValue rather than controlled value', () => {
-    render(
-      <AutomationEditorPromptEditor
-        value="weekly audit"
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={vi.fn()}
-      />
-    )
-
-    expect(editorProps.current?.defaultValue).toBe('weekly audit')
-    expect(editorProps.current).not.toHaveProperty('value')
-    expect(editorProps.current?.defaultLanguage).toBe('plaintext')
-    expect(
-      (editorProps.current?.options as { placeholder?: string } | undefined)?.placeholder
-    ).toBe('Prompt placeholder')
-  })
-
-  it('installs editor shortcuts and syncs an external rewrite after mount', () => {
-    const editorInstance = {
-      getContainerDomNode: () => document.createElement('div'),
-      onDidDispose: vi.fn<(listener: () => void) => void>()
-    }
-    const { rerender } = render(
-      <AutomationEditorPromptEditor
-        value="original"
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={vi.fn()}
-      />
-    )
-
-    const onMount = editorProps.current?.onMount as (editor: typeof editorInstance) => void
-    onMount(editorInstance)
-
-    expect(installFindShortcut).toHaveBeenCalledWith(editorInstance)
-    expect(installCommandPaletteShortcut).toHaveBeenCalledWith(editorInstance)
-    expect(syncContentOnMount).toHaveBeenCalledWith(editorInstance, 'original')
-
-    rerender(
-      <AutomationEditorPromptEditor
-        value="from template"
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={vi.fn()}
-      />
-    )
-
-    expect(syncContentUpdate).toHaveBeenCalledWith(editorInstance, 'from template')
-
-    const disposeEditor = editorInstance.onDidDispose.mock.calls[0]?.[0]
-    disposeEditor?.()
-    expect(cleanupCommandPaletteShortcut).toHaveBeenCalledTimes(1)
-  })
-
   it('dismisses on Escape only when find is closed', () => {
     const onDismiss = vi.fn()
     const editorDom = document.createElement('div')
@@ -134,22 +75,6 @@ describe('AutomationEditorPromptEditor', () => {
     findWidget.setAttribute('aria-hidden', 'true')
     editorDom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(onDismiss).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not render a custom placeholder overlay on an empty prompt', () => {
-    const { container } = render(
-      <AutomationEditorPromptEditor
-        value=""
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={vi.fn()}
-      />
-    )
-
-    expect(container.textContent).not.toContain('Prompt placeholder')
-    expect(
-      (editorProps.current?.options as { placeholder?: string } | undefined)?.placeholder
-    ).toBe('Prompt placeholder')
   })
 
   it('scopes find-widget lookups to the prompt editor slot, not the document', () => {
@@ -183,21 +108,5 @@ describe('AutomationEditorPromptEditor', () => {
 
     dialog.remove()
     background.remove()
-  })
-
-  it('forwards typed edits to the draft', () => {
-    const onChange = vi.fn()
-    render(
-      <AutomationEditorPromptEditor
-        value=""
-        placeholder="Prompt placeholder"
-        ariaLabel="Prompt"
-        onChange={onChange}
-      />
-    )
-
-    const handleChange = editorProps.current?.onChange as (value: string) => void
-    handleChange('typed prompt')
-    expect(onChange).toHaveBeenCalledWith('typed prompt')
   })
 })

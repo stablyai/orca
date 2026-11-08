@@ -73,7 +73,7 @@ vi.mock('@monaco-editor/react', () => ({
 vi.mock('@/store/index', () => ({
   useAppStore: <T,>(selector: (state: typeof fixture.state) => T) => selector(fixture.state)
 }))
-vi.mock('@/store/diff-comment-owner', () => ({
+vi.mock('@/store/slices/diff-comments/diff-comment-owner', () => ({
   sourceParts: () => [],
   createDiffCommentViewSelector: () => () => fixture.view,
   selectDiffCommentView: () => ({ owner: null, comments: undefined }),

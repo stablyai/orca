@@ -2,9 +2,9 @@ import { useCallback } from 'react'
 import { useAppStore } from '../../../store'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { connectPanePty } from '../pty-connection/connect-pane-pty'
-import { releasePaneTransportForRestart } from '../pane-restart-transport-handoff'
-import { clearPaneTerminalError } from '../terminal-error-accumulation'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
+import { clearPaneTerminalError } from '../errors/terminal-error-accumulation'
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
 
 export function usePaneProcessRestart({
