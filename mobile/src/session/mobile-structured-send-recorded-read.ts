@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
@@ -29,19 +29,25 @@ function readMobileStructuredSendRecorded(
     .catch(() => false)
 }
 
-/** Null where the host can confirm a send only through the history pages the phone loaded. */
+/** Bound to the chat when a send is held; support is read when its deadline fires, since a
+ *  relaunch claims saved sends before the capability probe answers. Null: the host can't be asked. */
 export function useMobileStructuredSendRecorded(
   client: RpcClient | null,
   sessionId: string | null,
   hostSupport: StructuredAgentSessionHostSupport | null | undefined
-): ((clientMessageId: string) => Promise<boolean>) | null {
-  const supported = hostSupport?.sendRecorded === true
+): ((clientMessageId: string) => Promise<boolean> | null) | null {
+  const supportedRef = useRef(false)
+  useLayoutEffect(() => {
+    supportedRef.current = hostSupport?.sendRecorded === true
+  }, [hostSupport?.sendRecorded])
   return useMemo(
     () =>
-      client && sessionId && supported
+      client && sessionId
         ? (clientMessageId: string) =>
-            readMobileStructuredSendRecorded(client, sessionId, clientMessageId)
+            supportedRef.current
+              ? readMobileStructuredSendRecorded(client, sessionId, clientMessageId)
+              : null
         : null,
-    [client, sessionId, supported]
+    [client, sessionId]
   )
 }

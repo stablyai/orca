@@ -49,7 +49,7 @@ export function useMobileStructuredSends(args: {
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   onSendError: MobileNativeChatSendErrorReporter
   /** Asks the host whether it recorded a send; null where only the loaded pages can say. */
-  confirmRecorded?: ((clientMessageId: string) => Promise<boolean>) | null
+  confirmRecorded?: ((clientMessageId: string) => Promise<boolean> | null) | null
 }): MobileStructuredSends {
   const {
     confirmRecorded = null,
@@ -74,6 +74,8 @@ export function useMobileStructuredSends(args: {
   }, [sendsBySession])
   // Held sends by journal id; their deadlines pause while the host is out.
   const [holds] = useState(createUnconfirmedSendDeadlines<string>)
+  // Expired holds whose host lookup is out: a row arriving meanwhile still settles them.
+  const [asking] = useState(() => new Set<string>())
   useLayoutEffect(() => {
     holds.setConnected(connected)
   }, [connected, holds])
@@ -171,11 +173,14 @@ export function useMobileStructuredSends(args: {
       inFlightIds: () => string[],
       handBack: () => void
     ): void => {
-      if (!confirm) {
+      const asked = confirm?.(clientMessageId)
+      if (!asked) {
         handBack()
         return
       }
-      void confirm(clientMessageId).then((onHost) => {
+      asking.add(clientMessageId)
+      void asked.then((onHost) => {
+        asking.delete(clientMessageId)
         if (onHost) {
           for (const id of inFlightIds()) {
             settleMobileNativeChatInFlightSend(id)
@@ -187,7 +192,7 @@ export function useMobileStructuredSends(args: {
         }
       })
     },
-    [forget]
+    [asking, forget]
   )
 
   const isHeld = useCallback(
@@ -265,7 +270,7 @@ export function useMobileStructuredSends(args: {
 
   const sends = sendsBySession[sessionKey] ?? NO_SENDS
   useEffect(() => {
-    const held = holds.keys()
+    const held = [...holds.keys(), ...asking]
     if (sends.length === 0 && held.length === 0) {
       return
     }
@@ -287,7 +292,7 @@ export function useMobileStructuredSends(args: {
     if (sends.some((send) => settled.has(send.clientMessageId))) {
       forget(settled)
     }
-  }, [cursor, forget, holds, recorded, sends])
+  }, [asking, cursor, forget, holds, recorded, sends])
 
   useEffect(() => {
     mountedRef.current = true
