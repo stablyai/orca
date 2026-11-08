@@ -1,6 +1,5 @@
 import { resolveHiddenProbeCwd } from '../../../../../rate-limits/hidden-probe-cwd'
 import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import '../../../unused-default-rpc-methods.test-fixture'
 // The catalog read behind the picker: which directory a named worktree runs in on this host.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

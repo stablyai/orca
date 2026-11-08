@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { z } from 'zod'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'

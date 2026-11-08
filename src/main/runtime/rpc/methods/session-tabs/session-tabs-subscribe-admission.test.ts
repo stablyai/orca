@@ -1,7 +1,6 @@
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import '../../runtime-client-capabilities'
 import type { RuntimeClientCapabilities } from '../../runtime-client-capabilities'
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'

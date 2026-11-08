@@ -1,5 +1,4 @@
 import { EVERY_AGENT_CHAT } from '../../src/shared/native-chat/every-agent-chat.test-fixture'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type { createChatRendererBridge } from './helpers/automation-chat-renderer-test-harness'
 import { exerciseBusyChatReuse } from './helpers/automation-chat-reuse-test-harness'
 import { readAutomationRunReceipt } from '../../src/main/automations/automation-run-receipt'

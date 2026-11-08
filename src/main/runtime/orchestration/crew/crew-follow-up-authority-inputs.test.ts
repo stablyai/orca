@@ -1,4 +1,3 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { fixture } from './crew-read-model.test-fixture'
 
