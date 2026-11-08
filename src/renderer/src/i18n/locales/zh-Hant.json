@@ -16080,6 +16080,7 @@
           "kernelStartFailed": "核心啟動失敗。",
           "noPython": "在此電腦上未找到 Python。請從 [python.org](https://www.python.org/downloads/) 安裝，然後重新執行儲存格。",
           "kernelDied": "核心已停止。",
+          "outputTruncated": "輸出已截斷：Orca 保留了此儲存格輸出的開頭部分，並捨棄其餘內容。如需保留全部輸出，請改為寫入檔案。",
           "localOnly": "筆記本儲存格只能針對此電腦上的檔案執行。",
           "pythonOnly": "Orca 中只能執行 Python 筆記本。",
           "ownerUnresolved": "Orca 尚無法判斷此筆記本位於哪台電腦，因此無法執行其中的儲存格。",
