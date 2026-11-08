@@ -298,7 +298,8 @@ export function ChecksTab({
     },
     onFix: () => {
       void handleFixBrokenChecks()
-    }
+    },
+    t
   })
   const compactHeader = (
     <ChecksTabCompactHeader

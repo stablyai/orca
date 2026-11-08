@@ -9,8 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export function ChecksTabActions({
   variant,
@@ -23,7 +22,8 @@ export function ChecksTabActions({
   listLength,
   onRefresh,
   onRerun,
-  onFix
+  onFix,
+  t
 }: {
   variant: 'compact' | 'page'
   canUseChecksRepoContext: boolean
@@ -36,6 +36,8 @@ export function ChecksTabActions({
   onRefresh: () => void
   onRerun: (failedOnly: boolean) => void
   onFix: () => void
+  /** The caller's render translator; this runs as a plain function, not a component. */
+  t: Translate
 }): {
   refreshAction: React.JSX.Element
   fixBrokenChecksAction: React.JSX.Element | null
@@ -53,13 +55,13 @@ export function ChecksTabActions({
           className="size-7 shrink-0"
           disabled={!canUseChecksRepoContext || refreshing}
           onClick={() => void onRefresh()}
-          aria-label={translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
+          aria-label={t('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
         >
           <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {translate('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
+        {t('auto.components.GitHubItemDialog.9a1004fc76', 'Refresh checks')}
       </TooltipContent>
     </Tooltip>
   )
@@ -81,12 +83,12 @@ export function ChecksTabActions({
               <Wrench className="size-3" />
             )}
             {variant === 'compact'
-              ? translate('auto.components.GitHubItemDialog.9157d48ddb', 'Fix checks')
-              : translate('auto.components.GitHubItemDialog.2511f44bb7', 'Fix broken checks')}
+              ? t('auto.components.GitHubItemDialog.9157d48ddb', 'Fix checks')
+              : t('auto.components.GitHubItemDialog.2511f44bb7', 'Fix broken checks')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate(
+          {t(
             'auto.components.GitHubItemDialog.f4b1292569',
             'Start the default AI agent on these checks'
           )}
@@ -109,7 +111,7 @@ export function ChecksTabActions({
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {translate('auto.components.GitHubItemDialog.1b56e28faa', 'Rerun')}
+            {t('auto.components.GitHubItemDialog.1b56e28faa', 'Rerun')}
             <ChevronDown className="size-3 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -119,11 +121,11 @@ export function ChecksTabActions({
             onSelect={() => void onRerun(true)}
           >
             <RefreshCw className="size-4" />
-            {translate('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
+            {t('checks.rerunUnsuccessful', 'Rerun unsuccessful')}
           </DropdownMenuItem>
           <DropdownMenuItem disabled={rerunning} onSelect={() => void onRerun(false)}>
             <RefreshCw className="size-4" />
-            {translate('auto.components.GitHubItemDialog.71c11aff84', 'Rerun all checks')}
+            {t('auto.components.GitHubItemDialog.71c11aff84', 'Rerun all checks')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
