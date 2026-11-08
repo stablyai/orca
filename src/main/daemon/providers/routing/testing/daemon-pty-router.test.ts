@@ -1,6 +1,9 @@
 import { createAdapter } from './daemon-pty-router-test-fixture'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from '../daemon-pty-router'
+
+// Why: drain retirement telemetry is real-module noise here; the router itself never emits it.
+vi.mock('../../observability/daemon-lifecycle-event', () => ({ trackDaemonRetired: vi.fn() }))
 import { TerminalSessionOwnerUnverifiedError } from '../../../protocol/daemon-errors'
 import type { PtyProcessInfo } from '../../../../providers/pty-provider-contract'
 import {
@@ -135,6 +138,26 @@ describe('DaemonPtyRouter', () => {
     expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
   })
 
+  it('keeps consulting a legacy daemon whose inventory listing failed', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('wedged'))
+    vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+    // Why: a wedged inventory cannot prove the generation drained; only the daemon's census can.
+    vi.mocked(legacy.requestIdleRetirement).mockResolvedValue({
+      state: 'busy',
+      liveSessions: 1,
+      admissionReopened: true
+    })
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    // Without an inventory nothing proves the legacy daemon doesn't own this id.
+    await expect(router.probePtyLiveness('unknown-session')).resolves.toBeNull()
+    expect(legacy.listProcesses).toHaveBeenCalledTimes(2)
+    expect(legacy.probePtyLiveness).not.toHaveBeenCalled()
+  })
+
   it('keeps the legacy route when checkpointed shutdown fails', async () => {
     const current = createAdapter('current', [], undefined, HISTORY_SEED_TRANSFER_PROTOCOL_VERSION)
     const legacy = createAdapter(
@@ -155,5 +178,72 @@ describe('DaemonPtyRouter', () => {
     expect(legacy.spawn).toHaveBeenCalled()
     expect(legacy.ackColdRestore).not.toHaveBeenCalled()
     expect(current.spawn).not.toHaveBeenCalled()
+  })
+})
+
+// #9138: a legacy generation whose sessions all exited must not outlive the drain —
+// the app's own legacy event connection blocks the daemon-side last-disconnect
+// retirement, so the router has to ask once the exits settle.
+describe('DaemonPtyRouter legacy drain retirement', () => {
+  const DRAIN_DEBOUNCE_MS = 5_000
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('retires and detaches a drained legacy adapter once its exits settle', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['legacy-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+    expect(router.getLegacyAdapters()).toContain(legacy)
+
+    await router.shutdown('legacy-session', { immediate: true })
+    legacy.emitExit('legacy-session', 0)
+    await vi.advanceTimersByTimeAsync(DRAIN_DEBOUNCE_MS)
+
+    expect(legacy.requestIdleRetirement).toHaveBeenCalledOnce()
+    expect(router.getLegacyAdapters()).not.toContain(legacy)
+    expect(legacy.disconnectOnly).toHaveBeenCalled()
+  })
+
+  it('keeps a legacy adapter that still routes a live session', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy', ['live-session', 'exiting-session'])
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+    await router.discoverLegacySessions()
+
+    legacy.emitExit('exiting-session', 0)
+    await vi.advanceTimersByTimeAsync(DRAIN_DEBOUNCE_MS * 2)
+
+    expect(legacy.requestIdleRetirement).not.toHaveBeenCalled()
+    expect(router.getLegacyAdapters()).toContain(legacy)
+  })
+
+  it('never drains the current generation', async () => {
+    const current = createAdapter('current', ['current-session'])
+    new DaemonPtyRouter({ current, legacy: [] })
+
+    current.emitExit('current-session', 0)
+    await vi.advanceTimersByTimeAsync(DRAIN_DEBOUNCE_MS * 2)
+
+    expect(current.requestIdleRetirement).not.toHaveBeenCalled()
+  })
+
+  it('sweeps generations that drained while no app was running at discovery time', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy')
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await router.discoverLegacySessions()
+    // Why zero: the sweep is fire-and-forget; flush its microtasks without waiting the debounce.
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(legacy.requestIdleRetirement).toHaveBeenCalledOnce()
+    expect(router.getLegacyAdapters()).not.toContain(legacy)
   })
 })
