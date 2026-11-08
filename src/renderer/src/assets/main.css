@@ -607,12 +607,16 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   background: color-mix(in oklab, var(--primary) 90%, transparent);
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button][data-cancel] {
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-button][data-cancel] {
   background: var(--secondary);
   color: var(--secondary-foreground);
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button][data-cancel]:hover {
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-button][data-cancel]:hover {
   background: color-mix(in oklab, var(--secondary) 80%, transparent);
 }
 
