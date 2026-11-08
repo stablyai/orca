@@ -34,21 +34,30 @@ function isHostIntervalCallee(node) {
   )
 }
 
-// Any local `setInterval` binding shadows the global: module imports and aliases are the collector's to count.
-function declaresSetInterval(node) {
-  return (
-    (ts.isImportSpecifier(node) ||
-      ts.isImportClause(node) ||
-      ts.isNamespaceImport(node) ||
-      ts.isImportEqualsDeclaration(node) ||
-      ts.isBindingElement(node) ||
-      ts.isVariableDeclaration(node) ||
-      ts.isParameter(node) ||
-      ts.isFunctionDeclaration(node)) &&
-    !!node.name &&
-    ts.isIdentifier(node.name) &&
-    node.name.text === 'setInterval'
-  )
+const SCOPE_OPTIONS = { noLib: true, noResolve: true, allowJs: true, types: [] }
+
+// Scope-aware per call: a bare call is the global timer when it binds to nothing declared in this
+// file. Module bindings (and their aliases) are the collector's to count, so they are skipped here.
+function countGlobalBareCalls(source) {
+  const host = ts.createCompilerHost(SCOPE_OPTIONS)
+  host.getSourceFile = (name) => (name === source.fileName ? source : undefined)
+  const checker = ts.createProgram([source.fileName], SCOPE_OPTIONS, host).getTypeChecker()
+  let count = 0
+  const visit = (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'setInterval'
+    ) {
+      const declarations = checker.getSymbolAtLocation(node.expression)?.declarations ?? []
+      if (!declarations.some((declaration) => declaration.getSourceFile() === source)) {
+        count += 1
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return count
 }
 
 export function countRecurringTimers(rel, source) {
@@ -56,22 +65,15 @@ export function countRecurringTimers(rel, source) {
     return 0
   }
   const file = ts.createSourceFile(rel, source, ts.ScriptTarget.Latest, true)
-  let shadowed = false
-  let bare = 0
   let hosted = 0
   const visit = (node) => {
-    shadowed ||= declaresSetInterval(node)
-    if (ts.isCallExpression(node)) {
-      if (ts.isIdentifier(node.expression) && node.expression.text === 'setInterval') {
-        bare += 1
-      } else if (isHostIntervalCallee(node.expression)) {
-        hosted += 1
-      }
+    if (ts.isCallExpression(node) && isHostIntervalCallee(node.expression)) {
+      hosted += 1
     }
     ts.forEachChild(node, visit)
   }
   visit(file)
-  return (shadowed ? 0 : bare) + hosted + timerImports.collectUses(rel, source).count
+  return countGlobalBareCalls(file) + hosted + timerImports.collectUses(rel, source).count
 }
 
 export function collectRecurringTimerCounts(root = process.cwd()) {
@@ -92,7 +94,8 @@ export function main(root = process.cwd(), arg = undefined) {
       baselinePath: BASELINE_PATH,
       header: [
         '# setInterval calls (global, or imported from node:timers / node:timers/promises) in production src/main,',
-        '# src/renderer, src/shared and src/cli, per file. A self-rescheduling setTimeout is not counted; it must back off or pause while hidden.',
+        '# src/renderer, src/shared and src/cli, per file. Bare calls are resolved per scope; imported bindings follow the shared',
+        '# collector (file-wide). Not counted: global-object destructuring, a self-rescheduling setTimeout (it must back off or pause while hidden).',
         '# This is a RATCHET: counts may only go DOWN.',
         '# Prune after removing intervals: pnpm check:recurring-timer-ratchet --prune'
       ],
