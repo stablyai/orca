@@ -86,7 +86,11 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
       )
       if (original) {
         const piece =
-          reason === 'savedConversationMissing' ? 'forkOriginalMissing' : 'forkOriginalUnavailable'
+          reason === 'savedConversationMissing'
+            ? 'forkOriginalMissing'
+            : reason === 'turnActive'
+              ? 'forkOriginalLatestOnly'
+              : 'forkOriginalUnavailable'
         const title = record.conversationName?.trim()
         refusal.refusal.message = sayAgentSessionFailureEnglish(title ? `${piece}Named` : piece, {
           agent: name,

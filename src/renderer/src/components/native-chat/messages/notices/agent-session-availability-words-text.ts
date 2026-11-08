@@ -11,6 +11,8 @@ type AvailabilityCopyId = Extract<
   | 'forkOriginalUnavailable'
   | 'forkOriginalMissingNamed'
   | 'forkOriginalUnavailableNamed'
+  | 'forkOriginalLatestOnly'
+  | 'forkOriginalLatestOnlyNamed'
   | 'claudeSystemNotSignedIn'
   | 'claudeManagedNotSignedIn'
   | 'codexSystemNotSignedIn'
@@ -55,6 +57,18 @@ export const AVAILABILITY_PIECES: Record<
     translate(
       'components.native-chat.failureWords.forkOriginalUnavailableNamed',
       COPY.forkOriginalUnavailableNamed,
+      values
+    ),
+  forkOriginalLatestOnly: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalLatestOnly',
+      COPY.forkOriginalLatestOnly,
+      values
+    ),
+  forkOriginalLatestOnlyNamed: (values) =>
+    translate(
+      'components.native-chat.failureWords.forkOriginalLatestOnlyNamed',
+      COPY.forkOriginalLatestOnlyNamed,
       values
     ),
   agentCommandNotSignedIn: (values) =>

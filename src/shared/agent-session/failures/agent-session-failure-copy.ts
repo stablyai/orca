@@ -28,6 +28,10 @@ export const AGENT_SESSION_FAILURE_COPY = {
     '{{agent}} could not find this response in "{{detail}}". Open that chat and fork from there.',
   forkOriginalUnavailableNamed:
     '{{agent}} cannot fork this response in "{{detail}}". Open that chat and fork from there.',
+  forkOriginalLatestOnly:
+    '{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.',
+  forkOriginalLatestOnlyNamed:
+    '{{agent}} can only fork the latest response in "{{detail}}". Open that chat and fork its latest response once it has finished.',
   unconfirmed: "Couldn't confirm whether this was sent. It hasn't been resent.",
   providerStartFailed: '{{agent}} stopped before it finished starting.',
   savedConversationMissing: "{{agent}} couldn't find this chat's saved conversation.",
@@ -278,7 +282,9 @@ export function agentSessionForkSourceFailureWords(
     'forkOriginalMissing',
     'forkOriginalUnavailable',
     'forkOriginalMissingNamed',
-    'forkOriginalUnavailableNamed'
+    'forkOriginalUnavailableNamed',
+    'forkOriginalLatestOnly',
+    'forkOriginalLatestOnlyNamed'
   ] as const) {
     const [prefix, suffix] = sayAgentSessionFailureEnglish(id, { agent }).split('{{detail}}')
     if (
