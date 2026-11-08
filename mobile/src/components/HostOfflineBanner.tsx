@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { CloudOff } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -31,6 +32,20 @@ export function useHostOfflineBanner({
   asOf: number | null
 }): { offline: boolean; asOf: number | null; retry: (() => void) | null } | null {
   const state = useCalmConnectionState(connState, lastConnectedAt)
+  // Data this document read stayed live until the connection dropped; stored data only until it was read.
+  const [mountedAt] = useState(Date.now)
+  const [droppedAt, setDroppedAt] = useState<number | null>(null)
+  useEffect(() => {
+    let previous = client?.getState()
+    return client?.onStateChange((next) => {
+      if (next === 'connected') {
+        setDroppedAt(null)
+      } else if (previous === 'connected') {
+        setDroppedAt(Date.now())
+      }
+      previous = next
+    })
+  }, [client])
   // Before a first connect, such as a relaunch over stored rows, the header's refresh line covers
   // connecting and the banner waits until the host is judged unreachable.
   const show =
@@ -43,7 +58,12 @@ export function useHostOfflineBanner({
   }
   // A nudge redials now instead of waiting out the reconnect backoff.
   const retry = forceReconnect ?? (client ? () => client.notifyForeground('focus') : null)
-  return { offline: outage || state === 'disconnected', asOf, retry }
+  const readThisDocument = asOf !== null && asOf >= mountedAt
+  return {
+    offline: outage || state === 'disconnected',
+    asOf: readThisDocument ? (droppedAt ?? asOf) : asOf,
+    retry
+  }
 }
 
 /**

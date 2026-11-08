@@ -62,6 +62,8 @@ export type DeviceStore = {
   ): Promise<DeviceStoreWriteResult>
   // Every table by default; a revoked host loses only its cached screens and keeps drafts until removal.
   wipeHost(hostId: string, tables?: readonly DeviceStoreTable[]): Promise<void>
+  // While a host is revoked its cache refuses writes, so a page's pending flush can't bring a wipe back.
+  fenceHostCache(hostId: string, fenced: boolean): void
   // Loads the key unless it is already loaded; an unavailable store retries here.
   open(): Promise<'ready' | 'unavailable'>
   // The launch pass over both roots. Later runs redo only a pass that missed files.
@@ -167,6 +169,7 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
   }
 
   let maintenance: Promise<void> | null = null
+  const fencedCacheHosts = new Set<string>()
 
   // The first key load heads the queue, so every call runs behind it in call order. An unavailable store
   // stays unavailable until open() runs again (the next foreground), not per call.
@@ -217,7 +220,8 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
       }
       const result = await enqueue(async (): Promise<DeviceStoreWriteResult> => {
         const cryptoKey = key
-        if (!cryptoKey) {
+        // Checked in turn, so a write queued before a revocation's wipe lands before it and is wiped.
+        if (!cryptoKey || (table === 'cache' && fencedCacheHosts.has(hostId))) {
           return UNAVAILABLE
         }
         const index = indexes[table]
@@ -260,6 +264,9 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
         await enforceCacheCap()
       }
       return result
+    },
+    fenceHostCache(hostId, fenced) {
+      void (fenced ? fencedCacheHosts.add(hostId) : fencedCacheHosts.delete(hostId))
     },
     wipeHost(hostId, tables = DEVICE_STORE_TABLES) {
       return enqueue(async () => {
@@ -332,9 +339,4 @@ export function startDeviceStore(): void {
 // Removal doesn't wait on this; the launch orphan sweep catches a crash in between.
 export function wipeHostStore(hostId: string): Promise<void> {
   return processDeviceStore().wipeHost(hostId)
-}
-
-// A definite revocation verdict (K6): cached screens go at once, drafts stay until the host is removed.
-export function wipeHostCacheStore(hostId: string): Promise<void> {
-  return processDeviceStore().wipeHost(hostId, ['cache'])
 }

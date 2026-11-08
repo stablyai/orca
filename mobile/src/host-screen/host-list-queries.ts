@@ -168,7 +168,6 @@ export const hostRepoCatalogQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, H
   signal: { events: ['reposChanged'] },
   persist: {
     version: 1,
-    // Snapshot ids hash the reply's content, so a stored one still answers `unchanged` after a relaunch.
     dataSchema: z.object({ snapshotId: z.string().nullable(), catalog: hostRepoCatalogRepos })
   }
 })

@@ -46,6 +46,17 @@ function hostQueryPersistOf(query: Query): HostQueryPersist<unknown> | undefined
   return query.meta?.persist as HostQueryPersist<unknown> | undefined
 }
 
+// Per world, the keys whose data came from the store and no read has replaced yet.
+const restoredKeys = new WeakMap<QueryClient, Set<string>>()
+
+/**
+ * Whether a key still holds what an earlier launch stored. Such data is shown, but a read never builds on
+ * it: it may be days old, and nothing this document did confirmed it.
+ */
+export function holdsRestoredHostQueryData(queryClient: QueryClient, queryHash: string): boolean {
+  return restoredKeys.get(queryClient)?.has(queryHash) === true
+}
+
 // TanStack's storage key is `<prefix>-<queryHash>`; the version keeps old shapes from ever being read.
 function familyPrefix(family: string, persist: HostQueryPersist<unknown>): string {
   return `q1|${family}@${persist.version}`
@@ -110,6 +121,8 @@ export function createHostQueryPersistence(
   // Keys the boot read just found empty: the screen's first observer doesn't read them again.
   const missedAtBoot = new Set<string>()
   const triedOnMiss = new WeakSet<Query>()
+  const restored = new Set<string>()
+  restoredKeys.set(queryClient, restored)
 
   function storedData(queryHash: string, data: unknown, persist: HostQueryPersist<unknown>) {
     const last = lastStored.get(queryHash)
@@ -175,6 +188,7 @@ export function createHostQueryPersistence(
             const { data, dataUpdatedAt } = record.state
             settledAt.set(queryHash, dataUpdatedAt)
             queryClient.setQueryData(queryKey, data, { updatedAt: dataUpdatedAt })
+            restored.add(queryHash)
           }
           settle()
         })
@@ -208,10 +222,17 @@ export function createHostQueryPersistence(
       }
       return
     }
+    if (event.type === 'removed') {
+      settledAt.delete(query.queryHash)
+      lastStored.delete(query.queryHash)
+      restored.delete(query.queryHash)
+      return
+    }
     // Fetches and setQueryData both land as success; only data newer than what the key holds on disk is written.
     if (event.type !== 'updated' || event.action.type !== 'success') {
       return
     }
+    restored.delete(query.queryHash)
     const family = familyOf(query.queryKey)
     const at = query.state.dataUpdatedAt
     if (family === null || at <= (settledAt.get(query.queryHash) ?? 0)) {

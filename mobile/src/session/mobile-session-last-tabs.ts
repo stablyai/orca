@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
+import { hashKey, skipToken, useQuery, useQueryClient } from '@tanstack/react-query'
 import * as z from 'zod'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -68,6 +68,24 @@ export function useMobileSessionLastTabs(hostId: string, worktreeId: string) {
     rememberLastSessionTabs: useCallback(
       (tabs: readonly MobileSessionTab[]) =>
         queryClient.setQueryData<MobileSessionTab[]>(key, [...tabs]),
+      [queryClient, key]
+    ),
+    // Calls back each time the remembered strip is set, such as by a store read that lands after mount.
+    watchLastSessionTabs: useCallback(
+      (listener: (tabs: readonly MobileSessionTab[]) => void) => {
+        const queryHash = hashKey(key)
+        return queryClient.getQueryCache().subscribe((event) => {
+          const tabs = event.query.state.data
+          if (
+            event.type === 'updated' &&
+            event.action.type === 'success' &&
+            event.query.queryHash === queryHash &&
+            Array.isArray(tabs)
+          ) {
+            listener(tabs)
+          }
+        })
+      },
       [queryClient, key]
     ),
     // A tab closed on the phone stays gone on reopen even if the page leaves before the host's next snapshot.

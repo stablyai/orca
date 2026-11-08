@@ -1,11 +1,11 @@
 import { AppState, Platform } from 'react-native'
-import { wipeHostCacheStore } from '../device-store/device-store'
+import { processDeviceStore } from '../device-store/device-store'
 import { connect, type RpcClient } from './rpc-client'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, HostProfile } from './types'
 import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
-import { wipeCacheOnRevocation } from './host-revocation-cache-wipe'
+import { watchHostRevocation } from './host-revocation-watch'
 
 export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSink): RpcClient {
   // Keep app-visible RPC/subscription identity stable while replacing physical sockets.
@@ -22,8 +22,14 @@ export function openHostLogicalClient(host: HostProfile, onLog: ConnectionLogSin
   const appStateSubscription = AppState.addEventListener('change', (state) => {
     endpointLifecycle.setForeground(state === 'active')
   })
-  const stopRevocationWipe = wipeCacheOnRevocation(logical, () => {
-    void wipeHostCacheStore(host.id).catch(() => undefined)
+  // A definite revocation (K6): cached screens go at once and stay gone until the desktop accepts this
+  // phone again; drafts stay until the host is removed.
+  const stopRevocationWipe = watchHostRevocation(logical, (revoked) => {
+    const store = processDeviceStore()
+    store.fenceHostCache(host.id, revoked)
+    if (revoked) {
+      void store.wipeHost(host.id, ['cache']).catch(() => undefined)
+    }
   })
   const closeLogical = logical.close
   logical.close = () => {

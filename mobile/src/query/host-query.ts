@@ -20,7 +20,7 @@ import {
   type HostQueryParams,
   type HostQueryTarget
 } from './host-query-key'
-import type { HostQueryPersist } from './host-query-persistence'
+import { holdsRestoredHostQueryData, type HostQueryPersist } from './host-query-persistence'
 import { hostReadClient } from './host-read-client'
 
 // Exported with the query hooks so the router lands in their page chunk, not a chunk of its own.
@@ -28,7 +28,8 @@ export { useHostEventRouter } from './host-event-router'
 
 export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
-  // Calls the domain's loader. `previous` is the cached data a revalidation may build on; live reads pass none.
+  // Calls the domain's loader. `previous` is the cached data a revalidation may build on; live reads and
+  // data restored from the phone's store pass none.
   // Absent for a family only its screen can read (its inputs live in the screen); that screen passes `read`.
   // `read.live` marks an action's read (readHostQueryLive), which must not be served from a host-side cache.
   fetch?: HostQueryFetch<TInput, TData>
@@ -71,6 +72,16 @@ export function defineHostQuery<TInput extends HostQueryParams, TData>(
   return query
 }
 
+// What a revalidation may build on: data this document read, never a record restored from the store.
+function liveCachedData<TData>(
+  queryClient: QueryClient,
+  queryKey: HostQueryKey
+): TData | undefined {
+  return holdsRestoredHostQueryData(queryClient, hashKey(queryKey))
+    ? undefined
+    : queryClient.getQueryData<TData>(queryKey)
+}
+
 function hostQueryOptions<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData>,
   client: RpcClient,
@@ -86,9 +97,15 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
     // No abort signal: the host has no cancel, and a screen that unmounts still wants the answer cached.
     queryFn: fetch
       ? ({ client: queryClient }) =>
-          fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey), {
-            live: false
-          })
+          fetch(
+            hostReadClient(client),
+            target,
+            input,
+            liveCachedData<TData>(queryClient, queryKey),
+            {
+              live: false
+            }
+          )
       : skipToken,
     meta: { streamBacked, signal, persist }
   })

@@ -13,18 +13,19 @@ function isRevoked(client: RevocationSignals): boolean {
   )
 }
 
-/** Wipes the host's cached screens each time the desktop is found to have revoked this phone (K6). */
-export function wipeCacheOnRevocation(client: RevocationSignals, wipe: () => void): () => void {
+/** Reports whether the desktop has revoked this phone (K6): now, then on each change. */
+export function watchHostRevocation(
+  client: RevocationSignals,
+  onChange: (revoked: boolean) => void
+): () => void {
   let revoked = isRevoked(client)
-  if (revoked) {
-    wipe()
-  }
+  onChange(revoked)
   const check = (): void => {
     const next = isRevoked(client)
-    if (next && !revoked) {
-      wipe()
+    if (next !== revoked) {
+      revoked = next
+      onChange(next)
     }
-    revoked = next
   }
   const stopState = client.onStateChange(check)
   const stopPath = client.onConnectionPathChange(check)
