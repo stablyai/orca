@@ -3,9 +3,18 @@ import type { RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayAssignment } from './assignment/assignment-store.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell/admission/cell-admission-selector.js'
 import type { RelayDatabase, SqlRow } from './database/database.js'
-import { EdgeAdminUnavailableError, edgeLocationHint, type EdgeAdmin } from './edge-admin-client.js'
+import {
+  EDGE_ADMIN_LOCKED_TIMEOUT_MS,
+  EdgeAdminUnavailableError,
+  edgeLocationHint,
+  type EdgeAdmin,
+  type EdgeAssignBody,
+  type EdgeAssignResult
+} from './edge-admin-client.js'
+import { fenceEdge } from './edge-relay-fence.js'
 import {
   EDGE_EXPORT_FAILURE_GAP_MS,
+  EDGE_LOCKED_CALLS_MAX,
   DEVICE_COLUMNS,
   EDGE_EXPORT_SKIP_AFTER_MS,
   EdgeMoveBusyError,
@@ -21,6 +30,7 @@ import {
 
 export {
   EDGE_EXPORT_SKIP_AFTER_MS,
+  EDGE_LOCKED_CALLS_MAX,
   EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
   EdgeMoveBusyError,
   EdgeMoveDeferredError,
@@ -41,6 +51,8 @@ export class EdgeAssignments {
   // When this director's exports started failing as unavailable; any usable answer clears it.
   private exportFailingSince: number | undefined
   private exportLastFailureAt: number | undefined
+  // Edge admin calls in flight under an assignment row lock (pushes), capped at EDGE_LOCKED_CALLS_MAX.
+  private lockedCalls = 0
 
   // With `admin` (the edge keeps host data in its objects) every move onto the edge pushes the
   // host's devices before the answer, and every move off exports them back first.
@@ -206,7 +218,7 @@ export class EdgeAssignments {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let result
       try {
-        result = await this.admin.assign({
+        result = await this.lockedAssign({
           ...identity,
           cellId: EDGE_CELL_ID,
           assignmentEpoch,
@@ -225,6 +237,19 @@ export class EdgeAssignments {
       )
     }
     throw new EdgeMoveDeferredError('push_failed')
+  }
+
+  // A push made under the row lock. Past EDGE_LOCKED_CALLS_MAX in flight the move is deferred at
+  // once rather than adding another row lock held on a slow edge.
+  private async lockedAssign(body: EdgeAssignBody): Promise<EdgeAssignResult> {
+    if (!this.admin) { throw new Error('relay_edge_admin_missing') }
+    if (this.lockedCalls >= EDGE_LOCKED_CALLS_MAX) { throw new EdgeMoveDeferredError('edge_busy') }
+    this.lockedCalls += 1
+    try {
+      return await this.admin.assign(body, { timeoutMs: EDGE_ADMIN_LOCKED_TIMEOUT_MS })
+    } finally {
+      this.lockedCalls -= 1
+    }
   }
 
   // A host on the edge is about to be placed elsewhere (cohort off, rollback): first take its
@@ -289,22 +314,13 @@ export class EdgeAssignments {
   }
 
   // After the host left: tell the edge where it went, so its phones get WRONG_CELL (re-resolve)
-  // rather than HOST_OFFLINE. Best effort; until it lands the edge's freeze does the same, and after
-  // that its phones see HOST_OFFLINE until the next move.
+  // rather than HOST_OFFLINE. Until it lands the edge's freeze does the same; one that does not land
+  // is recorded for the evacuation sweep to retry (edge-relay-fence.ts).
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
     if (!this.admin) { return true }
     // An edge whose exports are failing gets one try, so a skipped export is not slowed further.
     const attempts = this.exportFailingSince === undefined ? 3 : 1
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      try {
-        const result = await this.admin.assign({ ...identity, cellId, assignmentEpoch })
-        if (result.outcome !== 'conflict') { return true }
-      } catch (error) {
-        if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
-      }
-    }
-    console.error(JSON.stringify({ event: 'orca_relay_edge_fence_failed', cellId, assignmentEpoch }))
-    return false
+    return await fenceEdge(this.database, this.admin, { ...identity, cellId, assignmentEpoch }, attempts, this.now())
   }
 
   private answer(identity: Identity, assignmentEpoch: number, leaseExpiresAt: number): RelayAssignment {

@@ -57,10 +57,15 @@ export class EdgeMoveBusyError extends Error {
 
 export const EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS = 2
 
-// The move cannot happen on this ask (old-cell units still held, or the edge did not take the
-// push) and nothing changed: the host stays where it is and moves on a later ask.
+// Edge admin calls one director may have in flight while it holds assignment row locks (pushes of
+// moves). A move that would exceed it is deferred rather than queued behind a slow edge.
+export const EDGE_LOCKED_CALLS_MAX = 8
+
+// The move cannot happen on this ask (old-cell units still held, the edge did not take the push, or
+// this director already has EDGE_LOCKED_CALLS_MAX pushes in flight) and nothing changed: the host
+// stays where it is and moves on a later ask.
 export class EdgeMoveDeferredError extends Error {
-  constructor(reason: 'units_held' | 'push_failed') {
+  constructor(reason: 'units_held' | 'push_failed' | 'edge_busy') {
     super(`relay_edge_move_deferred:${reason}`)
   }
 }
