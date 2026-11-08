@@ -42,7 +42,11 @@ function terminalTabFromAgentSessionTab(tab: Tab, names: StructuredChatTabNames)
     id: tab.id,
     ptyId: null,
     worktreeId: tab.worktreeId,
-    title: name ?? tab.generatedLabel ?? tab.label,
+    title: name ?? tab.label,
+    // Why: as generatedTitle, the label stays behind the tabAutoGenerateTitle gate like the tab strip.
+    generatedTitle: tab.generatedLabel,
+    // Why: the tab label is the chat's default, not a session name, so it must not outrank the prompt.
+    defaultTitle: tab.label,
     customTitle: name,
     color: tab.color,
     isPinned: tab.isPinned,

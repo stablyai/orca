@@ -54,11 +54,11 @@ function isAgentIdentityStatusTitle(
   if (isIdentityStatusTitle(titleLower, agentTypeLabelLower)) {
     return true
   }
-  return (
-    AGENT_IDENTITY_ALIASES_LOWER[agentType ?? '']?.some((identity) =>
-      isIdentityStatusTitle(titleLower, identity)
-    ) ?? false
-  )
+  // Why: without an agent type, any known identity label is still not a conversation name.
+  const aliases = agentType
+    ? (AGENT_IDENTITY_ALIASES_LOWER[agentType] ?? [])
+    : Object.values(AGENT_IDENTITY_ALIASES_LOWER).flat()
+  return aliases.some((identity) => isIdentityStatusTitle(titleLower, identity))
 }
 
 function isCwdLikeTitle(title: string): boolean {
