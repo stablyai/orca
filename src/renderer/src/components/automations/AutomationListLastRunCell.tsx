@@ -4,6 +4,7 @@ import {
   formatAutomationLastRunCell,
   type AutomationLastRunSnapshot
 } from './automation-list-last-run'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function AutomationListLastRunCell({
   snapshot,
@@ -12,7 +13,9 @@ export function AutomationListLastRunCell({
   snapshot: AutomationLastRunSnapshot
   now: number
 }): React.JSX.Element {
-  const cell = formatAutomationLastRunCell(snapshot, now)
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const cell = formatAutomationLastRunCell(snapshot, now, t, intlLocale)
   const failed = cell.tone === 'failed'
   return (
     <span
