@@ -6278,25 +6278,25 @@
           "removeBatchMixed_other": "Remove <target>{{count}} workspaces</target> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeBatchGit_one": "Remove <target>{{count}} workspace</target> from git and delete its workspace folder.",
           "removeBatchGit_other": "Remove <target>{{count}} workspaces</target> from git and delete their workspace folders.",
-          "removeSingleFolder": "Remove <target/> from Orca. The project folder on disk will not be deleted.",
-          "removeSingleGit": "Remove <target/> from git and delete its workspace folder.",
           "removeWithChildrenFolder_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Project folders on disk will not be deleted.",
           "removeWithChildrenFolder_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Project folders on disk will not be deleted.",
           "removeWithChildrenMixed_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeWithChildrenMixed_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry.",
           "removeWithChildrenGit_one": "Remove <target/> and <descendants>{{count}} child workspace</descendants> from git and delete their workspace folders.",
-          "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders."
+          "removeWithChildrenGit_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from git and delete their workspace folders.",
+          "removeSingleFolderFromOrca": "Removes it from Orca. The folder on disk is kept.",
+          "deleteSingleWorktreeAndBranch": "Deletes the worktree and its branch (kept if unmerged)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Show loaded paths",
           "loadedPathsNotice": "Loaded paths may be incomplete or out of date.",
           "loadedChangedPaths": "Loaded changed paths",
           "unresolvedConflict": "Unresolved conflict",
-          "changeCount_one": "{{count}} uncommitted or untracked change",
-          "changeCount_other": "{{count}} uncommitted or untracked changes",
-          "changes": "Uncommitted or untracked changes",
           "moreLoadedPaths_one": "and {{count}} more loaded path",
-          "moreLoadedPaths_other": "and {{count}} more loaded paths"
+          "moreLoadedPaths_other": "and {{count}} more loaded paths",
+          "changesLost_one": "{{count}} uncommitted change will be lost",
+          "changesLost_other": "{{count}} uncommitted changes will be lost",
+          "uncountedChangesLost": "Uncommitted changes will be lost"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "Child workspaces will be deleted",
@@ -6304,9 +6304,6 @@
           "alsoDeletesChildren_other": "Deleting this workspace also deletes {{count}} child workspaces.",
           "moreChildren_one": "+{{count}} more",
           "moreChildren_other": "+{{count}} more"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Don't ask again"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "This is the <strong>main worktree</strong> (the original clone directory)."
@@ -21118,12 +21115,11 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Any uncommitted or untracked changes in Git workspaces will be permanently deleted.",
-          "clean": "No uncommitted or untracked changes",
           "unavailable": "Changes could not be checked",
           "checking": "Checking for changes…",
           "checkingDetails": "Checking…",
-          "unavailableDetails": "Details unavailable"
+          "unavailableDetails": "Details unavailable",
+          "none": "No uncommitted changes"
         },
         "unsavedEdits": {
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
@@ -22579,7 +22575,10 @@
     "alwaysForceDeleteTooltip": "Applies to all future workspace deletions.",
     "moreBranchActions": "More branch delete options",
     "alwaysForceDeleteBranches": "Always delete preserved branches",
-    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions."
+    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions.",
+    "moreDeleteOptions": "More delete options",
+    "alwaysDelete": "Always delete",
+    "alwaysDeleteTooltip": "Skip this confirmation for future deletions."
   },
   "worktree": {
     "setupTrust": {

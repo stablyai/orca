@@ -5369,29 +5369,26 @@
           "removeBatchFolder_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
           "removeBatchMixed_other": "Orca에서 <target>워크스페이스 {{count}}개</target>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
           "removeBatchGit_other": "git에서 <target>워크스페이스 {{count}}개</target>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
-          "removeSingleFolder": "Orca에서 <target/>을(를) 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
-          "removeSingleGit": "git에서 <target/>을(를) 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
           "removeWithChildrenFolder_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. 디스크의 프로젝트 폴더는 삭제되지 않습니다.",
           "removeWithChildrenMixed_other": "Orca에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거합니다. Git 워크트리는 git과 디스크에서도 제거됩니다. 폴더 워크스페이스는 Orca 항목만 제거됩니다.",
-          "removeWithChildrenGit_other": "git에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거하고 해당 워크스페이스 폴더를 삭제합니다."
+          "removeWithChildrenGit_other": "git에서 <target/> 및 <descendants>하위 워크스페이스 {{count}}개</descendants>를 제거하고 해당 워크스페이스 폴더를 삭제합니다.",
+          "removeSingleFolderFromOrca": "Orca에서 제거합니다. 디스크의 폴더는 유지됩니다.",
+          "deleteSingleWorktreeAndBranch": "워크트리와 해당 브랜치를 삭제합니다(병합되지 않은 브랜치는 유지)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "불러온 경로 표시",
           "loadedPathsNotice": "불러온 경로가 일부 누락되었거나 오래되었을 수 있습니다.",
           "loadedChangedPaths": "불러온 변경된 경로",
           "unresolvedConflict": "해결되지 않은 충돌",
-          "changeCount_one": "커밋되지 않았거나 추적되지 않는 변경 {{count}}개",
-          "changeCount_other": "커밋되지 않았거나 추적되지 않는 변경 {{count}}개",
-          "changes": "커밋되지 않았거나 추적되지 않는 변경 사항",
-          "moreLoadedPaths_other": "그 외 로드된 경로 {{count}}개"
+          "moreLoadedPaths_other": "그 외 로드된 경로 {{count}}개",
+          "changesLost_one": "커밋되지 않은 변경 사항 {{count}}개가 손실됩니다",
+          "changesLost_other": "커밋되지 않은 변경 사항 {{count}}개가 손실됩니다",
+          "uncountedChangesLost": "커밋되지 않은 변경 사항이 손실됩니다"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "하위 워크스페이스가 삭제됩니다.",
           "alsoDeletesChildren_other": "이 워크스페이스를 삭제하면 하위 워크스페이스 {{count}}개도 삭제됩니다.",
           "moreChildren_other": "+{{count}}개 더"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "다시 묻지 마세요"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "이 워크트리는 <strong>메인 워크트리</strong>(원래 복제 디렉터리)입니다."
@@ -19788,12 +19785,11 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git 워크스페이스의 커밋되지 않은 변경 사항이나 추적되지 않은 변경 사항은 영구적으로 삭제됩니다.",
-          "clean": "커밋되지 않았거나 추적되지 않은 변경 사항 없음",
           "unavailable": "변경 사항을 확인할 수 없습니다",
           "checking": "변경 사항 확인 중…",
           "checkingDetails": "확인 중…",
-          "unavailableDetails": "세부 정보를 사용할 수 없음"
+          "unavailableDetails": "세부 정보를 사용할 수 없음",
+          "none": "커밋되지 않은 변경 사항 없음"
         },
         "unsavedEdits": {
           "discarded_one": "파일 {{count}}개의 저장되지 않은 편집 내용이 버려집니다:",
@@ -21681,7 +21677,10 @@
     "alwaysForceDeleteTooltip": "이후 모든 워크스페이스 삭제에 적용됩니다.",
     "alwaysForceDeleteBranchesTooltip": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다.",
     "moreBranchActions": "브랜치 삭제 옵션 더 보기",
-    "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제"
+    "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제",
+    "moreDeleteOptions": "추가 삭제 옵션",
+    "alwaysDelete": "항상 삭제",
+    "alwaysDeleteTooltip": "이후 삭제 시 이 확인을 건너뜁니다."
   },
   "workspace": {
     "branchChoice": {

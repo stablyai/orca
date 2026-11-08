@@ -5369,29 +5369,26 @@
           "removeBatchFolder_other": "Orca から<target>{{count}} 個のワークスペース</target>を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
           "removeBatchMixed_other": "Orca から<target>{{count}} 個のワークスペース</target>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
           "removeBatchGit_other": "git から<target>{{count}} 個のワークスペース</target>を削除し、そのワークスペースフォルダーも削除します。",
-          "removeSingleFolder": "Orca から <target/> を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
-          "removeSingleGit": "git から <target/> を削除し、そのワークスペースフォルダーも削除します。",
           "removeWithChildrenFolder_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。ディスク上のプロジェクトフォルダーは削除されません。",
           "removeWithChildrenMixed_other": "Orca から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除します。Git ワークツリーは git とディスクからも削除されます。フォルダーワークスペースは Orca の登録のみ削除されます。",
-          "removeWithChildrenGit_other": "git から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除し、それらのワークスペースフォルダーも削除します。"
+          "removeWithChildrenGit_other": "git から <target/> と<descendants>{{count}} 個の子ワークスペース</descendants>を削除し、それらのワークスペースフォルダーも削除します。",
+          "removeSingleFolderFromOrca": "Orca から削除します。ディスク上のフォルダーは保持されます。",
+          "deleteSingleWorktreeAndBranch": "ワークツリーとそのブランチを削除します（未マージの場合ブランチは保持）。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "読み込まれたパスを表示",
           "loadedPathsNotice": "読み込まれたパスは不完全な場合や古い場合があります。",
           "loadedChangedPaths": "読み込まれた変更済みパス",
           "unresolvedConflict": "未解決の競合",
-          "changeCount_one": "未コミットまたは未追跡の変更: {{count}} 件",
-          "changeCount_other": "未コミットまたは未追跡の変更: {{count}} 件",
-          "changes": "未コミットまたは未追跡の変更があります",
-          "moreLoadedPaths_other": "ほかに読み込み済みのパス {{count}} 件"
+          "moreLoadedPaths_other": "ほかに読み込み済みのパス {{count}} 件",
+          "changesLost_one": "未コミットの変更 {{count}} 件が失われます",
+          "changesLost_other": "未コミットの変更 {{count}} 件が失われます",
+          "uncountedChangesLost": "未コミットの変更が失われます"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "子ワークスペースは削除されます",
           "alsoDeletesChildren_other": "このワークスペースを削除すると、{{count}} 件の子ワークスペースも削除されます。",
           "moreChildren_other": "ほか {{count}} 件"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "今後表示しない"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "これは<strong>メインワークツリー</strong>（元のクローンディレクトリ）です。"
@@ -19788,12 +19785,11 @@
       },
       "delete": {
         "changes": {
-          "permanentLoss": "Git ワークスペース内のコミットされていない変更または未追跡の変更は完全に削除されます。",
-          "clean": "コミットされていない変更または未追跡の変更はありません",
           "unavailable": "変更を確認できませんでした",
           "checking": "変更を確認中…",
           "checkingDetails": "確認中…",
-          "unavailableDetails": "詳細を利用できません"
+          "unavailableDetails": "詳細を利用できません",
+          "none": "未コミットの変更はありません"
         },
         "unsavedEdits": {
           "discarded_one": "{{count}} 個のファイルの未保存の編集は破棄されます：",
@@ -21681,7 +21677,10 @@
     "alwaysForceDeleteTooltip": "今後のすべてのワークスペース削除に適用されます。",
     "alwaysForceDeleteBranches": "保持したブランチを常に削除する",
     "moreBranchActions": "その他のブランチ削除オプション",
-    "alwaysForceDeleteBranchesTooltip": "将来のワークスペースの削除後に保持されるブランチに適用されます。"
+    "alwaysForceDeleteBranchesTooltip": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
+    "moreDeleteOptions": "その他の削除オプション",
+    "alwaysDelete": "常に削除",
+    "alwaysDeleteTooltip": "今後の削除ではこの確認をスキップします。"
   },
   "workspace": {
     "branchChoice": {
