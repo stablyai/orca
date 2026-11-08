@@ -325,7 +325,7 @@ it('reconciles a lost create first and retains uncertainty when a later proof ca
   })
 })
 
-it('rederives a restored tip fork requirement from the child before resubmitting', async () => {
+it('rederives a restored ancestor fork requirement from the child before resubmitting', async () => {
   const call = await remoteForkTransport()
   const prior = inheritedIntent()
   const restored = restoreStructuredAgentSessionLaunchIntent({
@@ -359,18 +359,28 @@ it('rederives a restored tip fork requirement from the child before resubmitting
                 body: { kind: 'message', role: 'assistant', blocks: [] }
               },
               {
-                itemId: 'orca:forked-from',
+                itemId: 'parent-fork-u2',
                 sequence: 3,
-                body: { kind: 'status', presentation: 'forked-from', text: 'Forked from source' }
-              },
-              {
-                itemId: 'child-u2',
-                sequence: 4,
                 body: { kind: 'message', role: 'user', blocks: [] }
               },
               {
-                itemId: 'legacy:opencode:child:reply-2',
+                itemId: 'legacy:opencode:parent-fork:reply-2',
+                sequence: 4,
+                body: { kind: 'message', role: 'assistant', blocks: [] }
+              },
+              {
+                itemId: 'orca:forked-from',
                 sequence: 5,
+                body: { kind: 'status', presentation: 'forked-from', text: 'Forked from source' }
+              },
+              {
+                itemId: 'child-u3',
+                sequence: 6,
+                body: { kind: 'message', role: 'user', blocks: [] }
+              },
+              {
+                itemId: 'legacy:opencode:child:reply-3',
+                sequence: 7,
                 body: { kind: 'message', role: 'assistant', blocks: [] }
               }
             ]

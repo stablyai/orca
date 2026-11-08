@@ -294,6 +294,7 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
   })
   await settle()
   expect(latest?.offerFor(copied)).toBe('reserved')
+  expect(latest?.offerFor(older)).toBe('reserved')
   expect(latest?.offerFor(own)).toBe('available')
   await act(async () => {
     renderer!.update(
@@ -303,7 +304,7 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
     )
   })
   expect(latest?.offerFor(copied)).toBe('available')
-  expect(latest?.offerFor(older)).toBe('reserved')
+  expect(latest?.offerFor(older)).toBe('available')
   await act(async () => {
     renderer!.update(
       createElement(ForkProbe, {

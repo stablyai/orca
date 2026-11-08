@@ -144,11 +144,14 @@ describe('the side chat fork point the transcript finds while laying out', () =>
   })
 })
 
-it('offers only the copied fork-point tip while a later child response is running', () => {
+it('offers inherited ancestor replies in a fork of a fork while the child is running', () => {
   const { input, latestTurnKey } = conversation(
     [
       { ask: 'older-user', replies: [row('legacy:opencode:source:reply-0', 'assistant', 1)] },
-      { ask: 'inherited-user', replies: [row('legacy:opencode:source:reply-1', 'assistant', 3)] },
+      {
+        ask: 'inherited-user',
+        replies: [row('legacy:opencode:parent-fork:reply-1', 'assistant', 3)]
+      },
       { ask: 'own-user', replies: [row('legacy:opencode:child:reply-2', 'assistant', 6)] }
     ],
     true
@@ -164,7 +167,7 @@ it('offers only the copied fork-point tip while a later child response is runnin
       }
     },
     {
-      itemId: 'legacy:opencode:source:reply-1',
+      itemId: 'legacy:opencode:parent-fork:reply-1',
       sequence: 3,
       body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'copied' }] }
     },
@@ -194,7 +197,13 @@ it('offers only the copied fork-point tip while a later child response is runnin
     turnWorking: false,
     inLatestTurn: false
   }
-  expect(nativeChatRowOffersFork(olderRow, chat)).toBe(false)
+  expect(nativeChatRowOffersFork(olderRow, chat)).toBe(true)
+  expect(
+    nativeChatRowOffersFork(olderRow, {
+      ...chat,
+      support: { kind: 'known', fork: 'tip' }
+    })
+  ).toBe(false)
   // Checkpoint providers still offer earlier inherited replies without original-tip support.
   expect(
     nativeChatRowOffersFork(olderRow, {
@@ -210,7 +219,7 @@ it('offers only the copied fork-point tip while a later child response is runnin
   ).toEqual({ kind: 'reply-running' })
   expect(
     buildNativeChatTranscript({ ...input, forkOffer: { chat, latestTurnKey } }).forkPoint
-  ).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:source:reply-1' })
+  ).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:parent-fork:reply-1' })
   expect(
     buildNativeChatTranscript({
       ...input,
