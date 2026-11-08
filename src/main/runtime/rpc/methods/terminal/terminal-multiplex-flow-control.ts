@@ -6,53 +6,25 @@ import {
 } from './terminal-snapshot-publication'
 import {
   isMultiplexStreamAttached,
-  type TerminalAckRecoveryCause,
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import {
   ackLinkHasRoomForHistory,
   creditAckWindow,
-  pacedAckWindowBytes
+  releaseAckPendingHoldbackIfDrained
 } from './terminal-multiplex-ack-window'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
-import { framesAreSupersedable } from './terminal-multiplex-supersedable-frames'
 import {
   markYieldedQueriesDiscardedInFrames,
   replaySnapshotCoveredStatelessQueries
 } from './terminal-multiplex-yielded-queries'
 
-const SUPERSEDE_UNAVAILABLE_BACKOFF_MS = 10_000
-// Rejected backlogs are rescanned at most this often instead of on every ACK.
-const SUPERSEDE_REJECTED_BACKOFF_MS = 1_000
-
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
-  const { runtime, streams, linkEstimate } = state
+  const { runtime, streams } = state
   const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
     ackLinkHasRoomForHistory(state, stream)
-  // Draining alt-screen frames a newer screen supersedes only delays echo; a viewport snapshot is cheaper.
-  const snapshotSupersedesBacklog = (stream: TerminalMultiplexStream): boolean => {
-    if (!linkEstimate.supersedesAltBacklog || stream.ackPendingOutput.length === 0) {
-      return false
-    }
-    const paced = pacedAckWindowBytes(state, stream)
-    if (
-      paced === null ||
-      stream.ackPendingOutputBytes <= paced ||
-      linkEstimate.now() < stream.ackSupersedeSnapshotNotBefore
-    ) {
-      return false
-    }
-    if (!framesAreSupersedable(stream.ackSentOutputTail, stream.ackPendingOutput)) {
-      stream.ackSupersedeSnapshotNotBefore = linkEstimate.now() + SUPERSEDE_REJECTED_BACKOFF_MS
-      return false
-    }
-    return true
-  }
-  state.sendAckRecoverySnapshot = async (
-    stream: TerminalMultiplexStream,
-    cause: TerminalAckRecoveryCause = 'overflow'
-  ): Promise<void> => {
+  state.sendAckRecoverySnapshot = async (stream: TerminalMultiplexStream): Promise<void> => {
     if (
       !isMultiplexStreamAttached(state, stream) ||
       stream.outputPaused ||
@@ -63,7 +35,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     stream.ackRecoverySnapshotInFlight = true
     try {
       // Replace client history after dropped output; its retained history no longer reaches this screen.
-      const carriesHistory = cause === 'overflow' && linkHasRoomForHistory(stream)
+      const carriesHistory = linkHasRoomForHistory(stream)
       const serialized = await serializeBudgetedRequestedSnapshot(
         runtime,
         stream.ptyId,
@@ -72,35 +44,11 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!isMultiplexStreamAttached(state, stream) || stream.outputPaused) {
         return
       }
-      if (!serialized && cause === 'superseded') {
-        // Nothing was dropped, so the backlog still drains; back off instead of serializing per ACK.
-        stream.ackSupersedeSnapshotNotBefore = linkEstimate.now() + SUPERSEDE_UNAVAILABLE_BACKOFF_MS
-        return
-      }
       if (!serialized) {
         throw new Error('Remote terminal recovery snapshot unavailable.')
       }
       // Overflow still queues, so batched covered output reaches the cutoff below instead of settling queries the viewer drops.
       stream.outputBatcher.flush()
-      const isCovered = (chunk: TerminalOutputFrameChunk): boolean =>
-        typeof serialized.seq === 'number' &&
-        typeof chunk.seq === 'number' &&
-        chunk.seq <= serialized.seq
-      // An overflow while serializing already dropped output, so this recovery owes history like any overflow.
-      const supersedesCleanly = cause === 'superseded' && !stream.ackPendingOutputOverflowed
-      if (
-        supersedesCleanly &&
-        (serialized.alternateScreen !== true ||
-          typeof serialized.seq !== 'number' ||
-          // A snapshot cut inside an escape would print the queued suffix as text.
-          Boolean(serialized.pendingEscapeTailAnsi) ||
-          // The whole queue, so a marker split between covered and retained frames is still seen.
-          !framesAreSupersedable(stream.ackSentOutputTail, stream.ackPendingOutput))
-      ) {
-        // The screen changed while serializing; drain rather than risk client history, and back off from re-serializing.
-        stream.ackSupersedeSnapshotNotBefore = linkEstimate.now() + SUPERSEDE_UNAVAILABLE_BACKOFF_MS
-        return
-      }
       const displayMode = runtime.getMobileDisplayMode(stream.ptyId)
       const publication = sendSnapshotFrames(
         (opcode, payload) =>
@@ -129,15 +77,10 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       if (!isMultiplexStreamAttached(state, stream)) {
         throw new Error('Remote terminal recovery snapshot stream detached.')
       }
-      if (linkEstimate.supersedesAltBacklog) {
-        const rate = linkEstimate.deliveryBytesPerMs()
-        // Snapshots bypass the ACK window, so cap superseding ones at half the measured link rate.
-        stream.ackSupersedeSnapshotNotBefore =
-          rate === null ? 0 : linkEstimate.now() + (2 * publication.bytes) / rate
-        // A snapshot can end inside an escape (pendingEscapeTailAnsi), so the sent tail is unknown until text follows.
-        stream.ackSentOutputTail = null
-      }
       if (typeof serialized.seq === 'number') {
+        const snapshotSeq = serialized.seq
+        const isCovered = (chunk: TerminalOutputFrameChunk): boolean =>
+          typeof chunk.seq === 'number' && chunk.seq <= snapshotSeq
         markYieldedQueriesDiscardedInFrames(stream, stream.ackPendingOutput.filter(isCovered))
         const retained = stream.ackPendingOutput.filter((chunk) => !isCovered(chunk))
         stream.ackPendingOutput = retained
@@ -146,11 +89,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
           0
         )
       }
-      // A clean supersede repaints alt only and leaves client history as-is.
-      if (!supersedesCleanly) {
-        stream.ackRecoveryHistoryOwed = !carriesHistory
-      }
       stream.ackPendingOutputOverflowed = false
+      stream.ackRecoveryHistoryOwed = !carriesHistory
       replaySnapshotCoveredStatelessQueries(state, stream, [], serialized.seq)
     } catch (error) {
       if (!isMultiplexStreamAttached(state, stream)) {
@@ -179,14 +119,6 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       void state.sendAckRecoverySnapshot(stream)
       return 0
     }
-    if (linkEstimate.supersedesAltBacklog && stream.ackRecoverySnapshotInFlight) {
-      // A superseding snapshot is serializing; its cutoff will drop the covered backlog.
-      return 0
-    }
-    if (snapshotSupersedesBacklog(stream)) {
-      void state.sendAckRecoverySnapshot(stream, 'superseded')
-      return 0
-    }
     let flushed = 0
     while (
       flushed < stream.ackPendingOutput.length &&
@@ -204,6 +136,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         (total, pending) => total + pending.bytes.byteLength,
         0
       )
+      releaseAckPendingHoldbackIfDrained(state, stream)
     }
     if (
       stream.ackRecoveryHistoryOwed &&
@@ -238,8 +171,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       return
     }
     const acknowledged = creditAckWindow(state, stream, bytes)
-    if (linkEstimate.enabled) {
-      linkEstimate.noteAcknowledged(stream, acknowledged)
+    if (state.linkEstimate.enabled) {
+      state.linkEstimate.noteAcknowledged(stream, acknowledged)
     }
     state.flushAllAckPendingOutput()
   }

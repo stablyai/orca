@@ -18,8 +18,6 @@ import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal/st
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
 export type MultiplexSnapshotRequest = z.infer<typeof TerminalMultiplexSnapshotRequestFrame>
 export type MultiplexEmit = (result: unknown) => void
-/** A `superseded` snapshot may fail without detaching; the backlog drains instead. */
-export type TerminalAckRecoveryCause = 'overflow' | 'superseded'
 
 export type TerminalMultiplexConnectionBase = {
   runtime: RpcContext['runtime']
@@ -78,10 +76,7 @@ export type TerminalMultiplexFrameDelivery = {
 }
 
 export type TerminalMultiplexFlowControl = {
-  sendAckRecoverySnapshot: (
-    stream: TerminalMultiplexStream,
-    cause?: TerminalAckRecoveryCause
-  ) => Promise<void>
+  sendAckRecoverySnapshot: (stream: TerminalMultiplexStream) => Promise<void>
   flushAckPendingOutput: (stream: TerminalMultiplexStream, maxChunks?: number) => number
   flushAllAckPendingOutput: () => void
   acknowledgeOutput: (stream: TerminalMultiplexStream, bytes: number) => void

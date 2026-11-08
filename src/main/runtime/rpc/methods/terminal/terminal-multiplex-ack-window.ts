@@ -7,8 +7,7 @@ import {
 import type { TerminalMultiplexConnectionBase } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 
-// A probe's zero window still has one chunk in flight.
-const PACED_SAMPLE_MIN_QUEUE_BYTES = 64 * 1024
+import { PACED_WINDOW_MIN_BYTES } from './terminal-multiplex-link-estimate'
 
 type AckWindowConnection = Pick<
   TerminalMultiplexConnectionBase,
@@ -19,75 +18,11 @@ type AckWindowConnection = Pick<
   | 'linkEstimate'
 >
 
-/** Only alternate-screen output is paced: a newer frame supersedes it, so a snapshot can replace backlog. */
-export function pacedAckWindowBytes(
-  connection: AckWindowConnection,
-  stream: TerminalMultiplexStream
-): number | null {
-  if (!connection.linkEstimate.enabled) {
-    return null
-  }
-  const paced = connection.linkEstimate.pacedWindowBytes()
-  return paced !== null && connection.runtime.isTerminalAlternateScreen(stream.ptyId) ? paced : null
-}
-
-/** Only then does our own window bound the queue ahead of this send, so its RTT can reveal a path change. */
-export function isSentUnderPacedWindow(
-  connection: AckWindowConnection,
-  stream: TerminalMultiplexStream
-): boolean {
-  const paced = pacedAckWindowBytes(connection, stream)
+// Only alternate-screen output is paced: its frames supersede each other, while normal-screen output stays byte-exact.
+function isPacedStream(connection: AckWindowConnection, stream: TerminalMultiplexStream): boolean {
   return (
-    paced !== null &&
-    connection.ackTotalInFlightBytes <= Math.max(paced, PACED_SAMPLE_MIN_QUEUE_BYTES)
+    connection.linkEstimate.enabled && connection.runtime.isTerminalAlternateScreen(stream.ptyId)
   )
-}
-
-// Bytes pacing keeps off the wire wait here instead, so overflow recovery fires no earlier than on legacy windows.
-export function ackPendingOutputBudgetBytes(
-  connection: AckWindowConnection,
-  stream: TerminalMultiplexStream
-): number {
-  if (!connection.linkEstimate.enabled) {
-    return TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
-  }
-  const paced = pacedAckWindowBytes(connection, stream)
-  if (paced !== null) {
-    // Legacy would have put these bytes on the wire, which the connection window also caps.
-    const othersHeld = connection.ackTotalHoldbackBytes - stream.ackPendingHoldbackBytes
-    const available = Math.max(
-      0,
-      connection.ackTotalWindowBytes - connection.ackTotalInFlightBytes - othersHeld
-    )
-    setAckPendingHoldback(
-      connection,
-      stream,
-      Math.max(stream.ackPendingHoldbackBytes, Math.min(stream.ackWindowBytes - paced, available))
-    )
-  } else if (stream.ackPendingOutputBytes <= TERMINAL_MULTIPLEX_PENDING_MAX_BYTES) {
-    // Kept until the queue drains, so leaving the alternate screen cannot force an overflow.
-    setAckPendingHoldback(connection, stream, 0)
-  }
-  return TERMINAL_MULTIPLEX_PENDING_MAX_BYTES + stream.ackPendingHoldbackBytes
-}
-
-function setAckPendingHoldback(
-  connection: AckWindowConnection,
-  stream: TerminalMultiplexStream,
-  bytes: number
-): void {
-  connection.ackTotalHoldbackBytes += bytes - stream.ackPendingHoldbackBytes
-  stream.ackPendingHoldbackBytes = bytes
-}
-
-/** Pause and detach empty the queue, so its headroom returns to the connection. */
-export function releaseAckPendingHoldback(
-  connection: AckWindowConnection,
-  stream: TerminalMultiplexStream
-): void {
-  if (stream.ackPendingHoldbackBytes > 0) {
-    setAckPendingHoldback(connection, stream, 0)
-  }
 }
 
 export function ackWindowAdmits(
@@ -101,9 +36,85 @@ export function ackWindowAdmits(
   ) {
     return false
   }
-  const paced = pacedAckWindowBytes(connection, stream)
+  if (!connection.linkEstimate.enabled) {
+    return true
+  }
+  // Decided once here and reused by the send, so a probe starting in between cannot mislabel the sample.
+  stream.ackAdmittedPacedWindowBytes = isPacedStream(connection, stream)
+    ? connection.linkEstimate.pacedWindowBytes()
+    : null
+  const paced = stream.ackAdmittedPacedWindowBytes
   // An idle stream may always send one chunk, so a paced window under a chunk's size cannot stall.
   return paced === null || stream.ackInFlightBytes === 0 || stream.ackInFlightBytes + bytes <= paced
+}
+
+/** Records the send for the link estimate; a paced sample is one whose queue our own window bounded. */
+export function noteAckGatedSend(
+  connection: AckWindowConnection,
+  stream: TerminalMultiplexStream,
+  bytes: number,
+  backlogged: boolean
+): void {
+  const paced = stream.ackAdmittedPacedWindowBytes
+  connection.linkEstimate.noteSent(stream, bytes, {
+    backlogged,
+    paced:
+      paced !== null && connection.ackTotalInFlightBytes <= Math.max(paced, PACED_WINDOW_MIN_BYTES),
+    connectionInFlightBytes: connection.ackTotalInFlightBytes
+  })
+}
+
+// Bytes pacing keeps off the wire wait here instead, so overflow recovery fires no earlier than on legacy windows.
+export function ackPendingOutputBudgetBytes(
+  connection: AckWindowConnection,
+  stream: TerminalMultiplexStream
+): number {
+  if (!connection.linkEstimate.enabled) {
+    return TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
+  }
+  // The steady window, not a probe's zero, sizes the grant.
+  const steady = isPacedStream(connection, stream)
+    ? connection.linkEstimate.steadyWindowBytes()
+    : null
+  if (steady !== null) {
+    // Legacy would have put these bytes on the wire, which the connection window also caps.
+    const othersHeld = connection.ackTotalHoldbackBytes - stream.ackPendingHoldbackBytes
+    const available = Math.max(
+      0,
+      connection.ackTotalWindowBytes - connection.ackTotalInFlightBytes - othersHeld
+    )
+    setAckPendingHoldback(
+      connection,
+      stream,
+      Math.max(
+        stream.ackPendingHoldbackBytes,
+        Math.min(Math.max(0, stream.ackWindowBytes - steady), available)
+      )
+    )
+  }
+  return TERMINAL_MULTIPLEX_PENDING_MAX_BYTES + stream.ackPendingHoldbackBytes
+}
+
+function setAckPendingHoldback(
+  connection: AckWindowConnection,
+  stream: TerminalMultiplexStream,
+  bytes: number
+): void {
+  connection.ackTotalHoldbackBytes += bytes - stream.ackPendingHoldbackBytes
+  stream.ackPendingHoldbackBytes = bytes
+}
+
+/** Once the queue is back within the legacy cap (drained, paused or detached), its headroom returns to the connection. */
+export function releaseAckPendingHoldbackIfDrained(
+  connection: AckWindowConnection,
+  stream: TerminalMultiplexStream
+): void {
+  if (
+    stream.ackPendingHoldbackBytes > 0 &&
+    stream.ackPendingOutputBytes <= TERMINAL_MULTIPLEX_PENDING_MAX_BYTES
+  ) {
+    setAckPendingHoldback(connection, stream, 0)
+  }
 }
 
 export function chargeAckWindow(
@@ -155,6 +166,8 @@ export function ackLinkHasRoomForHistory(
     stream.ackInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
     connection.ackTotalInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
     // Paced in-flight always sits under the batch size, so only a fully drained paced stream proves room.
-    (stream.ackInFlightBytes === 0 || pacedAckWindowBytes(connection, stream) === null)
+    (stream.ackInFlightBytes === 0 ||
+      !isPacedStream(connection, stream) ||
+      connection.linkEstimate.steadyWindowBytes() === null)
   )
 }

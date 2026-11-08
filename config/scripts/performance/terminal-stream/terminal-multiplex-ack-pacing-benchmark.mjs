@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Drive the real terminal multiplex over a modeled link: a TUI floods while the user types, and we report how long
-// the echo takes to reach the client under legacy windows, adaptive pacing, and pacing plus backlog superseding.
+// the echo takes to reach the client under legacy windows and opt-in adaptive pacing.
 import { createJiti } from 'jiti'
 
 const jiti = createJiti(import.meta.url)
@@ -46,7 +46,6 @@ async function run({
   endMs
 }) {
   process.env.ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW = mode === 'legacy' ? '' : '1'
-  process.env.ORCA_TERMINAL_SUPERSEDE_ALT_BACKLOG = mode === 'supersede' ? '1' : ''
   clock = 0
   let seq = 0
   let screen = 'flood'
@@ -276,7 +275,7 @@ const SCENARIOS = [
 ]
 
 for (const scenario of SCENARIOS) {
-  for (const mode of ['legacy', 'paced', 'supersede']) {
+  for (const mode of ['legacy', 'paced']) {
     const result = await run({ ...scenario, mode, alternateScreen: true })
     console.log(
       `${scenario.name.padEnd(30)} ${mode.padEnd(10)} echo=${String(result.echoMs).padStart(6)}ms ` +

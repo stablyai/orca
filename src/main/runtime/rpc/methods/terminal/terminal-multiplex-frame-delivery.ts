@@ -19,12 +19,11 @@ import {
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
 import type { TerminalStreamInputOutcome } from './terminal-input-delivery'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
-import { supersedableSentTail } from './terminal-multiplex-supersedable-frames'
 import {
-  isSentUnderPacedWindow,
   ackPendingOutputBudgetBytes,
   ackWindowAdmits,
-  chargeAckWindow
+  chargeAckWindow,
+  noteAckGatedSend
 } from './terminal-multiplex-ack-window'
 import type { RpcBinarySendResult } from '../../rpc-binary-sender'
 
@@ -134,16 +133,9 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     }
     if (stream.ackOutput) {
       if (state.linkEstimate.enabled) {
-        state.linkEstimate.noteSent(stream, chunk.bytes.byteLength, {
-          backlogged: fromBacklog,
-          linkIdle: state.ackTotalInFlightBytes === 0,
-          paced: isSentUnderPacedWindow(state, stream)
-        })
+        noteAckGatedSend(state, stream, chunk.bytes.byteLength, fromBacklog)
       }
       chargeAckWindow(state, stream, chunk.bytes.byteLength)
-      if (state.linkEstimate.supersedesAltBacklog) {
-        stream.ackSentOutputTail = supersedableSentTail(stream.ackSentOutputTail, chunk)
-      }
     }
     return true
   }

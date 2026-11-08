@@ -19,7 +19,7 @@ import {
 } from './terminal-snapshot-publication'
 import { chainPassiveDesktopResize, updateViewportForClient } from './terminal-viewport-update'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
-import { releaseAckPendingHoldback } from './terminal-multiplex-ack-window'
+import { releaseAckPendingHoldbackIfDrained } from './terminal-multiplex-ack-window'
 import {
   answerUndeliveredYieldedQueries,
   discardPendingMultiplexOutput,
@@ -97,7 +97,7 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false
-        releaseAckPendingHoldback(state, stream)
+        releaseAckPendingHoldbackIfDrained(state, stream)
         answerUndeliveredYieldedQueries(runtime, stream)
         if (discardsQueuedOutput) {
           notePausedOutputDropped(state, stream)
