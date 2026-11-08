@@ -25,7 +25,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import { resolveAgentLaunchCommand } from '../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 

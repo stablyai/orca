@@ -18,7 +18,7 @@ import type {
   StructuredAgentCreateSupportReason,
   StructuredAgentCreateSupportReply
 } from '../../shared/agent-session/structured-agent-create-support-reply'
-import type { WorkspaceLaunchKind } from '../../shared/workspace-launch-kind'
+import type { WorkspaceLaunchKind } from '../../shared/agent-launch/contracts/workspace-launch-kind'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'

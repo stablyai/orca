@@ -7,7 +7,7 @@ import type {
   LinearCollectionResult,
   LinearWorkflowState
 } from '../../../../../shared/linear/workspace-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState, useRef, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useTeamStates } from '@/hooks/useIssueMetadata'

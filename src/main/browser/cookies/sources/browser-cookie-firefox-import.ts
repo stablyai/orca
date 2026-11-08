@@ -115,7 +115,7 @@ export async function importCookiesFromFirefox(
       return browserCookieImportFailure('noValidCookies', { browser: 'Firefox' })
     }
 
-    return importValidatedCookies(
+    return await importValidatedCookies(
       validated,
       rows.length,
       cookieImportTarget(targetPartition),

@@ -8,7 +8,7 @@ import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-s
 import {
   isCoordinatorOnlyNews,
   withApprovalTitle
-} from '../../../../shared/dispatched-worker-attention'
+} from '../../../../shared/orchestration/workers/dispatched-worker-attention'
 import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
 import { isNotificationSourceEnabled } from '../../../../shared/notification-source-gate'
 import type {

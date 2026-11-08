@@ -32,7 +32,7 @@ import {
 import {
   hostAccountsManagedByDesktopMessage,
   type HostAccountLaunchEnv
-} from '../../../../shared/host-account-launch-env'
+} from '../../../../shared/agent-launch/startup/host-account-launch-env'
 import type { HostClaudeProfileRefresh } from './host-claude-profile-refresh'
 import { HostAccountLaunchEnvState } from './host-account-launch-env-state'
 import type { RuntimeNotifier } from '../../client/events/runtime-notifier-contract'

@@ -9,7 +9,7 @@ import {
   launchWorkspaceId,
   type LaunchClient,
   type LaunchWorkspace
-} from '../../../shared/launch-parity-window-request.test-fixture'
+} from '../../../shared/agent-launch/fixtures/launch-parity-window-request.test-fixture'
 
 const USER_AGENT: Record<LaunchClient, string> = {
   darwin: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Orca',

@@ -6,7 +6,7 @@ import {
   getManagedDataAccountService,
   type ManagedDataAccountService
 } from '../managed-data-accounts/service'
-import type { AcpAccountBinding } from '../acp/acp-account-binding'
+import type { AcpAccountBinding } from '../acp/launch/acp-account-binding'
 
 type AccountReader = Pick<
   ManagedDataAccountService,

@@ -2,7 +2,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import {
   terminalAgentReference,
   type OrchestrationAgentReference
-} from '../../../../../../shared/orchestration-agent-reference'
+} from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import {
   getCurrentTerminalDropTransport,
   type CapturedTerminalDropTarget

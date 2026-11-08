@@ -3,12 +3,12 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import type {
   AutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import {

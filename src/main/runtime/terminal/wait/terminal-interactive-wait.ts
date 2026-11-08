@@ -23,7 +23,7 @@ import {
   type ActiveWorkspaceContext,
   type PairedWorkspaceContextSource
 } from './active-worktree-context-fallback'
-import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
+import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'

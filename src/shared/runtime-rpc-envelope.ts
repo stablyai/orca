@@ -1,6 +1,6 @@
 // Share envelopes across CLI/desktop/non-Electron clients without client-to-client imports.
 import { z } from 'zod'
-import type { OrchestrationCompatibilityEvidence } from './orchestration-compatibility-evidence'
+import type { OrchestrationCompatibilityEvidence } from './orchestration/orchestration-compatibility-evidence'
 
 // Independently updated peers may add envelope fields; strip unknown fields while validating known ones.
 const MetaSuccess = z

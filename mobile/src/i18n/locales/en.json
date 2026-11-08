@@ -3050,6 +3050,11 @@
       "signIn": "Sign in",
       "signInHint": "Opens a terminal on the computer running this chat"
     },
+    "ciResultLine": {
+      "failingLead": "CI failing on",
+      "greenLead": "CI green on",
+      "at": "at"
+    },
     "nativeChatProse": {
       "attachedImage": "Attached image",
       "image": "image",

@@ -22,15 +22,18 @@ import {
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
 } from '../../../src/shared/agent-session/structured-agent-session-reducer'
-import { subscribeConnectionRevival } from '../transport/connection-revival-signal'
-import { readRuntimeStatusProbe, recordRuntimeStatusProbe } from '../transport/runtime-status-probe'
+import { subscribeConnectionRevival } from '../diagnostics/connection/connection-revival-signal'
+import {
+  readRuntimeStatusProbe,
+  recordRuntimeStatusProbe
+} from '../transport/connection/runtime-status-probe'
 import { decodeHostStatusReply, readHostStatusReply } from '../query/host-status-query'
-import { hostStatusSchema } from '../transport/host-status-reply-schema'
+import { hostStatusSchema } from '../transport/hosts/host-status-reply-schema'
 import {
   AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   agentSessionReadFailureRefusal,
   agentSessionReadRefusalText,

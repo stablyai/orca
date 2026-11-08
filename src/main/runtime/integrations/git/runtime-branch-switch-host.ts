@@ -129,7 +129,10 @@ export function createBranchSwitchHost<P extends ConnectedPty>(
     },
     // Watchers only cover desktop-hosted local repos, so Orca's own switch updates every client
     // itself; the user's choice also ends first-work automatic branch naming.
-    recordBranchSwitched: (worktree: Pick<Worktree, 'id' | 'hostId' | 'repoId'>) => {
+    recordBranchSwitched: (
+      worktree: Pick<Worktree, 'id' | 'hostId' | 'repoId'>,
+      detached = false
+    ) => {
       const store = sources.getStore()
       try {
         const target = store ? worktreeRowTarget(store, worktree) : undefined
@@ -146,7 +149,7 @@ export function createBranchSwitchHost<P extends ConnectedPty>(
             meta.pushTarget !== undefined)
         store.setWorktreeMeta(target, {
           ...(hasBranchScopedLinks ? CLEARED_HOSTED_REVIEW_LINK_UPDATES : {}),
-          branchNameIsUserChosen: true
+          ...(!detached ? { branchNameIsUserChosen: true } : {})
         })
       } catch (error) {
         // The switch already landed; bookkeeping must not turn it into a failure. First-work

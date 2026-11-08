@@ -15,13 +15,16 @@ export async function switchRuntimeGitBranch(
   target: BranchSwitchTarget,
   hostLabel = context.target.kind === 'environment'
     ? context.target.environmentId
-    : translate('sourceControl.branchPicker.thisComputer', 'this computer')
+    : translate('sourceControl.branchPicker.thisComputer', 'this computer'),
+  beforeSend?: () => void
 ): Promise<RuntimeGitSwitchResult> {
   try {
-    return await callRuntimeRpc<RuntimeGitSwitchResult>(context.target, 'git.switchBranch', {
-      worktree: toRuntimeWorktreeSelector(context.worktreeId ?? ''),
-      target
-    })
+    const params = { worktree: toRuntimeWorktreeSelector(context.worktreeId ?? ''), target }
+    return await (beforeSend
+      ? callRuntimeRpc<RuntimeGitSwitchResult>(context.target, 'git.switchBranch', params, {
+          beforeSend
+        })
+      : callRuntimeRpc<RuntimeGitSwitchResult>(context.target, 'git.switchBranch', params))
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       throw new Error(

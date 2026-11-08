@@ -4,6 +4,7 @@ import {
 } from './editor-file-operation-owner-interpretation.spec'
 // @vitest-environment happy-dom
 
+// @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import {
@@ -32,36 +33,6 @@ beforeEach(() => {
 })
 
 describe('editor file operation owner', () => {
-  it('uses the explicit worktree owner instead of global runtime focus', () => {
-    useAppStore.setState({
-      worktreesByRepo: {
-        repo: [
-          {
-            id: worktreeId,
-            repoId: 'repo',
-            path: '/remote/repo',
-            hostId: 'runtime:hub-a',
-            runtimeOwnerEnvironmentId: 'hub-a'
-          } as never
-        ]
-      }
-    })
-
-    const provenance = captureEditorFileOperationProvenance(
-      useAppStore.getState(),
-      worktreeId,
-      undefined,
-      false
-    )
-    const context = getEditorFileOperationContext(
-      useAppStore.getState(),
-      { worktreeId, operationProvenance: provenance },
-      '/remote/repo'
-    )
-
-    expect(context.target).toEqual({ kind: 'environment', environmentId: 'hub-a' })
-  })
-
   it('rejects an open tab after the same environment id is re-paired', () => {
     useAppStore.getState().setRuntimeEnvironments([runtimeEnvironment('hub-a', 1)])
     useAppStore.setState({

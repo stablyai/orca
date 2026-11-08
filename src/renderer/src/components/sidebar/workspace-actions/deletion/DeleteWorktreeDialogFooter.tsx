@@ -19,6 +19,7 @@ export function DeleteWorktreeDialogFooter({
   onForceDelete,
   onSavingChange,
   onDelete,
+  onAlwaysDelete,
   confirmButtonRef
 }: {
   isMainWorktree: boolean
@@ -32,6 +33,8 @@ export function DeleteWorktreeDialogFooter({
   onForceDelete: () => void
   onSavingChange: (saving: boolean) => void
   onDelete: () => void
+  /** Saves the skip-confirmation preference; omitted where skipping is not allowed. */
+  onAlwaysDelete?: () => Promise<void>
   confirmButtonRef: Ref<HTMLButtonElement>
 }): JSX.Element {
   const t = useTranslate()
@@ -67,6 +70,24 @@ export function DeleteWorktreeDialogFooter({
           onAlwaysForceDelete={() =>
             useAppStore.getState().updateSettingsOrThrow({ alwaysForceDeleteWorktrees: true })
           }
+        >
+          {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
+          {label}
+        </WorktreeForceDeleteButton>
+      ) : !isMainWorktree && onAlwaysDelete ? (
+        <WorktreeForceDeleteButton
+          buttonRef={confirmButtonRef}
+          size="default"
+          disabled={isDeleting}
+          onForceDelete={onDelete}
+          onSavingChange={onSavingChange}
+          onAlwaysForceDelete={onAlwaysDelete}
+          moreActionsLabel={t('workspaceDeletion.moreDeleteOptions', 'More delete options')}
+          alwaysForceDeleteLabel={t('workspaceDeletion.alwaysDelete', 'Always delete')}
+          alwaysForceDeleteTooltip={t(
+            'workspaceDeletion.alwaysDeleteTooltip',
+            'Skip this confirmation for future deletions.'
+          )}
         >
           {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
           {label}
