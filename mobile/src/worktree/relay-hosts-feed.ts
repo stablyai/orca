@@ -2,6 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
+import { readViewBase } from '../query/host-read-client'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { RpcClient } from '../transport/rpc-client'
 import { relayHostsListRead } from './server-workspace-operations'
@@ -116,10 +117,12 @@ function createFeed(client: RpcClient): RelayHostsFeed {
 }
 
 export function relayHostsFeed(client: RpcClient): RelayHostsFeed {
-  let feed = feeds.get(client)
+  // A query's fail-fast view shares the feed its connection's screens already hold.
+  const owner = readViewBase(client)
+  let feed = feeds.get(owner)
   if (!feed) {
-    feed = createFeed(client)
-    feeds.set(client, feed)
+    feed = createFeed(owner)
+    feeds.set(owner, feed)
   }
   return feed
 }

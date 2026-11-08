@@ -14,6 +14,7 @@ import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input
 import { healMobileNativeChatStaleInput } from '../mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from '../mobile-native-chat-send-classification'
 import { readMobileNativeChatSkillOrigin } from '../composer/mobile-native-chat-draft-store'
+import { nativeChatSendTextOwner } from './mobile-native-chat-send-text-owner'
 import {
   beginMobileNativeChatInFlightSend,
   settleMobileNativeChatInFlightSend
@@ -123,7 +124,8 @@ export function useMobileNativeChatMessageSend(args: {
         return 'rejected'
       }
       // A picked skill leading the draft is chat, as on desktop; read it before the clear forgets it.
-      const skillOrigin = readMobileNativeChatSkillOrigin(origin.draftKey)
+      const owner = nativeChatSendTextOwner(intent, syncComposer ? restoreRejectedDraft : null)
+      const skillOrigin = owner.skillOrigin ?? readMobileNativeChatSkillOrigin(origin.draftKey)
       // Clear optimistically before slow/lost acknowledgements; only definite rejection restores the draft.
       if (syncComposer) {
         clearDraftForSend(origin, draftText)
@@ -131,10 +133,10 @@ export function useMobileNativeChatMessageSend(args: {
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       const classification = classifyMobileNativeChatSend(agent, text, skillOrigin)
       // Saved in the same write as the clear, so a kill before the outcome cannot lose the text.
-      const inFlightId = syncComposer
+      const inFlightId = owner.owned
         ? beginMobileNativeChatInFlightSend(origin, 'terminal', draftText, {
             command: classification !== 'chat',
-            carried: intent?.carried
+            intent
           })
         : null
       const typesCodexCommand =
@@ -199,20 +201,17 @@ export function useMobileNativeChatMessageSend(args: {
             text,
             () => {
               // A TUI holds a mid-turn send with no transcript row until the turn ends, so its absence proves nothing.
-              if (!syncComposer || origin.queuedDuringWorkingEpoch !== undefined) {
+              if (!owner.owned || origin.queuedDuringWorkingEpoch !== undefined) {
                 onSendError(UNCONFIRMED_SEND_MESSAGE)
                 return
               }
-              restoreRejectedDraft(origin, draftText)
-              intent?.onHandBack?.()
+              owner.giveBack(origin, draftText)
               onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
             },
             inFlightId
           )
         } else {
-          if (syncComposer) {
-            restoreRejectedDraft(origin, draftText, { preserveConversationCommands: true })
-          }
+          owner.giveBack(origin, draftText, { preserveConversationCommands: true })
           settleMobileNativeChatInFlightSend(inFlightId, 'sent')
           onSendError(UNCONFIRMED_SEND_MESSAGE)
         }
@@ -260,7 +259,7 @@ export function useMobileNativeChatMessageSend(args: {
       _attachments?: readonly unknown[],
       sentAt?: number,
       intent?: MobileNativeChatSendIntent
-    ) => sendMessage(text, images, true, true, deadline, sentAt, intent),
+    ) => sendMessage(text, images, !intent?.queued, true, deadline, sentAt, intent),
     [sendMessage]
   )
 

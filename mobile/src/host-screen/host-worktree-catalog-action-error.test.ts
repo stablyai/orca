@@ -1,21 +1,17 @@
 import { createElement } from 'react'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
 
 // The desktop's server-list feed loads react-native; its timer never runs without a subscriber.
 vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
-vi.mock('../cache/worktree-cache', () => ({
-  getCachedWorktrees: () => null,
-  setCachedWorktrees: () => {}
-}))
 vi.mock('../storage/preferences', () => ({ savePinnedIds: async () => {} }))
 vi.mock('../worktree/host-worktree-refresh', () => ({ startHostWorktreeRefresh: () => () => {} }))
-vi.mock('../transport/use-worktree-resync', () => ({
-  useWorktreeResync: () => ({ refreshing: false, onRefresh: async () => {} })
-}))
 
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
+import { createOrcaQueryClient } from '../query/orca-query-client'
+import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
 
 import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
 import type { RpcResponse } from '../transport/types'
@@ -44,7 +40,6 @@ async function fetchWith(fail: boolean) {
       client,
       connState: 'connected',
       embedded: true,
-      fetchRepoMetadata: async () => {},
       hostCapabilities: [],
       hostId: 'host-1',
       sidebarFeed: null,
@@ -57,7 +52,13 @@ async function fetchWith(fail: boolean) {
   let renderer: ReturnType<typeof create> | null = null
   try {
     await act(async () => {
-      renderer = create(createElement(Probe))
+      renderer = create(
+        createElement(
+          QueryClientProvider,
+          { client: createOrcaQueryClient() },
+          createElement(Probe)
+        )
+      )
     })
     const get = (): NonNullable<typeof current> => {
       if (current === null) {
@@ -65,9 +66,16 @@ async function fetchWith(fail: boolean) {
       }
       return current
     }
+    // The mount's own read settles first; the failure is from an action after it.
+    await settleQueryNotifications()
     act(() => get().state.setActionError('Could not delete workspace.'))
     await act(async () => get().fetch())
-    expect(client.sendRequest).toHaveBeenCalledWith('worktree.ps', expect.anything())
+    await settleQueryNotifications()
+    expect(client.sendRequest).toHaveBeenCalledWith(
+      'worktree.ps',
+      expect.anything(),
+      expect.anything()
+    )
     return {
       actionError: get().state.actionError,
       catalogError: get().state.catalogError,

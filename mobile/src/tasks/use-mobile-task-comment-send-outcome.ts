@@ -18,14 +18,17 @@ export const COMMENT_SEND_FAILED_NOTICE = 'Not sent. Try sending it again.'
 // Which draft a send came from: the item's comment box, or a reply box keyed by comment id.
 export type CommentDraftSlot = 'comment' | `reply:${string}`
 
-type CommentSend = { item: string; priorIds: ReadonlySet<string> }
+type CommentSend = { item: string; priorIds: ReadonlySet<string>; startedAt: number }
+
+// A long thread's refresh can show older comments the send never saw; allow for the phone's clock running ahead.
+const SEND_CLOCK_SKEW_MS = 5 * 60_000
 
 type CommentSendOutcome = {
   item: string
   slot: CommentDraftSlot
   notice: string
   // Only an unconfirmed send can still turn out posted; a later thread read settles it.
-  unconfirmed: { postedBody: string; priorIds: ReadonlySet<string>; clearDraft: () => void } | null
+  unconfirmed: { send: CommentSend; postedBody: string; clearDraft: () => void } | null
 }
 
 function itemIdentity(item: ActionableTaskItem | null): string | null {
@@ -65,7 +68,8 @@ export function useMobileTaskCommentSendOutcome(model: {
     const landed = detailPayload.comments.some(
       (comment) =>
         comment.viewerDidAuthor === true &&
-        !unconfirmed.priorIds.has(String(comment.id)) &&
+        !unconfirmed.send.priorIds.has(String(comment.id)) &&
+        Date.parse(comment.createdAt ?? '') >= unconfirmed.send.startedAt - SEND_CLOCK_SKEW_MS &&
         sameCommentText(comment.body, unconfirmed.postedBody)
     )
     if (landed) {
@@ -78,7 +82,8 @@ export function useMobileTaskCommentSendOutcome(model: {
     setOutcome(null)
     return {
       item: itemIdentity(item) ?? '',
-      priorIds: new Set(threadRef.current?.comments.map((comment) => String(comment.id)))
+      priorIds: new Set(threadRef.current?.comments.map((comment) => String(comment.id))),
+      startedAt: Date.now()
     }
   }, [])
 
@@ -89,7 +94,7 @@ export function useMobileTaskCommentSendOutcome(model: {
         item: send.item,
         slot,
         notice: COMMENT_SEND_UNCONFIRMED_NOTICE,
-        unconfirmed: { postedBody, priorIds: send.priorIds, clearDraft }
+        unconfirmed: { send, postedBody, clearDraft }
       })
       requestDetailRefresh()
     },

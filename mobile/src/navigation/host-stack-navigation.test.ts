@@ -219,4 +219,76 @@ describe('host stack navigation', () => {
       expect.objectContaining({ payload: OTHER_TARGET })
     )
   })
+
+  describe('a session opened inside its host document', () => {
+    const SESSION = {
+      name: '[hostId]/session/[worktreeId]',
+      params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt', paneKey: 'tab-1:leaf 2' }
+    } as const
+    // The session's href, escaped once more because the host screen's param reader decodes it.
+    const OPEN =
+      '%2Fh%2Fhost%252Fone%2Fsession%2Frepo%253A%253A%252Ftmp%252Fwt%3FpaneKey%3Dtab-1%253Aleaf%25202'
+
+    it('pushes the host with the session to open instead of pushing a second document', () => {
+      const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+      const push = vi.fn()
+
+      navigateToHostStackRoute(
+        harness.navigation,
+        { push, replace: vi.fn() },
+        'host/one',
+        SESSION,
+        true
+      )
+      harness.setState(committedHostState('host/one'))
+
+      expect(push.mock.calls).toEqual([
+        [{ pathname: '/h/[hostId]', params: { hostId: 'host/one', open: OPEN } }]
+      ])
+      expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+    })
+
+    it('folds a second tap for the same host into the push still committing', () => {
+      const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+      const push = vi.fn()
+      const router = { push, replace: vi.fn() }
+
+      const pending = coordinateHostStackNavigation(
+        null,
+        harness.navigation,
+        router,
+        'host/one',
+        SESSION,
+        true
+      )
+      coordinateHostStackNavigation(pending, harness.navigation, router, 'host/one', SESSION, true)
+
+      expect(push).toHaveBeenCalledTimes(1)
+    })
+
+    it('hands the session to the host list already showing', () => {
+      const harness = navigationHarness(committedHostState('host/one'))
+      const push = vi.fn()
+
+      navigateToHostStackRoute(
+        harness.navigation,
+        { push, replace: vi.fn() },
+        'host/one',
+        SESSION,
+        true
+      )
+
+      expect(push).not.toHaveBeenCalled()
+      expect(harness.navigation.dispatch.mock.calls).toEqual([
+        [
+          {
+            type: 'SET_PARAMS',
+            target: '/h',
+            source: 'host-index',
+            payload: { params: { open: OPEN } }
+          }
+        ]
+      ])
+    })
+  })
 })

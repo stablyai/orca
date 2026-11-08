@@ -77,14 +77,18 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
-      const skills = readMobileNativeChatPickedSkills(origin.draftKey)
-      clearDraftForSend(origin, text)
+      // A queued message never sat in the composer, so its send leaves the composer alone.
+      const queued = intent?.queued
+      const skills = queued ? [...queued.skills] : readMobileNativeChatPickedSkills(origin.draftKey)
+      if (!queued) {
+        clearDraftForSend(origin, text)
+      }
       // Saved, journal id included, in the same write as the clear, so a kill mid-send can be checked against the journal.
       const clientMessageId = structuredSessionOperationId()
       const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text, {
         clientMessageId,
         command: intent?.goal === true || isSlashCommandDraft(text),
-        carried: intent?.carried
+        intent
       })
       const created: { clientMessageId?: string } = {}
       const outcome = await sendStructured(text, images, deadline, attachments, skills, {
@@ -96,6 +100,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         }
       })
       const handBack = () => {
+        if (queued) {
+          return
+        }
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }
@@ -112,7 +119,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       if (outcome === 'unknown') {
         // A host command whose reply was lost minted no journal id; its text returns now, as a terminal chat's does.
         settleMobileNativeChatInFlightSend(inFlightId)
-        restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
+        if (queued) {
+          intent?.onHandBack?.()
+        } else {
+          restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
+        }
         return outcome
       }
       settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')

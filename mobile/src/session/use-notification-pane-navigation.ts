@@ -36,11 +36,20 @@ export function useNotificationPaneNavigation({
   const applied = useRef<string | null>(null)
   const [asked, setAsked] = useState(0)
 
+  // The mount's URL tap is already pending; one set later on this screen (the shell reopening the session already showing) asks again.
+  const mountUrlPaneKey = useRef(urlPaneKey)
   useEffect(() => {
-    // Spend the URL's tap so a remount of this screen cannot replay it over a later tab pick.
-    if (urlPaneKey !== null) {
-      navigation.setParams({ paneKey: undefined })
+    if (urlPaneKey === null) {
+      mountUrlPaneKey.current = null
+      return
     }
+    if (urlPaneKey !== mountUrlPaneKey.current) {
+      pending.current = urlPaneKey
+      applied.current = null
+      setAsked((count) => count + 1)
+    }
+    // Spend the URL's tap so a remount of this screen cannot replay it over a later tab pick.
+    navigation.setParams({ paneKey: undefined })
   }, [navigation, urlPaneKey])
 
   useEffect(() => {
