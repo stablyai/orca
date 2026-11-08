@@ -2276,11 +2276,22 @@ export function createRemoteRuntimePtyTransport(
     return true
   }
 
-  const inputBatcher = createRemoteRuntimePtyTextBatcher(REMOTE_TERMINAL_INPUT_FLUSH_MS, (text) => {
-    if (!sendUnacknowledgedInput(text)) {
-      holdUnsentInput(text)
+  const inputBatcher = createRemoteRuntimePtyTextBatcher(
+    REMOTE_TERMINAL_INPUT_FLUSH_MS,
+    (text) => {
+      if (!sendUnacknowledgedInput(text)) {
+        holdUnsentInput(text)
+      }
+    },
+    {
+      // Why: without the ack journal an accepted write's separate RPC could overtake an immediate key.
+      sendLeadingEdge: () =>
+        // A hold replaying through sendInputNow must not re-enter its own queue.
+        !recoveryInputHold.isHolding() &&
+        handle !== null &&
+        getCurrentMultiplexedStream(handle)?.acknowledgesInput() === true
     }
-  })
+  )
 
   function deferViewportForRecovery(claim: boolean): void {
     // Why: the replay sends the latest viewport; an older queued batch flushing after it would win.
@@ -4107,7 +4118,7 @@ export function createRemoteRuntimePtyTransport(
       return sendInputNow(data)
     },
 
-    // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms debounce would miss it and echo the reply onto the prompt (#7329).
+    // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms coalescing window would miss it and echo the reply onto the prompt (#7329).
     sendInputImmediate: (data: string): boolean => sendInputImmediateNow(data),
 
     sendInputAccepted(data, inputKind, options) {
