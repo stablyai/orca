@@ -108,7 +108,7 @@ export async function previewLocalSkillPackage(
   )
   try {
     const extracted = await inspectExtractedPackage(input, recovery.extractionPath)
-    return previewLocalExtractedSkillPackage(input, extracted)
+    return await previewLocalExtractedSkillPackage(input, extracted)
   } finally {
     await finishSkillExtractionRecovery(input.stateDirectory, recovery, filesystem)
   }
