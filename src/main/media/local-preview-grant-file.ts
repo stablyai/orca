@@ -1,8 +1,8 @@
 import type { Store } from '../persistence/loading-store/store'
-import { filePreviewForPath, isDocumentPreview } from '../../shared/file-preview-kind'
-import { resolveLocalFileRequestPath } from '../ipc/local-file-access-resolution'
+import { filePreviewForPath, isDocumentPreview } from '../../shared/file-preview/file-preview-kind'
+import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'
-import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
+import { guardWslUncPathAccess } from '../wsl/filesystem/wsl-unc-access-gate'
 import type { LocalPreviewTarget, PreviewGrant } from './preview-grant-registry'
 
 /**

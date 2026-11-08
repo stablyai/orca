@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getAgentCapabilityStatusClassName,
   type AgentCapabilityInstallStatus
@@ -9,6 +9,7 @@ import {
 export function AgentCapabilityStatusPill(props: {
   status: AgentCapabilityInstallStatus
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (props.status.tone === 'unavailable') {
     return (
       <span className="text-[11px] font-medium text-muted-foreground">{props.status.label}</span>
@@ -20,10 +21,7 @@ export function AgentCapabilityStatusPill(props: {
   return (
     <span className="flex items-center gap-1 text-[11px] font-medium text-muted-foreground">
       <Check className="size-3" />
-      {translate(
-        'auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2',
-        'Installed'
-      )}
+      {t('auto.components.feature.wall.AgentCapabilitiesSetupAction.b8dc9dd8a2', 'Installed')}
     </span>
   )
 }

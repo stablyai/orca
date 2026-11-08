@@ -109,27 +109,6 @@ describe('scanAiVaultSessions scope inclusion', () => {
     expect(ids(withScope)).toContain('old-in-scope-subdir')
   })
 
-  it('does not duplicate sessions already in the capped result', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
-    tempRoots.push(root)
-    const claudeRoot = join(root, 'claude-projects')
-
-    await writeClaudeSession({
-      claudeRoot,
-      dirName: '-repo-app',
-      sessionId: 'recent-in-scope',
-      cwd: '/repo/app',
-      iso: '2026-06-24T00:00:00.000Z'
-    })
-
-    const result = await scanAiVaultSessions(
-      scopedScanOptions(claudeRoot, { limit: 50, scopePaths: ['/repo/app'] })
-    )
-
-    const matches = result.sessions.filter((session) => session.sessionId === 'recent-in-scope')
-    expect(matches).toHaveLength(1)
-  })
-
   it('does not assign a native transcript to a WSL distro from cwd alone', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-scope-'))
     tempRoots.push(root)

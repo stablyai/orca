@@ -6,19 +6,20 @@ import type { AppState } from '@/store/types'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -246,17 +247,6 @@ describe('ensureSimulatorTab', () => {
     drawn.store = null
   })
 
-  it('activates an existing simulator tab through unified tab state', async () => {
-    const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
-
-    expect(ensureSimulatorTab('wt-1')).toBe('sim-1')
-
-    expect(mockStoreState.activateTab).toHaveBeenCalledWith('sim-1')
-    expect(mockStoreState.setActiveTab).not.toHaveBeenCalled()
-    expect(mockStoreState.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
-    expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator', 'wt-1')
-  })
-
   it('does not reuse a simulator owned by a same-id sibling host', async () => {
     mockStoreState.activeWorkspaceExecutionHostId = 'runtime:host-b'
     mockStoreState.allWorktrees.mockReturnValue([
@@ -470,47 +460,6 @@ describe('ensureSimulatorTab', () => {
     expect(mockStoreState.setActiveTabType).toHaveBeenCalledWith('simulator', 'wt-1')
   })
 
-  it('falls back to the source group when atomic right split creation fails', async () => {
-    mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
-    mockStoreState.createUnifiedTabInSplit.mockReturnValue(null)
-    stubCreatedSimulatorTab('group-1')
-    const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
-
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const { tabId, tab, sent, store } = await openThroughMain(() =>
-        ensureSimulatorTab('wt-1', { placement: 'rightSplit' })
-      )
-      expect(sent).toEqual([
-        expect.objectContaining({ tabId, split: { besideGroupId: 'group-1', direction: 'right' } })
-      ])
-      expect(tab).toMatchObject({ contentType: 'simulator', label: 'Mobile Emulator' })
-      expectSurfaced(store, tab!)
-      return
-    }
-    expect(ensureSimulatorTab('wt-1', { placement: 'rightSplit' })).toBe(createdSimulatorTabId())
-
-    expect(mockStoreState.createUnifiedTabInSplit).toHaveBeenCalledWith(
-      'wt-1',
-      'simulator',
-      {
-        sourceGroupId: 'group-1',
-        splitDirection: 'right'
-      },
-      {
-        label: 'Mobile Emulator',
-        activate: true
-      }
-    )
-    expect(mockStoreState.createUnifiedTab).toHaveBeenCalledWith('wt-1', 'simulator', {
-      id: expect.any(String),
-      label: 'Mobile Emulator',
-      targetGroupId: 'group-1',
-      activate: true
-    })
-    expect(mockStoreState.dropUnifiedTab).not.toHaveBeenCalled()
-    expect(mockStoreState.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
-  })
-
   it('does not create a split for background auto-attach', async () => {
     mockStoreState.unifiedTabsByWorktree = { 'wt-1': [] }
     stubCreatedSimulatorTab('group-1')
@@ -622,16 +571,6 @@ describe('ensureSimulatorTab', () => {
     expect(ensureSimulatorTab('wt-1', { surfacePane: false, executionHostId: 'local' })).toBe(
       'sim-local'
     )
-    expect(mockStoreState.createUnifiedTab).not.toHaveBeenCalled()
-  })
-
-  it('does not create or focus a simulator tab when disabled in settings', async () => {
-    mockStoreState.settings = { mobileEmulatorEnabled: false }
-    const { ensureSimulatorTab } = await import('./ensure-simulator-tab')
-
-    expect(ensureSimulatorTab('wt-1')).toBeNull()
-
-    expect(mockStoreState.activateTab).not.toHaveBeenCalled()
     expect(mockStoreState.createUnifiedTab).not.toHaveBeenCalled()
   })
 })

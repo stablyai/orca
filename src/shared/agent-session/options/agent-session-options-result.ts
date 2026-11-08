@@ -10,7 +10,10 @@ import type {
 } from '../agent-session-wire'
 
 export type AgentSessionAcceptedInputSources = Partial<
-  Record<'model' | 'effort' | 'fastMode' | 'serviceTier', 'saved' | 'seeded' | 'policy'>
+  Record<
+    'model' | 'effort' | 'fastMode' | 'serviceTier' | 'interactionMode',
+    'saved' | 'seeded' | 'policy'
+  >
 >
 
 /** Provider-reported choices and effective next-turn values. Additive read-only
@@ -18,10 +21,17 @@ export type AgentSessionAcceptedInputSources = Partial<
 export type AgentSessionOptionsResult = {
   /** This host verified that account selection moves this chat with its history intact. */
   canSwitchAccount?: boolean
+  accountUsage?: true
+  /** Fresh host observation; absent means an older host or unknown conversation. */
+  sessionNeverStarted?: boolean
   /** Saved conversation on this execution host, resolved from the record's own account store. */
   transcriptPath?: string
   rewind?: AgentSessionRewindSupport
+  /** Whether this chat's agent copies its conversation natively; absent means unknown, never unsupported. */
+  forkSupport?: 'unknown' | 'supported' | 'unsupported'
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  /** `/compact` takes instructions here; an older host omits this and refuses the field. */
+  compactInstructions?: boolean
   /** Offer goal controls only with threadGoal support; current spans the whole journal, including unloaded pages. */
   threadGoal?: { current: AgentJournalThreadGoal | null; contextFloor?: AgentJournalCursor }
   /** Journal goal changed only by the agent's /goal; separate from threadGoal so older clients never offer host controls. */
@@ -42,6 +52,8 @@ export type AgentSessionOptionsResult = {
     /** Accepted input origins; an empty map excludes all display-only observations. */
     acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
+    /** Current child reports this model for display; it is never a next-turn selection. */
+    reportedModel?: string
     effort?: string
     /** Child-scoped actual for display only; effort remains accepted raw input. */
     reportedEffort?: string
@@ -49,6 +61,8 @@ export type AgentSessionOptionsResult = {
     fastMode?: boolean
     /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */
     serviceTier?: string
+    /** Present only on hosts offering native Build/Plan; display alone is not accepted intent. */
+    interactionMode?: 'default' | 'plan'
     /** The permission mode a start runs now; absent from a host or agent with no picker. */
     permissionMode?: string
     /** Current startup report or accepted fresh-turn policy: null means reported but not a named Orca mode. */

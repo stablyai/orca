@@ -28,14 +28,29 @@ export type NativeChatTurnFoldRow = {
   outlivesTurn: boolean
   /** System failures compete as final answers so failed turns end on visible errors. */
   reportsFailure: boolean
-  /** Compaction/interruption/turn notices remain visible; hiding them leaves only generic turn status. */
+  /** Plans and turn notices remain visible independently of the agent's answer. */
   explainsTurn: boolean
   /** A Stop hook sent the agent back after it answered, so the prose before this row is an answer too. */
   sendsBack: boolean
 }
 
+const rowFacts = new WeakMap<NativeChatMessage, NativeChatTurnFoldRow>()
+
 /** How the fold reads a transcript row, with the same derivation the row renders from. */
 export function nativeChatTurnFoldRow(
+  message: NativeChatMessage,
+  turnKey: string | undefined,
+  hasReceipt: boolean
+): NativeChatTurnFoldRow {
+  let facts = rowFacts.get(message)
+  if (!facts) {
+    facts = deriveTurnFoldRow(message, undefined, false)
+    rowFacts.set(message, facts)
+  }
+  return { ...facts, turnKey, draws: hasReceipt || facts.draws }
+}
+
+function deriveTurnFoldRow(
   message: NativeChatMessage,
   turnKey: string | undefined,
   hasReceipt: boolean
@@ -64,7 +79,8 @@ export function nativeChatTurnFoldRow(
     explainsTurn: message.blocks.some(
       (block) =>
         block.type === 'text' &&
-        (block.presentation === 'compaction' ||
+        (block.presentation === 'plan-document' ||
+          block.presentation === 'compaction' ||
           block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
           block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
           block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||

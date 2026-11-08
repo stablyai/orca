@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { isTerminalPromptMutation } from '../../../shared/orchestration-rpc-contract'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 
@@ -19,7 +19,8 @@ const CALLER_ORCA_SESSION_ID_KEY = '__orcaCallerOrcaSessionId'
 export function replayStableCallerParams(
   runtime: OrcaRuntimeService,
   params: unknown,
-  callerOrcaSessionId?: OrcaSessionId
+  callerOrcaSessionId?: OrcaSessionId,
+  method?: string
 ): unknown {
   if (!params || typeof params !== 'object' || Array.isArray(params)) {
     return params
@@ -29,6 +30,12 @@ export function replayStableCallerParams(
   const result: Record<string, unknown> = callerOrcaSessionId
     ? { ...source, [CALLER_ORCA_SESSION_ID_KEY]: callerOrcaSessionId }
     : { ...source }
+  if (method === 'orchestration.federationImport' && Array.isArray(result.items)) {
+    result.items = result.items.map((item: Record<string, unknown>) => {
+      const { answerSenderReport: _answer, ...canonical } = item
+      return canonical
+    })
+  }
   delete result.waitSubmitMs
   for (const property of ['from', 'callerTerminalHandle', 'terminal'] as const) {
     const handle = source[property]

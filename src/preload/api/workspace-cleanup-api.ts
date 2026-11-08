@@ -5,14 +5,14 @@ import type {
   WorkspaceCleanupScanResult,
   WorkspaceCleanupSnapshotPruneBatchArgs,
   WorkspaceCleanupSnapshotPruneRecordArgs
-} from '../../shared/workspace-cleanup'
+} from '../../shared/workspace-cleanup/workspace-cleanup'
 import type {
   WorkspaceSpaceAnalysis,
   WorkspaceSpaceAnalyzeResult,
   WorkspaceSpaceScanProgress
-} from '../../shared/workspace-space-types'
+} from '../../shared/workspace-disk-space/workspace-space-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { WorkspaceSpaceChange } from '../../shared/workspace-space-change'
+import type { WorkspaceSpaceChange } from '../../shared/workspace-disk-space/workspace-space-change'
 
 export type WorkspaceCleanupApi = {
   scan: (

@@ -4,29 +4,25 @@ import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-hand
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalResolvePane,
-  RuntimeTerminalShow
-} from '../../../../shared/runtime-types'
-import type {
-  RuntimeTerminalCreate,
+  RuntimeTerminalShow,
   RuntimeTerminalSummary
 } from '../../../../shared/runtime-terminal-contracts'
-import type {
-  RuntimeProviderSnapshotReadOptions,
-  TerminalHandleRecord
-} from '../../runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
+import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+} from '../records/runtime-terminal-state-records'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   buildVisibleSnapshotReadFallback,
   labelTerminalReadSource,
   readTerminalTail
-} from '../../terminal-tail-read'
-import { getTerminalState } from '../../terminal-wait-results'
-import { readStructuredWorkerTerminal } from '../../structured-worker-terminal-read'
+} from '../output/tail/terminal-tail-read'
+import { getTerminalState } from '../wait/terminal-wait-results'
+import { readStructuredWorkerTerminal } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-terminal-read'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithRestoredHandlePaneStart {

@@ -9,9 +9,9 @@ import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from './use-pan-zoom-viewport'
 import { useViewerZoomCommands } from './use-viewer-zoom-commands'
 import { useSvgObjectUrl } from './use-svg-object-url'
-import { translate } from '@/i18n/i18n'
-import { buildImageDataUri } from '../../../../shared/image-data-uri'
-import { decodeSvgBase64, readSvgIntrinsicSize } from '../../../../shared/svg-document'
+import { useTranslate } from '@/i18n/use-translate'
+import { buildImageDataUri } from '../../../../shared/file-preview/image-data-uri'
+import { decodeSvgBase64, readSvgIntrinsicSize } from '../../../../shared/file-preview/svg-document'
 
 const FALLBACK_IMAGE_MIME_TYPE = 'image/png'
 const SVG_MIME_TYPE = 'image/svg+xml'
@@ -55,6 +55,7 @@ export default function ImageViewer({
   preferenceKey,
   scrollCacheKey = null
 }: ImageViewerProps): JSX.Element {
+  const t = useTranslate()
   const [loaded, setLoaded] = useState<{ key: string | null; size: PanZoomSize } | null>(null)
   const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
 
@@ -117,10 +118,7 @@ export default function ImageViewer({
       >
         <ImageIcon size={40} />
         <div>
-          {translate(
-            'auto.components.editor.ImageViewer.d9d2944855',
-            'Failed to load file preview'
-          )}
+          {t('auto.components.editor.ImageViewer.d9d2944855', 'Failed to load file preview')}
         </div>
         <div className="max-w-md break-all text-center text-xs">{filename}</div>
       </div>
@@ -135,7 +133,7 @@ export default function ImageViewer({
           isIntrinsicLayout ? 'min-h-64' : 'h-full'
         )}
       >
-        {translate('auto.components.editor.ImageViewer.3ef9551ba2', 'Loading preview...')}
+        {t('auto.components.editor.ImageViewer.3ef9551ba2', 'Loading preview...')}
       </div>
     )
   }
@@ -195,6 +193,7 @@ function FilledImage({
   isVector: boolean
   estimatedSize: string
 } & ImageLoadHandlers): JSX.Element {
+  const t = useTranslate()
   const panZoom = usePanZoomViewport({ content: imageSize, upscale: isVector, contain: true })
   useViewerZoomCommands(panZoom, 'pane')
   const zoomPercent = Math.round(panZoom.scale * 100)
@@ -219,7 +218,7 @@ function FilledImage({
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={() => panZoom.zoomBy(1 / IMAGE_VIEWER_ZOOM_STEP)}
             disabled={!panZoom.canZoomOut}
-            title={translate('auto.components.editor.ImageViewer.be27304574', 'Zoom out')}
+            title={t('auto.components.editor.ImageViewer.be27304574', 'Zoom out')}
           >
             <ZoomOut size={14} />
           </button>
@@ -228,7 +227,7 @@ function FilledImage({
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={panZoom.fit}
             disabled={panZoom.isFitted}
-            title={translate('auto.components.editor.ImageViewer.fitToView', 'Fit to view')}
+            title={t('auto.components.editor.ImageViewer.fitToView', 'Fit to view')}
           >
             <RotateCcw size={14} />
           </button>
@@ -237,7 +236,7 @@ function FilledImage({
             className="rounded p-1 hover:bg-accent hover:text-foreground disabled:opacity-50"
             onClick={() => panZoom.zoomBy(IMAGE_VIEWER_ZOOM_STEP)}
             disabled={!panZoom.canZoomIn}
-            title={translate('auto.components.editor.ImageViewer.3c9217f5a6', 'Zoom in')}
+            title={t('auto.components.editor.ImageViewer.3c9217f5a6', 'Zoom in')}
           >
             <ZoomIn size={14} />
           </button>
@@ -246,7 +245,7 @@ function FilledImage({
             className="ml-1 rounded px-1 tabular-nums hover:bg-accent hover:text-foreground disabled:hover:bg-transparent"
             onClick={panZoom.showActualSize}
             disabled={!imageSize || zoomPercent === 100}
-            title={translate('auto.components.editor.ImageViewer.actualSize', 'Actual size')}
+            title={t('auto.components.editor.ImageViewer.actualSize', 'Actual size')}
           >
             {imageSize ? `${zoomPercent}%` : '—'}
           </button>
@@ -277,8 +276,9 @@ function IntrinsicImage({
   filename: string
   imageSize: PanZoomSize | null
 } & ImageLoadHandlers): JSX.Element {
+  const t = useTranslate()
   const [expanded, setExpanded] = useState(false)
-  const label = translate('auto.components.editor.ImageViewer.expand', 'Expand image')
+  const label = t('auto.components.editor.ImageViewer.expand', 'Expand image')
   return (
     <div className="group/image relative flex justify-center bg-muted/20 p-4">
       <img

@@ -19,6 +19,13 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
       ? translate('chat.sessionOptionCopy.permissions', 'Permissions')
       : translate('chat.sessionOptionCopy.notSet', 'Not set')
   }
+  if (
+    descriptor.id === 'permissionMode' &&
+    descriptor.kind.type === 'select' &&
+    descriptor.kind.currentValue === 'own'
+  ) {
+    return translate('settings.agents.permissionOwnAll', "Agents' own settings")
+  }
   const choice = selectedNativeChatChoice(descriptor)
   if (!choice) {
     return translate('chat.sessionOptionCopy.notSet', 'Not set')

@@ -23,8 +23,11 @@ export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort
     const settings = store.getSettings()
     const telemetry = settings.telemetry
     const saved = telemetry?.chatUiLaunchTipCohort
+    const rollout = telemetry?.chatUiLaunchTipRolloutCohort
+    if (rollout === 'control' || rollout === 'treatment') {
+      return rollout
+    }
     if (
-      saved === 'control' ||
       saved === 'treatment' ||
       saved === 'treatment-live-switch' ||
       saved === 'treatment-swapped-buttons' ||
@@ -35,30 +38,24 @@ export function ensureChatUiLaunchTipCohort(store: Store): ChatUiLaunchTipCohort
     if (
       !telemetry ||
       store.getChatUiLaunchTipVariant() === 'none' ||
-      store.getUI().featureTipsSeenIds?.includes('chat-ui-here')
+      (saved !== 'control' && store.getUI().featureTipsSeenIds?.includes('chat-ui-here'))
     ) {
-      return undefined
+      return saved === 'control' ? saved : undefined
     }
     const consent = resolveConsent(settings).effective
     if (consent !== 'enabled') {
       deferredForConsent = consent === 'pending_banner'
-      return undefined
+      return saved === 'control' ? saved : undefined
     }
-    const draw = randomInt(10)
-    const cohort: ChatUiLaunchTipCohort =
-      draw < 7
-        ? 'control'
-        : draw === 7
-          ? 'treatment-center'
-          : draw === 8
-            ? 'treatment'
-            : 'treatment-live-switch'
+    // Promote 3/7 of the old 70% control group once: 30% + 70% × 3/7 = 60% treatment.
+    const draw = randomInt(saved === 'control' ? 7 : 10)
+    const cohort: ChatUiLaunchTipCohort = draw < 4 ? 'control' : 'treatment'
     const targeting =
       cohort === 'control' ? undefined : assignTargeting(settings.agentDefaultSurface)
     store.updateSettings({
       telemetry: {
         ...telemetry,
-        chatUiLaunchTipCohort: cohort,
+        chatUiLaunchTipRolloutCohort: cohort,
         ...(targeting
           ? {
               chatUiLaunchTipTargeting: targeting,

@@ -1,13 +1,17 @@
 import { selectBareRecipientOwner, runMismatch } from './recipient-owner-selection'
-import type { LegacyAdoptedMailboxOwner, OrchestrationDb } from '../../../../orchestration/db'
+import type { LegacyAdoptedMailboxOwner } from '../../../../orchestration/db/runs/run-lookup'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { DispatchContextRow, DispatchStatus } from '../../../../orchestration/types'
+import type {
+  DispatchContextRow,
+  DispatchStatus
+} from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
+import { resolveOrchestrationParty } from '../../../../orchestration/addressing/orchestration-party'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
-import type { OrchestrationCoordinatorKey } from '../../../../orchestration/orchestration-caller-identity'
-import { CURRENT_CONTRACT_VERSION } from '../../../../orchestration/db/contract-constants'
-import { readAgentSessionRecordStore } from '../../../../orchestration/structured-session-lineage'
+import type { OrchestrationCoordinatorKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
+import { readAgentSessionRecordStore } from '../../../../orchestration/addressing/session-lineage/structured-session-lineage'
 import {
   readSessionRecipient,
   refuseUndeliverableSessionRecipient,
@@ -215,7 +219,8 @@ export function resolveBareOrchestrationRecipient(params: {
     party.terminalHandle === null
       ? undefined
       : (runtime.getLiveTerminalPaneKey(party.terminalHandle) ?? undefined)
-  return selectBareRecipientOwner({
+  const dispatches = () => db.getActiveDispatchMailboxOwners(handle, paneKey)
+  const resolution = selectBareRecipientOwner({
     ...params,
     handle,
     boundRuns: () =>
@@ -224,7 +229,7 @@ export function resolveBareOrchestrationRecipient(params: {
         : paneKey
           ? db.runsBoundToPane(paneKey)
           : [],
-    dispatches: () => db.getActiveDispatchMailboxOwners(handle, paneKey),
+    dispatches,
     ownerRunIds: () => db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner),
     fallback: () => {
       if (session) {
@@ -256,6 +261,16 @@ export function resolveBareOrchestrationRecipient(params: {
       }
     }
   })
+  if (resolution.ok || resolution.code !== 'recipient_run_mismatch') {
+    return resolution
+  }
+  // A terminal can coordinate one Run and work a Dispatch in the named one; its mail follows that Dispatch.
+  const worked = dispatches().filter((dispatch) => dispatch.run_id === params.explicitRunId)
+  const runBound =
+    worked.length === 1
+      ? resolveRunBoundDispatchRecipient(runtime, db, worked[0].id, params.explicitRunId)
+      : undefined
+  return runBound ? { ok: true, ...runBound } : resolution
 }
 
 function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecipientResolution {
@@ -266,5 +281,3 @@ function refused(recipient: string, refusal: SessionRecipientRefusal): BareRecip
     warning: { code: 'recipient_unreachable', recipient, message: refusal.message }
   }
 }
-
-export { selectBareRecipientOwner } from './recipient-owner-selection'

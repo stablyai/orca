@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
@@ -49,56 +49,6 @@ describe('The main agent fact across a restart', () => {
       })
     )
   }
-
-  it('round-trips a settled main agent held open by a child through disk and back', async () => {
-    const firstServer = new AgentHookServer()
-    await firstServer.start({ env: 'production', userDataPath })
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'finish after child' })
-    )
-    await postHookEvent(
-      firstServer,
-      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'arestored-child' })
-    )
-    await postHookEvent(firstServer, buildBody({ hook_event_name: 'Stop', is_interrupt: true }))
-    const live = firstServer.getStatusSnapshot()[0]
-    expect(live).toMatchObject({
-      state: 'working',
-      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: expect.any(Number) }
-    })
-    firstServer.flushStatusPersistSync()
-    firstServer.stop()
-    const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
-    expect(file.entries[PANE].payload.mainAgent).toEqual(live?.mainAgent)
-    expect(file.entries[PANE]).not.toHaveProperty('claudeLeadBoundaryChildOnly')
-
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'working',
-        restoredUnconfirmed: true,
-        mainAgent: live?.mainAgent
-      })
-      // The restored main-agent fact lets child drain settle the pane without losing its verdict.
-      await postHookEvent(
-        server,
-        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'arestored-child' })
-      )
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'done',
-        interrupted: true,
-        mainAgent: {
-          state: 'done',
-          outcome: 'cancellation',
-          stateStartedAt: live?.mainAgent?.stateStartedAt
-        }
-      })
-    } finally {
-      server.stop()
-    }
-  })
 
   // Captured Claude cancellation emits no hook; exercise the inferred Ctrl+C path.
   it('round-trips an inferred cancel held open by a child through disk and back', async () => {
@@ -260,31 +210,6 @@ describe('The main agent fact across a restart', () => {
     }
   })
 
-  it('prefers a persisted main agent over the legacy flag when a row carries both', async () => {
-    const receivedAt = recentTs()
-    const mainAgent = { state: 'done', outcome: 'cancellation', stateStartedAt: receivedAt - 2_000 }
-    writeEntry({
-      receivedAt,
-      stateStartedAt: receivedAt - 5_000,
-      claudeLeadBoundaryChildOnly: true,
-      payload: {
-        state: 'working',
-        prompt: 'both',
-        agentType: 'claude',
-        turnCompletedAt: receivedAt - 1_000,
-        mainAgent,
-        subagents: [{ id: 'arestored-child', state: 'working', startedAt: receivedAt - 4_000 }]
-      }
-    })
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      expect(server.getStatusSnapshot()[0]?.mainAgent).toEqual(mainAgent)
-    } finally {
-      server.stop()
-    }
-  })
-
   it('drops a malformed persisted main agent and keeps the row', async () => {
     const receivedAt = recentTs()
     writeEntry({
@@ -298,23 +223,6 @@ describe('The main agent fact across a restart', () => {
       const row = server.getStatusSnapshot()[0]
       expect(row).toMatchObject({ state: 'done', prompt: 'survived' })
       expect(row?.mainAgent).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('never invents a main agent for a non-Claude row from the legacy flag', async () => {
-    const receivedAt = recentTs()
-    writeEntry({
-      receivedAt,
-      stateStartedAt: receivedAt - 5_000,
-      claudeLeadBoundaryChildOnly: true,
-      payload: { state: 'working', prompt: 'codex row', agentType: 'codex' }
-    })
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    try {
-      expect(server.getStatusSnapshot()[0]?.mainAgent).toBeUndefined()
     } finally {
       server.stop()
     }

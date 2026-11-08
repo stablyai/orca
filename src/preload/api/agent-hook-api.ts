@@ -1,6 +1,6 @@
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { SetupScriptImportCandidate } from '../../shared/setup-script-imports'
+import type { SetupScriptImportCandidate } from '../../shared/workspace-setup/setup-script-imports'
 
 export type HooksApi = {
   /** `background`: a render-driven probe, refused (status 'error') rather than booting a stopped WSL distro. */
@@ -28,6 +28,7 @@ export type HooksApi = {
     effectiveContent: string | null
     localFilePath: string
     source: 'local' | 'shared' | 'none'
+    localUntracked?: true
     refusedWslDistro?: string
   }>
   writeIssueCommand: (args: {

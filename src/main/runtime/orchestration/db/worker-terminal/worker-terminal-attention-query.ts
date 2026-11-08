@@ -5,8 +5,8 @@ import {
   type AttemptObservationStorageRow
 } from '../attempt-observation-store'
 import type { AttemptProjectedOutcome } from '../attempt-observation-types'
-import type { DispatchStatus, WorkerDispatchState } from '../../types'
-import type { TerminalExitCause } from '../../../../../shared/terminal-exit-cause'
+import type { DispatchStatus, WorkerDispatchState } from '../orchestration-records'
+import type { TerminalExitCause } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { OrchestrationDb } from '../orchestration-db'
 import { ATTEMPT_OBSERVATION_FACT_COLUMN_LIST } from '../row-column-lists'
 

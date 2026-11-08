@@ -1,7 +1,7 @@
 import type React from 'react'
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import {
@@ -14,6 +14,7 @@ import {
 
 /** Right-edge grip that resizes its parent tab-strip slot; must be the slot's direct child. */
 export function TabStripSlotResizeHandle({ tabId }: { tabId: string }): React.JSX.Element {
+  const t = useTranslate()
   const storedWidth = useAppStore((s) => s.tabWidthsById[tabId])
   const setTabWidth = useAppStore((s) => s.setTabWidth)
   const setWidth = useCallback((width: number) => setTabWidth(tabId, width), [setTabWidth, tabId])
@@ -33,15 +34,23 @@ export function TabStripSlotResizeHandle({ tabId }: { tabId: string }): React.JS
     [containerRef]
   )
 
+  useLayoutEffect(() => {
+    // Unsized tabs keep their CSS width (content-fit or terminal); the hook pins a default width otherwise.
+    const slot = containerRef.current
+    if (slot && storedWidth === undefined && !isResizing) {
+      slot.style.width = ''
+    }
+  }, [containerRef, isResizing, storedWidth])
+
   useEffect(() => {
-    // flex-1 slots share space equally and ignore width; release the slot while dragging so the width shows live.
+    // Release flex sizing and the width cap while dragging so the width shows live.
     const slot = containerRef.current
     if (!isResizing || !slot) {
       return
     }
-    slot.style.flex = 'none'
+    slot.dataset.tabResizing = ''
     return () => {
-      slot.style.flex = ''
+      delete slot.dataset.tabResizing
     }
   }, [containerRef, isResizing])
 
@@ -86,8 +95,8 @@ export function TabStripSlotResizeHandle({ tabId }: { tabId: string }): React.JS
       aria-valuemin={TAB_MIN_WIDTH}
       aria-valuemax={TAB_MAX_WIDTH}
       tabIndex={0}
-      aria-label={translate('tabResizeHandle.label', 'Resize tab')}
-      title={translate(
+      aria-label={t('tabResizeHandle.label', 'Resize tab')}
+      title={t(
         'tabResizeHandle.hint',
         'Drag or use the arrow keys to resize. Double-click or press Enter to reset.'
       )}

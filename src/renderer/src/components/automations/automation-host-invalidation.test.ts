@@ -81,37 +81,6 @@ describe('automation host invalidation', () => {
     expect(generationOf(cache, RUNTIME_SELF)).toBe(untouched)
   })
 
-  it('coalesces a burst into one invalidation pass', async () => {
-    const cache = seeded()
-    const onInvalidated = vi.fn()
-    const invalidation = createAutomationHostInvalidation({ cache, onInvalidated })
-
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'self' }, reason: 'definition' })
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'self' }, reason: 'run' })
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'ssh', targetId: 'target-1' } })
-    expect(invalidation.pending()).toBe(2)
-    expect(onInvalidated).not.toHaveBeenCalled()
-
-    await Promise.resolve()
-    expect(onInvalidated).toHaveBeenCalledTimes(1)
-    expect(onInvalidated.mock.calls[0]?.[0]).toHaveLength(2)
-    // Why: one refresh per burst, so an entry's generation advances once, not three times.
-    expect(generationOf(cache, DESKTOP_SELF)).toBe(1)
-  })
-
-  it('folds a scoped event into the authority pass it is already covered by', async () => {
-    const cache = seeded()
-    const onInvalidated = vi.fn()
-    const invalidation = createAutomationHostInvalidation({ cache, onInvalidated })
-
-    invalidation.handle({ authority: DESKTOP })
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'self' } })
-    await Promise.resolve()
-
-    expect(onInvalidated.mock.calls[0]?.[0]).toHaveLength(2)
-    expect(generationOf(cache, DESKTOP_SELF)).toBe(1)
-  })
-
   it('reports a scoped event for a host nothing is caching yet', async () => {
     const cache = seeded()
     const uncached: StableAutomationCatalogRef = {

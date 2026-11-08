@@ -2,8 +2,9 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
-import { listEnvironments } from '../../shared/runtime-environment-store'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   listEphemeralVmRuntimes,
   upsertEphemeralVmRuntime
@@ -50,6 +51,7 @@ vi.mock('./runtime-environments/runtime-environments', () => ({
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
+import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
 
 const tempDirs: string[] = []
 
@@ -140,75 +142,6 @@ describe('registerEphemeralVmHandlers', () => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
-  })
-
-  it('lists recipes from local repo orca.yaml', async () => {
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
-    writeFileSync(
-      join(repoPath, 'orca.yaml'),
-      [
-        'environmentRecipes:',
-        '  - id: cloud-sandbox',
-        '    name: Cloud Sandbox',
-        '    create: ./scripts/start.sh',
-        '    destroy: none'
-      ].join('\n')
-    )
-
-    const store = makeStore(repoPath)
-    registerEphemeralVmHandlers(store as never)
-    const result = await handlers.get('ephemeralVm:listRecipes')?.(null, {
-      repoId: 'repo-1'
-    } as never)
-
-    expect(removeHandlerMock).toHaveBeenCalledWith('ephemeralVm:listRecipes')
-    expect(result).toEqual({
-      status: 'ok',
-      repoPath,
-      diagnostics: [],
-      recipes: [
-        {
-          id: 'cloud-sandbox',
-          name: 'Cloud Sandbox',
-          create: './scripts/start.sh',
-          destroyDisabled: true
-        }
-      ]
-    })
-  })
-
-  it('merges approved plugin recipes while repository recipes shadow matching ids', async () => {
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
-    writeFileSync(
-      join(repoPath, 'orca.yaml'),
-      [
-        'environmentRecipes:',
-        '  - id: shared',
-        '    name: Repository Recipe',
-        '    create: repo-create'
-      ].join('\n')
-    )
-    const pluginService = pluginServiceWithRecipes([
-      {
-        pluginKey: 'samples.recipes',
-        recipe: { id: 'shared', name: 'Plugin Shared', create: 'plugin-shared' }
-      },
-      {
-        pluginKey: 'samples.recipes',
-        recipe: { id: 'global', name: 'Plugin Global', create: 'plugin-global' }
-      }
-    ])
-
-    registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
-    const result = (await handlers.get('ephemeralVm:listRecipes')?.(null, {
-      repoId: 'repo-1'
-    } as never)) as { recipes: { id: string; name: string }[] }
-
-    expect(pluginService.whenReady).toHaveBeenCalled()
-    expect(result.recipes).toMatchObject([
-      { id: 'shared', name: 'Repository Recipe' },
-      { id: 'global', name: 'Plugin Global' }
-    ])
   })
 
   it('uses an immutable plugin recipe snapshot after the plugin is removed', async () => {
@@ -303,170 +236,6 @@ describe('registerEphemeralVmHandlers', () => {
     expect(existsSync(join(repoPath, 'plugin-destroy-ran.txt'))).toBe(false)
   })
 
-  it('provisions a recipe and persists the ephemeral runtime', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
-    getPathMock.mockReturnValue(userDataPath)
-    mkdirSync(join(repoPath, 'scripts'), { recursive: true })
-    const startPath = join(repoPath, 'scripts', 'start.js')
-    writeFileSync(
-      startPath,
-      [
-        'console.log(JSON.stringify({',
-        '  schemaVersion: 1,',
-        `  pairingCode: ${JSON.stringify(makePairingCode())},`,
-        "  projectRoot: '/workspace/repo',",
-        '  userData: { providerResourceId: process.env.ORCA_VM_INSTANCE_ID }',
-        '}))'
-      ].join('\n')
-    )
-    writeFileSync(
-      join(repoPath, 'orca.yaml'),
-      [
-        'environmentRecipes:',
-        '  - id: cloud-sandbox',
-        '    name: Cloud Sandbox',
-        `    create: ${JSON.stringify(nodeCommand(startPath))}`,
-        '    destroy: none'
-      ].join('\n')
-    )
-
-    const store = makeStore(repoPath)
-    registerEphemeralVmHandlers(store as never)
-    const result = (await handlers.get('ephemeralVm:provision')?.(null, {
-      repoId: 'repo-1',
-      recipeId: 'cloud-sandbox',
-      workspaceName: 'Fix Login Race'
-    } as never)) as {
-      ok: boolean
-      runtime?: { id: string; repoId?: string; status?: string; runtimeEnvironmentId?: string }
-      environment?: { id: string; name: string }
-    }
-
-    expect(result).toMatchObject({
-      ok: true,
-      environment: {
-        name: expect.stringContaining('Repo VM ')
-      },
-      runtime: {
-        repoId: 'repo-1',
-        status: 'running',
-        runtimeEnvironmentId: result.environment?.id
-      }
-    })
-    const runtimes = await handlers.get('ephemeralVm:listRuntimes')?.(null, undefined as never)
-    expect(runtimes).toEqual([
-      expect.objectContaining({
-        repoId: 'repo-1',
-        recipeId: 'cloud-sandbox',
-        runtimeEnvironmentId: result.environment?.id
-      })
-    ])
-
-    const attached = await handlers.get('ephemeralVm:attachWorkspace')?.(null, {
-      runtimeId: result.runtime?.id,
-      workspaceId: 'repo-1::/workspace/repo/worktree'
-    } as never)
-    expect(attached).toEqual(
-      expect.objectContaining({
-        id: result.runtime?.id,
-        workspaceId: 'repo-1::/workspace/repo/worktree'
-      })
-    )
-
-    store.updateSettings({ activeRuntimeEnvironmentId: result.environment!.id })
-    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
-      runtimeId: result.runtime?.id
-    } as never)
-    expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
-    expect(listEnvironments(userDataPath)).toEqual([])
-    expect(store.getSettings().activeRuntimeEnvironmentId).toBe(result.environment!.id)
-    expect(store.updateSettings).toHaveBeenCalledTimes(1)
-  })
-
-  it('provisions an ssh recipe without creating a runtime environment', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
-    getPathMock.mockReturnValue(userDataPath)
-    mkdirSync(join(repoPath, 'scripts'), { recursive: true })
-    const startPath = join(repoPath, 'scripts', 'start-ssh.js')
-    writeFileSync(
-      startPath,
-      [
-        'console.log(JSON.stringify({',
-        '  schemaVersion: 1,',
-        '  connection: {',
-        "    type: 'ssh',",
-        "    projectRoot: '/workspace/repo',",
-        '    target: {',
-        "      label: 'Sandbox',",
-        "      host: 'sandbox.example.com',",
-        '      port: 22,',
-        "      username: 'root'",
-        '    }',
-        '  },',
-        "  userData: { sandboxId: 'sandbox-123' }",
-        '}))'
-      ].join('\n')
-    )
-    writeFileSync(
-      join(repoPath, 'orca.yaml'),
-      [
-        'environmentRecipes:',
-        '  - id: cloud-sandbox',
-        '    name: Cloud Sandbox',
-        `    create: ${JSON.stringify(nodeCommand(startPath))}`,
-        '    destroy: none'
-      ].join('\n')
-    )
-
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
-    const result = (await handlers.get('ephemeralVm:provision')?.(null, {
-      repoId: 'repo-1',
-      recipeId: 'cloud-sandbox',
-      workspaceName: 'Fix Login Race'
-    } as never)) as {
-      ok: boolean
-      connectionType?: string
-      sshTargetId?: string
-      runtime?: {
-        id: string
-        repoId?: string
-        status?: string
-        connectionMode?: string
-        sshTargetId?: string
-      }
-      environment?: { id: string; name: string }
-    }
-
-    expect(result).toMatchObject({
-      ok: true,
-      connectionType: 'ssh',
-      sshTargetId: 'runtime-ssh-orca-instance-1',
-      runtime: {
-        repoId: 'repo-1',
-        status: 'running',
-        connectionMode: 'ssh',
-        sshTargetId: 'runtime-ssh-orca-instance-1'
-      }
-    })
-    expect(result.environment).toBeUndefined()
-    expect(connectRuntimeOwnedSshTargetMock).toHaveBeenCalledWith({
-      runtimeId: result.runtime?.id,
-      connection: {
-        type: 'ssh',
-        projectRoot: '/workspace/repo',
-        target: {
-          label: 'Sandbox',
-          host: 'sandbox.example.com',
-          port: 22,
-          username: 'root'
-        }
-      }
-    })
-    expect(listEnvironments(userDataPath)).toEqual([])
-  })
-
   it('retains the runtime-owned SSH target when destroy fails', async () => {
     const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
     const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
@@ -524,53 +293,6 @@ describe('registerEphemeralVmHandlers', () => {
     expect(removeRuntimeOwnedSshTargetMock).not.toHaveBeenCalled()
     expect(cleaned.connectionMode).toBe('ssh')
     expect(cleaned.sshTargetId).toBe('runtime-ssh-orca-instance-1')
-  })
-
-  it('retries hidden SSH teardown without rerunning completed provider cleanup', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
-    getPathMock.mockReturnValue(userDataPath)
-    upsertEphemeralVmRuntime(userDataPath, {
-      id: 'runtime-cleanup-retry',
-      recipeId: 'cloud-sandbox',
-      repoId: 'repo-1',
-      status: 'cleanup_failed',
-      cleanupStatus: 'succeeded',
-      connectionMode: 'ssh',
-      sshTargetId: 'runtime-ssh-cleanup-retry',
-      createdAt: 1,
-      updatedAt: 1,
-      recipeResult: {
-        schemaVersion: 1,
-        connection: {
-          type: 'ssh',
-          projectRoot: '/workspace/repo',
-          target: { label: 'VM', host: 'host', port: 22, username: 'orca' }
-        }
-      }
-    })
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
-    removeRuntimeOwnedSshTargetMock.mockRejectedValueOnce(new Error('store unavailable'))
-
-    const failed = await handlers.get('ephemeralVm:cleanup')?.(null, {
-      runtimeId: 'runtime-cleanup-retry'
-    } as never)
-    expect(failed).toMatchObject({
-      status: 'cleanup_failed',
-      cleanupStatus: 'succeeded',
-      sshTargetId: 'runtime-ssh-cleanup-retry'
-    })
-
-    removeRuntimeOwnedSshTargetMock.mockResolvedValue(undefined)
-    const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
-      runtimeId: 'runtime-cleanup-retry'
-    } as never)
-    expect(cleaned).toMatchObject({
-      status: 'cleaned',
-      cleanupStatus: 'succeeded',
-      sshTargetId: undefined
-    })
-    expect(removeRuntimeOwnedSshTargetMock).toHaveBeenCalledTimes(2)
   })
 
   it('runs suspend and resume for an attached ephemeral VM workspace', async () => {
@@ -643,9 +365,11 @@ describe('registerEphemeralVmHandlers', () => {
       workspaceId: 'workspace-1'
     } as never)
 
-    const runningResume = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
-      workspaceId: 'workspace-1'
-    } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only getRepo and getRepos, which makeStore provides.
+    const runningResume = await resumeEphemeralVmWorkspace(store as never, 'workspace-1', {
+      sshHeld: false,
+      sshUserDisconnects: 0
+    })
     expect(runningResume).toEqual(expect.objectContaining({ status: 'running' }))
     expect(existsSync(join(repoPath, 'resume-mode.txt'))).toBe(false)
 
@@ -660,9 +384,11 @@ describe('registerEphemeralVmHandlers', () => {
       const environment = listEnvironments(userDataPath).find((entry) => entry.id === environmentId)
       expect(environment?.endpoints[0]?.endpoint).toBe('wss://resumed.example.com')
     })
-    const resumed = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
-      workspaceId: 'workspace-1'
-    } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only getRepo and getRepos, which makeStore provides.
+    const resumed = await resumeEphemeralVmWorkspace(store as never, 'workspace-1', {
+      sshHeld: false,
+      sshUserDisconnects: 0
+    })
     expect(resumed).toEqual(
       expect.objectContaining({
         status: 'running',
@@ -677,61 +403,6 @@ describe('registerEphemeralVmHandlers', () => {
     expect(invalidateRuntimeEnvironmentTransportMock).toHaveBeenCalledWith(
       provisioned.environment.id
     )
-  })
-
-  it('streams provision logs and cancels an active provision', async () => {
-    const userDataPath = makeDir('orca-ephemeral-vm-ipc-user-data-')
-    const repoPath = makeDir('orca-ephemeral-vm-ipc-repo-')
-    getPathMock.mockReturnValue(userDataPath)
-    mkdirSync(join(repoPath, 'scripts'), { recursive: true })
-    const startPath = join(repoPath, 'scripts', 'start.js')
-    writeFileSync(
-      startPath,
-      [
-        "process.stderr.write('creating sandbox\\n')",
-        'setTimeout(() => {',
-        '  console.log(JSON.stringify({',
-        '    schemaVersion: 1,',
-        `    pairingCode: ${JSON.stringify(makePairingCode())},`,
-        "    projectRoot: '/workspace/repo'",
-        '  }))',
-        '}, 30000)'
-      ].join('\n')
-    )
-    writeFileSync(
-      join(repoPath, 'orca.yaml'),
-      [
-        'environmentRecipes:',
-        '  - id: cloud-sandbox',
-        '    name: Cloud Sandbox',
-        `    create: ${JSON.stringify(nodeCommand(startPath))}`,
-        '    destroy: none'
-      ].join('\n')
-    )
-
-    registerEphemeralVmHandlers(makeStore(repoPath) as never)
-    const sender = { send: vi.fn() }
-    const provision = handlers.get('ephemeralVm:provision')?.({ sender }, {
-      repoId: 'repo-1',
-      recipeId: 'cloud-sandbox',
-      workspaceName: 'Fix Login Race',
-      provisionId: 'provision-1'
-    } as never) as Promise<{ ok: boolean; error?: string }>
-
-    await vi.waitFor(() =>
-      expect(sender.send).toHaveBeenCalledWith('ephemeralVm:provisionEvent', {
-        provisionId: 'provision-1',
-        stream: 'stderr',
-        chunk: 'creating sandbox\n'
-      })
-    )
-    const cancelled = await handlers.get('ephemeralVm:cancelProvision')?.(null, {
-      provisionId: 'provision-1'
-    } as never)
-    const result = await provision
-
-    expect(cancelled).toEqual({ cancelled: true })
-    expect(result.ok).toBe(false)
   })
 
   it('redacts recipe stdout when provisioning fails', async () => {

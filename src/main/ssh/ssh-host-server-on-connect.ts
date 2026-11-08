@@ -50,6 +50,7 @@ export type HostServerOnConnectResult =
       route: 'unserved'
       reason: SshManagedServerRelayReason
       detail?: string
+      code?: string
       terminals?: number
       terminalsElsewhere?: boolean
       canLeaveBehind?: true

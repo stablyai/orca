@@ -1,4 +1,5 @@
-import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/structured-agent-session-status-feed'
+import type { StructuredAgentSessionStatusChange } from '@/runtime/native-chat/status/structured-agent-session-status-dispatch'
+import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 
 /** Watch offered/failed chats only; debounce status/prompt changes into host rereads without one request per streamed summary. */
@@ -19,18 +20,22 @@ export function createOfferedChatWatch(deps: {
   let watch: {
     feed: StructuredAgentSessionStatusFeedOwner
     seen: Map<string, string>
+    /** The offered ids as of the last sync, so a tick for another chat costs nothing. */
+    watched: Set<string>
     release: () => void
   } | null = null
   let pendingRefresh: ReturnType<typeof setTimeout> | null = null
 
-  const notice = (): void => {
+  const notice = (change: StructuredAgentSessionStatusChange): void => {
     if (!watch) {
       return
     }
-    const { feed, seen } = watch
+    const { feed, seen, watched } = watch
     const snapshot = feed.getSnapshot()
     let changed = false
-    for (const sessionId of deps.offeredIds()) {
+    for (const sessionId of change === null
+      ? watched
+      : [...change].filter((sessionId) => watched.has(sessionId))) {
       const summary = snapshot.get(sessionId)
       if (!summary) {
         continue
@@ -73,12 +78,14 @@ export function createOfferedChatWatch(deps: {
       watch = {
         feed,
         seen: new Map(),
+        watched: offeredIds,
         release: () => {
           unsubscribe()
           deactivate()
         }
       }
     }
+    watch.watched = offeredIds
     const { feed, seen } = watch
     for (const sessionId of seen.keys()) {
       if (!offeredIds.has(sessionId)) {

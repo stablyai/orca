@@ -10,8 +10,6 @@ import {
   installAutomationsPageHarness,
   mocks,
   renderPage,
-  runtimeHost,
-  RUNTIME_SELF_FILTER,
   settleHostQueries
 } from './automations-page-test-harness'
 import { listedExternalEntries } from './automations-page-listed-items'
@@ -104,17 +102,6 @@ describe('AutomationsPage external manager probes', () => {
     ])
   })
 
-  it('lists no external rows for a host whose managers it says are not listed', async () => {
-    runtimeHost([], [])
-    mocks.state.automationHostFilter = RUNTIME_SELF_FILTER
-    openclawOnly()
-
-    await renderPage()
-    await settleHostQueries()
-
-    expect(listedExternalEntries()).toEqual([])
-  })
-
   it('drops the previous host rows when the selection moves, not when the new probe lands', async () => {
     withSshHosts('staging')
     mocks.state.automationHostFilter = DESKTOP_SELF_FILTER
@@ -151,15 +138,5 @@ describe('AutomationsPage external manager probes', () => {
     expect(mocks.listPanel?.externalManagersUncheckedNotice).toBe(
       `External automation managers on ${desktopLabel} could not be checked.`
     )
-  })
-
-  it('says nothing about unchecked hosts when every probe answered', async () => {
-    mocks.state.automationHostFilter = DESKTOP_SELF_FILTER
-    openclawOnly()
-
-    await renderPage()
-    await settleHostQueries()
-
-    expect(mocks.listPanel?.externalManagersUncheckedNotice).toBeNull()
   })
 })

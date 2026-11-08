@@ -10,7 +10,7 @@ import {
   OPENCODE_STARTUP_PROMPT_SHA256_ENV,
   OPENCODE_STARTUP_PROMPT_BODY_ENV,
   OPENCODE_STARTUP_PROMPT_ENDPOINT_ENV
-} from '../../shared/opencode-startup-prompt'
+} from '../../shared/agent-launch/startup/opencode-startup-prompt'
 
 export function createOpenCodeStartupPromptInstaller(source: () => string): OpenCodeHookService {
   return new OpenCodeHookService({

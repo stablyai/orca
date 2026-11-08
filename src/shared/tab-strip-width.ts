@@ -1,4 +1,4 @@
-export const TAB_DEFAULT_WIDTH = 330
+export const TAB_DEFAULT_WIDTH = 300
 export const TAB_MIN_WIDTH = 144
 export const TAB_MAX_WIDTH = 640
 export const TAB_RESIZE_KEYBOARD_STEP = 16

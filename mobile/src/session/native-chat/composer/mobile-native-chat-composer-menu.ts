@@ -29,6 +29,7 @@ export type MobileComposerStructuredCatalog = {
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
   reported: readonly AgentSessionSlashCommand[] | undefined
   conversationCommands: readonly AgentSessionConversationCommand[]
+  compactInstructions?: boolean
 }
 
 export type MobileComposerCatalog = {
@@ -45,18 +46,26 @@ const NO_DISCOVERY: NativeChatSkillDiscoverySnapshot = { status: 'ready', skills
 export function mobileComposerCatalog({
   agent,
   structured,
-  discovery = NO_DISCOVERY
+  discovery = NO_DISCOVERY,
+  interactionModeSupported = false
 }: {
   agent: string | null
   structured: MobileComposerStructuredCatalog | undefined
   discovery?: NativeChatSkillDiscoverySnapshot
+  interactionModeSupported?: boolean
 }): MobileComposerCatalog {
   if (!agent) {
     return { profile: null, commands: [], discovery: NO_DISCOVERY, sessionSkills: [] }
   }
   const reported = structured?.reported
   const commands = structured
-    ? structuredSessionSlashCommands(agent, structured.conversationCommands, reported)
+    ? structuredSessionSlashCommands(
+        agent,
+        structured.conversationCommands,
+        reported,
+        structured.compactInstructions,
+        interactionModeSupported
+      )
     : getMobileNativeChatCommands(agent)
   return {
     profile: getNativeChatAgentProfile(agent),

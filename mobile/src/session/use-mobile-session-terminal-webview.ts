@@ -1,4 +1,10 @@
 import { terminalInputSend } from '../terminal/mobile-terminal-operations'
+import {
+  MobileTerminalInputSender,
+  type TerminalInputEnqueueOptions
+} from '../terminal/mobile-terminal-input-sender'
+import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../src/shared/terminal/input/terminal-ordered-input'
+import { useRouteCapability } from '../transport/use-workspace-client'
 import { pendingSelectionWantsHandle } from './pending-session-selection'
 import { useEffect, useCallback, useRef } from 'react'
 import type { TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
@@ -8,6 +14,9 @@ import type { MobileSessionTabSwitchingModel } from './use-mobile-session-tab-sw
 export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitchingModel) {
   const {
     markdownDocs,
+    client,
+    hostId,
+    worktreeId,
     fileDocs,
     terminalGestureInputBucketsRef,
     terminalGestureInputQueuesRef,
@@ -15,6 +24,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalRefs,
     terminalUnsubsRef,
     initializedHandlesRef,
+    terminalResume,
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
@@ -26,6 +36,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     getTerminalPaneViewport,
     terminalPaneViewportsRef,
     connState,
+    terminalTextScale,
     showNativeChat,
     switchTab,
     handleTerminalTap: focusTerminalTap,
@@ -40,12 +51,45 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     notifyTerminalFrameHeight,
     notifyTerminalFrameWidth
   } = scope
+  const orderedInputSupported = useRouteCapability(TERMINAL_ORDERED_INPUT_CAPABILITY)
+  const inputSender = useRef(new MobileTerminalInputSender()).current
+  useEffect(() => {
+    const unsubscribe = client?.onStateChange((state) => {
+      if (state !== 'connected') {
+        inputSender.cancelAll()
+      }
+    })
+    const unpath = client?.onConnectionPathChange?.(() => inputSender.cancelAll())
+    return () => {
+      unsubscribe?.()
+      unpath?.()
+      inputSender.cancelAll()
+    }
+  }, [client, hostId, worktreeId, inputSender])
+  const sendTerminalOrderedInput = useCallback(
+    (
+      rpc: Parameters<typeof terminalInputSend.request>[0],
+      params: Parameters<typeof terminalInputSend.request>[1],
+      options?: Parameters<typeof terminalInputSend.request>[2],
+      enqueue?: TerminalInputEnqueueOptions
+    ) => {
+      if (!client || rpc !== client) {
+        return Promise.resolve({
+          id: 'retired-input',
+          ok: true as const,
+          result: { send: { accepted: false } }
+        })
+      }
+      return inputSender.request(client, params, options, orderedInputSupported, enqueue)
+    },
+    [client, inputSender, orderedInputSupported]
+  )
   const sendTerminalUserInput = useCallback<typeof terminalInputSend.request>(
     (client, params, options) => {
       terminalRefs.current.get(params.terminal)?.scrollToBottom()
-      return terminalInputSend.request(client, params, options)
+      return sendTerminalOrderedInput(client, params, options)
     },
-    [terminalRefs]
+    [terminalRefs, sendTerminalOrderedInput]
   )
   // Store the ref but subscribe only after web-ready so init cannot precede xterm loading.
   const setTerminalWebViewRef = useCallback((handle: string, ref: TerminalWebViewHandle | null) => {
@@ -84,13 +128,21 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         wasAlreadyReady,
         handle === activeHandleRef.current
       )
-      if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
+      // A pending resume would only append to the reloaded, empty buffer.
+      const showedOutput =
+        initializedHandlesRef.current.has(handle) || terminalResume.isCatchingUp(handle)
+      if (wasAlreadyReady && showedOutput) {
         // Reload loses the xterm buffer; request fresh scrollback.
         unsubscribeTerminal(handle)
+        terminalResume.forget(handle)
         if (visibleTerminalHandlesRef.current.includes(handle)) {
           subscribeToTerminal(handle)
         }
         return
+      }
+      if (wasAlreadyReady) {
+        // A hidden document that reloaded lost its buffer too.
+        terminalResume.forget(handle)
       }
       // Lagging snapshots can clear a new tab’s active handle; its pending marker still authorizes ready subscribe.
       const isIntendedActive =
@@ -100,7 +152,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         subscribeToTerminal(handle)
       }
     },
-    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+    [nativeChatStream, subscribeToTerminal, terminalResume, unsubscribeTerminal]
   )
 
   const notifyTerminalFrame = useCallback(
@@ -196,10 +248,14 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   )
 
   const visibleKey = visibleTerminalHandles.join('\0')
+  const connStateSeenRef = useRef(connState)
   useEffect(() => {
     const visible = visibleTerminalHandlesRef.current
+    // Cancel resumable streams on a lost connection, or the shell replays them as snapshots; connected resubscribes each from where its xterm stopped.
+    const lostConnection = connStateSeenRef.current === 'connected' && connState !== 'connected'
+    connStateSeenRef.current = connState
     for (const handle of terminalUnsubsRef.current.keys()) {
-      if (!visible.includes(handle)) {
+      if (!visible.includes(handle) || (lostConnection && terminalResume.canResume(handle))) {
         unsubscribeTerminal(handle)
       }
     }
@@ -208,7 +264,12 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         subscribeToTerminal(handle)
       }
     }
-  }, [visibleKey, connState, subscribeToTerminal, unsubscribeTerminal])
+  }, [visibleKey, connState, subscribeToTerminal, terminalResume, unsubscribeTerminal])
+
+  // Hidden xterms reflow to a new text size on their own, so the host's record of their screens no longer fits them.
+  useEffect(() => {
+    terminalResume.forget()
+  }, [terminalResume, terminalTextScale])
 
   useEffect(() => {
     if (activeSessionTab?.type !== 'markdown') {
@@ -231,6 +292,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   }, [activeSessionTab, fileDocs, readFileTab])
   return {
     sendTerminalUserInput,
+    sendTerminalOrderedInput,
     setTerminalWebViewRef,
     handleTerminalWebReady,
     notifyTerminalFrame,

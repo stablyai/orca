@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
+import { buildSidebarHostOptions } from '@/components/sidebar/worktree-list/controls/sidebar-host-options'
 import { getProjectGroupExecutionHostIdForRows } from '../../../../shared/sidebar-list/host-filtering'
 import { buildPaletteFilterModel } from '@/components/cmd-j/palette-filter-options'
 import {
@@ -7,7 +7,7 @@ import {
   isPaletteFilterActive
 } from '@/components/cmd-j/palette-filter'
 import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
-import { getPaletteWorktreeExecutionHostId } from '@/lib/palette-repo-resolution'
+import { getPaletteWorktreeExecutionHostId } from '@/lib/workspace/search/palette-repo-resolution'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'

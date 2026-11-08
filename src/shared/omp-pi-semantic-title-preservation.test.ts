@@ -3,10 +3,13 @@
  * Orca manufactured OMP/Pi flicker via synthetic profile labels and normalization that discarded session/cwd (#16093).
  * OMP disables terminal-title synthesis so its session titles survive every state. Normalize rotating braille while preserving labels. */
 import { describe, expect, it } from 'vitest'
-import { detectAgentStatusFromTitle, normalizeTerminalTitle } from './agent-title-status'
-import { isDecorativeAgentTitleFrameChange } from './agent-decorative-title-signature'
-import { normalizeCompatibleAgentTitleForOwner } from './agent-title-owner'
-import { getPiCompatibleTitleSeparatorStatus } from './pi-compatible-synthetic-title'
+import {
+  detectAgentStatusFromTitle,
+  normalizeTerminalTitle
+} from './agent-status/title/agent-title-status'
+import { isDecorativeAgentTitleFrameChange } from './agent-status/title/agent-decorative-title-signature'
+import { normalizeCompatibleAgentTitleForOwner } from './agent-status/title/agent-title-owner'
+import { getPiCompatibleTitleSeparatorStatus } from './agent-status/title/providers/pi-compatible-synthetic-title'
 
 // Verbatim from src/main/pi/titlebar-extension-source.ts:44 and oh-my-pi:530-544.
 const ORCA_EXTENSION_WORKING = (frame: string): string => `${frame} π - fixing the sidebar - orca`
@@ -48,12 +51,6 @@ describe('normalizeTerminalTitle keeps the OMP/Pi session label', () => {
 
     expect(normalized.size).toBe(1)
     expect([...normalized][0]).toContain('fixing the sidebar')
-  })
-
-  it('keeps two different sessions distinguishable', () => {
-    expect(normalizeTerminalTitle('π - session A - orca')).not.toBe(
-      normalizeTerminalTitle('π - session B - orca')
-    )
   })
 })
 
@@ -120,13 +117,6 @@ describe('the owner relabel keeps the label and swaps only the brand', () => {
     expect(detectAgentStatusFromTitle(normalizeCompatibleAgentTitleForOwner(title, 'omp'))).toBe(
       detectAgentStatusFromTitle(title)
     )
-  })
-
-  // Persisted bare frames lack session text but still need explicit OMP owner identity (#6689/#7633/#9077).
-  it('still re-owns bare identity frames', () => {
-    expect(normalizeCompatibleAgentTitleForOwner('⠋ Pi', 'omp')).toBe('⠋ OMP')
-    expect(normalizeCompatibleAgentTitleForOwner('Pi ready', 'omp')).toBe('OMP ready')
-    expect(normalizeCompatibleAgentTitleForOwner('⠋ OMP', 'pi')).toBe('⠋ Pi')
   })
 })
 

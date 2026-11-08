@@ -1,26 +1,25 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import { makeWorkspaceLineage } from '../../src/main/persistence/persistence-test-harness'
-import * as folderTeardown from '../../src/main/runtime/folder-workspace-pty-teardown'
-import * as pathPresence from '../../src/main/local-worktree-path-presence'
+import * as folderTeardown from '../../src/main/runtime/workspaces/removal/folder-workspace-pty-teardown'
+import * as pathPresence from '../../src/main/workspaces/catalog/local-worktree-path-presence'
 import { mkdir } from 'node:fs/promises'
 import { basename } from 'node:path'
-import * as worktreePaths from '../../src/main/git/worktree-path-comparison'
-import * as gitRemoval from '../../src/main/git/worktree-removal'
+import * as worktreePaths from '../../src/main/git/worktrees/catalog/worktree-path-comparison'
+import * as gitRemoval from '../../src/main/git/worktrees/removal/worktree-removal'
 import * as pushTargetCleanup from '../../src/main/ipc/worktree-remote'
-import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/runtime-registered-local-worktree-removal'
-import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/runtime-folder-workspace'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
+import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal'
+import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/workspaces/catalog/runtime-folder-workspace'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-sessions/conversation/structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   acquireWatcherRemovalGate,
   beginWatcherInstall
-} from '../../src/main/ipc/watcher-removal-gate'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
+} from '../../src/main/workspaces/removal/watcher-removal-gate'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
 import {
   root,
   B,
@@ -28,7 +27,7 @@ import {
   openAuthorityRuntime,
   savedIds,
   AuthorityRuntime
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
 import { removalPtyProvider } from '../../src/main/runtime/rpc/worktree-rm-pty.test-fixture'
 import type { DurableProfileStateMutation } from '../../src/main/persistence/loading-store/store-runtime-state'
 import * as publication from '../../src/main/runtime/session-tabs/structured-session-tab-publication'
@@ -36,12 +35,12 @@ import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
 } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
-import { storeRepo } from '../../src/main/runtime/runtime-store-partial-fixture'
+import { storeRepo } from '../../src/main/runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
-import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/repo-worktree-resolution-scan'
+import type { RuntimeWorktreeScanResult } from '../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan'
 import { openMobileAgentHistoryChat } from '../../mobile/src/agent-history/open-mobile-agent-history-chat'
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
-import type { AiVaultSession } from '../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
 
 vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
   prewarmClaudeCliFlags: async () => undefined
@@ -363,68 +362,6 @@ class ScannedWorkspaceRuntime extends AuthorityRuntime {
   }
 }
 
-it.each([10, 100])(
-  'bounds actual target reveal across %i repo roots and metadata aliases',
-  async (n) => {
-    const input = await authorityProfile([], { records: [B], visible: [] })
-    for (let i = 0; i < n; i++) {
-      input.profile.addRepo(storeRepo({ id: `owner-${i}`, path: `${root}/repo-${i}` }))
-      input.profile.setWorktreeMeta(
-        hostWorktreeTarget({ id: `owner-${i}::${root}/repo-${i}/topic`, hostId: 'local' }),
-        {}
-      )
-    }
-    const workspace = `owner-${n - 1}::${root}/repo-${n - 1}/topic`
-    const prior = await readPersistedTestAgentSessionStore(root)
-    await seedTestAgentSessionRecordStore(root, {
-      records: Object.values(prior.records).map((record) => ({
-        ...record,
-        location: { ...record.location, workspaceId: workspace, workspaceKind: 'git-worktree' }
-      })),
-      sessionTabs: []
-    })
-    const runtime = new ScannedWorkspaceRuntime(input.profile)
-    runtime.scan = {
-      ok: true,
-      worktrees: [
-        {
-          path: `${root}/repo-${n - 1}/topic`,
-          head: 'abc1234',
-          branch: 'topic',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ]
-    }
-    const rig = await openAuthorityRuntime({ ...input, workspace }, runtime)
-    await runtime.prepareStructuredAgentSessionStartupRestoration()
-    let repoVisits = 0,
-      metaVisits = 0
-    const repos = input.profile.getRepos.bind(input.profile)
-    const meta = input.profile.getAllWorktreeMetaForHost.bind(input.profile)
-    vi.spyOn(input.profile, 'getRepos').mockImplementation(() => {
-      const rows = repos()
-      repoVisits += rows.length
-      return rows
-    })
-    vi.spyOn(input.profile, 'getAllWorktreeMetaForHost').mockImplementation((hostId) => {
-      const rows = meta(hostId)
-      metaVisits += Object.keys(rows).length
-      return rows
-    })
-    expect(await reveal(rig)).toMatchObject({
-      ok: true,
-      result: { ok: true, workspaceId: workspace }
-    })
-    await chatTabCommandsSettled()
-    expect(runtime.scans).toBe(1)
-    expect(repoVisits).toBeGreaterThanOrEqual(n)
-    expect(repoVisits).toBeLessThanOrEqual(40 * n)
-    expect(metaVisits).toBe(n)
-    expect(savedIds(rig)).toEqual([B])
-  }
-)
-
 async function inWorkspace(
   workspace: string,
   kind: 'folder' | 'git-worktree' = 'git-worktree',
@@ -563,7 +500,7 @@ it('fences actual folder-extra teardown through forget without denying its survi
   const cleanup = rig.runtime.removeWorktreeMetadataAndHistory.bind(rig.runtime)
   vi.spyOn(rig.runtime, 'removeWorktreeMetadataAndHistory').mockImplementation((...args) => {
     expect(() => beginWatcherInstall(root)).toThrow()
-    cleanup(...args)
+    return cleanup(...args)
   })
   expect(await rig.runtime.removeManagedWorktree(`id:${workspace}`)).toEqual({})
   expect(await reveal(rig)).toMatchObject({

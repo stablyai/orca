@@ -22,6 +22,7 @@ export function projectStructuredAgentStartItem(
     role: 'system',
     blocks: [{ type: 'text', text: body.task }],
     agentStart: true,
+    ...(body.kind === 'agent-start' ? { agentStartDispatchId: body.dispatchId } : {}),
     ...(body.kind === 'agent-handoff' ? { agentHandoff: true as const } : {}),
     from: readAgentMessageSource({
       kind: 'agent',

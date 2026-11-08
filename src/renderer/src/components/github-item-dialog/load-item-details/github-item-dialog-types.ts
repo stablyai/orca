@@ -8,6 +8,20 @@ import type {
 
 export type GitHubItemDialogProjectOrigin = GitHubWorkItemProjectOrigin
 
+export type GitHubWorkItemDetailsArgs = {
+  workItem: GitHubWorkItem | null
+  repoPath: string | null
+  effectiveRepoId: string | null
+  sourceContext?: TaskSourceContext | null
+  initialTab?: ItemDialogTab
+  projectOrigin?: GitHubItemDialogProjectOrigin
+  onRefreshAccepted?: (item: GitHubWorkItem) => void
+  onReviewRequestsChange?: (
+    itemKey: { id: string; repoId: string },
+    reviewRequests: GitHubAssignableUser[]
+  ) => void
+}
+
 export type GitHubItemDialogProps = {
   workItem: GitHubWorkItem | null
   repoPath: string | null

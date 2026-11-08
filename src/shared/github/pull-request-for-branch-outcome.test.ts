@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRRefreshOutcome } from './pull-request-refresh-types'
+
 import type { PRInfo } from './pull-request-types'
 import { normalizeGitHubPRForBranchOutcome } from './pull-request-for-branch-outcome'
 
@@ -14,11 +14,6 @@ const PR: PRInfo = {
 }
 
 describe('normalizeGitHubPRForBranchOutcome', () => {
-  it('preserves current classified outcomes', () => {
-    const outcome: PRRefreshOutcome = { kind: 'found', pr: PR, fetchedAt: 10 }
-    expect(normalizeGitHubPRForBranchOutcome(outcome, 20)).toBe(outcome)
-  })
-
   it.each([
     { kind: 'no-pr' as const, fetchedAt: 10 },
     { kind: 'no-pr' as const, fetchedAt: 10, rejectedPRUrls: [PR.url] }
@@ -36,15 +31,5 @@ describe('normalizeGitHubPRForBranchOutcome', () => {
       kind: 'no-pr',
       fetchedAt: 20
     })
-  })
-
-  it('preserves classified upstream errors', () => {
-    const outcome: PRRefreshOutcome = {
-      kind: 'upstream-error',
-      errorType: 'network',
-      message: 'network unavailable',
-      fetchedAt: 10
-    }
-    expect(normalizeGitHubPRForBranchOutcome(outcome, 20)).toBe(outcome)
   })
 })

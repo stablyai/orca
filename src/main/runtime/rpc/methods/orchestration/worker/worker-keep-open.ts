@@ -1,11 +1,11 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import type { FederatedDispatchRow } from '../../../../orchestration/types'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import type { FederatedDispatchRow } from '../../../../orchestration/db/orchestration-records'
 import { keptOpenStopRefusal } from '../../../../orchestration/db/worker-terminal/worker-terminal-user-keep'
 import { callFederatedWorkerShow } from './worker-observation'
-import { resolveStructuredWorkerIdentityForSession } from '../../../../structured-worker-authority'
+import { resolveStructuredWorkerIdentityForSession } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
   OrchestrationWorkerKeepOpenParams,
   OrchestrationWorkerSubjectParams

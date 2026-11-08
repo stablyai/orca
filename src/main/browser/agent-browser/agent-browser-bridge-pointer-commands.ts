@@ -1,6 +1,6 @@
 import type { ResolvedBrowserCommandTarget } from './agent-browser-bridge-types'
 import { BrowserError } from '../browser-error'
-import { normalizeCdpPointerButton } from './agent-browser-bridge-mouse'
+import { normalizeCdpPointerButton } from '../cdp/input/cdp-pointer-targets'
 import {
   assertFinitePointerValues,
   cdpPointerStateFor,
@@ -8,13 +8,14 @@ import {
   releaseCdpPointerButton,
   resolveCdpPointerReleaseButton,
   type CdpPointerState
-} from '../cdp-pointer-input'
-import { acquireElectronDebugger } from '../electron-debugger-lease'
-import { sendGuestCdpCommand } from '../guest-cdp-command'
+} from '../cdp/input/cdp-pointer-input'
+import { acquireElectronDebugger } from '../cdp/debugger/electron-debugger-lease'
+import { assertExpectedPageUrlForStep } from '../cdp/input/browser-expected-page-url'
+import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
 import { AgentBrowserBridgeInputCommands } from './agent-browser-bridge-input-commands'
-import { isEmbeddedGuest } from '../guest-direct-key-input'
-import { enablePageFocusEmulation } from '../agent-input-focus-guard'
-import { waitForGuestFirstPaint } from '../guest-first-paint'
+import { isEmbeddedGuest } from '../cdp/input/guest-direct-key-input'
+import { enablePageFocusEmulation } from '../cdp/input/agent-input-focus-guard'
+import { waitForGuestFirstPaint } from '../cdp/debugger/guest-first-paint'
 
 type CdpPointerEventParams = {
   type: 'mouseMoved' | 'mousePressed' | 'mouseReleased' | 'mouseWheel'
@@ -59,6 +60,7 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
       if (press) {
         releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
       }
+      assertExpectedPageUrlForStep()
       await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', params)
       return result
     } catch (error) {

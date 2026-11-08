@@ -3,8 +3,8 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type * as NodeOs from 'node:os'
 import type * as CodexCommand from '../codex-cli/command'
-import type * as TrustDerivation from '../codex/codex-hook-trust-derivation'
-import type { CodexHookAnswer } from '../codex/codex-hook-trust-derivation'
+import type * as TrustDerivation from '../codex/trust/hooks/codex-hook-trust-derivation'
+import type { CodexHookAnswer } from '../codex/trust/hooks/codex-hook-trust-derivation'
 import { createSettings } from './runtime-home-settings-test-fixtures'
 import {
   createStore,
@@ -30,7 +30,7 @@ vi.mock('../codex-cli/command', async (importOriginal) => ({
   resolveCodexCommand: () => mocks.codexPath,
   resolveCodexCommandForSpawn: async () => mocks.codexPath
 }))
-vi.mock('../codex/codex-hook-trust-derivation', async (importOriginal) => ({
+vi.mock('../codex/trust/hooks/codex-hook-trust-derivation', async (importOriginal) => ({
   ...(await importOriginal<typeof TrustDerivation>()),
   probeCodexVersion: mocks.probeCodexVersion,
   deriveCodexHookHashes: mocks.deriveCodexHookHashes
@@ -88,8 +88,10 @@ describe('a status-hook problem never moves the system default off ~/.codex', ()
       [hooksPath(), tomlPath()].map((path) => [path, readOptional(path)] as const)
     )
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const { startCodexHooks, _internals } = await import('../codex/codex-hook-reconcile')
-    const { readCurrentCodexHookStatus } = await import('../codex/codex-hook-status')
+    const { startCodexHooks, _internals } =
+      await import('../codex/hooks/reconciliation/codex-hook-reconcile')
+    const { readCurrentCodexHookStatus } =
+      await import('../codex/hooks/reconciliation/codex-hook-status')
     const store = createStore(createSettings({ realHomeRoutable: true }))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the service reads only getSettings/updateSettings, which the harness store implements.
     const service = new CodexRuntimeHomeService(store as never)

@@ -1,6 +1,6 @@
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path'
 import { isSkillInstallProviderId } from '../../shared/skill-install-providers'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import type { SkillInstalledFileMode } from './skill-install-filesystem'
 import { skillInstallStateKey, type SkillInstallReceiptV1 } from './skill-install-provenance'
 import {

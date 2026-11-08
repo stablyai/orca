@@ -1,3 +1,4 @@
+import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
 import { buildTerminalCreateWindow } from './ipc-events-terminal-create-window-test-fixtures'
@@ -152,21 +153,22 @@ export async function setupTerminalCreateSurfacing(
   vi.doMock('@/lib/ui-zoom', () => ({
     applyUIZoom: vi.fn()
   }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('@/lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+  vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
   }))
   vi.doMock('@/lib/editor-font-zoom', () => ({
     nextEditorFontZoomLevel: vi.fn(() => 0),
     computeEditorFontSize: vi.fn(() => 13)
   }))
-  vi.doMock('@/components/settings/SettingsConstants', () => ({
+  vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+    ...(await importOriginal<typeof UIZoomLevelModule>()),
     zoomLevelToPercent: vi.fn(() => 100),
-    ZOOM_MIN: -3,
-    ZOOM_MAX: 3
+    UI_ZOOM_MIN: -3,
+    UI_ZOOM_MAX: 3
   }))
   vi.doMock('@/lib/zoom-events', () => ({
     dispatchZoomLevelChanged: vi.fn()
@@ -175,21 +177,23 @@ export async function setupTerminalCreateSurfacing(
     createFloatingWorkspaceTerminalTab,
     isFloatingWorkspacePanelFocused: () => isFloatingPanelFocused()
   }))
-  vi.doMock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+  vi.doMock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
     activateWebRuntimeSessionTab: vi.fn(),
     closeWebRuntimeSessionTab: vi.fn()
   }))
-  vi.doMock('@/runtime/web-runtime-browser-creation', () => ({
+  vi.doMock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
     createWebRuntimeSessionBrowserTab: vi.fn().mockResolvedValue(false)
   }))
-  vi.doMock('@/runtime/web-runtime-terminal-creation', () => ({ createWebRuntimeSessionTerminal }))
-  vi.doMock('@/runtime/web-runtime-session-environment', () => ({
+  vi.doMock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
+    createWebRuntimeSessionTerminal
+  }))
+  vi.doMock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
     isWebRuntimeSessionActive: vi.fn(() => false)
   }))
   vi.doMock('@/lib/focus-terminal-tab-surface', () => ({
     focusTerminalTabSurface
   }))
-  vi.doMock('@/runtime/mounted-terminal-tab-registry', () => ({
+  vi.doMock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
     focusRuntimeTerminalSurface
   }))
   vi.doMock('@/lib/activate-tab-and-focus-pane', () => ({

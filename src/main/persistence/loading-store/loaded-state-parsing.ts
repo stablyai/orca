@@ -5,15 +5,15 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ChatUiLaunchTipAudience } from '../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
-import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
+import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session/workspace-session-terminal-buffers'
+import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../shared/project-groups'
-import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
+import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { logStartupMilestone } from '../../startup/startup-diagnostics'
 import {
   PROTECTED_SECRET_SLOT,
   sshPtyOwnerLeaseSecretSlot
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import {
   isLegacyOpenCodeSessionCookie,
   isLegacySshPtyOwnerLease
@@ -105,6 +105,7 @@ export class LoadedStateParsingOperations {
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }
+        parsed = this.cohorts.migrateCohortSeeds(parsed, true)
         // Freeze audience before defaults or migrations alter the saved Chat UI state.
         chatUiLaunchTipAudience = this.cohorts.captureChatUiLaunchTipAudience(parsed)
         this.runtime.originalExperimentalNativeChat =
@@ -195,7 +196,7 @@ export class LoadedStateParsingOperations {
     }
 
     if (result === null) {
-      result = getDefaultPersistedState(homedir())
+      result = this.cohorts.migrateCohortSeeds(getDefaultPersistedState(homedir()), false)
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
@@ -276,9 +277,9 @@ export class LoadedStateParsingOperations {
       chatUiLaunchTipAudience ?? this.cohorts.captureChatUiLaunchTipAudience(undefined)
     const migrated = {
       ...this.cohorts.carryChatUiChoices(
-        this.cohorts.migrateTabSwitchKeybindings(
+        this.cohorts.keepResumeOnRestartOffForExistingProfiles(
           this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
-          fileExistedOnLoad
+          parsed
         ),
         parsed,
         audience

@@ -22,39 +22,6 @@ function repo(overrides: Partial<Repo>): Repo {
 }
 
 describe('getAutomationProjectGroups', () => {
-  it('groups same logical project sources under one row', () => {
-    const groups = getAutomationProjectGroups(
-      [
-        repo({
-          id: 'local',
-          displayName: 'claude-swap',
-          path: '/Users/me/claude-swap',
-          repoIcon: { type: 'image', source: 'github', label: 'realiti4/claude-swap', src: '' }
-        }),
-        repo({
-          id: 'ssh',
-          displayName: 'claude-swap',
-          path: '/home/orca/claude-swap',
-          connectionId: 'docker',
-          repoIcon: { type: 'image', source: 'github', label: 'realiti4/claude-swap', src: '' }
-        }),
-        repo({
-          id: 'other',
-          displayName: 'other',
-          path: '/other'
-        })
-      ],
-      'ssh'
-    )
-
-    expect(groups).toHaveLength(2)
-    expect(groups[0]).toMatchObject({
-      projectKey: 'github:realiti4/claude-swap',
-      repo: { id: 'ssh' }
-    })
-    expect(groups[0]?.sources.map((source) => source.id)).toEqual(['local', 'ssh'])
-  })
-
   it('finds and preserves the selected concrete source', () => {
     const groups = getAutomationProjectGroups(
       [

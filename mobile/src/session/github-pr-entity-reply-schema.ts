@@ -1,4 +1,5 @@
-import { z } from 'zod'
+import { normalizePRCheckHeadSha } from '../../../src/shared/github/pr-check-head'
+import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import type { GitHubReaction, PRComment } from '../../../src/shared/github/comment-types'
 import type {
@@ -159,7 +160,9 @@ const checkSummarySchema = z
     passed: prCount('passed'),
     failed: prCount('failed'),
     pending: prCount('pending'),
-    neutral: prCount('neutral')
+    neutral: prCount('neutral'),
+    cancelled: salvagedOptional('cancelled', z.number().int().nonnegative()),
+    scope: z.literal('pipeline').optional()
   })
   .transform((summary): ProviderCheckSummary => ({
     state: summary.state,
@@ -167,7 +170,14 @@ const checkSummarySchema = z
     passed: summary.passed ?? 0,
     failed: summary.failed ?? 0,
     pending: summary.pending ?? 0,
-    neutral: summary.neutral ?? 0
+    neutral: summary.neutral ?? 0,
+    ...(summary.cancelled !== undefined &&
+    [summary.total, summary.passed, summary.failed, summary.pending, summary.neutral].every(
+      (count) => count !== undefined
+    )
+      ? { cancelled: summary.cancelled }
+      : {}),
+    ...(summary.scope ? { scope: summary.scope } : {})
   }))
 
 export function prCheckSummary(name: string) {
@@ -216,8 +226,10 @@ const prCommentSchema = z
   }))
 
 // Preserve upstream order because timeline thread grouping depends on it.
+export const prCommentsSchema = salvagingArray(prCommentSchema)
+
 export function prCommentList(name: string) {
-  return salvagedOptional(name, salvagingArray(prCommentSchema))
+  return salvagedOptional(name, prCommentsSchema)
 }
 
 const checkDetailSchema = z
@@ -227,7 +239,8 @@ const checkDetailSchema = z
     conclusion: salvagedOptional('conclusion', z.enum(CHECK_RUN_CONCLUSION)),
     url: prText('url'),
     checkRunId: prCount('checkRunId'),
-    workflowRunId: prCount('workflowRunId')
+    workflowRunId: prCount('workflowRunId'),
+    observedHeadSha: z.unknown().optional().transform(normalizePRCheckHeadSha)
   })
   .transform((check): PRCheckDetail => ({
     name: check.name,
@@ -235,7 +248,8 @@ const checkDetailSchema = z
     conclusion: check.conclusion ?? null,
     url: check.url ?? null,
     checkRunId: check.checkRunId,
-    workflowRunId: check.workflowRunId
+    workflowRunId: check.workflowRunId,
+    observedHeadSha: check.observedHeadSha
   }))
 
 export const prChecksSchema = salvagingArray(checkDetailSchema)

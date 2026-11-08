@@ -4,12 +4,12 @@ import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Hello
-} from '../../../src/shared/mobile-e2ee-v2-contract'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
 import {
   openMobileE2EEV2Frame,
   sealMobileE2EEV2Frame
-} from '../../../src/shared/mobile-e2ee-v2-framing'
-import { deriveMobileE2EEV2KeySchedule } from '../../../src/shared/mobile-e2ee-v2-node-key-schedule'
+} from '../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
+import { deriveMobileE2EEV2KeySchedule } from '../../../src/shared/remote-runtime/e2ee/node/mobile-e2ee-v2-node-key-schedule'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

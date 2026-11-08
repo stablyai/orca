@@ -10,7 +10,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     disposition: 'rewrite-desktop',
     item: 42
   },
-  'src/renderer/src/components/editor/ipynb-kernel-store.ts': {
+  'src/renderer/src/components/editor/notebook/kernel/ipynb-kernel-store.ts': {
     disposition: 'rewrite-desktop',
     item: 43
   },
@@ -24,11 +24,11 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'
   },
-  'src/renderer/src/components/native-chat/native-chat-composer-draft-journal.ts':
+  'src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-journal.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/components/native-chat/native-chat-composer-draft-storage.ts':
+  'src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-storage.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/components/native-chat/structured-agent-session-legacy-outbox.ts':
+  'src/renderer/src/components/native-chat/session/structured/delivery/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/lib/wsl-move-renderer-store-rewrites.ts': notApplicableDisposition(
     62,
@@ -54,8 +54,6 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
       'src/renderer/src/components/feature-wall/feature-wall-completion-persistence.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-bounds.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-panel-render-probe.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-panel-test-harness.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-view-state.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-trigger-position.ts',
       'src/renderer/src/components/floating-terminal/use-floating-terminal-orchestration-dismissal.ts',
@@ -68,21 +66,21 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/jira-view-mode-storage.ts',
       'src/renderer/src/components/landing-preflight-dismissal.ts',
       'src/renderer/src/components/linear-issue-view-storage.ts',
-      'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',
+      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx',
       'src/renderer/src/components/onboarding/onboarding-feature-setup.ts',
       'src/renderer/src/components/pet/PetOverlay.tsx',
-      'src/renderer/src/components/right-sidebar/ai-vault-view-options-persistence.ts',
-      'src/renderer/src/components/right-sidebar/pr-comment-presentation.ts',
-      'src/renderer/src/components/settings/BrowserUsePane.tsx',
-      'src/renderer/src/components/settings/local-network-connection-history.ts',
+      'src/renderer/src/components/right-sidebar/ai-vault/scope/ai-vault-view-options-persistence.ts',
+      'src/renderer/src/components/right-sidebar/checks-panel/comments/pr-comment-presentation.ts',
+      'src/renderer/src/components/settings/browser/use/BrowserUsePane.tsx',
+      'src/renderer/src/components/settings/developer-permissions/local-network-connection-history.ts',
       'src/renderer/src/components/sidebar/linear-agent-skill-runtime.ts',
       'src/renderer/src/components/sidebar/LinearAgentSkillSetupPrompt.tsx',
       'src/renderer/src/components/sidebar/mobile-sidebar-onboarding-badge.ts',
       'src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx',
       'src/renderer/src/components/sidebar/SidebarToolbar.tsx',
-      'src/renderer/src/components/terminal-pane/terminal-freeze-breadcrumbs.ts',
-      'src/renderer/src/components/terminal-pane/terminal-render-desync-trigger.ts',
-      'src/renderer/src/components/terminal-pane/terminal-startup-timing.ts',
+      'src/renderer/src/components/terminal-pane/render-health/diagnostics/terminal-freeze-breadcrumbs.ts',
+      'src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-trigger.ts',
+      'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
       'src/renderer/src/lib/document-theme.ts',
       'src/renderer/src/lib/feature-education-telemetry.ts',
@@ -110,16 +108,21 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
   'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
   'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
-  'src/main/ai-vault/session-parse-cache-database.ts': 'ai-vault-parse-cache',
-  'src/main/ai-vault/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
-  'src/main/browser/cookies/browser-cookie-staged-import.ts': 'browser-cookie-import',
+  'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
+  'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
+  'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-database-schema.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-outcome-format.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-pi-active-branch.ts': 'pi-branch-import',
-  'src/main/native-chat/agent-session-journal/queued-message-schema.ts': 'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/writing/command-receipt-schema.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/database/journal-database-schema.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts':
+    'pi-branch-import',
+  'src/main/native-chat/agent-session-journal/queued-messages/queued-message-schema.ts':
+    'agent-session-journal',
   'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts': 'orchestration',
@@ -131,12 +134,14 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/runtime/orchestration/db/schema/migrate-v39.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate.ts': 'orchestration',
   'src/main/runtime/orchestration/db/reset/removed-orchestration-work-store.ts': 'orchestration',
-  'src/main/runtime/orchestration/mutation-receipt-capacity.ts': 'orchestration',
+  'src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts':
+    'orchestration',
   // Test fixtures that mirror third-party agent and browser databases.
-  'src/main/ai-vault/session-scanner-opencode-sqlite-fixture.ts': 'test-fixture',
+  'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
+    'test-fixture',
   'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
-  'src/main/codex/codex-state-db-test-fixture.ts': 'test-fixture',
+  'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'
 }
 
@@ -215,7 +220,8 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'question_threads',
         'remote_questions',
         'attempt_observation_facts',
-        'structured_pointer_operations'
+        'structured_pointer_operations',
+        'structured_mail_sends'
       ],
       notApplicableDisposition(53, 'Keyed by run, task, dispatch, message or handle ids.')
     ),

@@ -16,15 +16,23 @@ export class ClaudeAssistantFailures {
   ) {}
 
   assistant(message: Record<string, unknown>) {
+    const row = this.notice(message)
+    if (row) {
+      this.shown.set(this.scopeKey(message), claudeText(message.user_message_uuid))
+    } else if (message.type === 'user' || message.type === 'assistant') {
+      this.shown.delete(this.scopeKey(message))
+    }
+    return row
+  }
+
+  /** Classify without recording it as shown; a caller that keeps the row must write it. */
+  notice(message: Record<string, unknown>) {
     const unavailable =
       message.error === 'model_not_found' && (message.parent_tool_use_id ?? null) === null
     if (
       message.type !== 'assistant' ||
       (!unavailable && message.error !== 'authentication_failed')
     ) {
-      if (message.type === 'user' || message.type === 'assistant') {
-        this.shown.delete(this.scopeKey(message))
-      }
       return null
     }
     const content = claudeRecord(message.message)?.content
@@ -36,7 +44,6 @@ export class ClaudeAssistantFailures {
           })
           .join('\n')
       : ''
-    this.shown.set(this.scopeKey(message), claudeText(message.user_message_uuid))
     return {
       kind: 'status' as const,
       tone: 'error' as const,

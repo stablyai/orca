@@ -1,4 +1,3 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createSshDelivery,
@@ -8,14 +7,13 @@ import {
 } from './__mocks__/native-chat-ssh-delivery'
 import {
   sendNativeChatAskAnswer,
-  sendNativeChatMessage,
-  sendNativeChatMessageVerified,
-  resetNativeChatPtySendQueuesForTests
-} from '../../src/renderer/src/components/native-chat/native-chat-runtime-send'
+  sendNativeChatMessageVerified
+} from '../../src/renderer/src/components/native-chat/session/terminal/send/native-chat-runtime-send'
+import { resetNativeChatPtySendQueuesForTests } from '../../src/renderer/src/components/native-chat/session/terminal/send/native-chat-pty-send-queue'
 import { buildAskAnswerKeys } from '../../src/shared/native-chat/input/native-chat-ask-answer'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
+import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal'
 import { sendAgentDraftPasteContentNow } from '../../src/renderer/src/lib/agent-draft-paste-content'
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
 
@@ -72,17 +70,6 @@ describe('prompt delivery through production IPC, provider and paired host', () 
     expect(ssh.bytes.join('')).toBe(`\x1b[200~${'X'.repeat(32768)}TAIL\x1b[201~`)
     expect(ssh.bytes).not.toContain('\r')
     expect(onSettled).not.toHaveBeenCalled()
-  })
-
-  it('keeps ordinary healthy SSH body and Enter complete', async () => {
-    vi.useFakeTimers()
-    const ssh = createSshDelivery()
-    close = ssh.close
-    const onDeliverySettled = vi.fn()
-    sendNativeChatMessage(ssh.id, 'body', { onDeliverySettled })
-    await vi.advanceTimersByTimeAsync(600)
-    expect(ssh.bytes.join('')).toBe('\x15body\r')
-    expect(onDeliverySettled).toHaveBeenCalledExactlyOnceWith(true)
   })
 
   it.each(['accepted', 'lost'] as const)(

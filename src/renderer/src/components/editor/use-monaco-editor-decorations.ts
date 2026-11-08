@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, type MutableRefObject } from 'react'
 import type { editor } from 'monaco-editor'
-import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../shared/file-listing/file-document'
 import {
   clearMarkdownDocCompletionDocuments,
   setMarkdownDocCompletionDocuments
-} from './monaco-markdown-doc-completions'
-import type { MarkdownDocLinkDecorationController } from './monaco-markdown-doc-link-decorations'
+} from './markdown-source-tools/monaco/monaco-markdown-doc-completions'
+import type { MarkdownDocLinkDecorationController } from './markdown-source-tools/monaco/monaco-markdown-doc-link-decorations'
 import { buildGitConflictDecorations } from './monaco-conflict-decorations'
 
 export type MonacoEditorDecorations = {

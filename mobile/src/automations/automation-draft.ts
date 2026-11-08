@@ -1,6 +1,6 @@
 import { translate } from '../i18n/mobile-i18n'
 import { assertAutomationExtraAgentArgs } from '../../../src/shared/automation-extra-agent-args-record'
-import { isTuiAgent } from '../../../src/shared/tui-agent-config'
+import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { RpcSendParams } from '../transport/rpc-params-contract'
 import type { MobileAutomation } from './automation-reply-schema'
 import type { AutomationTargets } from './automation-target-inventory'
@@ -57,6 +57,22 @@ export function newAutomationDraft(current?: MobileAutomation): AutomationDraft 
     precheckTimeout: String(current?.precheck?.timeoutSeconds ?? 60),
     grace: String(current?.missedRunGraceMinutes ?? 720)
   }
+}
+
+/** The fields that differ from `original`; null when nothing the user would lose did (the *Edited flags only record how a field changed). */
+export function automationDraftEdits(
+  original: AutomationDraft,
+  draft: AutomationDraft
+): Partial<AutomationDraft> | null {
+  const before = new Map(Object.entries(original))
+  const edits = Object.entries(draft).filter(([key, value]) => value !== before.get(key))
+  return edits.some(([key]) => key !== 'targetEdited' && key !== 'setupDecisionEdited')
+    ? Object.fromEntries(edits)
+    : null
+}
+
+export function automationDraftChanged(original: AutomationDraft, draft: AutomationDraft): boolean {
+  return automationDraftEdits(original, draft) !== null
 }
 
 // The host checks arguments for an agent or surface this build doesn't know.

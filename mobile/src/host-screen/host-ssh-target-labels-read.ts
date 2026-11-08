@@ -1,3 +1,4 @@
+import { isHostNotConnectedError } from '../query/host-query-errors'
 import { optionalSettingsRead } from '../transport/settings-read-operations'
 import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
 import type { RpcClient } from '../transport/rpc-client'
@@ -10,7 +11,11 @@ export async function settledMetadataReply(
 ): Promise<RpcResponse | null> {
   try {
     return await send()
-  } catch {
+  } catch (error) {
+    // A query read sent while the host is down is not an answer; the connected edge reads it again.
+    if (isHostNotConnectedError(error)) {
+      throw error
+    }
     // Best-effort: hosts that predate a method still list repos; labels degrade to host ids.
     return null
   }
@@ -35,7 +40,7 @@ function readHostSettingOverrides(result: unknown): unknown {
 export async function readHostSshTargetLabels(client: RpcClient) {
   const [sshTargets, hostSettings] = await Promise.all([
     settledMetadataReply(() => hostSshTargetSummariesRead.request(client)),
-    optionalSettingsRead.request(client).catch(() => null)
+    settledMetadataReply(() => optionalSettingsRead.request(client))
   ])
   const hostSettingsResult = hostSettings ? optionalSettingsRead.interpret(hostSettings) : null
   const sshTargetSummaries =

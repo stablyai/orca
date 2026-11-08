@@ -4,7 +4,7 @@ import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
 } from '../../../shared/orcad-artifacts'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
@@ -132,7 +132,7 @@ export function orcadLaunchCommand(
           '{ umask "$orcad_login_umask" &&',
           ...launchEnv,
           // exec keeps $! equal to runtime PID; in-place launcher loading also preserves older clients’ argv checks.
-          `exec nohup "$orcad_runtime" ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
+          `exec nohup "$orcad_runtime" $orcad_runtime_flags ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
           `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)};`,
           `} > ${readiness} 2>> ${log} < /dev/null &`,
           `echo $! > ${pidFile} &&`,
@@ -163,7 +163,7 @@ function setsidLaunchTail(
       'else setsid "$@" & fi; }; orcad_detach "$@"\' orcad-detach',
     `sh -c 'echo $$ > "$1" && umask "$2" && shift 2 && exec "$@"' orcad-launch ${pidFile}`,
     '"$orcad_login_umask"',
-    `"$orcad_runtime" ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
+    `"$orcad_runtime" $orcad_runtime_flags ${ORCAD_RUNTIME_V8_FLAGS} ${entry}`,
     `--json --bind ${quotePosixShell(spec.bindHost)} --port ${String(spec.port)}`,
     `> ${readiness} 2>> ${log} < /dev/null &&`,
     `orcad_wait=0; while [ ! -s ${pidFile} ] && [ "$orcad_wait" -lt ${ORCAD_SETSID_PID_WAIT_TRIES} ];`,

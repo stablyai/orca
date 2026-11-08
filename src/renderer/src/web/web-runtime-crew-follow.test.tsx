@@ -1,13 +1,16 @@
 // @vitest-environment happy-dom
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
-import { runtimeEnvironmentStatusFromSnapshot } from '../../../shared/runtime-host-status'
+
+import {
+  type RuntimeEnvironmentStatus,
+  runtimeEnvironmentStatusFromSnapshot
+} from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
 import type * as RuntimeSession from './preload-api/web-runtime-session'
 import type { PreloadApi } from '../../../preload/api-types'
-import { replaceRuntimeEnvironmentRevisions } from '../runtime/runtime-environment-revision'
-import { useOrchestrationCrew } from '../components/native-chat/use-orchestration-crew'
+import { replaceRuntimeEnvironmentRevisions } from '../runtime/rpc/environment-revisions/runtime-environment-revision'
+import { useOrchestrationCrew } from '../components/native-chat/worker-lifetime/use-orchestration-crew'
 import { SharedControlReconnectScheduler } from '../../../shared/remote-runtime/control/remote-runtime-shared-control-reconnect'
 import {
   CrewSocket,

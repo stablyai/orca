@@ -1,6 +1,6 @@
 // Request shutdown without signaling; only kernel identity, owner change or PID absence proves exit.
 import { setTimeout as delay } from 'node:timers/promises'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import {
   OrcadManagedStopRequestSchema,
   orcadManagedStopRequestKey,
@@ -14,7 +14,10 @@ import {
   type OrcadProcessIdentityReaders,
   type OrcadRecordedIdentity
 } from './orcad-process-start-time'
-import { hasErrorCode, inspectProcessSignal } from '../daemon/daemon-process-inspection'
+import {
+  hasErrorCode,
+  inspectProcessSignal
+} from '../daemon/endpoint/identity/daemon-process-inspection'
 import { persistOrcadCompletedStopReceipt } from './orcad-completed-stop-receipt'
 import { readOrcadManagedStopDecision } from './orcad-managed-stop-decision'
 import { withdrawOrcadManagedStopRequest } from './orcad-managed-stop-cancellation'

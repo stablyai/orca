@@ -1,20 +1,31 @@
 // @vitest-environment happy-dom
+import { join } from 'node:path'
 import {
   fakeCodex,
   THREAD_ID as CODEX_THREAD_ID
-} from '../../src/main/codex/codex-structured-session-adapter-fixture'
-import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/structured-agent-runtime-registrations'
-import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/structured-agent-shell-environment'
+} from '../../src/main/codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
+import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/agent-session/installation/structured-agent-runtime-registrations'
+import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/agent-session/environment/structured-agent-shell-environment'
 import { act, renderHook, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { SDKStatusMessage } from '@anthropic-ai/claude-agent-sdk'
 const transport = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: transport.call,
-  subscribeStructuredAgentSessionStatus: transport.subscribe
-}))
-import { useStructuredAgentSessionOptions } from '../../src/renderer/src/components/native-chat/use-structured-agent-session-options'
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: transport.call
+  })
+)
+
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSessionStatus: transport.subscribe
+  })
+)
+import { useStructuredAgentSessionOptionStamp } from '../../src/renderer/src/components/native-chat/session/status/structured-agent-session-status-hooks'
+import { useStructuredAgentSessionOptions } from '../../src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-options'
 import { loadMobileStructuredOptions } from './__mocks__/mobile-structured-options'
 const useMobileStructuredAgentOptions = await loadMobileStructuredOptions()
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
@@ -26,29 +37,29 @@ import {
   PROVIDER_SESSION_ID
 } from '../../src/main/claude/structured/claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/structured/claude-structured-session-state'
-import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/structured-claude-runtime-adapter'
+import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/agent-session/installation/structured-claude-runtime-adapter'
 import {
   hostTestState,
   attachParams,
   envelope,
   CALLER
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as sessionId
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-permission-modes-capability'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { acpLaunchSpecFor } from '../../src/main/acp/acp-launch-specs'
 import { openHostRig, launch } from '../../src/main/acp/acp-structured-host.test-support'
 import { GROK_CONFIG_OPTIONS } from '../../src/main/acp/acp-structured-adapter.test-support'
 import { closeProviderTimelineRigs } from '../../src/main/native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 
 import { agentSessionRefusalFailure } from '../../src/shared/agent-session/failures/agent-session-write-failure'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 
 beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW))
 afterEach(() => {
@@ -134,7 +145,7 @@ function permissionConsumersFor(
         providerStarting: false,
         turnId: null,
         unloadedTurnRevisions: undefined,
-        hostOptionStamp: 'model|own',
+        hostOptionStamp: useStructuredAgentSessionOptionStamp(sessionId, target),
         mutate: write
       }),
     () =>
@@ -142,8 +153,9 @@ function permissionConsumersFor(
         ...common,
         client,
         enabled: true,
-        optionStamp: 'model|own',
+        optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target),
         turnId: null,
+        unloadedTurnRevisions: undefined,
         hostSupport: {
           permissionModes: true,
           permissionOwn: true,
@@ -252,7 +264,9 @@ it.each([1, 10, 100])(
             view.result.current.optionSnapshot.find((row) => row.id === 'permissionMode')
               ?.description
         )
-      await waitFor(() => expect(descriptions()).toEqual(Array(count * 2).fill('Accept edits')))
+      await waitFor(() =>
+        expect(descriptions()).toEqual(Array(count * 2).fill("Agent's own settings"))
+      )
       sink.publish.mockClear()
       onStatusChanged.mockClear()
       const unchanged = host.readStatusSummary(sessionId)!
@@ -281,7 +295,9 @@ it.each([1, 10, 100])(
         claudeFrame(connection, frame)
         await Promise.all(settlements)
       })
-      await waitFor(() => expect(descriptions()).toEqual(Array(count * 2).fill('Ask for approval')))
+      await waitFor(() =>
+        expect(descriptions()).toEqual(Array(count * 2).fill("Agent's own settings"))
+      )
       expect(read.mock.calls.filter(([method]) => method === 'agentSession.options')).toHaveLength(
         reads
       )
@@ -344,7 +360,7 @@ it.each([1, 10, 100])(
       })
       views.forEach((view) => view.unmount())
       views = mount()
-      await waitFor(() => expect(descriptions()).toEqual(Array(count * 2).fill('Ask for approval')))
+      await waitFor(() => expect(descriptions()).toEqual(Array(count * 2).fill('Full access')))
       expect((await host.readOptions(sessionId)).current).toMatchObject({
         permissionMode: 'full-access',
         reportedPermissionMode: 'ask'
@@ -372,7 +388,7 @@ it.each([1, 10, 100])(
       await act(async () => {
         subscriptions.forEach((dispose) => dispose())
       })
-      // Report loss falls back to the saved mode, which the next turn applies.
+      // Losing runtime evidence does not change the saved selection.
       expect(descriptions()).toEqual(Array(count * 2).fill('Full access'))
     } finally {
       cleanup()
@@ -395,7 +411,7 @@ it.each([
   ),
   { agent: 'omp' as const, fullAccess: false, savedMode: 'own' as const }
 ])(
-  'keeps $agent saved $savedMode controls tied to installed fullAccess=$fullAccess, not saved intent',
+  'keeps $agent saved $savedMode selected despite installed fullAccess=$fullAccess',
   async ({ agent, fullAccess, savedMode }) => {
     const spec = acpLaunchSpecFor(agent)
     if (!spec) {
@@ -409,7 +425,13 @@ it.each([
     })
     const mode = fullAccess ? 'full-access' : 'ask'
     const other = fullAccess ? 'ask' : 'full-access'
-    const description = fullAccess ? 'Full access' : 'Ask for approval'
+    const label = (choice: string) =>
+      choice === 'own'
+        ? "Agent's own settings"
+        : choice === 'full-access'
+          ? 'Full access'
+          : 'Ask for approval'
+    const description = label(savedMode)
     try {
       setLocalRuntimeCapabilitiesForTests([AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY])
       expect(
@@ -468,7 +490,7 @@ it.each([
       views.forEach((view) => view.unmount())
       views = mount()
       await waitFor(() =>
-        expect(rows().map((row) => row?.description)).toEqual([description, description])
+        expect(rows().map((row) => row?.description)).toEqual([label(other), label(other)])
       )
       expect(rows().every((row) => row?.settable)).toBe(true)
       expect((await host.readOptions(sessionId)).current).toMatchObject({
@@ -507,7 +529,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' as const }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      resolveCodexCommand: () => ({ command: join(root, 'codex-not-installed'), prefixArgs: [] }),
       readCodexInstallation: async () => ({ version: '0.136.0' }),
       readProcessStartTime: async () => 1_700_000_000_000,
       openCodexConnection: codex.openConnection
@@ -548,7 +570,9 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
         (view) =>
           view.result.current.optionSnapshot.find((row) => row.id === 'permissionMode')?.description
       )
-    await waitFor(() => expect(descriptions()).toEqual(['Approve for me', 'Approve for me']))
+    await waitFor(() =>
+      expect(descriptions()).toEqual(["Agent's own settings", "Agent's own settings"])
+    )
     const desktop = views[0]!
     await act(async () => {
       const applied = await desktop.result.current.setStructuredOption('permissionMode', 'ask')
@@ -558,6 +582,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       ).toMatchObject({ ok: true })
       expect(applied).toBe(true)
     })
+    expect(descriptions()[0]).toBe('Ask for approval')
     const saved = structuredClone(store.getRecord(sessionId))
     const readCurrentOptions = adapter.readOptions!.bind(adapter, { sessionId, fence })
     expect((await readCurrentOptions()).current.reportedPermissionMode).toBe('auto')
@@ -580,7 +605,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       turn: { id: 'applied-ask' }
     })
     expect(host.readStatusSummary(sessionId)?.runtimePermission).toEqual({ fence, mode: 'auto' })
-    expect(descriptions()).toEqual(['Approve for me', 'Approve for me'])
+    expect(descriptions()).toEqual(['Ask for approval', 'Ask for approval'])
     await act(async () => {
       answer.resolve({ turn: { id: 'applied-ask' } })
       expect(await finished).toMatchObject({ value: { state: 'admitted' } })

@@ -1,6 +1,7 @@
+import { ptyForegroundGroupReader } from '../../pty/process-retirement/pty-master-foreground-observation'
 import { createGitBashConsoleCapacityDetector } from '../../../shared/git-bash-console-capacity'
-import { withInitialOutputDiagnostic } from '../../../shared/terminal-start-failure'
-import type { TerminalExitCause } from '../../../shared/terminal-exit-cause'
+import { withInitialOutputDiagnostic } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+
 import type * as pty from 'node-pty'
 import { isBracketedPasteSafeShell } from '../../../shared/startup-command-submission'
 import {
@@ -9,11 +10,14 @@ import {
   startupStagingFailureNotice,
   type StartupCommandStaging
 } from '../../../shared/startup-command-staging'
-import { PtyStartupIngress } from '../../../shared/pty-startup-ingress'
-import type { PtyIngressEmission } from '../../../shared/pty-startup-ingress-contract'
-import { resolvePtyOwnerBackend } from '../../../shared/pty-owner-backend'
-import { resolveProcessExitCause } from '../../../shared/terminal-exit-cause'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/posix-shell-startup-command'
+import { PtyStartupIngress } from '../../../shared/terminal/pty/ingress/pty-startup-ingress'
+import type { PtyIngressEmission } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
+import { resolvePtyOwnerBackend } from '../../../shared/terminal/pty/lifecycle/pty-owner-backend'
+import {
+  type TerminalExitCause,
+  resolveProcessExitCause
+} from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { getAgentForegroundContextPaths } from '../agent-foreground-context-paths'
 import { getSpawnedShellName } from './local-pty-launch-context'
 import type { LocalPtyLaunchPlan } from './local-pty-launch-plan'
@@ -38,8 +42,10 @@ import {
   ptyTerminationMode,
   ptyWorktreeId,
   ptyWslDistroById,
+  ptyWslGuestRootById,
   startupIngressByPty
 } from './local-pty-provider-state'
+import { createWslGuestRootObserver } from '../../../shared/wsl-guest-root-marker'
 import { createLocalPtyShellReadinessSession } from './local-pty-shell-readiness-session'
 import { destroyPtyProcess, createPtyPhysicalExit } from './local-pty-termination'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
@@ -118,6 +124,7 @@ export function activateLocalPtySession(args: {
   const startupIngress = new PtyStartupIngress({
     ...(spawn.startupIngress ? { intent: spawn.startupIngress } : {}),
     ownerBackend,
+    readForegroundGroup: ptyForegroundGroupReader(proc),
     write: (data) => proc.write(data),
     onEmission: emitIngressData
   })
@@ -132,8 +139,12 @@ export function activateLocalPtySession(args: {
     startupIngress
   })
   const disposables: { dispose: () => void }[] = []
+  const observeGuestRoot = spawnedWslDistro
+    ? createWslGuestRootObserver((root) => ptyWslGuestRootById.set(id, root))
+    : undefined
   const onDataDisposable = proc.onData((rawData) => {
     initialOutput?.observe(rawData)
+    observeGuestRoot?.(rawData)
     readiness.acceptData(rawData)
   })
   if (onDataDisposable) {

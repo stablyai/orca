@@ -1,5 +1,6 @@
 import type React from 'react'
 import { Input } from '@/components/ui/input'
+import { preventMiddleButtonDefault } from './middle-button-default-guard'
 
 type TabRenameInputProps = Omit<
   React.ComponentProps<typeof Input>,
@@ -19,9 +20,7 @@ export function TabRenameInput(props: TabRenameInputProps): React.JSX.Element {
       onMouseDown={(event) => {
         event.stopPropagation()
         // Middle-click would paste the X11 primary selection on Linux.
-        if (event.button === 1) {
-          event.preventDefault()
-        }
+        preventMiddleButtonDefault(event)
       }}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}

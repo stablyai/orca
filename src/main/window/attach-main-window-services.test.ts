@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence/loading-store/store'
-import { cancelHistoryGc } from '../terminal-history-gc'
+import { cancelHistoryGc } from '../pty/history/terminal-history-gc'
 import type { registerSshHandlers } from '../ipc/ssh/ssh'
 import type { registerDaemonManagementHandlers } from '../ipc/pty/pty-management'
-import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
+import type { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup/workspace-cleanup'
 import type { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import {
   createMainWindowServiceStub,
@@ -108,7 +108,7 @@ vi.mock('../ipc/worktrees', () => ({
   registerWorktreeHandlers: registerWorktreeHandlersMock
 }))
 
-vi.mock('../ipc/worktree-change-invalidators', () => ({
+vi.mock('../ipc/worktrees/listing/worktree-change-invalidators', () => ({
   runWorktreeChangeInvalidators: runWorktreeChangeInvalidatorsMock
 }))
 
@@ -119,7 +119,7 @@ vi.mock('../ipc/ssh/ssh', () => ({ registerSshHandlers: registerSshHandlersMock 
 vi.mock('../ipc/pty/pty-management', () => ({
   registerDaemonManagementHandlers: registerDaemonManagementHandlersMock
 }))
-vi.mock('../ipc/workspace-cleanup', () => ({
+vi.mock('../ipc/workspace-cleanup/workspace-cleanup', () => ({
   registerWorkspaceCleanupHandlers: registerWorkspaceCleanupHandlersMock
 }))
 vi.mock('../ipc/folder-repo-git-upgrade', () => ({
@@ -130,7 +130,7 @@ vi.mock('../memory/hydrate-local-pty-registry', () => ({
   hydrateLocalPtyRegistryAtBoot: hydrateLocalPtyRegistryAtBootMock
 }))
 
-vi.mock('../ipc/worktree-base-directory-watcher', () => ({
+vi.mock('../ipc/worktrees/creation/worktree-base-directory-watcher', () => ({
   setWorktreeBaseDirectoryWatcherSyncContext: setWorktreeBaseDirectoryWatcherSyncContextMock,
   scheduleWorktreeBaseDirectoryWatcherSync: scheduleWorktreeBaseDirectoryWatcherSyncMock
 }))
@@ -141,18 +141,18 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
-vi.mock('../updater', () => ({
+vi.mock('../updater/updater-service', () => ({
   checkForUpdates: vi.fn(),
   getUpdateStatus: vi.fn(),
   quitAndInstall: vi.fn(),
   dismissNudge: vi.fn(),
   setupAutoUpdater: setupAutoUpdaterMock
 }))
-vi.mock('../updater/electron-updater-proxy-session', () => ({
+vi.mock('../updater/lifecycle/electron-updater-proxy-session', () => ({
   applyProxyToElectronUpdaterSession: vi.fn()
 }))
 
-vi.mock('../macos-tcc-prompt-notice', () => ({
+vi.mock('../macos-permissions/macos-tcc-prompt-notice', () => ({
   acknowledgePendingTccPromptNotice: acknowledgePendingTccPromptNoticeMock,
   consumePendingTccPromptNotice: consumePendingTccPromptNoticeMock,
   dismissTccPromptNotice: dismissTccPromptNoticeMock,

@@ -22,6 +22,7 @@ export const UI_STATE_DISPOSITIONS = {
     rewriteDesktopCopy: true,
     newManifestSection: true
   }),
+  gitGraphFiltersByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
   showDotfilesByWorktree: moveDisposition(38, { rewriteDesktopCopy: true }),
   filterRepoIds: moveDisposition(38),
   agentsFilterRepoIds: moveDisposition(38),
@@ -129,6 +130,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'dismissedUpdateNudgeId',
   'notificationPermissionRequested',
   'updateReassuranceSeen',
+  'seenMacosUpdateRequirement',
   'setupGuideSidebarDismissed',
   'setupGuideBrowserMilestoneMigrated',
   'setupGuideBrowserMilestoneLegacyComplete',
@@ -183,6 +185,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_jiraIssueWorktreeCardPropertyDefaulted',
   '_kimiStatusBarDefaultAdded',
   '_minimaxStatusBarDefaultAdded',
+  '_museStatusBarDefaultAdded',
   '_portsStatusBarDefaultAdded',
   '_sortBySmartMigrated',
   '_workspaceStatusesDefaultOrderMigrated',

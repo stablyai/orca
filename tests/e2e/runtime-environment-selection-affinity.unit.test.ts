@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import * as environmentStore from '../../src/shared/runtime-environment-store'
+import * as environmentStore from '../../src/shared/remote-runtime/host-store/runtime-environment-store'
 import {
   RUNTIME_PROTOCOL_VERSION,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
@@ -12,9 +12,9 @@ import {
   structuredSessionSelectionController,
   forgetStructuredSessionSelection,
   registerStructuredSelectionCatalogStore
-} from '@/lib/structured-agent-session-selection-controller'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+} from '@/lib/agent-session/options/structured-agent-session-selection-controller'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { resetRuntimeEnvironmentStatusOwners } from '../../src/main/ipc/runtime-environments/runtime-environment-request-connections'
 import { pairingCode } from '../../src/main/ipc/runtime-environments/runtime-environments-ipc-test-harness'
 

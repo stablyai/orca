@@ -20,7 +20,7 @@ import {
 import {
   combineTerminalWorktreeParkIds,
   useManualTerminalWorktreeParking
-} from './terminal-pane/use-manual-terminal-worktree-parking'
+} from './terminal-pane/parking/lifecycle/use-manual-terminal-worktree-parking'
 import type { TerminalEditorCloseController } from './use-terminal-editor-close-dialog-actions'
 
 export function useTerminalParkingFoundation(controller: TerminalEditorCloseController) {

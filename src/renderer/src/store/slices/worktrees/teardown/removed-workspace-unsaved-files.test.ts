@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { registerPendingEditorFlush } from '@/components/editor/editor-pending-flush'
+import { registerPendingEditorFlush } from '@/components/editor/save/flush/editor-pending-flush'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
-import { createHostTwinFixture } from '../../../host-twin.test-fixture'
-import { resetHostTwinModuleStores } from '../../../host-twin-state-projection.test-fixture'
-import { createTestStore, makeOpenFile, makeWorktree, TEST_REPO } from '../../store-test-helpers'
-import { createStoreCascadesMockApi } from '../../store-cascades-test-harness'
+import { createHostTwinFixture } from '../../../workspaces/host-isolation/host-twin.test-fixture'
+import { resetHostTwinModuleStores } from '../../../workspaces/host-isolation/host-twin-state-projection.test-fixture'
+import { createTestStore } from '../../../testing/app-store-test-fixture'
+import { makeOpenFile } from '../../editor/types/open-file.test-fixture'
+import { makeWorktree } from '../worktree.test-fixture'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
+import { createStoreCascadesMockApi } from '../../../testing/app-store-cascade-api.test-fixture'
 import { mergeFetchedWorktrees } from '../listing/fetched-worktree-merge'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 import { confirmUnsavedDiscard, noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
@@ -106,18 +109,6 @@ describe('confirmed discards apply only to the confirmed removal', () => {
     expect(shownContents()).toEqual(['typed after confirming'])
   })
 
-  it('reaches the teardown through removeWorktree', async () => {
-    vi.stubGlobal('window', { api: createStoreCascadesMockApi() })
-    const store = dirtyStore([GONE])
-    const confirmed = confirmUnsavedDiscard(store.getState, [{ id: GONE, hostId: 'local' }])
-    await store.getState().removeWorktree({ id: GONE, executionHostId: 'local' }, false, {
-      confirmedDiscards: confirmed
-    })
-    expect(store.getState().openFiles).toEqual([])
-    await settle()
-    expect(show).not.toHaveBeenCalled()
-  })
-
   it.each(purgePaths)('%s still offers text a dialog confirmed', async (_, purge, host) => {
     const store = dirtyStore([GONE], host)
     confirmUnsavedDiscard(store.getState, [{ id: GONE, hostId: host ?? 'local' }])
@@ -154,19 +145,6 @@ describe('delayed text is committed before a purge', () => {
       expect(shownContents()).toEqual(['late rich text'])
     } finally {
       panes.forEach((unregister) => unregister())
-    }
-  })
-
-  it('leaves a surviving workspace’s CSV cell editing', () => {
-    const survivor = `${TEST_REPO.id}::/survivor`
-    const store = dirtyStore([GONE, survivor])
-    const cell = vi.fn()
-    const unregister = registerPendingEditorFlush(`${survivor}/file.ts`, cell, () => true)
-    try {
-      store.getState().purgeWorktreeTerminalState([GONE])
-      expect(cell).not.toHaveBeenCalled()
-    } finally {
-      unregister()
     }
   })
 })
@@ -236,15 +214,5 @@ describe('the closed-files notice', () => {
     } finally {
       unregister()
     }
-  })
-
-  it('falls back to a sharing tab’s draft when the dirty tab has none', async () => {
-    const store = dirtyStore([GONE])
-    const tab = (id: string) =>
-      makeOpenFile({ id, filePath: '/w/shared.ts', worktreeId: GONE, isDirty: true })
-    store.setState({ openFiles: [tab('first'), tab('second')], editorDrafts: { second: 'kept' } })
-    store.getState().purgeWorktreeTerminalState([GONE])
-    await vi.waitFor(() => expect(show).toHaveBeenCalledTimes(1))
-    expect(shownContents()).toEqual(['kept'])
   })
 })

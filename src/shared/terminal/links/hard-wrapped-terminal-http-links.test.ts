@@ -1,0 +1,246 @@
+import type { IBufferLine } from '@xterm/xterm'
+import { describe, expect, it } from 'vitest'
+import { buildHardWrappedHttpLogicalLineCandidates } from './hard-wrapped-terminal-http-links'
+import { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
+
+function bufferLineWithCellColumns(text: string): IBufferLine {
+  const columns: number[] = []
+  let column = 0
+  for (const character of text) {
+    columns.push(column)
+    column += character === '你' ? 2 : 1
+  }
+  columns.push(column)
+  return {
+    isWrapped: false,
+    length: column,
+    translateToString: (
+      _trimRight?: boolean,
+      startColumn = 0,
+      endColumn = text.length,
+      outColumns?: number[]
+    ) => {
+      outColumns?.push(...columns)
+      return text.slice(startColumn, endColumn)
+    }
+  } as IBufferLine
+}
+
+describe('hard-wrapped terminal HTTP candidate bounds', () => {
+  it('reconstructs framed URL rows aligned by cells when a fragment has wide characters', () => {
+    const rowTexts = ['|http://a/ab|', '|a你你你你你|', '|tailzzzzzzz|']
+    const rows = rowTexts.map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe('http://a/aba你你你你你tailzzzzzzz')
+  })
+
+  it('reconstructs a framed URL while the screen underneath shows through left of the frame', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `      |${inner}|`,
+      `todo  |${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final |${'dddd'.padEnd(inner.length, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
+  it('reconstructs an overlay URL when only its first row shows a frame in the gutter', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `ls | g|${inner}|`,
+      `todo  |${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final |${'dddd'.padEnd(inner.length, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
+  it('reconstructs a URL in a nested frame whose left label repeats on every row', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `│ label │ ${inner} │`,
+      `│ label │ ${'b'.repeat(inner.length)} │`,
+      `│ label │ ${'c'.repeat(inner.length)} │`,
+      `│ label │ ${'dddd'.padEnd(inner.length, ' ')} │`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
+  it('reconstructs an overlay URL when a box border underneath shows at a fixed column', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `│      │ ${inner} │`,
+      `│      │ ${'b'.repeat(inner.length)} │`,
+      `│      │ ${'c'.repeat(inner.length)} │`,
+      `│      │ ${'dddd'.padEnd(inner.length, ' ')} │`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
+  it.each([
+    [
+      'a single-column table',
+      ['│ https://example.com/aaaaaaaaaa │', '│ README.md                      │']
+    ],
+    [
+      'rows with filled cells right of it',
+      [
+        '│ https://example.com/aaaaaaaaaa │ ok   │',
+        '│ src/renderer/terminal-pane.tsx │ todo │',
+        '│ README.md                      │ done │'
+      ]
+    ],
+    [
+      'a row labelled further left',
+      [
+        '│ 1 │ doc │ https://example.com/aaaaaaaaaa │',
+        '│ 2 │     │ notes                          │'
+      ]
+    ],
+    [
+      'an overlay over screen text',
+      ['todo  |http://example.com/aaaa|', '      |README.md              |']
+    ],
+    [
+      'a box beside an open split pane',
+      ['│ https://example.com/aaaaaaaaaa │ │ $ ls', '│ README.md                      │ │']
+    ]
+  ])('does not join a URL that fills its cell onto the next rows in %s', (_, rowTexts) => {
+    const rows = rowTexts.map(bufferLineWithCellColumns)
+
+    expect(
+      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)
+    ).toEqual([])
+  })
+
+  it('ends a wrapped cell URL at the next row that fills a cell left of it again', () => {
+    const rows = [
+      '│ doc │ https://example.com/aaaaaaaaaa │',
+      '│     │ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbb │',
+      '│ doc │ README.md                      │'
+    ].map(bufferLineWithCellColumns)
+
+    expect(buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, 2)[0]?.text).toBe(
+      `https://example.com/aaaaaaaaaa${'b'.repeat(30)}`
+    )
+  })
+
+  it('does not join adjacent cells from a shared framed table', () => {
+    const rows = [
+      '│ Label  │ https://example.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa │',
+      '│ Other  │ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb │',
+      '│ Third  │ cccccccccccccccccccccccccccccccccccccccccccccccccc │'
+    ].map(bufferLineWithCellColumns)
+
+    expect(
+      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)
+    ).toEqual([])
+  })
+
+  it('aligns continuation rows by the frame cell column when a gutter holds wide characters', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `      |${inner}|`,
+      `你你你|${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final |${'dddd'.padEnd(inner.length, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates[0]?.text).toBe(
+      `${inner}${'b'.repeat(inner.length)}${'c'.repeat(inner.length)}dddd`
+    )
+  })
+
+  it('stops joining when the frame moves to another column', () => {
+    const inner = 'http://example.com/aaaa'
+    const rows = [
+      `      |${inner}|`,
+      `todo  |${'b'.repeat(inner.length)}|`,
+      `  in  |${'c'.repeat(inner.length)}|`,
+      `Final  |${'dddd'.padEnd(inner.length - 1, ' ')}|`
+    ].map(bufferLineWithCellColumns)
+
+    const candidates = buildHardWrappedHttpLogicalLineCandidates(
+      { getLine: (y) => rows[y] },
+      rows.length
+    )
+
+    expect(candidates).toEqual([])
+  })
+
+  it('reconstructs a maximum-length wide-character URL beyond the ASCII row bound', () => {
+    const scheme = 'http://'
+    const continuation = '你'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH - scheme.length)
+    const rows = [
+      bufferLineWithCellColumns(`|${scheme}|`),
+      ...continuation
+        .match(/.{1,3}/g)!
+        .map((fragment) =>
+          bufferLineWithCellColumns(`|${fragment}${' '.repeat(7 - fragment.length * 2)}|`)
+        )
+    ]
+
+    expect(rows.length).toBeGreaterThan(Math.ceil(TERMINAL_HTTP_URL_MAX_LENGTH / scheme.length))
+    expect(
+      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)[0]?.text
+    ).toBe(scheme + continuation)
+  })
+
+  it('reconstructs a maximum-length URL with one-character continuation rows', () => {
+    const firstFragment = 'http://a'
+    const continuation = '/'.repeat(TERMINAL_HTTP_URL_MAX_LENGTH - firstFragment.length)
+    const rows = [
+      bufferLineWithCellColumns(`|${firstFragment}|`),
+      ...continuation.split('').map((fragment) => bufferLineWithCellColumns(`|${fragment}       |`))
+    ]
+    const fullUrl = firstFragment + continuation
+
+    expect(() => new URL(fullUrl)).not.toThrow()
+    expect(
+      buildHardWrappedHttpLogicalLineCandidates({ getLine: (y) => rows[y] }, rows.length)[0]?.text
+    ).toBe(fullUrl)
+  })
+})

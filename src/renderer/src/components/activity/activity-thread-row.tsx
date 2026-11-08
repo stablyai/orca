@@ -1,13 +1,14 @@
 import React from 'react'
 import { Bell, ExternalLink, X } from 'lucide-react'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { FilledBellIcon } from '../sidebar/WorktreeCardHelpers'
+import '../sidebar/workspace-card/activity/worktree-card-empty-inputs'
+import { FilledBellIcon } from '../sidebar/workspace-card/identity/worktree-card-glyphs'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
 import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls'
 import { ActivityThreadHoverCard } from './activity-thread-hover-card'
@@ -85,9 +86,10 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   showJumpAction?: boolean
   previewSuppressed?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const { taskTitle, statusLine, statusKind, needsAttention, workspaceLabel } =
-    activityThreadRowCopy(thread)
+    activityThreadRowCopy(thread, t)
   const showMarkdownStatus = statusKind === 'message'
   const agentLabel = formatAgentTypeLabel(thread.agentType)
 
@@ -175,7 +177,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
               <TooltipProvider delayDuration={800} skipDelayDuration={0}>
                 {canJump && showJumpAction ? (
                   <ActivityThreadRowAction
-                    label={translate(
+                    label={t(
                       'auto.components.activity.ActivityPrototypePage.4616ea39fd',
                       'Jump to workspace'
                     )}
@@ -186,7 +188,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                 ) : null}
                 {onClear ? (
                   <ActivityThreadRowAction
-                    label={translate(
+                    label={t(
                       'auto.components.activity.ActivityThreadRow.clearNotification',
                       'Clear notification'
                     )}
@@ -211,7 +213,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                           }}
                           onMouseDown={(event) => event.stopPropagation()}
                           className="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          aria-label={translate(
+                          aria-label={t(
                             'auto.components.activity.ActivityPrototypePage.markThreadRead',
                             'Mark thread as read'
                           )}
@@ -223,7 +225,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="left">
-                        {translate(
+                        {t(
                           'auto.components.activity.ActivityPrototypePage.markThreadRead',
                           'Mark thread as read'
                         )}
@@ -246,7 +248,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                             'hover:bg-accent/80 active:scale-95',
                             'focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
                           )}
-                          aria-label={translate(
+                          aria-label={t(
                             'auto.components.activity.ActivityPrototypePage.59b131fbd9',
                             'Mark thread unread'
                           )}
@@ -255,7 +257,7 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
                         </button>
                       </TooltipTrigger>
                       <TooltipContent side="left">
-                        {translate(
+                        {t(
                           'auto.components.activity.ActivityPrototypePage.59b131fbd9',
                           'Mark thread unread'
                         )}

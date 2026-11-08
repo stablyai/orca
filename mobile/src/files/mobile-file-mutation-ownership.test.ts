@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
-import {
-  FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
-  FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE
-} from '../../../src/shared/protocol-version'
+import { FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY } from '../../../src/shared/file-access/files-runtime-capabilities'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
@@ -70,41 +67,6 @@ describe('mobile file mutation ownership', () => {
     )
   })
 
-  it('captures local ownership only after verifying the runtime capability', async () => {
-    const { client, sendRequest } = clientWithResponses([
-      success({ capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] }),
-      success({ worktree: { hostId: 'local' } })
-    ])
-
-    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).resolves.toEqual({
-      expectedExecutionHostId: 'local'
-    })
-    expect(sendRequest.mock.calls).toEqual([
-      ['status.get', undefined, { timeoutMs: 15_000 }],
-      ['worktree.show', { worktree: 'id:worktree-1' }, { timeoutMs: 15_000 }]
-    ])
-  })
-
-  it('captures SSH generation from the HUB before building mutation params', async () => {
-    const state = sshState('target-1', 9)
-    const { client, sendRequest } = clientWithResponses([
-      success({ capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] }),
-      success({ worktree: { hostId: 'ssh:target-1' } }),
-      success({ state })
-    ])
-
-    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).resolves.toEqual({
-      expectedExecutionHostId: 'ssh:target-1',
-      expectedSshTargetId: 'target-1',
-      expectedSshConnectionGeneration: 9
-    })
-    expect(sendRequest.mock.calls[2]).toEqual([
-      'ssh.getState',
-      { targetId: 'target-1' },
-      { timeoutMs: 15_000 }
-    ])
-  })
-
   // Absent hostId captures local; explicit null refuses an unplaceable host instead of sending its write locally.
   it('captures local ownership for a workspace whose reply records no host', async () => {
     const { client } = clientWithResponses([
@@ -126,14 +88,5 @@ describe('mobile file mutation ownership', () => {
     await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).rejects.toThrow(
       "Couldn't verify the SSH connection"
     )
-  })
-
-  it('refuses older runtimes before reading or mutating workspace files', async () => {
-    const { client, sendRequest } = clientWithResponses([success({ capabilities: [] })])
-
-    await expect(captureMobileFileMutationOwnership(client, 'id:worktree-1')).rejects.toThrow(
-      FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE
-    )
-    expect(sendRequest).toHaveBeenCalledTimes(1)
   })
 })

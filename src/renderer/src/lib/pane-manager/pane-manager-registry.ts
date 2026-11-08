@@ -1,4 +1,4 @@
-import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal-webgl-diagnostics'
+import { recordTerminalWebglDiagnostic } from '../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { registerRendererMemoryProfileContributor } from '../renderer-memory-profile'
 import type { PaneRenderingDiagnostics } from './pane-manager-types'
 
@@ -38,7 +38,10 @@ export function unregisterLivePaneManager(manager: RegisteredPaneManager): void 
   liveManagers.delete(manager)
 }
 
-export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
+export function resetAndRefreshAllTerminalWebglAtlases(
+  reason?: string,
+  options?: { includeHidden?: boolean }
+): void {
   // Record heavy atlas recovery so freeze reports distinguish a missing repaint from a completed post-wake attempt.
   const recoveryManagers = Array.from(liveManagers).filter(
     (manager) => manager.isVisibleForAtlasRecovery?.() !== false
@@ -48,6 +51,18 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
     mountedManagers: liveManagers.size,
     ...(reason ? { reason } : {})
   })
+  if (options?.includeHidden) {
+    // Light reveal only presents, so hidden atlases are cleared without painting or they keep stale glyphs.
+    for (const manager of liveManagers) {
+      if (!recoveryManagers.includes(manager)) {
+        try {
+          manager.clearWebglTextureAtlases?.()
+        } catch {
+          // A manager torn down while hidden must not block the rest.
+        }
+      }
+    }
+  }
   const resetManagers: RegisteredPaneManager[] = []
   // clearTextureAtlas is global: wipe all before presenting or later wipes invalidate earlier panes’ generation and preserve stale footer pixels.
   for (const manager of recoveryManagers) {

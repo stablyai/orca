@@ -2,7 +2,7 @@ import type { Page } from '@stablyai/playwright-test'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../src/shared/terminal-tab-types'
+} from '../../src/shared/workspace-layout/terminal-tab-types'
 import { expect, test } from './helpers/orca-app'
 import {
   callPairedRuntime,

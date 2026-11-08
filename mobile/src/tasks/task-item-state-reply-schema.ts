@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { prCount, prFlag, prText } from '../session/github-pr-entity-reply-schema'
 import {
   detailCheckListSchema,

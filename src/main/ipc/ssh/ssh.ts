@@ -8,7 +8,7 @@ import {
 } from './ssh-host-user-disconnect'
 import { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
 import { SshPortForwardManager } from '../../ssh/port-forwarding/ssh-port-forward'
-import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
+import { quitTeardownStartGate } from '../../startup/quit/quit-teardown-start-gate'
 import {
   getSshTargetRegistryStore,
   setSshConnectionManagerResolver,
@@ -55,7 +55,11 @@ import { registerSshPortForwardHandlers } from './ssh-port-forward-handlers'
 import { persistPortForwards } from './ssh-port-forward-persistence'
 import { recordForwardFailure } from './ssh-port-forward-unrestored'
 import { restoreManagedHostPortForwards } from './ssh-managed-port-forward-restore'
-import { setSshHostServedListener } from '../../ssh/ssh-host-server-status'
+import {
+  getSshHostServerStatus,
+  isSshHostKeptForBridgedTerminals,
+  setSshHostServedListener
+} from '../../ssh/ssh-host-server-status'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
@@ -67,9 +71,14 @@ import { installOrcadMigrationScrollbackRetention } from '../../ssh/orcad-migrat
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { registerLegacyRelayBridgeIpc } from '../../ssh/legacy-relay/legacy-relay-bridge-ipc'
 import {
+  onLastBridgedTerminalExit,
+  retryMoveAfterLastBridgedExit
+} from '../../ssh/legacy-relay/legacy-relay-move-retry'
+import { connectTarget } from './ssh-connect-flow'
+import {
   disposeDesktopBrowserBridge,
   installDesktopBrowserBridge
-} from '../desktop-browser-bridge-wiring'
+} from '../browser/desktop-browser-bridge-wiring'
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
@@ -163,6 +172,17 @@ export function registerSshHandlers(
     connection: (targetId) => connectionManager?.getConnection(targetId) ?? null,
     runtime: () => runtime ?? null
   })
+  // COMPAT(legacy-relay-bridge): the move waited only on those terminals; finish it (#29626).
+  onLastBridgedTerminalExit(
+    (targetId) =>
+      void retryMoveAfterLastBridgedExit(targetId, {
+        waitingOnBridgedTerminals: (id) =>
+          connectionManager?.getState(id)?.status === 'connected' &&
+          isSshHostKeptForBridgedTerminals(getSshHostServerStatus(id)),
+        connectInFlight: (id) => connectInFlight.get(id)?.promise,
+        connect: (id) => connectTarget(id, { quiet: true })
+      })
+  )
 
   if (runtime) {
     installDesktopBrowserBridge({

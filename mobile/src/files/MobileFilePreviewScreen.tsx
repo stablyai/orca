@@ -1,3 +1,5 @@
+import { saveErrorMessageFromPreviewResult } from './mobile-file-preview-response'
+import { MobileChatAttachmentPreview } from './MobileChatAttachmentPreview'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Alert, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -15,7 +17,6 @@ import {
   loadMobileFilePreview,
   previewError,
   saveMobileTerminalArtifactPreview,
-  type MobileFilePreviewSource,
   type MobileFilePreviewResult
 } from './mobile-file-preview-request'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -40,12 +41,21 @@ import {
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
 import { mobileMarkdownFileLink } from './mobile-markdown-file-link'
 import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
+import { filePreviewEditDraftKey, MobileFilePreviewEditDraft } from './MobileFilePreviewEditDraft'
+import { dropDocumentEditDraft } from '../drafts/document-edit-draft-rows'
 
 type Props = {
   route: MobileFilePreviewRouteState
 }
 
-export function MobileFilePreviewScreen({ route }: Props) {
+export const MobileFilePreviewScreen = ({ route }: Props) =>
+  route.ok && route.params.source === 'chatAttachment' ? (
+    <MobileChatAttachmentPreview key={JSON.stringify(route.params)} params={route.params} />
+  ) : (
+    <WorkspaceFilePreviewScreen route={route} />
+  )
+
+function WorkspaceFilePreviewScreen({ route }: Props) {
   const executionHost = useWorkspaceExecutionHost()
   const documentKey = route.ok
     ? [
@@ -59,6 +69,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
 
 function MobileFilePreviewDocument({ route }: Props) {
   const t = useMobileTranslation()
+  const executionHost = useWorkspaceExecutionHost()
   useMobileColorScheme()
   // Use the shared route handoff to keep this screen within the bundle asset budget.
   const router = useWorkspaceRouteHandoff()
@@ -89,9 +100,7 @@ function MobileFilePreviewDocument({ route }: Props) {
     () => (previewParams ? previewSourceFromRoute(previewParams) : null),
     [previewParams]
   )
-  const [previewSource, setPreviewSource] = useState<MobileFilePreviewSource | null>(
-    routePreviewSource
-  )
+  const [previewSource, setPreviewSource] = useState(routePreviewSource)
   const previewSourceKey = useMemo(() => sourceKeyForPreview(previewSource), [previewSource])
   const routePreviewSourceKey = useMemo(
     () => sourceKeyForPreview(routePreviewSource),
@@ -115,19 +124,10 @@ function MobileFilePreviewDocument({ route }: Props) {
 
   useEffect(() => {
     previewSourceKeyRef.current = previewSourceKey
-  }, [previewSourceKey])
-
-  useEffect(() => {
     previewSourceRef.current = previewSource
-  }, [previewSource])
-
-  useEffect(() => {
     draftContentRef.current = draftContent
-  }, [draftContent])
-
-  useEffect(() => {
     savedContentRef.current = savedContent
-  }, [savedContent])
+  })
 
   const loadPreview = useCallback(async () => {
     const revision = ++previewLoadRevisionRef.current
@@ -244,10 +244,8 @@ function MobileFilePreviewDocument({ route }: Props) {
   const isEditableTerminalArtifact =
     previewSource?.source === 'terminalArtifact' &&
     isEditableMobileTerminalArtifactPreview(preview, previewSource.readOnly === true)
-  const canSaveArtifact =
-    isEditableTerminalArtifact &&
-    draftSourceKeyRef.current === previewSourceKey &&
-    draftContent !== savedContent
+  const draftLoaded = draftSourceKeyRef.current === previewSourceKey
+  const canSaveArtifact = isEditableTerminalArtifact && draftLoaded && draftContent !== savedContent
   const hasUnsavedTerminalArtifactDraft = hasUnsavedMobileTerminalArtifactDraft({
     source: previewSource?.source,
     draftSourceKey: draftSourceKeyRef.current,
@@ -307,9 +305,11 @@ function MobileFilePreviewDocument({ route }: Props) {
 
   // Unmount retires pending saves; a refused back keeps the document and its save alive.
   const leave = useCallback(() => router.back(), [router])
+  const editDraftKey = filePreviewEditDraftKey(previewSource, previewParams?.hostId, executionHost)
   const { confirmingDiscard, requestBack, stay, discard } = useMobileFilePreviewBack({
     hasUnsavedDraft: hasUnsavedTerminalArtifactDraft,
-    leave
+    leave,
+    onDiscard: () => editDraftKey && dropDocumentEditDraft(editDraftKey)
   })
 
   return (
@@ -388,6 +388,13 @@ function MobileFilePreviewDocument({ route }: Props) {
           }
         }}
       />
+      <MobileFilePreviewEditDraft
+        draftKey={editDraftKey}
+        base={draftLoaded ? savedContent : null}
+        editable={isEditableTerminalArtifact}
+        live={draftContent}
+        onRestore={setDraftContent}
+      />
       <ConfirmModal
         visible={confirmingDiscard}
         title={t('files.filePreviewScreen.discardTitle', 'Discard changes?')}
@@ -407,10 +414,4 @@ function MobileFilePreviewDocument({ route }: Props) {
       />
     </View>
   )
-}
-
-function saveErrorMessageFromPreviewResult(result: MobileFilePreviewResult): string {
-  return result.status === 'error' || result.status === 'waiting'
-    ? result.message
-    : translate('files.filePreviewScreen.saveFailed', 'Unable to save file')
 }

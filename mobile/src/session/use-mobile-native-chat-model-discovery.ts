@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { getAgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import {
@@ -15,7 +15,8 @@ const discoveredModel = z.object({
   thinkingLevels: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
   supportsFastMode: z.boolean().optional(),
   isDefault: z.boolean().optional(),
-  contextWindowTokens: z.number().optional()
+  contextWindowTokens: z.number().optional(),
+  resolvedModel: z.string().optional()
 })
 
 const discoveryResult = z.union([

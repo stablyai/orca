@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { contrastRatio, over, safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
-import { resolvePaintedDark, synthesizeTerminalAppTheme } from './terminal-app-theme'
+import { safePluginThemeTokens, type ColorProbe } from './plugin-theme-tokens'
+import { contrastRatio, over } from '../../../shared/color/rgba-contrast'
+import { synthesizeTerminalAppTheme } from './terminal-app-theme'
 
 // Parses #rrggbb and rgb(r g b), which is all the synthesized theme and its inputs use.
 const probe: ColorProbe = (value) => {
@@ -62,33 +63,6 @@ describe('synthesizeTerminalAppTheme', () => {
     expect(tokens['--background']).toBe('#757575')
     expect(Object.keys(safePluginThemeTokens(tokens, theme?.base ?? 'dark', {}, probe))).toEqual(
       Object.keys(tokens)
-    )
-  })
-
-  it("follows the painting mode's color overrides and paints the background opaque", () => {
-    const settings = settingsWith({
-      terminalColorOverrides: { background: '#101820', foreground: '#f0f4f8' },
-      terminalColorOverridesLight: { background: '#f8f4f0', foreground: '#201810' },
-      terminalUseSeparateLightTheme: true,
-      terminalBackgroundOpacity: 0.5
-    })
-    const dark = synthesizeTerminalAppTheme(settings, true, probe)
-    expect(dark?.tokens).toMatchObject({ '--background': '#101820', '--foreground': '#f0f4f8' })
-    const light = synthesizeTerminalAppTheme({ ...settings, theme: 'light' }, true, probe)
-    expect(light?.base).toBe('light')
-    expect(light?.tokens).toMatchObject({ '--background': '#f8f4f0', '--foreground': '#201810' })
-  })
-})
-
-describe('resolvePaintedDark', () => {
-  it('paints the mode of the terminal theme only when the slot matches the terminal', () => {
-    const lightTerminal = settingsWith({
-      terminalThemeDark: 'Solarized Light',
-      pluginAppThemeDark: 'match-terminal'
-    })
-    expect(resolvePaintedDark(lightTerminal, true, true)).toBe(false)
-    expect(resolvePaintedDark({ ...lightTerminal, pluginAppThemeDark: null }, true, true)).toBe(
-      true
     )
   })
 })

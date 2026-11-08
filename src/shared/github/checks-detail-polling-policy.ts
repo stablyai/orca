@@ -1,6 +1,6 @@
 import type { PRCheckDetail } from './check-types'
 import type { CheckStatus } from './pull-request-types'
-import type { HostedReviewState } from '../hosted-review'
+import type { HostedReviewState } from '../source-control/hosted-review/hosted-review-contracts'
 import { reviewRefreshIntervalMs } from '../review-refresh-policy'
 
 export function detailedChecksStatus(checks: readonly PRCheckDetail[]): CheckStatus | undefined {

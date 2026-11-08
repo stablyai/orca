@@ -4,161 +4,83 @@
   "family": "tasks.item-detail-metadata",
   "namedDeltas": [],
   "values": {
-    "187a6bd82efe": {
-      "labels": ["bug", "chore"],
-      "labelsError": "",
-      "labelsLoading": false,
-      "users": [
-        {
-          "avatarUrl": {
-            "$rpc": "null"
-          },
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ],
-      "usersError": "",
-      "usersLoading": false
-    },
-    "215de61d1fbb": {
-      "name": "itemAssignableUsersLoading",
-      "ordinal": 15,
-      "value": false
-    },
-    "3356ec8253b4": {
+    "1ae1dc53b706": {
       "name": "itemBodyDraft",
-      "ordinal": 1,
+      "ordinal": 13,
       "value": "body"
     },
-    "3b4a3643a78c": {
-      "name": "github.listAssignableUsers#1",
-      "ordinal": 11,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"github.listAssignableUsers\",\"params\":{\"repo\":\"id:repo-1\"}}"
+    "4c5fe26e1c97": {
+      "name": "itemLabelsError",
+      "ordinal": 8,
+      "value": ""
     },
-    "3c0f8d43db2e": {
-      "name": "itemLabelsLoading",
-      "ordinal": 13,
+    "5c50471cdd48": {
+      "name": "mutatingStatus",
+      "ordinal": 10,
       "value": false
     },
-    "3edb9333eaaf": {
-      "name": "itemAssignableUsers",
+    "7a1299e1e3ac": {
+      "name": "itemLabelsLoading",
+      "ordinal": 9,
+      "value": false
+    },
+    "9c483a675f4b": {
+      "name": "itemAvailableLabels",
       "ordinal": 6,
       "value": []
     },
-    "4f0b27d85f31": {
-      "name": "github.listAssignableUsers#1",
-      "ordinal": 9,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.listAssignableUsers"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": [
-            {
-              "avatarUrl": {
-                "$rpc": "null"
-              },
-              "login": "octocat",
-              "name": "Octo"
-            }
-          ]
-        }
+    "a0ec6c8c4548": {
+      "labels": [],
+      "labelsError": "",
+      "labelsLoading": false,
+      "users": [],
+      "usersError": "",
+      "usersLoading": false
+    },
+    "bcd7aec5dd24": {
+      "name": "itemAssignableUsersError",
+      "ordinal": 4,
+      "value": ""
+    },
+    "cc2ece9478f0": {
+      "name": "actionItem",
+      "ordinal": 1,
+      "value": {
+        "$rpc": "null"
       }
     },
-    "90483b517d86": {
-      "name": "itemAssignableUsers",
-      "ordinal": 14,
-      "value": [
-        {
-          "avatarUrl": {
-            "$rpc": "null"
-          },
-          "login": "octocat",
-          "name": "Octo"
-        }
-      ]
+    "d191f868fc7a": {
+      "name": "itemAssignableUsersLoading",
+      "ordinal": 5,
+      "value": false
     },
-    "99b2357770d0": {
-      "name": "itemAssignableUsersError",
+    "dc200050b5f4": {
+      "name": "actionItem",
+      "ordinal": 11,
+      "value": {
+        "provider": "github",
+        "source": {
+          "id": "github:issue:9",
+          "labels": ["bug"],
+          "number": 9,
+          "repoId": "repo-1",
+          "reviewRequests": [],
+          "state": "open",
+          "type": "issue",
+          "url": "https://github.com/owner/repo/issues/9"
+        },
+        "title": "An issue"
+      }
+    },
+    "df267b378e62": {
+      "name": "itemAssignableUsers",
+      "ordinal": 3,
+      "value": []
+    },
+    "e416a2404225": {
+      "name": "itemBodyDraft",
       "ordinal": 7,
       "value": ""
-    },
-    "9a8e65d1e38f": {
-      "name": "github.listLabels#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"github.listLabels\",\"params\":{\"repo\":\"id:repo-1\"}}"
-    },
-    "a49372405361": {
-      "name": "itemAssignableUsersLoading",
-      "ordinal": 8,
-      "value": true
-    },
-    "ae373967e842": {
-      "name": "itemLabelsLoading",
-      "ordinal": 4,
-      "value": true
-    },
-    "cd0e3d61ff7d": {
-      "name": "github.listLabels#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "github.listLabels"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo-1"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": ["bug", "chore"]
-        }
-      }
-    },
-    "e11f2dac1b42": {
-      "name": "itemLabelsError",
-      "ordinal": 3,
-      "value": ""
-    },
-    "e8ff540f77f3": {
-      "name": "itemAvailableLabels",
-      "ordinal": 2,
-      "value": []
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -168,10 +90,62 @@
         "$rpc": "undefined"
       }
     },
-    "fbaca9693f87": {
-      "name": "itemAvailableLabels",
+    "eda130337c99": {
+      "name": "detailPayload",
+      "ordinal": 2,
+      "value": {
+        "$rpc": "null"
+      }
+    },
+    "f5d301978157": {
+      "name": "detailPayload",
       "ordinal": 12,
-      "value": ["bug", "chore"]
+      "value": {
+        "assignees": ["octocat"],
+        "baseSha": "base-sha",
+        "body": "body",
+        "checks": [],
+        "comments": [
+          {
+            "author": "octocat",
+            "body": "please fix",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": 501,
+            "isResolved": false,
+            "line": 12,
+            "path": "src/index.ts",
+            "threadId": "thread-1"
+          },
+          {
+            "author": "octocat",
+            "body": "a thought",
+            "createdAt": "2020-01-01T00:00:00.000Z",
+            "id": "comment-2"
+          }
+        ],
+        "files": [
+          {
+            "additions": 2,
+            "deletions": 1,
+            "oldPath": {
+              "$rpc": "undefined"
+            },
+            "path": "src/index.ts",
+            "status": "modified",
+            "viewerViewedState": "UNVIEWED"
+          }
+        ],
+        "headSha": "head-sha",
+        "labels": ["bug"],
+        "latestReviews": [],
+        "provider": "github",
+        "pullRequestId": "PR_kwDO",
+        "reviewDecision": {
+          "$rpc": "null"
+        },
+        "reviewRequests": [],
+        "targetKey": "repo-1\u0000owner/repo\u0000issue\u00009"
+      }
     }
   },
   "recording": {
@@ -180,24 +154,26 @@
       {
         "id": "mounted",
         "observation": {
-          "sender": ["cd0e3d61ff7d", "4f0b27d85f31"],
-          "payloads": ["9a8e65d1e38f", "3b4a3643a78c"],
+          "sender": [],
+          "payloads": [],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "187a6bd82efe",
+          "state": "a0ec6c8c4548",
           "effects": [
-            "3356ec8253b4",
-            "e8ff540f77f3",
-            "e11f2dac1b42",
-            "ae373967e842",
-            "3edb9333eaaf",
-            "99b2357770d0",
-            "a49372405361",
-            "fbaca9693f87",
-            "3c0f8d43db2e",
-            "90483b517d86",
-            "215de61d1fbb"
+            "cc2ece9478f0",
+            "eda130337c99",
+            "df267b378e62",
+            "bcd7aec5dd24",
+            "d191f868fc7a",
+            "9c483a675f4b",
+            "e416a2404225",
+            "4c5fe26e1c97",
+            "7a1299e1e3ac",
+            "5c50471cdd48",
+            "dc200050b5f4",
+            "f5d301978157",
+            "1ae1dc53b706"
           ]
         }
       }

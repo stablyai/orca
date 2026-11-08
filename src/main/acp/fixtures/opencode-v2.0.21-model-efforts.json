@@ -1,0 +1,269 @@
+{
+  "version": "opencode v2.0.21",
+  "new": {
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "opencode/crouton-alpha-free",
+        "options": [
+          {
+            "value": "google/gemini-3.8-flash",
+            "name": "google/Gemini 3.8 Flash"
+          },
+          {
+            "value": "opencode/beam-free",
+            "name": "opencode/Beam Free"
+          },
+          {
+            "value": "opencode/crouton-alpha-free",
+            "name": "opencode/Crouton Alpha Free"
+          }
+        ]
+      },
+      {
+        "id": "effort",
+        "name": "Effort",
+        "description": "Available effort levels for this model",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "default",
+        "options": [
+          {
+            "value": "minimal",
+            "name": "Minimal"
+          },
+          {
+            "value": "low",
+            "name": "Low"
+          },
+          {
+            "value": "medium",
+            "name": "Medium"
+          },
+          {
+            "value": "high",
+            "name": "High"
+          },
+          {
+            "value": "xhigh",
+            "name": "Xhigh"
+          },
+          {
+            "value": "max",
+            "name": "Max"
+          },
+          {
+            "value": "default",
+            "name": "Default"
+          }
+        ]
+      },
+      {
+        "id": "mode",
+        "name": "Session Mode",
+        "category": "mode",
+        "type": "select",
+        "currentValue": "build",
+        "options": [
+          {
+            "value": "build",
+            "name": "Build",
+            "description": "The default agent. Executes tools based on configured permissions."
+          },
+          {
+            "value": "plan",
+            "name": "Plan",
+            "description": "Read-only agent for exploring the codebase and planning work before implementation."
+          }
+        ]
+      }
+    ]
+  },
+  "opencode/beam-free": {
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "opencode/beam-free",
+        "options": [
+          {
+            "value": "google/gemini-3.8-flash",
+            "name": "google/Gemini 3.8 Flash"
+          },
+          {
+            "value": "opencode/beam-free",
+            "name": "opencode/Beam Free"
+          },
+          {
+            "value": "opencode/crouton-alpha-free",
+            "name": "opencode/Crouton Alpha Free"
+          }
+        ]
+      },
+      {
+        "id": "effort",
+        "name": "Effort",
+        "description": "Available effort levels for this model",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "default",
+        "options": [
+          {
+            "value": "low",
+            "name": "Low"
+          },
+          {
+            "value": "medium",
+            "name": "Medium"
+          },
+          {
+            "value": "high",
+            "name": "High"
+          },
+          {
+            "value": "xhigh",
+            "name": "Xhigh"
+          },
+          {
+            "value": "max",
+            "name": "Max"
+          },
+          {
+            "value": "default",
+            "name": "Default"
+          }
+        ]
+      },
+      {
+        "id": "mode",
+        "name": "Session Mode",
+        "category": "mode",
+        "type": "select",
+        "currentValue": "build",
+        "options": [
+          {
+            "value": "build",
+            "name": "Build",
+            "description": "The default agent. Executes tools based on configured permissions."
+          },
+          {
+            "value": "plan",
+            "name": "Plan",
+            "description": "Read-only agent for exploring the codebase and planning work before implementation."
+          }
+        ]
+      }
+    ]
+  },
+  "opencode/longcat-2.5-preview-free": {
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "opencode/longcat-2.5-preview-free",
+        "options": [
+          {
+            "value": "opencode/longcat-2.5-preview-free",
+            "name": "opencode/LongCat 2.5 Preview Free"
+          }
+        ]
+      },
+      {
+        "id": "mode",
+        "name": "Session Mode",
+        "category": "mode",
+        "type": "select",
+        "currentValue": "build",
+        "options": [
+          {
+            "value": "build",
+            "name": "Build",
+            "description": "The default agent. Executes tools based on configured permissions."
+          },
+          {
+            "value": "plan",
+            "name": "Plan",
+            "description": "Read-only agent for exploring the codebase and planning work before implementation."
+          }
+        ]
+      }
+    ]
+  },
+  "google/gemini-3.8-flash": {
+    "configOptions": [
+      {
+        "id": "model",
+        "name": "Model",
+        "category": "model",
+        "type": "select",
+        "currentValue": "google/gemini-3.8-flash",
+        "options": [
+          {
+            "value": "google/gemini-3.8-flash",
+            "name": "google/Gemini 3.8 Flash"
+          },
+          {
+            "value": "opencode/beam-free",
+            "name": "opencode/Beam Free"
+          },
+          {
+            "value": "opencode/crouton-alpha-free",
+            "name": "opencode/Crouton Alpha Free"
+          }
+        ]
+      },
+      {
+        "id": "effort",
+        "name": "Effort",
+        "description": "Available effort levels for this model",
+        "category": "thought_level",
+        "type": "select",
+        "currentValue": "default",
+        "options": [
+          {
+            "value": "low",
+            "name": "Low"
+          },
+          {
+            "value": "medium",
+            "name": "Medium"
+          },
+          {
+            "value": "high",
+            "name": "High"
+          },
+          {
+            "value": "default",
+            "name": "Default"
+          }
+        ]
+      },
+      {
+        "id": "mode",
+        "name": "Session Mode",
+        "category": "mode",
+        "type": "select",
+        "currentValue": "build",
+        "options": [
+          {
+            "value": "build",
+            "name": "Build",
+            "description": "The default agent. Executes tools based on configured permissions."
+          },
+          {
+            "value": "plan",
+            "name": "Plan",
+            "description": "Read-only agent for exploring the codebase and planning work before implementation."
+          }
+        ]
+      }
+    ]
+  }
+}

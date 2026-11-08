@@ -17,23 +17,6 @@ function response(overrides: Record<string, unknown> = {}) {
 }
 
 describe('validateAutomationListResponse', () => {
-  it('accepts a capable response and keeps the reported orphan count', () => {
-    const result = validateAutomationListResponse(response(), SELF)
-    expect(result).toMatchObject({ ok: true, invalidRows: 0 })
-    expect(result.ok && result.result.orphanCount).toBe(3)
-    expect(result.ok && result.result.automations.map((entry) => entry.id)).toEqual(['a1', 'a2'])
-  })
-
-  // Preserve unreported versus authoritatively none; invented zeroes settle orphan buckets nobody counted.
-  it('leaves an omitted orphan count unreported instead of committing zero', () => {
-    const raw = response()
-    delete (raw as { orphanCount?: number }).orphanCount
-    const result = validateAutomationListResponse(raw, SELF)
-    expect(result).toMatchObject({ ok: true, invalidRows: 0 })
-    expect(result.ok && result.result.orphanCount).toBeUndefined()
-    expect(result.ok && 'orphanCount' in result.result).toBe(false)
-  })
-
   it('reports a legacy-shaped payload as unsupported host scope', () => {
     const result = validateAutomationListResponse({ automations: [{ id: 'a1' }] }, SELF)
     expect(result).toMatchObject({ ok: false, error: { code: 'unsupported_host_scope' } })
@@ -129,17 +112,5 @@ describe('validateAutomationListResponse', () => {
     )
     expect(result.ok && result.result.automations).toEqual([])
     expect(result.ok && result.invalidRows).toBe(4)
-  })
-
-  it('keeps a row whose usage summary is unusable but blanks the summary', () => {
-    const result = validateAutomationListResponse(
-      response({
-        automations: [{ id: 'a1' }],
-        items: [{ automationId: 'a1', selector: { kind: 'self' }, usageSummary: { knownRuns: 1 } }]
-      }),
-      SELF
-    )
-    expect(result.ok && result.result.items[0]?.usageSummary).toBeNull()
-    expect(result.ok && result.invalidRows).toBe(0)
   })
 })

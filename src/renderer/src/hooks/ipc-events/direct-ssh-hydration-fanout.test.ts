@@ -59,6 +59,7 @@ describe('direct SSH hydration fanout', () => {
           onCredentialResolved: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onStateChanged: () => () => {}
         }
       }

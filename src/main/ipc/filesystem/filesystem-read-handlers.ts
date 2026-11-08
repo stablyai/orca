@@ -1,23 +1,24 @@
 import { classifyFilesystemDirectoryEntries } from './filesystem-symlink-directory-entries'
-import { markdownDocumentsFromRelativePaths } from '../../../shared/markdown-document-paths'
+import { markdownDocumentsFromRelativePaths } from '../../../shared/file-listing/markdown-document-paths'
 import {
   capturePathExistence,
   validatePathExistenceBatch,
   type PathExistenceResult
-} from '../../../shared/path-existence-batch'
+} from '../../../shared/file-access/path-existence-batch'
 import { ipcMain } from 'electron'
 import { readdir, stat } from 'node:fs/promises'
-import type { DirEntry, MarkdownDocument } from '../../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../../shared/file-name-sort'
+import type { DirEntry } from '../../../shared/file-listing/directory-entry'
+import type { MarkdownDocument } from '../../../shared/file-listing/file-document'
+import { sortDirEntries } from '../../../shared/file-listing/file-name-sort'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import {
   resolveDesktopAuthorizedPath,
   resolveLocalFileRequestPath,
   resolveLocalListRequestPath
-} from '../local-file-access-resolution'
-import { isPathAbsentError } from './filesystem-path-containment'
+} from './access/local-file-access-resolution'
+import { isPathAbsentError } from './access/filesystem-path-containment'
 import { listMarkdownDocuments } from '../markdown-documents'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../crash-reporting/crash-breadcrumb-store'
@@ -26,9 +27,12 @@ import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'
 import { grantRemoteFilePreview, readLocalFilePreview } from '../../media/media-preview-protocol'
 import { readPreviewGrantRange } from '../../media/preview-grant-range-read'
-import { windowsFsPath } from '../../wsl/wsl-unc-drive-fs-path'
-import { assertWslUncPathRunning, guardWslUncPathAccess } from '../../wsl/wsl-unc-access-gate'
-import { parseRemoteFilePreviewAddress } from '../../../shared/remote-file-preview-address'
+import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
+import {
+  assertWslUncPathRunning,
+  guardWslUncPathAccess
+} from '../../wsl/filesystem/wsl-unc-access-gate'
+import { parseRemoteFilePreviewAddress } from '../../../shared/file-preview/remote-file-preview-address'
 import {
   readLocalFileContent,
   readLocalLogSnapshot,

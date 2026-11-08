@@ -1,7 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { legacyBaseRefSearchResult } from '../../../../shared/base-ref-search-result'
 import type { Repo } from '../../../../shared/repo-types'
-import { getDefaultCreateProjectParent } from '@/components/sidebar/create-project-defaults'
+import { getDefaultCreateProjectParent } from '@/components/sidebar/project-admission/create/create-project-defaults'
 import {
   callRuntimeResult,
   callRuntimeResultWithOwner,

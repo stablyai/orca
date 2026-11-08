@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { useRepoLabels, useRepoAssignees, useImmediateMutation } from '@/hooks/useIssueMetadata'
+import { useRepoLabels, useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
+import { useImmediateMutation } from '@/hooks/useIssueMetadata'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
@@ -13,6 +14,7 @@ import {
 } from '@/components/task-page/github/task-page-github-status-actions'
 import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitHubItemDialogEditSectionProps } from '../load-item-details/github-item-dialog-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -41,6 +43,9 @@ const NO_ASSIGNEES: string[] = []
 
 export function GHEditSection(props: GitHubItemDialogEditSectionProps): React.JSX.Element | null {
   const { item, projectOrigin } = props
+  if (item.type === 'pr') {
+    return null
+  }
   const repository = projectOrigin ?? parseOwnerRepoFromItemUrl(item.url)
   const itemKey = `${item.repoId}\0${repository ? githubRepoIdentityKey(repository) : item.url}\0${item.type}\0${item.id}`
   return <GHEditSectionItem key={itemKey} {...props} />
@@ -64,6 +69,7 @@ function GHEditSectionItem({
   attachedWorkspaceLabel,
   layout = 'horizontal'
 }: GitHubItemDialogEditSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
@@ -154,9 +160,9 @@ function GHEditSectionItem({
     const parsed = parseOwnerRepoFromItemUrl(item.url)
     return parsed
       ? `${parsed.owner}/${parsed.repo}`
-      : translate('auto.components.TaskPage.repository', 'Repository')
+      : t('auto.components.TaskPage.repository', 'Repository')
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [item.url, projectOrigin, languageRevision])
+  }, [item.url, projectOrigin, languageRevision, t])
   const handleOpenOrUseWorkspace = useCallback((): void => {
     if (onOpenOrUse) {
       onOpenOrUse(item)

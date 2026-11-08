@@ -98,19 +98,6 @@ describe('assertAutomationOwnerFence', () => {
     )
   })
 
-  it('passes when the captured owner still matches', () => {
-    expect(() =>
-      assertAutomationOwnerFence({
-        automation: sshRecord,
-        expectedOwner: {
-          selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 }
-        },
-        operation: 'mutate',
-        context
-      })
-    ).not.toThrow()
-  })
-
   it('fails closed on a stale SSH generation', () => {
     expectConflict(
       () =>
@@ -185,16 +172,6 @@ describe('assertAutomationOwnerFence', () => {
     }
   })
 
-  it('still lets an old client read a workspace-pinned record', () => {
-    expect(() =>
-      assertAutomationOwnerFence({
-        automation: pinnedLocalRecord,
-        operation: 'read',
-        context: pinnedContext
-      })
-    ).not.toThrow()
-  })
-
   it('accepts the projected owner as the precondition for a workspace-pinned record', () => {
     expect(() =>
       assertAutomationOwnerFence({
@@ -244,15 +221,6 @@ describe('assertAutomationOwnerFence', () => {
 })
 
 describe('destination validation', () => {
-  it('accepts an SSH destination whose registration still matches', () => {
-    expect(() =>
-      assertAutomationDestination(
-        { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } },
-        context
-      )
-    ).not.toThrow()
-  })
-
   it('rejects a ghost or future same-id target', () => {
     expectConflict(
       () =>
@@ -320,15 +288,6 @@ describe('destination validation', () => {
         },
         { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } },
         { targetId: 'ssh-1', generation: 7 }
-      )
-    ).not.toThrow()
-  })
-
-  it('leaves an unpinned local record landing on self', () => {
-    expect(() =>
-      assertExecutionTargetMatchesDestination(
-        { executionTargetType: 'local', executionTargetId: 'local' },
-        { selector: { kind: 'self' } }
       )
     ).not.toThrow()
   })

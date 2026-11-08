@@ -11,8 +11,8 @@ import { openProviderTimelineRig } from '../native-chat/agent-session-timeline/p
 import { GROK_ACP_DIALECT } from './acp-dialects/grok-dialect'
 import type { AcpDialect, AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from './acp-timeline-translator'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
 import { acpSubagentRecords } from './acp-structured-child-work.test-support'
 import { PromptResponseSchema } from './generated/acp-protocol.generated'
 

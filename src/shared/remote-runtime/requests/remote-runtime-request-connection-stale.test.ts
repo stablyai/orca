@@ -1,9 +1,9 @@
-import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../pairing/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
-import type { PairingOffer } from '../../mobile-relay-pairing-offer'
-import { decrypt, encrypt } from '../../e2ee-crypto'
-import { createFixedKeyLegacyHandshakeForTest } from '../../paired-e2ee-fixed-key-test-fixture'
+import type { PairingOffer } from '../pairing/mobile-relay-pairing-offer'
+import { decrypt, encrypt } from '../e2ee/node/e2ee-crypto'
+import { createFixedKeyLegacyHandshakeForTest } from '../e2ee/paired-e2ee-fixed-key-test-fixture'
 import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepared-request-admission'
 import type { RemoteRuntimeWebSocketCallbacks } from './remote-runtime-request-websocket'
 
@@ -57,14 +57,14 @@ async function authenticate(
   socket: FakeOpenedSocket,
   beforeAuthenticated?: () => void
 ): Promise<void> {
-  socket.callbacks.onTextFrame(socket.ws, JSON.stringify({ type: 'e2ee_ready' }))
+  socket.callbacks.onFrame(socket.ws, JSON.stringify({ type: 'e2ee_ready' }))
   // The auth step is async; a host answers only after the auth frame is on the wire.
   for (let tick = 0; tick < 20 && socket.sent.length === 0; tick++) {
     await Promise.resolve()
   }
   expect(socket.sent).toHaveLength(1)
   beforeAuthenticated?.()
-  socket.callbacks.onTextFrame(
+  socket.callbacks.onFrame(
     socket.ws,
     encrypt(JSON.stringify({ type: 'e2ee_authenticated' }), socket.sharedKey)
   )
@@ -164,13 +164,13 @@ describe('RemoteRuntimeRequestConnection stale socket callbacks', () => {
       await vi.waitFor(() => expect(opens[1]!.sent.length).toBeGreaterThan(1))
 
       opens[0]!.callbacks.onError(opens[0]!.ws, new Error('stale socket error') as never)
-      opens[0]!.callbacks.onTextFrame(
+      opens[0]!.callbacks.onFrame(
         opens[0]!.ws,
         encrypt(JSON.stringify({ id: 'stale', ok: true, result: {} }), opens[0]!.sharedKey)
       )
 
       const requestId = latestRequestId(opens[1]!)
-      opens[1]!.callbacks.onTextFrame(
+      opens[1]!.callbacks.onFrame(
         opens[1]!.ws,
         encrypt(
           JSON.stringify({

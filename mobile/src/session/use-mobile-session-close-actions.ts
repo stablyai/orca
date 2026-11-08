@@ -12,6 +12,25 @@ import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from './native-chat/composer/mobile-native-chat-draft-store'
+import { defineHostMutation, useHostMutation, type HostMutationPhase } from '../query/host-mutation'
+import type { RpcClient } from '../transport/rpc-client'
+
+async function sendTerminalRename(
+  client: RpcClient,
+  vars: { terminal: string; title: string }
+): Promise<void> {
+  const reply = await sessionTerminalRename.request(client, vars)
+  if (!reply.ok) {
+    throw new Error(reply.error.message)
+  }
+}
+
+const terminalRename = defineHostMutation({
+  offline: 'draft',
+  send: sendTerminalRename,
+  // Renaming is idempotent, so a lost reply is settled by sending the same title again.
+  confirm: sendTerminalRename
+})
 
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
   const {
@@ -24,9 +43,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setFileDocs,
     setMarkdownDocs,
     sessionTabsRef,
-    reconcileBufferedDraftsRef,
+    forgetLastSessionTab,
     closedTabTombstonesRef,
-    clearTerminalLiveInputDefault,
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
@@ -43,31 +61,28 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     subscribeToTerminal,
     fetchTerminals
   } = scope
-  async function handleRenameTerminal(value: string) {
-    if (!client || !renameTarget) {
+  const terminalRenameWrite = useHostMutation(terminalRename, { hostId, client })
+  // Throws on refusal so the sheet keeps the typed name and offers Retry.
+  async function handleRenameTerminal(
+    value: string,
+    onPhase?: (phase: HostMutationPhase) => void
+  ): Promise<void> {
+    const target = renameTarget
+    if (!target) {
       return
     }
-    const target = renameTarget
-    setRenameTarget(null)
-
-    try {
-      const title = value.trim()
-      const response = sessionTerminalRename.interpret(
-        await sessionTerminalRename.request(client, { terminal: target.handle, title })
+    const title = value.trim()
+    await terminalRenameWrite.mutate({ terminal: target.handle, title }, { onPhase })
+    setTerminals((prev) => {
+      const next = prev.map((terminal) =>
+        terminal.handle === target.handle ? { ...terminal, title: title || 'Terminal' } : terminal
       )
-      if (response.accepted) {
-        setTerminals((prev) => {
-          const next = prev.map((terminal) =>
-            terminal.handle === target.handle
-              ? { ...terminal, title: title || 'Terminal' }
-              : terminal
-          )
-          terminalsRef.current = next
-          return next
-        })
-        scheduleDelayedAction(() => void fetchTerminals(), 300)
-      }
-    } catch {}
+      terminalsRef.current = next
+      return next
+    })
+    scheduleDelayedAction(() => void fetchTerminals(), 300)
+    // A sheet reopened for another terminal while this one was in flight stays open.
+    setRenameTarget((current) => (current === target ? null : current))
   }
 
   async function handleCloseTerminal(target: Terminal) {
@@ -82,7 +97,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       if (response.accepted) {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
-        clearTerminalLiveInputDefault(target.handle)
         const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
         terminalsRef.current = next
         setTerminals(next)
@@ -146,7 +160,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           })
         }
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
-        reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
@@ -154,10 +167,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           const terminalHandle = tab.terminal
           unsubscribeTerminal(terminalHandle)
           terminalRefs.current.delete(terminalHandle)
-          clearTerminalLiveInputDefault(terminalHandle)
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
+        forgetLastSessionTab(tab.id)
         // Tombstone closed tabs until snapshots confirm them; immediate refetch can resurrect a pending close.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
         if (selectedSessionTabIdRef.current === tab.id) {
@@ -181,6 +194,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
   }
   return {
     handleRenameTerminal,
+    terminalRenameWrite,
     handleCloseTerminal,
     handleCloseSessionTab
   }
