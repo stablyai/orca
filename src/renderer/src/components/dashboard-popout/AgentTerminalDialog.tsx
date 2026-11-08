@@ -1,6 +1,9 @@
-import { useEffect, useId, useRef } from 'react'
+import { useCallback, useEffect, useId, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
+import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { keybindingMatchesAction } from '../../../../shared/keybindings'
+import { useAppStore } from '@/store'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { agentStateLabel } from '@/components/AgentStateDot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
@@ -34,6 +37,36 @@ type AgentTerminalFrameProps = Omit<AgentTerminalDialogProps, 'card'> & {
   previewClassName?: string
 }
 
+function useAgentTerminalShortcuts(close: () => void): void {
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.defaultPrevented || event.isComposing || event.repeat) {
+        return
+      }
+      const { keybindings, settings } = useAppStore.getState()
+      if (
+        !keybindingMatchesAction(
+          'dashboard.closeTerminal',
+          event,
+          getShortcutPlatform(),
+          keybindings,
+          {
+            context: 'terminal',
+            terminalShortcutPolicy: settings?.terminalShortcutPolicy
+          }
+        )
+      ) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      close()
+    }
+    document.addEventListener('keydown', handleKeyDown, true)
+    return () => document.removeEventListener('keydown', handleKeyDown, true)
+  }, [close])
+}
+
 function AgentTerminalFrame({
   card,
   title,
@@ -43,6 +76,7 @@ function AgentTerminalFrame({
   onBrowserForeground
 }: AgentTerminalFrameProps): React.JSX.Element {
   const t = useTranslate()
+  const close = useCallback(() => onOpenChange(false), [onOpenChange])
   const reveal = (): void => {
     onReveal({
       repoId: card.repoId,
@@ -53,6 +87,7 @@ function AgentTerminalFrame({
     })
     onOpenChange(false)
   }
+  useAgentTerminalShortcuts(close)
 
   return (
     <>

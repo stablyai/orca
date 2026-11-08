@@ -9,6 +9,7 @@ import type {
   DashboardCardTerminalInput
 } from '../../../../shared/dashboard-snapshot'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useAppStore } from '@/store'
 import { AgentTerminalDialog, AgentTerminalPanel } from './AgentTerminalDialog'
 
 // Stub xterm/IPC to inspect the routing props passed to the preview.
@@ -61,6 +62,7 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
 
 afterEach(() => {
   cleanup()
+  useAppStore.setState({ keybindings: {} })
 })
 
 // This prop is the only path carrying relayed host-input facts into the preview; omission silently falls back to client-OS routing.
@@ -84,6 +86,31 @@ describe('AgentTerminalDialog', () => {
 
     fireEvent.keyDown(document.body, { key: 'Escape' })
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('closes the preview with its custom terminal shortcut', () => {
+    useAppStore.setState({
+      keybindings: { 'dashboard.closeTerminal': ['Mod+Alt+B'] }
+    })
+    function Host() {
+      const [open, setOpen] = useState(true)
+      return open ? (
+        <AgentTerminalPanel card={card()} onOpenChange={setOpen} onReveal={() => {}} />
+      ) : (
+        <p>Agents board</p>
+      )
+    }
+    render(<Host />)
+
+    fireEvent.keyDown(screen.getByTestId('preview'), {
+      key: 'b',
+      code: 'KeyB',
+      ctrlKey: true,
+      altKey: true
+    })
+
+    expect(screen.getByText('Agents board')).toBeInTheDocument()
+    expect(screen.queryByTestId('preview')).not.toBeInTheDocument()
   })
 })
 
