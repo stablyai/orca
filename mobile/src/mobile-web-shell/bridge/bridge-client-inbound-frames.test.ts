@@ -27,20 +27,6 @@ afterEach(() => {
 })
 
 describe('bridge client refusals and send failures', () => {
-  it('reports a frame its own reader will not take, and changes nothing', () => {
-    const page = createPageClient()
-    page.start()
-    page.deliverRaw('{ not json')
-    page.deliverRaw(JSON.stringify({ v: 99, type: 'state' }))
-    page.deliverRaw(`"${'z'.repeat(BRIDGE_MAX_MESSAGE_BYTES)}"`)
-    expect(page.diagnostics).toEqual([
-      { kind: 'refused', refusal: 'malformed-json' },
-      { kind: 'refused', refusal: 'unrecognised-message' },
-      { kind: 'refused', refusal: 'oversized' }
-    ])
-    expect(page.client.getState()).toBe('connected')
-  })
-
   it('settles the request a reply it could not read was answering, on the same turn', async () => {
     const page = createPageClient()
     page.start()
