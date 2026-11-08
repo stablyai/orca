@@ -244,7 +244,12 @@ export function WorktreeCardStatusSlot({
   // The classic card's unread bell still wins so it can be cleared.
   if (vmState && showStatus && !(unreadActionEnabled && isUnread)) {
     return overlayNewCardUnreadStatus(
-      <WorktreeCardVmStateBadge state={vmState} failure={vmFailure} className={className} />,
+      <WorktreeCardVmStateBadge
+        state={vmState}
+        failure={vmFailure}
+        // The classic card's status lane is 16px; match it so titles stay aligned.
+        className={cn(!newCardStyle && 'size-4 p-0', className)}
+      />,
       newCardStyle && isUnread
     )
   }
