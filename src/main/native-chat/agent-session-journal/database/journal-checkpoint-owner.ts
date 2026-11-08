@@ -30,6 +30,8 @@ export class JournalCheckpointOwner {
   private generation = 0
   private checkAgain = false
   private log = 0
+  private checkpointed = 0
+  private frames: ReturnType<Database.Database['prepare']> | undefined
   private unknown = true
   private blocked = false
   private truncate: { id: number; acknowledged: boolean } | undefined
@@ -53,6 +55,7 @@ export class JournalCheckpointOwner {
         this.fallback(new Error(`SQLite ${version} lacks NOOP checkpoints`))
         return
       }
+      this.frames = writer.prepare('PRAGMA wal_checkpoint(NOOP)')
       const worker = options.factory
         ? options.factory()
         : spawnWorkerThread(journalCheckpointWorkerSource, {
@@ -105,11 +108,12 @@ export class JournalCheckpointOwner {
     try {
       this.generation++
       try {
-        const state = this.writer.prepare('PRAGMA wal_checkpoint(NOOP)').get()
+        const state = this.frames!.get()
         if (!Number.isSafeInteger(state?.log) || !Number.isSafeInteger(state?.checkpointed)) {
           throw new Error('invalid journal WAL frame counts')
         }
         this.log = Number(state!.log)
+        this.checkpointed = Number(state!.checkpointed)
         this.unknown = false
       } catch {
         this.unknown = true
@@ -162,6 +166,9 @@ export class JournalCheckpointOwner {
       this.checkAgain = true
       return
     }
+    if (!this.gated() && this.log - this.checkpointed < 1000) {
+      return
+    }
     this.pending = ++this.nextRequest
     this.send({ type: 'check', id: this.pending, generation: this.generation, force: this.gated() })
     this.armDeadline()
@@ -210,6 +217,7 @@ export class JournalCheckpointOwner {
         typeof message.blocked === 'boolean'
       ) {
         this.log = message.log
+        this.checkpointed = message.checkpointed
         this.blocked = message.blocked
         this.unknown = false
       }

@@ -118,12 +118,13 @@ class ControlledCheckpoint extends EventEmitter {
 it('does not admit a send from a stale checkpoint, and close hands back admission before physical retirement', async () => {
   const { filename, writer } = fixture()
   const worker = new ControlledCheckpoint()
+  writer.prepare('INSERT INTO writes VALUES(1, zeroblob(1048576))').run()
   const owner = new JournalCheckpointOwner(writer, filename, { factory: () => worker })
   const batch = new JournalSqlBatch(writer, owner)
   const old = worker.sent[0]!
-  writer.prepare('INSERT INTO writes VALUES(1, zeroblob(18874368))').run()
+  writer.prepare('INSERT INTO writes VALUES(2, zeroblob(18874368))').run()
   owner.afterCommit()
-  const send = batch.run([2], (id) =>
+  const send = batch.run([3], (id) =>
     writer.prepare("INSERT INTO writes VALUES(?, 'send')").run(id)
   )
   worker.emit('message', {
@@ -135,7 +136,7 @@ it('does not admit a send from a stale checkpoint, and close hands back admissio
     blocked: false
   })
   await Promise.resolve()
-  expect(writer.prepare('SELECT id FROM writes WHERE id=2').get()).toBeUndefined()
+  expect(writer.prepare('SELECT id FROM writes WHERE id=3').get()).toBeUndefined()
   let retired = false
   const close = owner.close().then(() => {
     retired = true
@@ -143,7 +144,7 @@ it('does not admit a send from a stale checkpoint, and close hands back admissio
   cleanup.push(() => close)
   await send
   expect(writer.pragma('wal_autocheckpoint', { simple: true })).toBe(1000)
-  expect(writer.prepare('SELECT body FROM writes WHERE id=2').get()).toEqual({ body: 'send' })
+  expect(writer.prepare('SELECT body FROM writes WHERE id=3').get()).toEqual({ body: 'send' })
   expect(retired).toBe(false)
   worker.emit('message', { type: 'truncate-request', truncateId: 99 })
   worker.exited()

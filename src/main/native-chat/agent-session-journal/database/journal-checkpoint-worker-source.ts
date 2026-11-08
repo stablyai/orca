@@ -21,7 +21,7 @@ try {
   const oversized = () => statSync(workerData.filename + '-wal').size > workerData.sizeLimit;
   const ceiling = (state) => state.log >= workerData.backpressureFrames;
   const schedule = (state, blocked) => {
-    if (blocked || state.log > state.checkpointed) {
+    if (blocked || state.log - state.checkpointed >= 1000) {
       idle = setTimeout(() => check(true), 1000);
     }
   };
