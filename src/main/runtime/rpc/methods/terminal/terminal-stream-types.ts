@@ -91,6 +91,10 @@ export type TerminalMultiplexStream = {
   ackRecoverySnapshotInFlight: boolean
   // Paces backlog-replacing snapshots, which bypass the ACK window, to a share of the measured link rate.
   ackSupersedeSnapshotNotBefore: number
+  // End of the last sent output frame, so a screen switch split across the send boundary is still seen.
+  ackSentOutputTail: Uint8Array<ArrayBufferLike>
+  // Pending headroom granted while paced; kept until the queue drains so leaving alt cannot force an overflow.
+  ackPendingHoldbackBytes: number
   yieldedQueries: YieldedTerminalQuery[]
   yieldedQueryScan: TerminalReplyQueryScanState
   /** A recovery went out screen-only while the link was saturated; history follows once it drains. */

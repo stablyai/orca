@@ -27,10 +27,15 @@ export function ackPendingOutputBudgetBytes(
   stream: TerminalMultiplexStream
 ): number {
   const paced = pacedAckWindowBytes(connection, stream)
-  return (
-    TERMINAL_MULTIPLEX_PENDING_MAX_BYTES +
-    (paced === null ? 0 : Math.max(0, stream.ackWindowBytes - paced))
-  )
+  if (paced !== null) {
+    stream.ackPendingHoldbackBytes = Math.max(
+      stream.ackPendingHoldbackBytes,
+      stream.ackWindowBytes - paced
+    )
+  } else if (stream.ackPendingOutputBytes <= TERMINAL_MULTIPLEX_PENDING_MAX_BYTES) {
+    stream.ackPendingHoldbackBytes = 0
+  }
+  return TERMINAL_MULTIPLEX_PENDING_MAX_BYTES + stream.ackPendingHoldbackBytes
 }
 
 export function ackWindowAdmits(

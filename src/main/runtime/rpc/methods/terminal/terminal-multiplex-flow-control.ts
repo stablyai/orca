@@ -16,33 +16,13 @@ import {
   pacedAckWindowBytes
 } from './terminal-multiplex-ack-window'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+import { framesAreSupersedable } from './terminal-multiplex-supersedable-frames'
 import {
   markYieldedQueriesDiscardedInFrames,
   replaySnapshotCoveredStatelessQueries
 } from './terminal-multiplex-yielded-queries'
 
 const SUPERSEDE_UNAVAILABLE_BACKOFF_MS = 10_000
-// Alternate-screen enter/exit (?1049, ?1047, ?47); a loose digit match only forgoes superseding.
-const SCREEN_MODE_SWITCH_MARKERS = ['1049', '1047', '?47']
-
-// Queued frames are rechecked on every ACK, so scan each frame once.
-const switchesScreenModeByFrame = new WeakMap<TerminalOutputFrameChunk, boolean>()
-
-function switchesScreenMode(chunk: TerminalOutputFrameChunk): boolean {
-  let switches = switchesScreenModeByFrame.get(chunk)
-  if (switches === undefined) {
-    const bytes = Buffer.from(chunk.bytes.buffer, chunk.bytes.byteOffset, chunk.bytes.byteLength)
-    switches = SCREEN_MODE_SWITCH_MARKERS.some((marker) => bytes.includes(marker))
-    switchesScreenModeByFrame.set(chunk, switches)
-  }
-  return switches
-}
-
-// A screen-only snapshot repaints alt without touching client history only if the replaced frames never left alt.
-function framesStayOnAlternateScreen(chunks: readonly TerminalOutputFrameChunk[]): boolean {
-  return !chunks.some(switchesScreenMode)
-}
-
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
   const { runtime, streams, linkEstimate } = state
   const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
@@ -54,7 +34,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       paced !== null &&
       stream.ackPendingOutputBytes > paced &&
       linkEstimate.now() >= stream.ackSupersedeSnapshotNotBefore &&
-      framesStayOnAlternateScreen(stream.ackPendingOutput)
+      framesAreSupersedable(stream.ackSentOutputTail, stream.ackPendingOutput)
     )
   }
   state.sendAckRecoverySnapshot = async (
@@ -100,9 +80,13 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         supersedesCleanly &&
         (serialized.alternateScreen !== true ||
           typeof serialized.seq !== 'number' ||
-          !framesStayOnAlternateScreen(stream.ackPendingOutput.filter(isCovered)))
+          !framesAreSupersedable(
+            stream.ackSentOutputTail,
+            stream.ackPendingOutput.filter(isCovered)
+          ))
       ) {
-        // The screen mode changed while serializing; drain rather than risk the client's normal history.
+        // The screen changed while serializing; drain rather than risk client history, and back off from re-serializing.
+        stream.ackSupersedeSnapshotNotBefore = linkEstimate.now() + SUPERSEDE_UNAVAILABLE_BACKOFF_MS
         return
       }
       const displayMode = runtime.getMobileDisplayMode(stream.ptyId)
