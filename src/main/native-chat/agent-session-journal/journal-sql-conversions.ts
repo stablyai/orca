@@ -62,46 +62,40 @@ export class JournalSqlConversions {
   }
 
   private async convert(sessionId: string, promotion: AbortSignal): Promise<string | null> {
-    for (;;) {
-      await this.boundary(promotion)
-      const state = await this.writer.maintain({ kind: 'projection-state', sessionId })
-      if (!state || typeof state !== 'object' || !('state' in state)) {
-        throw new Error('journal writer returned no projection state')
-      }
-      if (state.state !== 'converting') {
-        return state.epoch
-      }
-      await this.writer.maintain({ kind: 'conversion-begin', sessionId })
-      do {
+    await this.boundary(promotion)
+    const state = await this.writer.maintain({ kind: 'projection-state', sessionId })
+    if (!state || typeof state !== 'object' || !('state' in state)) {
+      throw new Error('journal writer returned no projection state')
+    }
+    if (state.state !== 'converting') {
+      return state.epoch
+    }
+    await this.boundary(promotion)
+    const reader = await this.readers.prepareConversion(sessionId)
+    if (!reader) {
+      return null
+    }
+    try {
+      const { header } = reader
+      for (;;) {
         await this.boundary(promotion)
-      } while (await this.writer.maintain({ kind: 'conversion-clear', sessionId }))
+        const page = await reader.next()
+        if (!page) {
+          break
+        }
+        // A chat already ready keeps its rows; the frozen source never replaces them.
+        if (!(await this.writer.maintain({ kind: 'import-page', target: header, page }))) {
+          break
+        }
+      }
       await this.boundary(promotion)
-      const reader = await this.readers.prepareConversion(sessionId)
-      if (!reader) {
-        return null
+      const epoch = await this.writer.maintain({ kind: 'import-finish', header })
+      if (typeof epoch !== 'string') {
+        throw new Error('journal writer returned no imported epoch')
       }
-      try {
-        for (;;) {
-          await this.boundary(promotion)
-          const page = await reader.next()
-          if (!page) {
-            break
-          }
-          const { rows, ...table } = page
-          await this.writer.maintain({ kind: 'conversion-insert', table, rows })
-        }
-        await this.boundary(promotion)
-        const ready = await this.writer.maintain({
-          kind: 'conversion-finish',
-          sessionId,
-          watermark: reader.header.watermark
-        })
-        if (ready === true) {
-          return reader.header.epoch
-        }
-      } finally {
-        await reader.close()
-      }
+      return epoch
+    } finally {
+      await reader.close()
     }
   }
 }

@@ -3,8 +3,7 @@ import Database from '../../sqlite/sync-database'
 import { readJournalSqlHistoryPage } from './journal-sql-history-page'
 import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlReaderRequest, JournalSqlReaderReply } from './journal-sql-reader-protocol'
-import { prepareJournalSqlConversion } from './journal-sql-conversion'
-import { journalSqlConversionPages } from './journal-sql-conversion-pages'
+import { prepareJournalDomainImport, type JournalDomainImport } from './journal-domain-import'
 import { readJournalSqlDatabase } from './journal-sql-database-read'
 import { readJournalSqlPoint } from './journal-sql-point-read'
 import { readJournalDomainHistoryPage } from './journal-domain-history-page'
@@ -14,7 +13,7 @@ if (!parentPort || typeof workerData?.filename !== 'string') {
 }
 const port = parentPort
 let db: Database.Database | undefined
-const conversions = new Map<number, ReturnType<typeof journalSqlConversionPages>>()
+const conversions = new Map<number, JournalDomainImport['pages']>()
 function reply(message: JournalSqlReaderReply): void {
   port.postMessage(message)
 }
@@ -49,18 +48,11 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         reply({ type: 'page', id, result: readJournalSqlHistoryPage(db, operation.request) })
         break
       case 'conversion-prepare': {
-        db.exec('BEGIN')
-        let conversion: ReturnType<typeof prepareJournalSqlConversion>
-        try {
-          conversion = prepareJournalSqlConversion(db, operation.sessionId)
-          db.exec('COMMIT')
-        } catch (error) {
-          db.exec('ROLLBACK')
-          throw error
-        }
-        if (conversion) {
-          conversions.set(id, journalSqlConversionPages(conversion))
-          const { tables: _tables, ...header } = conversion
+        // Each frozen-source read is its own short statement; no snapshot spans the restore.
+        const prepared = prepareJournalDomainImport(db, operation.sessionId)
+        if (prepared) {
+          const { pages, ...header } = prepared
+          conversions.set(id, pages)
           reply({ type: 'prepared', id, conversion: header })
         } else {
           reply({ type: 'prepared', id, conversion: null })
