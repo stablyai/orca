@@ -14,15 +14,22 @@ const PROBE_NEUTRAL_FLAGS = new Set(['--auto', '--standalone'])
 const LITERAL_MODEL = /^[A-Za-z0-9._/:@#+-]+$/
 const SHELL_OPERATOR = /[;|&<>]/
 
-function hasUnquotedOperator(raw: string): boolean {
+function hasUnquotedOperator(raw: string, shell: AgentStartupShell): boolean {
+  // cmd quotes only with "; PowerShell escapes with a backtick; posix with a backslash.
+  const escape = shell === 'cmd' ? '^' : shell === 'powershell' ? '`' : '\\'
+  const quotes = shell === 'cmd' ? '"' : `'"`
   let quote: string | null = null
   for (let index = 0; index < raw.length; index += 1) {
     const char = raw[index]
     if (quote) {
-      quote = char === quote ? null : quote
-    } else if (char === '\\') {
+      if (char === escape && quote === '"' && shell !== 'cmd') {
+        index += 1
+      } else if (char === quote) {
+        quote = null
+      }
+    } else if (char === escape) {
       index += 1
-    } else if (char === "'" || char === '"') {
+    } else if (quotes.includes(char)) {
       quote = char
     } else if (SHELL_OPERATOR.test(char)) {
       return true
@@ -64,7 +71,8 @@ export function planOpenCodeRootModelRewrite(
       (span, index) =>
         index !== executable - 1 &&
         // A word starting with # comments out the rest of the line in posix and PowerShell.
-        (hasUnquotedOperator(command.slice(span.start, span.end)) || command[span.start] === '#')
+        (hasUnquotedOperator(command.slice(span.start, span.end), shell) ||
+          command[span.start] === '#')
     )
   ) {
     return null

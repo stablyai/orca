@@ -40,6 +40,13 @@ describe('planOpenCodeRootModelRewrite', () => {
   })
 
   it.each([
+    ['cmd', "opencode '--auto&echo' --model a/b"],
+    ['powershell', "opencode --auto`';echo --model a/b"]
+  ] as const)('leaves a %s operator the posix rules would miss as typed', (shell, command) => {
+    expect(planOpenCodeRootModelRewrite(command, shell)).toBeNull()
+  })
+
+  it.each([
     'opencode',
     'opencode run --model a/b hi',
     'opencode mini --model a/b',
