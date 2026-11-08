@@ -205,6 +205,20 @@ describe('orchestration.events', () => {
     expect((await polling).events).toEqual([{ type: 'end', reason: 'dispatch_closed' }])
   })
 
+  it('answers a cursor older than an unread gap with a snapshot, even when nothing was tracked', async () => {
+    const state = h.setup()
+    const workers = attachWorkers(state)
+    workers.dispatch('term_worker')
+    const start = await poll(state.ctx, state.activeRunId!, 'term_coord')
+
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3 * 60 * 1000)
+    workers.hook('term_worker', 'blocked')
+    const resumed = await poll(state.ctx, state.activeRunId!, 'term_coord', start.cursor)
+    expect(resumed.events).toEqual([
+      expect.objectContaining({ type: 'worker_state', state: 'blocked', snapshot: true })
+    ])
+  })
+
   it('resolves a pane Dispatch only while read, and once bound only on a state change', async () => {
     const state = h.setup()
     const workers = attachWorkers(state)

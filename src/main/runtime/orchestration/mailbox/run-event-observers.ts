@@ -59,6 +59,7 @@ export class RunEventObservers {
     { dispatchId: string | null; state: AgentStatusIpcPayload['state'] }
   >()
   private lastReadAt = -Infinity
+  private unrecorded = false
 
   get wakeCount(): number {
     return this.wakes
@@ -71,6 +72,7 @@ export class RunEventObservers {
   /** Marks a reader present; a pending poll counts as present on its own. */
   noteReader(): void {
     this.lastReadAt = Date.now()
+    this.unrecorded = false
   }
 
   wake(): void {
@@ -110,8 +112,9 @@ export class RunEventObservers {
     readContext: () => AgentStatusOrchestrationContext | undefined
   ): void {
     if (this.listeners.size === 0 && Date.now() - this.lastReadAt > READER_GRACE_MS) {
-      if (this.paneStates.size > 0 || this.journal.length > 0) {
+      if (!this.unrecorded) {
         // Changes go unrecorded from here, so no cursor minted so far may replay past them.
+        this.unrecorded = true
         this.paneStates.clear()
         this.journal.length = 0
         this.stateSequence += 1
