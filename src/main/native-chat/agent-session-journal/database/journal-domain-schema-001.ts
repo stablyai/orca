@@ -58,8 +58,23 @@ CREATE TABLE journal_chat_state (
   retained_sequence INTEGER NOT NULL DEFAULT 0,
   highest_fence INTEGER NOT NULL,
   context_boundary INTEGER NOT NULL DEFAULT 0,
-  last_activity_at INTEGER NOT NULL DEFAULT 0
+  last_activity_at INTEGER NOT NULL DEFAULT 0,
+  derived_turn_item_id TEXT,
+  queue_latest_stop_json TEXT,
+  queue_manual_stop_json TEXT,
+  queue_resumed_sequence INTEGER NOT NULL DEFAULT 0,
+  queue_reopened_sequence INTEGER NOT NULL DEFAULT 0,
+  queue_clear_sequence INTEGER,
+  queue_clear_operation_id TEXT,
+  queue_clear_lifted INTEGER NOT NULL DEFAULT 0,
+  queue_failure_boundary INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE journal_queue_clear_members (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  PRIMARY KEY(session_id, epoch, message_id)
+) WITHOUT ROWID;
 CREATE TABLE journal_items (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
@@ -79,6 +94,11 @@ CREATE TABLE journal_items (
   wire_bytes INTEGER,
   turn_item_id TEXT,
   original_stop_note_json TEXT,
+  queue_command_turn INTEGER NOT NULL DEFAULT 0,
+  queue_failed_outcome INTEGER NOT NULL DEFAULT 0,
+  queue_failed_at INTEGER NOT NULL DEFAULT 0,
+  queue_failure_witnessed_through INTEGER NOT NULL DEFAULT 0,
+  queue_failure_report_turn_item_id TEXT,
   PRIMARY KEY(session_id, epoch, item_id)
 );
 CREATE TABLE journal_item_subagent_names (
@@ -192,6 +212,8 @@ CREATE INDEX journal_items_turn_marker ON journal_items(session_id, epoch, seque
   WHERE hidden=0 AND turn_marker=1;
 CREATE INDEX journal_items_visible_position ON journal_items(session_id, epoch, sequence, sequence_index, ordinal)
   WHERE hidden=0;
+CREATE INDEX journal_items_queue_failure_report ON journal_items(session_id, epoch, queue_failure_report_turn_item_id)
+  WHERE hidden=0 AND queue_failure_report_turn_item_id IS NOT NULL;
 CREATE INDEX journal_items_stop_turn ON journal_items(session_id, epoch, turn_item_id)
   WHERE hidden=0 AND turn_item_id IS NOT NULL;
 CREATE INDEX journal_events_saved_at ON journal_events(saved_at,session_id,epoch,sequence);

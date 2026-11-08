@@ -21,6 +21,12 @@ import { journalOutcomeSource } from './outcomes/journal-outcome-format'
 import { memoryJournalMap } from './journal-memory-collections'
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalDomainStopNote } from './journal-domain-stop-notes'
+import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause'
+import {
+  isCommand,
+  reportedTurnItemId,
+  settledFailure
+} from './queued-messages/journal-queue-failure-policy'
 
 /** The chat head, written last: its row is the chat's ready mark. */
 export type JournalDomainImportHead = {
@@ -28,6 +34,11 @@ export type JournalDomainImportHead = {
   highestFence: number
   contextBoundary: number
   lastActivityAt: number
+  derivedTurnItemId: string | null
+  queuePauseMarks: Omit<JournalQueuePauseMarks, 'cleared'> & {
+    cleared?: Omit<NonNullable<JournalQueuePauseMarks['cleared']>, 'messageIds'>
+  }
+  queueFailureBoundary: number
 }
 
 export type JournalDomainImportItem = {
@@ -38,6 +49,11 @@ export type JournalDomainImportItem = {
   item: AgentJournalRenderItem
   turnItemId: string | null
   originalStopNoteJson: string | null
+  queueCommandTurn: boolean
+  queueFailedOutcome: boolean
+  queueFailedAt: number
+  queueFailureWitnessedThrough: number
+  queueFailureReportTurnItemId: string | null
 }
 
 export type JournalDomainImportAttempt = {
@@ -59,6 +75,7 @@ export type JournalDomainImportPage =
   | { kind: 'receipts'; rows: AgentJournalAcceptanceReceipt[] }
   | { kind: 'cards'; rows: QueuedMessageRow[] }
   | { kind: 'activity'; rows: { fence: number; lastActivityAt: number }[] }
+  | { kind: 'queue-clear-members'; rows: { messageId: string }[] }
 
 export type JournalDomainImportHeader = {
   sessionId: string
@@ -92,6 +109,7 @@ export function prepareJournalDomainImport(
   }
   failLoadOnUnloadableJournal(sessionId, loaded)
   const { state } = loaded
+  const { cleared, ...pauseMarks } = state.queuePauseMarks
   const cards = currentCards(db, state)
   const personal = restoredJournalPersonAcceptance(
     db,
@@ -106,7 +124,21 @@ export function prepareJournalDomainImport(
       lastSequence: state.lastSequence,
       highestFence: state.highestFence,
       contextBoundary: state.contextBoundary,
-      lastActivityAt: state.lastActivityAt
+      lastActivityAt: state.lastActivityAt,
+      derivedTurnItemId: state.derivedTurnScope.snapshot(),
+      queuePauseMarks: {
+        ...pauseMarks,
+        ...(cleared
+          ? {
+              cleared: {
+                sequence: cleared.sequence,
+                operationId: cleared.operationId,
+                ...(cleared.lifted ? { lifted: true as const } : {})
+              }
+            }
+          : {})
+      },
+      queueFailureBoundary: journalInputOrder(state).newestTurn.importBoundary()
     },
     pages: importPages(state, cards, personal)
   }
@@ -153,6 +185,15 @@ function* importPages(
       ownerFence: state.itemFences.get(key) ?? 0,
       executionOwner: state.itemExecutionOwners.get(key) ?? null,
       hidden: !journalInputPresentationMember(state, key),
+      queueCommandTurn: isCommand(item),
+      queueFailedOutcome: settledFailure(item),
+      queueFailedAt: journalInputOrder(state).newestTurn.importFailure(key).failedAt,
+      queueFailureWitnessedThrough:
+        journalInputOrder(state).newestTurn.importFailure(key).witnessedThrough,
+      queueFailureReportTurnItemId: (() => {
+        const report = reportedTurnItemId(item)
+        return report === null ? null : (state.aliases.get(report) ?? report)
+      })(),
       ...journalDomainStopNote(item, (id) => state.items.get(id))
     }))
   )
@@ -182,6 +223,10 @@ function* importPages(
   )
   yield* paged('receipts', [...memoryJournalMap(state.receipts).values()])
   yield* paged('cards', [...cards.values()])
+  yield* paged(
+    'queue-clear-members',
+    (state.queuePauseMarks.cleared?.messageIds ?? []).map((messageId) => ({ messageId }))
+  )
   yield* paged(
     'activity',
     [...memoryJournalMap(state.providerActivityAt)].map(([fence, lastActivityAt]) => ({

@@ -23,6 +23,7 @@ export function discardJournalDomainImportPage(
     ['journal_submission_attempts', 'epoch,message_id,attempt_sequence,attempt_index'],
     ['journal_send_receipts', 'epoch,message_id'],
     ['journal_queue_cards', 'epoch,message_id'],
+    ['journal_queue_clear_members', 'epoch,message_id'],
     ['journal_edit_leases', 'epoch,owner_id,caller_key,edit_id'],
     ['journal_provider_activity', 'epoch,fence'],
     ['journal_events', 'epoch,sequence']

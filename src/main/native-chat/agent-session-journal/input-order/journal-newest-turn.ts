@@ -1,19 +1,18 @@
 import { memoryJournalMap } from '../journal-memory-collections'
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { isAgentSessionContextClear } from '../../../../shared/agent-session/agent-session-context-clear'
-import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import {
-  agentJournalLinkageFields,
-  isRootAgentJournalItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandTurnId } from '../../agent-session-wire/operations/structured-agent-session-command-turn'
+import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { compareTurnSources, type TurnSource } from './journal-newest-turn-tree'
 import type { JournalNewestTurnStorage } from '../journal-index-storage'
 import { memoryJournalIndexStorage } from '../journal-memory-index-storage'
+import {
+  isTurnOrClear,
+  settledFailure,
+  isCommand,
+  reportedTurnItemId
+} from '../queued-messages/journal-queue-failure-policy'
 
 /** The input owner updates only touched turn sources; storage supplies creation-order queries. */
 export class JournalNewestTurn {
@@ -46,6 +45,16 @@ export class JournalNewestTurn {
 
   read(): AgentJournalRenderItem | null {
     return this.storage.sources.latest()?.item ?? null
+  }
+
+  /** Import preserves native failure chronology rather than guessing from display placement. */
+  importFailure(itemId: string): { failedAt: number; witnessedThrough: number } {
+    const source = this.storage.sources.get(itemId)
+    return { failedAt: source?.failedAt ?? 0, witnessedThrough: source?.witnessedThrough ?? 0 }
+  }
+
+  importBoundary(): number {
+    return this.storage.boundary
   }
 
   /** Releasing Resume marks must be written after this position. */
@@ -188,7 +197,8 @@ export class JournalNewestTurn {
     item: AgentJournalRenderItem | undefined,
     touched: Set<string>
   ): void {
-    const turn = item ? reportedTurn(state, item) : null
+    const report = item ? reportedTurnItemId(item) : null
+    const turn = report === null ? null : (state.aliases.get(report) ?? report)
     const prior = this.storage.evidence.get(itemId) ?? null
     if (turn === prior) {
       return
@@ -213,47 +223,4 @@ export class JournalNewestTurn {
       this.storage.evidence.set(itemId, turn)
     }
   }
-}
-
-function isTurnOrClear(item: AgentJournalRenderItem | undefined): boolean {
-  return !!item && (!!readAgentJournalTurn(item.body) || isAgentSessionContextClear(item.body))
-}
-
-function settledFailure(item: AgentJournalRenderItem): boolean {
-  const turn = readAgentJournalTurn(item.body)
-  return turn?.state !== 'running' && turn?.outcome === 'failure'
-}
-
-/** A command turn holds the queue only with an agent failure row in its turn. */
-function isCommand(item: AgentJournalRenderItem): boolean {
-  const turnId = readAgentJournalTurn(item.body)?.turnId
-  return !!turnId && isStructuredAgentSessionCommandTurnId(turnId)
-}
-
-/** A command's own verdict, whichever writer saved it, and a retry still under way are not the
- * agent reporting a failure. */
-const NOT_REPORTS: ReadonlySet<string> = new Set([
-  'compactionFailed',
-  'compactionUnconfirmed',
-  'commandRefused',
-  'providerRetrying'
-])
-
-/** The turn a root failure row reports for, unless it is a command's own verdict: one of the kinds
- * above, or anything Orca wrote on a command's result identity (its refusals). */
-function reportedTurn(state: JournalReducerState, item: AgentJournalRenderItem): string | null {
-  const { body, turnScope } = item
-  if (
-    body.kind !== 'status' ||
-    turnScope?.kind !== 'turn' ||
-    !isRootAgentJournalItem(item) ||
-    !(body.failure ? !NOT_REPORTS.has(body.failure.kind) : body.tone === 'error')
-  ) {
-    return null
-  }
-  const identity = parseAgentJournalItemKey(item.itemId)
-  if (identity?.provider === 'orca' && identity.clientMessageId.startsWith('command-result:')) {
-    return null
-  }
-  return state.aliases.get(turnScope.turnItemId) ?? turnScope.turnItemId
 }

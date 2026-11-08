@@ -45,8 +45,9 @@ export function insertJournalDomainImportPage(
       const insert =
         db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
         sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,root,subagent_row,
-        subagent_group_key,turn_marker,wire_bytes,turn_item_id,original_stop_note_json)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
+        subagent_group_key,turn_marker,wire_bytes,turn_item_id,original_stop_note_json,
+        queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
       for (const {
         ordinal,
         ownerFence,
@@ -54,7 +55,12 @@ export function insertJournalDomainImportPage(
         hidden,
         item,
         turnItemId,
-        originalStopNoteJson
+        originalStopNoteJson,
+        queueCommandTurn,
+        queueFailedOutcome,
+        queueFailedAt,
+        queueFailureWitnessedThrough,
+        queueFailureReportTurnItemId
       } of page.rows) {
         const payload = JSON.stringify(item)
         const metadata = journalDomainHistoryMetadata(item, payload)
@@ -75,7 +81,12 @@ export function insertJournalDomainImportPage(
           metadata.turnMarker,
           metadata.wireBytes,
           turnItemId,
-          originalStopNoteJson
+          originalStopNoteJson,
+          Number(queueCommandTurn),
+          Number(queueFailedOutcome),
+          queueFailedAt,
+          queueFailureWitnessedThrough,
+          queueFailureReportTurnItemId
         )
         if (Number(result.changes) > 0) {
           writeJournalDomainItemNames(
@@ -161,6 +172,15 @@ export function insertJournalDomainImportPage(
       }
       break
     }
+    case 'queue-clear-members': {
+      const insert =
+        db.prepare(`INSERT INTO journal_queue_clear_members(session_id,epoch,message_id)
+        VALUES(?,?,?) ON CONFLICT DO NOTHING`)
+      for (const { messageId } of page.rows) {
+        insert.run(...prefix, messageId)
+      }
+      break
+    }
   }
   return true
 }
@@ -178,7 +198,9 @@ export function finishJournalDomainImport(
   }
   const { head } = header
   db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,retained_sequence,
-    highest_fence,context_boundary,last_activity_at) VALUES(?,?,?,?,?,?,?)
+    highest_fence,context_boundary,last_activity_at,derived_turn_item_id,queue_latest_stop_json,
+    queue_manual_stop_json,queue_resumed_sequence,queue_reopened_sequence,queue_clear_sequence,
+    queue_clear_operation_id,queue_clear_lifted,queue_failure_boundary) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(session_id) DO NOTHING`).run(
     header.sessionId,
     header.epoch,
@@ -186,7 +208,18 @@ export function finishJournalDomainImport(
     head.lastSequence,
     head.highestFence,
     head.contextBoundary,
-    head.lastActivityAt
+    head.lastActivityAt,
+    head.derivedTurnItemId,
+    head.queuePauseMarks.latestStop ? JSON.stringify(head.queuePauseMarks.latestStop) : null,
+    head.queuePauseMarks.manualStop === undefined
+      ? null
+      : JSON.stringify(head.queuePauseMarks.manualStop),
+    head.queuePauseMarks.resumedSequence,
+    head.queuePauseMarks.reopenedSequence,
+    head.queuePauseMarks.cleared?.sequence ?? null,
+    head.queuePauseMarks.cleared?.operationId ?? null,
+    Number(head.queuePauseMarks.cleared?.lifted ?? false),
+    head.queueFailureBoundary
   )
   const state = journalDomainImportState(db, header.sessionId)
   if (state.state !== 'ready') {

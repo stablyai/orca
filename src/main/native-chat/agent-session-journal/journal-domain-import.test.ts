@@ -17,6 +17,8 @@ import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { JournalSqlConversions } from './journal-sql-conversions'
 import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
+import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
+import { readJournalDomainTurnScope } from './journal-domain-turn-scope'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -91,7 +93,10 @@ function domainRows(db: Database.Database) {
         json_extract(payload_json,'$.unattended') AS unattended FROM journal_queue_cards
         ORDER BY message_id`)
       .all(),
-    head: db.prepare(`SELECT * FROM journal_chat_state`).all()
+    head: db
+      .prepare(`SELECT session_id,epoch,last_sequence,retained_sequence,highest_fence,
+      context_boundary,last_activity_at FROM journal_chat_state`)
+      .all()
   }
 }
 
@@ -173,6 +178,20 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
       }
     ]
   })
+  expect(
+    readJournalDomainQueuePauseContext(db, { sessionId: 'session', epoch: 'epoch' }, null, []).marks
+  ).toMatchObject({ manualStop: null, resumedSequence: 17, reopenedSequence: 2 })
+  expect(
+    readJournalDomainTurnScope(
+      db,
+      { sessionId: 'session', epoch: 'epoch' },
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: []
+      }
+    )
+  ).toEqual({ kind: 'turn', turnItemId: 'failed' })
 })
 
 it('keeps a ready chat on its domain rows and never reads the changed or missing frozen source', () => {

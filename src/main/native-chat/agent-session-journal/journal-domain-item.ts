@@ -196,6 +196,7 @@ export function applyJournalDomainItem(
       : {}),
     ordinal: Number(stored?.ordinal ?? sequence),
     hidden: Boolean(stored?.hidden),
+    writtenSequence: sequence,
     ownerFence: row.ownerFence!,
     executionOwner:
       row.executionOwner ??
