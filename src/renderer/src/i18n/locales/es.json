@@ -19995,6 +19995,7 @@
         "copyIdentity": "Copiar {{value0}}",
         "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
+        "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "El chat de este agente aún no está disponible en Windows. Ábralo en una terminal.",

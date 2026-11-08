@@ -19883,6 +19883,7 @@
         "copyIdentity": "複製 {{value0}}",
         "folder": "資料夾",
         "mainCheckout": "主要工作副本",
+        "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
       },
       "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。",

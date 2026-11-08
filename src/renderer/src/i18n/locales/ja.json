@@ -19486,6 +19486,7 @@
         "copyIdentity": "{{value0}} をコピー",
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
+        "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
         "worktree": "ワークツリー"
       },
       "explicitChatWindows": "この Agent のチャットはまだ Windows では利用できません。ターミナルで開いてください。",

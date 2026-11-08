@@ -12,6 +12,7 @@ import {
   createNativeChatComposerWorkspaceSelector,
   type NativeChatComposerWorkspaceTarget
 } from './native-chat-composer-workspace'
+import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
@@ -19,10 +20,12 @@ const FOOTER_TEXT =
 
 export function NativeChatComposerWorkspace({
   terminalTabId,
-  structuredTransport
+  structuredTransport,
+  isWorking = false
 }: {
   terminalTabId: string
   structuredTransport?: NativeChatComposerWorkspaceTarget
+  isWorking?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const { worktreeId, runtimeEnvironmentId } = structuredTransport ?? {}
@@ -37,7 +40,17 @@ export function NativeChatComposerWorkspace({
       ),
     [terminalTabId, worktreeId, runtimeEnvironmentId, hasTransport]
   )
-  const { hostId, machine, checkout, kind, path, branch, head } = useAppStore(useShallow(selector))
+  const {
+    worktreeId: rowWorktreeId,
+    repoId,
+    hostId,
+    machine,
+    checkout,
+    kind,
+    path,
+    branch,
+    head
+  } = useAppStore(useShallow(selector))
 
   const identity = getWorktreeGitIdentityDisplay({ branch, head })
   const label = identity?.kind === 'branch' ? identity.branchName : identity?.sourceControlLabel
@@ -111,33 +124,46 @@ export function NativeChatComposerWorkspace({
           </TooltipContent>
         </Tooltip>
       )}
-      {identity && label && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
-              className="h-5.5 min-w-0 flex-1 justify-start"
-              aria-label={t(
-                'components.native-chat.composerWorkspace.copyIdentity',
-                'Copy {{value0}}',
-                { value0: label }
-              )}
-              onClick={() => void copyValue(identityCopyValue)}
-            >
-              {identity.kind === 'branch' ? (
-                <GitBranch className="size-3" aria-hidden />
-              ) : (
-                <GitCommitHorizontal className="size-3" aria-hidden />
-              )}
-              <span className={`${FOOTER_TEXT} font-mono`}>{label}</span>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            {identity.kind === 'detached' ? identity.tooltip : label}
-          </TooltipContent>
-        </Tooltip>
+      {identity?.kind === 'branch' && rowWorktreeId && repoId && hostId && path ? (
+        <NativeChatComposerBranchPicker
+          worktreeId={rowWorktreeId}
+          worktreePath={path}
+          hostId={hostId}
+          repoId={repoId}
+          branch={identity.branchName}
+          turnActive={isWorking}
+          textClassName={FOOTER_TEXT}
+        />
+      ) : (
+        identity &&
+        label && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="xs"
+                className="h-5.5 min-w-0 flex-1 justify-start"
+                aria-label={t(
+                  'components.native-chat.composerWorkspace.copyIdentity',
+                  'Copy {{value0}}',
+                  { value0: label }
+                )}
+                onClick={() => void copyValue(identityCopyValue)}
+              >
+                {identity.kind === 'branch' ? (
+                  <GitBranch className="size-3" aria-hidden />
+                ) : (
+                  <GitCommitHorizontal className="size-3" aria-hidden />
+                )}
+                <span className={`${FOOTER_TEXT} font-mono`}>{label}</span>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {identity.kind === 'detached' ? identity.tooltip : label}
+            </TooltipContent>
+          </Tooltip>
+        )
       )}
     </div>
   )

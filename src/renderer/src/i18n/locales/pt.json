@@ -21171,6 +21171,7 @@
         "copyIdentity": "Copiar {{value0}}",
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
+        "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "O chat deste agente ainda não está disponível no Windows. Abra-o em um terminal.",

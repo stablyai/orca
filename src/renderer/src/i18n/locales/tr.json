@@ -20174,6 +20174,7 @@
         "copyIdentity": "{{value0}} kopyala",
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
+        "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın.",

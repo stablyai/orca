@@ -19486,6 +19486,7 @@
         "copyIdentity": "{{value0}} 복사",
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
+        "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
         "worktree": "작업 트리"
       },
       "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요.",

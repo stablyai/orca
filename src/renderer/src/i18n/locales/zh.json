@@ -19427,6 +19427,7 @@
         "copyIdentity": "复制 {{value0}}",
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
+        "turnWorking": "此聊天的代理正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
       },
       "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开。",

@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, type ReactNode } from 'react'
 import { Check, ChevronDown, GitBranch, Info } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
@@ -12,11 +12,16 @@ export type BranchPickerProps = BranchPickerOptions & {
   branch: string
   blocker: string | null
   dirtyOnlyBlocker?: boolean
+  /** Replaces the header trigger; it must forward a ref and props to a button. */
+  trigger?: ReactNode
+  onOpen?: () => void
 }
 export function BranchPicker({
   branch,
   blocker,
   dirtyOnlyBlocker = false,
+  trigger,
+  onOpen,
   ...options
 }: BranchPickerProps) {
   const t = useTranslate()
@@ -24,19 +29,29 @@ export function BranchPicker({
   const picker = useBranchPicker(options)
   const disabled = blocker !== null || picker.pending
   return (
-    <Popover open={picker.open} onOpenChange={picker.setOpen}>
+    <Popover
+      open={picker.open}
+      onOpenChange={(next) => {
+        if (next) {
+          onOpen?.()
+        }
+        picker.setOpen(next)
+      }}
+    >
       <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={t('sourceControl.branchPicker.switch', 'Switch branch: {{branch}}', {
-            branch
-          })}
-          className="flex min-w-0 items-center gap-1 rounded-sm font-mono text-[10.5px] font-medium text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
-        >
-          <GitBranch className="size-3 shrink-0" />
-          <span className="truncate">{branch}</span>
-          <ChevronDown className="size-3 shrink-0" />
-        </button>
+        {trigger ?? (
+          <button
+            type="button"
+            aria-label={t('sourceControl.branchPicker.switch', 'Switch branch: {{branch}}', {
+              branch
+            })}
+            className="flex min-w-0 items-center gap-1 rounded-sm font-mono text-[10.5px] font-medium text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <GitBranch className="size-3 shrink-0" />
+            <span className="truncate">{branch}</span>
+            <ChevronDown className="size-3 shrink-0" />
+          </button>
+        )}
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80">
         <Command shouldFilter={false}>
