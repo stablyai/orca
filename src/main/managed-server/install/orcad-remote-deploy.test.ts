@@ -113,7 +113,6 @@ type HostScript = {
   snapshotResult?: string
   comparisonResult?: string
   candidateStopResult?: string
-  readinessAtMs?: number
   orcadLog?: string
 }
 
@@ -138,9 +137,6 @@ function scriptHost(script: HostScript): void {
       return 'CLEAR'
     }
     if (text.includes('.orcad-readiness') && isReadinessRead(text)) {
-      if (script.readinessAtMs !== undefined && Date.now() < script.readinessAtMs) {
-        return ''
-      }
       const version = Object.keys(script.readiness).find((v) => text.includes(v))
       return version ? script.readiness[version] : ''
     }
