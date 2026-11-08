@@ -11,6 +11,7 @@ import {
 import { useAppStore } from '../../store'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   isOwnedSshTargetId,
@@ -49,6 +50,7 @@ export function SshStatusSegment({
   compact: boolean
   iconOnly: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const repos = useAppStore((s) => s.repos)
@@ -171,7 +173,7 @@ export function SshStatusSegment({
   }
 
   const statuses = [
-    ...targets.map((t) => sshStatusForOverall(t.status)),
+    ...targets.map((target) => sshStatusForOverall(target.status)),
     ...runtimeHostRows.map((host) => runtimeHostStatusForOverall(host.state, host.blockedReason))
   ]
   const connectedHostCount = statuses.filter((status) => status === 'connected').length
@@ -207,7 +209,7 @@ export function SshStatusSegment({
           ref={triggerRef}
           type="button"
           className="inline-flex shrink-0 items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 text-muted-foreground hover:bg-accent/70"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.status.bar.SshStatusSegment.fdc57e9970',
             'Remote host connection status'
           )}
@@ -248,7 +250,7 @@ export function SshStatusSegment({
         }}
       >
         <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          {translate('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote Hosts')}
+          {t('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote Hosts')}
         </div>
         {connectedRuntimeHosts.map((host) => (
           <RuntimeHostStatusRow
@@ -263,8 +265,13 @@ export function SshStatusSegment({
             onRecover={() => openRecovery(host)}
           />
         ))}
-        {connectedTargets.map((t) => (
-          <SshTargetStatusRow key={t.id} targetId={t.id} label={t.label} status={t.status} />
+        {connectedTargets.map((target) => (
+          <SshTargetStatusRow
+            key={target.id}
+            targetId={target.id}
+            label={target.label}
+            status={target.status}
+          />
         ))}
         {inactiveRuntimeHosts.map((host) => (
           <RuntimeHostStatusRow
@@ -279,8 +286,13 @@ export function SshStatusSegment({
             onRecover={() => openRecovery(host)}
           />
         ))}
-        {disconnectedTargets.map((t) => (
-          <SshTargetStatusRow key={t.id} targetId={t.id} label={t.label} status={t.status} />
+        {disconnectedTargets.map((target) => (
+          <SshTargetStatusRow
+            key={target.id}
+            targetId={target.id}
+            label={target.label}
+            status={target.status}
+          />
         ))}
         {hiddenIdleCount > 0 ? (
           // Why a search and not a Settings link: web clients connect hosts here but have no SSH pane.
@@ -296,10 +308,7 @@ export function SshStatusSegment({
             setActiveView('settings')
           }}
         >
-          {translate(
-            'auto.components.status.bar.SshStatusSegment.3ad70e0365',
-            'Manage Remote Hosts…'
-          )}
+          {t('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage Remote Hosts…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
       <SshHostFindPopover

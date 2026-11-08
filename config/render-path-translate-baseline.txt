@@ -459,7 +459,6 @@
 20 src/renderer/src/components/stats/UsageOverviewPane.tsx
 3 src/renderer/src/components/stats/share-card-utils.tsx
 23 src/renderer/src/components/stats/usage-overview-sections.tsx
-3 src/renderer/src/components/status-bar/SshStatusSegment.tsx
 11 src/renderer/src/components/tab-bar/BrowserTab.tsx
 2 src/renderer/src/components/tab-bar/ClientHostedBrowserTab.tsx
 1 src/renderer/src/components/tab-bar/ClientHostedBrowserTabRows.tsx
