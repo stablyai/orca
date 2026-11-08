@@ -158,6 +158,7 @@ it("lets every writer command plan with the host's unsaved Stop settlement", asy
     )
   await turn('unsettled', 'running')
   await turn('settling', 'running')
+  await turn('stale', 'running')
   await journal.acceptStop({ event: { reason: 'user-stop' }, fence: 1, liveTurnId: null })
 
   await turn('unsettled', 'interrupted')
@@ -168,6 +169,20 @@ it("lets every writer command plan with the host's unsaved Stop settlement", asy
   expect((await journal.reads.item('orca:settling'))?.body).toMatchObject({
     outcome: 'cancellation'
   })
+
+  await journal.settleStaleState({
+    sessionId: 'session',
+    fence: 2,
+    acquisitionGeneration: 'stopped',
+    deathEvidence: { kind: 'exit-observed', detail: '', ownerFence: 1, observedAt: 100 }
+  })
+  expect((await journal.reads.item('orca:stale'))?.body).toMatchObject({
+    state: 'interrupted',
+    outcome: 'cancellation'
+  })
+  const notices: string[] = []
+  await journal.reads.visitItems({ kinds: ['status'] }, (id) => notices.push(id))
+  expect(notices).toEqual([])
 
   const restarted = await reopen(root, database, journal)
   expect((await restarted.journal.stopMarks.latest())?.settle).toBeUndefined()

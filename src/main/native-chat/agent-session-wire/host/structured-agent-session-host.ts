@@ -75,6 +75,7 @@ export class StructuredAgentSessionHost {
       this.sessions,
       this.subscribers,
       (sessionId) => this.lifetime.conversation(sessionId),
+      this.clientDelivery.readCurrentWork,
       this.clientDelivery.readChildWork,
       this.clientDelivery.childWorkIncomplete
     )

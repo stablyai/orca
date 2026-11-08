@@ -11,7 +11,7 @@ import type { AgentChildWorkView } from '../../../../../shared/agent-status/chil
 import { structuredChildWorkLegacyTasks } from '../../../../../shared/agent-session/structured-agent-session-child-work-legacy'
 import { structuredRunningChildWork } from '../../../../../shared/agent-status/child-work/agent-child-work-listing'
 import { readStructuredAgentSessionHistoryResult } from '../history/structured-agent-session-history-result'
-import { hostStructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-host-current-work'
+import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
 import type { AgentSessionHistoryScope } from '../history/agent-session-history-page'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
 import type { AgentSessionSubscribers } from './structured-agent-session-subscribers'
@@ -33,6 +33,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     private readonly conversation: (
       sessionId: string
     ) => Promise<StructuredAgentSessionHostSession>,
+    private readonly currentWork: StructuredAgentSessionClientDelivery['readCurrentWork'],
     private readonly readChildWork: (sessionId: string) => AgentChildWorkView[] | undefined,
     private readonly childWorkIncomplete: (sessionId: string) => boolean = () => false
   ) {}
@@ -50,10 +51,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
     replaceNormalizedHistory = true
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
-    const work = hostStructuredAgentSessionCurrentWork(
-      { store: this.deps.store, sessions: this.sessions },
-      request.sessionId
-    )
+    const work = await this.currentWork(request.sessionId)
     const result = readStructuredAgentSessionHistoryResult({
       journal,
       record: this.deps.store.getConversation(request.sessionId),
@@ -87,10 +85,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
 
   async currentRequests(request: AgentSessionCurrentRequestsRead) {
     await this.conversation(request.sessionId)
-    const work = hostStructuredAgentSessionCurrentWork(
-      { store: this.deps.store, sessions: this.sessions },
-      request.sessionId
-    )
+    const work = await this.currentWork(request.sessionId)
     if (!work) {
       throw new Error('Current requests unavailable')
     }

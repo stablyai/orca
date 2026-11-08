@@ -295,6 +295,7 @@ function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptStage['r
   switch (operation.kind) {
     case 'item':
     case 'item-claiming':
+    case 'prompt-mutate':
       return 'item'
     case 'tombstone':
     case 'goal-withdraw':

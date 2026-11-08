@@ -10,6 +10,9 @@ import type {
   JournalItemAppendInput,
   JournalItemAppendOptions,
   JournalLifecycleBatchInput,
+  JournalStaleSettlementInput,
+  JournalDeadGenerationSettlementInput,
+  JournalPromptMutationInput,
   JournalSubmissionConsume,
   JournalSubmissionInput,
   JournalTombstoneInput,
@@ -72,6 +75,21 @@ export abstract class SqlJournalAppends {
 
   appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.answerOf(this.write({ kind: 'lifecycle', input }))
+  }
+
+  settleStaleState(input: JournalStaleSettlementInput): Promise<number> {
+    return this.answerOf(this.write({ kind: 'stale-settle', input }))
+  }
+
+  settleDeadGeneration(input: JournalDeadGenerationSettlementInput): Promise<number> {
+    return this.answerOf(this.write({ kind: 'dead-generation-settle', input }))
+  }
+
+  mutatePrompt(
+    input: JournalPromptMutationInput,
+    receipt?: JournalOperationReceipt
+  ): Promise<JournalAppendResult> {
+    return this.answerOf(this.write({ kind: 'prompt-mutate', input }, receipted(receipt)))
   }
 
   /** `consume.owed` is asked only when the writer reaches the handover it guards. */

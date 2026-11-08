@@ -313,6 +313,12 @@ it('publishes SQL status only with recaptured live owners through the existing r
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Read my chat' }] },
     options: { fence: 0, turnScope: { kind: 'thread' } }
   })
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'turn' },
+    { kind: 'turn', turnId: 'turn', state: 'running', userItemId: 'orca:prompt' },
+    { fence: 0, turnScope: { kind: 'thread' } }
+  )
+  await journal.appendStopEvent({ reason: 'user-stop' }, 0)
   const held = new Set<string>()
   const session: StatusFeedSession = {
     journal,
@@ -348,7 +354,8 @@ it('publishes SQL status only with recaptured live owners through the existing r
   const pending = feed.publish('session', journal, { replay: true }, (projection) => {
     observations.push({
       revision: projection.workRevision,
-      held: projection.authority?.child?.heldSends
+      held: projection.authority?.child?.heldSends,
+      stopping: projection.stopping
     })
     published.resolve()
   })
@@ -356,10 +363,16 @@ it('publishes SQL status only with recaptured live owners through the existing r
   expect(feed.readPublished('session')).toBeUndefined()
   session.operationalRevision = 1
   held.add('held-without-row')
+  await journal.stopMarks.beginSettle(true)
   release.resolve()
   await pending
   await published.promise
-  expect(observations).toEqual([{ revision: 1, held: ['held-without-row'] }])
-  expect(feed.readPublished('session')).toMatchObject({ prompt: 'Read my chat', updatedAt: 100 })
+  expect(observations).toEqual([{ revision: 1, held: ['held-without-row'], stopping: true }])
+  expect(feed.readPublished('session')).toMatchObject({
+    latestPrompt: 'Read my chat',
+    status: 'working',
+    stopping: true,
+    updatedAt: 100
+  })
   expect(logger.warn).not.toHaveBeenCalled()
 })
