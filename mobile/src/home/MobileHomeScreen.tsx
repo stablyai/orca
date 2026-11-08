@@ -4,13 +4,11 @@ import { Alert, BackHandler, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
-import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
-import { hostRouteWithNotice } from '../host-route-notice'
 import { triggerMediumImpact } from '../platform/haptics'
-import { useOpenMobileSession } from '../session/use-open-mobile-session'
+import { useAgentListRowActions } from '../agents/use-agent-list-row-actions'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -28,11 +26,10 @@ import { loadHostCatalog } from '../transport/hosts/host-store'
 import type { HostCatalogEntry, HostProfile } from '../transport/hosts/host-profile'
 import { useOpenMobileHostEdit } from '../host-screen/use-open-mobile-host-edit'
 import { mobileConnectionPathLabel } from '../transport/connection/mobile-connection-path-label'
-import { homeAgentNeedsYou, type HomeJumpBackInRow } from '../worktree/home-jump-back-in'
-import { isResumeTargetConfirmedMissing } from '../worktree/home-resume-card'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
+import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeFab } from './tabs/MobileHomeFab'
 import { MobileHomeFeedTab } from './tabs/MobileHomeFeedTab'
@@ -51,7 +48,6 @@ export function MobileHomeScreen() {
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
   const openMobileAutomations = useOpenMobileAutomations()
-  const openMobileSession = useOpenMobileSession()
   const openMobileAccounts = useOpenMobileAccounts()
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
@@ -63,6 +59,7 @@ export function MobileHomeScreen() {
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(() => new Set(['feed']))
   const [automationsHostId, setAutomationsHostId] = useState<string | null>(null)
   const [tabBarHeight, setTabBarHeight] = useState(0)
+  const agentActions = useAgentListRowActions(tabBarHeight)
 
   const selectTab = useCallback((next: HomeTabId) => {
     setTab(next)
@@ -85,21 +82,7 @@ export function MobileHomeScreen() {
 
   // Stable handlers keep the memoized Feed sections and desktop rows from redrawing on every Home update.
   const { router, setHostCatalog } = data
-  const openWorktree = useCallback(
-    (row: HomeJumpBackInRow) => {
-      if (isResumeTargetConfirmedMissing(row, getProvenCachedWorktrees(row.hostId))) {
-        router.push(hostRouteWithNotice(row.hostId, 'worktree-missing'))
-        return
-      }
-      openMobileSession({
-        hostId: row.hostId,
-        worktreeId: row.worktree.worktreeId,
-        name: row.worktree.displayName || row.worktree.repo,
-        paneKey: row.worktree.paneKey
-      })
-    },
-    [router, openMobileSession]
-  )
+  const seeAllAgents = useCallback(() => selectTab('agents'), [selectTab])
 
   const openHost = useCallback(
     (host: HostCatalogEntry) => {
@@ -156,9 +139,6 @@ export function MobileHomeScreen() {
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
   const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
-  const feedBadge = data.jumpBackInRows.filter(
-    (row) => !row.lastOpened && homeAgentNeedsYou(row.worktree.dotStatus)
-  ).length
   const automationsHostConnected =
     automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
   const fab =
@@ -194,11 +174,18 @@ export function MobileHomeScreen() {
                 <MobileHomeFeedTab
                   data={data}
                   bottomInset={contentBottom}
-                  onOpenWorktree={openWorktree}
+                  agentHandlers={agentActions.handlers}
+                  onSeeAllAgents={seeAllAgents}
                   onOpenHost={openHost}
                   onOpenHostActions={openHostActions}
                   onPairDesktop={pairDesktop}
                   onOpenTasks={openTasks}
+                />
+              ) : id === 'agents' ? (
+                <MobileHomeAgentsTab
+                  data={data}
+                  bottomInset={contentBottom}
+                  handlers={agentActions.handlers}
                 />
               ) : id === 'usage' ? (
                 <MobileHomeUsageTab
@@ -239,10 +226,11 @@ export function MobileHomeScreen() {
           tabs={HOME_TABS}
           active={tab}
           bottomInset={insets.bottom}
-          feedBadge={feedBadge}
+          agentsBadge={data.agentsNeedingYou.length}
           onSelect={selectTab}
         />
       </View>
+      {agentActions.sheet}
       <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.name}
