@@ -8,8 +8,8 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { MessageRouting } from '../routing'
 
-/** A terminal also proves its process, so a new process in the same pane is not taken for the old worker;
- *  a session caller is already bound to its own identity. */
+/** A chat worker is matched by its session, and a terminal worker by its process, so neither another chat
+ *  in the pane nor a new process in it is taken for the worker that finished. */
 type FinishedSender = Pick<OrchestrationCallerIdentity, 'address' | 'paneKey' | 'orcaSessionId'> & {
   processIncarnation: () => string | undefined
 }
@@ -34,19 +34,41 @@ export function finishedWorkerDispatch(
     dispatch.status === 'pending' ||
     dispatch.status === 'dispatched' ||
     !isDispatchAssignee(dispatch, sender.address, sender.paneKey) ||
-    (!sender.orcaSessionId &&
-      dispatch.process_incarnation &&
-      !db.isDispatchProcessCurrent({
-        dispatchId: dispatch.id,
-        paneKey: sender.paneKey,
-        processIncarnation: sender.processIncarnation() ?? null
-      })) ||
+    (dispatch.assignee_orca_session_id
+      ? dispatch.assignee_orca_session_id !== sender.orcaSessionId
+      : dispatch.process_incarnation &&
+        !db.isDispatchProcessCurrent({
+          dispatchId: dispatch.id,
+          paneKey: sender.paneKey,
+          processIncarnation: sender.processIncarnation() ?? null
+        })) ||
     db.getFederatedDispatch(dispatch.id)
   ) {
     return undefined
   }
   const task = type === 'worker_done' ? db.getTask(dispatch.task_id) : undefined
   return task && reportCorrectsUnobservedPrompt(dispatch, task) ? undefined : dispatch
+}
+
+/** Whether a Dispatch is the one that asked, or follows it up in the same Run; a later worker the pane was
+ *  given is neither, so it cannot take that answer. */
+export function continuesDispatch(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  askedBy: string
+): boolean {
+  const seen = new Set<string>()
+  let at: DispatchContextRow | undefined = dispatch
+  while (at && at.run_id === dispatch.run_id && !seen.has(at.id)) {
+    if (at.id === askedBy) {
+      return true
+    }
+    seen.add(at.id)
+    at = at.follow_up_of_dispatch_id
+      ? db.getDispatchContextById(at.follow_up_of_dispatch_id)
+      : undefined
+  }
+  return false
 }
 
 /** Mail from a finished worker is ordinary mail to its coordinator, so no report or escalation reopens the Task. */
