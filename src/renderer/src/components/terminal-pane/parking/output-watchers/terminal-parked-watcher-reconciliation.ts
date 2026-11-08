@@ -42,6 +42,17 @@ function leafPtyKey(leafId: string, ptyId: string | null): string {
   return `${leafId}\u0000${ptyId ?? ''}\u0000${ptyId === null ? 0 : 1}`
 }
 
+// Index captured panes so a many-split tab stays linear in its pane count.
+function capturedCoversFallback(
+  captured: readonly ParkedTerminalPaneCapture[],
+  fallback: readonly ParkedTerminalPaneCapture[]
+): boolean {
+  const capturedLeafPtyKeys = new Set(
+    captured.map((candidate) => leafPtyKey(candidate.leafId, candidate.ptyId))
+  )
+  return fallback.every((pane) => capturedLeafPtyKeys.has(leafPtyKey(pane.leafId, pane.ptyId)))
+}
+
 export function resolveParkedTerminalPaneCandidates(
   tab: ParkableTerminalTabModel,
   state: ParkedPaneFallbackState
@@ -51,18 +62,17 @@ export function resolveParkedTerminalPaneCandidates(
   if (!captured) {
     return fallback
   }
-  // Index captured panes once so a many-split tab stays linear in its pane count.
-  const capturedLeafPtyKeys = new Set(
-    captured.panes.map((candidate) => leafPtyKey(candidate.leafId, candidate.ptyId))
-  )
   const capturedIsCurrent =
     captured.panes.length > 0 &&
     (tab.ptyId === null || captured.panes.some((pane) => pane.ptyId === tab.ptyId)) &&
     (fallback.length === 0 ||
       (captured.panes.length === fallback.length &&
-        fallback.every((pane) => capturedLeafPtyKeys.has(leafPtyKey(pane.leafId, pane.ptyId)))))
+        capturedCoversFallback(captured.panes, fallback)))
   if (capturedIsCurrent) {
     return captured.panes
+  }
+  if (fallback.length === 0) {
+    return fallback
   }
   const priorByLeafId = new Map<string, ParkedTerminalPaneCapture>()
   for (const candidate of captured.panes) {
