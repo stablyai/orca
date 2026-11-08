@@ -23,7 +23,10 @@ export function resolveAdvertisedPairingEndpoint(
   const endpoint = new URL(boundEndpoint)
   const override = advertisedAddress?.trim()
   if (!override) {
-    // Why: a wildcard listener is not client-reachable; default pairing must remain local-only unless explicitly advertised.
+    // A listener pinned to one interface (e.g. a Tailscale IP) is reachable there; a wildcard one stays local-only unless advertised.
+    if (!isWildcardHost(endpoint.hostname)) {
+      return valid(formatWebSocketUrl(endpoint))
+    }
     endpoint.hostname = '127.0.0.1'
     return valid(formatWebSocketUrl(endpoint))
   }

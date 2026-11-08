@@ -20,6 +20,13 @@ describe('resolveAdvertisedPairingEndpoint', () => {
     })
   })
 
+  it('advertises a listener pinned to one interface when no address is given', () => {
+    expect(resolveAdvertisedPairingEndpoint('ws://100.64.1.20:6768', null)).toEqual({
+      ok: true,
+      endpoint: 'ws://100.64.1.20:6768'
+    })
+  })
+
   it.each([
     ['100.64.1.20', 'ws://100.64.1.20:6768'],
     ['host.tailnet.ts.net', 'ws://host.tailnet.ts.net:6768'],
