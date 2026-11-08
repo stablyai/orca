@@ -169,11 +169,16 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
     }
   }
 
+  /** Snapshot live non-root child records as subagents, excluding top-level OpenCode service sessions. */
   const snapshotChildren = (): AgentSubagentSnapshot[] => {
     const at = now()
     const live = new Set<string>()
     const children: AgentSubagentSnapshot[] = []
     for (const record of records.descendants()) {
+      // OpenCode's top-level keyed OSC 7501 records report active sessions in the shared OpenCode service, not subagents of this pane's turn; hierarchical child records (`parent/child`) still count as subagents.
+      if (record.app === 'opencode' && record.id !== null && !record.id.includes('/')) {
+        continue
+      }
       const state = subagentState(record)
       if (record.id === null || state === null) {
         continue
