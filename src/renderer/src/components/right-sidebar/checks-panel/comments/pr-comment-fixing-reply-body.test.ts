@@ -37,6 +37,16 @@ describe('buildPRCommentBatchConversationReplyBody', () => {
     expect(body).toContain('- @alice: comment — See `text @greptileai` and `see #123` here')
   })
 
+  it('keeps a code span intact when it contains a longer backtick run', () => {
+    const body = buildPRCommentBatchConversationReplyBody([
+      comment({ author: 'alice', body: 'See `a `` b `` c @greptileai`' }),
+      comment({ author: 'bob', body: 'Off by one.', path: 'src/a.ts', line: 12 })
+    ])
+
+    // Why: CommonMark closes a span only on a run of the opener's exact length, so `` stays inside it.
+    expect(body).toContain('- @alice: comment — See `a `` b `` c @greptileai`')
+  })
+
   it('leaves a numeric prefix inside a longer token alone', () => {
     const body = buildPRCommentBatchConversationReplyBody([
       comment({ author: 'alice', body: 'Use #123abc for the border, tracked in #123-followup' }),

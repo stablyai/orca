@@ -19,11 +19,11 @@ export function buildPRCommentConversationReplyBody(
 const ACK_SNIPPET_MAX_LENGTH = 72
 
 const INLINE_CODE_SPAN_OR_REFERENCE =
-  /(`+)(?:[^`]|(?!\1)`+)*?\1(?!`)|(^|[^\w`/])(@[a-zA-Z0-9][\w-]*|#\d+(?!\w))/g
+  /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)|(^|[^\w`/])(@[a-zA-Z0-9][\w-]*|#\d+(?!\w))/g
 
 // Why: echoed `@handle`/`#123` re-ping the quoted bots and cross-link issues; inline code keeps them inert.
 function neutralizePRCommentReferences(line: string): string {
-  // Existing code spans pass through untouched; `#123abc` is skipped since GitHub doesn't linkify it.
+  // Code spans (closed only by an equal-length run) pass through; `#123abc` isn't linkified by GitHub.
   return line.replace(INLINE_CODE_SPAN_OR_REFERENCE, (match, _fence, prefix, token) =>
     token === undefined ? match : `${prefix}\`${token}\``
   )
