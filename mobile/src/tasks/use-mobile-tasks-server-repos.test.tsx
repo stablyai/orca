@@ -533,6 +533,33 @@ describe('Tasks screen repos on the desktop and its servers', () => {
     expect([...model().effectiveRepoIds]).toEqual([])
     expect(ranOn(client, 'linear.listIssues').slice(before)).toEqual(['desktop'])
   })
+
+  it('reopens on the kept list before the desktop answers', async () => {
+    const client = desktop()
+    // A live connection, so its status read is the connection's.
+    client.getLastConnectedAt = () => 1
+    const model = await mount(client, [])
+    await settle()
+    expect(titles(model)).toEqual(['from the desktop'])
+
+    const gates: HostStatusGates = {
+      hostCapabilities: [],
+      floatingWorkspaceEnabled: false,
+      desktopAppVersion: null,
+      compatVerdict: { kind: 'ok' },
+      hostProtocolWindow: { protocolVersion: undefined, minCompatibleMobileVersion: undefined },
+      statusPending: false,
+      statusReadable: true
+    }
+    const screen = (children: ReturnType<typeof createElement> | null) =>
+      createElement(HostStatusGatesContext.Provider, { value: gates }, children)
+    // Leave Tasks and come back in the same page document, with the desktop now silent.
+    await act(async () => mounted[0]!.update(screen(null)))
+    client.sendRequest.mockImplementation(() => new Promise<RpcResponse>(() => {}))
+    await act(async () => mounted[0]!.update(screen(createElement(MobileTasksScreen))))
+    expect(titles(model)).toEqual(['from the desktop'])
+    expect(model().loading).toBe(false)
+  })
 })
 
 function deferred<Value>() {

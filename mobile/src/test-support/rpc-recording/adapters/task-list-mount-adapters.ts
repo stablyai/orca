@@ -75,6 +75,7 @@ export function taskListMountAdapters(
         defaultLinearTeamSelectionRef: { current: null },
         jiraStatusRequestIdRef: { current: 0 },
         githubKind: 'issues',
+        keepSettings: () => {},
         taskUiReady: true,
         tasksSupported: true,
         linearConnected: false,
