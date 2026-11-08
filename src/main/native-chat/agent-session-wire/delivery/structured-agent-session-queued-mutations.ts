@@ -61,7 +61,11 @@ function submissionRowReceipt(
   if (submission?.submittedSequence === undefined) {
     throw new Error('an acknowledged hand-off requires its submission row')
   }
-  return { kind: 'journal-row', epoch: ctx.journal.epoch, sequence: submission.submittedSequence }
+  return {
+    kind: 'journal-row',
+    epoch: ctx.journal.cursor().epoch,
+    sequence: submission.submittedSequence
+  }
 }
 
 export function mutateQueued<TValue>(
@@ -99,7 +103,7 @@ export function sendQueuedStructuredAgentMessage(
     run: async (ctx): Promise<TurnOutcome<AgentSessionSendResult>> => {
       // Send-now overrides working/FIFO/stored holds, preserving stronger gates.
       const record = context.deps.store.getRecord(ctx.sessionId)
-      const work = contextStructuredAgentSessionCurrentWork(ctx)
+      const work = await contextStructuredAgentSessionCurrentWork(ctx)
       const hold = structuredQueueHold({ record, work })
       if (hold === 'blocked') {
         return structuredAgentSessionSendBlock(record) ?? invalid('This conversation cannot send.')
@@ -181,7 +185,7 @@ export function sendQueuedStructuredAgentMessage(
     // Replay the receipt’s original handoff, never the card’s newer handoff.
     replay: async (ctx, _outcome, receipt) => {
       const submission =
-        receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.epoch
+        receipt?.kind === 'journal-row' && receipt.epoch === ctx.journal.cursor().epoch
           ? (await ctx.journal.reads.input({ kind: 'submission-at', sequence: receipt.sequence }))
               .submission
           : undefined

@@ -8,11 +8,11 @@ import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/f
 import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
+import { readContextStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import {
-  contextStructuredAgentSessionCurrentWork,
-  type StructuredAgentSessionCurrentWork
-} from '../observations/structured-agent-session-current-work'
+import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import {
   QueuedMessageNotConsumableError,
   QueuedMessageNotOwedError
@@ -48,6 +48,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     | 'fence'
     | 'operationReceipt'
     | 'currentWork'
+    | 'readWork'
     | 'agents'
     | 'agent'
     | 'persistedOptions'
@@ -74,20 +75,21 @@ export async function maybeQueueStructuredAgentSessionSend(
   if (queuedBefore) {
     return { ok: true, value: queuedBefore }
   }
-  if (ctx.journal.submission(clientMessageId)) {
+  if (await ctx.journal.reads.submission(clientMessageId)) {
     return null
   }
   if (
-    !shouldQueueStructuredAgentSessionSend({
+    !(await shouldQueueStructuredAgentSessionSend({
       journal: ctx.journal,
       record: context.deps.store.getRecord(ctx.sessionId),
-      work: contextStructuredAgentSessionCurrentWork(ctx),
+      work: await contextStructuredAgentSessionCurrentWork(ctx),
+      readWork: (operation) => readContextStructuredAgentSessionWork(ctx, operation),
       fromAgent: !params.userSend && !params.personsMessage && params.body.from !== undefined
-    })
+    }))
   ) {
     return null
   }
-  const refusal = queuedMessagesPublishedBytesRefusal(
+  const refusal = await queuedMessagesPublishedBytesRefusal(
     ctx.journal,
     params.body,
     params.userSend === true || params.personsMessage === true
@@ -130,8 +132,9 @@ export type QueuedMessageDrainDeps = {
   getRecord: (sessionId: string) => AgentSessionRecord | null
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   conversationFence: (sessionId: string) => number
-  currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
-  canSteer?: (sessionId: string, card: QueuedMessageRow) => boolean
+  currentWork: (sessionId: string) => Promise<StructuredAgentSessionObservedWork | null>
+  readWork: (sessionId: string) => JournalWorkReader
+  canSteer?: (sessionId: string, card: QueuedMessageRow) => boolean | Promise<boolean>
   wakeDelivery: (sessionId: string) => void
   submissionReceipt?: (sessionId: string) => JournalOperationReceipt
   owed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
@@ -182,12 +185,13 @@ export class StructuredAgentSessionQueuedMessageDrain {
     const journal = session.journal
     const fence = this.deps.conversationFence(sessionId)
     const record = this.deps.getRecord(sessionId)
-    const work = this.deps.currentWork(sessionId)
+    const work = await this.deps.currentWork(sessionId)
     const next = work
-      ? nextStructuredQueuedMessage({
+      ? await nextStructuredQueuedMessage({
           journal,
           record,
           work,
+          readWork: this.deps.readWork(sessionId),
           steer: true,
           canSteer: this.deps.canSteer?.bind(null, sessionId)
         })
@@ -222,7 +226,9 @@ export class StructuredAgentSessionQueuedMessageDrain {
       )
     } catch (error) {
       if (error instanceof QueuedMessageNotConsumableError) {
-        if (next.messageId !== journal.queuedMessages.nextInputCard(true, steer)?.messageId) {
+        if (
+          next.messageId !== (await journal.queuedMessages.nextInputCard(true, steer))?.messageId
+        ) {
           // The queue's choice moved (older mail became decidable): choose again.
           this.schedule(sessionId)
         }

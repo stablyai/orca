@@ -9,10 +9,10 @@ import {
   type AgentSessionFailureWordsContext
 } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { orcaShutdownRowClientMessageId } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
 type OrcaStopRowJournal = Pick<AgentSessionJournal, 'appendShutdownCut'>
@@ -35,16 +35,13 @@ export function orcaStopRowBody(
   }
 }
 
-export function runningRootTurnItemId(
-  journal: Pick<AgentSessionJournal, 'itemsRead'>
-): string | null {
+export async function runningRootTurnItemId(
+  journal: Pick<AgentSessionJournal, 'reads'>
+): Promise<string | null> {
   return (
-    journal
-      .itemsRead()
-      .items.findLast(
-        (item) =>
-          isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
-      )?.itemId ?? null
+    (await journal.reads.generation()).items.findLast(
+      (item) => isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
+    )?.itemId ?? null
   )
 }
 

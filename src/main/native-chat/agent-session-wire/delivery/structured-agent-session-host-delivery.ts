@@ -5,7 +5,7 @@ import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { holdClosedStructuredAgentSessionSends } from '../termination/structured-agent-session-host-lifetime'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import {
   openStructuredAgentSessionConversation,
   resettleOpenStructuredAgentSessionConversation,
@@ -37,7 +37,6 @@ import {
   structuredAgentSessionInputCompilerPermission,
   structuredAgentSessionImmediatePermission
 } from '../options/structured-agent-session-launch-permission'
-import { acceptedNoLaterThan } from '../startup/structured-agent-session-start-failure-row'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
 import { createStructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
@@ -91,11 +90,10 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   >
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
+  const workHost = { store: deps.store, sessions }
   const retainedWork = (sessionId: string, continuingId?: string) => ({
     currentWork: () =>
-      readHostStructuredAgentSessionWork({ store: deps.store, sessions }, sessionId, {
-        kind: 'child-work'
-      }),
+      readHostStructuredAgentSessionWork(workHost, sessionId, { kind: 'child-work' }),
     childWork: () => input.clientDelivery.readChildWork(sessionId),
     childWorkOpen: () => input.clientDelivery.childWorkOpen(sessionId),
     hasOpenDispatch: () => {
@@ -116,7 +114,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     stopPermissionTransitionChild: input.stopPermissionTransitionChild,
     retireOutgrownChild: async (sessionId, continuingId, next) => {
       // Defer retirement while personal Stop holds handover; its next step decides.
-      const session = input.clientDelivery.readStopping(sessionId)
+      const session = (await input.clientDelivery.readStopping(sessionId))
         ? undefined
         : sessions.get(sessionId)
       await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
@@ -172,7 +170,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         ? true
         : holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, {
             mark: 'settled',
-            which: await acceptedNoLaterThan(session.journal, ended.endedAt)
+            select: { acceptedThrough: ended.endedAt }
           })
     },
     failureTextContext: (sessionId) =>
@@ -190,7 +188,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
           deps,
           sessionId,
           session.journal,
-          { mark: 'settled', unrun: (s) => s.clientMessageId === id && s.fence === fence },
+          { mark: 'settled', unrun: { only: { clientMessageId: id, fence } } },
           cause
         ))
       ) {
@@ -212,8 +210,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         }
       }
     },
-    currentWork: (sessionId) =>
-      hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
+    currentWork: (sessionId) => hostStructuredAgentSessionCurrentWork(workHost, sessionId),
+    readWork: (sessionId) => (operation) =>
+      readHostStructuredAgentSessionWork(workHost, sessionId, operation),
     readChildWork: input.clientDelivery.readChildWork,
     workChanged: (sessionId) => input.clientDelivery.publishGenerationEnded(sessionId),
     childWorkOpen: input.clientDelivery.childWorkOpen,
@@ -245,21 +244,25 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   }
   const wakesQueued = new Set<string>()
   const afterCommit = (sessionId: string, journal: AgentSessionJournal): void => {
-    input.deliveryOrder.reconcile(sessionId, journal)
-    const work = hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
-    if (
-      wakesQueued.has(sessionId) ||
-      !work ||
-      structuredAgentSessionCommandRunning(work) ||
-      !selectableStructuredSubmission(journal, work)
-    ) {
+    if (wakesQueued.has(sessionId)) {
       return
     }
     wakesQueued.add(sessionId)
     void input
       .serialize(sessionId, async () => {
         wakesQueued.delete(sessionId)
-        loop.wake(sessionId)
+        await input.deliveryOrder.reconcile(sessionId, journal)
+        const work = await hostStructuredAgentSessionCurrentWork(
+          { store: deps.store, sessions },
+          sessionId
+        )
+        if (
+          work &&
+          !structuredAgentSessionCommandRunning(work) &&
+          (await selectableStructuredSubmission(journal, work))
+        ) {
+          void loop.wake(sessionId)
+        }
       })
       .catch((error: unknown) => {
         wakesQueued.delete(sessionId)

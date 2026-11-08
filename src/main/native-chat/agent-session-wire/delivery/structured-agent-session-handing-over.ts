@@ -1,14 +1,11 @@
 // Count pending handovers and late-settlement writes as held until child/journal state catches up.
 // Nested late-settlement windows share the count without replacing the input that owns its result.
 
+import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 
 /** The chat's journal, which identifies the conversation for as long as it is held. */
-type HandoverJournal =
-  | Pick<AgentSessionJournal, 'itemFence'>
-  | Pick<SqlAgentSessionJournal, 'reads'>
+type HandoverJournal = object
 
 type HandoverInput = {
   owner: () => void
@@ -82,11 +79,11 @@ export function continuingStructuredAgentSessionInput(
   clientMessageId: string
 ): boolean {
   const input = handingOver.get(journal)?.get(clientMessageId)?.input
-  return input?.unadmitted === true && input.signal?.aborted !== true && input.pending?.() === true
+  return input?.unadmitted === true && input.signal?.aborted !== true && (input.pending?.() ?? true)
 }
 
 export function markStructuredAgentSessionInputUnadmitted(
-  journal: Pick<AgentSessionJournal, 'itemFence' | 'submissions' | 'submission'>,
+  journal: HandoverJournal,
   clientMessageId: string,
   owner: () => void,
   unadmitted: boolean,
@@ -99,7 +96,9 @@ export function markStructuredAgentSessionInputUnadmitted(
       unadmitted,
       compilerPermission,
       signal,
-      pending: () => journal.submission(clientMessageId)?.dispatchState === 'pending'
+      ...(hasSubmissionSnapshot(journal)
+        ? { pending: () => journal.submission(clientMessageId)?.dispatchState === 'pending' }
+        : {})
     })
   }
 }
@@ -171,4 +170,11 @@ export function beginStructuredAgentSessionHandover(
     }
   }
   return release
+}
+
+/** Finite policy snapshots retain their synchronous membership check. Live handles read it in-worker. */
+function hasSubmissionSnapshot(
+  journal: object
+): journal is { submission: (id: string) => AgentJournalSubmission | undefined } {
+  return 'submission' in journal && typeof journal.submission === 'function'
 }

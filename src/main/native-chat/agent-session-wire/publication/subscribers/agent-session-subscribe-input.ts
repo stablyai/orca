@@ -1,3 +1,7 @@
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
+import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import type { CurrentRequestsSubscriber } from '../../observations/agent-session-current-requests'
 import type { ForkMarker } from '../history/agent-session-fork-marker'
 import type { HistoryReader } from '../history/agent-session-history-page-bounds'
@@ -39,3 +43,15 @@ export type Subscriber = {
   historyView?: string
 } & CurrentRequestsSubscriber &
   SubscriberFieldState
+
+export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
+  readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
+  readForkMarker?: (sessionId: string) => ForkMarker | undefined
+  readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
+  onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
+  readCurrentWork?: (
+    sessionId: string,
+    journal: AgentSessionJournal
+  ) => Promise<StructuredAgentSessionObservedWork | null>
+  now?: () => number
+}

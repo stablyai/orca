@@ -13,7 +13,10 @@ import { journalPendingSubmissionResolutions } from '../../agent-session-journal
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { ResolveDispatchInput } from '../../agent-session-journal/journal-store-contracts'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import type { UnopenedSendJournal } from '../delivery/structured-agent-session-unopened-send-withdrawal'
+import type { TurnVerdictJournal } from './structured-agent-session-stale-turn-verdict'
+import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { lostLiveWorkJournalBody } from '../../agent-session-journal/item-lifecycle/journal-subagent-liveness'
 import {
   endedUnseenMessageBody,
@@ -33,18 +36,13 @@ import { settledRootTurnScope } from './structured-agent-session-exit-turn-scope
 import { isUnverifiableTurn, staleStopRow } from './structured-agent-session-stale-stop-row'
 import { isInProgressStructuredAgentSessionItem } from './structured-agent-session-unfinished-work'
 
-export type StaleStructuredAgentSessionStateJournal = Pick<
-  AgentSessionJournal,
-  | 'snapshot'
-  | 'itemFence'
-  | 'itemBody'
-  | 'submissions'
-  | 'statusRead'
-  | 'lastProviderActivityAt'
-  | 'cursor'
-> & {
-  inputOrder: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
-  stopMarks: Pick<AgentSessionJournal['stopMarks'], 'latest' | 'personStopDecides'>
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+
+export type StaleStructuredAgentSessionStateJournal = TurnVerdictJournal & {
+  cursor: () => AgentJournalCursor
+  statusRead: () => { items: readonly AgentJournalRenderItem[] }
+  itemBody: (itemId: string) => AgentJournalItemBody | null
+  inputOrder: NonNullable<UnopenedSendJournal['inputOrder']>
 }
 
 export type StaleStructuredAgentSessionStateInput = {
@@ -61,8 +59,8 @@ export type StaleStructuredAgentSessionStateInput = {
 }
 
 export async function settleStaleStructuredAgentSessionState(
-  input: StaleStructuredAgentSessionStateInput & {
-    journal: Pick<AgentSessionJournal, 'settleStaleState'>
+  input: Omit<StaleStructuredAgentSessionStateInput, 'journal'> & {
+    journal: Pick<SqlAgentSessionJournal, 'settleStaleState'>
   }
 ): Promise<number> {
   const { journal, ...facts } = input

@@ -6,7 +6,7 @@ import {
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import '../../../../shared/rpc-contract/structured-agent-session-params'
 import { MAX_PROMPT_BYTES } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { AGENT_SESSION_HISTORY_MAX_PAGE_BYTES } from '../publication/history/agent-session-history-page-bounds'
 import { unsettledQueuedMessages } from './structured-agent-session-queued-stop'
 
@@ -18,13 +18,13 @@ export const QUEUED_MESSAGES_PUBLISHED_MAX_BYTES =
 export const QUEUED_MESSAGES_PERSON_RESERVE_BYTES = MAX_PROMPT_BYTES + 1024
 
 /** Refuse frame overflow without trimming; edits replace old body bytes and agent cards preserve user reserve. */
-export function queuedMessagesPublishedBytesRefusal(
+export async function queuedMessagesPublishedBytesRefusal(
   journal: AgentSessionJournal,
   body: AgentJournalMessageItem,
   fromPerson: boolean,
   replacing?: string
-): AgentSessionWireRefusal | null {
-  const bytes = unsettledQueuedMessages(journal).reduce(
+): Promise<AgentSessionWireRefusal | null> {
+  const bytes = (await unsettledQueuedMessages(journal)).reduce(
     (sum, row) => (row.messageId === replacing ? sum : sum + publishedBodyBytes(row.body)),
     publishedBodyBytes(body)
   )

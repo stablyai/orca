@@ -9,7 +9,7 @@ import type { StructuredAgentSessionAttachLock } from './structured-agent-sessio
 
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,

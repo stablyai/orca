@@ -261,7 +261,8 @@ async function foundConversation(
     const tabId = store.getSessionTabId(sessionId)
     const [cursor, firstMessage] = await Promise.all([
       session.journal.reads.cursor(),
-      options.firstMessage && session.journal.reads.submission(options.firstMessage.clientMessageId)
+      options.firstMessage &&
+        (await session.journal.reads.submission(options.firstMessage.clientMessageId))
     ])
     const result = {
       ok: true as const,
@@ -271,7 +272,7 @@ async function foundConversation(
       value: {
         sessionId,
         fence,
-        page: readForkHydration(session.journal, fence, store, sessionId),
+        page: await readForkHydration(session.journal, fence, store, sessionId),
         unconfirmedClientMessageIds: [],
         ...(firstMessage ? { firstMessage } : {}),
         ...(tabId ? { tabId } : {})

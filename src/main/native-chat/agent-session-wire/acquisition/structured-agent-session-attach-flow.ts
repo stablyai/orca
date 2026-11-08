@@ -50,7 +50,7 @@ import {
 } from '../../../observability/agent-session-instrumentation'
 import type { StructuredAgentSessionStartupAttempt } from '../startup/structured-agent-session-startup-attempt-contract'
 import type { StructuredAgentSessionStartupProgress } from '../startup/structured-agent-session-startup-tracking'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import {
   heldStructuredAgentSessionAttachLock,
@@ -287,9 +287,20 @@ export async function performAttach(
 
   const fence = record.lease.runtimeFence
   const tabId = store.getSessionTabId(sessionId)
-  const view = attached.journal.publicRead()
-  const work = heldStructuredAgentSessionCurrentWork(store, sessionId, attached.journal, undefined)
-  let page: ReturnType<typeof readAgentSessionHydrationPage> | undefined
+  const work = await heldStructuredAgentSessionCurrentWork(
+    store,
+    sessionId,
+    attached.journal,
+    undefined
+  )
+  const page = withPublishedWork(
+    await readAgentSessionHydrationPage(
+      attached.journal,
+      fence,
+      withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId))
+    ),
+    work
+  )
   return {
     ok: true,
     replayed,
@@ -298,17 +309,7 @@ export async function performAttach(
     value: {
       sessionId,
       fence,
-      get page() {
-        return (page ??= withPublishedWork(
-          readAgentSessionHydrationPage(
-            attached.journal,
-            fence,
-            withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId)),
-            view.currentSnapshot()
-          ),
-          work
-        ))
-      },
+      page,
       unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
       ...(tabId ? { tabId } : {})
     }

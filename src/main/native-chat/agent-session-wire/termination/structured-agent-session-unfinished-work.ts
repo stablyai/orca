@@ -3,10 +3,13 @@ import {
   finalizingStructuredAgentSessionInput
 } from '../delivery/structured-agent-session-handing-over'
 import { providerTimelineExecutionItems } from '../../agent-session-timeline/provider-timeline-history'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { requiresTerminalSettlement } from '../../agent-session-journal/item-lifecycle/journal-terminal-settlement'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+
 import {
   watchedExitRevisions,
   type StructuredAgentSessionWatchedExit
@@ -15,8 +18,9 @@ import type { UnopenedSendJournal } from '../delivery/structured-agent-session-u
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 
 export type DeadGenerationJournal = UnopenedSendJournal & {
-  pendingSubmissions?: AgentSessionJournal['pendingSubmissions']
-  itemFence: AgentSessionJournal['itemFence']
+  handoverJournal?: object
+  pendingSubmissions?: () => AgentJournalSubmission[]
+  itemFence: (itemId: string) => number | undefined
 }
 
 export type StructuredAgentSessionUnfinishedWork = {
@@ -72,7 +76,10 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
     )?.some(
       (send) =>
         heldSends?.has(send.clientMessageId) &&
-        !finalizingStructuredAgentSessionInput(journal, send.clientMessageId) &&
+        !finalizingStructuredAgentSessionInput(
+          journal.handoverJournal ?? journal,
+          send.clientMessageId
+        ) &&
         send.fence === exit?.ownerFence &&
         !isQueuedAgentJournalSubmission(send) &&
         (send.dispatchState === 'pending' || send.dispatchState === 'unknown')
@@ -137,8 +144,14 @@ function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
     ? submissions.some(
         (submission) =>
           // Unhanded queued messages are not work in progress.
-          !continuingStructuredAgentSessionInput(journal, submission.clientMessageId) &&
-          !finalizingStructuredAgentSessionInput(journal, submission.clientMessageId) &&
+          !continuingStructuredAgentSessionInput(
+            journal.handoverJournal ?? journal,
+            submission.clientMessageId
+          ) &&
+          !finalizingStructuredAgentSessionInput(
+            journal.handoverJournal ?? journal,
+            submission.clientMessageId
+          ) &&
           ((submission.dispatchState === 'pending' &&
             !(submission.handoverRecorded && submission.handedOverAt === undefined)) ||
             (submission.dispatchState === 'unknown' && submission.recovered !== true))

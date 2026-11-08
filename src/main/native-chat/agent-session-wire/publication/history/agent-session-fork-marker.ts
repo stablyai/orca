@@ -1,6 +1,6 @@
 import { journalItemsAtSequence, journalItemsById } from './agent-session-journal-item-index'
 import { compareAgentJournalItems } from '../../../../../shared/agent-session/journal/agent-session-journal-position'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
 import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../../../../../shared/agent-session/agent-session-fork'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -125,30 +125,47 @@ export function withForkMarker(
 ): HistoryReader {
   return {
     ...reader,
-    snapshot: (journal, snapshot, touched) => {
+    snapshot: async (journal, snapshot, touched) => {
       const marker = read?.()
       if (!marker) {
-        return reader.snapshot?.(journal, snapshot, touched) ?? snapshot ?? journal.currentRead()
+        const raw = snapshot ?? {
+          sessionId: journal.identity.sessionId,
+          cursor: journal.cursor(),
+          items: [],
+          submissions: []
+        }
+        return reader.snapshot?.(journal, raw, touched) ?? raw
       }
-      const raw = snapshot ?? journal.itemsRead()
-      const position = markerPosition(raw, marker)
       const previous = projectedPositions.get(journal)
-      const sameEpoch = previous?.epoch === raw.cursor.epoch
+      let group = await journal.reads.forkMarkerGroup(
+        marker.forkedFrom.childBoundary,
+        previous?.restored ?? previous?.sequence
+      )
+      const raw = snapshot ?? group
+      const sameEpoch = previous !== undefined && previous.epoch === raw.cursor.epoch
+      const position = markerPosition(group, marker)
       const moved = sameEpoch && previous.sequence !== position?.sequence
       const oldSequence = sameEpoch
         ? moved
           ? (previous.sequence ?? previous.restored)
           : previous.restored
         : undefined
+      if (
+        moved &&
+        oldSequence !== undefined &&
+        oldSequence !== (previous?.restored ?? previous?.sequence)
+      ) {
+        group = await journal.reads.forkMarkerGroup(marker.forkedFrom.childBoundary, oldSequence)
+      }
       projectedPositions.set(journal, {
         epoch: raw.cursor.epoch,
         sequence: position?.sequence,
         restored: oldSequence
       })
       if (!touched) {
-        return projectForkMarker(reader.snapshot?.(journal, raw) ?? raw, marker)
+        return projectForkMarker((await reader.snapshot?.(journal, raw)) ?? raw, marker)
       }
-      const live = journalItemsById(raw.items)
+      const live = journalItemsById([...raw.items, ...group.items])
       const boundary = marker.forkedFrom.childBoundary
       const affected =
         (moved && oldSequence !== undefined) ||
@@ -159,7 +176,7 @@ export function withForkMarker(
         touched.add(FORK_MARKER_ITEM_ID)
         for (const sequence of new Set([position?.sequence, oldSequence])) {
           if (sequence !== undefined) {
-            for (const row of journalItemsAtSequence(raw.items, sequence)) {
+            for (const row of journalItemsAtSequence(group.items, sequence)) {
               touched.add(row.itemId)
             }
           }
@@ -169,7 +186,7 @@ export function withForkMarker(
         ...raw,
         items: [...touched].flatMap((id) => live.get(id) ?? []).sort(compareAgentJournalItems)
       }
-      const base = reader.snapshot?.(journal, selected, touched) ?? selected
+      const base = (await reader.snapshot?.(journal, selected, touched)) ?? selected
       return affected ? projectForkMarker(base, marker) : base
     }
   }

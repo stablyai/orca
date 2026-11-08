@@ -1,6 +1,6 @@
 import { sessionCrewChanges } from '../../../../runtime/orchestration/crew/crew-changes'
 import { FORK_MARKER_ITEM_ID } from '../history/agent-session-fork-marker'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
@@ -21,7 +21,11 @@ export class ForkMarkerSubscriptions {
     private readonly port: () => SubscriberDeliveryPort,
     private readonly subscribers: (id: string) => Subscriber[],
     private readonly now: () => number,
-    private readonly readJournal: (id: string) => AgentSessionJournal | undefined
+    private readonly readJournal: (id: string) => AgentSessionJournal | undefined,
+    private readonly refreshSubscriber: (
+      subscriber: Subscriber,
+      journal: AgentSessionJournal
+    ) => void
   ) {}
 
   add(subscriber: Subscriber): void {
@@ -60,14 +64,18 @@ export class ForkMarkerSubscriptions {
         const journal = readJournal(child)
         if (journal) {
           for (const subscriber of this.subscribers(child)) {
-            this.refresh(subscriber, journal)
+            this.refreshSubscriber(subscriber, journal)
           }
         }
       }
     }
   }
 
-  refresh(subscriber: Subscriber, journal: AgentSessionJournal, force = false): void {
+  async refresh(
+    subscriber: Subscriber,
+    journal: AgentSessionJournal,
+    force = false
+  ): Promise<void> {
     const marker = subscriber.readForkMarker?.()
     const view = JSON.stringify(marker)
     if (!force && subscriber.forkMarkerView === view) {
@@ -78,12 +86,15 @@ export class ForkMarkerSubscriptions {
     if (!marker) {
       return
     }
-    const snapshot = reader.snapshot?.(journal, undefined, new Set([FORK_MARKER_ITEM_ID]))
+    const snapshot = await reader.snapshot?.(journal, undefined, new Set([FORK_MARKER_ITEM_ID]))
     const items = snapshot?.items.map((item) => reader.form(item).item) ?? []
     const removedItemIds = items.some((item) => item.itemId === FORK_MARKER_ITEM_ID)
       ? []
       : [FORK_MARKER_ITEM_ID]
-    this.port().emit(
+    if (!this.port().isActive(subscriber)) {
+      return
+    }
+    await this.port().emit(
       subscriber,
       {
         type: 'batch',

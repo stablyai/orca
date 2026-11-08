@@ -60,7 +60,6 @@ export class StructuredAgentSessionDeliveryLoop {
       return Promise.resolve()
     }
     this.running.get(sessionId)?.woke()
-    this.deps.deliveryOrder.reconcile(sessionId, this.deps.sessions.get(sessionId)?.journal)
     if (this.running.has(sessionId)) {
       return this.runs.get(sessionId) ?? Promise.resolve()
     }
@@ -169,6 +168,7 @@ export class StructuredAgentSessionDeliveryLoop {
 
   private async prepare(sessionId: string, progress: DeliveryProgress): Promise<Prepared> {
     const session = this.deps.sessions.get(sessionId)
+    await this.deps.deliveryOrder.reconcile(sessionId, session?.journal)
     // A step that proved no change since the last one would repeat forever; park until a commit or wake.
     if (!session || this.disposed || progress.decide(sessionId, this.deps).kind === 'park') {
       return this.stop(sessionId)
@@ -184,8 +184,8 @@ export class StructuredAgentSessionDeliveryLoop {
       return this.stop(sessionId)
     }
     // Commands block while their child lives; ended command commits wake delivery again.
-    const work = this.deps.currentWork(sessionId)
-    const oldest = selectableStructuredSubmission(session.journal, work)
+    const work = await this.deps.currentWork(sessionId)
+    const oldest = await selectableStructuredSubmission(session.journal, work)
     if (!oldest || (session.child && work && structuredAgentSessionCommandRunning(work))) {
       return this.stop(sessionId)
     }
@@ -242,12 +242,17 @@ export class StructuredAgentSessionDeliveryLoop {
       )
     }
     // Stop may take the lane during readiness; recheck before steering into work it is ending.
-    if (this.deps.stopping(sessionId) || awaitedChild.phase !== 'ready') {
+    if ((await this.deps.stopping(sessionId)) || awaitedChild.phase !== 'ready') {
       return this.stop(sessionId)
     }
     // Opening turns must exist before follow-ups join them.
-    const work = this.deps.currentWork(sessionId)
-    const next = structuredAgentSessionNextHandover(session, awaitedChild.fence, work)
+    const work = await this.deps.currentWork(sessionId)
+    const next = await structuredAgentSessionNextHandover(
+      session,
+      awaitedChild.fence,
+      this.deps.readWork(sessionId),
+      work
+    )
     if (!next) {
       return this.stop(sessionId)
     }

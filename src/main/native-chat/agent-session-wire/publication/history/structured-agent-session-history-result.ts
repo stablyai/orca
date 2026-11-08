@@ -6,7 +6,7 @@ import type {
   AgentSessionHistoryRequest,
   AgentSessionHistoryResult
 } from '../../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { HistoryReader } from './agent-session-history-page-bounds'
 import {
   readAgentSessionHistory,
@@ -24,7 +24,7 @@ export function structuredAgentSessionProviderSessionMetadata(
   return head ? { key: 'session_id', id: head.handle.nativeId } : undefined
 }
 
-export function readStructuredAgentSessionHistoryResult(input: {
+export async function readStructuredAgentSessionHistoryResult(input: {
   journal: AgentSessionJournal
   record: AgentSessionConversationView | null
   request: AgentSessionHistoryRequest
@@ -34,9 +34,9 @@ export function readStructuredAgentSessionHistoryResult(input: {
   replaceNormalizedHistory?: boolean
   /** The host's current-work projection, which the page's turn and prompt fields state. */
   work?: AgentSessionPublishedWork
-}): AgentSessionHistoryResult {
+}): Promise<AgentSessionHistoryResult> {
   const result = withPublishedWorkResult(
-    readAgentSessionHistory(input.journal, input.request, {
+    await readAgentSessionHistory(input.journal, input.request, {
       scope: input.scope,
       reader: withForkMarker(input.reader, () => input.forkMarker),
       rowReplay: input.replaceNormalizedHistory === false

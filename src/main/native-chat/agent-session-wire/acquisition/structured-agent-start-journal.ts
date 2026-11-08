@@ -74,18 +74,15 @@ export function structuredAgentStartJournal(
     const result = await journal.appendSteps(
       [
         {
-          kind: 'command',
-          step: {
-            kind: 'creation-fact',
-            epoch: destination.epoch,
-            identity,
-            body,
-            reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body),
-            options: {
-              fence: deps().store.getConversation(sessionId)?.currentFence ?? 0,
-              turnScope: AGENT_JOURNAL_THREAD_SCOPE,
-              observedAt
-            }
+          kind: 'creation-fact',
+          epoch: destination.epoch,
+          identity,
+          body,
+          reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body),
+          options: {
+            fence: deps().store.getConversation(sessionId)?.currentFence ?? 0,
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+            observedAt
           }
         }
       ],

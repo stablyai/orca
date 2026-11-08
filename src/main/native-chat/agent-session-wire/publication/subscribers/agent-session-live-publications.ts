@@ -1,12 +1,12 @@
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { Subscriber } from './agent-session-subscribe-input'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
 import { backgroundTaskFingerprint } from './agent-session-subscriber-frame-fields'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 
 /** Ordinary equal-cursor items preserve the existing desktop and phone merge contract. */
-export function publishSubscriberLiveText(
+export async function publishSubscriberLiveText(
   port: SubscriberDeliveryPort,
   input: {
     sessionId: string
@@ -16,7 +16,7 @@ export function publishSubscriberLiveText(
     subscribers: readonly Subscriber[]
     hostNow: number
   }
-): void {
+): Promise<void> {
   const { sessionId, journal, fence, items, subscribers, hostNow } = input
   if (items.length === 0) {
     return
@@ -29,7 +29,7 @@ export function publishSubscriberLiveText(
     ) {
       continue
     }
-    port.emit(
+    await port.emit(
       subscriber,
       {
         type: 'batch',
@@ -43,13 +43,13 @@ export function publishSubscriberLiveText(
   }
 }
 
-export function republishSubscriberBackgroundTasks(
+export async function republishSubscriberBackgroundTasks(
   port: SubscriberDeliveryPort,
   subscribers: readonly Subscriber[],
   sessionId: string,
   fence: number,
   hostNow: number
-): void {
+): Promise<void> {
   const state = port.hooks.readBackgroundTasks?.(sessionId)
   if (state === undefined) {
     return
@@ -59,7 +59,7 @@ export function republishSubscriberBackgroundTasks(
     if (subscriber.backgroundTasks === fingerprint) {
       continue
     }
-    port.emit(subscriber, {
+    await port.emit(subscriber, {
       type: 'batch',
       sessionId,
       batch: emptyAgentSessionBatch(subscriber.cursor),
@@ -82,7 +82,7 @@ export function createSubscriberLiveTextPublisher(
     fence: number,
     items: readonly AgentJournalRenderItem[],
     targets = subscribers(sessionId)
-  ): void =>
+  ): Promise<void> =>
     publishSubscriberLiveText(port(), {
       sessionId,
       journal,

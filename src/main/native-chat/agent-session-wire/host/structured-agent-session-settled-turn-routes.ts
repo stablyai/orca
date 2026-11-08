@@ -1,6 +1,6 @@
-import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { journalSettledTurnItemIds } from '../../agent-session-journal/item-lifecycle/journal-settled-turns'
+import type { JournalWriterCommit } from '../../agent-session-journal/journal-writer-changes'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 
 type SettledTurnsListener = (turnItemIds: readonly string[]) => void
@@ -35,12 +35,15 @@ export class StructuredAgentSessionSettledTurnRoutes {
     }
   }
 
-  deliver(sessionId: string, journal: AgentSessionJournal, rows: readonly JournalRow[]): void {
+  deliver(sessionId: string, journal: AgentSessionJournal, commit: JournalWriterCommit): void {
     const listeners = this.routes.get(sessionId)
     if (!listeners?.size) {
       return
     }
-    const turnItemIds = journalSettledTurnItemIds(rows)
+    const turnItemIds = (commit.publication?.items ?? []).flatMap((item) => {
+      const turn = readAgentJournalTurn(item.body)
+      return turn && turn.state !== 'running' ? [item.itemId] : []
+    })
     if (turnItemIds.length === 0) {
       return
     }

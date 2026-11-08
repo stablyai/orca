@@ -1,6 +1,6 @@
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { JournalWriterCommit } from '../../agent-session-journal/journal-writer-changes'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { StructuredAgentSessionSettledTurnRoutes } from './structured-agent-session-settled-turn-routes'
@@ -11,7 +11,7 @@ export type JournalPublication = {
   source: object | null
   journal: AgentSessionJournal | null
   cursor?: AgentJournalCursor
-  rows?: readonly JournalRow[]
+  commit?: JournalWriterCommit
 }
 type PublicationObserver = {
   next: (hint: JournalPublication) => void
@@ -39,7 +39,7 @@ export class StructuredAgentSessionConversations extends Map<
       observe?: (
         sessionId: string,
         journal: AgentSessionJournal,
-        rows?: readonly JournalRow[]
+        commit?: JournalWriterCommit
       ) => void
       forget?: (sessionId: string) => void
       deliver: (sessionId: string, journal: AgentSessionJournal, inputChanged?: boolean) => void
@@ -79,16 +79,14 @@ export class StructuredAgentSessionConversations extends Map<
       }
     }
     const current = () => this.attachments.get(sessionId) === source
-    const releaseCommit = journal.observeCommits((rows, affectsInput = true) => {
+    const releaseCommit = journal.observeCommits((commit) => {
       if (!current()) {
         return
       }
-      this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
-      if (rows) {
-        this.settledTurns.deliver(sessionId, journal, rows)
-      }
+      this.publish(sessionId, 'commit', commit)
+      this.settledTurns.deliver(sessionId, journal, commit)
       try {
-        this.delivery.observe?.(sessionId, journal, rows)
+        this.delivery.observe?.(sessionId, journal, commit)
       } catch (error) {
         this.delivery.logger.warn('observing committed requests failed', {
           scope: 'request-outcomes',
@@ -96,7 +94,7 @@ export class StructuredAgentSessionConversations extends Map<
           error
         })
       }
-      inputChanged ||= affectsInput
+      inputChanged ||= commit.inputChanged
       if (queued) {
         return
       }
@@ -119,7 +117,7 @@ export class StructuredAgentSessionConversations extends Map<
         }
       })
     })
-    const releaseReplacing = journal.context.replacements.observe((replaced) => {
+    const releaseReplacing = journal.epochReplacements.observe((replaced) => {
       if (current()) {
         this.snapshots.replacing(sessionId, journal, replaced)
       }
@@ -181,24 +179,24 @@ export class StructuredAgentSessionConversations extends Map<
   private hint(
     sessionId: string,
     kind: JournalPublication['kind'],
-    rows?: readonly JournalRow[]
-  ): JournalPublication | Promise<JournalPublication> {
+    commit?: JournalWriterCommit
+  ): JournalPublication {
     const source = kind === 'detach' || kind === 'end' ? undefined : this.attachments.get(sessionId)
     const hint: JournalPublication = {
       kind,
       source: source ?? null,
       journal: source?.journal ?? null,
-      rows
+      commit
     }
-    return source ? source.journal.reads.cursor().then((cursor) => ({ ...hint, cursor })) : hint
+    return source ? { ...hint, cursor: commit?.cursor ?? source.journal.cursor() } : hint
   }
 
-  publish(sessionId: string, kind: JournalPublication['kind'], rows?: readonly JournalRow[]): void {
+  publish(sessionId: string, kind: JournalPublication['kind'], commit?: JournalWriterCommit): void {
     const observers = this.observers.get(sessionId)
     if (!observers?.size) {
       return
     }
-    const hint = this.hint(sessionId, kind, rows)
+    const hint = this.hint(sessionId, kind, commit)
     for (const registration of observers) {
       this.deliverPublication(sessionId, registration, hint)
     }
@@ -207,33 +205,10 @@ export class StructuredAgentSessionConversations extends Map<
   private deliverPublication(
     sessionId: string,
     registration: { observer: PublicationObserver },
-    hint: JournalPublication | Promise<JournalPublication>
+    hint: JournalPublication
   ): void {
     const release = () => this.removeObserver(sessionId, registration)
-    if (!(hint instanceof Promise)) {
-      this.deliverHint(registration.observer, hint, release)
-      return
-    }
-    void hint.then(
-      (value) => {
-        if (
-          this.observers.get(sessionId)?.has(registration) &&
-          this.attachments.get(sessionId) === value.source
-        ) {
-          this.deliverHint(registration.observer, value, release)
-        }
-      },
-      (error: unknown) => {
-        if (this.observers.get(sessionId)?.has(registration)) {
-          release()
-          try {
-            registration.observer.error(error)
-          } catch {
-            // A consumer cannot fail another consumer or the durable writer.
-          }
-        }
-      }
-    )
+    this.deliverHint(registration.observer, hint, release)
   }
 
   private removeObserver(sessionId: string, registration: { observer: PublicationObserver }): void {

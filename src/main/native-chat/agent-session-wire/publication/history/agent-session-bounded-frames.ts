@@ -16,6 +16,7 @@ import type { QueuePublication } from '../../delivery/structured-agent-session-q
 // Omit slash commands because phones read them through agentSession.options.
 
 const BOUNDED_FRAME_READER: HistoryReader = {
+  wireForm: 'bounded',
   form: (item) => boundedFrameItem(agentJournalItemForWire(item)),
   budgetBytes: BOUNDED_FRAME_CONTENT_BUDGET_BYTES
 }

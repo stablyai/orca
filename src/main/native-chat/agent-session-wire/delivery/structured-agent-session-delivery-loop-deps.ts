@@ -9,7 +9,8 @@ import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-s
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import type { StructuredAgentSessionRanRecorder } from '../options/structured-agent-session-ran-options'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
@@ -51,7 +52,8 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   failureTextContext: (sessionId: string) => AgentSessionFailureWordsContext
   logger: StructuredAgentSessionLogger
   record: (sessionId: string) => AgentSessionRecord | null
-  currentWork: (sessionId: string) => StructuredAgentSessionCurrentWork | null
+  currentWork: (sessionId: string) => Promise<StructuredAgentSessionObservedWork | null>
+  readWork: (sessionId: string) => JournalWorkReader
   /** Publish row-free changes in current work. */
   workChanged?: (sessionId: string) => void
   holdClosedInput?: (
@@ -63,7 +65,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   settleLeftovers?: (sessionId: string, owner: () => void) => Promise<void>
   readChildWork: (sessionId: string) => readonly AgentChildWorkView[] | undefined
   childWorkOpen: (sessionId: string) => boolean
-  stopping: (sessionId: string) => boolean
+  stopping: (sessionId: string) => Promise<boolean>
   now: () => number
   acquireAborts: Pick<StructuredAgentSessionAcquireAborts, 'begin'>
   recordRanOptions?: StructuredAgentSessionRanRecorder

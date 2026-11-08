@@ -2,7 +2,7 @@
 // Earlier children's rows are swept before attach; this covers rows that reach the live fence
 // without the child's own lifecycle, such as restored history.
 
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 
 /** `liveTurnId` undefined means the agent cannot say, so nothing is settled. */
 export async function settleUnheldStructuredAgentSessionTurns(

@@ -1,3 +1,8 @@
+import type {
+  StructuredAgentSessionChildExit,
+  StructuredAgentSessionChildExitContext
+} from '../termination/structured-agent-session-child-exit'
+import { evictStructuredAgentSession } from '../termination/structured-agent-session-eviction'
 // Release only this host’s child with observed/proven exit; read-only or TUI ownership
 // proves no exit and must never admit a second writer.
 
@@ -76,4 +81,44 @@ export async function upgradeStoredStructuredAgentSessionOwnerExitEvidence(
       }
     })
   }
+}
+
+/** Release proven ownership and its sink before publishing the child as gone. */
+export async function releaseExitedStructuredAgentSessionOwner(
+  context: Pick<StructuredAgentSessionChildExitContext, 'store' | 'now' | 'route' | 'logger'>,
+  sessionId: string,
+  fence: number,
+  exit: StructuredAgentSessionChildExit,
+  observedAt: number
+): Promise<boolean> {
+  let released = false
+  try {
+    await releaseStoredStructuredAgentSessionOwnerAfterExit({
+      store: context.store,
+      sessionId,
+      expectedFence: fence,
+      now: context.now(),
+      exitObservedAt: observedAt,
+      exitReason: exit.reason,
+      ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {})
+    })
+    released = true
+  } catch (error) {
+    context.logger.warn('settling a provider exit did not finish', {
+      scope: 'exit-owner-release',
+      sessionId,
+      error
+    })
+  }
+  if (context.route) {
+    const { runtimeState, acknowledgeRelease } = context.route
+    await evictStructuredAgentSession({
+      sessionId,
+      eventSink: runtimeState.eventSinkFor(sessionId),
+      logger: context.logger,
+      discardSink: () => runtimeState.discardEventSink(sessionId),
+      acknowledgeRelease: () => acknowledgeRelease(sessionId)
+    })
+  }
+  return released
 }

@@ -36,10 +36,16 @@ import {
   activeStructuredAgentSessionTurnId,
   newestStructuredAgentSessionTurn
 } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { isUnansweredHandedOverSubmission } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import { structuredAgentSessionShownStatus } from '../observations/structured-agent-session-shown-work'
-import { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { StructuredAgentSessionWorkPolicy } from '../observations/structured-agent-session-work-policy'
+import {
+  structuredAgentSessionHandingOver,
+  continuingStructuredAgentSessionInput,
+  finalizingStructuredAgentSessionInput
+} from '../delivery/structured-agent-session-handing-over'
+import { runningStructuredAgentSessionTurnItemBySequence } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import type { StructuredAgentSessionProviderChild } from '../host/structured-agent-session-host-types'
 
@@ -158,7 +164,7 @@ type WorkingCandidateSession = {
   child: Pick<StructuredAgentSessionProviderChild, 'fence' | 'phase' | 'heldSends'> | null
 }
 
-export function structuredAgentSessionWorkingAtStop(input: {
+export async function structuredAgentSessionWorkingAtStop(input: {
   sessionId: string
   session: WorkingCandidateSession | undefined
   getRecord: (
@@ -170,25 +176,15 @@ export function structuredAgentSessionWorkingAtStop(input: {
   trigger: AgentSessionResumeTrigger
   teardownId: string
   now: number
-}): AgentSessionResumeMarker | null {
+}): Promise<AgentSessionResumeMarker | null> {
   const { sessionId, session } = input
   if (!session?.child) {
     return null
   }
-  const statusRead = session.journal.statusRead()
-  const inputs = new Map(statusRead.submissions.map((send) => [send.clientMessageId, send]))
-  for (const send of session.journal.inputOrder.recoverableSubmissions()) {
-    inputs.set(send.clientMessageId, send)
-  }
-  const snapshot = {
-    ...statusRead,
-    cursor: session.journal.cursor(),
-    submissions: [...inputs.values()].sort(
-      (a, b) =>
-        a.submittedAt - b.submittedAt ||
-        session.journal.inputOrder.inputOrdinal(a.clientMessageId) -
-          session.journal.inputOrder.inputOrdinal(b.clientMessageId)
-    )
+  const child = session.child
+  const snapshot = await session.journal.reads.generation({ teardownAnchors: true })
+  if (session.child !== child) {
+    return null
   }
   const current = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
   // Queued/unanswered-start sends never reached an agent; reopen/exit keeps them as unsent.
@@ -201,8 +197,19 @@ export function structuredAgentSessionWorkingAtStop(input: {
   const childWork = input.childWork(sessionId)
   const record = input.getRecord(sessionId)
   // Trust the host’s own live child generation, never a restored lease.
-  const { scope } = new StructuredAgentSessionCurrentWork(
-    session.journal,
+  const itemsById = new Map(snapshot.items.map((item) => [item.itemId, item]))
+  const fences = new Map(snapshot.itemFences)
+  const { scope } = new StructuredAgentSessionWorkPolicy(
+    {
+      item: (id) => itemsById.get(id) ?? null,
+      itemFence: (id) => fences.get(id),
+      wroteBeforeOpen: (sequence) => session.journal.wroteBeforeOpen(sequence),
+      runningTurn: () => runningStructuredAgentSessionTurnItemBySequence(snapshot.items),
+      recoverableSubmissions: () => snapshot.submissions,
+      continuingInput: (id) => continuingStructuredAgentSessionInput(session.journal, id),
+      finalizingInput: (id) => finalizingStructuredAgentSessionInput(session.journal, id),
+      handingOver: (id) => structuredAgentSessionHandingOver(session.journal).has(id)
+    },
     session.child.fence,
     0,
     undefined,

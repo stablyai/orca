@@ -1,7 +1,7 @@
 // Stop atomically records its event/queued-send withdrawal without withdrawing draft text.
 // Derive pause until a later send’s turn starts or Resume; Send-now alone lifts only its own card.
 
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import {
   isUnsettledQueuedMessage,
   type QueuedMessageRow
@@ -14,8 +14,10 @@ import {
 } from '../termination/structured-agent-session-turn-stop-notes'
 
 /** Unsettled means waiting/returned; pending, unknown and accepted deliveries are excluded. */
-export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMessageRow[] {
-  return journal.queuedMessages.list().filter(isUnsettledQueuedMessage)
+export async function unsettledQueuedMessages(
+  journal: AgentSessionJournal
+): Promise<QueuedMessageRow[]> {
+  return (await journal.queuedMessages.list()).filter(isUnsettledQueuedMessage)
 }
 
 /** Distinguish unrecorded work, repeated Stop without later sends, and late Stops naming ended turns. */

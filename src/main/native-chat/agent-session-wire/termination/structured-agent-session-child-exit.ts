@@ -1,3 +1,4 @@
+import { logExitFailure } from './structured-agent-session-ended-child-failure'
 // First-hand writer death evidence ends the child record in finally. Attempt/report every bookkeeping step;
 // expected changes presentation, never whether the dead child remains recorded.
 
@@ -15,7 +16,7 @@ import type {
 } from '../host/structured-agent-session-host-types'
 import { recordProviderChildEnd } from '../host/structured-agent-session-provider-child'
 import {
-  releaseStoredStructuredAgentSessionOwnerAfterExit,
+  releaseExitedStructuredAgentSessionOwner,
   upgradeStoredStructuredAgentSessionOwnerExitEvidence,
   type StructuredAgentSessionLeaseStore
 } from '../host/structured-agent-session-lease-release'
@@ -31,7 +32,6 @@ import {
   unfinishedStructuredAgentSessionWorkWasInterrupted
 } from './structured-agent-session-unfinished-work'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import { evictStructuredAgentSession } from './structured-agent-session-eviction'
 import type { StructuredAgentSessionHostRuntimeState } from '../host/structured-agent-session-host-runtime-state'
 import type { StructuredAgentSessionStartFlights } from '../startup/structured-agent-session-start-flight'
 import type { StructuredAgentSessionStartupAttempts } from '../startup/structured-agent-session-startup-attempt'
@@ -199,10 +199,9 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     }
     context.publishStatus?.(sessionId)
   }
-  const wakeQueuedDelivery = (): void => {
+  const wakeQueuedDelivery = async (): Promise<void> => {
     if (
-      !session.journal.submissions ||
-      (session.journal.inputOrder?.recoverableSubmissions() ?? session.journal.submissions()).some(
+      (await session.journal.reads.input({ kind: 'recoverable-submissions' })).submissions.some(
         isQueuedAgentJournalSubmission
       )
     ) {
@@ -212,7 +211,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   const record = context.store.getRecord(sessionId)
   if (!record || record.lease.handoffStage !== null) {
     endChild()
-    wakeQueuedDelivery()
+    await wakeQueuedDelivery()
     return
   }
   let settlement: StructuredAgentSessionExitSettlement | null = null
@@ -231,7 +230,14 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         .holdUnrunSends(sessionId, child.fence, unrunHold)
         .catch((error: unknown) => logExitFailure(context, sessionId, 'exit-unrun-hold', error))
     }
-    const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(session.journal)
+    const before = await session.journal.reads.generation()
+    const beforeFences = new Map(before.itemFences)
+    const unfinishedWork = captureUnfinishedStructuredAgentSessionWork({
+      handoverJournal: session.journal,
+      snapshot: () => before,
+      submissions: () => before.submissions,
+      itemFence: (id) => beforeFences.get(id)
+    })
     // Quiet idle starts owe no failure row unless work was handed to them.
     const startFailed =
       exitedDuringStartup &&
@@ -240,6 +246,13 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     await close?.recorded
     // Proven exit can refine earlier unverifiable rows.
     const watched = { ownerFence: child.fence, observedAt }
+    const after = await session.journal.reads.generation({
+      itemIds: unfinishedWork.items.map((item) => item.itemId),
+      exitScope: { completedAt: observedAt, ownerFence: child.fence }
+    })
+    const afterFences = new Map(after.itemFences)
+    const afterBodies = new Map(after.items.map((item) => [item.itemId, item.body]))
+    const afterSends = new Map(after.submissions.map((send) => [send.clientMessageId, send]))
     settlement = {
       ownerFence: child.fence,
       settlementId: `${expected ? 'expected-close:' : PROVIDER_EXIT_ROW_PREFIX}${sessionId}:${child.fence}:${child.generation ?? 'unknown'}`,
@@ -248,14 +261,23 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         : 'provider_exited_before_acknowledgement',
       // Provider-settled turns stand; fallback interruption applies journal Stop classification.
       verdict: { state: 'interrupted', completedAt: expected ? context.now() : observedAt },
-      failureTextContext: structuredAgentSessionFailureWordsContext(record, session.journal),
+      failureTextContext: structuredAgentSessionFailureWordsContext(record, {
+        submissions: () => after.submissions,
+        itemBody: (id) => afterBodies.get(id) ?? null
+      }),
       // Failed starts need explicit wording because no response can carry the reason.
       showUnexpectedExitOutcome:
         startFailed ||
         (!expected &&
           unfinishedStructuredAgentSessionWorkWasInterrupted(
             unfinishedWork,
-            session.journal,
+            {
+              handoverJournal: session.journal,
+              snapshot: () => after,
+              submissions: () => after.submissions,
+              submission: (id) => afterSends.get(id),
+              itemFence: (id) => afterFences.get(id)
+            },
             observedAt,
             watched,
             observation?.heldSends ?? exit.heldSends
@@ -289,43 +311,17 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
         logExitFailure(context, sessionId, 'exit-settlement', settled.error)
       }
     }
-    try {
-      await releaseStoredStructuredAgentSessionOwnerAfterExit({
-        store: context.store,
-        sessionId,
-        expectedFence: child.fence,
-        now: context.now(),
-        exitObservedAt: observedAt,
-        exitReason: exit.reason,
-        ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {})
-      })
-      released = true
-    } catch (error) {
-      logExitFailure(context, sessionId, 'exit-owner-release', error)
-    }
-    if (context.route) {
-      const { runtimeState, acknowledgeRelease } = context.route
-      await evictStructuredAgentSession({
-        sessionId,
-        eventSink: runtimeState.eventSinkFor(sessionId),
-        logger: context.logger,
-        discardSink: () => runtimeState.discardEventSink(sessionId),
-        acknowledgeRelease: () => acknowledgeRelease(sessionId)
-      })
-    }
+    released = await releaseExitedStructuredAgentSessionOwner(
+      context,
+      sessionId,
+      child.fence,
+      exit,
+      observedAt
+    )
     endChild()
     // Unexpected death rebaselines fences; requested close preserves outstanding Stop replies.
     // Always publish generation end and wake delivery, even when cleanup writes failed.
     context.generationEnded(sessionId, { restate: released && !expected })
-    wakeQueuedDelivery()
+    await wakeQueuedDelivery()
   }
-}
-
-function logExitFailure(
-  context: Pick<StructuredAgentSessionChildExitContext, 'logger'>,
-  sessionId: string,
-  scope: string,
-  error: unknown
-): void {
-  context.logger.warn('settling a provider exit did not finish', { scope, sessionId, error })
 }

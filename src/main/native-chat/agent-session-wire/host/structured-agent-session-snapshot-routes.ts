@@ -1,4 +1,4 @@
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   StructuredAgentSessionSnapshotRecipient,
   StructuredAgentSessionSnapshotSource

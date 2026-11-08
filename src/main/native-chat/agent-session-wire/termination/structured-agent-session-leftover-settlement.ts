@@ -2,12 +2,10 @@ import { agentSessionConversationView } from '../../../../shared/agent-session/l
 import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionDeadGenerationInput } from './structured-agent-session-dead-generation-settlement'
-import type { StaleStructuredAgentSessionStateJournal } from './structured-agent-session-stale-state-settlement'
-import type { DeadGenerationJournal } from './structured-agent-session-unfinished-work'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { structuredAgentSessionLiveFence } from '../observations/structured-agent-session-current-work'
 
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionWorkEvidence } from '../observations/structured-agent-session-work-evidence'
 // Settle ended generations atomically at the current fence. Death/replacement proof interrupts;
 // absent proof marks unverifiable, revisable by later proof. Failed settlement holds no live work.
@@ -24,9 +22,7 @@ export type StructuredAgentSessionExitSettlement = Omit<
 export type StructuredAgentSessionLeftoverSettlementInput = {
   store: StructuredAgentSessionLeftoverStore
   sessionId: string
-  journal: DeadGenerationJournal &
-    StaleStructuredAgentSessionStateJournal &
-    Pick<AgentSessionJournal, 'settleStaleState' | 'settleDeadGeneration'>
+  journal: AgentSessionJournal
   exit?: StructuredAgentSessionExitSettlement
   /** Observed root exit ends the generation even if lease release failed. */
   ended?: StructuredAgentSessionWorkEvidence['ended']

@@ -1,7 +1,8 @@
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
 import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -12,47 +13,45 @@ export type StructuredInputSelection =
   | { kind: 'none' }
 
 /** One live checkpoint owns automatic input order; debt alone is not execution. */
-export function selectStructuredAgentSessionInput(
+export async function selectStructuredAgentSessionInput(
   journal: AgentSessionJournal,
   currentInput?: string,
   _unanswerable = false,
   steer = false
-): StructuredInputSelection {
-  const current = currentInput ? journal.submission(currentInput) : undefined
+): Promise<StructuredInputSelection> {
+  const current = currentInput ? await journal.reads.submission(currentInput) : undefined
   const pending =
-    journal.inputOrder.firstQueued() ?? (current?.dispatchState === 'pending' ? current : undefined)
+    (await journal.reads.input({ kind: 'first-queued' })).submission ??
+    (current?.dispatchState === 'pending' ? current : undefined)
   if (pending) {
     return { kind: 'submission', submission: pending }
   }
-  const card = journal.queuedMessages.nextInputCard(true, steer)
+  const card = await journal.queuedMessages.nextInputCard(true, steer)
   return card ? { kind: 'card', card } : { kind: 'none' }
 }
 
-export function selectedStructuredSubmission(
+export async function selectedStructuredSubmission(
   journal: AgentSessionJournal
-): AgentJournalSubmission | undefined {
-  if (!journal.inputOrder.firstQueued()) {
-    return undefined
-  }
-  const selected = selectStructuredAgentSessionInput(journal)
-  return selected.kind === 'submission' ? selected.submission : undefined
+): Promise<AgentJournalSubmission | undefined> {
+  return (await journal.reads.input({ kind: 'first-queued' })).submission
 }
 
-export function selectableStructuredSubmission(
+export async function selectableStructuredSubmission(
   journal: AgentSessionJournal,
-  work: StructuredAgentSessionCurrentWork | null,
+  work: Pick<
+    StructuredAgentSessionObservedWork,
+    'actionablePrompts' | 'hasActionablePrompt'
+  > | null,
   currentInput?: string
-): AgentJournalSubmission | undefined {
-  if (!journal.inputOrder.firstQueued() && currentInput === undefined) {
+): Promise<AgentJournalSubmission | undefined> {
+  const submission =
+    (await selectedStructuredSubmission(journal)) ??
+    (currentInput ? await journal.reads.submission(currentInput) : undefined)
+  if (submission?.dispatchState !== 'pending') {
     return undefined
   }
   const unanswerable = work !== null && pendingPromptsAllUnanswerableHere(work.actionablePrompts())
-  const selected = selectStructuredAgentSessionInput(journal, currentInput, unanswerable)
-  if (selected.kind !== 'submission') {
-    return undefined
-  }
-  const { submission } = selected
-  const body = journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
+  const body = await journal.reads.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
   if (
     !unanswerable &&
     submission.origin === 'host' &&
@@ -69,26 +68,22 @@ export function selectableStructuredSubmission(
 }
 
 /** Provider-held/uncertain work still blocks cards; deferred, proven-unhanded inputs do not. */
-export function structuredInputExecutionWorking(
+export async function structuredInputExecutionWorking(
   journal: AgentSessionJournal,
-  work: StructuredAgentSessionCurrentWork,
+  work: Pick<StructuredAgentSessionObservedWork, 'activeTurnId'>,
+  readWork: JournalWorkReader,
   currentInput?: string
-): boolean {
-  if (work.activeTurnId() !== null) {
-    return true
-  }
-  return structuredInputHandoverWorking(journal, work, currentInput)
+): Promise<boolean> {
+  return (
+    work.activeTurnId() !== null || structuredInputHandoverWorking(journal, readWork, currentInput)
+  )
 }
 
-export function structuredInputHandoverWorking(
-  journal: AgentSessionJournal,
-  work: StructuredAgentSessionCurrentWork,
+export async function structuredInputHandoverWorking(
+  _journal: AgentSessionJournal,
+  readWork: JournalWorkReader,
   currentInput?: string
-): boolean {
-  for (const entry of journal.inputOrder.enteredSubmissions()) {
-    if (entry.clientMessageId !== currentInput && work.owesSend(entry)) {
-      return true
-    }
-  }
-  return false
+): Promise<boolean> {
+  const { state } = await readWork({ kind: 'state' })
+  return state.owedEnteredSubmissions.some((entry) => entry.clientMessageId !== currentInput)
 }

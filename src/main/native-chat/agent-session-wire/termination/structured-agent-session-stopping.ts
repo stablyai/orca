@@ -9,20 +9,20 @@ import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle
 import { activeStructuredAgentSessionTurnId } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { stopIsAPersons } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
 import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
 
-export function structuredAgentSessionStopping(
+export async function structuredAgentSessionStopping(
   journal: Pick<AgentSessionJournal, 'stopMarks'>,
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[] = [],
   /** A Stop bound to an ended generation’s turn is over. */
   scope?: StructuredAgentSessionWorkScope
-): boolean {
+): Promise<boolean> {
   return structuredAgentSessionStoppingForMark(
-    journal.stopMarks.latest(),
+    await journal.stopMarks.latest(),
     items,
     submissions,
     scope

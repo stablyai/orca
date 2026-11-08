@@ -4,10 +4,8 @@ import type {
   StructuredAgentSessionHostSession
 } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
-import {
-  bindStructuredAgentSessionInputWork,
-  hostStructuredAgentSessionCurrentWork
-} from '../observations/structured-agent-session-host-current-work'
+import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { StructuredAgentSessionQueuedMessageDrain } from './structured-agent-session-queued-messages'
 import {
   deleteQueuedStructuredAgentMessage,
@@ -39,12 +37,18 @@ export function wireStructuredAgentSessionQueuedMessages(
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
     currentWork: (sessionId) =>
       hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
+    readWork: (sessionId) => (operation) =>
+      readHostStructuredAgentSessionWork(
+        { store: context().deps.store, sessions },
+        sessionId,
+        operation
+      ),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
-    canSteer: (sessionId, card) => {
+    canSteer: async (sessionId, card) => {
       const ctx = context()
       const child = sessions.get(sessionId)?.child
       const record = ctx.deps.store.getRecord(sessionId)
-      const work = hostStructuredAgentSessionCurrentWork(
+      const work = await hostStructuredAgentSessionCurrentWork(
         { store: ctx.deps.store, sessions },
         sessionId
       )
@@ -53,7 +57,7 @@ export function wireStructuredAgentSessionQueuedMessages(
           child,
           record,
           work,
-          stopping: ctx.readStopping(sessionId),
+          stopping: await ctx.readStopping(sessionId),
           adapter: ctx.deps.adapter
         },
         card
@@ -86,7 +90,6 @@ export function wireStructuredAgentSessionQueuedMessages(
     drain,
     refresh,
     onOpened: (sessionId: string) => {
-      bindStructuredAgentSessionInputWork(context().deps.store, sessionId, sessions.get(sessionId))
       const journal = sessions.get(sessionId)?.journal
       if (journal) {
         // Installed before anything reads the next card, so every reader applies the one mail rule.

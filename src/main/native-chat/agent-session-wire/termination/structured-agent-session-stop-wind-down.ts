@@ -7,11 +7,9 @@ import {
   type AgentJournalItemBody
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
 import { readContextStructuredAgentSessionTurn } from '../observations/structured-agent-session-read-work'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
-import { structuredAgentSessionFailedStopMark } from './structured-agent-session-stopping'
 import { structuredAgentSessionStopNoteIdentity } from '../operations/structured-agent-session-command-turn'
 
 /** Queued immediately behind Stop, so no later turn can intervene; wait only for an accepted interrupt. */
@@ -31,7 +29,10 @@ export type StructuredAgentSessionStopWindDown = {
 /** Queue in the Stop’s tick to exclude intervening input; failures revise its note.
  * Unproven closes retain the child, and later agent operations join that close. */
 export async function endStoppedStructuredAgentSession(
-  ctx: Pick<AgentSessionTurnContext, 'sessionId' | 'adapter' | 'journal' | 'fence' | 'currentWork'>,
+  ctx: Pick<
+    AgentSessionTurnContext,
+    'sessionId' | 'adapter' | 'journal' | 'fence' | 'currentWork' | 'readWork'
+  >,
   windDown: StructuredAgentSessionStopWindDown,
   stopChild: () => Promise<void>,
   onError: (error: unknown) => void
@@ -55,10 +56,11 @@ export async function endStoppedStructuredAgentSession(
     if (windDown.outcome?.errors.length === 0) {
       windDown.outcome.errors.push(error)
     }
-    failedOn = structuredAgentSessionFailedStopMark(
-      contextStructuredAgentSessionCurrentWork(ctx),
-      ctx.journal
-    )
+    const { activeTurnId } = await readContextStructuredAgentSessionTurn(ctx)
+    failedOn =
+      activeTurnId !== null
+        ? { turnId: activeTurnId }
+        : { openedAfter: ctx.journal.cursor().sequence }
     await windDown.stopNoteWrite?.catch(onError)
     if (!windDown.outcome) {
       await reviseStopNoteUnconfirmed(ctx, windDown.stopNote).catch(onError)

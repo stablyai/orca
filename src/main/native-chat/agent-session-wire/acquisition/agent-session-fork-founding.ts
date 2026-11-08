@@ -1,7 +1,7 @@
 import { readAgentSessionHydrationPage } from '../publication/history/agent-session-history-page'
 import { forkHistoryReader } from '../publication/history/agent-session-fork-marker'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import type { AgentSessionAttachParams, reserveRequestFor } from './structured-agent-session-attach'

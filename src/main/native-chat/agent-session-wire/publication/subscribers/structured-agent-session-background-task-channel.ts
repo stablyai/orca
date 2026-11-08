@@ -52,7 +52,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   ): Promise<AgentSessionHistoryResult> {
     const journal = (await this.conversation(request.sessionId)).journal
     const work = await this.currentWork(request.sessionId)
-    const result = readStructuredAgentSessionHistoryResult({
+    const result = await readStructuredAgentSessionHistoryResult({
       journal,
       record: this.deps.store.getConversation(request.sessionId),
       forkMarker: readForkMarker(this.deps.store, request.sessionId),
@@ -63,7 +63,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       ...(work ? { work } : {})
     })
     const backgroundTasks = this.read(request.sessionId)
-    const queue = this.subscribers.readQueuePublication(request.sessionId)
+    const queue = await this.subscribers.readQueuePublication(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
     return {
       ...result,

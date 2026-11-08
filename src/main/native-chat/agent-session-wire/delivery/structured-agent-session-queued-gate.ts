@@ -3,11 +3,11 @@ import type { StructuredAgentSessionProviderChild } from '../host/structured-age
 import type { StructuredAgentSessionAdapter } from '../providers/structured-agent-session-adapter'
 import { structuredAgentSessionChildAcceptsInput } from './structured-agent-session-input-readiness'
 import { codexTurnOptionsDiffer } from '../options/structured-agent-session-message-options'
-import { journalInputOrder } from '../../agent-session-journal/input-order/journal-input-order'
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { structuredAgentSessionSendBlock } from '../operations/structured-agent-session-send-preparation'
 import {
   selectStructuredAgentSessionInput,
@@ -21,10 +21,16 @@ export type StructuredQueueHold = 'blocked' | 'working' | 'prompt'
 /** Ended-generation leftovers must not hold the queue. */
 export type StructuredQueueGateInput = {
   record: AgentSessionRecord | null
-  work: StructuredAgentSessionCurrentWork
+  work: Pick<
+    StructuredAgentSessionObservedWork,
+    'working' | 'hasActionablePrompt' | 'actionablePrompts' | 'activeTurnId'
+  >
+  readWork: JournalWorkReader
 }
 
-export function structuredQueueHold(input: StructuredQueueGateInput): StructuredQueueHold | null {
+export function structuredQueueHold(
+  input: Pick<StructuredQueueGateInput, 'record' | 'work'>
+): StructuredQueueHold | null {
   if (!input.record || structuredAgentSessionSendBlock(input.record)) {
     return 'blocked'
   }
@@ -36,41 +42,38 @@ export function structuredQueueHold(input: StructuredQueueGateInput): Structured
 }
 
 /** Publish the drain’s live pick; backlog itself never gates a lone draft. */
-export function nextStructuredQueuedMessage(
+export async function nextStructuredQueuedMessage(
   input: StructuredQueueGateInput & {
     journal: AgentSessionJournal
     working?: boolean
     steer?: boolean
-    canSteer?: (card: QueuedMessageRow) => boolean
+    canSteer?: (card: QueuedMessageRow) => boolean | Promise<boolean>
   }
-): QueuedMessageRow | null {
+): Promise<QueuedMessageRow | null> {
   // Check execution barriers before choosing a card, which can read mail authority.
-  const state = input.journal.queuedMessages.inputState()
-  const cards = journalInputOrder(state).cards
-  cards.ensure(state)
-  if (!cards.head()) {
-    return null
-  }
-  const working = input.working ?? structuredInputExecutionWorking(input.journal, input.work)
+  const working =
+    input.working ??
+    (await structuredInputExecutionWorking(input.journal, input.work, input.readWork))
   const steer = working && input.steer === true && input.work.activeTurnId() !== null
   if (
-    (working && (!steer || structuredInputHandoverWorking(input.journal, input.work))) ||
+    (working &&
+      (!steer || (await structuredInputHandoverWorking(input.journal, input.readWork)))) ||
     !input.record ||
     structuredAgentSessionSendBlock(input.record) ||
     input.work.hasActionablePrompt()
   ) {
     return null
   }
-  const selected = selectStructuredAgentSessionInput(input.journal, undefined, false, steer)
-  return selected.kind === 'card' && (!steer || input.canSteer?.(selected.card) === true)
+  const selected = await selectStructuredAgentSessionInput(input.journal, undefined, false, steer)
+  return selected.kind === 'card' && (!steer || (await input.canSteer?.(selected.card)) === true)
     ? selected.card
     : null
 }
 
 /** Queue behind work/actionable backlog; held, Stop-held or returned cards cannot trap a fresh send. */
-export function shouldQueueStructuredAgentSessionSend(
+export async function shouldQueueStructuredAgentSessionSend(
   input: StructuredQueueGateInput & { journal: AgentSessionJournal; fromAgent?: boolean }
-): boolean {
+): Promise<boolean> {
   const hold = structuredQueueHold(input)
   if (hold === 'blocked') {
     // Return immediate refusal; queueing behind a blocked session would strand the draft.
@@ -79,26 +82,26 @@ export function shouldQueueStructuredAgentSessionSend(
   if (!input.fromAgent && pendingPromptsAllUnanswerableHere(input.work.actionablePrompts())) {
     return false
   }
-  if (hold !== null || input.journal.inputOrder.firstQueued() !== undefined) {
+  if (
+    hold !== null ||
+    (await input.journal.reads.input({ kind: 'first-queued' })).submission !== undefined
+  ) {
     return true
   }
   if (input.fromAgent) {
     // Only the person's own send recovers a failed turn; another agent's message waits held with the rest.
-    const state = input.journal.queuedMessages.inputState()
-    const cards = journalInputOrder(state).cards
-    cards.ensure(state)
-    if (cards.failureHolds()) {
+    if (await input.journal.queuedMessages.failureHolds()) {
       return true
     }
   }
   // A person's fresh send ignores edit leases. Automatic drain is what stops on them.
-  return input.journal.queuedMessages.nextInputCard(false) !== null
+  return (await input.journal.queuedMessages.nextInputCard(false)) !== null
 }
 
 export function canSteerStructuredQueuedMessage(
   input: {
     record: AgentSessionRecord | null
-    work: StructuredAgentSessionCurrentWork | null
+    work: Pick<StructuredAgentSessionObservedWork, 'activeTurnId' | 'activeTurn'> | null
     child: StructuredAgentSessionProviderChild | null | undefined
     stopping: boolean
     adapter: StructuredAgentSessionAdapter

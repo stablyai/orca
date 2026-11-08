@@ -51,7 +51,7 @@ export function updateQueuedStructuredAgentMessage(
         return { ok: true, value: decision }
       }
       // Personal edits may use the user’s byte reserve, even for agent-origin cards.
-      const refusal = queuedMessagesPublishedBytesRefusal(
+      const refusal = await queuedMessagesPublishedBytesRefusal(
         ctx.journal,
         decision.body,
         true,
