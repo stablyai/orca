@@ -18,8 +18,8 @@ import {
   type SkillInstallLockOwner
 } from './skill-install-lock-owner'
 import {
-  cleanupReleasedSkillInstallLock,
-  reclaimReleasedSkillInstallLock
+  reclaimReleasedSkillInstallLock,
+  releaseOwnedSkillInstallLock
 } from './skill-install-lock-release'
 import { skillInstallStateKey } from './skill-install-provenance'
 
@@ -70,7 +70,11 @@ async function removeStaleLegacyLock(path: string): Promise<void> {
   }
 }
 
-async function removeStaleLockDirectory(path: string, incompleteStaleMs = 0): Promise<void> {
+async function removeStaleLockDirectory(
+  path: string,
+  options: { incompleteStaleMs?: number; abandonedWhenEmpty?: boolean } = {}
+): Promise<void> {
+  const incompleteStaleMs = options.incompleteStaleMs ?? 0
   const lockStat = await stat(path).catch(() => null)
   if (!lockStat?.isDirectory()) {
     return
@@ -85,7 +89,10 @@ async function removeStaleLockDirectory(path: string, incompleteStaleMs = 0): Pr
       return match?.[1] ? [match[1]] : []
     })
   )
-  let mayRemoveDirectory = releasedTokens.size > 0
+  // Why: a lock directory is only ever published with its owner record inside, so an empty one is
+  // owned by nobody; a candidate directory is empty while it is still being built.
+  let mayRemoveDirectory =
+    releasedTokens.size > 0 || (options.abandonedWhenEmpty === true && entries.length === 0)
   for (const entry of entries) {
     const match = entry.isFile() ? OWNER_ENTRY_NAME.exec(entry.name) : null
     if (!match?.[1]) {
@@ -130,7 +137,7 @@ async function removeStaleLockDirectory(path: string, incompleteStaleMs = 0): Pr
 async function removeStaleLock(path: string): Promise<void> {
   const lockStat = await stat(path).catch(() => null)
   if (lockStat?.isDirectory()) {
-    await removeStaleLockDirectory(path)
+    await removeStaleLockDirectory(path, { abandonedWhenEmpty: true })
   } else if (lockStat?.isFile()) {
     await removeStaleLegacyLock(path)
   }
@@ -163,7 +170,7 @@ export async function reclaimDeadSkillInstallLocks(stateDirectory: string): Prom
     await (LEGACY_OWNER_NAME.test(lock.name)
       ? removeStaleLegacyLock(path)
       : CANDIDATE_LOCK_NAME.test(lock.name)
-        ? removeStaleLockDirectory(path, LOCK_STALE_MS)
+        ? removeStaleLockDirectory(path, { incompleteStaleMs: LOCK_STALE_MS })
         : RELEASED_LOCK_NAME.test(lock.name)
           ? reclaimReleasedSkillInstallLock(path)
           : removeStaleLock(path))
@@ -201,15 +208,6 @@ async function writeOwnerRecord(
   }
 }
 
-async function markReleased(path: string): Promise<void> {
-  const handle = await open(path, 'wx', 0o600)
-  try {
-    await handle.sync()
-  } finally {
-    await handle.close()
-  }
-}
-
 export async function acquireSkillInstallLock(input: {
   path: string
   timeoutMs?: number
@@ -227,7 +225,6 @@ export async function acquireSkillInstallLock(input: {
   const ownerRecord = JSON.stringify(owner)
   const candidatePath = `${input.path}.${owner.token}.candidate`
   const candidateOwnerPath = join(candidatePath, `${owner.token}.owner`)
-  const ownerPath = join(input.path, `${owner.token}.owner`)
   const releasedPath = `${input.path}.${owner.token}.released`
   await mkdir(candidatePath, { mode: 0o700 })
   activeLockTokens.add(owner.token)
@@ -270,19 +267,12 @@ export async function acquireSkillInstallLock(input: {
   return () => {
     releasePromise ??= (async () => {
       try {
-        if ((await readSkillInstallLockOwner(ownerPath))?.token !== owner.token) {
-          return
-        }
-        await markReleased(join(input.path, `${owner.token}.released`))
-        try {
-          await rename(input.path, releasedPath)
-        } catch (error) {
-          if ((await readSkillInstallLockOwner(ownerPath))?.token === owner.token) {
-            throw error
-          }
-          return
-        }
-        await cleanupReleasedSkillInstallLock(releasedPath, owner.token, input.removeLock)
+        await releaseOwnedSkillInstallLock({
+          path: input.path,
+          token: owner.token,
+          releasedPath,
+          removeDirectory: input.removeLock
+        })
       } finally {
         activeLockTokens.delete(owner.token)
       }
