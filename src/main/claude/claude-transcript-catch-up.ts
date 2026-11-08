@@ -94,15 +94,17 @@ export async function catchUpClaudeTranscript(input: {
         return null
       }
       const planned = view()
-      let leafAbsent = false
-      const tail = await readClaudeTranscriptTail({
-        filePath,
-        leafUuid: input.leafUuid,
-        check,
-        onLeafAbsent: () => {
-          leafAbsent = true
-        }
-      })
+      let leafAbsent = input.leafUuid === '' && !!planned.covered
+      const tail = leafAbsent
+        ? null
+        : await readClaudeTranscriptTail({
+            filePath,
+            leafUuid: input.leafUuid,
+            check,
+            onLeafAbsent: () => {
+              leafAbsent = true
+            }
+          })
       check()
       if (!tail && !(leafAbsent && planned.covered)) {
         warn('leaf-not-in-tail')

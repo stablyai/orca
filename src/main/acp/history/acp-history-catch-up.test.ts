@@ -2,7 +2,14 @@
 // OpenCode 2.0.14 and Grok 1.0.62 recordings: once, in order, without a notice, and never a turn
 // the chat already holds.
 
-import { setup, dividers, chatSend } from './acp-history-catch-up.test-support'
+import {
+  setup,
+  dividers,
+  chatSend,
+  replayUpdate,
+  userReplay,
+  answerReplay
+} from './acp-history-catch-up.test-support'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -10,6 +17,7 @@ import '../../../shared/agent-session/failures/agent-session-failure'
 import '../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   closeProviderTimelineRigs,
+  AGENT,
   NAMESPACE
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from '../acp-dialects/grok-dialect'

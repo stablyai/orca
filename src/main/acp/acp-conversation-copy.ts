@@ -133,7 +133,13 @@ export async function copyAcpConversation(
           signal
         )
         return { ...result, coverage: { unit: 'acp-user-message', ids } }
-      } catch {
+      } catch (error) {
+        signal.throwIfAborted()
+        deps.logger?.warn('OpenCode fork coverage read failed', {
+          scope: 'acp-conversation-copy',
+          sessionId: result.sessionId,
+          error
+        })
         throw agentConversationCopyRefusal(
           'agent_session_identity_required',
           { reason: 'transcriptUnreadable' },

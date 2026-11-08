@@ -128,7 +128,7 @@ async function setup(version = 2) {
     forkSession: fork,
     close: async () => true
   } as unknown as AcpStructuredConnection
-  const copy = (input: StructuredAgentSessionConversationCopyInput) =>
+  const copy = (input: StructuredAgentSessionConversationCopyInput, signal?: AbortSignal) =>
     copyAcpConversation(
       {
         spec: {
@@ -151,7 +151,7 @@ async function setup(version = 2) {
         connect: () => connection
       },
       input,
-      { track: () => {} }
+      { track: () => {}, ...(signal ? { signal } : {}) }
     )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: source preparation/terminal copying use only this store, registry, snapshot and adapter.
   const source = {
@@ -191,6 +191,7 @@ async function setup(version = 2) {
     record,
     source,
     fork,
+    copy,
     prepare,
     nativeId,
     sessionId: intent.envelope.sessionId
@@ -375,8 +376,9 @@ it.each([1, 2])(
   }
 )
 
-it('refuses a journal fork on store failure after native success, while terminal copying never reads coverage', async () => {
+it('refuses a journal fork on store failure, preserves cancellation, and never reads coverage for terminal copying', async () => {
   const test = await setup(1)
+  const copying = vi.spyOn(test.source.deps.adapter, 'copyConversation')
   const read = vi
     .spyOn(reader, 'readOpenCodeForkCoverageViaWorker')
     .mockRejectedValue(new Error('database read failed'))
@@ -400,4 +402,11 @@ it('refuses a journal fork on store failure after native success, while terminal
     forkedSession: { sessionId: 'ses_e4d76d713ffe98vxcM3WaxWjVI', agent: 'opencode' }
   })
   expect(read).not.toHaveBeenCalled()
+  const stop = new AbortController()
+  const cancelled = new Error('Coverage read cancelled')
+  read.mockImplementation(async () => {
+    stop.abort(cancelled)
+    throw cancelled
+  })
+  await expect(test.copy(copying.mock.calls[0]![0], stop.signal)).rejects.toBe(cancelled)
 })
