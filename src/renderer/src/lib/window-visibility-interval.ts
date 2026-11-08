@@ -5,7 +5,7 @@ export type WindowVisibilityJitterTimer = ReturnType<typeof setTimeout>
 
 const MAX_VISIBILITY_JITTER_MS = 400
 // Visible windows behind another app slow remote/process polls instead of pausing (other displays still show them).
-export const UNFOCUSED_POLL_SLOWDOWN = 4
+const UNFOCUSED_POLL_SLOWDOWN = 4
 
 export function isWindowVisible(): boolean {
   return (

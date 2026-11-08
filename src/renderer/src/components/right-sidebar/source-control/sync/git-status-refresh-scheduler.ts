@@ -245,7 +245,8 @@ export function createGitStatusRefreshScheduler(
         return
       }
       if (activityTimer !== null) {
-        scheduleActivityRun(0)
+        // Keep the debounce: focus also fires when leaving a webview in an already-focused window.
+        scheduleActivityRun(options.activityDebounceMs)
         return
       }
       const safetyFiresAt = pacing.lastRunEndedAt + safetyDelayMs()

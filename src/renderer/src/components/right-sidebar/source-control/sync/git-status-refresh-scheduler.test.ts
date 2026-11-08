@@ -33,7 +33,7 @@ describe('createGitStatusRefreshScheduler cadence scale', () => {
 
     unfocused = false
     scheduler.retime()
-    await vi.advanceTimersByTimeAsync(0)
+    await vi.advanceTimersByTimeAsync(100)
     expect(reasons).toEqual(['activity', 'activity'])
     scheduler.dispose()
   })
