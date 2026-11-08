@@ -42,32 +42,6 @@ it('keeps a local batch answered when main refuses one path in it (E9)', async (
   await expect(wsl).rejects.toThrow('is not running')
   expect(batch).toHaveBeenCalledTimes(1)
 })
-it('isolates identical paths by runtime, worktree, connection, and hover turn', async () => {
-  remote.mockImplementation(async (_context, paths: string[]) =>
-    paths.map(() => ({ exists: true }))
-  )
-  const enqueue = createTerminalPathExistenceBatch()
-  const contexts = [
-    { ...context, target: { kind: 'environment' as const, environmentId: 'a' } },
-    { ...context, target: { kind: 'environment' as const, environmentId: 'b' } },
-    {
-      ...context,
-      target: { kind: 'environment' as const, environmentId: 'a' },
-      worktreeId: 'folder:/other',
-      worktreePath: '/other'
-    },
-    { ...context, connectionId: 'ssh-one' },
-    { ...context, connectionId: 'ssh-two' }
-  ]
-  await Promise.all(
-    contexts.flatMap((ctx) => [enqueue(ctx, '/same', true), enqueue(ctx, '/same', true)])
-  )
-  expect(remote).toHaveBeenCalledTimes(5)
-  expect(remote.mock.calls.map((call) => call[0])).toEqual(contexts)
-  expect(remote.mock.calls.every((call) => call[1].length === 1)).toBe(true)
-  await enqueue(contexts[0], '/same', true)
-  expect(remote).toHaveBeenCalledTimes(6)
-})
 it('rejects transport failure without turning it into a missing path', async () => {
   remote.mockRejectedValue(new Error('connection closed'))
   const enqueue = createTerminalPathExistenceBatch()

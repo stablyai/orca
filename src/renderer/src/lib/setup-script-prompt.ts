@@ -7,6 +7,7 @@ import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { isRuntimeScopeForbiddenError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { hasEffectiveSetupCommand } from './setup-script-status'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -228,18 +229,21 @@ export function getSetupScriptFirstLine(setup: string): { firstLine: string; has
 }
 
 // Product names stay as detected; descriptive labels translate by provider.
-function candidateLabel(candidate: SetupScriptImportCandidate): string {
+function candidateLabel(candidate: SetupScriptImportCandidate, t: Translate = translate): string {
   if (candidate.provider === 'codex') {
-    return translate('setupScriptPrompt.candidateLabels.codexEnvironment', 'Codex environment')
+    return t('setupScriptPrompt.candidateLabels.codexEnvironment', 'Codex environment')
   }
   if (candidate.provider === 'package-manager') {
-    return translate('setupScriptPrompt.candidateLabels.packageManager', 'package manager')
+    return t('setupScriptPrompt.candidateLabels.packageManager', 'package manager')
   }
   return candidate.label
 }
 
-export function formatCandidateSource(candidate: SetupScriptImportCandidate): string {
-  const label = candidateLabel(candidate)
+export function formatCandidateSource(
+  candidate: SetupScriptImportCandidate,
+  t?: Translate
+): string {
+  const label = candidateLabel(candidate, t)
   const [primaryFile, ...remainingFiles] = candidate.files
   if (!primaryFile) {
     return label

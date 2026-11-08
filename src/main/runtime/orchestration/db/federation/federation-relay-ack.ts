@@ -4,7 +4,7 @@ import type {
   FederationRelayItemRow
 } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../shared/protocol-version'
+import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { parseFederatedWorkerReportOutcome } from '../federated-worker-report-outcome'
 import type { OrchestrationDb } from '../orchestration-db'
 

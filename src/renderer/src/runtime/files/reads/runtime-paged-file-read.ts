@@ -1,12 +1,12 @@
-import { BINARY_PROBE_BYTES } from '../../../../../shared/binary-buffer'
+import { BINARY_PROBE_BYTES } from '../../../../../shared/file-preview/binary-buffer'
 import {
   IMAGE_AND_PDF_PREVIEW_MIME_TYPES,
   filePreviewExtension
-} from '../../../../../shared/file-preview-kind'
+} from '../../../../../shared/file-preview/file-preview-kind'
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/file-content/runtime-file-read'
 import {
   rangeReadTarget,
   readRemoteRuntimeFileChunk,
@@ -18,9 +18,12 @@ import {
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
-import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-range-read'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../../../../shared/file-content/file-range-read'
 import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
-import { remoteFilePath, remoteFileRequest } from '../../../../../shared/remote-file-locator'
+import {
+  remoteFilePath,
+  remoteFileRequest
+} from '../../../../../shared/file-access/remote-file-locator'
 import {
   isRenewableGrantError,
   renewTerminalArtifactGrant

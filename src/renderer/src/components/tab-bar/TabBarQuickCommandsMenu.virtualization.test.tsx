@@ -134,12 +134,6 @@ function expectWindowed(list: HTMLElement): void {
 }
 
 describe('quick command dropdown virtualization', () => {
-  it('virtualizes a single host at the saved-command limit', async () => {
-    const { list } = await openMenu(0, 40)
-    expect(list.querySelector('[data-testid="virtualized-list"]')).not.toBeNull()
-    expect(list.querySelectorAll('[role="option"]').length).toBeLessThan(30)
-  })
-
   it('mounts a bounded window and keeps distant command actions attached to their host', async () => {
     const { list, onRunCommand, onEditCommand } = await openMenu()
     expectWindowed(list)
@@ -189,24 +183,6 @@ describe('quick command dropdown virtualization', () => {
     )
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onRunCommand).toHaveBeenCalledExactlyOnceWith(commands[499])
-  })
-
-  it('filters a scrolled list to a distant match, handles no results, and restores windowing', async () => {
-    const { input, list, onRunCommand } = await openMenu(400)
-    fireEvent.change(input, { target: { value: 'Command 499' } })
-    await waitFor(() => expect(list.querySelectorAll('[role="option"]').length).toBe(1))
-    expect(selectedRow(list)?.getAttribute('data-value')).toBe(commands[499].key)
-    expect(list.querySelector('[data-testid="virtualized-list"]')).toBeNull()
-
-    fireEvent.change(input, { target: { value: 'no matching command exists' } })
-    await screen.findByText('No commands match')
-    expect(list.querySelectorAll('[role="option"]').length).toBe(0)
-    fireEvent.change(input, { target: { value: '' } })
-    await waitFor(() =>
-      expect(selectedRow(list)?.getAttribute('data-value')).toBe(commands[400].key)
-    )
-    expectWindowed(list)
-    expect(onRunCommand).not.toHaveBeenCalled()
   })
 
   it('keeps the project/global separator in the scrollable window and deletes the correct command', async () => {

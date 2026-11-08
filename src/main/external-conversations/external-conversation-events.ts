@@ -12,7 +12,7 @@ import { judgeIdleAgentTurn } from '../runtime/agent-state-rules/agent-turn-idle
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
-} from '../runtime/terminal-agent-turn-news'
+} from '../runtime/push/notifications/terminal-agent-turn-news'
 import {
   allLinks,
   type ExternalConversationLinkStore,

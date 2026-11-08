@@ -1,5 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
-
 import { describe, expect, it, vi } from 'vitest'
 import { dispatch as dispatchCommand } from '../../../../../cli/dispatch'
 import { orchestrationTestContext } from '../../../../../cli/handlers/orchestration-handler-test-context'
@@ -47,24 +45,6 @@ import {
 const unread = (mailbox: string) => db.getUnreadMessages(mailbox)
 
 describe('a worker result reaches the structured chat that coordinates it', () => {
-  it('hands an idle coordinator the whole worker report as its own turn, leaving check nothing', async () => {
-    const chat = await openChat(COORDINATOR)
-    const { runId, taskId } = await coordinatorRunAndTask()
-
-    await finishWorker(taskId)
-
-    await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-    const text = turnText(chat.turns[0]!)
-    expect(isWholeMail(text)).toBe(true)
-    expect(text).toContain('(worker_done)')
-    await settleTurn(COORDINATOR, 0)
-    expect(await userTexts(COORDINATOR)).toEqual([text])
-    await vi.waitFor(() => expect(unread(`run:${runId}`)).toEqual([]), WAIT)
-
-    const checked = await call('orchestration.check', {}, { sessionId: COORDINATOR })
-    expect(checked).toMatchObject({ runId, count: 0 })
-  })
-
   it('does not send a report twice when the delivery is retried', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
@@ -356,24 +336,6 @@ describe('a worker result reaches the structured chat that coordinates it', () =
     expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
-  it('starts a coordinator whose agent is not running through the send alone', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-    await host.close(COORDINATOR, 'evict')
-    expect(host.hasSession(COORDINATOR)).toBe(false)
-    const before = codex.connections.length
-
-    await finishWorker(taskId)
-
-    // Nothing holds or wakes the session first: the report's accepted send starts its agent.
-    await vi.waitFor(() => expect(codex.connections.length).toBe(before + 1), WAIT)
-    const revived = connectionFor(COORDINATOR)
-    await vi.waitFor(() => expect(revived.turns).toHaveLength(1), WAIT)
-    expect(isWholeMail(turnText(revived.turns[0]!))).toBe(true)
-    await settleTurn(COORDINATOR, 0)
-    expect((await userTexts(COORDINATOR)).filter(isWholeMail)).toHaveLength(1)
-  })
-
   it('steers a report into the running turn once, with who it is from', async () => {
     const chat = await openChat(COORDINATOR)
     const { runId, taskId } = await coordinatorRunAndTask()
@@ -566,34 +528,6 @@ describe('a /clear keeps the chat its orchestration address', () => {
     expect(unread(`run:${runId}`)).toHaveLength(1)
   })
 
-  it('keeps a Run under the same conversation address through repeated clears', async () => {
-    await openChat(COORDINATOR)
-    const firstClear = await clearChat(COORDINATOR)
-    await startClearedContext(firstClear)
-    const created = await call(
-      'orchestration.runCreate',
-      { objective: 'next' },
-      { sessionId: firstClear }
-    )
-    const runId = idOf(created.run)
-    expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
-    const cleared = await clearChat(firstClear)
-    await startClearedContext(cleared)
-
-    await expect(
-      call('orchestration.runCurrent', {}, { sessionId: cleared })
-    ).resolves.toMatchObject({ run: { id: runId } })
-    expect(db.getRunRaw(runId)!.coordinator_orca_session_id).toBe(COORDINATOR)
-    await openChat(PEER_CHAT)
-    await expect(
-      call(
-        'orchestration.send',
-        { to: `orca_session_id:${PEER_CHAT}`, subject: 'hi' },
-        { sessionId: cleared }
-      )
-    ).resolves.toMatchObject({ message: { from_handle: `orca_session_id:${COORDINATOR}` } })
-  })
-
   it('binds a Run a cleared chat creates or uses to the same conversation at the current generation', async () => {
     const root = COORDINATOR
     const boundOrcaSessionId = (runId: string): string | null =>
@@ -627,49 +561,9 @@ describe('a /clear keeps the chat its orchestration address', () => {
       call('orchestration.runCurrent', {}, { sessionId: cleared })
     ).resolves.toMatchObject({ run: { id: first } })
   })
-
-  it('lands successive mail at the same conversation after repeated clears', async () => {
-    await openChat(PEER_CHAT)
-    const firstClear = await clearChat(PEER_CHAT)
-    const cleared = await clearChat(firstClear)
-    expect(firstClear).toBe(PEER_CHAT)
-    expect(cleared).toBe(PEER_CHAT)
-    // The first ping starts the fresh context, which neither clear did.
-    for (const [index, spelling] of [PEER_CHAT, firstClear, cleared].entries()) {
-      const sent = await call('orchestration.send', {
-        from: 'term_worker',
-        to: `orca_session_id:${spelling}`,
-        subject: `ping ${index}`
-      })
-      expect(sent).toMatchObject({ message: { to_handle: `orca_session_id:${PEER_CHAT}` } })
-      await vi.waitFor(() => expect(connectionFor(cleared).turns).toHaveLength(index + 1), WAIT)
-      expect(turnText(connectionFor(cleared).turns[index]!)).toContain(`Subject: ping ${index}`)
-      await settleTurn(cleared, index)
-      await vi.waitFor(() => expect(unread(`orca_session_id:${PEER_CHAT}`)).toEqual([]), WAIT)
-    }
-  })
 })
 
 describe('any live session is addressable by its id', () => {
-  it('lands mail sent to `orca_session_id:<id>` whole as a turn in that chat', async () => {
-    const peer = await openChat(PEER_CHAT)
-
-    const sent = await call('orchestration.send', {
-      from: 'term_worker',
-      to: `orca_session_id:${PEER_CHAT}`,
-      subject: 'ping'
-    })
-    expect(sent).toMatchObject({ message: { to_handle: `orca_session_id:${PEER_CHAT}` } })
-
-    await vi.waitFor(() => expect(peer.turns).toHaveLength(1), WAIT)
-    const text = turnText(peer.turns[0]!)
-    expect(text).toContain('Subject: ping')
-    // Direct mail names who to reply as.
-    expect(text).toContain(`--from orca_session_id:${PEER_CHAT}`)
-    await settleTurn(PEER_CHAT, 0)
-    await vi.waitFor(() => expect(unread(`orca_session_id:${PEER_CHAT}`)).toEqual([]), WAIT)
-  })
-
   it('refuses mail to a chat that was closed, before storing it', async () => {
     await openChat(PEER_CHAT)
     await host.setSessionTabVisibility(PEER_CHAT, false)

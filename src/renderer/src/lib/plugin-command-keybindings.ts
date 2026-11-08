@@ -1,4 +1,4 @@
-import type { ActivePluginCommand } from '@/store/plugin-panels'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import {
   getEffectiveKeybindingsForDefinition,
   keybindingIsActiveInContext,

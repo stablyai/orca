@@ -1,4 +1,4 @@
-import { useAppViewExternalStore } from '@/store/app-state-view'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -11,7 +11,10 @@ type Observer = {
 }
 type Reads = {
   settings?: () => Promise<AgentPickerEntry[] | undefined>
-  catalog: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['catalog'] | undefined>
+  catalog: (
+    entry: AgentPickerEntry,
+    waitForListing: boolean
+  ) => Promise<AgentPickerEntry['catalog'] | undefined>
   support: (entry: AgentPickerEntry) => Promise<AgentPickerEntry['structured'] | undefined>
 }
 type SupportRead = {
@@ -25,6 +28,7 @@ class AgentPickerAcquisition {
   settingsPending = false
   private outstanding = { catalog: 0, support: 0 }
   private queued: Record<'catalog' | 'support', Set<number>>
+  private deferredCatalogs = new Set<number>()
   private supports = new Map<number, SupportRead>()
   private defaults: AgentPickerEntry[]
 
@@ -61,7 +65,8 @@ class AgentPickerAcquisition {
           this.initial[i].catalogRead !== 'unsupported' &&
           entry.surfaces.length &&
           entry.catalogRead !== 'pending' &&
-          (entry.catalog.origin === 'unknown' ||
+          (this.deferredCatalogs.has(i) ||
+            entry.catalog.origin === 'unknown' ||
             entry.catalogRead === 'failed' ||
             entry.catalogRead === 'unsupported' ||
             entry.catalog.unavailable !== undefined ||
@@ -142,6 +147,23 @@ class AgentPickerAcquisition {
       })
   }
 
+  private async readCatalog(entry: AgentPickerEntry, index: number) {
+    this.deferredCatalogs.delete(index)
+    const saved = await this.reads.catalog(entry, false)
+    if (!saved?.listingInProgress) {
+      return saved
+    }
+    if (saved.origin !== 'unknown') {
+      this.entries = this.entries.map((e, i) => (i === index ? { ...e, catalog: saved } : e))
+      this.publish()
+    }
+    if (!this.observers.size) {
+      this.deferredCatalogs.add(index)
+      return saved
+    }
+    return this.reads.catalog(entry, true)
+  }
+
   private admit(kind: 'catalog' | 'support') {
     while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
       const priorities = [...this.observers].map((o) => o.selected())
@@ -160,15 +182,18 @@ class AgentPickerAcquisition {
       }
       const read =
         kind === 'catalog'
-          ? this.reads
-              .catalog(entry)
+          ? this.readCatalog(entry, index)
               .then((catalog) => {
+                const resume = this.deferredCatalogs.has(index) && this.observers.size > 0
+                if (resume) {
+                  this.queued.catalog.add(index)
+                }
                 this.entries = this.entries.map((e, i) =>
                   i === index
                     ? {
                         ...e,
                         ...(catalog ? { catalog } : {}),
-                        catalogRead: 'settled'
+                        catalogRead: resume ? 'pending' : 'settled'
                       }
                     : e
                 )

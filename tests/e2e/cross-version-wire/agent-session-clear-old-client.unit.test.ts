@@ -14,7 +14,7 @@ import {
 } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/agent-session/structured-agent-session-reducer'
-import type { useNativeChatRewind } from '../../../src/renderer/src/components/native-chat/use-native-chat-rewind'
+import type { useNativeChatRewind } from '../../../src/renderer/src/components/native-chat/messages/actions/use-native-chat-rewind'
 
 const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))

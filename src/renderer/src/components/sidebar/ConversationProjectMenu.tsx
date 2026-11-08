@@ -11,7 +11,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { getRepoOwnerWorktreeVisibilityDefaults } from '@/store/worktree-visibility-defaults-by-host'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '@/store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { RepoHeaderProjectActionsMenu } from './worktree-list/rows/repo-header-project-actions'
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'
 import { ProjectGroupNameDialog } from './worktree-list/rows/ProjectGroupNameDialog'

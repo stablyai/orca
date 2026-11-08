@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import { boundHostList } from './bounded-host-list'
 import { HostListOverflowNote } from './HostListOverflowNote'
 import { noHostsMatchLabel, searchHostsLabel } from './host-picker-copy'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type HostComboboxOption = {
   id: string
@@ -64,6 +65,7 @@ export function HostCombobox({
   disabled?: boolean
   notifyOnReselect?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const selected = options.find((option) => option.id === value)
@@ -101,15 +103,15 @@ export function HostCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-[min(20rem,calc(100vw-1rem))]">
-        <Command shouldFilter={false} density="menu" label={searchHostsLabel()}>
+        <Command shouldFilter={false} density="menu" label={searchHostsLabel(t)}>
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder={searchHostsLabel()}
-            aria-label={searchHostsLabel()}
+            placeholder={searchHostsLabel(t)}
+            aria-label={searchHostsLabel(t)}
           />
           <CommandList>
-            <CommandEmpty>{noHostsMatchLabel()}</CommandEmpty>
+            <CommandEmpty>{noHostsMatchLabel(t)}</CommandEmpty>
             {groupOptions(shown).map((group) => (
               <CommandGroup key={group.heading ?? ''} heading={group.heading}>
                 {group.options.map((option) => (

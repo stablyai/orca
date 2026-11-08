@@ -37,18 +37,18 @@ describe('quantizeFontScale', () => {
 })
 
 describe('useMobileNativeChatPinchGesture', () => {
-  let renderer: { unmount: () => void } | null = null
+  let renderer: ReturnType<typeof create> | null = null
   let latest = 1
 
-  function Probe(): null {
-    latest = useMobileNativeChatPinchGesture().fontScale
+  function Probe({ chat }: { chat: string }): null {
+    latest = useMobileNativeChatPinchGesture(chat).fontScale
     return null
   }
 
   beforeEach(() => {
     latest = 1
     act(() => {
-      renderer = create(createElement(Probe))
+      renderer = create(createElement(Probe, { chat: 'a' }))
     })
   })
 
@@ -74,5 +74,13 @@ describe('useMobileNativeChatPinchGesture', () => {
     expect(latest).toBe(1.35)
     act(() => handlers.update?.({ scale: 1.42 }))
     expect(latest).toBe(1.4)
+  })
+
+  it('starts another chat in the same view at the default size', () => {
+    act(() => handlers.start?.())
+    act(() => handlers.update?.({ scale: 1.34 }))
+    expect(latest).toBe(1.35)
+    act(() => renderer?.update(createElement(Probe, { chat: 'b' })))
+    expect(latest).toBe(1)
   })
 })

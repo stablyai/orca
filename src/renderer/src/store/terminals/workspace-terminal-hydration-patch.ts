@@ -5,7 +5,7 @@ import {
   makePaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { resolveAgentPaneAuthorityKey } from '../slices/agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from '../slices/agent-status/agent-pane-authority'
 import type { HydrateWorkspaceSessionOptions } from './terminal-contracts'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 

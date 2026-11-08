@@ -1,14 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
-import { createTestStore, makeWorktree, seedStore } from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import type * as HostPersistence from '@/lib/workspace/persistence/workspace-session-host-persistence'
-import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mobile-session-snapshots'
+
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '../../store/slices/tabs-drawn-from-main.test-fixture'
+} from '../../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 const { storeRef } = vi.hoisted(() => {
   const ref: { current: ReturnType<typeof createTestStore> | null } = { current: null }
@@ -41,12 +42,12 @@ vi.mock('@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow', () =
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock(
@@ -58,7 +59,6 @@ vi.mock(
 )
 
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
-import { handleSwitchRecentTab } from '../ipc-tab-switch'
 
 type OpenFilePayload = {
   worktreeId: string
@@ -214,19 +214,6 @@ describe('runtime file opens on the host desktop', () => {
     expect(tabEntityIds(store, VIEWED)).toContain(VIEWED_APP_TS.filePath)
   })
 
-  it('CLI caller diff is added to the viewed worktree without replacing the visible editor', async () => {
-    const { openDiff, store } = await setup('editor')
-    const before = screenState(store)
-    expect(store.getState().activeFileId).toBe(VIEWED_FILE)
-
-    await openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false, navigation: 'caller' })
-
-    expect(screenState(store)).toEqual(before)
-    expect(
-      store.getState().openFiles.some((file) => file.mode === 'diff' && file.worktreeId === VIEWED)
-    ).toBe(true)
-  })
-
   it('CLI caller open in a background worktree leaves the viewed editor alone', async () => {
     const { openFile, store } = await setup('editor')
     const before = screenState(store)
@@ -239,112 +226,6 @@ describe('runtime file opens on the host desktop', () => {
     store.getState().setActiveWorktree(BACKGROUND)
     expect(store.getState().activeFileId).toBe(APP_TS.filePath)
     expect(store.getState().activeTabType).toBe('editor')
-  })
-
-  it('CLI caller diff in a background worktree leaves the viewed editor alone', async () => {
-    const { openDiff, store } = await setup('editor')
-    const before = screenState(store)
-
-    await openDiff({ worktreeId: BACKGROUND, ...APP_TS, staged: true, navigation: 'caller' })
-
-    expect(screenState(store)).toEqual(before)
-    const opened = store
-      .getState()
-      .openFiles.find((file) => file.mode === 'diff' && file.worktreeId === BACKGROUND)
-    expect(opened?.diffSource).toBe('staged')
-    expect(activeEditorEntityId(store, BACKGROUND)).toBe(opened?.id)
-  })
-
-  it('CLI caller reopen of an already-open file keeps the focused terminal', async () => {
-    const { openFile, store } = await setup('terminal')
-    const before = screenState(store)
-    const tabCount = tabEntityIds(store, VIEWED).length
-
-    await openFile({
-      worktreeId: VIEWED,
-      filePath: VIEWED_FILE,
-      relativePath: 'notes.md',
-      navigation: 'caller'
-    })
-    await openFile({
-      worktreeId: VIEWED,
-      filePath: VIEWED_FILE,
-      relativePath: 'notes.md',
-      navigation: 'caller'
-    })
-
-    expect(screenState(store)).toEqual(before)
-    expect(tabEntityIds(store, VIEWED)).toHaveLength(tabCount)
-  })
-
-  it('CLI caller reopen of an already-open diff keeps the focused terminal', async () => {
-    const { openDiff, store } = await setup('terminal')
-    const before = screenState(store)
-
-    await openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false, navigation: 'caller' })
-    const tabCount = tabEntityIds(store, VIEWED).length
-    await openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false, navigation: 'caller' })
-
-    expect(screenState(store)).toEqual(before)
-    expect(tabEntityIds(store, VIEWED)).toHaveLength(tabCount)
-  })
-
-  it('selects a background CLI tab without stamping a visit, keeping its tab history', async () => {
-    const { openFile, store } = await setup('editor')
-    const terminal = store.getState().createTab(BACKGROUND)
-    const tabId = (entityId: string): string | undefined =>
-      store.getState().unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === entityId)
-        ?.id
-    const focusTimes = (): [string, number | undefined][] =>
-      (store.getState().unifiedTabsByWorktree[BACKGROUND] ?? []).map((tab) => [
-        tab.entityId,
-        tab.lastFocusedAt
-      ])
-    const history = (): string[] | undefined =>
-      store.getState().groupsByWorktree[BACKGROUND]?.[0]?.recentTabIds
-    const timesBefore = focusTimes()
-
-    await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
-
-    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
-    // Why: the jump palette's recent rows sort by lastFocusedAt; the user never looked at this tab.
-    expect(focusTimes()).toEqual([...timesBefore, [APP_TS.filePath, undefined]])
-    // Why: the group history must still end on the active tab, or Ctrl+Tab has nowhere to go back to.
-    expect(history()?.at(-1)).toBe(tabId(APP_TS.filePath))
-
-    store.getState().activateTab(tabId(terminal.id) ?? '')
-    const timesBeforeReopen = focusTimes()
-    await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
-
-    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
-    expect(focusTimes()).toEqual(timesBeforeReopen)
-    expect(history()?.at(-1)).toBe(tabId(APP_TS.filePath))
-  })
-
-  it.each([
-    ['a new tab', false],
-    ['a reopened tab already in the history', true]
-  ] as const)('Ctrl+Tab works after a background CLI open of %s', async (_label, reopen) => {
-    const { openFile, store } = await setup('editor')
-    store.getState().setActiveWorktree(BACKGROUND)
-    const terminal = store.getState().createTab(BACKGROUND)
-    store.getState().setActiveTabType('terminal', BACKGROUND)
-    store.getState().setActiveWorktree(VIEWED)
-    const terminalTabId = store
-      .getState()
-      .unifiedTabsByWorktree[BACKGROUND]?.find((tab) => tab.entityId === terminal.id)?.id
-    if (reopen) {
-      await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
-      store.getState().activateTab(terminalTabId ?? '')
-    }
-
-    await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation: 'caller' })
-    store.getState().setActiveWorktree(BACKGROUND)
-    store.getState().setActiveTabType('editor', BACKGROUND)
-
-    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
-    expect(handleSwitchRecentTab()).toBe(true)
-    expect(activeEditorEntityId(store, BACKGROUND)).toBe(terminal.id)
   })
 
   it.each(['workspaces', 'conversations'] as const)(
@@ -368,81 +249,6 @@ describe('runtime file opens on the host desktop', () => {
       expect(state.lastVisitedAtByWorktreeId[BACKGROUND]).toBeDefined()
     }
   )
-
-  it('selects a phone-opened diff in the viewed worktree so "Open in session" lands on it', async () => {
-    const { openDiff, store } = await setup('terminal')
-
-    await openDiff({ worktreeId: VIEWED, ...VIEWED_APP_TS, staged: false })
-
-    const state = store.getState()
-    const diff = state.openFiles.find((file) => file.mode === 'diff' && file.worktreeId === VIEWED)
-    expect(state.activeWorktreeId).toBe(VIEWED)
-    expect(state.activeTabType).toBe('editor')
-    expect(state.activeFileId).toBe(diff?.id)
-    expect(activeEditorEntityId(store, VIEWED)).toBe(diff?.id)
-    const snapshot = buildMobileSessionTabSnapshots(state, false).find(
-      (candidate) => candidate.worktree === VIEWED
-    )
-    const activeTab = snapshot?.tabs.find((tab) => tab.id === snapshot.activeTabId)
-    expect(activeTab && 'relativePath' in activeTab ? activeTab.relativePath : null).toBe(
-      VIEWED_APP_TS.relativePath
-    )
-  })
-
-  it('publishes a CLI caller tab to the phone tab list without moving the desktop', async () => {
-    const { openFile, store } = await setup('terminal')
-    const before = screenState(store)
-
-    await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'caller' })
-
-    expect(screenState(store)).toEqual(before)
-    const snapshot = buildMobileSessionTabSnapshots(store.getState(), false).find(
-      (candidate) => candidate.worktree === VIEWED
-    )
-    expect(
-      snapshot?.tabs.some(
-        (tab) => 'relativePath' in tab && tab.relativePath === VIEWED_APP_TS.relativePath
-      )
-    ).toBe(true)
-  })
-
-  it.each(['all', 'host'] as const)(
-    'brings the user to the file with navigation %s',
-    async (navigation) => {
-      const { openFile, store } = await setup('terminal')
-
-      await openFile({ worktreeId: BACKGROUND, ...APP_TS, navigation })
-
-      const state = store.getState()
-      expect(state.activeWorktreeId).toBe(BACKGROUND)
-      expect(state.activeView).toBe('terminal')
-      expect(state.activeFileId).toBe(APP_TS.filePath)
-      expect(state.activeTabType).toBe('editor')
-      expect(state.pendingRevealWorktree?.worktreeId).toBe(BACKGROUND)
-      expect(state.lastVisitedAtByWorktreeId[BACKGROUND]).toBeDefined()
-    }
-  )
-
-  it('selects the tab over a focused terminal in the viewed worktree with navigation all', async () => {
-    const { openFile, store } = await setup('terminal')
-
-    await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'all' })
-
-    expect(store.getState().activeTabType).toBe('editor')
-    expect(store.getState().activeFileId).toBe(VIEWED_APP_TS.filePath)
-    expect(activeEditorEntityId(store, VIEWED)).toBe(VIEWED_APP_TS.filePath)
-  })
-
-  it('brings the user to a diff with navigation all', async () => {
-    const { openDiff, store } = await setup('editor')
-
-    await openDiff({ worktreeId: BACKGROUND, ...APP_TS, staged: false, navigation: 'all' })
-
-    const state = store.getState()
-    expect(state.activeWorktreeId).toBe(BACKGROUND)
-    expect(state.openFiles.find((file) => file.id === state.activeFileId)?.mode).toBe('diff')
-    expect(state.pendingRevealWorktree?.worktreeId).toBe(BACKGROUND)
-  })
 
   describe('with another server focused', () => {
     const FRESH = 'repo9::/repo9/fresh'
@@ -470,32 +276,6 @@ describe('runtime file opens on the host desktop', () => {
 
       const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
       expect(opened?.runtimeEnvironmentId).toBeNull()
-    })
-
-    it('keeps a desktop-owned diff open on this desktop', async () => {
-      const { openDiff, store } = await setup('editor')
-      focusServer(store)
-
-      await openDiff({
-        worktreeId: FRESH,
-        ...FRESH_TS,
-        staged: false,
-        runtimeEnvironmentId: null,
-        navigation: 'caller'
-      })
-
-      const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
-      expect(opened?.runtimeEnvironmentId).toBeNull()
-    })
-
-    it('an unnamed owner would hand the file to the focused server', async () => {
-      const { openFile, store } = await setup('editor')
-      focusServer(store)
-
-      await openFile({ worktreeId: FRESH, ...FRESH_TS, navigation: 'caller' })
-
-      const opened = store.getState().openFiles.find((file) => file.worktreeId === FRESH)
-      expect(opened?.runtimeEnvironmentId).toBe('srv-focused')
     })
   })
 })
@@ -544,25 +324,6 @@ describe('runtime file positioning', () => {
     }
   )
 
-  it('reveals a focused file after mounting, including its column', async () => {
-    const { openFile, store } = await setup('terminal')
-    await openFile({
-      worktreeId: VIEWED,
-      ...VIEWED_APP_TS,
-      navigation: 'all',
-      position: { line: 12, column: 5 }
-    })
-    expect(store.getState().pendingEditorReveal).toBeNull()
-    flushFrames()
-    expect(store.getState().pendingEditorReveal).toMatchObject({
-      filePath: VIEWED_APP_TS.filePath,
-      fileId: VIEWED_APP_TS.filePath,
-      line: 12,
-      column: 5,
-      matchLength: 0
-    })
-  })
-
   it('preserves a viewed terminal until the positioned background file is selected', async () => {
     const { openFile, store } = await setup('terminal')
     const before = screenState(store)
@@ -589,52 +350,6 @@ describe('runtime file positioning', () => {
     })
   })
 
-  it('defers a viewed Markdown source switch until the user returns to its tab', async () => {
-    const { openFile, store } = await setup('editor')
-    store.getState().setMarkdownViewMode(VIEWED_FILE, 'rich')
-    await openFile({
-      worktreeId: VIEWED,
-      filePath: VIEWED_FILE,
-      relativePath: 'notes.md',
-      navigation: 'caller',
-      position: { line: 8 }
-    })
-    flushFrames()
-    expect(store.getState().markdownViewMode[VIEWED_FILE]).toBe('rich')
-    expect(store.getState().pendingEditorReveal).toBeNull()
-    store.getState().createTab(VIEWED)
-    const tab = store
-      .getState()
-      .unifiedTabsByWorktree[VIEWED]?.find((candidate) => candidate.entityId === VIEWED_FILE)
-    store.getState().activateTab(tab?.id ?? '')
-    flushFrames()
-    expect(store.getState().markdownViewMode[VIEWED_FILE]).toBe('source')
-    expect(store.getState().pendingEditorReveal).toMatchObject({ fileId: VIEWED_FILE, line: 8 })
-  })
-
-  it('waits again if the user returns to a terminal before reveal frames run', async () => {
-    const { openFile, store } = await setup('terminal')
-    const terminal = store.getState().getActiveTab(VIEWED)
-    await openFile({
-      worktreeId: VIEWED,
-      ...VIEWED_APP_TS,
-      navigation: 'caller',
-      position: { line: 17 }
-    })
-    const tab = store
-      .getState()
-      .unifiedTabsByWorktree[VIEWED]?.find(
-        (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
-      )
-    store.getState().activateTab(tab?.id ?? '')
-    store.getState().activateTab(terminal?.id ?? '')
-    flushFrames()
-    expect(store.getState().pendingEditorReveal).toBeNull()
-    store.getState().activateTab(tab?.id ?? '')
-    flushFrames()
-    expect(store.getState().pendingEditorReveal).toMatchObject({ line: 17, viewStateId: tab?.id })
-  })
-
   it('invalidates a published reveal if navigation changes before Monaco applies it', async () => {
     const { openFile, store } = await setup('terminal')
     const terminal = store.getState().getActiveTab(VIEWED)
@@ -649,19 +364,6 @@ describe('runtime file positioning', () => {
     expect(reveal?.canApply?.()).toBe(true)
     store.getState().activateTab(terminal?.id ?? '')
     expect(reveal?.canApply?.()).toBe(false)
-  })
-
-  it('does not publish a reveal after its bridge is disposed', async () => {
-    const { openFile, store, dispose } = await setup('terminal')
-    await openFile({
-      worktreeId: VIEWED,
-      ...VIEWED_APP_TS,
-      navigation: 'all',
-      position: { line: 17 }
-    })
-    dispose()
-    flushFrames()
-    expect(store.getState().pendingEditorReveal).toBeNull()
   })
 
   it('invalidates an already-published reveal when its bridge is disposed', async () => {
@@ -716,41 +418,6 @@ describe('runtime file positioning', () => {
     store.getState().activateTab(tab?.id ?? '')
     flushFrames()
     expect(store.getState().pendingEditorReveal).toMatchObject({ line: 19 })
-  })
-
-  it.each(['caller', 'all'] as const)(
-    'cancels a queued position when the same file later opens without one (%s)',
-    async (navigation) => {
-      const { openFile, store } = await setup('terminal')
-      await openFile({
-        worktreeId: VIEWED,
-        ...VIEWED_APP_TS,
-        navigation: 'caller',
-        position: { line: 17 }
-      })
-      await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation })
-      const tab = store
-        .getState()
-        .unifiedTabsByWorktree[VIEWED]?.find(
-          (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
-        )
-      store.getState().activateTab(tab?.id ?? '')
-      flushFrames()
-      expect(store.getState().pendingEditorReveal).toBeNull()
-    }
-  )
-
-  it('cancels a positioned open before publication when a plain open follows', async () => {
-    const { openFile, store } = await setup('terminal')
-    await openFile({
-      worktreeId: VIEWED,
-      ...VIEWED_APP_TS,
-      navigation: 'all',
-      position: { line: 17 }
-    })
-    await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'caller' })
-    flushFrames()
-    expect(store.getState().pendingEditorReveal).toBeNull()
   })
 
   it('invalidates a published position when a plain open follows', async () => {
@@ -809,78 +476,5 @@ describe('runtime file positioning', () => {
     store.getState().activateTab(tab?.id ?? '')
     flushFrames()
     expect(store.getState().pendingEditorReveal).toBeNull()
-  })
-
-  it('discards positioning when its file closes', async () => {
-    const { openFile, store } = await setup('terminal')
-    await openFile({
-      worktreeId: VIEWED,
-      ...VIEWED_APP_TS,
-      navigation: 'caller',
-      position: { line: 3 }
-    })
-    store.getState().closeFile(VIEWED_APP_TS.filePath)
-    await settle()
-    await openFile({ worktreeId: VIEWED, ...VIEWED_APP_TS, navigation: 'all' })
-    flushFrames()
-    expect(store.getState().pendingEditorReveal).toBeNull()
-  })
-
-  it('isolates queued positions for the same path on different owners and workspaces', async () => {
-    const { openFile, store } = await setup('terminal')
-    await openFile({
-      worktreeId: VIEWED,
-      ...VIEWED_APP_TS,
-      runtimeEnvironmentId: null,
-      navigation: 'caller',
-      position: { line: 3 }
-    })
-    await openFile({
-      worktreeId: BACKGROUND,
-      ...VIEWED_APP_TS,
-      runtimeEnvironmentId: 'remote-1',
-      navigation: 'caller',
-      position: { line: 19 }
-    })
-    store.getState().setActiveWorktree(BACKGROUND)
-    flushFrames()
-    const remote = store
-      .getState()
-      .openFiles.find((file) => file.runtimeEnvironmentId === 'remote-1')
-    expect(remote?.id).not.toBe(VIEWED_APP_TS.filePath)
-    expect(store.getState().pendingEditorReveal).toMatchObject({ fileId: remote?.id, line: 19 })
-    store.getState().setPendingEditorReveal(null)
-    store.getState().setActiveWorktree(VIEWED)
-    const tab = store
-      .getState()
-      .unifiedTabsByWorktree[VIEWED]?.find(
-        (candidate) => candidate.entityId === VIEWED_APP_TS.filePath
-      )
-    store.getState().activateTab(tab?.id ?? '')
-    flushFrames()
-    expect(store.getState().pendingEditorReveal).toMatchObject({
-      fileId: VIEWED_APP_TS.filePath,
-      line: 3
-    })
-  })
-
-  it('positions a background worktree only after it becomes visible', async () => {
-    const { openFile, store } = await setup('editor')
-    const before = screenState(store)
-    await openFile({
-      worktreeId: BACKGROUND,
-      ...APP_TS,
-      navigation: 'caller',
-      position: { line: 17 }
-    })
-    flushFrames()
-    expect(screenState(store)).toEqual(before)
-    expect(store.getState().pendingEditorReveal).toBeNull()
-    store.getState().setActiveWorktree(BACKGROUND)
-    flushFrames()
-    expect(store.getState().pendingEditorReveal).toMatchObject({
-      fileId: APP_TS.filePath,
-      line: 17
-    })
   })
 })

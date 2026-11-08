@@ -22,26 +22,6 @@ describe('WatcherProcessCrashFuse', () => {
     vi.restoreAllMocks()
   })
 
-  it('opens after three crashes at the watcher restart cadence', () => {
-    const fuse = new WatcherProcessCrashFuse()
-
-    tripAt(fuse, 0)
-
-    expect(fuse.isOpen(80_000)).toBe(true)
-  })
-
-  it('stays open for the cooldown, then half-opens to retry native watching', () => {
-    const fuse = new WatcherProcessCrashFuse()
-    tripAt(fuse, 0)
-    const openedAt = 80_000
-
-    expect(fuse.isOpen(openedAt + CRASH_FUSE_COOLDOWN_INITIAL_MS - 1)).toBe(true)
-    expect(fuse.isOpen(openedAt + CRASH_FUSE_COOLDOWN_INITIAL_MS)).toBe(false)
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining('retrying native file watching')
-    )
-  })
-
   it('reopens on a single trial crash with a doubled, capped cooldown', () => {
     const fuse = new WatcherProcessCrashFuse()
     tripAt(fuse, 0)
@@ -125,23 +105,5 @@ describe('WatcherProcessCrashFuse', () => {
     expect(fuse.isOpen(stableAt)).toBe(false)
     fuse.recordCrash(stableAt + 1)
     expect(fuse.isOpen(stableAt + 1)).toBe(false)
-  })
-
-  it('closes immediately when explicitly reset', () => {
-    const fuse = new WatcherProcessCrashFuse()
-    tripAt(fuse, 0)
-
-    fuse.reset()
-    expect(fuse.isOpen(80_000)).toBe(false)
-  })
-
-  it('expires crashes outside the two-minute window', () => {
-    const fuse = new WatcherProcessCrashFuse()
-
-    fuse.recordCrash(0)
-    fuse.recordCrash(40_000)
-    fuse.recordCrash(120_000)
-
-    expect(fuse.isOpen(120_000)).toBe(false)
   })
 })

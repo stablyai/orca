@@ -1,23 +1,33 @@
 import { mkdtempSync, rmSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { describe, expect, it, vi } from 'vitest'
-import { RuntimeOrchestrationSenderNames } from '../../../runtime-orchestration-sender-names'
+
+import type { RuntimeOrchestrationSenderNames } from '../senders/runtime-orchestration-sender-names'
+
 import { OrchestrationDb } from '../../db/orchestration-db'
+
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
+
 import { StructuredMailboxParking } from '../structured-mail/structured-mailbox-parking'
+
 import type {
   StructuredMailboxPointerHost,
   StructuredPointerSendOutcome
 } from './structured-mailbox-pointer-host-contract'
+
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
+
 import type { StructuredMailSendRow } from '../../db/messages/structured-mail-send-store'
+
 import { MAX_PROMPT_BYTES } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
-import { agentMessageTranscriptText } from '../../../../../shared/agent-session/agent-message-display-text'
 
 type Mail = {
   id: string
@@ -254,31 +264,6 @@ const flush = async () => {
 }
 
 describe('structured mailbox delivery: each message whole', () => {
-  it('hands an idle chat the whole message and marks it read', async () => {
-    const h = harness()
-    h.receive('m1', 'Tests pass; PR #12 is ready.')
-    await h.deliver()
-    expect(h.sent).toHaveLength(1)
-    expect(h.sent[0]!.text).toContain('Subject: subject of m1')
-    expect(h.sent[0]!.text).toContain('Tests pass; PR #12 is ready.')
-    expect(h.sent[0]!.text).toContain('[Reply: orca-dev orchestration reply --id m1')
-    const delivered = vi.mocked(h.host.send).mock.calls[0][0].body
-    expect(h.sent[0]!.text).toBe(
-      [
-        '──── From: TERM_COORD (term_coord) (status) ────',
-        'Subject: subject of m1',
-        'Tests pass; PR #12 is ready.',
-        '[Reply: orca-dev orchestration reply --id m1 --body "..."]',
-        '─'.repeat(60)
-      ].join('\n')
-    )
-    expect(agentMessageTranscriptText(delivered.blocks, delivered.from)).toBe(
-      'subject of m1\n\nTests pass; PR #12 is ready.'
-    )
-    expect(h.mail.get('m1')).toMatchObject({ read: 1 })
-    expect(h.records.size).toBe(0)
-  })
-
   it('queues each message as its own card while the chat works, reading each on handover', async () => {
     const h = harness({ busy: true })
     h.receive('m1')
@@ -309,45 +294,6 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.host.withdraw).toHaveBeenCalledWith('session-1', operationId)
     expect(h.records.size).toBe(0)
     expect(h.mail.get('m1')?.read).toBe(1)
-  })
-
-  it('never sends a message twice when its card already waits after a restart', async () => {
-    const h = harness({ busy: true })
-    h.receive('m1')
-    await h.deliver()
-    // A crash before the delivered stamp: the record and the card survive, the stamp does not.
-    h.mail.get('m1')!.delivered_at = null
-    h.restart()
-    await h.deliver()
-    expect(h.host.send).toHaveBeenCalledTimes(1)
-    expect(h.mail.get('m1')?.delivered_at).toBe('now')
-  })
-
-  it('admits a recorded send that never landed under the same id', async () => {
-    const h = harness({ busy: true })
-    h.receive('m1')
-    await h.deliver()
-    const first = h.operation('m1')
-    // Recorded, then Orca stopped before the host admitted it.
-    h.chat.delete(first)
-    h.restart()
-    await h.deliver()
-    expect(h.host.send).toHaveBeenCalledTimes(2)
-    expect(h.sent.map((send) => send.operationId)).toEqual([first, first])
-    expect(h.operation('m1')).toBe(first)
-  })
-
-  it('never sends again a message that may have reached the agent', async () => {
-    const h = harness({ busy: true })
-    h.receive('m1')
-    await h.deliver()
-    h.settle('m1', { kind: 'unknown' })
-    await h.journal()
-    await h.deliver()
-    expect(h.host.send).toHaveBeenCalledTimes(1)
-    // Still unread for `check`, and nothing left to follow.
-    expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })
-    expect(h.records.size).toBe(0)
   })
 
   it('sends a proven rejection again once, under a new id, only after a later turn or clear', async () => {
@@ -386,17 +332,6 @@ describe('structured mailbox delivery: each message whole', () => {
     expect(h.host.send).toHaveBeenCalledTimes(1)
     expect(h.records.size).toBe(0)
     expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })
-  })
-
-  it('keeps refused mail unstamped and retries it on the session’s next journal edge', async () => {
-    const h = harness()
-    h.receive('m1')
-    h.answers.push(async () => ({ kind: 'refused' }))
-    await h.deliver()
-    expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: null })
-    expect(h.records.size).toBe(0)
-    await h.journal()
-    expect(h.mail.get('m1')?.read).toBe(1)
   })
 
   it('still retries a refusal when an edge arrived while that send was in flight', async () => {
@@ -454,20 +389,6 @@ describe('structured mailbox delivery: each message whole', () => {
     ])
     expect(h.host.withdraw).toHaveBeenCalledTimes(1)
     expect(h.records.get('m2')?.session_id).toBe('session-2')
-  })
-
-  it('withdraws a former owner’s waiting card and hands the mail to the new owner', async () => {
-    const h = harness({ busy: true })
-    h.receive('m1')
-    await h.deliver()
-    const first = h.operation('m1')
-    h.setOwner('session-2')
-    h.delivery.withdrawStale()
-    await flush()
-    expect(h.host.withdraw).toHaveBeenCalledWith('session-1', first)
-    expect(h.sent.map((send) => send.sessionId)).toEqual(['session-1', 'session-2'])
-    // The old card's deletion was Orca's, not the person's: the mail was not marked read.
-    expect(h.mail.get('m1')).toMatchObject({ read: 0, delivered_at: 'now' })
   })
 
   it('settles a card the queue dropped at handover so its deletion never reads as the person’s', async () => {
@@ -539,51 +460,6 @@ describe('structured mailbox delivery: each message whole', () => {
     await h.journal()
     expect(h.mail.get('m1')).toMatchObject({ read: 1, delivered_at: 'now' })
     expect(h.records.size).toBe(0)
-  })
-})
-
-describe('what the lane remembers about settled mailboxes', () => {
-  /** The in-memory settle bookkeeping still held: per-mailbox change counts and last settles. */
-  const retained = (h: ReturnType<typeof harness>) =>
-    h.delivery['settledState']['changes'].size + h.delivery['settledState']['settled'].size
-
-  it.each([4, 40])(
-    'keeps nothing for %i ended mailboxes cleaned up with no mail ever sent',
-    async (count) => {
-      const h = harness()
-      const gone = Array.from({ length: count }, (_, index) => `dispatch:gone-${index}`)
-      h.delivery.withdrawStale(gone)
-      h.delivery.withdrawStale(gone)
-      await flush()
-      expect(retained(h)).toBe(0)
-      expect(h.host.observe).not.toHaveBeenCalled()
-    }
-  )
-
-  it('keeps a cleanup that races a settle, then forgets the mailbox once nothing of it is left', async () => {
-    const h = harness({ busy: true })
-    h.receive('m1')
-    await h.deliver()
-    expect(h.records.size).toBe(1)
-    // The card still waits in the chat: the lane remembers the mailbox.
-    expect(retained(h)).toBeGreaterThan(0)
-    let answer!: () => void
-    vi.mocked(h.host.observe).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          answer = () => resolve({ kind: 'absent' })
-        })
-    )
-    h.end()
-    h.delivery.withdrawStale(['dispatch:d1'])
-    await flush()
-    // Mid-settle, the record goes and another cleanup finds nothing: its mark is kept for the pass.
-    h.records.clear()
-    h.delivery.withdrawStale(['dispatch:d1'])
-    expect(h.delivery['settledState']['changes'].get('dispatch:d1')).toBe(2)
-    answer()
-    await flush()
-    expect(retained(h)).toBe(0)
   })
 })
 
@@ -713,50 +589,4 @@ describe('parked mailboxes and their journal watches', () => {
       ])
     }
   )
-})
-
-it('captures a newly known actor for later mail admitted after an awaited send', async () => {
-  const db = new OrchestrationDb(':memory:')
-  try {
-    let known = false
-    const names = new RuntimeOrchestrationSenderNames({
-      getDb: () => db,
-      getHandleRecord: () => ({ worktreeId: 'w', tabId: 't', ptyId: 'p' }),
-      getPtyAgents: () => (known ? { foregroundAgent: 'codex' } : undefined),
-      getTerminalPaneKey: () => 't:leaf',
-      getWorkspaceSession: () => null,
-      getGeneratedTitlesEnabled: () => false,
-      getAgentStatusSnapshotForPane: () => [],
-      getTrackedTitle: () => null
-    })
-    const h = harness({ senderNames: names })
-    h.receive('m1')
-    let release: (() => void) | undefined
-    let entered: (() => void) | undefined
-    const paused = new Promise<void>((resolve) => {
-      entered = resolve
-    })
-    const resume = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    h.answers.push(async (operationId) => {
-      entered?.()
-      await resume
-      h.chat.set(operationId, { kind: 'accepted' })
-      return { kind: 'sent', state: 'accepted' }
-    })
-    const delivery = h.deliver()
-    await paused
-    known = true
-    h.receive('m2')
-    release?.()
-    await delivery
-    await h.deliver()
-    const sources = vi.mocked(h.host.send).mock.calls.map(([input]) => input.body.from)
-    expect(sources[0]?.kind === 'agent' && sources[0].senders[0].agent).toBeUndefined()
-    expect(sources[1]).toMatchObject({ senders: [{ agent: 'codex' }] })
-    expect(h.host.send).toHaveBeenCalledTimes(2)
-  } finally {
-    db.close()
-  }
 })

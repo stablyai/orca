@@ -5,7 +5,7 @@ import {
   requestedExecutionHostScope
 } from '../../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { useAppStore } from '@/store'
 import { getAgentSessionIdsKey } from './ai-vault-agent-session-refresh-key'
 

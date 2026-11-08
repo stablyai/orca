@@ -1,3 +1,4 @@
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   useSourceControlScope,
   useSourceControlScopeOwner,
@@ -10,7 +11,8 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-clien
 import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import type { AppState } from '@/store/types'
-import { getWorktreeMapFromState, selectRepoByIdForActiveWorkspace } from '@/store/selectors'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
@@ -70,7 +72,7 @@ export function useSourceControlWorktreeContext() {
   )
   // A section's history ends with its owner; only the ordinary panel caches several worktrees.
   const worktreeMap = useSourceControlState((s) =>
-    scopeWorktreeId ? scopedWorktrees : getWorktreeMapFromState(s)
+    scopeWorktreeId ? scopedWorktrees : getIndexedWorktreeMap(selectWorktreesByRepo(s))
   )
   const rightSidebarTab = useSourceControlState((s) => s.rightSidebarTab)
   const selectedRepo = useSourceControlState((s) =>

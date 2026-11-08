@@ -5,7 +5,7 @@ import type {
   BrowserWorkspace
 } from '../../../../../../shared/browser-workspace-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
+import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
 import { contentTabOpenPlacement } from '../../tabs/content-tab-open-placement'
 import type { BrowserSliceGet, CreateBrowserTabOptions } from '../browser-slice-contract'
 

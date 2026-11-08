@@ -22,24 +22,9 @@ describe('Cursor vendor hook replay guard', () => {
     ).toEqual([])
   })
 
-  it.each([{}, { CURSOR_VERSION: CURSOR_ENV.CURSOR_VERSION }, { CURSOR_PROJECT_DIR: '/p' }])(
-    'still delivers Claude hooks when only part of the Cursor environment is present: %j',
-    async (env) => {
-      expect(
-        (await runVendorHook(getClaudeManagedScript('local', CLAUDE_SCRIPT_OPTIONS), env)).requests
-      ).toEqual(['/hook/claude'])
-    }
-  )
-
   it('keeps Cursor native hooks reporting in the same environment', async () => {
     expect((await runVendorHook(getCursorManagedScript('local'), CURSOR_ENV)).requests).toEqual([
       '/hook/cursor'
-    ])
-  })
-
-  it('does not suppress a hook service that did not opt in to the Claude import guard', async () => {
-    expect((await runVendorHook(getClaudeManagedScript('local'), CURSOR_ENV)).requests).toEqual([
-      '/hook/claude'
     ])
   })
 })

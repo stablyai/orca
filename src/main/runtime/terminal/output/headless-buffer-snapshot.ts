@@ -15,8 +15,6 @@ export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends Orc
     OrchestrationCompatibilitySshTerminal
   >()
 
-  protected abstract getLeafKey(tabId: string, leafId: string): string
-
   protected async serializeHeadlessTerminalBuffer(
     ptyId: string,
     opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}

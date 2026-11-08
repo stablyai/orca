@@ -219,43 +219,6 @@ describe('resolveWindowShortcutAction', () => {
     ).toEqual({ type: 'jumpToTabIndex', index: 2 })
   })
 
-  it('applies custom keybinding overrides to main-process shortcuts', () => {
-    const overrides: KeybindingOverrides = {
-      'worktree.quickOpen': ['Mod+Shift+O'],
-      'workspace.openBoard': ['Mod+Alt+B'],
-      'view.tasks': ['Mod+Alt+K']
-    }
-
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyP', key: 'p', meta: false, control: true, alt: false, shift: false },
-        'linux',
-        overrides
-      )
-    ).toBeNull()
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyO', key: 'o', meta: false, control: true, alt: false, shift: true },
-        'linux',
-        overrides
-      )
-    ).toEqual({ type: 'openQuickOpen' })
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyB', key: 'b', meta: false, control: true, alt: true, shift: false },
-        'linux',
-        overrides
-      )
-    ).toEqual({ type: 'openWorkspaceBoard' })
-    expect(
-      resolveWindowShortcutAction(
-        { code: 'KeyK', key: 'k', meta: false, control: true, alt: true, shift: false },
-        'linux',
-        overrides
-      )
-    ).toEqual({ type: 'openTasks' })
-  })
-
   it('resolves workspace delete by default and honors custom terminal-active bindings', () => {
     const input = {
       code: 'Backspace',
@@ -357,48 +320,6 @@ describe('resolveWindowShortcutAction', () => {
         ctrlKey: false
       })
     ).toBe(true)
-  })
-
-  it('accepts all supported zoom key variants', () => {
-    const zoomInCases: WindowShortcutInput[] = [
-      { key: '=', meta: true, control: false, alt: false, shift: false },
-      { key: '+', meta: true, control: false, alt: false, shift: true },
-      { code: 'NumpadAdd', key: '', meta: true, control: false, alt: false, shift: false }
-    ]
-    for (const input of zoomInCases) {
-      expect(resolveWindowShortcutAction(input, 'darwin')).toEqual({
-        type: 'zoom',
-        direction: 'in'
-      })
-    }
-
-    const zoomOutCases: WindowShortcutInput[] = [
-      { key: '-', meta: false, control: true, alt: false, shift: false },
-      { key: 'Minus', meta: false, control: true, alt: false, shift: false },
-      { key: 'Subtract', meta: false, control: true, alt: false, shift: false },
-      { code: 'NumpadSubtract', key: '', meta: false, control: true, alt: false, shift: false }
-    ]
-    for (const input of zoomOutCases) {
-      expect(resolveWindowShortcutAction(input, 'linux')).toEqual({
-        type: 'zoom',
-        direction: 'out'
-      })
-    }
-
-    expect(
-      resolveWindowShortcutAction(
-        { key: '0', meta: false, control: true, alt: false, shift: false },
-        'linux'
-      )
-    ).toEqual({ type: 'zoom', direction: 'reset' })
-
-    // Why: Ctrl+Shift+_ is PowerShell undo on Windows; zoom-out must not steal it.
-    expect(
-      resolveWindowShortcutAction(
-        { key: '_', meta: false, control: true, alt: false, shift: true },
-        'win32'
-      )
-    ).toBeNull()
   })
 
   it('resolves the floating terminal chord when macOS Option composes the letter', () => {

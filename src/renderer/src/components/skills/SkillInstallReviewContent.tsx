@@ -14,7 +14,7 @@ import { SkillInstallRiskNotice } from './SkillInstallRiskNotice'
 import type { SkillInstallRiskSummary } from './skill-package-install-risk'
 import { skillInstallResultLabel } from './skill-install-result-label'
 import type { ResolvedSkillShare } from './skill-share-version-summary'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Submit stays in the footer; Enter in this field still submits its form. */
 export function SkillShareLinkInputForm({
@@ -26,6 +26,7 @@ export function SkillShareLinkInputForm({
   onLinkChange: (link: string) => void
   onSubmit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <form
       className="space-y-2"
@@ -35,16 +36,13 @@ export function SkillShareLinkInputForm({
       }}
     >
       <Label htmlFor="skill-share-link">
-        {translate(
-          'auto.components.skills.SkillInstallReviewContent.93eb0fe8c7',
-          'Orca skill link'
-        )}
+        {t('auto.components.skills.SkillInstallReviewContent.93eb0fe8c7', 'Orca skill link')}
       </Label>
       <Input
         id="skill-share-link"
         value={link}
         onChange={(event) => onLinkChange(event.target.value)}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.skills.SkillInstallReviewContent.66cff7a804',
           'https://app.orca.dev/skills/share/…'
         )}
@@ -52,7 +50,7 @@ export function SkillShareLinkInputForm({
         autoFocus
       />
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.skills.install.linkHint',
           'Opening a link never installs anything — you review it first.'
         )}
@@ -62,6 +60,7 @@ export function SkillShareLinkInputForm({
 }
 
 export function SkillInstallOutcome({ result }: { result: SkillInstallResult }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-3">
       <div
@@ -77,9 +76,9 @@ export function SkillInstallOutcome({ result }: { result: SkillInstallResult }):
           )}
         </div>
         <div>
-          <p className="text-sm font-medium">{skillInstallResultLabel(result)}</p>
+          <p className="text-sm font-medium">{skillInstallResultLabel(result, t)}</p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.skills.SkillInstallReviewContent.placementsChecked',
               '{{count}} placements checked.',
               { count: result.placements.length, defaultValue_one: '{{count}} placement checked.' }
@@ -102,7 +101,7 @@ export function SkillInstallOutcome({ result }: { result: SkillInstallResult }):
         <p className="text-xs text-muted-foreground">
           {result.failure.code}
           {result.failure.retryable
-            ? translate(
+            ? t(
                 'auto.components.skills.SkillInstallReviewContent.66270286ac',
                 '· You can retry safely.'
               )
@@ -130,6 +129,7 @@ export function SkillInstallReview({
   onDiscard: () => void
   children: ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const version = preview.version
   const hasConflict =
     result?.status === 'conflict' ||
@@ -148,10 +148,7 @@ export function SkillInstallReview({
         {version.releaseNotes.trim() ? (
           <p className="break-words whitespace-pre-wrap rounded-lg border border-border/40 bg-muted/40 p-3 text-xs leading-5 text-muted-foreground">
             <span className="font-semibold text-foreground">
-              {translate(
-                'auto.components.skills.SkillInstallReviewContent.releaseNotes',
-                'Release notes:'
-              )}
+              {t('auto.components.skills.SkillInstallReviewContent.releaseNotes', 'Release notes:')}
             </span>{' '}
             {version.releaseNotes}
           </p>
@@ -161,7 +158,7 @@ export function SkillInstallReview({
 
       <div className="space-y-3 rounded-xl border border-border/70 bg-card/40 p-3.5">
         <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.skills.SkillInstallReviewContent.targetHeader',
             'Installation Target'
           )}
@@ -176,26 +173,23 @@ export function SkillInstallReview({
         >
           <div className="flex items-center gap-2 text-sm font-medium text-destructive">
             <AlertTriangle className="size-4 shrink-0" />{' '}
-            {translate(
+            {t(
               'auto.components.skills.SkillInstallReviewContent.651b7d8a57',
               'Local copy needs a decision'
             )}
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            {translate('auto.components.skills.SkillInstallReviewContent.2a31912f14', 'Orca found')}{' '}
+            {t('auto.components.skills.SkillInstallReviewContent.2a31912f14', 'Orca found')}{' '}
             {result?.conflict?.kind ||
               destinationPreview?.currentState ||
-              translate(
-                'auto.components.skills.SkillInstallReviewContent.37d990b94c',
-                'changed'
-              )}{' '}
-            {translate(
+              t('auto.components.skills.SkillInstallReviewContent.37d990b94c', 'changed')}{' '}
+            {t(
               'auto.components.skills.SkillInstallReviewContent.a5675fb371',
               'content and left it untouched. Keep it, or explicitly discard and replace it with this version.'
             )}
           </p>
           <Button type="button" variant="destructive" size="sm" disabled={busy} onClick={onDiscard}>
-            {translate(
+            {t(
               'auto.components.skills.SkillInstallReviewContent.89e2601162',
               'Discard and replace'
             )}

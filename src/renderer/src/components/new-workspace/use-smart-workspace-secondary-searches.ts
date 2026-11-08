@@ -9,7 +9,7 @@ import type { LinearCollectionResult } from '../../../../shared/linear/workspace
 import { linearIssueViewError } from '@/lib/linear-read-error'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useEffect, useMemo, useRef } from 'react'
-import { searchRuntimeRepoBaseRefDetails } from '@/runtime/runtime-repo-client'
+import { searchRuntimeRepoBaseRefDetails } from '@/runtime/source-control/references/runtime-repo-client'
 import { lookupLinearIssueUrl } from '@/lib/work-items/linear/linear-issue-url-lookup'
 import { searchJiraIssuesByKeyOrText } from '@/components/jira-key-or-text-search'
 import { linearWorkspaceScopeSignature } from '../../../../shared/linear/workspace-types'

@@ -1,9 +1,11 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef } from 'react'
 import { AI_VAULT_AGENTS } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { useAiVaultConversationSearch } from '../search/ai-vault-conversation-search'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { useAllWorktrees, useProjectHostSetupProjection, useRepos } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { useRepos } from '@/store/repos/use-repository-catalog'
 import { useAiVaultPanelSessions } from '../session-list/ai-vault-session-filters'
 import { countAiVaultViewAdjustments } from '../scope/ai-vault-view-defaults'
 import { useAiVaultSessionLaunchActions } from '../session-actions/ai-vault-session-launch-actions'
@@ -17,7 +19,7 @@ import {
   useAiVaultPanelSearchWithin
 } from '../scope/use-ai-vault-panel-projects'
 import { copyAiVaultSessionText } from '../session-actions/ai-vault-copy-session-text'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AiVaultPanelHeader } from './AiVaultPanelHeader'
 import {
   aiVaultResultCountLabel,
@@ -50,7 +52,10 @@ import {
 } from '../session-list/use-ai-vault-session-keyboard-navigation'
 import { useAiVaultPanelHandle, type AiVaultPanelProps } from '../scope/ai-vault-panel-handle'
 import { aiVaultSearchHitHostLabels } from '../search/ai-vault-search-hit-hosts'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
 
 export default function AiVaultPanel({
@@ -63,6 +68,7 @@ export default function AiVaultPanel({
   resumeHere,
   conversationNavigation = false
 }: AiVaultPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const {
     workspaceId: activeWorktreeId,
     worktree: activeWorktree,
@@ -85,7 +91,7 @@ export default function AiVaultPanel({
   const settings = useAppStore((s) => s.settings)
   const agentCmdOverrides = settings?.agentCmdOverrides
   const paneActions = useAiVaultOriginalPaneActions()
-  const [focusSearchRequestId, setFocusSearchRequestId] = useState(0)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const listKeyboardRef = useRef<AiVaultSessionListKeyboard>(null)
   // Why: scope depends on current workspace/project availability, so only stable view options persist.
   const {
@@ -240,7 +246,7 @@ export default function AiVaultPanel({
     query,
     setQuery,
     changeScope: handleScopeChange,
-    setFocusSearchRequestId
+    searchInputRef
   })
 
   const requestDelete = useAiVaultSessionDeleteAction({
@@ -269,7 +275,7 @@ export default function AiVaultPanel({
         hideEmptySessions={hideEmptySessions}
         sessionLimit={sessionLimit}
         adjustmentCount={viewAdjustmentCount}
-        focusSearchRequestId={focusSearchRequestId}
+        searchInputRef={searchInputRef}
         headerAction={headerAction}
         onSearchKeyDown={
           onSessionOpened ? (event) => listKeyboardRef.current?.handleKeyDown(event) : undefined
@@ -303,18 +309,18 @@ export default function AiVaultPanel({
         {searching
           ? filteredSessions.length > 0 && (
               <AiVaultSessionListBar
-                label={aiVaultResultCountLabel(filteredSessions.length)}
+                label={aiVaultResultCountLabel(filteredSessions.length, t)}
                 value={searchSort}
-                menu={aiVaultSearchSortMenu()}
+                menu={aiVaultSearchSortMenu(t)}
                 onChange={setSearchSort}
               />
             )
           : !conversationNavigation &&
             sessions.length > 0 && (
               <AiVaultSessionListBar
-                label={aiVaultSessionCountLabel(filteredSessions.length, sessions.length)}
+                label={aiVaultSessionCountLabel(filteredSessions.length, sessions.length, t)}
                 value={sort}
-                menu={aiVaultBrowseSortMenu()}
+                menu={aiVaultBrowseSortMenu(t)}
                 onChange={setSort}
               />
             )}
@@ -366,13 +372,13 @@ export default function AiVaultPanel({
             onCopyId={(session) =>
               void copyAiVaultSessionText(
                 session.sessionId,
-                translate('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
+                t('auto.components.right.sidebar.AiVaultPanel.sessionId', 'Session ID')
               )
             }
             onCopyPath={(session) =>
               void copyAiVaultSessionText(
                 formatClipboardFilePath(session.filePath, session.executionHostId),
-                translate('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
+                t('auto.components.right.sidebar.AiVaultPanel.logPath', 'Log path')
               )
             }
             onOpenLog={(session) => void openAiVaultSessionLogInOrca(session)}

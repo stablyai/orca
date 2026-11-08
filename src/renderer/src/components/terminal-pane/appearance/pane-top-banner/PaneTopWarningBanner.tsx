@@ -3,7 +3,7 @@ import { TriangleAlert, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Stacks the pane's banners top to bottom and reserves their total height for the terminal. */
 function layoutPaneTopBanners(pane: HTMLElement, leaving?: HTMLElement): void {
@@ -48,13 +48,14 @@ function useReservePaneTopSpace(): React.RefObject<HTMLDivElement | null> {
 }
 
 export function PaneBannerLearnMore({ onClick }: { onClick: () => void }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
       className="text-foreground underline underline-offset-2 hover:text-foreground/80"
       onClick={onClick}
     >
-      {translate('terminal.paneTopBanner.learnMore', 'Learn more')}
+      {t('terminal.paneTopBanner.learnMore', 'Learn more')}
     </button>
   )
 }
@@ -102,6 +103,7 @@ export function PaneTopWarningBanner({
   onDontShowAgain?: () => void
   onShown?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const ref = useReservePaneTopSpace()
   useEffect(() => {
     onShown?.()
@@ -149,12 +151,12 @@ export function PaneTopWarningBanner({
           {primaryAction}
           {onDontShowAgain ? (
             <Button type="button" variant="ghost" size="xs" onClick={onDontShowAgain}>
-              {translate('terminal.paneTopBanner.dontShowAgain', "Don't show again")}
+              {t('terminal.paneTopBanner.dontShowAgain', "Don't show again")}
             </Button>
           ) : null}
           {onDismiss ? (
             <Button type="button" variant="ghost" size="xs" onClick={onDismiss}>
-              {translate('terminal.paneTopBanner.dismiss', 'Dismiss')}
+              {t('terminal.paneTopBanner.dismiss', 'Dismiss')}
             </Button>
           ) : null}
         </div>

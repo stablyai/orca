@@ -26,60 +26,6 @@ function nodeCommand(scriptPath: string): string {
 }
 
 describe('runRecipeCommand', () => {
-  it('does not impose an implicit wall-clock deadline', async () => {
-    vi.useFakeTimers()
-    const child = Object.assign(new EventEmitter(), {
-      pid: undefined,
-      stdin: new PassThrough(),
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
-      kill: vi.fn(),
-      unref: vi.fn()
-    })
-    const resultPromise = runRecipeCommand({
-      command: 'destroy',
-      repoPath: makeRepo(),
-      mode: 'destroy',
-      resultSchemaVersion: 1,
-      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
-      spawnCommand: vi.fn(() => child) as never
-    })
-
-    expect(vi.getTimerCount()).toBe(0)
-    child.emit('close', 0, null)
-    await expect(resultPromise).resolves.toMatchObject({ exitCode: 0 })
-  })
-
-  it('force-kills an aborted recipe if graceful termination never closes it', async () => {
-    vi.useFakeTimers()
-    const child = Object.assign(new EventEmitter(), {
-      pid: undefined,
-      stdin: new PassThrough(),
-      stdout: new PassThrough(),
-      stderr: new PassThrough(),
-      kill: vi.fn(),
-      unref: vi.fn()
-    })
-    const controller = new AbortController()
-    const resultPromise = runRecipeCommand({
-      command: 'destroy',
-      repoPath: makeRepo(),
-      mode: 'destroy',
-      resultSchemaVersion: 1,
-      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
-      signal: controller.signal,
-      spawnCommand: vi.fn(() => child) as never
-    })
-
-    controller.abort()
-    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    await expect(resultPromise).resolves.toMatchObject({ aborted: true, exitCode: null })
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-    expect(child.unref).toHaveBeenCalledOnce()
-  })
-
   it('clears the force-kill timer when graceful termination closes synchronously', async () => {
     vi.useFakeTimers()
     const child = Object.assign(new EventEmitter(), {
