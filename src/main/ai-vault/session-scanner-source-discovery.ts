@@ -52,7 +52,12 @@ function agentDiscoveries(
 ): Promise<SessionFileDiscovery>[] {
   const rootDirs = source.rootDirs(options, wslHomeDirs)
   // Scope-only scans read cwd-bucket agents through their bucket inventory and can't place cwd-less ones.
-  if (scopeOnlyScan(options) && !scopeWalksAgentFiles(agent, options.scopePaths)) {
+  // Pi stays listed: OMP shares its folder under PI_CODING_AGENT_DIR, and Pi's listing decides who parses a file.
+  if (
+    scopeOnlyScan(options) &&
+    !scopeWalksAgentFiles(agent, options.scopePaths) &&
+    agent !== 'pi'
+  ) {
     return rootDirs.map(async (rootDir) => ({ agent, rootDir, files: [] }))
   }
   const discover = (rootDir: string): Promise<SessionFileDiscovery> =>

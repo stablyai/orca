@@ -81,11 +81,9 @@ export function useAiVaultSessionRefresh(
   const mountedRef = useRef(true)
   const publicationGateRef = useRef<AiVaultSessionPublicationGate>(undefined!)
   publicationGateRef.current ??= new AiVaultSessionPublicationGate()
-  const scopeBaseKey = aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)
-  const scanScopeKey = `${scopeBaseKey}\n${sessionLimit}`
-  // Another scope's scope-only rows would pass for this scope's list while it loads or after it fails.
-  const shown =
-    scan && (!scan.scopeOnly || scan.scopeKey === `${scopeBaseKey}\n${scan.limit}`) ? scan : null
+  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)}\n${sessionLimit}`
+  // Workspace or Project rows would pass for All's list while it loads or after it fails; the filter narrows the rest.
+  const shown = scan?.scopeOnly && !scopeOnly ? null : scan
   // Kept through rescans so a repeat failure doesn't blink; shown only for the scope that failed.
   const error = failure?.scopeKey === scanScopeKey ? aiVaultScanErrorText(failure.cause) : null
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
