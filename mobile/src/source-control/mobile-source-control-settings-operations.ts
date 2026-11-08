@@ -10,6 +10,14 @@ export type MobileSourceControlSettings = {
   diffShowWhitespace: boolean
 }
 
+const SOURCE_CONTROL_SETTING = {
+  groupOrder: 'sourceControlGroupOrder',
+  compareAgainstUpstream: 'sourceControlCompareAgainstUpstream',
+  diffShowWhitespace: 'diffShowWhitespace'
+} as const
+
+export const SOURCE_CONTROL_SETTINGS_KEYS: readonly string[] = Object.values(SOURCE_CONTROL_SETTING)
+
 // Older hosts omit these settings; absence reads as desktop's defaults.
 const sourceControlSettingsReader: RpcCompatibleReader<
   unknown,
@@ -22,9 +30,9 @@ const sourceControlSettingsReader: RpcCompatibleReader<
     compatible: true,
     variant: 'source-control-settings',
     value: {
-      groupOrder: normalizeSourceControlGroupOrder(field('sourceControlGroupOrder')),
-      compareAgainstUpstream: field('sourceControlCompareAgainstUpstream') === true,
-      diffShowWhitespace: field('diffShowWhitespace') === true
+      groupOrder: normalizeSourceControlGroupOrder(field(SOURCE_CONTROL_SETTING.groupOrder)),
+      compareAgainstUpstream: field(SOURCE_CONTROL_SETTING.compareAgainstUpstream) === true,
+      diffShowWhitespace: field(SOURCE_CONTROL_SETTING.diffShowWhitespace) === true
     },
     salvage: { droppedPaths: [], droppedCount: 0 }
   }
