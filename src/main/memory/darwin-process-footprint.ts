@@ -69,10 +69,16 @@ const TOP_SOURCE: FootprintSource = {
   parse: parseTopFootprints
 }
 
-function currentSource(): FootprintSource {
+/** The bundled helper, or null when it is missing or has failed. */
+export function darwinProcessHelperPath(): string | null {
   const helperPath = join(dirname(process.execPath), HELPER_EXECUTABLE)
   helperAvailable ??= existsSync(helperPath)
-  return helperAvailable
+  return helperAvailable ? helperPath : null
+}
+
+function currentSource(): FootprintSource {
+  const helperPath = darwinProcessHelperPath()
+  return helperPath
     ? { program: helperPath, args: [], refreshMs: 0, parse: parseHelperFootprints }
     : TOP_SOURCE
 }

@@ -4760,7 +4760,10 @@
             "endOrphanTerminals_one": "End {{count}} orphan terminal",
             "endOrphanTerminals_other": "End {{count}} orphan terminals",
             "orphanCount_one": "{{count}} orphan",
-            "orphanCount_other": "{{count}} orphans"
+            "orphanCount_other": "{{count}} orphans",
+            "outsideTerminalProcesses_one": "{{count}} process outside terminals",
+            "outsideTerminalProcesses_other": "{{count}} processes outside terminals",
+            "outsideTerminalProcessesHint": "Started in this workspace's terminals and still running outside them, for example a server left behind when its terminal closed."
           },
           "SshStatusSegment": {
             "3ad70e0365": "Manage Remote Hosts…",

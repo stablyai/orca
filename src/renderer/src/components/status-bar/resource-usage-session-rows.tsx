@@ -1,5 +1,5 @@
 import React from 'react'
-import { ChevronDown, ChevronRight, Globe, Trash2, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Globe, Trash2, Unplug, X } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -100,6 +100,40 @@ function BrowserRow({ browser }: { browser: BrowserWorkspace }): React.JSX.Eleme
   )
 }
 
+function OutsideTerminalsRow({
+  usage
+}: {
+  usage: NonNullable<UnifiedWorktreeRow['outsideTerminals']>
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center gap-2 pl-10 pr-3 py-1.5">
+      <Unplug className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="min-w-0 flex-1 truncate text-[11px] text-muted-foreground">
+            {translate(
+              'auto.components.status.bar.ResourceUsageStatusSegment.outsideTerminalProcesses',
+              '{{count}} processes outside terminals',
+              {
+                count: usage.processCount,
+                defaultValue_one: '{{count}} process outside terminals'
+              }
+            )}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4} className="z-[70] max-w-[200px]">
+          {translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.outsideTerminalProcessesHint',
+            "Started in this workspace's terminals and still running outside them, for example a server left behind when its terminal closed."
+          )}
+        </TooltipContent>
+      </Tooltip>
+      <MetricPair cpu={usage.cpu} memory={usage.memory} size="small" />
+      <span className={ROW_TRAILING_GUTTER_CLS} aria-hidden />
+    </div>
+  )
+}
+
 export function WorktreeRow({
   worktree,
   storeRecord,
@@ -121,7 +155,10 @@ export function WorktreeRow({
   onKillSession: (session: UnifiedSessionRow) => void
   navigateToTab: (tabId: string, paneKey: string | null) => void
 }): React.JSX.Element {
-  const hasResources = worktree.sessions.length > 0 || worktree.browsers.length > 0
+  const hasResources =
+    worktree.sessions.length > 0 ||
+    worktree.browsers.length > 0 ||
+    worktree.outsideTerminals !== undefined
   // Why: synthetic buckets (orphan/unattributed) have no sidebar target to reveal; real and SSH-resolved worktrees stay navigable.
   const isSynthetic =
     worktree.worktreeId === ORPHAN_WORKTREE_ID || worktree.repoId === UNATTRIBUTED_REPO_ID
@@ -258,6 +295,9 @@ export function WorktreeRow({
             onKill={onKillSession}
           />
         ))}
+      {!isCollapsed && worktree.outsideTerminals && (
+        <OutsideTerminalsRow usage={worktree.outsideTerminals} />
+      )}
       {!isCollapsed &&
         worktree.browsers.map((browser) => <BrowserRow key={browser.id} browser={browser} />)}
     </div>
