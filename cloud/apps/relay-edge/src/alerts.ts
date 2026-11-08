@@ -4,6 +4,9 @@
 // Stateless: "starts breaching" = breaching in the last window but not in the one before.
 // Secrets (set from stdin, never in config or logs): AE_READ_TOKEN (Account Analytics: Read),
 // ALERT_WEBHOOK_URL (Slack-compatible incoming webhook: POST {text}).
+// Share rules need MIN_VOLUME hellos per window; the absolute-count rules (admin failures, 4401s
+// below that volume) and the synthetic probe (EDGE_PROBE_URL, alerts-probe.ts) also cover a quiet edge.
+import { probeEdge } from './alerts-probe'
 
 export type AlertsEnv = {
   ACCOUNT_ID: string
@@ -13,9 +16,27 @@ export type AlertsEnv = {
   ALERT_WEBHOOK_URL: string
   // Below this many hellos (phone_open + control_active) per window, ratio rules stay quiet.
   MIN_VOLUME?: string
+  // The edge's public origin; each run probes it (alerts-probe.ts). Absent: no probe.
+  EDGE_PROBE_URL?: string
 }
 
 const WINDOW_MIN = 15
+// Per window, whatever the volume.
+const ADMIN_FAILURES_MIN = 3
+const LOW_VOLUME_4401_MIN = 5
+// Admin labels that are an answer the director expects ('<op>:<outcome>'); anything else (a status
+// such as assign:401, or stale / conflict / error) is a failure.
+export const ADMIN_SUCCESS_LABELS = [
+  'assign:applied',
+  'assign:unchanged',
+  'export:exported',
+  'export:busy',
+  'erase:erased',
+  'erase:busy',
+  'erase:mismatch',
+  'drain:drained',
+  'drain:idle'
+]
 
 type Counts = Record<string, number>
 // `prior` is the previous window; rules that compare against it never count as breaching "before".
@@ -31,6 +52,7 @@ SELECT
   sumIf(_sample_interval, blob1 = 'control_close') AS control_close,
   sumIf(_sample_interval, blob1 = 'db_op') AS db_ops,
   sumIf(_sample_interval, blob1 = 'db_op' AND blob2 != 'ok') AS db_failures,
+  sumIf(_sample_interval, blob1 = 'admin' AND blob2 NOT IN (${ADMIN_SUCCESS_LABELS.map((l) => `'${l}'`).join(', ')})) AS admin_failures,
   sum(_sample_interval) AS events
 FROM ${dataset}
 WHERE timestamp > NOW() - INTERVAL '${fromMin}' MINUTE AND timestamp <= NOW() - INTERVAL '${toMin}' MINUTE
@@ -67,6 +89,18 @@ export const RULES: Rule[] = [
     id: 'mass-drop',
     breach: (c, min, prior) => prior !== undefined && c.control_close >= min && c.control_close > 3 * Math.max(1, prior.control_close),
     describe: (c) => `control closes ${c.control_close} in ${WINDOW_MIN} min, over 3x the previous window`
+  },
+  {
+    // The director's calls failing (bad signature, stale or conflicting pushes, errors).
+    id: 'admin-failures',
+    breach: (c) => c.admin_failures >= ADMIN_FAILURES_MIN,
+    describe: (c) => `${c.admin_failures} failed admin calls in ${WINDOW_MIN} min`
+  },
+  {
+    // Below the share rules' volume a handful of 4401s is still worth a look.
+    id: 'auth-refusals-low-volume',
+    breach: (c, min) => c.phone_open + c.control_active < min && c.refuse_4401 >= LOW_VOLUME_4401_MIN,
+    describe: (c) => `4401 refusals ${c.refuse_4401} in ${WINDOW_MIN} min at low volume (${c.phone_open + c.control_active} hellos)`
   },
   {
     // Dead man: traffic stopped (the edge or its metrics went silent) after a window that had some.
@@ -109,6 +143,9 @@ export async function evaluate(env: AlertsEnv, scheduledTime: number): Promise<s
     return []
   }
   const minVolume = Number(env.MIN_VOLUME ?? '200')
+  const probeFailure = env.EDGE_PROBE_URL ? await probeEdge(env.EDGE_PROBE_URL) : null
+  const probeAlert = probeFailure ? [`FIRING edge-probe: ${probeFailure}`] : []
+  if (probeAlert.length > 0) { await post(env, probeAlert[0]) }
   let now: Counts
   let before: Counts
   try {
@@ -117,7 +154,7 @@ export async function evaluate(env: AlertsEnv, scheduledTime: number): Promise<s
   } catch (error) {
     const text = `alerts cannot read metrics: ${(error as Error).message}`
     await post(env, text)
-    return [text]
+    return [...probeAlert, text]
   }
   const hourly = new Date(scheduledTime).getUTCMinutes() < 5
   const fired: string[] = []
@@ -127,7 +164,7 @@ export async function evaluate(env: AlertsEnv, scheduledTime: number): Promise<s
     if (started || hourly) { fired.push(`${started ? 'FIRING' : 'STILL FIRING'} ${rule.id}: ${rule.describe(now)}`) }
   }
   for (const text of fired) { await post(env, text) }
-  return fired
+  return [...probeAlert, ...fired]
 }
 
 export default {
