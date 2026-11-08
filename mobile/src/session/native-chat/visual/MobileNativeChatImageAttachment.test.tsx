@@ -142,13 +142,14 @@ describe('host-owned mobile chat images', () => {
 
   it('lets a device-only image retry after a decoder failure', async () => {
     await act(async () => {
-      tree = create(render(null, { type: 'image-ref', url: 'file:///phone/photo.png' }))
+      tree = create(render(null, { type: 'image-ref', path: URI }))
     })
+    expect(press().props.accessibilityLabel).not.toContain('data:image')
     const failedImage = image()
     act(() => failedImage.props.onError())
     expect(findAllByHostType(mounted().root, 'Image')).toEqual([])
     await act(async () => press().props.onPress())
-    expect(image().props.source).toEqual({ uri: 'file:///phone/photo.png' })
+    expect(image().props.source).toEqual({ uri: URI })
     expect(image()).not.toBe(failedImage)
   })
 

@@ -81,7 +81,9 @@ export function MobileNativeChatImageAttachment({
 
   const uri = usableDirectUri ?? current?.uri
   const label =
-    block.alt?.trim() || path || t('chat.nativeChatProse.attachedImage', 'Attached image')
+    block.alt?.trim() ||
+    (isRenderableImageUri(path) ? null : path) ||
+    t('chat.nativeChatProse.attachedImage', 'Attached image')
   if (uri && failedOwner !== owner) {
     return (
       <Pressable
