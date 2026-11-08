@@ -55,6 +55,11 @@ export function registerLegacyRelayBridgeIpc(args: {
   }
   installLegacyRelayBridge({
     leases: (targetId) => args.store.getSshRemotePtyLeases(targetId),
+    // A removed target's stale leases name no pane: it can never connect again.
+    leasedTargetIds: () =>
+      [...new Set(args.store.getSshRemotePtyLeases().map((lease) => lease.targetId))].filter(
+        (targetId) => args.store.getSshTarget(targetId) !== undefined
+      ),
     retireLease: (targetId, relayPtyId, evidence) => {
       // Cleared first so the retire can prune the tombstone.
       args.store.setSshRemotePtyLeasePendingKill(targetId, relayPtyId, null)

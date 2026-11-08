@@ -81,6 +81,7 @@ beforeEach(async () => {
   report = vi.fn()
   registry.installLegacyRelayBridge({
     leases: () => leases,
+    leasedTargetIds: () => [...new Set(leases.map((row) => row.targetId))],
     retireLease: vi.fn(),
     recordStop: vi.fn(),
     connection: () => null,
@@ -140,12 +141,93 @@ describe('a hung-up legacy relay bridge (loss of contact is not exit)', () => {
   })
 })
 
+describe('an app relaunch before the host connects (#37840)', () => {
+  let published: LegacyRelayBridgedPane[][]
+
+  function relaunch(): void {
+    published = []
+    // A relaunch keeps only the persisted leases: no bridge, nothing held.
+    registry.installLegacyRelayBridge({
+      leases: () => leases,
+      leasedTargetIds: () => [...new Set(leases.map((row) => row.targetId))],
+      retireLease: (_target, relayPtyId) => {
+        leases = leases.map((row) =>
+          row.ptyId === relayPtyId ? { ...row, state: 'terminated' as const } : row
+        )
+      },
+      recordStop: (_target, relayPtyId, pendingKill) => {
+        leases = leases.map((row) => (row.ptyId === relayPtyId ? { ...row, pendingKill } : row))
+      },
+      connection: () => null,
+      onPanesChanged: (panes) => void published.push(panes),
+      onData: vi.fn(),
+      onReplay: vi.fn(),
+      onExit: vi.fn(),
+      report: vi.fn()
+    })
+  }
+
+  it('lists a leased relay terminal as unverifiable, so its pane never starts on orcad', () => {
+    relaunch()
+
+    expect(registry.legacyRelayBridgedPanes()).toEqual([
+      { ptyId: PTY, targetId: TARGET, tabId: 'tab-1', leafId: 'leaf-1', state: 'unverifiable' }
+    ])
+  })
+
+  it('lists no pane for a closed tab or an ended terminal', () => {
+    relaunch()
+    leases = [
+      { ...lease(), pendingKill: { requestedAt: 1, attempts: 0 } },
+      { ...lease(), ptyId: 'pty-2', state: 'terminated' }
+    ]
+
+    expect(registry.legacyRelayBridgedPanes()).toEqual([])
+  })
+
+  it('lists each pane once after the bridge starts', async () => {
+    relaunch()
+    await registry.startLegacyRelayBridge(TARGET)
+
+    expect(registry.legacyRelayBridgedPanes()).toEqual([
+      { ptyId: PTY, targetId: TARGET, tabId: 'tab-1', leafId: 'leaf-1', state: 'live' }
+    ])
+  })
+
+  it("leaves a target to its bridge's own listing once the bridge has listed it", async () => {
+    relaunch()
+    await registry.startLegacyRelayBridge(TARGET)
+    // A lease the bridge's listing did not name is the bridge's call, not a pending pane.
+    leases = [...leases, { ...lease(), ptyId: 'pty-2', leafId: 'leaf-2' }]
+
+    expect(registry.legacyRelayBridgedPanes().map((pane) => pane.ptyId)).toEqual([PTY])
+  })
+
+  it('publishes the list without a pane closed while the host is disconnected', async () => {
+    relaunch()
+
+    await registry.closeLegacyRelayPane(PTY)
+
+    expect(published.at(-1)).toEqual([])
+  })
+
+  it('publishes the list without its panes when the target is removed', () => {
+    relaunch()
+    leases = []
+
+    registry.forgetLegacyRelayTarget(TARGET)
+
+    expect(published.at(-1)).toEqual([])
+  })
+})
+
 describe('attaching a bridged pane', () => {
   it('sends a reattach screen in output order and only once', async () => {
     const replays: string[] = []
     const connection = unusedSshConnection()
     registry.installLegacyRelayBridge({
       leases: () => leases,
+      leasedTargetIds: () => [...new Set(leases.map((row) => row.targetId))],
       retireLease: vi.fn(),
       recordStop: vi.fn(),
       connection: () => connection,

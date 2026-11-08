@@ -8,6 +8,7 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
+import type { PtyTransport } from '../pty-transport-types'
 
 let panes: LegacyRelayBridgedPane[] = []
 const listeners = new Set<() => void>()
@@ -15,6 +16,7 @@ const listeners = new Set<() => void>()
 const claims = new Map<string, string>()
 let subscribed = false
 let firstListing: Promise<void> = Promise.resolve()
+let firstListingSettled = false
 
 function ensureSubscribed(): void {
   const api = typeof window === 'undefined' ? undefined : window.api?.legacyRelayBridge
@@ -32,13 +34,27 @@ function ensureSubscribed(): void {
     listeners.forEach((listener) => listener())
   }
   api.onPanes(apply)
-  firstListing = api.listPanes().then(apply, () => {})
+  firstListing = api
+    .listPanes()
+    .then(apply, (error: unknown) => {
+      // Panes then wait only for main's next push; until it comes, none reads as bridged.
+      console.warn('[legacy-relay] Could not list bridged panes:', error)
+    })
+    .finally(() => {
+      firstListingSettled = true
+    })
 }
 
 /** Settles once main's first pane list arrived, so a close never reads the empty initial cache. */
 export function legacyRelayBridgedPanesListed(): Promise<void> {
   ensureSubscribed()
   return firstListing
+}
+
+/** False until main's first pane list arrived; an empty cache before then is not "no bridged panes". */
+export function hasLegacyRelayBridgedPanesListing(): boolean {
+  ensureSubscribed()
+  return firstListingSettled || !subscribed
 }
 
 ensureSubscribed()
@@ -155,4 +171,33 @@ export function legacyRelayBridgedTabIds(targetId: string): string[] {
 export function onLegacyRelayBridgedPanesChanged(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+// The notice a bridged pane shows while its older relay can't be reached.
+type UnreachableNoticeCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
+
+const UNREACHABLE_MESSAGE =
+  'This terminal is still running on the host under an older version of Orca. Reconnecting to it…'
+
+export function createLegacyRelayUnreachableNotice(
+  callbacks: () => UnreachableNoticeCallbacks | null
+): {
+  show: () => void
+  clear: () => void
+} {
+  let showing = false
+  return {
+    show: () => {
+      if (!showing) {
+        showing = true
+        callbacks()?.onError?.(UNREACHABLE_MESSAGE)
+      }
+    },
+    clear: () => {
+      if (showing) {
+        showing = false
+        callbacks()?.onErrorCleared?.(UNREACHABLE_MESSAGE)
+      }
+    }
+  }
 }

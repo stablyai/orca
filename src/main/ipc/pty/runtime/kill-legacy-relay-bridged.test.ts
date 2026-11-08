@@ -31,6 +31,7 @@ describe('a tab close of a terminal an older relay still runs', () => {
     }
     installLegacyRelayBridge({
       leases: () => leases,
+      leasedTargetIds: () => [TARGET],
       retireLease: vi.fn(),
       recordStop: vi.fn(),
       // Disconnected, so the SSH provider is unregistered: the bridge records the stop.

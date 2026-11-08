@@ -6,6 +6,7 @@
  * When the bridge answers that the terminal is gone, the pane gets the host's "session expired"
  * error, which retires its binding and starts a fresh shell on the managed server. When the relay
  * can't be reached, the pane stays bound and reattaches once it can: loss of contact is never exit.
+ * A terminal proven gone before this pane ever attached starts afresh too, via `goneBeforeAttach`.
  */
 import type { LegacyRelayBridgeAttachResult } from '../../../../../../shared/legacy-relay-bridge-contract'
 import type { PtyConnectResult, PtyTransport } from '../pty-transport-types'
@@ -13,24 +14,27 @@ import type { RemoteRuntimeSnapshotRequestOptions } from '../../../../runtime/ho
 import { SSH_SESSION_EXPIRED_ERROR } from '../host-ownership/ssh-session-gone-verdict'
 import {
   legacyRelayBridgedPane,
-  onLegacyRelayBridgedPanesChanged
+  onLegacyRelayBridgedPanesChanged,
+  createLegacyRelayUnreachableNotice
 } from './legacy-relay-bridge-panes'
 
 type Callbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 
-const UNREACHABLE_MESSAGE =
-  'This terminal is still running on the host under an older version of Orca. Reconnecting to it…'
-
-export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransport): PtyTransport {
+export function createLegacyRelayBridgeTransport(
+  ptyId: string,
+  inner: PtyTransport,
+  options: { goneBeforeAttach?: () => void } = {}
+): PtyTransport {
   const api = window.api.legacyRelayBridge
   let mode: 'pending' | 'bridge' | 'inner' = 'pending'
   /** The viewer main counted for this pane's attach; null while not attached. */
   let viewer: number | null = null
+  let everAttached = false
   let callbacks: Callbacks | null = null
   let unsubscribe: (() => void)[] = []
   let reattaching = false
   let reattachQueued = false
-  let showingUnreachable = false
+  const unreachable = createLegacyRelayUnreachableNotice(() => callbacks)
   let lastState: 'live' | 'unverifiable' | null = null
   /** Bumped by release, so an attach answered after the pane left hands its viewer back. */
   let epoch = 0
@@ -55,6 +59,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       api?.detach({ ptyId, acquisitionId: viewer })
     }
     viewer = acquisitionId
+    everAttached = true
     seqs.viewer = seq
   }
 
@@ -76,18 +81,15 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     return false
   }
 
-  const showUnreachable = (): void => {
-    if (!showingUnreachable) {
-      showingUnreachable = true
-      callbacks?.onError?.(UNREACHABLE_MESSAGE)
+  /** The relay proved the terminal gone. Never shown here, the pane starts afresh instead of exiting. */
+  const ended = (code: number): void => {
+    unreachable.clear()
+    if (!everAttached && options.goneBeforeAttach) {
+      release()
+      options.goneBeforeAttach()
+      return
     }
-  }
-
-  const clearUnreachable = (): void => {
-    if (showingUnreachable) {
-      showingUnreachable = false
-      callbacks?.onErrorCleared?.(UNREACHABLE_MESSAGE)
-    }
+    callbacks?.onExit?.(code)
   }
 
   const reattach = async (): Promise<void> => {
@@ -110,11 +112,10 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       }
       if (result.status === 'attached') {
         adoptViewer(seq, result.acquisitionId)
-        clearUnreachable()
+        unreachable.clear()
         callbacks?.onConnect?.()
       } else if (result.status === 'exited' || result.status === 'not-bridged') {
-        clearUnreachable()
-        callbacks?.onExit?.(-1)
+        ended(-1)
       }
     } finally {
       reattaching = false
@@ -145,9 +146,8 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
       }),
       api.onExit((event) => {
         if (mode === 'bridge' && event.ptyId === ptyId) {
-          clearUnreachable()
           release()
-          callbacks?.onExit?.(event.code)
+          ended(event.code)
         }
       }),
       onLegacyRelayBridgedPanesChanged(() => {
@@ -166,7 +166,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
         lastState = pane.state
         if (pane.state === 'unverifiable') {
           dropViewer()
-          showUnreachable()
+          unreachable.show()
         } else if (viewer === null && previous !== 'live') {
           // Only on the change to live: a terminal that refuses to attach waits for the next one.
           void reattach()
@@ -198,7 +198,7 @@ export function createLegacyRelayBridgeTransport(ptyId: string, inner: PtyTransp
     next.onConnect?.()
     lastState = result.status === 'attached' ? 'live' : 'unverifiable'
     if (result.status === 'unverifiable') {
-      showUnreachable()
+      unreachable.show()
       return { id: ptyId, isReattach: true, replay: '' }
     }
     adoptViewer(seq, result.acquisitionId)
