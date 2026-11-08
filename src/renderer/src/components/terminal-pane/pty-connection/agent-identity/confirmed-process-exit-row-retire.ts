@@ -6,14 +6,25 @@ import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-exec
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
+/** Suppress re-retention after confirmed shell return; existing same-turn and host checks still own live-row removal. */
 export function retireConfirmedShellAgent(paneKey: string): void {
   const state = useAppStore.getState()
-  // Live rows keep the existing same-turn and host-process confirmation policy.
-  if (state.agentStatusByPaneKey[paneKey]) {
+  const live = state.agentStatusByPaneKey[paneKey]
+  const entry = live ?? state.retainedAgentsByPaneKey[paneKey]?.entry
+  if (entry && isRetainedProgramResult(entry)) {
     return
   }
-  const entry = state.retainedAgentsByPaneKey[paneKey]?.entry
-  if (entry && isRetainedProgramResult(entry)) {
+  if (live) {
+    state.updateAgentStatusState((current) =>
+      paneKey in current.retentionSuppressedPaneKeys
+        ? current
+        : {
+            retentionSuppressedPaneKeys: {
+              ...current.retentionSuppressedPaneKeys,
+              [paneKey]: true
+            }
+          }
+    )
     return
   }
   // A pending retention sync can still hold the vanished live row.

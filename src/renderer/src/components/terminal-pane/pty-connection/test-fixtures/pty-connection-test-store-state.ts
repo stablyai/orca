@@ -107,6 +107,8 @@ export type StoreState = {
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   agentStatusByPaneKey: Record<string, unknown>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>
+  retentionSuppressedPaneKeys: AppState['retentionSuppressedPaneKeys']
+  updateAgentStatusState: ReturnType<typeof vi.fn>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   sleepingAgentSessionsByPaneKey: Record<string, unknown>
   suppressedPtyExitIds: Record<string, true>
