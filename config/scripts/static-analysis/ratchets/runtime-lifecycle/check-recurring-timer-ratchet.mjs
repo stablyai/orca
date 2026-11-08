@@ -39,19 +39,47 @@ function isHostInterval(node) {
   )
 }
 
-// A value reference to the identifier, not a declaration, member name, key or `typeof` probe.
+// Skips transparent wrappers so `typeof (setInterval)` and `(setInterval) = x` read like the bare forms.
+function outerExpression(node) {
+  let current = node
+  while (ts.isParenthesizedExpression(current.parent)) {
+    current = current.parent
+  }
+  return current
+}
+
+// Reads the timer value: not a write target, a `typeof` probe or a JSX tag name.
+function isRuntimeRead(node) {
+  const outer = outerExpression(node)
+  const parent = outer.parent
+  return !(
+    ts.isTypeOfExpression(parent) ||
+    (ts.isBinaryExpression(parent) &&
+      parent.left === outer &&
+      parent.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      parent.operatorToken.kind <= ts.SyntaxKind.LastAssignment) ||
+    ((ts.isJsxOpeningElement(parent) ||
+      ts.isJsxSelfClosingElement(parent) ||
+      ts.isJsxClosingElement(parent)) &&
+      parent.tagName === node)
+  )
+}
+
+// A value reference to the identifier, not a declaration, member name or key.
 function isBareValueReference(node) {
   const parent = node.parent
-  return !(
-    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
-    (ts.isPropertyAssignment(parent) && parent.name === node) ||
-    ts.isTypeOfExpression(parent) ||
-    ts.isImportSpecifier(parent) ||
-    ts.isExportSpecifier(parent) ||
-    (ts.isBindingElement(parent) && (parent.name === node || parent.propertyName === node)) ||
-    (ts.isVariableDeclaration(parent) && parent.name === node) ||
-    (ts.isParameter(parent) && parent.name === node) ||
-    ((ts.isFunctionDeclaration(parent) || ts.isMethodDeclaration(parent)) && parent.name === node)
+  return (
+    isRuntimeRead(node) &&
+    !(
+      (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+      (ts.isPropertyAssignment(parent) && parent.name === node) ||
+      ts.isImportSpecifier(parent) ||
+      ts.isExportSpecifier(parent) ||
+      (ts.isBindingElement(parent) && (parent.name === node || parent.propertyName === node)) ||
+      (ts.isVariableDeclaration(parent) && parent.name === node) ||
+      (ts.isParameter(parent) && parent.name === node) ||
+      ((ts.isFunctionDeclaration(parent) || ts.isMethodDeclaration(parent)) && parent.name === node)
+    )
   )
 }
 
@@ -72,11 +100,15 @@ function countGlobalTimerReferences(source) {
     if (
       (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) &&
       isHostInterval(node) &&
-      !ts.isTypeOfExpression(node.parent)
+      isRuntimeRead(node)
     ) {
       count += 1
     } else if (ts.isIdentifier(node) && node.text === 'setInterval' && isBareValueReference(node)) {
-      const declarations = checker.getSymbolAtLocation(node)?.declarations ?? []
+      // A shorthand `{ setInterval }` names the property; its value is the binding being read.
+      const symbol = ts.isShorthandPropertyAssignment(node.parent)
+        ? checker.getShorthandAssignmentValueSymbol(node.parent)
+        : checker.getSymbolAtLocation(node)
+      const declarations = symbol?.declarations ?? []
       if (!declarations.some((declaration) => declaration.getSourceFile() === source)) {
         count += 1
       }

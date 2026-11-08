@@ -30,7 +30,9 @@ describe('recurring-timer ratchet', () => {
     ['const schedule = setInterval\nschedule(poll, 1000)', 1],
     ["window['setInterval'](poll, 1000)", 1],
     ['const every = window.setInterval\nevery(poll, 1)', 1],
-    ["if (typeof setInterval === 'function') {}\ntype T = typeof setInterval", 0]
+    ["if (typeof setInterval === 'function') {}\ntype T = typeof setInterval", 0],
+    ['const deps = { setInterval, clearInterval }\ndeps.setInterval(poll, 1)', 1],
+    ["setInterval = replacement\nwindow['setInterval'] = replacement\ntypeof (setInterval)", 0]
   ])('counts %s', (source, count) => {
     expect(countRecurringTimers('src/main/example.ts', source)).toBe(count)
   })
