@@ -35,6 +35,7 @@ const telemetryEventSchema = z.discriminatedUnion('type', [
   })
 ])
 
+/** Live, best-effort delivery; outcomes settled without the caller connected are not replayed. */
 export function subscribeStructuredChatTelemetry(listener: TelemetryListener): () => void {
   remoteListeners.add(listener)
   return () => remoteListeners.delete(listener)

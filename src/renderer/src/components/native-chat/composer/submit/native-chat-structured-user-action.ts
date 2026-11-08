@@ -1,4 +1,5 @@
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { peekRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { STRUCTURED_CHAT_DISPATCH_TELEMETRY_RUNTIME_CAPABILITY } from '../../../../../../shared/structured-chat-dispatch-telemetry'
 import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -22,9 +23,16 @@ export function completeNativeChatStructuredUserAction(
   if (action !== 'message') {
     emit()
   } else if (transport.runtime === 'remote' && transport.runtimeEnvironmentId) {
-    void runtimeEnvironmentSupportsCapability(
+    const cachedSupport = peekRuntimeEnvironmentCapability(
       transport.runtimeEnvironmentId,
       STRUCTURED_CHAT_DISPATCH_TELEMETRY_RUNTIME_CAPABILITY
+    )
+    void Promise.resolve(
+      cachedSupport ??
+        runtimeEnvironmentSupportsCapability(
+          transport.runtimeEnvironmentId,
+          STRUCTURED_CHAT_DISPATCH_TELEMETRY_RUNTIME_CAPABILITY
+        )
     )
       .then((supported) => {
         if (!supported) {
