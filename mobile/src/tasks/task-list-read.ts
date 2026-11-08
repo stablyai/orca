@@ -121,7 +121,7 @@ export async function readTaskListRows(
       })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the schema requires `items` and types each row at `GitLabWorkItem`'s own member types, requiring the ones a consumer reads unguarded; the row builder's own reads are unchanged.
       const envelope = gitlabWorkItemSearchRead.interpret(reply) as {
-        items: Array<Omit<GitLabWorkItem, 'repoId' | 'repoName'>>
+        items: Omit<GitLabWorkItem, 'repoId' | 'repoName'>[]
         error?: { type?: string; message: string }
       }
       if (envelope.error?.type && envelope.error.type !== 'not_found') {
