@@ -50,7 +50,7 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--tab-bar` | Strip behind tabs, including the title bar when tabs sit in it | no | same as `--card` |
 | `--tab-active` | Active tab | no | light: same as `--tab-bar`; dark: `--foreground` mixed 6% into `--tab-bar` |
 | `--tab-active-foreground` | Active tab text, and inactive tab text on hover | no | same as `--foreground` |
-| `--tab-active-indicator` | Line under the active tab | no | same as `--tab-active-foreground` |
+| `--tab-active-indicator` | Line marking the active tab and the active right sidebar tool | no | same as `--tab-active-foreground` |
 | `--tab-inactive` | Inactive tabs | no | light: `--foreground` mixed 4% into `--tab-bar`; dark: same as `--tab-bar` |
 | `--tab-inactive-foreground` | Inactive tab text | no | same as `--muted-foreground` |
 | `--split-divider` | Divider between split tab groups | no | Orca's built-in color |

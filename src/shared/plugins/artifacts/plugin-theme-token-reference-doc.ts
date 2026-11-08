@@ -57,7 +57,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--tab-bar': 'Strip behind tabs, including the title bar when tabs sit in it',
   '--tab-active': 'Active tab',
   '--tab-active-foreground': 'Active tab text, and inactive tab text on hover',
-  '--tab-active-indicator': 'Line under the active tab',
+  '--tab-active-indicator': 'Line marking the active tab and the active right sidebar tool',
   '--tab-inactive': 'Inactive tabs',
   '--tab-inactive-foreground': 'Inactive tab text',
   '--split-divider': 'Divider between split tab groups',

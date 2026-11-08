@@ -48,7 +48,7 @@ function buildTintedSurfaceVariables(background: string): LeftSidebarStyleVariab
   }
 }
 
-/** Style variables for the tinted left sidebar; undefined for zero tint and every other mode. */
+/** Style variables for the tinted left sidebar; undefined in every other mode. */
 export function resolveLeftSidebarStyleVariables(
   settings: LeftSidebarAppearanceSettings | null | undefined
 ): LeftSidebarStyleVariables | undefined {
@@ -57,9 +57,6 @@ export function resolveLeftSidebarStyleVariables(
   }
   const tintColor = normalizeLeftSidebarTintColor(settings.leftSidebarTintColor)
   const tintOpacity = normalizeLeftSidebarTintOpacity(settings.leftSidebarTintOpacity)
-  if (tintOpacity === 0) {
-    return undefined
-  }
   const tintPercent = Number((tintOpacity * 100).toFixed(2))
   return buildTintedSurfaceVariables(
     `color-mix(in srgb, ${tintColor} ${tintPercent}%, var(--background))`
@@ -69,7 +66,7 @@ export function resolveLeftSidebarStyleVariables(
 /**
  * The host pill outline mix for the tinted sidebar, measured on the colors it paints: the app's
  * text on the tint mixed into the app background, under the built-in selected wash. Null in every
- * other mode, at zero tint, or when a color can't be resolved.
+ * other mode, or when a color can't be resolved.
  */
 export function tintedSidebarHostPillOutlineMix(
   settings: LeftSidebarAppearanceSettings | null | undefined,
@@ -79,10 +76,6 @@ export function tintedSidebarHostPillOutlineMix(
   if (settings?.leftSidebarAppearanceMode !== 'tinted') {
     return null
   }
-  const opacity = normalizeLeftSidebarTintOpacity(settings.leftSidebarTintOpacity)
-  if (opacity === 0) {
-    return null
-  }
   const foreground = probe(app.foreground)
   const background = probe(app.background)
   const tint = probe(normalizeLeftSidebarTintColor(settings.leftSidebarTintColor))
@@ -90,6 +83,7 @@ export function tintedSidebarHostPillOutlineMix(
   if (!foreground || !background || !tint || !washRule || !('tint' in washRule)) {
     return null
   }
+  const opacity = normalizeLeftSidebarTintOpacity(settings.leftSidebarTintOpacity)
   const sidebar = mix(tint, background, opacity * 100)
   const wash: Rgba = [foreground[0], foreground[1], foreground[2], washRule.percent / 100]
   return hostPillOutlineMixOver(foreground, sidebar, wash)

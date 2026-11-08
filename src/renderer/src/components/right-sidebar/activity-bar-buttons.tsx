@@ -161,9 +161,7 @@ export function ActivityBarButton({
             'relative flex shrink-0 items-center justify-center transition-colors',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
             isTop ? 'h-[36px] w-9' : 'w-10 h-10',
-            active
-              ? 'text-[color-mix(in_srgb,var(--sidebar-ring)_20%,var(--sidebar-foreground))]'
-              : 'text-muted-foreground/60 hover:text-muted-foreground'
+            active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
           aria-pressed={active}
@@ -183,10 +181,10 @@ export function ActivityBarButton({
           )}
 
           {active && isTop && (
-            <div className="absolute bottom-0 left-[25%] right-[25%] h-[2px] bg-current rounded-t" />
+            <div className="absolute bottom-0 left-[25%] right-[25%] h-[2px] bg-tab-active-indicator rounded-t" />
           )}
           {active && !isTop && (
-            <div className="absolute right-0 top-[25%] bottom-[25%] w-[2px] bg-current rounded-l" />
+            <div className="absolute right-0 top-[25%] bottom-[25%] w-[2px] bg-tab-active-indicator rounded-l" />
           )}
         </button>
       </TooltipTrigger>
