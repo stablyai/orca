@@ -8,6 +8,8 @@ import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-
 import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
 import { toLinuxPath } from '../../../../shared/wsl-paths'
 import { writeAgentSessionContextSnapshot } from '../../agent-session-context-snapshots'
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { JournalContinuationContext } from '../../agent-session-journal/journal-sql-continuation-context'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -33,16 +35,15 @@ export function continuationContextReader(
       return { status: 'superseded' }
     }
     const session = await conversation(input.sessionId)
+    const context = await continuationContext(session.journal)
     const record = sourceConversation()
-    const snapshot = session.journal.snapshot()
     if (
       !record ||
-      snapshot.cursor.epoch !== input.expectedCursor.epoch ||
-      snapshot.cursor.sequence < input.expectedCursor.sequence
+      context.cursor.epoch !== input.expectedCursor.epoch ||
+      context.cursor.sequence < input.expectedCursor.sequence
     ) {
       return { status: 'superseded' }
     }
-    const context = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
     const messages = projectStructuredAgentSessionMessages(
       context.items,
       [],
@@ -66,4 +67,13 @@ export function continuationContextReader(
       transcriptPath: record.location.wslDistro ? toLinuxPath(path) : path
     }
   }
+}
+
+// Stand-in until the journal's named continuation read lands; same rows as the SQL export.
+function continuationContext(journal: AgentSessionJournal): Promise<JournalContinuationContext> {
+  const snapshot = journal.snapshot()
+  return Promise.resolve({
+    cursor: snapshot.cursor,
+    ...agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
+  })
 }
