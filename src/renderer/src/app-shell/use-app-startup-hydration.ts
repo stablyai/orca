@@ -29,6 +29,7 @@ import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
 } from '../components/terminal/terminal-provider-snapshot-capability'
+import { probeTerminalProviderGoneSessions } from '../components/terminal/terminal-provider-gone-sessions'
 import {
   getRepoExecutionHostId,
   isOwnedSshTargetId,
@@ -262,10 +263,11 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          const restoredPtyIds = collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
+          // Unawaited: liveness answers only widen parking later and must never delay reconnect.
+          void probeTerminalProviderGoneSessions(restoredPtyIds)
           await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () =>
-            refreshTerminalProviderSnapshotCapabilities(
-              collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
-            )
+            refreshTerminalProviderSnapshotCapabilities(restoredPtyIds)
           )
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>
