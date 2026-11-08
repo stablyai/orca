@@ -155,6 +155,7 @@ describe('useIpcEvents updater integration', () => {
           onRequestTerminalCreate: () => () => {},
           onPublishAgentLaunchTab: () => () => {},
           onRevealTerminalPane: () => () => {},
+          onApplyAgentPaneActivity: () => () => {},
           onAgentLaunchPaneVerdict: () => () => {},
           onLaunchRecipe: () => () => {},
           onRequestTerminalTabMount: () => () => {},

@@ -17,6 +17,11 @@ import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-tear
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import { isDeepStrictEqual } from 'node:util'
+import type {
+  AgentListPublication,
+  AgentPaneActivityChange
+} from '../../../shared/agent-status/presentation/agent-list-status'
 import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
 import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
 import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
@@ -188,6 +193,29 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
     }
     this.store.updateUI(updates)
     return this.store.getUI()
+  }
+
+  /** The live desktop window's Agents-list verdicts; null with no window, so worktree.ps claims none. */
+  private agentListPublication: AgentListPublication | null = null
+
+  readAgentListPublication(): AgentListPublication | null {
+    return this.agentListPublication
+  }
+
+  setAgentListPublication(next: AgentListPublication | null): void {
+    const changed = !isDeepStrictEqual(this.agentListPublication?.verdicts, next?.verdicts)
+    this.agentListPublication = next
+    if (changed) {
+      this.emitClientEvent({ type: 'agentListChanged' })
+    }
+  }
+
+  /** Applies through the window's own Activity actions and keeps the verdicts it answers with, so the next worktree.ps already shows them. */
+  async applyAgentPaneActivity(change: AgentPaneActivityChange): Promise<void> {
+    if (!this.notifier?.applyAgentPaneActivity) {
+      throw new Error('agent_activity_needs_desktop_window')
+    }
+    this.setAgentListPublication(await this.notifier.applyAgentPaneActivity(change))
   }
 
   recordFeatureInteraction(id: FeatureInteractionId): PersistedUIState {

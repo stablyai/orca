@@ -135,7 +135,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       rowSources,
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
       getSummary,
-      conversationName: this.orchestrationSenderNames.agentRowNamer()
+      conversationName: this.orchestrationSenderNames.agentRowNamer(),
+      agentList: this.readAgentListPublication()
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)

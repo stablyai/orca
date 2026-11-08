@@ -255,3 +255,32 @@ it('keeps loaded rows while a continuation is pending and appends its captured p
   expect(result.current.hits.map((hit) => hit.sessionId)).toEqual(['first', 'second'])
   unmount()
 })
+
+it('keeps the last hits on screen until a newer query answers, ignoring the older reply', async () => {
+  const hit = (sessionId: string) => ({ ...searchHit(), sessionId })
+  let answerOld = (_response: AiVaultSearchResponse): void => {}
+  searchSessions
+    .mockResolvedValueOnce({ ...searchResults(), hits: [hit('first')] })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerOld = resolve
+        })
+    )
+    .mockResolvedValueOnce({ ...searchResults(), hits: [hit('newest')] })
+  const { result, rerender, unmount } = renderHook(
+    ({ request }) => useAiVaultSearch(request, 'local', ''),
+    { initialProps: { request: { query: 'n' } } }
+  )
+  await debounce()
+  rerender({ request: { query: 'ne' } })
+  await debounce()
+  rerender({ request: { query: 'nee' } })
+  expect(result.current.hits.map((entry) => entry.sessionId)).toEqual(['first'])
+  expect(result.current.answered).toBe(false)
+  await debounce()
+  await act(async () => answerOld({ ...searchResults(), hits: [hit('older')] }))
+  expect(result.current.hits.map((entry) => entry.sessionId)).toEqual(['newest'])
+  expect(result.current.answered).toBe(true)
+  unmount()
+})

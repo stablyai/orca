@@ -248,6 +248,38 @@
         }
       }
     },
+    "3088889ce80e": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "3403b59cf439": {
       "name": "worktree.show#1",
       "ordinal": 6,
@@ -450,38 +482,6 @@
       "ordinal": 11,
       "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
     },
-    "63bc0796d81c": {
-      "name": "settings.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
     "6f4a5d6a5a86": {
       "name": "worktree.show#1",
       "ordinal": 6,
@@ -559,32 +559,6 @@
           "payload": "runtime.clientEvents.subscribe#1"
         }
       ]
-    },
-    "891438a18444": {
-      "name": "settings.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
     },
     "8989d6980fc9": {
       "name": "repo.baseRefDefault#1",
@@ -782,6 +756,32 @@
         }
       }
     },
+    "b823fdc0d205": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "cb462f8b50a3": {
       "name": "worktree.show#1",
       "ordinal": 8,
@@ -924,11 +924,6 @@
         }
       }
     },
-    "e539e80d06e9": {
-      "name": "runtime.clientEvents.subscribe#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -936,6 +931,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "eef1ee3c2773": {
+      "name": "runtime.clientEvents.subscribe#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
     },
     "f802165696e4": {
       "name": "repo.list#1",
@@ -976,8 +976,8 @@
       {
         "id": "sc-changes-loaded.prelude:status-pending",
         "observation": {
-          "sender": ["891438a18444", "2ab4c978da8d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "2ab4c978da8d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -988,9 +988,9 @@
       {
         "id": "sc-changes-loaded.prelude:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "962f91336a50", "6f4a5d6a5a86", "1934c215114a"],
+          "sender": ["b823fdc0d205", "962f91336a50", "6f4a5d6a5a86", "1934c215114a"],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1007,14 +1007,14 @@
         "id": "sc-changes-loaded.prelude:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "da80647539b5",
             "f802165696e4",
             "99df70fb15d8"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1031,14 +1031,14 @@
         "id": "sc-changes-loaded.normal:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "74d102469d68",
             "2ca33da4d135",
             "5d30d477f0d5"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1056,14 +1056,14 @@
         "id": "sc-changes-loaded.normal:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "74d102469d68",
             "2ca33da4d135",
             "5d30d477f0d5"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1081,14 +1081,14 @@
         "id": "sc-changes-loaded.result-absent:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "b1f1cf609f1a",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1106,14 +1106,14 @@
         "id": "sc-changes-loaded.result-absent:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "b1f1cf609f1a",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1131,14 +1131,14 @@
         "id": "sc-changes-loaded.result-null:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "3fa278bfc300",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1156,14 +1156,14 @@
         "id": "sc-changes-loaded.result-null:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "3fa278bfc300",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1181,14 +1181,14 @@
         "id": "sc-changes-loaded.inner-ok-missing:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "12cda398ef1c",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1206,14 +1206,14 @@
         "id": "sc-changes-loaded.inner-ok-missing:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "12cda398ef1c",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1231,14 +1231,14 @@
         "id": "sc-changes-loaded.inner-false-string-error:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "cbba4d974cd2",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1256,14 +1256,14 @@
         "id": "sc-changes-loaded.inner-false-string-error:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "cbba4d974cd2",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1281,14 +1281,14 @@
         "id": "sc-changes-loaded.inner-false-object-error:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "3403b59cf439",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1306,14 +1306,14 @@
         "id": "sc-changes-loaded.inner-false-object-error:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "3403b59cf439",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1331,14 +1331,14 @@
         "id": "sc-changes-loaded.outer-refused:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "db7a4d8e637e",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1356,14 +1356,14 @@
         "id": "sc-changes-loaded.outer-refused:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "db7a4d8e637e",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1381,14 +1381,14 @@
         "id": "sc-changes-loaded.outer-refused-no-message:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "1266df2a91af",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1406,14 +1406,14 @@
         "id": "sc-changes-loaded.outer-refused-no-message:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "1266df2a91af",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1431,14 +1431,14 @@
         "id": "sc-changes-loaded.method-not-found:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "d67ff8e687bf",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1456,14 +1456,14 @@
         "id": "sc-changes-loaded.method-not-found:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "d67ff8e687bf",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1481,14 +1481,14 @@
         "id": "sc-changes-loaded.transport-rejection:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "5782be802edd",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1506,14 +1506,14 @@
         "id": "sc-changes-loaded.transport-rejection:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "5782be802edd",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1531,14 +1531,14 @@
         "id": "sc-changes-loaded.transport-rejection-no-message:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "1ff055d43072",
             "2ca33da4d135",
             "8989d6980fc9"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1556,14 +1556,14 @@
         "id": "sc-changes-loaded.transport-rejection-no-message:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "1ff055d43072",
             "2ca33da4d135",
             "3718b7e83a50"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",

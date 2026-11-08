@@ -1407,12 +1407,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "활성 {{count}}개",
-      "heading": "에이전트",
-      "showAll": "{{count}}개 모두 보기",
-      "showFewer": "접기"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
       "title": "Orca {{version}} 업데이트 가능",
