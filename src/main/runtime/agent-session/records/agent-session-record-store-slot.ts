@@ -3,6 +3,7 @@ import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 
 import { existsSync } from 'node:fs'
 import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
+import { journalDomainDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-domain-database'
 import { journalDatabaseHoldsAgentSessions } from '../../../native-chat/agent-session-journal/database/journal-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
@@ -155,7 +156,8 @@ export function hasPersistedStructuredAgentSessionStore(
   stateDirectory: string,
   fileExists: (path: string) => boolean = existsSync
 ): boolean {
-  const databasePath = journalDatabasePath(stateDirectory)
+  const currentPath = journalDomainDatabasePath(stateDirectory)
+  const databasePath = fileExists(currentPath) ? currentPath : journalDatabasePath(stateDirectory)
   if (!fileExists(databasePath)) {
     return false
   }

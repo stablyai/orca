@@ -5,6 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
+import { openJournalDatabase } from '../../../native-chat/agent-session-journal/database/journal-database'
+import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
+import {
+  journalDomainDatabasePath,
+  openJournalDomainDatabase
+} from '../../../native-chat/agent-session-journal/database/journal-domain-database'
 import {
   journalSqlReaderPath,
   journalSqlWorkerPath
@@ -12,6 +18,7 @@ import {
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import {
   closeAgentSessionRecordStoreDatabase,
+  hasPersistedStructuredAgentSessionStore,
   openAgentSessionRecordStoreOnce,
   peekOpenedAgentSessionRecordStore,
   retireAgentSessionRecordStore
@@ -54,6 +61,27 @@ afterEach(async () => {
   await retireStandalone()
   vi.restoreAllMocks()
   await rm(stateDirectory, { recursive: true, force: true })
+})
+
+it('discovers saved SQL chats after restart and consults the old store only before conversion', async () => {
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
+  const oldPath = journalDatabasePath(stateDirectory)
+  const { db: old } = openJournalDatabase(oldPath)
+  try {
+    old.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('old-chat', '{}')
+  } finally {
+    old.close()
+  }
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(stateDirectory))
+  try {
+    expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
+    db.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('new-chat', '{}')
+  } finally {
+    db.close()
+  }
+  await rm(oldPath)
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
 })
 
 it.each(['standalone', 'construction'] as const)(
