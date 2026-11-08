@@ -230,7 +230,6 @@
 1 src/renderer/src/components/diff-comments/useDiffCommentDecorator.tsx
 3 src/renderer/src/components/editor/MonacoGutterContextMenu.tsx
 2 src/renderer/src/components/editor/markdown-preview/render-tree/use-markdown-preview-components.tsx
-1 src/renderer/src/components/editor/notebook/document/IpynbViewer.tsx
 3 src/renderer/src/components/editor/review-note-delivery/ReviewNotesSendMenuContent.tsx
 1 src/renderer/src/components/emulator-pane/EmulatorPane.tsx
 9 src/renderer/src/components/emulator-pane/MobileEmulatorAgentSetupGuide.tsx
@@ -572,7 +571,6 @@
 3 src/renderer/src/components/repo/NestedRepoScanLimitNotice.tsx
 8 src/renderer/src/components/repo/RepoCombobox.tsx
 1 src/renderer/src/components/repo/repo-fork-indicator.tsx
-1 src/renderer/src/components/right-sidebar/checks-panel/comments/comment-controls.tsx
 1 src/renderer/src/components/right-sidebar/source-control/ai/use-ai.ts
 16 src/renderer/src/components/runtime-access/RuntimeHostAccessForm.tsx
 8 src/renderer/src/components/runtime-access/RuntimeRepairDialog.tsx
