@@ -145,9 +145,15 @@ export async function acquireAcpStructuredSession(input: {
           message
         }),
       // Protocol loss may leave the process alive; stdout EOF alone does not trigger this.
-      onClose: (error) => input.onConnectionLost(session, error),
+      onClose: (error) => {
+        session?.historyCatchUp?.abort()
+        input.onConnectionLost(session, error)
+      },
       // Read final diagnostics at process exit, which may follow stdout EOF.
-      onExit: () => input.onExit(session)
+      onExit: () => {
+        session?.historyCatchUp?.abort()
+        input.onExit(session)
+      }
     }
   )
   if (!spec.permissionModeConfig) {
@@ -265,6 +271,7 @@ export async function acquireAcpStructuredSession(input: {
     open: (signal) =>
       initializeAcpStructuredSession({
         acquire,
+        signal,
         deps,
         generation,
         launch,
@@ -290,6 +297,7 @@ export async function acquireAcpStructuredSession(input: {
         onSessionLost: (error) => input.onConnectionLost(child, error)
       }),
     dispose: () => {
+      child.historyCatchUp?.abort()
       slot.lane?.dispose()
       early.length = 0
     }

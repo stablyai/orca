@@ -34,8 +34,51 @@ import {
 } from './claude-transcript-catch-up-test-support'
 // Real disk tail → isolated translator → deferred sink → on-disk journal contracts.
 import * as transcriptTail from './claude-transcript-tail'
+import {
+  withStructuredHistoryInvocation,
+  type StructuredHistoryInvocationOwner
+} from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 
 describe('Claude chat catch-up', () => {
+  it('revokes a queued catch-up on context activity without a journal write', async () => {
+    const c = await chat()
+    await c.live()
+    await c.write([...chatTurn, ...outsideTurn])
+    const translator = createClaudeJournalTranslator({ sink: c.deferred.sink })
+    const owner: StructuredHistoryInvocationOwner = {}
+    const append = c.deferred.sink.tryAppendTransition!.bind(c.deferred.sink)
+    vi.spyOn(c.deferred.sink, 'tryAppendTransition').mockImplementationOnce((transition) =>
+      append({
+        ...transition,
+        beforeRun: () => {
+          const allowed = transition.beforeRun?.() !== false
+          translator.markContextActivity()
+          return allowed
+        }
+      })
+    )
+    const before = c.journal.snapshot()
+    try {
+      const covered = await withStructuredHistoryInvocation(
+        owner,
+        new AbortController().signal,
+        async (signal, revoke) => {
+          const release = translator.subscribeContextActivity(revoke)
+          try {
+            return await c.open('a1', { signal })
+          } finally {
+            release()
+          }
+        }
+      )
+      expect(covered).toBe(false)
+      expect(c.journal.snapshot()).toEqual(before)
+      expect(await c.open('a1')).toBe(true)
+      expect(c.journal.snapshot().items.length).toBeGreaterThan(before.items.length)
+    } finally {
+      translator.dispose()
+    }
+  })
   it.each([false, true])(
     'recognizes an unacknowledged local prompt; equal external input: %s',
     async (outside) => {

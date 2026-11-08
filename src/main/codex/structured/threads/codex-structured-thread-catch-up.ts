@@ -66,7 +66,10 @@ export async function catchUpCodexThread(input: {
         providerIdentity: AgentJournalItemIdentity
       ) => {
         check()
-        if (input.sink.journalHistory?.() !== history || history.epoch !== view.epoch) {
+        if (
+          input.sink.journalHistory?.() !== history ||
+          history.physicalCursor().epoch !== view.epoch
+        ) {
           throw new Error('stale-history')
         }
         await waitForPromiseWithSignal(

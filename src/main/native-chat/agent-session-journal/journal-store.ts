@@ -358,15 +358,15 @@ export class AgentSessionJournal {
   mutatePrompt = (input: contracts.JournalPromptMutationInput, receipt?: JournalOperationReceipt) =>
     mutateJournalPrompt({ state: () => this.state, writer: this.rowWriter }, input, receipt)
 
-  appendSteps: typeof this.stepWriter.append = (steps) => this.stepWriter.append(steps)
+  appendSteps: typeof this.stepWriter.append = (steps, beforeRun) =>
+    this.stepWriter.append(steps, beforeRun)
 
   appendSubmission(...args: Parameters<typeof this.submissionWriter.append>) {
     return this.submissionWriter.append(...args)
   }
 
-  resolveDispatch(...args: Parameters<typeof this.submissionWriter.resolveDispatch>) {
-    return this.submissionWriter.resolveDispatch(...args)
-  }
+  resolveDispatch: typeof this.submissionWriter.resolveDispatch = (...args) =>
+    this.submissionWriter.resolveDispatch(...args)
 
   acceptLate: typeof this.submissionWriter.acceptLate = (i) => this.submissionWriter.acceptLate(i)
 

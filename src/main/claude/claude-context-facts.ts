@@ -45,6 +45,7 @@ export class ClaudeContextFacts {
   private journalMayLackWindow = true
   private lastResponse: string | null = null
   private readonly requestListeners = new Set<(target: ClaudeContextReportTarget) => void>()
+  private readonly activityListeners = new Set<() => void>()
 
   constructor(
     private readonly turn: ClaudeOpenTurn,
@@ -56,7 +57,15 @@ export class ClaudeContextFacts {
   }
 
   markActivity(): void {
+    for (const listener of this.activityListeners) {
+      listener()
+    }
     this.activity += 1
+  }
+
+  subscribeActivity(listener: () => void): () => void {
+    this.activityListeners.add(listener)
+    return () => this.activityListeners.delete(listener)
   }
 
   /** Observe before journaling. */
@@ -184,6 +193,7 @@ export class ClaudeContextFacts {
   }
 
   dispose(): void {
+    this.activityListeners.clear()
     this.requestListeners.clear()
   }
 

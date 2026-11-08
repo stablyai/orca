@@ -1,3 +1,4 @@
+import { withStructuredHistoryInvocation } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import type {
   StructuredAgentSessionProviderOpenInput,
   StructuredAgentSessionProviderOpenResult
@@ -86,26 +87,38 @@ async function openStartingClaudeSession(
   // The stored leaf is set only on a resume, and is the chat's last completed turn.
   const history = session.initialization.history
   const leafUuid = history.leafUuid
-  if (resumesTranscript && leafUuid && session.events) {
-    const catchUp = catchUpClaudeTranscript({
-      sessionId: request.sessionId,
-      providerSessionId: session.providerSessionId,
-      leafUuid,
-      claudeConfigDir: session.initialization.claudeConfigDir,
-      cwd: session.initialization.cwd,
-      sink: session.events,
-      signal: request.signal,
-      assertCurrent: () => {
-        current()
-        if (
-          session.translator?.contextActivity !== history.contextActivity ||
-          session.dispatchSequence !== 0
-        ) {
-          throw new Error('claude made live progress before catch-up completed')
+  const events = session.events
+  if (resumesTranscript && leafUuid && events) {
+    const catchUp = withStructuredHistoryInvocation(
+      session,
+      request.signal,
+      async (signal, revoke) => {
+        const release = session.translator?.subscribeContextActivity(revoke)
+        try {
+          return await catchUpClaudeTranscript({
+            sessionId: request.sessionId,
+            providerSessionId: session.providerSessionId,
+            leafUuid,
+            claudeConfigDir: session.initialization.claudeConfigDir,
+            cwd: session.initialization.cwd,
+            sink: events,
+            signal,
+            assertCurrent: () => {
+              current()
+              if (
+                session.translator?.contextActivity !== history.contextActivity ||
+                session.dispatchSequence !== 0
+              ) {
+                throw new Error('claude made live progress before catch-up completed')
+              }
+            },
+            ...(deps.logger ? { logger: deps.logger } : {})
+          })
+        } finally {
+          release?.()
         }
-      },
-      ...(deps.logger ? { logger: deps.logger } : {})
-    })
+      }
+    )
     history.covered = await waitForPromiseWithSignal(
       startup.race(catchUp, request.signal),
       request.signal

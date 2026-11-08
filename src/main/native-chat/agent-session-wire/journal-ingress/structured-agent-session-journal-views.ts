@@ -21,6 +21,7 @@ export type StructuredAgentSessionHistoryJournal = Pick<
   AgentSessionJournal,
   | 'epoch'
   | 'cursor'
+  | 'physicalCursor'
   | 'visitItems'
   | 'visitItemsWithLinkage'
   | 'item'

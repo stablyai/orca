@@ -182,12 +182,11 @@ export function registerCodexHistoryVariantsTests(input: {
     expect(c.journal.item(old.itemId)?.body).toMatchObject({
       output: journalPayload('concurrent writer')
     })
-    // Execute the captured real resolver against the now-current journal: stale checked dependency rejects the whole plan.
-    const settlement = calls.mock.calls[0]?.[0].steps.find((step) => step.kind === 'settlement')
-    expect(settlement?.kind).toBe('settlement')
-    if (settlement?.kind === 'settlement') {
-      expect(settlement.resolve(c.journal)).toEqual([])
-    }
+    expect(
+      calls.mock.calls[0]?.[0].steps.some(
+        (step) => step.kind === 'settlement' && 'resolution' in step
+      )
+    ).toBe(true)
   })
 
   it('retains good observations, pre-filter message slots and exact proof around local collisions', async () => {

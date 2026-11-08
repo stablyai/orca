@@ -25,6 +25,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import type { CommandReceipt } from './writing/command-receipt-schema'
 import { readCommandReceipt } from './writing/command-receipt-table'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { JournalWriterStep } from './writing/journal-writer-step'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -55,6 +56,61 @@ function fixture() {
     batch: new JournalSqlBatch(db)
   }
 }
+
+it('commits a step prefix without leaking the rolled-back session or admitting its suffix', async () => {
+  const { db, engine, batch } = fixture()
+  db.exec(`CREATE TEMP TRIGGER refuse_step BEFORE INSERT ON journal_proj_items
+    WHEN NEW.entry_key='"orca:refused"' BEGIN SELECT RAISE(ABORT, 'step refused'); END`)
+  const step = (clientMessageId: string): JournalWriterStep => ({
+    kind: 'item',
+    identity: { provider: 'orca', clientMessageId },
+    body: { kind: 'status', text: clientMessageId },
+    options: { fence: 1, turnScope: { kind: 'thread' } },
+    reservedBytes: 1024
+  })
+  const answer = (
+    await batch.run(
+      [
+        {
+          command: command({
+            kind: 'steps',
+            steps: [step('first'), step('refused'), step('suffix')]
+          }),
+          normal: false
+        }
+      ],
+      (entry) => engine.apply(entry, 100)
+    )
+  ).outcomes[0]!
+  expect(answer).toMatchObject({
+    committed: true,
+    value: {
+      cursor: { epoch: 'epoch', sequence: 2 },
+      items: [{ itemId: 'orca:first', revision: 1, deleted: false }],
+      value: {
+        outcomes: [{ kind: 'committed', wrote: true }],
+        failure: { message: 'step refused' }
+      }
+    }
+  })
+  if (!answer.committed) {
+    throw new Error('prefix must commit')
+  }
+  expect(
+    answer.value.keys.some((entry) => entry.key === 'orca:refused' || entry.key === 'orca:suffix')
+  ).toBe(false)
+  expect(
+    db
+      .prepare('SELECT entry_key FROM journal_proj_items ORDER BY ordinal')
+      .all()
+      .map((row) => JSON.parse(String(row.entry_key)))
+  ).toContain('orca:first')
+  expect(
+    db
+      .prepare('SELECT 1 FROM journal_proj_items WHERE entry_key IN (?,?)')
+      .get('"orca:refused"', '"orca:suffix"')
+  ).toBeUndefined()
+})
 
 it('assigns revisions after preceding successes and rolls back failed command projections and receipts', async () => {
   const { db, engine, batch, initial, source } = fixture()

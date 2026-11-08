@@ -159,6 +159,10 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
   prepare: (context: HistoryCatchUpContext<View>) => Promise<HistoryCatchUpPlan | null>
 }): Promise<HistoryCatchUpOutcome> {
   const controller = new AbortController()
+  const permit = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT))
+  Atomics.store(permit, 0, 1)
+  const revoke = () => Atomics.store(permit, 0, 0)
+  controller.signal.addEventListener('abort', revoke, { once: true })
   const abort = () => controller.abort(input.signal?.reason)
   input.signal?.addEventListener('abort', abort, { once: true })
   if (input.signal?.aborted) {
@@ -241,7 +245,9 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
             kind: 'history-catch-up',
             expectedCursor,
             expectedItems: plan.expectedItems ?? [],
-            mutations: plan.mutations
+            mutations: plan.mutations,
+            permit,
+            deadline
           }
         }
       ]

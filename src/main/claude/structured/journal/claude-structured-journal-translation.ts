@@ -283,6 +283,7 @@ export function createClaudeJournalTranslator(
       return coverage.admitted
     },
     markContextActivity: () => context.markActivity(),
+    subscribeContextActivity: (listener) => context.subscribeActivity(listener),
     subscribeContextUsageRequests: (listener) => context.subscribeReportRequests(listener),
     recordContextReport: (target, report, part) => context.recordReport(target, report, part),
     modelMayHaveChanged: () => context.modelMayHaveChanged(),

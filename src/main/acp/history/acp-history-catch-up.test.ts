@@ -641,10 +641,15 @@ describe('ACP history catch-up', () => {
         (item) => item.body.kind === 'message' && item.body.role === 'assistant'
       )
       expect(answer?.body).toMatchObject({
-        blocks: [{ text: scenario === 'queued-only' ? 'full' : 'prefix' }]
+        blocks: [{ text: 'prefix' }]
       })
       if (scenario === 'queued-only') {
         expect(rig.journal.submission('queued')?.handedOverAt).toBeUndefined()
+        await catchUp([userReplay('outside'), answerReplay('full')])
+        const caughtUp = (await rig.rows()).filter(
+          (item) => item.body.kind === 'message' && item.body.role === 'assistant'
+        )
+        expect(caughtUp.map((item) => item.body)).toMatchObject([{ blocks: [{ text: 'full' }] }])
       }
     }
   )

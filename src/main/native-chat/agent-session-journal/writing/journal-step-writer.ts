@@ -11,6 +11,13 @@ import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import type { JournalRowWriter } from './journal-row-writer'
 import type { JournalWriteBody } from './journal-write-queue'
+import { planJournalWriterStep } from './journal-writer-step-plan'
+import type {
+  JournalWriterStep,
+  JournalStepsResult,
+  JournalStepOutcome
+} from './journal-writer-step'
+import { journalSqlFailure } from '../journal-sql-failure'
 
 export type JournalStep =
   | {
@@ -20,6 +27,7 @@ export type JournalStep =
       options: JournalItemAppendOptions
     }
   | { kind: 'settlement'; batch: JournalResolvedLifecycleBatchInput }
+  | { kind: 'command'; step: JournalWriterStep }
 
 export class JournalStepWriter {
   constructor(
@@ -31,23 +39,45 @@ export class JournalStepWriter {
     }
   ) {}
 
-  append(steps: readonly JournalStep[]): Promise<boolean[]> {
+  append(steps: readonly JournalStep[], beforeRun?: () => boolean): Promise<JournalStepsResult> {
     return this.deps.serialize(() => {
-      const wrote: boolean[] = []
-      for (const step of steps) {
-        wrote.push(this.deps.writeRows(() => this.plan(step)).length > 0)
+      const result: JournalStepsResult = { outcomes: [] }
+      if (beforeRun?.() === false) {
+        return { outcomes: steps.map(() => ({ kind: 'dropped' as const })) }
       }
-      return wrote
+      for (const step of steps) {
+        try {
+          result.outcomes.push(this.write(step))
+        } catch (error) {
+          result.failure = journalSqlFailure(error)
+          break
+        }
+      }
+      return result
     })
   }
 
-  private plan(step: JournalStep): ((seq: number, ts: number) => JournalRow)[] {
+  /** Caller already owns the command's write turn and transaction. */
+  write(step: JournalStep): JournalStepOutcome {
+    let dropped = false
+    const rows = this.deps.writeRows(() => {
+      const plan = this.plan(step)
+      dropped = plan === null
+      return plan ?? []
+    })
+    return dropped ? { kind: 'dropped' } : { kind: 'committed', wrote: rows.length > 0 }
+  }
+
+  private plan(step: JournalStep): ((seq: number, ts: number) => JournalRow)[] | null {
+    if (step.kind === 'command') {
+      return planJournalWriterStep(this.deps.state(), step.step)
+    }
     if (step.kind === 'settlement') {
       return this.deps.planSettlement(step.batch)
     }
     const resolved = step.resolve()
     return resolved === null
-      ? []
+      ? null
       : [journalItemRowBuilder(this.deps.state, resolved.identity, resolved.body, step.options)]
   }
 }

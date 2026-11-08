@@ -1,3 +1,4 @@
+import Database from '../../sqlite/sync-database'
 import { StructuredAgentSessionJournalProjections } from '../agent-session-wire/observations/structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from '../agent-session-wire/observations/structured-agent-session-status-feed'
 import type { StatusFeedSession } from '../agent-session-wire/observations/structured-agent-session-status-feed-deps'
@@ -436,4 +437,69 @@ it('publishes SQL status only with recaptured live owners through the existing r
     updatedAt: 100
   })
   expect(logger.warn).not.toHaveBeenCalled()
+})
+
+it('drops a revoked history invocation after worker dispatch and preserves deduplicated verdicts', async () => {
+  const { root, database, journal } = await fixture()
+  const cursor = journal.physicalCursor()
+  const permit = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT))
+  Atomics.store(permit, 0, 1)
+  const step = {
+    kind: 'settlement' as const,
+    settlementId: 'history:one',
+    reservedBytes: 4096,
+    fence: 1,
+    ownerFence: 1,
+    resolution: {
+      kind: 'history-catch-up' as const,
+      expectedCursor: cursor,
+      expectedItems: [],
+      mutations: [
+        {
+          kind: 'item' as const,
+          identity: { provider: 'orca' as const, clientMessageId: 'history' },
+          body: { kind: 'status' as const, text: 'Recovered outside turn' },
+          turnScope: { kind: 'thread' as const }
+        }
+      ],
+      permit,
+      deadline: Number.MAX_SAFE_INTEGER
+    }
+  }
+  const posted = Promise.withResolvers<void>()
+  await database.serialize('observe-dispatch', (writer) => {
+    const write = writer.write.bind(writer)
+    vi.spyOn(writer, 'write').mockImplementationOnce((command) => {
+      const answer = write(command)
+      posted.resolve()
+      return answer
+    })
+  })
+  const lock = new Database(journalDatabasePath(root))
+  let pending: Promise<unknown> | undefined
+  lock.exec('BEGIN IMMEDIATE')
+  try {
+    pending = journal.appendSteps([step])
+    await posted.promise
+    Atomics.store(permit, 0, 0)
+  } finally {
+    lock.exec('ROLLBACK')
+    lock.close()
+  }
+  expect(await pending).toEqual({ outcomes: [{ kind: 'dropped' }] })
+  expect(journal.physicalCursor()).toEqual(cursor)
+  expect(await journal.reads.item('orca:history')).toBeNull()
+  Atomics.store(permit, 0, 1)
+  expect(await journal.appendSteps([step])).toEqual({
+    outcomes: [{ kind: 'committed', wrote: true }]
+  })
+  expect(await journal.reads.item('orca:history')).toMatchObject({
+    revision: 1,
+    body: { text: 'Recovered outside turn' }
+  })
+  Atomics.store(permit, 0, 0)
+  expect(await journal.appendSteps([step])).toEqual({
+    outcomes: [{ kind: 'committed', wrote: false }]
+  })
+  expect((await journal.reads.item('orca:history'))?.revision).toBe(1)
 })

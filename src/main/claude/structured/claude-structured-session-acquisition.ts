@@ -65,6 +65,7 @@ export async function acquireClaudeSession({
   // Owned by this acquisition alone, so a late frame cannot fail a replacement's open.
   const startup = createClaudeStartupOutcome()
   const childFailed = (error: Error, ended?: Promise<unknown>): void => {
+    liveSession?.historyCatchUp?.abort()
     childEnded ??= error
     void (ended ? ended.then(startup.fail) : endsClaudeStartup(error) && startup.fail(error))
     initProof.reject(error)

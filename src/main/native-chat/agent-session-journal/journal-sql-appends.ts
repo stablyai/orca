@@ -27,6 +27,7 @@ import type {
 import type { JournalWriterCommit } from './journal-writer-changes'
 import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
+import type { JournalWriterStep, JournalStepsResult } from './writing/journal-writer-step'
 
 /**
  * The in-memory journal's append surface, each method one writer command with the same answer.
@@ -75,6 +76,19 @@ export abstract class SqlJournalAppends {
 
   appendLifecycleBatch(input: JournalLifecycleBatchInput): Promise<AgentJournalCursor> {
     return this.answerOf(this.write({ kind: 'lifecycle', input }))
+  }
+
+  appendSteps(
+    steps: readonly JournalWriterStep[],
+    beforeRun?: () => boolean
+  ): Promise<JournalStepsResult> {
+    const operation: Extract<JournalSqlStoreOperation, { kind: 'steps' }> = { kind: 'steps', steps }
+    return this.answerOf(
+      this.write(operation, () => {
+        operation.dropped = beforeRun?.() === false
+        return {}
+      })
+    )
   }
 
   settleStaleState(input: JournalStaleSettlementInput): Promise<number> {

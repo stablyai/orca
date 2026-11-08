@@ -147,6 +147,7 @@ export async function closeCodexSession(
   const attempt = acquisitions.get(sessionId)
   const published = sessions.get(sessionId)
   if (attempt && published?.connection === attempt.window.connection) {
+    attempt.historyCatchUp?.abort()
     attempt.cancelled = true
     attempt.requestedClose = requestedClose
     const closed = await closeCodexPublishedSession(sessions, sessionId, onEvent, {

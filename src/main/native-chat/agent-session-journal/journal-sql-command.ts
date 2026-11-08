@@ -7,6 +7,7 @@ import { JournalWriterSession } from './journal-writer-session'
 import { runJournalWriterOperation } from './journal-writer-operations'
 import { planJournalWriterRows } from './journal-writer-plan'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
+import { runJournalSqlSteps } from './journal-sql-steps'
 import { isJournalStreamedTextRevision } from './writing/journal-streamed-text-revision'
 import {
   claimJournalSqlProjection,
@@ -38,6 +39,16 @@ export class JournalSqlCommand {
   async apply(command: JournalWriterCommand, savedAt: number): Promise<JournalWriterCommit> {
     if (!this.db.isTransaction) {
       throw new Error('journal SQL command requires its transaction')
+    }
+    if (command.operation.kind === 'steps') {
+      const commit = await runJournalSqlSteps(
+        this.db,
+        { ...command, operation: command.operation },
+        command.facts ?? { identity: unidentified(command.target.sessionId) },
+        (facts) => this.session({ ...command, facts }, command.savedAt ?? savedAt)
+      )
+      recordJournalSqlWatermark(this.db, command.target.sessionId)
+      return commit
     }
     if (
       command.operation.kind === 'open' &&

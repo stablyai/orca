@@ -53,6 +53,7 @@ export type ClaudeJournalTranslator = {
   readonly pendingStreamedBlocks: number
   /** Advances on conversation activity and accepted sends, invalidating older context requests. */
   readonly contextActivity: number
+  subscribeContextActivity: (listener: () => void) => () => void
   /** Every final snapshot and turn settlement this acquisition tried was admitted. */
   readonly finalOutputAdmitted: boolean
   markContextActivity: () => void

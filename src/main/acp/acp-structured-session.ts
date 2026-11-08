@@ -43,6 +43,7 @@ export type AcpStructuredSession = {
   closeRequested: boolean
   /** Null while provider events can still reach the journal. */
   journalClosed: string | null
+  historyCatchUp?: AbortController
   /** Exit was proven and reported to the host. */
   ended: boolean
   exitObservedAt: number | null
@@ -106,6 +107,7 @@ export function closeAcpSessionJournal(
     return
   }
   session.events?.observeExit?.(session.turns.heldSends)
+  session.historyCatchUp?.abort()
   session.journalClosed = reason
   session.prompts.clear()
   session.turns.end(reason, cause)

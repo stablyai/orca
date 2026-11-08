@@ -1,3 +1,4 @@
+import { withStructuredHistoryInvocation } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import { observeAcpForkSupport } from './acp-fork-support'
 // An ACP child's handshake, run after the host has published it: initialize, reopen the chat's
 // session or start a new one, then return its protocol facts to the host. A saved session the
@@ -33,6 +34,7 @@ import {
 
 type AcpHandshakeInput = {
   acquire: StructuredAgentSessionAcquireInput
+  signal: AbortSignal
   deps: AcpStructuredSessionAdapterDeps
   generation: string
   launch: AcpStructuredLaunch
@@ -133,17 +135,20 @@ export async function initializeAcpStructuredSession(
     started.sessionId === resume?.sessionId &&
     acquire.events
   ) {
-    await catchUpAcpHistory({
-      frames: replayed,
-      identity: spec.historyCatchUp,
-      sink: acquire.events,
-      sessionId,
-      agent: spec.agent,
-      providerSessionId: started.sessionId,
-      dialect: spec.dialect,
-      assertCurrent: assertStarting,
-      ...(deps.logger ? { logger: deps.logger } : {})
-    })
+    await withStructuredHistoryInvocation(child, input.signal, (signal) =>
+      catchUpAcpHistory({
+        signal,
+        frames: replayed,
+        identity: spec.historyCatchUp,
+        sink: acquire.events,
+        sessionId,
+        agent: spec.agent,
+        providerSessionId: started.sessionId,
+        dialect: spec.dialect,
+        assertCurrent: assertStarting,
+        ...(deps.logger ? { logger: deps.logger } : {})
+      })
+    )
     assertStarting()
   }
   const childStops = await probeAcpChildStops(connection, spec.dialect)

@@ -3,6 +3,11 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalStep } from '../../agent-session-journal/writing/journal-step-writer'
+import type {
+  JournalHistoryResolution,
+  JournalStepOutcome
+} from '../../agent-session-journal/writing/journal-writer-step'
+import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,
@@ -47,12 +52,21 @@ export type StructuredAgentSessionTransitionStep =
         journal: StructuredAgentSessionTransitionJournal
       ) => readonly JournalLifecycleMutationInput[]
     }
+  | {
+      kind: 'settlement'
+      settlementId: string
+      recovered?: true
+      reservedBytes: number
+      resolution: JournalHistoryResolution
+    }
 
 export type StructuredAgentSessionTransition = {
   steps: readonly StructuredAgentSessionTransitionStep[]
   /** Ending or settling work. */
   lifecycle: boolean
   publish: boolean
+  beforeRun?: () => boolean
+  onResolved?: (outcomes: readonly JournalStepOutcome[]) => void
   /** Run after writes and parent publication, in queue order. */
   onPublished?: () => void
 }
@@ -83,7 +97,7 @@ function transitionAppend(
         (transition.publish ? 1 : 0),
       run: async (bound) => {
         const { journal, fence } = bound
-        const wrote = await journal.appendSteps(
+        const result = await journal.appendSteps(
           transition.steps.map((step): JournalStep =>
             step.kind === 'item'
               ? {
@@ -101,20 +115,41 @@ function transitionAppend(
                   },
                   options: structuredAgentSessionJournalAppendOptions(fence, step.options)
                 }
-              : {
-                  kind: 'settlement',
-                  batch: {
-                    settlementId: step.settlementId,
-                    fence,
-                    ownerFence: fence,
-                    recovered: step.recovered,
-                    resolve: () => step.resolve(journal)
+              : 'resolution' in step
+                ? {
+                    kind: 'command',
+                    step: {
+                      kind: 'settlement',
+                      settlementId: step.settlementId,
+                      reservedBytes: step.reservedBytes,
+                      fence,
+                      ownerFence: fence,
+                      recovered: step.recovered,
+                      resolution: step.resolution
+                    }
                   }
-                }
-          )
+                : {
+                    kind: 'settlement',
+                    batch: {
+                      settlementId: step.settlementId,
+                      fence,
+                      ownerFence: fence,
+                      recovered: step.recovered,
+                      resolve: () => step.resolve(journal)
+                    }
+                  }
+          ),
+          transition.beforeRun
         )
-        if (transition.publish && wrote.includes(true)) {
+        transition.onResolved?.(result.outcomes)
+        if (
+          transition.publish &&
+          result.outcomes.some((outcome) => outcome.kind === 'committed' && outcome.wrote)
+        ) {
           bound.publish()
+        }
+        if (result.failure) {
+          throw restoreJournalSqlFailure(result.failure)
         }
         transition.onPublished?.()
       }

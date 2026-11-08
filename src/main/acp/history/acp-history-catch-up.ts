@@ -42,6 +42,7 @@ export type AcpHistoryCatchUpInput = AcpHistoryScope & {
   frames: readonly AcpLoadHistoryFrame[]
   sink: StructuredAgentSessionEventSink
   assertCurrent: () => void
+  signal?: AbortSignal
   timeoutMs?: number
   logger?: StructuredAgentSessionLogger
 }
@@ -55,6 +56,7 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
     sessionId: input.sessionId,
     sink: input.sink,
     assertCurrent: input.assertCurrent,
+    signal: input.signal,
     timeoutMs: input.timeoutMs ?? 30_000,
     ...(input.logger ? { logger: input.logger } : {}),
     readView: (history) => journalView(input, history, candidates),
