@@ -103,6 +103,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalFontSize: number
   terminalFontFamily: string
   terminalFontWeight: number
+  /** One-shot Windows move from the old 500 default to Regular; pending until its notice is closed. */
+  terminalFontWeightWindowsRegular?: 'notice-pending' | 'done'
   terminalFontWeightBold: number
   terminalLineHeight: number
   terminalScrollSensitivity: number

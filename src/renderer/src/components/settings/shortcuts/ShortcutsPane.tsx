@@ -109,20 +109,24 @@ export function ShortcutsPane(): React.JSX.Element {
   const { groups, definitions, definitionsByAction, ignoredConflictActionIds, conflictByAction } =
     useMemo(
       () =>
-        buildShortcutDefinitionCatalog({
-          disabledTuiAgents,
-          pluginCommands,
-          keybindings,
-          platform,
-          macCapturedDigitChords,
-          missionControlConflictMessage
-        }),
+        buildShortcutDefinitionCatalog(
+          {
+            disabledTuiAgents,
+            pluginCommands,
+            keybindings,
+            platform,
+            macCapturedDigitChords,
+            missionControlConflictMessage
+          },
+          t
+        ),
       [
         disabledTuiAgents,
         keybindings,
         macCapturedDigitChords,
         missionControlConflictMessage,
-        pluginCommands
+        pluginCommands,
+        t
       ]
     )
   const definitionForAction = (actionId: KeybindingActionId): KeybindingDefinition | null =>
@@ -136,19 +140,22 @@ export function ShortcutsPane(): React.JSX.Element {
   }
   const { filterCounts, shortcutRows, visibleShortcutCount, visibleShortcutGroups } = useMemo(
     () =>
-      buildShortcutRowVisibility({
-        groups,
-        keybindings,
-        conflictByAction,
-        terminalShortcutPolicy,
-        platform,
-        managedBrowserCreationEnabled,
-        mobileEmulatorCreationEnabled,
-        agentDashboardEnabled,
-        settingsSearchQuery: searchQuery,
-        shortcutQuery,
-        shortcutFilter
-      }),
+      buildShortcutRowVisibility(
+        {
+          groups,
+          keybindings,
+          conflictByAction,
+          terminalShortcutPolicy,
+          platform,
+          managedBrowserCreationEnabled,
+          mobileEmulatorCreationEnabled,
+          agentDashboardEnabled,
+          settingsSearchQuery: searchQuery,
+          shortcutQuery,
+          shortcutFilter
+        },
+        t
+      ),
     [
       agentDashboardEnabled,
       conflictByAction,
@@ -159,6 +166,7 @@ export function ShortcutsPane(): React.JSX.Element {
       searchQuery,
       shortcutFilter,
       shortcutQuery,
+      t,
       terminalShortcutPolicy
     ]
   )

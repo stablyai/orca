@@ -254,15 +254,23 @@ describe('agent row chat or CLI', () => {
         agent: 'antigravity'
       })
     )
-    if (runtime.current.kind !== 'active' || runtime.current.snapshot.kind !== 'known') {
+    const installing = runtime.current
+    if (installing.kind !== 'active' || installing.snapshot.kind !== 'known') {
       throw new Error('Managed runtime snapshot is missing')
     }
-    Object.assign(runtime.current.snapshot.state, {
-      revision: 2,
-      source: 'managed',
-      installedVersion: '1',
-      installedCurrent: true
-    })
+    runtime.current = {
+      ...installing,
+      snapshot: {
+        kind: 'known',
+        state: {
+          ...installing.snapshot.state,
+          revision: 2,
+          source: 'managed',
+          installedVersion: '1',
+          installedCurrent: true
+        }
+      }
+    }
     view.rerender(element())
     expect(screen.getByText('Antigravity account')).toBeTruthy()
     inventory.chatAvailable = true

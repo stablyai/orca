@@ -7,6 +7,7 @@ import { installPluginHookRunner } from './hooks/plugin-hook-participants'
 import { installPluginResidentWorkerWarmer } from './workers/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
+import type { DispatcherOptions } from '../runtime/rpc/dispatcher'
 import type { PluginRuntimeRpc } from './workers/plugin-host-workspace-method-bindings'
 import {
   pluginTerminalTitle,
@@ -47,10 +48,11 @@ export function pluginRuntimeDelegate(
 export function bindPluginRuntime(
   service: PluginService,
   runtime: OrcaRuntimeService,
-  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] }
+  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] },
+  methods: DispatcherOptions['methods']
 ): PluginRuntimeDelegate {
   const statuses = () => hookServer.getStatusSnapshot()
-  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime))
+  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime, methods))
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
   installPluginResidentWorkerWarmer(service)

@@ -5,7 +5,10 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from '../layout/close/terminal-pane-close-identity'
-import { reportActiveRendererPtyForPane } from '../pty-transport/renderer-active-pty'
+import {
+  reportActiveRendererPtyForPane,
+  syncPaneOutputCadences
+} from '../pty-transport/renderer-active-pty'
 import {
   retireMountedTerminalPaneSurface,
   suppressIntentionalPaneCloseExit
@@ -157,6 +160,7 @@ export function createTerminalPaneClosedHandler(
     const activePane = managerRef.current?.getActivePane()
     if (activePane) {
       reportActiveRendererPtyForPane(paneTransportsRef.current, activePane.id)
+      syncPaneOutputCadences(panePtyBindingsRef.current)
       const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
       updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, activePane.id))
     }

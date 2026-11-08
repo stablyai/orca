@@ -1,3 +1,4 @@
+import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
@@ -300,6 +301,7 @@ export function createRemoteRuntimePtyTransport(
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let multiplexedStreamHandle: string | null = null
   let desiredOutputPaused = false
+  let desiredOutputCadence: TerminalOutputCadence = 'focused'
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   const surfacedErrorMessages = new Set<string>()
@@ -2276,11 +2278,22 @@ export function createRemoteRuntimePtyTransport(
     return true
   }
 
-  const inputBatcher = createRemoteRuntimePtyTextBatcher(REMOTE_TERMINAL_INPUT_FLUSH_MS, (text) => {
-    if (!sendUnacknowledgedInput(text)) {
-      holdUnsentInput(text)
+  const inputBatcher = createRemoteRuntimePtyTextBatcher(
+    REMOTE_TERMINAL_INPUT_FLUSH_MS,
+    (text) => {
+      if (!sendUnacknowledgedInput(text)) {
+        holdUnsentInput(text)
+      }
+    },
+    {
+      // Why: without the ack journal an accepted write's separate RPC could overtake an immediate key.
+      sendLeadingEdge: () =>
+        // A hold replaying through sendInputNow must not re-enter its own queue.
+        !recoveryInputHold.isHolding() &&
+        handle !== null &&
+        getCurrentMultiplexedStream(handle)?.acknowledgesInput() === true
     }
-  })
+  )
 
   function deferViewportForRecovery(claim: boolean): void {
     // Why: the replay sends the latest viewport; an older queued batch flushing after it would win.
@@ -3057,6 +3070,7 @@ export function createRemoteRuntimePtyTransport(
       viewport: subscribedViewport ?? undefined,
       inputSessionId: inputJournal.sessionId,
       reportsPaneVisibility: true,
+      outputCadence: desiredOutputCadence,
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
@@ -3330,6 +3344,8 @@ export function createRemoteRuntimePtyTransport(
     multiplexedStream = nextStream
     multiplexedStreamHandle = subscribedHandle
     installedStream = nextStream
+    // Why: focus may have moved during the subscribe round-trip.
+    nextStream.setOutputCadence(desiredOutputCadence)
     setAttachmentReady(subscriptionAttached)
     if (subscriptionAttached) {
       resetRecoveryReplacementPolicy()
@@ -4107,7 +4123,7 @@ export function createRemoteRuntimePtyTransport(
       return sendInputNow(data)
     },
 
-    // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms debounce would miss it and echo the reply onto the prompt (#7329).
+    // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms coalescing window would miss it and echo the reply onto the prompt (#7329).
     sendInputImmediate: (data: string): boolean => sendInputImmediateNow(data),
 
     sendInputAccepted(data, inputKind, options) {
@@ -4163,6 +4179,13 @@ export function createRemoteRuntimePtyTransport(
         stream?.reportsPausedOutputDrops?.() === true
       )
       return supported
+    },
+
+    setOutputCadence(cadence: TerminalOutputCadence): void {
+      desiredOutputCadence = cadence
+      if (connected && handle) {
+        getCurrentMultiplexedStream(handle)?.setOutputCadence(cadence)
+      }
     },
 
     resize(cols: number, rows: number, meta): boolean {

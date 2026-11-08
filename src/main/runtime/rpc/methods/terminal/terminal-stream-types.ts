@@ -77,6 +77,7 @@ export type TerminalMultiplexStream = {
   // Set only when the client negotiated `inputAck`; sequenced Input frames are then deduped and acked.
   inputSessionId: string | null
   outputPaused: boolean
+  supportsOutputCadence: boolean
   supportsDesktopViewportClaims: boolean
   desktopClaimTail: Promise<boolean>
   // Only this stream's floor may be released on detach.

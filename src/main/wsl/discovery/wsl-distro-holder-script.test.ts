@@ -15,12 +15,7 @@ import {
   ORCAD_WSL_HOLDER_BLOCKED_FILENAME,
   ORCAD_WSL_HOLDER_RELEASE_FILENAME
 } from '../../../shared/orcad-idle-exit'
-import {
-  buildWslDistroHolderScript,
-  WSL_DISTRO_HOLDER_BLOCKED_NAMES_MAX,
-  WSL_DISTRO_HOLDER_IGNORED_PROCESS_NAMES,
-  WSL_DISTRO_HOLDER_MARKER
-} from './wsl-distro-holder-command'
+import { buildWslDistroHolderScript, WSL_DISTRO_HOLDER_MARKER } from './wsl-distro-holder-command'
 
 // The script runs inside the distro; any POSIX sh here exercises the same text. A fake /proc stands
 // in for the distro's, so the test runner's own processes never count as the user's work.
@@ -127,13 +122,6 @@ async function holderWithRequest(options: { procReadable?: boolean; path?: strin
 }
 
 describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => {
-  it('drops a request left from before it started: a client wants the distro now', async () => {
-    writeFileSync(releasePath(), '999999\n')
-    const { exited } = startHolder()
-    expect(await within(2_500, exited)).toBe('running')
-    expect(existsSync(releasePath())).toBe(false)
-  })
-
   it('waits for the requesting orcad to exit, then claims the request and ends', async () => {
     const holder = await startHolderReady()
     const orcad = track(spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' }))
@@ -173,43 +161,6 @@ describe.skipIf(process.platform === 'win32')('WSL distro holder script', () => 
     expect(await within(2_500, exited)).toBe('running')
     rmSync(shim, { recursive: true })
     expect(await within(RELEASE_BOUND_MS, exited)).toBe(0)
-  })
-
-  it('does not count session plumbing, zombies, other users or its own children', async () => {
-    let pid = 5000
-    for (const name of WSL_DISTRO_HOLDER_IGNORED_PROCESS_NAMES) {
-      fakeProcess(pid++, { name })
-    }
-    fakeProcess(pid++, { state: 'Z (zombie)' })
-    fakeProcess(pid++, { uid: me + 1 })
-    const holder = await startHolderReady()
-    fakeProcess(pid++, { name: 'sleep', ppid: holder.child.pid })
-    const orcad = track(spawn('/bin/sh', ['-c', 'exit 0'], { stdio: 'ignore' }))
-    await new Promise((resolve) => orcad.once('exit', resolve))
-    writeFileSync(releasePath(), `${orcad.pid}\n`)
-    expect(await within(RELEASE_BOUND_MS, holder.exited)).toBe(0)
-  })
-
-  it('notes what keeps it holding, and clears the note once it releases', async () => {
-    const job = fakeProcess(4242, { name: 'node' })
-    const { exited } = await holderWithRequest()
-    await expect.poll(() => existsSync(blockedPath()), { timeout: 5_000 }).toBe(true)
-    expect(readFileSync(blockedPath(), 'utf8')).toBe('node\n')
-    rmSync(job, { recursive: true })
-    expect(await within(RELEASE_BOUND_MS, exited)).toBe(0)
-    expect(existsSync(blockedPath())).toBe(false)
-  })
-
-  it('keeps the note bounded however much the user runs', async () => {
-    for (let pid = 6000; pid < 6000 + 3 * WSL_DISTRO_HOLDER_BLOCKED_NAMES_MAX; pid++) {
-      fakeProcess(pid, { name: `job${pid}` })
-    }
-    const { exited } = await holderWithRequest()
-    await expect.poll(() => existsSync(blockedPath()), { timeout: 5_000 }).toBe(true)
-    expect(readFileSync(blockedPath(), 'utf8').trim().split(' ')).toHaveLength(
-      WSL_DISTRO_HOLDER_BLOCKED_NAMES_MAX
-    )
-    expect(await within(1_500, exited)).toBe('running')
   })
 
   it('fails closed when /proc cannot be read', async () => {

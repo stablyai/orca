@@ -7,7 +7,7 @@ import {
 } from './remote-runtime-pty-batching'
 
 describe('createRemoteRuntimePtyTextBatcher', () => {
-  it('coalesces small input until the debounce flush', async () => {
+  it('sends idle input at once and coalesces input inside the window', async () => {
     vi.useFakeTimers()
     try {
       const flushes: string[] = []
@@ -15,38 +15,67 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
         maxPendingBytes: 8
       })
 
-      expect(batcher.hasPendingInput()).toBe(false)
       expect(batcher.push('a')).toBe(true)
+      expect(flushes).toEqual(['a'])
       expect(batcher.push('b')).toBe(true)
-      expect(flushes).toEqual([])
-      // Why: a remount during the debounce discards these, and the pane must know to say so.
-      await vi.advanceTimersByTimeAsync(0)
+      expect(batcher.push('c')).toBe(true)
+      expect(flushes).toEqual(['a'])
+      // Why: a remount during the window discards these, and the pane must know to say so.
       expect(batcher.hasPendingInput()).toBe(true)
 
       await vi.advanceTimersByTimeAsync(10)
-
-      expect(flushes).toEqual(['ab'])
+      expect(flushes).toEqual(['a', 'bc'])
       expect(batcher.hasPendingInput()).toBe(false)
+
+      // The window stays open after a trailing flush; once it lapses idle, the next key goes at once.
+      expect(batcher.push('d')).toBe(true)
+      expect(flushes).toEqual(['a', 'bc'])
+      await vi.advanceTimersByTimeAsync(10)
+      expect(flushes).toEqual(['a', 'bc', 'd'])
+      await vi.advanceTimersByTimeAsync(10)
+      expect(batcher.push('e')).toBe(true)
+      expect(flushes).toEqual(['a', 'bc', 'd', 'e'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps idle input trailing while the leading edge is disabled', () => {
+    vi.useFakeTimers()
+    try {
+      const flushes: string[] = []
+      const batcher = createRemoteRuntimePtyTextBatcher(10, (text) => flushes.push(text), {
+        sendLeadingEdge: () => false
+      })
+
+      expect(batcher.push('a')).toBe(true)
+      expect(batcher.push('b')).toBe(true)
+      expect(flushes).toEqual([])
+      vi.advanceTimersByTime(10)
+      expect(flushes).toEqual(['ab'])
     } finally {
       vi.useRealTimers()
     }
   })
 
   it('flushes before pending input exceeds the byte ceiling', () => {
-    const flushes: string[] = []
-    const batcher = createRemoteRuntimePtyTextBatcher(10, (text) => flushes.push(text), {
-      maxPendingBytes: 4
-    })
+    vi.useFakeTimers()
+    try {
+      const flushes: string[] = []
+      const batcher = createRemoteRuntimePtyTextBatcher(10, (text) => flushes.push(text), {
+        maxPendingBytes: 4
+      })
 
-    expect(batcher.push('ab')).toBe(true)
-    expect(batcher.push('cd')).toBe(true)
-    expect(flushes).toEqual([])
+      expect(batcher.push('x')).toBe(true)
+      expect(batcher.push('ab')).toBe(true)
+      expect(batcher.push('cd')).toBe(true)
+      expect(flushes).toEqual(['x'])
 
-    expect(batcher.push('e')).toBe(true)
-
-    expect(flushes).toEqual(['abcd'])
-    batcher.flush()
-    expect(flushes).toEqual(['abcd', 'e'])
+      expect(batcher.push('e')).toBe(true)
+      expect(flushes).toEqual(['x', 'abcd', 'e'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('splits one large UTF-8 input without splitting a code point', () => {
@@ -75,7 +104,7 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
     expect(flushes).toEqual([])
   })
 
-  it('yields while validating large accepted input before debounce flushing', async () => {
+  it('yields while validating large accepted input before sending it', async () => {
     vi.useFakeTimers()
     try {
       const flushes: string[] = []
@@ -90,10 +119,6 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
       const drained = batcher.drain()
       await vi.advanceTimersByTimeAsync(0)
       await drained
-
-      expect(flushes).toEqual([])
-
-      await vi.advanceTimersByTimeAsync(10)
 
       expect(flushes).toEqual([text])
     } finally {
@@ -117,8 +142,8 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
       await vi.advanceTimersByTimeAsync(0)
       await drained
 
-      expect(batcher.takePending()).toBe(`${text}tail`)
-      expect(flushes).toEqual([])
+      expect(flushes).toEqual([text])
+      expect(batcher.takePending()).toBe('tail')
     } finally {
       vi.useRealTimers()
     }
