@@ -251,6 +251,9 @@ export function replaceJournalDomainContext(
         JSON.stringify(item.echoOf ?? null)
       )
     }
+    if (!previous) {
+      ;(commit.insertedItemIds ??= []).push(itemId)
+    }
     commit.items.push(...written)
     commit.coordinates.push(coordinate('replacement-item', sequence))
     appendJournalSqlEvent(

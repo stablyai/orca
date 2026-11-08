@@ -51,6 +51,8 @@ export function runJournalSqlSteps(
       if (commit) {
         result.cursor = commit.cursor
         result.items.push(...commit.items)
+        result.insertedItemIds ??= []
+        result.insertedItemIds.push(...(commit.insertedItemIds ?? []))
         result.receipts.push(...commit.receipts)
         result.cards.push(...commit.cards)
         for (const item of commit.items) {

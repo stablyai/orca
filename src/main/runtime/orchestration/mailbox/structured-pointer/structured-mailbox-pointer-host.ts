@@ -133,7 +133,8 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           commit.publication?.items.some(
             (item) => readAgentJournalTurn(item.body) || isAgentSessionContextClear(item.body)
           ) === true ||
-          commit.items.some((item) => item.deleted || item.revision === 1)
+          commit.items.some((item) => item.deleted) ||
+          (commit.publication?.insertedItemIds?.length ?? 0) > 0
         )
       }
       return host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}

@@ -61,6 +61,7 @@ export type JournalDomainItemCommit = {
     | { kind: 'committed'; wrote: boolean }
     | { kind: 'dropped'; reason: 'turn-settled'; turnItemId: string }
   items: AgentJournalRenderItem[]
+  insertedItemIds?: string[]
   receipts: AgentJournalAcceptanceReceipt[]
   cards: QueuedMessageRow[]
   inputChanged: boolean
@@ -213,6 +214,7 @@ export function applyJournalDomainItem(
     cursor: { epoch, sequence },
     publicCursor: { epoch: journalContextEpoch(epoch, Number(head.context_boundary)), sequence },
     outcome: { kind: 'committed', wrote: true },
+    insertedItemIds: previous ? [] : [itemId],
     items,
     receipts: [],
     cards: [],

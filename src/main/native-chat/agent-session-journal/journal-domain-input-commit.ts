@@ -43,6 +43,8 @@ export function appendJournalDomainInputCommit<Value>(
   result.cursor = commit.cursor
   result.coordinates.push(...commit.coordinates)
   result.items.push(...commit.items)
+  result.insertedItemIds ??= []
+  result.insertedItemIds.push(...(commit.insertedItemIds ?? []))
   result.removedItemIds.push(...commit.removedItemIds)
   result.receipts.push(...commit.receipts)
   result.cards.push(...commit.cards)

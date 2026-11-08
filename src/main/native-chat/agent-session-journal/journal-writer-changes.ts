@@ -11,6 +11,7 @@ import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 
 export type JournalWriterPublication = {
   items: AgentJournalRenderItem[]
+  insertedItemIds?: string[]
   cards: QueuedMessageRow[]
   insertedCardIds?: string[]
   receipts: AgentJournalAcceptanceReceipt[]

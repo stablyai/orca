@@ -124,6 +124,7 @@ export function writeJournalDomainLifecycleItem(
     )
   }
   return {
+    insertedItemIds: previous ? [] : [itemId],
     items,
     inputObservation: { item: items[0]!, source: { ...row, ...mutation.linkage } },
     receipts: receipt ? [receipt] : [],

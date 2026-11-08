@@ -48,6 +48,7 @@ export type JournalDomainContextCommit = {
   contextBoundary: number | null
   coordinates: JournalDomainContextCoordinate[]
   items: AgentJournalRenderItem[]
+  insertedItemIds?: string[]
   removedItemIds: string[]
   /** Turns this command removed; membership persists independently of their items. */
   removedTurnIds: string[]
@@ -135,6 +136,7 @@ function clearJournalDomainContext(
       }
     ],
     items: divider.items,
+    insertedItemIds: divider.insertedItemIds,
     removedItemIds: [],
     removedTurnIds: [],
     cards: [...divider.cards, ...withdrawn],

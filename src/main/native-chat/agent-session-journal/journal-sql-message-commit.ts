@@ -88,6 +88,8 @@ export function applyJournalSqlMessageSteps(
       result.publicCursor = { ...result.publicCursor, sequence: commit.cursor.sequence }
       result.outcomes.push(commit.outcome)
       result.items.push(...commit.items)
+      result.insertedItemIds ??= []
+      result.insertedItemIds.push(...(commit.insertedItemIds ?? []))
       result.receipts.push(...commit.receipts)
       result.cards.push(...commit.cards)
       result.inputChanged ||= commit.inputChanged

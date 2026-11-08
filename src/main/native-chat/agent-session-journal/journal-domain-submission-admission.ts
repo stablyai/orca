@@ -213,6 +213,7 @@ export function applyJournalDomainSubmission(
     UNION ALL SELECT 1 FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=? AND revision>=0 LIMIT 1`)
     .get(...prefix, itemId, ...prefix, itemId)
   if (!blocked) {
+    result.insertedItemIds = [itemId]
     result.items = writeJournalDomainCurrentItem(db, target, {
       item,
       hidden: false,

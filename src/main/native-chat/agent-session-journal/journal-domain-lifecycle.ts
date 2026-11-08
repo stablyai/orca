@@ -187,6 +187,8 @@ export function applyJournalDomainLifecycle(
           ...removedItemIds.filter((id) => id !== revived)
         )
         deleted.delete(revived)
+        result.insertedItemIds ??= []
+        result.insertedItemIds.push(...commit.insertedItemIds)
         changedItems.push(...commit.items)
         inputObservations.push(commit.inputObservation)
         result.receipts.push(...commit.receipts)
