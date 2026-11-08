@@ -1,4 +1,5 @@
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import type { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
 import type { AgentSessionPublishedWork } from '../../observations/agent-session-published-work'
 import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { Subscriber } from './agent-session-subscribe-input'
@@ -37,7 +38,8 @@ export type SubscriberFieldHooks = {
     commandsOnRequest?: boolean
   ) => AgentSessionSlashCommand[] | undefined
   readQueuePublication?: (
-    sessionId: string
+    sessionId: string,
+    work?: StructuredAgentSessionObservedWork
   ) => QueuePublication | undefined | Promise<QueuePublication | undefined>
   /** Read expensive child-derived rosters only when a frame owes them. */
   readBackgroundTasks?: (sessionId: string) => AgentSessionBackgroundTaskState | null
@@ -64,7 +66,8 @@ export async function buildSubscriberFrame(
   event: AgentSessionSubscribeEvent,
   withholdQueued: boolean,
   work?: AgentSessionPublishedWork,
-  journal?: AgentSessionJournal
+  journal?: AgentSessionJournal,
+  queuePublication?: { value: QueuePublication | undefined }
 ): Promise<SubscriberFrame> {
   const commands =
     subscriber.boundedFrames && !subscriber.commandsOnRequest
@@ -78,7 +81,9 @@ export async function buildSubscriberFrame(
   const queued =
     withholdQueued || (subscriber.projectJournalEvent && !journal)
       ? undefined
-      : await hooks.readQueuePublication?.(subscriber.sessionId)
+      : queuePublication
+        ? queuePublication.value
+        : await hooks.readQueuePublication?.(subscriber.sessionId)
   const attachedQueued =
     queued !== undefined &&
     event.type !== 'end' &&
@@ -179,6 +184,7 @@ export async function emitSubscriberFrame(
     withholdQueued?: boolean
     currentWork?: AgentSessionPublishedWork
     journal?: AgentSessionJournal
+    queuePublication?: { value: QueuePublication | undefined }
     isActive?: () => boolean
   }
 ): Promise<void> {
@@ -194,7 +200,8 @@ export async function emitSubscriberFrame(
     includeMarker && event.type !== 'end' ? { ...event, currentRequests: marker } : event,
     options?.withholdQueued === true,
     options?.currentWork,
-    options?.journal
+    options?.journal,
+    options?.queuePublication
   )
   if (options?.isActive && !options.isActive()) {
     return

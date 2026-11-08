@@ -23,6 +23,7 @@ export class StructuredAgentSessionObservedWork {
     return this.work.liveFence
   }
   allowsObservation = () => this.work.allowsObservation
+  queueState = () => this.work
   working = () => this.work.working
   owesAnySend = () => this.work.owesAnySend
   activeTurn = () => this.work.activeTurn

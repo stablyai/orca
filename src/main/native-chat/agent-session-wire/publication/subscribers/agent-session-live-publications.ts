@@ -38,7 +38,7 @@ export async function publishSubscriberLiveText(
         hostNow,
         batch: { ...emptyAgentSessionBatch(cursor), items: [...items] }
       },
-      { journal }
+      { journal, queuePublication: { value: subscriber.queuePublication } }
     )
   }
 }

@@ -1,4 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { subscriberDeliveryPort } from './agent-session-subscriber-delivery-port'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import { ForkMarkerSubscriptions } from './agent-session-fork-marker-delivery'
 import type {
@@ -72,23 +73,17 @@ export class AgentSessionSubscribers {
     this.forkMarkers.add(subscriber)
     this.enqueue(subscriber, async () => {
       const hostNow = this.now()
-      const work = (await this.hooks.readCurrentWork?.(input.sessionId, journal)) ?? undefined
+      const port = this.deliveryPort(input.sessionId, journal)
+      const work = (await port.hooks.readCurrentWork?.(input.sessionId, journal)) ?? undefined
       if (!this.isActive(subscriber)) {
         return
       }
       if (input.cursor) {
-        await this.deliver(subscriber, journal, hostNow, true)
+        await deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: true })
         await this.forkMarkers.refresh(subscriber, journal, true)
-        await refreshDerivedStopNotes(this.deliveryPort(), subscriber, journal, hostNow, work)
+        await refreshDerivedStopNotes(port, subscriber, journal, hostNow, work)
       } else {
-        await publishSubscriberSnapshot(
-          this.deliveryPort(),
-          subscriber,
-          journal,
-          input.fence,
-          work,
-          hostNow
-        )
+        await publishSubscriberSnapshot(port, subscriber, journal, input.fence, work, hostNow)
         subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       }
       await publishSubscriberLiveText(this.deliveryPort(), {
@@ -165,27 +160,25 @@ export class AgentSessionSubscribers {
   deliverFrames(
     sessionId: string,
     journal: AgentSessionJournal,
-    activity?: AgentSessionTurnActivity | null
+    activity?: AgentSessionTurnActivity | null,
+    queueChanged = true
   ): void {
     const hostNow = this.now()
+    const port = this.deliveryPort(sessionId, journal, queueChanged)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.enqueue(subscriber, () => this.deliver(subscriber, journal, hostNow, false, activity))
+      this.enqueue(subscriber, () =>
+        deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity })
+      )
     }
   }
 
   snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {
     const hostNow = this.now()
+    const port = this.deliveryPort(sessionId, journal)
     for (const subscriber of this.subscribers(sessionId)) {
       this.enqueue(subscriber, async () => {
-        const work = (await this.hooks.readCurrentWork?.(sessionId, journal)) ?? undefined
-        await publishSubscriberSnapshot(
-          this.deliveryPort(),
-          subscriber,
-          journal,
-          fence,
-          work,
-          hostNow
-        )
+        const work = (await port.hooks.readCurrentWork?.(sessionId, journal)) ?? undefined
+        await publishSubscriberSnapshot(port, subscriber, journal, fence, work, hostNow)
         await publishSubscriberLiveText(this.deliveryPort(), {
           sessionId,
           journal,
@@ -241,35 +234,28 @@ export class AgentSessionSubscribers {
     this.forkMarkers.refreshSources(readJournal, sourceIds)
   }
 
-  private subscribers(sessionId: string): Subscriber[] {
-    return [...(this.bySession.get(sessionId)?.values() ?? [])]
-  }
-
-  private async deliver(
-    subscriber: Subscriber,
-    journal: AgentSessionJournal,
-    hostNow: number,
-    emitCheckpoint = false,
-    activity?: AgentSessionTurnActivity | null
-  ): Promise<void> {
-    await deliverToSubscriber(this.deliveryPort(), {
-      subscriber,
-      journal,
-      hostNow,
-      emitCheckpoint,
-      activity
-    })
-  }
+  private subscribers = (sessionId: string): Subscriber[] => [
+    ...(this.bySession.get(sessionId)?.values() ?? [])
+  ]
 
   private now = (): number => this.hooks.now?.() ?? Date.now()
 
-  private deliveryPort(): SubscriberDeliveryPort {
-    return {
-      hooks: this.hooks,
-      emit: (target, event, options) => this.emit(target, event, options),
-      isActive: this.isActive,
-      activity: (sessionId) => this.activityField(sessionId).activity
-    }
+  private deliveryPort(
+    sessionId?: string,
+    journal?: AgentSessionJournal,
+    queueChanged = true
+  ): SubscriberDeliveryPort {
+    return subscriberDeliveryPort(
+      {
+        hooks: this.hooks,
+        emit: (target, event, options, hooks) => this.emit(target, event, options, hooks),
+        isActive: this.isActive,
+        activity: (id) => this.activityBySession.get(id) ?? null
+      },
+      sessionId,
+      journal,
+      queueChanged
+    )
   }
 
   private isActive = (subscriber: Subscriber): boolean =>
@@ -279,13 +265,14 @@ export class AgentSessionSubscribers {
   private async emit(
     subscriber: Subscriber,
     event: AgentSessionSubscribeEvent,
-    options?: Parameters<SubscriberDeliveryPort['emit']>[2]
+    options?: Parameters<SubscriberDeliveryPort['emit']>[2],
+    hooks = this.hooks
   ): Promise<void> {
     try {
       if (!this.isActive(subscriber)) {
         return
       }
-      await emitSubscriberFrame(this.hooks, subscriber, event, {
+      await emitSubscriberFrame(hooks, subscriber, event, {
         ...options,
         isActive: () => this.isActive(subscriber)
       })
@@ -321,9 +308,5 @@ export class AgentSessionSubscribers {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)
     }
-  }
-
-  private activityField(sessionId: string): { activity: AgentSessionTurnActivity | null } {
-    return { activity: this.activityBySession.get(sessionId) ?? null }
   }
 }

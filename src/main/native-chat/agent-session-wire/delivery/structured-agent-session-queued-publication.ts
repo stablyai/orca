@@ -22,6 +22,7 @@ import {
   type StructuredAgentSessionCurrentWorkHost
 } from '../observations/structured-agent-session-host-current-work'
 import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { journalSubmissionIsPersonal } from '../../agent-session-journal/submissions/journal-submission-fold'
 
 export type QueuePublication = {
@@ -31,24 +32,35 @@ export type QueuePublication = {
   nextQueuedMessageId: string | null
 }
 
-export type QueueSendGate = (journal: AgentSessionJournal) => Promise<StructuredQueueGateInput>
+export type QueueSendGate = (
+  journal: AgentSessionJournal
+) => Promise<
+  StructuredQueueGateInput & { state: ReturnType<StructuredAgentSessionObservedWork['queueState']> }
+>
 
 export function structuredQueueSendGate(
   host: StructuredAgentSessionCurrentWorkHost & {
     store: Pick<AgentSessionRecordStore, 'getRecord'>
   },
-  sessionId: string
+  sessionId: string,
+  capturedWork?: StructuredAgentSessionObservedWork
 ): QueueSendGate {
-  return async (journal) => ({
-    record: host.store.getRecord(sessionId),
-    work: await heldStructuredAgentSessionCurrentWork(
-      host.store,
-      sessionId,
-      journal,
-      host.sessions.get(sessionId)
-    ),
-    readWork: (operation) => readHostStructuredAgentSessionWork(host, sessionId, operation)
-  })
+  return async (journal) => {
+    const work =
+      capturedWork ??
+      (await heldStructuredAgentSessionCurrentWork(
+        host.store,
+        sessionId,
+        journal,
+        host.sessions.get(sessionId)
+      ))
+    return {
+      record: host.store.getRecord(sessionId),
+      work,
+      state: work.queueState(),
+      readWork: (operation) => readHostStructuredAgentSessionWork(host, sessionId, operation)
+    }
+  }
 }
 
 /** Waiting and returned rows only. `paused` is a per-card hold (a failed conversion); a person's
@@ -157,7 +169,7 @@ export async function readQueuePublication(
     const resumable = silent ? null : resumableQueuePause(pauses, cardRows)
     // The input order indexes pending sends, so a held queue never rescans history.
     const input = await gate(journal)
-    const { state } = await input.readWork({ kind: 'state' })
+    const { state } = input
     const sending = state.owedSendingSubmissions
     const pause =
       resumable &&

@@ -1,3 +1,5 @@
+import { AgentSessionSubscribers } from '../agent-session-wire/publication/subscribers/structured-agent-session-subscribers'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session/agent-session-wire'
 import Database from '../../sqlite/sync-database'
 import { StructuredAgentSessionJournalProjections } from '../agent-session-wire/observations/structured-agent-session-status-journal-projection'
 import { StructuredAgentSessionStatusFeed } from '../agent-session-wire/observations/structured-agent-session-status-feed'
@@ -661,4 +663,81 @@ it('refuses stale running items on the writer while permitting completion of exi
     body: { state: 'completed' },
     turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
   })
+})
+
+it('delivers live and saved text with the delivered queue baseline until a queue dependency changes', async () => {
+  const { journal } = await fixture()
+  const initial = await journal.queuedMessages.insert({
+    messageId: 'queued',
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'waiting' }] }
+  })
+  let baseline: {
+    queuedMessages: {
+      messageId: string
+      position: number
+      body: typeof initial.body
+      state: 'waiting'
+    }[]
+    queuePause: null
+    nextQueuedMessageId: string | null
+  } = {
+    queuedMessages: [
+      {
+        messageId: initial.messageId,
+        position: initial.position,
+        body: initial.body,
+        state: 'waiting' as const
+      }
+    ],
+    queuePause: null,
+    nextQueuedMessageId: 'queued'
+  }
+  let queueAvailable = true
+  const subscribers = new AgentSessionSubscribers({
+    readQueuePublication: () => {
+      if (!queueAvailable) {
+        throw new Error('queue reader unavailable during text delivery')
+      }
+      return baseline
+    }
+  })
+  let received = Promise.withResolvers<AgentSessionSubscribeEvent>()
+  const close = subscribers.open({
+    id: 'desktop',
+    sessionId: identity.sessionId,
+    journal,
+    fence: 1,
+    emit: (event) => received.resolve(event)
+  })
+  const opening = await received.promise
+  expect(opening).toMatchObject({ queuedMessages: [{ messageId: 'queued' }] })
+  queueAvailable = false
+  received = Promise.withResolvers<AgentSessionSubscribeEvent>()
+  subscribers.publishLiveText(identity.sessionId, journal, 1, [
+    {
+      itemId: 'orca:text',
+      revision: 1,
+      sequence: journal.cursor().sequence,
+      observedAt: 100,
+      turnScope: { kind: 'thread' },
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'live' }] }
+    }
+  ])
+  expect(await received.promise).toMatchObject({
+    type: 'batch',
+    batch: { items: [{ body: { blocks: [{ text: 'live' }] } }] }
+  })
+  received = Promise.withResolvers<AgentSessionSubscribeEvent>()
+  await journal.write(item('saved'))
+  subscribers.deliverFrames(identity.sessionId, journal, undefined, false)
+  expect(await received.promise).toMatchObject({
+    type: 'batch',
+    batch: { items: [{ body: { text: 'saved' } }] }
+  })
+  queueAvailable = true
+  baseline = { queuedMessages: [], queuePause: null, nextQueuedMessageId: null }
+  received = Promise.withResolvers<AgentSessionSubscribeEvent>()
+  subscribers.deliverFrames(identity.sessionId, journal)
+  expect(await received.promise).toMatchObject({ queuedMessages: [], nextQueuedMessageId: null })
+  close()
 })

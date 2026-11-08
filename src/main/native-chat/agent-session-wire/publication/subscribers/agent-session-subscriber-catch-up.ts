@@ -24,6 +24,7 @@ import {
   subscriberQueuedMessagesChanged,
   type SubscriberFieldHooks
 } from './agent-session-subscriber-frame-fields'
+import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { Subscriber } from './agent-session-subscribe-input'
 
 export type SubscriberDeliveryPort = {
@@ -42,6 +43,7 @@ export type SubscriberDeliveryPort = {
       journal?: AgentSessionJournal
       currentWork?: AgentSessionPublishedWork
       historyView?: string
+      queuePublication?: { value: QueuePublication | undefined }
     }
   ) => Promise<void>
   isActive: (subscriber: Subscriber) => boolean
