@@ -1,7 +1,7 @@
 import {
   forgeCredentialTarget,
   forgeOwnerHostIdForWorkspace
-} from '@/runtime/forge-credential-target'
+} from '@/runtime/source-control/forge/forge-credential-target'
 import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'

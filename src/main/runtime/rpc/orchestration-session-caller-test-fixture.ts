@@ -9,7 +9,7 @@ import {
   agentSessionRecordFixture
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration-compatibility-evidence'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { OrcaRuntimeService } from '../orca-runtime'

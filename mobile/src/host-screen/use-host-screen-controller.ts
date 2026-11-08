@@ -6,7 +6,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { visibleHostRouteNotice } from '../host-route-notice'
 import { useActiveWorktreeScroll } from '../hooks/use-active-worktree-scroll'
-import { useNow } from '../hooks/use-now'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import {
   useForgetHostClient,
@@ -61,7 +60,6 @@ export function useHostScreenController({
   const relayRecovery = useRelayRecoveryStatus(hostId)
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
-  const now = useNow(30_000)
   const { hostCapabilities, floatingWorkspaceEnabled, hostInstallationId } = useHostProtocolGates()
   const state = useHostScreenState(hostId, peekStoredHost(hostId))
   const settings = useHostViewSettings({ client, connState, state })
@@ -166,7 +164,6 @@ export function useHostScreenController({
     isWideLayout,
     lastConnectedAt,
     noticeParam,
-    now,
     onHideSidebar,
     reconnectAttempts,
     relayRecovery,

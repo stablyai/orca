@@ -7,6 +7,7 @@ import {
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault/search/ai-vault-search-contract'
+import { AntigravityChatAuthConfigSchema } from '../antigravity-chat-auth-config'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
@@ -89,7 +90,6 @@ import {
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
-  AntigravityChatAuthConfigSchema,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
 } from './antigravity-accounts-params'
@@ -263,8 +263,8 @@ import {
 } from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
+  FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
-  FolderWorkspaceSelector,
   FolderWorkspaceUpdate
 } from './folder-workspace-params'
 import {
@@ -275,8 +275,10 @@ import {
   GitCheckIgnored,
   GitCheckout,
   GitCommit,
+  GitCommitAction,
   GitCommitCompare,
   GitCommitDiff,
+  GitCreateBranch,
   GitDiff,
   GitDiscoverCommitMessageModels,
   GitFilePath,
@@ -290,6 +292,7 @@ import {
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitResolveConflict,
+  GitSequencer,
   GitStatusParams,
   GitSubmoduleStatus,
   GitSwitchBranch,
@@ -641,7 +644,6 @@ import {
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,
-  RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
@@ -649,17 +651,19 @@ import {
   SendParams,
   SetOptionParams,
   SleepWorkspaceParams,
-  SubscribeParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
+import { RespondToQuestionParams } from './structured-agent-session-question-params'
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageMoveParams,
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
+import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
+import { SubscribeParams } from './structured-agent-session-subscribe-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
@@ -735,8 +739,8 @@ import {
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeRunApprovedSetup,
-  WorktreeSelector as WorktreeSelectorOfWorktreeParams,
   WorktreeSet,
+  WorktreeShow,
   WorktreeSleepParams,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
@@ -845,6 +849,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
+  'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
@@ -1068,7 +1073,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.writeIfUnchanged': FileWriteIfUnchanged,
   'files.writeTerminalArtifact': TerminalArtifactFileWrite,
   'folderWorkspace.create': FolderWorkspaceCreate,
-  'folderWorkspace.delete': FolderWorkspaceSelector,
+  'folderWorkspace.delete': FolderWorkspaceDelete,
   'folderWorkspace.getPathStatus': FolderWorkspacePathStatus,
   'folderWorkspace.list': null,
   'folderWorkspace.update': FolderWorkspaceUpdate,
@@ -1083,11 +1088,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.cancelGeneratePullRequestFields': WorktreeSelectorOfGitParams,
   'git.checkIgnored': GitCheckIgnored,
   'git.checkout': GitCheckout,
+  'git.cherryPick': GitCommitAction,
   'git.commit': GitCommit,
   'git.commitCompare': GitCommitCompare,
   'git.commitDiff': GitCommitDiff,
   'git.completeMerge': WorktreeSelectorOfGitParams,
   'git.conflictOperation': WorktreeSelectorOfGitParams,
+  'git.createBranch': GitCreateBranch,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
   'git.discoverCommitMessageModels': GitDiscoverCommitMessageModels,
@@ -1106,6 +1113,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.remoteCommitUrl': GitRemoteCommitUrl,
   'git.remoteFileUrl': GitRemoteFileUrl,
   'git.resolveConflict': GitResolveConflict,
+  'git.revert': GitCommitAction,
+  'git.sequencerAbort': GitSequencer,
+  'git.sequencerContinue': GitSequencer,
   'git.stage': GitFilePath,
   'git.status': GitStatusParams,
   'git.submoduleStatus': GitSubmoduleStatus,
@@ -1604,7 +1614,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.rm': WorktreeRemove,
   'worktree.runApprovedSetup': WorktreeRunApprovedSetup,
   'worktree.set': WorktreeSet,
-  'worktree.show': WorktreeSelectorOfWorktreeParams,
+  'worktree.show': WorktreeShow,
   'worktree.sleep': WorktreeSleepParams,
   'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
 } as const

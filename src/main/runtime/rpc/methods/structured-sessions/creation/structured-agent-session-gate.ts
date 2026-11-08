@@ -131,6 +131,7 @@ export async function requireRenameStructuredHost(
 /** Persist/share proven paired device id, never clientId bearer credentials (for example, who answered a prompt). */
 export function structuredCallerFor(ctx: RpcContext): StructuredAgentSessionCaller {
   return {
+    clientKind: ctx.clientKind,
     callerKey:
       ctx.caller?.kind === 'paired-device'
         ? rpcCallerOperationKey(ctx.caller)

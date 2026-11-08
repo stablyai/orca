@@ -12,7 +12,7 @@ import {
 import { Toggle } from '@/components/ui/toggle'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ActivityThreadOptionsMenu } from './activity-thread-controls'
 import type {
   ActivityGroupBy,
@@ -60,6 +60,7 @@ export function ActivityThreadListToolbar({
   showOptionsMenu: boolean
   showInlineActions?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const showToolbar = showFilterControls || showOptionsMenu
   if (!showToolbar) {
     return null
@@ -76,7 +77,7 @@ export function ActivityThreadListToolbar({
                 ref={activityFilterInputRef}
                 value={query}
                 onChange={(event) => onQueryChange(event.target.value)}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.activity.ActivityPrototypePage.795cbf26e2',
                   'Filter...'
                 )}
@@ -91,7 +92,7 @@ export function ActivityThreadListToolbar({
                   variant="ghost"
                   size="icon-xs"
                   className="absolute right-0.5 top-1/2 -translate-y-1/2 size-5 p-0 text-muted-foreground hover:text-foreground"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.sidebar.WorkspaceKanbanSearchField.3b7ea51793',
                     'Clear search'
                   )}
@@ -113,7 +114,7 @@ export function ActivityThreadListToolbar({
               <SelectTrigger
                 size="sm"
                 className="h-7 w-[116px] shrink-0 px-2 text-[11px]"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.activity.ActivityPrototypePage.groupAgentActivityBy',
                   'Group agent activity by'
                 )}
@@ -122,25 +123,19 @@ export function ActivityThreadListToolbar({
               </SelectTrigger>
               <SelectContent align="end">
                 <SelectItem value="none">
-                  {translate('auto.components.activity.ActivityPrototypePage.none', 'None')}
+                  {t('auto.components.activity.ActivityPrototypePage.none', 'None')}
                 </SelectItem>
                 <SelectItem value="status">
-                  {translate('auto.components.activity.ActivityPrototypePage.4a3986b200', 'Status')}
+                  {t('auto.components.activity.ActivityPrototypePage.4a3986b200', 'Status')}
                 </SelectItem>
                 <SelectItem value="project">
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.8c3b621ddf',
-                    'Project'
-                  )}
+                  {t('auto.components.activity.ActivityPrototypePage.8c3b621ddf', 'Project')}
                 </SelectItem>
                 <SelectItem value="worktree">
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.b29191b3e0',
-                    'Worktree'
-                  )}
+                  {t('auto.components.activity.ActivityPrototypePage.b29191b3e0', 'Worktree')}
                 </SelectItem>
                 <SelectItem value="agent">
-                  {translate('auto.components.activity.ActivityPrototypePage.f6396e1f85', 'Agent')}
+                  {t('auto.components.activity.ActivityPrototypePage.f6396e1f85', 'Agent')}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -158,7 +153,7 @@ export function ActivityThreadListToolbar({
                       ? '!border border-primary/30 !bg-primary/10 !text-primary/90 shadow-xs hover:!bg-primary/15 hover:!text-primary'
                       : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                   )}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.activity.ActivityPrototypePage.d1a88df9a8',
                     'Show unread threads only'
                   )}
@@ -167,7 +162,7 @@ export function ActivityThreadListToolbar({
                 </Toggle>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
-                {translate(
+                {t(
                   'auto.components.activity.ActivityPrototypePage.d1a88df9a8',
                   'Show unread threads only'
                 )}
@@ -203,10 +198,7 @@ export function ActivityThreadListToolbar({
             >
               <CheckCheck className="size-3.5" />
               <span>
-                {translate(
-                  'auto.components.activity.ActivityPrototypePage.023ff75afe',
-                  'Mark all read'
-                )}
+                {t('auto.components.activity.ActivityPrototypePage.023ff75afe', 'Mark all read')}
               </span>
             </Button>
           ) : null}
@@ -221,7 +213,7 @@ export function ActivityThreadListToolbar({
             >
               <Trash2 className="size-3.5" />
               <span>
-                {translate(
+                {t(
                   'auto.components.activity.ActivityPrototypePage.clearCompleted',
                   'Clear completed'
                 )}

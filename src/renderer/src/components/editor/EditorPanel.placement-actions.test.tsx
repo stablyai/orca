@@ -13,12 +13,12 @@ import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 vi.mock('./useEditorPanelContentState', () => ({

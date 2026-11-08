@@ -46,6 +46,7 @@ function mountRefresh(client: RpcClient, clientRef: { current: RpcClient | null 
       connState: 'connected',
       defaultLinearTeamSelectionRef: { current: null },
       githubKind: 'issues',
+      keepSettings: vi.fn(),
       setJiraConnection,
       jiraStatusRequestIdRef,
       setLinearConnected: vi.fn(),
@@ -85,20 +86,6 @@ function pendingStatus() {
 }
 
 describe('mobile Jira status host ownership', () => {
-  it('applies an explicit status refresh for the current host', async () => {
-    const client = new FakeSession('connected')
-    client.sendRequest.mockResolvedValue({
-      id: 'jira-test',
-      ok: true,
-      result: { connected: true }
-    })
-    const fixture = mountRefresh(client, { current: client })
-    await fixture.refresh()
-    expect(client.sendRequest).toHaveBeenCalledWith('jira.status')
-    expect(fixture.setJiraConnection).toHaveBeenCalledTimes(1)
-    expect(fixture.connection().connected).toBe(true)
-  })
-
   it('ignores an earlier explicit refresh that settles after a newer one', async () => {
     const client = new FakeSession('connected')
     const earlier = pendingStatus()

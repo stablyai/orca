@@ -24,7 +24,7 @@ import {
 } from '../../../../../../shared/orchestration-timing-budgets'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../../shared/orchestration-task-display'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prompt-budget'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 

@@ -5,7 +5,7 @@ import {
   normalizedSkillPath,
   skillPathInside
 } from '../../shared/skill-path-containment'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import type { SkillPlacementResult } from '../../shared/skill-install-contract'
 import type { SkillInstallFilesystem } from './skill-install-filesystem'
 import { nativeSkillInstallFilesystem } from './skill-install-filesystem'

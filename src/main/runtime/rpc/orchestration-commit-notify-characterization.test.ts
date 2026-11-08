@@ -1,21 +1,32 @@
-import './unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
+
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+
 import '../orchestration/db/contract-constants'
 import '../orchestration/db/messages/mailbox-routing-page'
 import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
 import { OrcaRuntimeService } from '../orca-runtime'
+
 import { OrchestrationError } from '../orchestration/orchestration-error'
+
 import type { RpcRequest } from './core'
+
 import { RpcDispatcher } from './dispatcher'
+
 import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
+
 import { createOrchestrationRpcHarness } from './methods/orchestration/rpc-test-harness'
-import { MessageWake } from '../runtime-message-waiters'
+
+import { MessageWake } from '../orchestration/mailbox/runtime-message-waiters'
 
 describe('orchestration commit-notify recovery', () => {
   const harness = createOrchestrationRpcHarness()

@@ -55,7 +55,8 @@ function resolveFederatedHostCapability(
 export async function armHomeAutoReleaseForOlderHost(
   runtime: FederationRuntime,
   dispatchId: string,
-  pairingRevision: number | undefined
+  pairingRevision: number | undefined,
+  isCurrent: () => boolean = () => true
 ): Promise<void> {
   const db = runtime.getOrchestrationDb()
   const federated = db.getFederatedDispatch(dispatchId)
@@ -84,7 +85,7 @@ export async function armHomeAutoReleaseForOlderHost(
       )
     )
   )
-  if (!hostReleases?.supported && releasable?.supported !== false) {
+  if (isCurrent() && !hostReleases?.supported && releasable?.supported !== false) {
     db.armFederatedHomeAutoRelease(dispatchId)
   }
 }

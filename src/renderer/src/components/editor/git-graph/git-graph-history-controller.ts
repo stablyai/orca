@@ -1,3 +1,5 @@
+import type { GitGraphHistoryView } from './git-graph-history-view'
+import { GitGraphCommitActionsController } from './git-graph-commit-actions-controller'
 import { gitGraphOwnerKey, switchGitGraphWorkspace } from './git-graph-workspace-navigation'
 import { createStore } from 'zustand/vanilla'
 import { shallow } from 'zustand/shallow'
@@ -11,34 +13,20 @@ import type {
 } from '../../../../../shared/git/history/git-history-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
-type HistoryView = {
-  result?: GitHistoryResult
-  error?: string
-  loading: boolean
-  selectedId?: string
-  revealId?: string
-}
-const controllers = new Map<string, GitGraphHistoryController>()
 const filterFor = (worktreeId: string) =>
   useAppStore.getState().gitGraphFiltersByWorktree?.[worktreeId] ?? 'all'
 
-export function gitGraphHistoryForTab(worktreeId: string): GitGraphHistoryController {
-  const id = `${worktreeId}::git-graph`
-  let controller = controllers.get(id)
-  if (!controller) {
-    controller = new GitGraphHistoryController(worktreeId)
-    controllers.set(id, controller)
-  }
-  return controller
-}
-
-export function disposeGitGraphHistory(tabId: string): void {
-  controllers.get(tabId)?.dispose()
-  controllers.delete(tabId)
-}
-
 export class GitGraphHistoryController {
-  readonly view = createStore<HistoryView>(() => ({ loading: false }))
+  readonly actions = new GitGraphCommitActionsController(this)
+  get actionScope() {
+    return this.scope
+  }
+  captureActionView(): () => boolean {
+    const generation = this.generation
+    const navigation = this.navigation
+    return () => !this.disposed && generation === this.generation && navigation === this.navigation
+  }
+  readonly view = createStore<GitGraphHistoryView>(() => ({ loading: false }))
   scrollOffset = 0
   graphWidth = 132
   private scope: ReturnType<typeof gitGraphScope>
@@ -102,6 +90,7 @@ export class GitGraphHistoryController {
     ) {
       return
     }
+    this.actions.cancel()
     this.scope = scope
     this.filter = filter
     this.scrollOffset = 0
@@ -125,6 +114,7 @@ export class GitGraphHistoryController {
   }
 
   dispose(): void {
+    this.actions.cancel()
     this.disposed = true
     this.generation++
     this.unsubscribe?.()
@@ -141,6 +131,7 @@ export class GitGraphHistoryController {
   }
 
   select = (selectedId: string): void => {
+    this.actions.cancel()
     this.navigation++
     this.view.setState({ selectedId, revealId: undefined })
   }
@@ -153,9 +144,12 @@ export class GitGraphHistoryController {
     return this.retrieve(false, true)
   }
   loadMore = (): Promise<GitHistoryResult | undefined> => this.retrieve(true)
+  settledResult = (): Promise<GitHistoryResult | undefined> =>
+    this.pending ?? (this.dirty ? this.retrieve() : Promise.resolve(this.view.getState().result))
 
   reveal = async (id: string): Promise<number> => {
     const generation = this.generation
+    this.actions.cancel()
     const navigation = ++this.navigation
     this.clearReveal()
     const current = () =>
@@ -279,6 +273,7 @@ export class GitGraphHistoryController {
         result?.items.find((item) => item.id === selection)?.id ?? result?.items[0]?.id
       const selectionGone = selection !== undefined && selection !== selectedId
       if (selectionGone) {
+        this.actions.cancel()
         this.scrollOffset = 0
       }
       this.view.setState({

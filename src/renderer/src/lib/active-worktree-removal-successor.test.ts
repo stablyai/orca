@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import { installActiveWorktreeRemovalSuccessor } from '@/lib/active-worktree-removal-successor'
+import {
+  installActiveWorktreeRemovalSuccessor,
+  pickActiveWorktreeSuccessor
+} from '@/lib/active-worktree-removal-successor'
 import { createTestStore, seedStore } from '../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { makeTerminalTab } from '../store/terminals/terminal-row.test-fixture'
 import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { createStoreCascadesMockApi } from '../store/testing/app-store-cascade-api.test-fixture'
 import { clearSshHostWorkspaces } from '@/components/sidebar/ssh-host-remove-workspaces'
@@ -32,12 +36,12 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -138,5 +142,51 @@ describe('deleting the active workspace', () => {
       revealInSidebar: false,
       executionHostId: 'local'
     })
+  })
+  it('does not wake a sibling that "Hide sleeping" keeps out of the sidebar', async () => {
+    const store = setup()
+    const awake = { ...sibling, id: 'repo1::/awake' }
+    store.setState({
+      worktreesByRepo: { repo1: [active, sibling, awake, main] },
+      lastVisitedAtByWorktreeId: { [sibling.id]: 2, [awake.id]: 1 },
+      // Only the sleeping sweep gates the pick; other filters hide nothing a jump would wake.
+      filterRepoIds: ['repo2'],
+      showSleepingWorkspaces: false,
+      alwaysShowDefaultBranchWorkspace: false,
+      persistedUIReady: true,
+      workspaceSessionReady: true,
+      tabsByWorktree: { [awake.id]: [makeTerminalTab({ id: 'awake-tab', worktreeId: awake.id })] },
+      ptyIdsByTabId: { 'awake-tab': ['pty-awake'] }
+    })
+    await forget(store, active)
+    await Promise.resolve()
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls.map((call) => call[0])).toEqual([
+      awake.id
+    ])
+
+    store.getState().setActiveWorktree(awake.id, 'local')
+    vi.mocked(activateAndRevealWorktree).mockReset()
+    store.setState({ ptyIdsByTabId: {} })
+    await forget(store, awake)
+    await Promise.resolve()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(store.getState().activeWorktreeId).toBeNull()
+  })
+
+  it('picks a sibling the sidebar still shows through a PTY-rebind grace window', () => {
+    const store = setup()
+    store.setState({
+      worktreesByRepo: { repo1: [sibling, main] },
+      showSleepingWorkspaces: false,
+      alwaysShowDefaultBranchWorkspace: false,
+      persistedUIReady: true,
+      workspaceSessionReady: true,
+      tabsByWorktree: { [sibling.id]: [makeTerminalTab({ id: 'rebind', worktreeId: sibling.id })] }
+    })
+    const removed = { id: active.id, hostId: null, repoId: 'repo1', ownerHostIds: [] }
+    expect(pickActiveWorktreeSuccessor(store.getState(), removed, new Set())).toBeNull()
+    expect(pickActiveWorktreeSuccessor(store.getState(), removed, new Set([sibling.id]))?.id).toBe(
+      sibling.id
+    )
   })
 })

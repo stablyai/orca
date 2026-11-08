@@ -1,5 +1,10 @@
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
-import * as Lineage from '../lineage/runtime-worktree-lineage-resolution'
+import {
+  formatAmbiguousCwdParentMessage,
+  type WorktreeLineageInput,
+  type WorktreeLineageResolution
+} from '../lineage/runtime-worktree-lineage-resolution'
+import { RuntimeLineageError, LINEAGE_PARENT_AMBIGUOUS } from '../lineage/runtime-lineage-error'
 import type { Repo } from '../../../../shared/repo-types'
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
@@ -34,9 +39,9 @@ import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree
 
 export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   abstract resolveLineageForWorktreeCreate(
-    input?: Lineage.WorktreeLineageInput,
+    input?: WorktreeLineageInput,
     childRepo?: Repo
-  ): Promise<Lineage.WorktreeLineageResolution>
+  ): Promise<WorktreeLineageResolution>
 
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
@@ -141,13 +146,10 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch(
       (error: unknown) => {
-        if (
-          error instanceof Lineage.RuntimeLineageError &&
-          error.code === Lineage.LINEAGE_PARENT_AMBIGUOUS
-        ) {
-          throw new Lineage.RuntimeLineageError(
+        if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
+          throw new RuntimeLineageError(
             error.code,
-            Lineage.formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
+            formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
           )
         }
         throw error

@@ -33,7 +33,7 @@ const key = (owner: RuntimeClientTarget): string =>
 function follow(owner: RuntimeClientTarget): void {
   streams.releases.push(observeAntigravityChatSignIn(owner))
 }
-vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => streams.capability
 }))
 vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({

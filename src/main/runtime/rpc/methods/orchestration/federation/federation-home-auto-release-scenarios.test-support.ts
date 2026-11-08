@@ -4,7 +4,7 @@ import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/f
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration-runtime-capabilities'
 import {
   GRACE_MS,
   type AutoReleaseScenarioHarness

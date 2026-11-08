@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type * as AgentStatusModule from '../../../../../../shared/agent-status/title/agent-title-status'
-import { layoutApplyTestTransport as main } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport as main } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { createStoreCascadesMockApi } from '../../../../store/testing/app-store-cascade-api.test-fixture'
 import { LEAF_1, LEAF_2, splitLayout } from './terminal-pane-tab-detach-fixture'
 import {
@@ -19,12 +19,12 @@ import {
 vi.mock('../../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('sonner', () => ({

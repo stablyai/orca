@@ -103,14 +103,16 @@ export class RuntimeGitStatusCommands {
 
   async checkoutRuntimeGitBranch(
     worktreeSelector: string,
-    branch: string
+    branch: string,
+    detached = false
   ): Promise<RuntimeGitCheckoutResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
     const worktreePath = target.worktree.path
+    const checkoutTarget = detached ? branch.toLowerCase() : branch
     const result = await switchBranchGuarded(
       worktreePath,
-      branch,
+      detached ? { commitId: checkoutTarget } : checkoutTarget,
       localGitOptionsForTarget(target),
       {
         getStatus: () =>
@@ -118,9 +120,9 @@ export class RuntimeGitStatusCommands {
             admissionTier: 'interactive',
             includeLineStats: false
           }),
-        checkout: () => provider.checkoutBranch(worktreePath, branch),
+        checkout: () => provider.checkoutBranch(worktreePath, checkoutTarget, undefined, detached),
         getAgentBlocker: async () => this.host.getAgentSwitchBlocker?.(worktreePath) ?? null,
-        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
+        onSwitched: () => this.host.recordBranchSwitched?.(target.worktree, detached)
       }
     )
     return { ok: true, branch: result.branch }
@@ -149,10 +151,10 @@ export class RuntimeGitStatusCommands {
           onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
         }
       )
-      return { ok: true, branch: result.branch }
+      return { ok: true, branch: result.branch, head: result.head }
     } catch (error) {
       if (error instanceof BranchSwitchLandedWithWarningError) {
-        return { ok: true, branch: error.branch, warning: error.message }
+        return { ok: true, branch: error.branch, head: error.head, warning: error.message }
       }
       throw error
     }

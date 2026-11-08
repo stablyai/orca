@@ -1,3 +1,5 @@
+import { prepareForkSnapshot } from './structured-agent-session-fork-snapshot'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { importedAgentSessionForkTipSettled } from './imported-agent-session-fork-tip'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 import {
@@ -5,12 +7,15 @@ import {
   AGENT_SESSION_CONVERSATION_NAME_MAX_LENGTH
 } from '../../../../shared/agent-session/agent-session-conversation-name'
 import { sliceAtCodeUnitLimit } from '../../../../shared/surrogate-safe-text-slice'
-import { AgentConversationCopyError } from '../../agent-conversation-copy-error'
+import {
+  AgentConversationCopyError,
+  agentConversationCopyRefusal
+} from '../../agent-conversation-copy-error'
 import { structuredAgentSessionForkBoundary } from './structured-agent-session-fork-boundary'
 import { acpAgentName } from '../../../acp/acp-structured-agent-definitions'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
-import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation
@@ -18,9 +23,7 @@ import {
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
-  resolveStructuredAgentSessionAdoptionForCreate,
-  requireUnownedStructuredAgentSessionAdoption,
-  structuredAgentSessionAdoptAttach
+  requireUnownedStructuredAgentSessionAdoption
 } from '../../../runtime/agent-session/structured-agent-session-create-adoption'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
@@ -37,7 +40,7 @@ export async function prepareStructuredAgentSessionFork(input: {
   const { host } = input
   const name = acpAgentName(input.agent)
   if (host.deps.store.selectWritableRecord(input.sessionId).kind === 'missing') {
-    throw agentSessionRefusalError(
+    throw agentConversationCopyRefusal(
       'agent_session_identity_required',
       { reason: 'recordMissing' },
       `${name} could not find the source chat. Open the chat again, then try again.`
@@ -57,10 +60,10 @@ export async function prepareStructuredAgentSessionFork(input: {
       | 'providerRejected'
       | 'launchFolderMissing' = 'savedConversationMissing'
   ): never => {
-    throw agentSessionRefusalError('agent_session_operation_invalid', { reason }, message)
+    throw agentConversationCopyRefusal('agent_session_operation_invalid', { reason }, message)
   }
   if (!capability || !metadata?.transcriptImport || !host.deps.adapter.copyConversation) {
-    throw agentSessionRefusalError(
+    throw agentConversationCopyRefusal(
       'structured_agent_session_unsupported',
       { reason: 'hostUnsupported' },
       `${name} cannot copy a chat. Update ${name}, then try again.`
@@ -162,6 +165,7 @@ export async function prepareStructuredAgentSessionFork(input: {
     ) {
       fail(`${name} could not finish the copy because the source context changed. Try again.`)
     }
+    return { snapshot: currentSnapshot, boundary: currentBoundary! }
   }
   await requireCurrent()
   const title = normalizeAgentSessionConversationName(
@@ -183,6 +187,9 @@ export async function prepareStructuredAgentSessionFork(input: {
       accountHome: record.accountHome
     })
     .catch((error: unknown) => {
+      if (isAgentSessionRefusalError(error)) {
+        throw error
+      }
       host.deps.logger.warn('native conversation copy failed', {
         scope: 'chat-fork',
         sessionId: record.sessionId,
@@ -199,7 +206,7 @@ export async function prepareStructuredAgentSessionFork(input: {
         'providerRejected'
       )
     })
-  await requireCurrent()
+  const current = await requireCurrent()
   if (!copy.sessionId.trim() || copy.sessionId === providerSessionId) {
     fail(`${name} did not save an independent chat copy. Try again.`)
   }
@@ -209,24 +216,43 @@ export async function prepareStructuredAgentSessionFork(input: {
     providerSessionId: copy.sessionId,
     selfSessionId: input.envelope.sessionId
   })
-  const importer = metadata.transcriptImport
-  const adoption = await resolveStructuredAgentSessionAdoptionForCreate({
-    settings: {},
+  const providerHandle = {
+    transport: metadata.definition.handleTransport,
     agent: input.agent,
-    transcriptImport: { ...importer, accountHomeCandidates: () => [record.accountHome] },
-    providerSessionId: copy.sessionId,
-    selectedAccountHome: record.accountHome,
-    launchEnv,
-    workspaceCwd,
-    conversationName: title
+    nativeId: metadata.transcriptImport.handleNamesTranscript ? copy.filePath! : copy.sessionId,
+    ...(copy.resumeCursor ? { resumeCursor: copy.resumeCursor } : {})
+  }
+  const prepared = prepareForkSnapshot({
+    snapshot: current.snapshot,
+    nextItemId: current.boundary.nextItemId,
+    ...(input.agent === 'codex'
+      ? { sourceThreadId: providerSessionId, childThreadId: copy.sessionId }
+      : {})
   })
-  await requireCurrent()
   return {
     envelope: input.envelope,
     fork: {
       sessionId: record.sessionId,
       itemId: input.throughItemId,
-      revalidate: requireCurrent
+      revalidate: async () => {
+        await requireCurrent()
+      },
+      prepared,
+      ...(copy.coverage
+        ? {
+            historyOrigin: {
+              version: 1 as const,
+              kind: 'native_copy' as const,
+              providerHandle: agentSessionJournalProviderHandle({
+                agent: input.agent,
+                providerHandle
+              }),
+              agent: input.agent,
+              ...copy.coverage,
+              ids: [...new Set(copy.coverage.ids)]
+            }
+          }
+        : {})
     },
     location: input.location,
     provider: input.agent,
@@ -240,21 +266,7 @@ export async function prepareStructuredAgentSessionFork(input: {
         : {})
     },
     ...(record.launchArgs ? { launchArgs: record.launchArgs } : {}),
-    adopt: structuredAgentSessionAdoptAttach({
-      definition: metadata.definition,
-      handleNamesTranscript: importer.handleNamesTranscript,
-      transcriptPath: adoption.transcriptPath,
-      conversationName: adoption.conversationName,
-      providerSessionId: copy.sessionId,
-      workspaceCwd,
-      ...(input.agent === 'codex'
-        ? {
-            conversationStore:
-              importer.conversationStore({ accountHome: record.accountHome, launchEnv }) ??
-              undefined
-          }
-        : {})
-    })
+    adopt: { providerHandle, conversationName: title }
   }
 }
 
@@ -268,7 +280,7 @@ export async function resolveStructuredAgentSessionForkIntent(input: {
 }): Promise<AgentSessionAttachParams> {
   const { host } = input
   if (!host) {
-    throw agentSessionRefusalError(
+    throw agentConversationCopyRefusal(
       'structured_agent_session_unsupported',
       { reason: 'hostUnsupported' },
       `${acpAgentName(input.agent)} could not reach the execution host. Reconnect to the host, then try again.`

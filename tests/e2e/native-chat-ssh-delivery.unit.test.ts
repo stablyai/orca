@@ -1,4 +1,3 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createSshDelivery,

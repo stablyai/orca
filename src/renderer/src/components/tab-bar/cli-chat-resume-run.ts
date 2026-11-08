@@ -15,8 +15,8 @@ import {
   type StructuredAgentSessionCreateGate
 } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import { supportsStructuredAgentSessionCliSource } from '@/runtime/structured-agent-session-client'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { supportsStructuredAgentSessionCliSource } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'

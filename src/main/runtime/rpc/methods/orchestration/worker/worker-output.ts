@@ -3,7 +3,7 @@ import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
 } from '../../../../../../shared/orchestration-worker-output'
-import type { RuntimeTerminalState } from '../../../../../../shared/runtime-types'
+import type { RuntimeTerminalState } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {

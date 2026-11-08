@@ -61,8 +61,11 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOri
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(),
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: vi.fn()
+}))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSession: vi.fn(),
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
@@ -73,7 +76,7 @@ import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStat
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
-} from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 const floatingTab = {
   id: 'floating-chat-1',

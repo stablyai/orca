@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import { readNodeFileWithinLimit } from '../../../shared/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import {
   SKILL_DELETE_PLACEMENT_KINDS,
   type SkillDeletePlacementKind

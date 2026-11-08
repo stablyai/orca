@@ -65,8 +65,6 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
 
   abstract getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus>
 
-  protected abstract getLeafKey(tabId: string, leafId: string): string
-
   protected abstract getPtyRecordForPaneKey(
     paneKey: string,
     context?: TerminalIdentityReadContext

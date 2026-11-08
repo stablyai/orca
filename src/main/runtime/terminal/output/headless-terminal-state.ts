@@ -2,7 +2,7 @@ import { OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer } from './headless-term
 import type { RuntimeHeadlessTerminal } from '../records/runtime-terminal-state-records'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
-import { isNativeWindowsConptyPty } from '../../terminal-model-query-authority'
+import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from '../view/terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
