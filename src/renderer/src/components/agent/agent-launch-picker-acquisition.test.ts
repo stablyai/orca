@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vitest'
 import {
   currentAgentPickerAcquisition,
   observeAgentPickerAcquisition
@@ -101,6 +101,42 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
     ])
   stopReopened()
   expect(currentAgentPickerAcquisition('closed-catalog')).toBeUndefined()
+})
+
+it('keeps following a listing that outlasts the waiting read while the picker is open', async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  let landed = false
+  let published: AgentPickerEntry[] = []
+  const saved = { origin: 'probe' as const, fetchedAt: 1, models: [model('saved')] }
+  const stop = observeAgentPickerAcquisition(
+    'outlasting-listing',
+    [codex],
+    {
+      // The waiting read ends at its deadline before the listing lands, reporting it final.
+      catalog: async (_entry, waitForListing) =>
+        waitForListing
+          ? saved
+          : landed
+            ? { origin: 'probe', fetchedAt: 2, models: [model('fresh')] }
+            : { ...saved, listingInProgress: true },
+      support: async () => undefined
+    },
+    { selected: () => undefined, publish: (entries) => (published = entries) }
+  )
+  try {
+    await vi.advanceTimersByTimeAsync(0)
+    landed = true
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(published[0]).toMatchObject({
+      catalogRead: 'settled',
+      catalog: { models: [{ id: 'fresh' }] }
+    })
+  } finally {
+    stop()
+  }
 })
 
 it('publishes every saved catalog while earlier refreshes are still pending', async () => {

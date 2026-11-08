@@ -23,6 +23,9 @@ type SupportRead = {
   value?: AgentPickerEntry['structured']
 }
 
+const fetched = (catalog: AgentPickerEntry['catalog'] | undefined) =>
+  catalog && (catalog.origin === 'unknown' ? catalog.origin : catalog.fetchedAt)
+
 class AgentPickerAcquisition {
   readonly observers = new Set<Observer>()
   entries: AgentPickerEntry[]
@@ -151,9 +154,19 @@ class AgentPickerAcquisition {
 
   private async readCatalog(entry: AgentPickerEntry, index: number, waitForListing: boolean) {
     const catalog = await this.reads.catalog(entry, waitForListing)
-    const refresh = catalog?.listingInProgress && !waitForListing && this.observers.size > 0
+    const observed = this.observers.size > 0
+    const refresh = catalog?.listingInProgress && !waitForListing && observed
+    // An unchanged waiting reply hit its deadline, not the listing; recheck while open.
+    const recheck = waitForListing && observed && fetched(catalog) === fetched(entry.catalog)
     if (refresh) {
       this.queued.refresh.add(index)
+    }
+    if (recheck) {
+      // Spaced so a fast reply cannot turn a queued listing into a request spin.
+      setTimeout(() => {
+        this.queued.catalog.add(index)
+        this.admit('catalog')
+      }, 1_000)
     }
     this.entries = this.entries.map((e, i) =>
       i === index
@@ -162,7 +175,7 @@ class AgentPickerAcquisition {
             ...(catalog ? { catalog } : {}),
             catalogRead: !catalog
               ? 'failed'
-              : refresh
+              : refresh || recheck
                 ? 'pending'
                 : catalog.listingInProgress
                   ? 'deferred'

@@ -23,7 +23,7 @@ import {
 } from './agent-model-catalog-snapshot'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from './agent-model-catalog-listing-waiters'
 
-/** One budget for a whole refresh: setup, the folder's settings, admission and the listing. */
+/** Bounds scope resolution and the folder's settings; listings own their execution budget. */
 const AGENT_MODEL_CATALOG_REFRESH_MS = AGENT_MODEL_CATALOG_PICKER_WAIT_MS
 
 /** What a refresh resolves, captured when it starts; no reader's session, deadline or callback. */
@@ -54,7 +54,7 @@ export type AgentModelCatalogRefresh = {
 type Held = AgentModelCatalogRefresh & { workspaceId?: string; end: () => void }
 
 /** Equivalent requests share one refresh that belongs to no reader. It ends when it finishes, at
- *  its fixed budget, on its agent's or workspace's retirement, or with the service; readers only
+ *  its setup budget, on its agent's or workspace's retirement, or with the service; readers only
  *  wait on it, each until its own deadline or cancellation, and never extend or end it. */
 export function createAgentModelCatalogRefreshes(context: {
   deps: AgentModelCatalogServiceDeps
@@ -66,6 +66,8 @@ export function createAgentModelCatalogRefreshes(context: {
 }) {
   const { deps, lifetime, admission, bindings, requestKey, tasks } = context
   const refreshes = new Map<string, Held>()
+  // By workspace id ('' without one): what holds listings past a refresh's setup budget.
+  const contexts = new Map<string, AbortController>()
   const start = (key: string, launch: AgentModelCatalogLaunch): Held => {
     const { agent } = launch
     const retirement = deps.store.retirementRevision(agent)
@@ -94,6 +96,10 @@ export function createAgentModelCatalogRefreshes(context: {
     const listing = Promise.withResolvers<void>()
     const defaults = Promise.withResolvers<void>()
     const targets = new Set<string>()
+    const contextKey = launch.records.record?.location.workspaceId ?? ''
+    const context = contexts.get(contextKey) ?? new AbortController()
+    contexts.set(contextKey, context)
+    const interest = AbortSignal.any([lifetime, context.signal])
     let list: ((model: string | undefined) => void) | undefined
     let projecting: Promise<void> | undefined
     const run = async (): Promise<void> => {
@@ -163,7 +169,6 @@ export function createAgentModelCatalogRefreshes(context: {
       ) {
         const lister = scopedAgentModelCatalogLister({
           legacy: launch.legacy,
-          admission,
           signal: lifetime,
           resolved,
           probe,
@@ -177,19 +182,30 @@ export function createAgentModelCatalogRefreshes(context: {
               deps.store.efforts.due(fingerprint, model) ||
               deps.store.isListing(fingerprint))
           ) {
-            // A listing another refresh started keeps that refresh's budget.
-            void deps.store.refresh(
-              fingerprint,
-              agent,
-              (selected, owner) => {
-                const task = lister(selected, owner)
-                tasks.add(task)
-                void task.finally(() => tasks.delete(task)).catch(() => {})
-                return task
-              },
-              { deadline, signal: lifetime },
-              model
-            )
+            // The workspace context, not this setup budget, holds the shared listing.
+            void deps.store
+              .refresh(
+                fingerprint,
+                agent,
+                (selected, owner) => {
+                  const task = lister(selected, owner)
+                  tasks.add(task)
+                  void task.finally(() => tasks.delete(task)).catch(() => {})
+                  return task
+                },
+                {
+                  signal: interest,
+                  ...(launch.legacy
+                    ? { deadline }
+                    : { admission, timeoutMs: AGENT_MODEL_CATALOG_REFRESH_MS })
+                },
+                model
+              )
+              .then((entry) => {
+                if (entry && bound.current()) {
+                  seedAccountList(deps, scope, agent)
+                }
+              })
           }
         }
         for (const model of targets.size > 0 ? [...targets] : [undefined]) {
@@ -253,6 +269,12 @@ export function createAgentModelCatalogRefreshes(context: {
       for (const held of refreshes.values()) {
         if (workspaceId === undefined || held.workspaceId === workspaceId) {
           held.end()
+        }
+      }
+      for (const [key, context] of contexts) {
+        if (workspaceId === undefined || key === workspaceId) {
+          contexts.delete(key)
+          context.abort()
         }
       }
     }
