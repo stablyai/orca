@@ -11,7 +11,6 @@ import {
 } from './edge-relay.js'
 import type { EdgeAssignBody, EdgeDeviceRow } from './edge-admin-client.js'
 import { EDGE_FENCE_RETRY_BASE_MS, retryPendingFences } from './edge-relay-fence.js'
-import './edge-relay-evacuation.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip

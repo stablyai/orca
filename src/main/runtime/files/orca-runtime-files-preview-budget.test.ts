@@ -10,7 +10,6 @@ import {
 } from './runtime-file-host.test-fixture'
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './file-preview-budget'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../shared/remote-rpc-content-budget'
-import '../../providers/ssh-host-not-served-error'
 
 vi.mock('fs', async () => (await import('./runtime-file-command-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>

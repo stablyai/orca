@@ -1,7 +1,4 @@
 import { createHash } from 'node:crypto'
-import 'node:fs'
-import 'node:os'
-import 'node:path'
 
 import { afterEach, expect, it } from 'vitest'
 

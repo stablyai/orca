@@ -2,8 +2,6 @@ import { createHash, randomBytes } from 'node:crypto'
 import { SignJWT } from 'jose'
 import { describe, expect, it } from 'vitest'
 import { verifyAdminRequest, verifyWith, type AdminOp } from '../src/admin'
-import '../src/admin-jti'
-import '../src/env'
 import type { Env } from '../src/env'
 
 const KEY = randomBytes(36).toString('base64url')

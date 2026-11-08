@@ -1,20 +1,8 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { DesktopChatCreationHistory } from './desktop-chat-creation-history'
-import type * as NodeFs from 'node:fs'
-import type * as NodeFsPromises from 'node:fs/promises'
-
-vi.mock('node:fs', async (original) => {
-  const fs = await original<typeof NodeFs>()
-  return { ...fs, readFileSync: vi.fn(fs.readFileSync) }
-})
-vi.mock('node:fs/promises', async (original) => {
-  const fs = await original<typeof NodeFsPromises>()
-  return { ...fs, writeFile: vi.fn(fs.writeFile), rename: vi.fn(fs.rename) }
-})
 
 const roots: string[] = []
 afterEach(() => {

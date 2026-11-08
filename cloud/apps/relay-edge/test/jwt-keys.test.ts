@@ -3,7 +3,6 @@
 import { SignJWT, exportJWK, generateKeyPair, type CryptoKey } from 'jose'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { Env } from '../src/env'
-import '../src/jwks-persist'
 
 const ISSUER = 'https://auth.test.invalid'
 const HOST = 'AAAAAAAAAAAAAAAA'

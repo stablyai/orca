@@ -1,9 +1,6 @@
-
-import 'jose'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database/database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin, type EdgeAdminCallOptions, type EdgeAssignBody, type EdgeAssignResult } from './edge-admin-client.js'
-import './edge-relay-evacuation.js'
 import { EDGE_FENCE_RETRY_BASE_MS, EDGE_FENCE_RETRY_BATCH, recordPendingFence, retryPendingFences } from './edge-relay-fence.js'
 import { EDGE_CELL_ID, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
 

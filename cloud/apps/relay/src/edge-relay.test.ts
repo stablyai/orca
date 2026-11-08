@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import '@orca-cloud/relay-contract'
 import { afterEach, describe, expect, it } from 'vitest'
 import { RelayAssignmentStore } from './assignment/assignment-store.js'
 import {
@@ -10,8 +9,6 @@ import {
 import type { RelayCellConfig } from './config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from './database/database.js'
 import { EDGE_CELL_ID, EdgeAssignments, EdgeMoveDeferredError, type EdgeRelayConfig } from './edge-relay.js'
-import './connections/host-session-registry.js'
-import './connections/splice-forwarder.js'
 
 const EDGE_URL = 'https://edge.relay.example.com'
 const GCE_CELL: RelayCellConfig = { id: 'production-gce-c3', url: 'https://c3.relay.example.com', capacityRequests: 1_000 }
