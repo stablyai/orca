@@ -102,6 +102,17 @@ describe('Floating Workspace window bridge', () => {
     stop()
   })
 
+  it('a bridge that starts in-window destroys a window a crashed renderer left mid-dock', async () => {
+    const { api } = stubWindowApi()
+    useAppStore.setState({
+      settings: { ...popoutSettings, experimentalFloatingWorkspaceMode: 'in-window' }
+    })
+    const stop = startFloatingWorkspaceWindowBridge()
+    await vi.waitFor(() => expect(api.destroy).toHaveBeenCalledTimes(1))
+    expect(api.show).not.toHaveBeenCalled()
+    stop()
+  })
+
   it('a user hide closes the open flag without hiding the window a second time', () => {
     const { api, handlers } = stubWindowApi()
     const stop = startFloatingWorkspaceWindowBridge()

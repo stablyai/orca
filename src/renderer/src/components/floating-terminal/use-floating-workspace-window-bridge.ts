@@ -50,7 +50,8 @@ export function startFloatingWorkspaceWindowBridge(
   const store = useAppStore
   let disposed = false
   let shown = false
-  let hasWindow = false
+  // Why: a reloaded renderer cannot see a window its crashed predecessor left mid-dock, so its first leave destroys.
+  let hasWindow = true
   // Only the first sync is a restore or reload; every later show answers a user action and takes focus.
   let focusOnShow = false
   // Why: a show during a dock's fit wait supersedes that dock, so its late destroy must not remove the new window.
