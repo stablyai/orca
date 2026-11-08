@@ -202,10 +202,11 @@ export function NativeChatToolRun({
                 />
               </span>
             ) : null}
-            {/* Keep the collapsed header bounded; the tool detail carries the full command. */}
+            {/* Keep previews compact; opening reveals labels that are only shortened by the row width. */}
             <span
               className={cn(
-                'min-w-0 truncate text-sm leading-relaxed transition-colors',
+                'min-w-0 text-sm leading-relaxed transition-colors',
+                open ? 'whitespace-normal break-words' : 'truncate',
                 live
                   ? 'max-w-[72%] animate-pulse text-chat-foreground motion-reduce:animate-none'
                   : 'min-w-0 text-chat-foreground-faint group-hover/tool-run:text-chat-foreground'

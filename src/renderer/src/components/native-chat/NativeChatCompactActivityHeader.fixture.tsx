@@ -5,7 +5,7 @@ import { NativeChatToolRun } from './NativeChatToolRun'
 const command =
   'node scripts/check-a-long-workspace-configuration-and-report-detailed-results.mjs --project workspace --configuration development --verify-all-sources'
 const store = { settings: { ...getDefaultSettings('/home/fixture'), uiLanguage: 'en' as const } }
-function header() {
+function header(commandText = command) {
   return (
     <div className="native-chat-appearance p-4">
       <NativeChatToolRun
@@ -14,7 +14,7 @@ function header() {
             type: 'tool-call',
             callId: 'check',
             name: 'Bash',
-            input: { command },
+            input: { command: commandText },
             state: 'completed'
           },
           {
@@ -28,11 +28,11 @@ function header() {
     </div>
   )
 }
-export const collapsed = defineFixture({ store, width: 390, render: header })
+export const collapsed = defineFixture({ store, width: 390, render: () => header() })
 export const expanded = defineFixture({
   store,
   width: 390,
-  render: header,
+  render: () => header(),
   interact: (frame) => {
     frame.querySelector<HTMLButtonElement>('[data-native-chat-tool-run-state]')?.click()
   }
@@ -40,7 +40,7 @@ export const expanded = defineFixture({
 export const verified = defineFixture({
   store,
   width: 390,
-  render: header,
+  render: () => header(),
   interact: async (frame) => {
     await document.fonts.ready
     const toggle = frame.querySelector<HTMLButtonElement>('[data-native-chat-tool-run-state]')
@@ -64,5 +64,22 @@ export const verified = defineFixture({
     if (toggle.getAttribute('aria-expanded') !== 'true') {
       throw new Error('The compact activity header no longer expands')
     }
+  }
+})
+
+const shortCommand = 'node scripts/verify-wide-workspace-configuration.mjs --all --verbose'
+export const shortCommandCollapsed = defineFixture({
+  store,
+  width: 390,
+  render: () => header(shortCommand)
+})
+export const shortCommandDetails = defineFixture({
+  ...shortCommandCollapsed,
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('[data-native-chat-tool-run-state]')?.click()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    Array.from(frame.querySelectorAll('button'))
+      .find((button) => button.classList.contains('group/tool-line'))
+      ?.click()
   }
 })
