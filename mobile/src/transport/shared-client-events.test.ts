@@ -136,4 +136,30 @@ describe('subscribeSharedClientEvents', () => {
     expect(home.events.at(-1)).toEqual({ type: 'reposChanged' })
     expect(preference.events.at(-1)).toEqual({ type: 'reposChanged' })
   })
+
+  it('tries a refused wire once per connected edge', () => {
+    const listeners = new Set<(state: 'connected') => void>()
+    let attempts = 0
+    const client = stubRpcClient({
+      onStateChange: (listener) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      },
+      subscribe: () => {
+        attempts += 1
+        throw new Error('over 32 subscriptions')
+      }
+    })
+    subscribeSharedClientEvents(client, recorder().listener)
+    expect(attempts).toBe(1)
+
+    // Like the page's connection cache, which notifies over its live listener set.
+    for (const listener of listeners) {
+      listener('connected')
+      if (attempts > 10) {
+        break
+      }
+    }
+    expect(attempts).toBe(2)
+  })
 })

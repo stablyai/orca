@@ -26,8 +26,8 @@ type SharedStream = {
   wire: Wire | null
   // The connection the last wire `ready` arrived on; null until one does.
   readyOn: string | null
-  // Set while a wire that never got ready waits for the next connected edge to try again.
-  stopWaiting: (() => void) | null
+  // A wire that failed before its ready opens again on the next connected edge, not in the same one.
+  stopWatching: () => void
 }
 
 const streams = new WeakMap<SharedClientEventsClient, SharedStream>()
@@ -44,12 +44,7 @@ export function subscribeSharedClientEvents(
   listener: SharedClientEventListener
 ): () => void {
   const subscription = { listener }
-  let stream = streams.get(client)
-  if (!stream) {
-    stream = { listeners: new Set(), wire: null, readyOn: null, stopWaiting: null }
-    streams.set(client, stream)
-  }
-  const joined = stream
+  const joined = streams.get(client) ?? createStream(client)
   joined.listeners.add(subscription)
   if (joined.wire) {
     // Deferred like a wire reply, so a caller never hears back before subscribe returns.
@@ -77,8 +72,7 @@ export function subscribeSharedClientEvents(
       if (streams.get(client) === joined) {
         streams.delete(client)
       }
-      joined.stopWaiting?.()
-      joined.stopWaiting = null
+      joined.stopWatching()
       const wire = joined.wire
       joined.wire = null
       wire?.stop?.()
@@ -86,9 +80,23 @@ export function subscribeSharedClientEvents(
   }
 }
 
+function createStream(client: SharedClientEventsClient): SharedStream {
+  const stream: SharedStream = {
+    listeners: new Set(),
+    wire: null,
+    readyOn: null,
+    stopWatching: () => {}
+  }
+  stream.stopWatching = client.onStateChange((state) => {
+    if (state === 'connected' && stream.listeners.size > 0 && !stream.wire) {
+      openWire(client, stream)
+    }
+  })
+  streams.set(client, stream)
+  return stream
+}
+
 function openWire(client: SharedClientEventsClient, stream: SharedStream): void {
-  stream.stopWaiting?.()
-  stream.stopWaiting = null
   const wire: Wire = { stop: null, ready: false }
   stream.wire = wire
   let stop: () => void
@@ -100,7 +108,6 @@ function openWire(client: SharedClientEventsClient, stream: SharedStream): void 
     // A page bridge throws when it can't open a stream now; try again on the next connection.
     if (stream.wire === wire) {
       stream.wire = null
-      waitForConnection(client, stream)
     }
     return
   }
@@ -112,14 +119,6 @@ function openWire(client: SharedClientEventsClient, stream: SharedStream): void 
   }
 }
 
-function waitForConnection(client: SharedClientEventsClient, stream: SharedStream): void {
-  stream.stopWaiting ??= client.onStateChange((state) => {
-    if (state === 'connected' && stream.listeners.size > 0 && !stream.wire) {
-      openWire(client, stream)
-    }
-  })
-}
-
 function deliver(
   client: SharedClientEventsClient,
   stream: SharedStream,
@@ -129,13 +128,13 @@ function deliver(
   if (stream.wire !== wire || !isEvent(payload)) {
     return
   }
-  let reopen: 'now' | 'on-connect' | null = null
+  let reopen = false
   if (payload.type === 'ready') {
     wire.ready = true
     stream.readyOn = connectionKey(client)
   } else if (payload.type === 'end' || payload.type === 'error') {
     // A wire that went live may open again at once; one refused before ready waits for a new connection.
-    reopen = wire.ready ? 'now' : 'on-connect'
+    reopen = wire.ready
     stream.readyOn = null
     stream.wire = null
     // Releases the transport's record too, so a path switch can't replay the dead subscribe.
@@ -154,15 +153,13 @@ function deliver(
       failure ??= { error }
     }
   }
-  if (reopen === 'now') {
+  if (reopen) {
     // Out of the transport's callback, and after any listener that left or rejoined on this event.
     queueMicrotask(() => {
       if (streams.get(client) === stream && stream.listeners.size > 0 && !stream.wire) {
         openWire(client, stream)
       }
     })
-  } else if (reopen === 'on-connect' && stream.listeners.size > 0 && !stream.wire) {
-    waitForConnection(client, stream)
   }
   if (failure) {
     throw failure.error
