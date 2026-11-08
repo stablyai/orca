@@ -288,3 +288,33 @@ mobile/
 │   └── mock-server.ts     # Standalone mock WebSocket server
 └── assets/                # App icons and splash screen
 ```
+
+## Linking to a paired mobile session
+
+In the mobile connection diagnostics screen, select the paired host and choose
+**Copy connection ID**. This copies that app installation's saved `hostId`, even
+when the desktop is offline. It does not copy pairing tokens or keys.
+
+The existing session route accepts that ID, the desktop's actual workspace ID,
+and the target pane key:
+
+```js
+const url = `orca:///h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}?paneKey=${encodeURIComponent(paneKey)}`
+```
+
+Encode each value once. `worktreeId` must be the existing workspace identifier
+(including its checkout path where applicable), not a display name. `paneKey`
+is the Orca tab/leaf identifier, not a provider's conversation/session ID.
+Inside an Orca-managed agent terminal, `ORCA_WORKTREE_ID` and `ORCA_PANE_KEY`
+provide the corresponding workspace and pane values.
+
+The connection ID belongs to the receiving app installation. Do not substitute a
+Mac hostname, WebSocket address, desktop `local` ID, or another phone's ID.
+After deleting and re-pairing a connection, copy its new ID and update links.
+Opening a link still requires the paired host to be reachable and the destination
+workspace/pane to exist; copying the ID does not create a connection or session.
+
+If a messaging client does not make custom-scheme URLs clickable, use an HTTPS
+page with a user-tapped link to the same `orca:///…` URL. Such a page is not part
+of Orca. Keep workspace paths and other destination identifiers out of public
+logs and do not include pairing secrets in links.

@@ -1144,6 +1144,12 @@
     }
   },
   "diagnostics": {
+    "connectionIdCopy": {
+      "title": "연결 ID",
+      "copy": "연결 ID 복사",
+      "copied": "연결 ID를 복사했습니다",
+      "failed": "복사하지 못했습니다. 다시 시도하세요."
+    },
     "connectionDiagnosticsView": {
       "authFailed": "인증 실패",
       "connected": "연결됨",

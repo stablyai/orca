@@ -368,6 +368,12 @@
     }
   },
   "diagnostics": {
+    "connectionIdCopy": {
+      "title": "Connection ID",
+      "copy": "Copy connection ID",
+      "copied": "Connection ID copied",
+      "failed": "Could not copy. Try again."
+    },
     "connectionDiagnosticsView": {
       "connecting": "connecting",
       "handshaking": "handshaking",
