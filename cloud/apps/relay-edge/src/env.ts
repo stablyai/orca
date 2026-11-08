@@ -88,6 +88,8 @@ export function edgeConfig(env: Env): EdgeConfig {
   if (backend === 'spike' && env.SPIKE_DEBUG !== '1' && env.SPIKE_ADMIN !== '1') {
     throw new Error('relay_edge_config_spike_backend_outside_spike')
   }
+  // The abort routes reset objects (drop every socket); only the spike backend may turn them on.
+  if (env.SPIKE_ADMIN === '1' && backend !== 'spike') throw new Error('relay_edge_config_spike_admin_outside_spike')
   if (!env.RELAY_JWKS_URL && !env.RELAY_JWKS) throw new Error('relay_edge_config_jwks')
   if (env.RELAY_JWKS_URL && !env.RELAY_AUTH_ISSUER) throw new Error('relay_edge_config_issuer')
   if (!env.RELAY_JWT_AUDIENCE) throw new Error('relay_edge_config_audience')
