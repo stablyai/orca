@@ -12,8 +12,8 @@ import { SheetHeader } from './nav-bar/SheetHeader'
 
 type PickerListItem = { id: string; label: string; detail?: string }
 
-/** Short lists are scannable; a search field there is only chrome. */
-const PICKER_SEARCH_MIN_ITEMS = 5
+/** A single row needs no search. */
+const PICKER_SEARCH_MIN_ITEMS = 2
 
 type PickerListSearch<T> = {
   placeholder: string

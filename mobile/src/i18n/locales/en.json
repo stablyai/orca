@@ -1208,6 +1208,10 @@
       "searchProjects": "Search projects or host project",
       "searchHosts": "Search hosts"
     },
+    "newWorktreeQuickPick": {
+      "placeholder": "Type host and project",
+      "noMatches": "No matches"
+    },
     "newWorktreeProjectTargetFields": {
       "project": "Project",
       "selectProject": "Select a project",

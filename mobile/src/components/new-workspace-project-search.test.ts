@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { buildNewWorkspaceProjectOptions } from './new-workspace-project-targets'
-import { searchNewWorkspaceProjectOptions } from './new-workspace-project-search'
+import {
+  quickPickNewWorkspaceTargets,
+  searchNewWorkspaceProjectOptions
+} from './new-workspace-project-search'
 
 const upstream = { owner: 'stablyai', repo: 'orca' }
 const repos = [
@@ -30,5 +33,22 @@ describe('searchNewWorkspaceProjectOptions', () => {
     expect(rest).toEqual([])
     expect(only).toMatchObject({ label: 'orca', detail: 'build-box' })
     expect(getRepoExecutionHostId(only.repo)).toBe(getRepoExecutionHostId(repos[1]))
+  })
+})
+
+describe('quickPickNewWorkspaceTargets', () => {
+  const options = buildNewWorkspaceProjectOptions(repos)
+  const pick = (query: string, hostId: string | null = null) =>
+    quickPickNewWorkspaceTargets(options, repos, query, hostLabelFor, hostId, 5).map(
+      (row) => `${row.label}@${row.hostLabel}`
+    )
+
+  it('offers one row per project and host so a pick sets both', () => {
+    expect(pick('orca')).toEqual(['orca@This Mac', 'orca@build-box'])
+    expect(pick('build orca')).toEqual(['orca@build-box'])
+  })
+
+  it('narrows to the host chosen as a quick filter', () => {
+    expect(pick('', getRepoExecutionHostId(repos[0]))).toEqual(['orca@This Mac', 'docs@This Mac'])
   })
 })

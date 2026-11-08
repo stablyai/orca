@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import { FolderGit2 } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -31,6 +32,8 @@ export function NewWorktreeFormSheet(props: {
   onRetryLoad: () => void
   project: Selection | null
   runTarget: (Selection & { hostId: string }) | null
+  /** Sits above the Where group: picks project and run target from typed names. */
+  quickPick?: ReactNode
   projectBadgeColor: string | null
   selectedRepoIsGit: boolean
   selectedRepoConnectionId: string | null
@@ -103,6 +106,7 @@ export function NewWorktreeFormSheet(props: {
         />
       ) : (
         <>
+          {props.quickPick}
           <NewWorktreeProjectTargetFields
             project={props.project}
             runTarget={props.runTarget}
