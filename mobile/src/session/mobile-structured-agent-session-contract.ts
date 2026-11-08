@@ -1,6 +1,6 @@
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type {
   MobileNativeChatSendIntent,
@@ -26,6 +26,11 @@ import type {
 import type { MobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import type { NativeChatContextUsageSummary } from '../../../src/shared/native-chat/native-chat-context-usage-summary'
+import type { MobileStructuredInterruptedContinue } from './use-mobile-structured-interrupted-continue'
+import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
+import type { MobileStructuredSends } from './use-mobile-structured-sends'
+import type { AgentSessionRewindSurface } from '../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
+import type { MobileNativeChatUsageLimit } from './native-chat/use-mobile-native-chat-usage-limit'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,
@@ -52,6 +57,7 @@ export type StructuredMobileSession = Omit<
       skills?: readonly AgentJournalSkillRef[],
       intent?: MobileNativeChatSendIntent
     ) => Promise<MobileNativeChatSendOutcome>
+    holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
     cancel: () => void
     receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
     /** Undefined from a host too old to say. */
@@ -64,12 +70,20 @@ export type StructuredMobileSession = Omit<
     queued: MobileStructuredQueuedMessageControls
     commandRefusalCauses: MobileNativeChatCommandRefusalCauses
     backgroundTasks: MobileStructuredBackgroundTasks
+    interruptedContinue: MobileStructuredInterruptedContinue
+    /** Null unless the host reports goals for this chat. */
+    threadGoal: MobileStructuredThreadGoal | null
+    /** "Rewind to here" for the chat's own turn openers; absent where the chat cannot rewind. */
+    rewind: AgentSessionRewindSurface | undefined
     visualSource: MobileNativeChatVisualSource | null
     imagePreviewsByMessageId: Record<string, string[]>
+    usageLimit: MobileNativeChatUsageLimit | null
   }
 
 export type MobileStructuredAgentSessionArgs = {
   client: RpcClient | null
+  /** The paired host the route opened: its query cache holds the chat's last model lists. */
+  hostId?: string
   /** The route's paired host owns follow-up behavior even when another host executes the chat. */
   pairedHostClient: RpcClient | null
   sessionId: string | null

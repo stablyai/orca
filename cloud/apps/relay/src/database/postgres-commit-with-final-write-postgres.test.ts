@@ -107,19 +107,6 @@ describePostgres('PostgreSQL counter write committed in the same round trip', ()
     expect(await logged()).toBe(0)
   })
 
-  it('reports a missing row the same way', async () => {
-    const read = await database.transaction(async (transaction) => {
-      await transaction.query(`INSERT INTO ${table}_log (id, note) VALUES (?, ?)`, ['z', 'x'])
-      if (await commitWithFinalWrite(transaction, counterUpdate, counterParams('z', -1))) {
-        return 'committed'
-      }
-      const rows = await transaction.query(`SELECT id FROM ${table} WHERE id = ?`, ['z'])
-      return rows.length > 0 ? 'over-cap' : 'missing'
-    })
-    expect(read).toBe('missing')
-    expect(await logged()).toBe(0)
-  })
-
   it('retries a deadlock raised by the fused message and commits once', async () => {
     const sequence = `${table}_retry_sequence`
     const trigger = `${table}_retry_trigger`

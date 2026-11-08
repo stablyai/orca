@@ -7,7 +7,7 @@ import {
   WORKER_RELEASE_VIEW,
   workerStopFailure
 } from './worker-release-agent-view'
-import type { WorkerStopReceipt } from '../../../shared/orchestration-worker-stop-receipt'
+import type { WorkerStopReceipt } from '../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

@@ -1,6 +1,7 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { Plus } from './mobile-tasks-dependencies'
-import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
 import { translate } from '../i18n/mobile-i18n'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 
@@ -32,8 +33,6 @@ export function renderMobileTasksSearchControl(
     providerLabel,
     query,
     setAppliedQuery,
-    setCreateBody,
-    setCreateTitle,
     setGithubProjectSearch,
     setQuery,
     setShowCreateTask,
@@ -110,11 +109,7 @@ export function renderMobileTasksSearchControl(
                   ? translate('tasks.screenChrome.newGitHubIssue', 'New GitHub issue')
                   : translate('tasks.screenChrome.newLinearIssue', 'New Linear issue'),
               disabled: !taskUiReady,
-              onPress: () => {
-                setCreateTitle('')
-                setCreateBody('')
-                setShowCreateTask(true)
-              }
+              onPress: () => setShowCreateTask(true)
             }
           : undefined
       }

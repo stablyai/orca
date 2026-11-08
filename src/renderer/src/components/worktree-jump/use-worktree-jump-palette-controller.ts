@@ -15,7 +15,7 @@ import { useWorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-ta
 import { useWorktreeJumpPaletteTaskUrl } from './use-worktree-jump-palette-task-url'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
-import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
+import type { WorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { useMemo } from 'react'
 
 export function useWorktreeJumpPaletteController({

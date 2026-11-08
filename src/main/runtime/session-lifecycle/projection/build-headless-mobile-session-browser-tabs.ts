@@ -2,12 +2,14 @@ import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as Browser
 import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
 import type {
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { findSavedBrowserPage } from '../../serve-browser-tab-layout'
+import { findSavedBrowserPage } from '../../browser/headless/serve-browser-tab-layout'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
 import type { Tab } from '../../../../shared/tab-types'
@@ -23,7 +25,7 @@ import type {
   TerminalSurfaceCloseTarget
 } from '../../../../shared/workspace-layout/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
-import type { PtyControllerInventory } from '../../runtime-pty-controller-contract'
+import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { captureAcknowledgedTerminalTabRetirement } from '../../terminal/surface/workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
@@ -51,10 +53,8 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         : []
     const session = serverTabs.length > 0 ? this.getWorkspaceSessionForWorktree(worktreeId) : null
     const publishedServerTabs = serverTabs.map((tab) => {
-      const persistedProps = this.getPersistedUnifiedSessionTabProps(
-        worktreeId,
-        this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
-      )
+      const tabId = this.serveBrowserTabs.unifiedTabId(worktreeId, tab.browserPageId)
+      const persistedProps = this.getPersistedUnifiedSessionTabProps(worktreeId, tabId)
       return {
         type: 'browser' as const,
         // Offscreen pages lack separate workspace identity; use page id like the server browserWorkspaceId fallback.

@@ -192,6 +192,36 @@ describeRender(
       await page.close()
     }, 300_000)
 
+    it('sends converted text when the keyboard commits it, without waiting for another key', async () => {
+      // WebKit's last input event during a commit still reports isComposing, and none follows compositionend.
+      const { errors, page } = await openProbe()
+      await page.focus(`#${LIVE_INPUT_FIELD_ID}`)
+      const input = await page.context().newCDPSession(page)
+      await input.send('Input.imeSetComposition', {
+        text: 'にほんご',
+        selectionStart: 4,
+        selectionEnd: 4
+      })
+      await page.waitForFunction(
+        (id) => document.getElementById(id)?.value === 'にほんご',
+        LIVE_INPUT_FIELD_ID,
+        { timeout: 30_000, polling: 50 }
+      )
+      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual([])
+
+      await input.send('Input.insertText', { text: '日本語' })
+
+      await page.waitForFunction(
+        () => globalThis.__orcaLiveInputProbe.sent().length > 0,
+        undefined,
+        { timeout: 30_000, polling: 50 }
+      )
+      expect(await page.evaluate(() => globalThis.__orcaLiveInputProbe.sent())).toEqual(['日本語'])
+      expect(await fieldValue(page)).toBe('日本語')
+      expect(errors).toEqual([])
+      await page.close()
+    }, 300_000)
+
     describe('under an Android keyboard, which composes every word it types', () => {
       // Android WebView Latin keyboard keeps composing region mid-word; native Android reports no range and forwards ASCII immediately.
       const ANDROID_WEBVIEW_USER_AGENT =

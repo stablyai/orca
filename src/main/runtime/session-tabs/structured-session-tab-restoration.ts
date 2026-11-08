@@ -6,14 +6,14 @@ import {
 } from './structured-session-tab-publication'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileSessionTabsChangedMethods } from './session-tabs-change-publication'
 import { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from './structured-session-create-support'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { restoredChatTabChanges } from './restored-chat-tab-changes'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { RuntimeRepoSearchRefs } from '../../../shared/runtime-types'
+import type { RuntimeRepoSearchRefs } from '../../../shared/runtime-worktree-contracts'
 import { REPO_SEARCH_REFS_DEFAULT_LIMIT as DEFAULT_REPO_SEARCH_REFS_LIMIT } from '../../../shared/repo-search-limits'
 import type { Repo } from '../../../shared/repo-types'
-import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
 import {
   getLocalProjectGhExecOptions,
   type LocalProjectGhExecOptions
@@ -29,6 +29,8 @@ import type { AgentLaunchRuntime } from '../../../shared/agent-launch/startup/ag
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import type { MainSessionTabRows } from './main-session-tab-rows'
+import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 
 export type AgentLaunchScope = Parameters<
   OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce['getAgentLaunchPlatformForWorkspace']
@@ -73,13 +75,27 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       (id) => this.hasCurrentLocalStructuredSessionTab(id)
     )
     for (const [worktreeId, worktreeChanges] of changes) {
-      this.changeWindowlessChatTabs(worktreeId, worktreeChanges, (change) =>
+      await this.changeWindowlessChatTabs(worktreeId, worktreeChanges, (change) =>
         this.passiveStructuredSessionTabChangeEligible(change)
       )
     }
+    const savedOrders = new Map<string, MainSessionTabRows | undefined>()
     for (const session of restored) {
       if (host?.isSessionTabVisible(session.sessionId)) {
-        this.projectStructuredAgentSessionTab({ ...session, activate: false, notify: false })
+        if (!savedOrders.has(session.workspaceId)) {
+          savedOrders.set(
+            session.workspaceId,
+            ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()
+              ? this.savedStructuredSessionTabOrder(session.workspaceId)
+              : undefined
+          )
+        }
+        this.projectStructuredAgentSessionTab({
+          ...session,
+          activate: false,
+          notify: false,
+          savedOrder: savedOrders.get(session.workspaceId)
+        })
       }
     }
     const wasUnverifiable = this.structuredAgentSessionInventoryUnverifiable
@@ -104,16 +120,35 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
     }
+    let savedOrder: MainSessionTabRows | undefined
     // Window creates retain the window's own placement decision.
-    if (!(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)) {
+    if (
+      (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
+      !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
+    ) {
       const saving = this.saveWindowlessAgentSessionTab(input.workspaceId, {
         ...input,
         eligible,
         ...(tabId ? { tabId } : {})
       })
-      input.workspaceAuthority?.saving(saving)
+      input.workspaceAuthority?.saving(saving.then(() => undefined))
+      // Captured placement waits for its owner; ordinary opens retain their queued-save lifetime.
+      const attempted = input.placement ? await saving : false
+      if (attempted) {
+        savedOrder = this.savedStructuredSessionTabOrder(input.workspaceId)
+        if (
+          !savedOrder?.tabs.some(
+            (tab) =>
+              tab.type === 'agent-session' &&
+              tab.sessionId === input.sessionId &&
+              (tab.id === tabId || (!isReopenedChatTabId(tab.id) && !isReopenedChatTabId(tabId)))
+          )
+        ) {
+          throw new Error('Chat tab publication was superseded')
+        }
+      }
     }
-    this.projectStructuredAgentSessionTab({ ...input, tabId, eligible })
+    this.projectStructuredAgentSessionTab({ ...input, tabId, eligible, savedOrder })
     input.workspaceAuthority?.committed()
     if (!eligible()) {
       throw new Error('Chat tab publication was superseded')
@@ -132,7 +167,15 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
 
   /** The caller owns the store write; this publishes only its current raw surface. */
   projectStructuredAgentSessionTab(input: StructuredSessionRawPublicationInput): void {
-    projectStructuredSessionTab(this, input, (snapshot) =>
+    // Publication supplies the owner's result, including an explicit absence; direct restores read it.
+    const savedOrder =
+      'savedOrder' in input
+        ? input.savedOrder
+        : (ORCA_LAYOUT_OWNER_IS_MAIN || !this.getAvailableAuthoritativeWindow()) &&
+            !(ORCA_LAYOUT_OWNER_IS_MAIN && input.placedByWindow)
+          ? this.savedStructuredSessionTabOrder(input.workspaceId)
+          : undefined
+    projectStructuredSessionTab(this, { ...input, savedOrder }, (snapshot) =>
       this.emitMobileSessionTabsSnapshot(snapshot)
     )
   }
@@ -170,9 +213,16 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     repoSelector: string,
     query: string,
     limit = DEFAULT_REPO_SEARCH_REFS_LIMIT,
-    includeQualifiedRefs = true
+    includeQualifiedRefs = true,
+    namespace?: 'remote'
   ): Promise<RuntimeRepoSearchRefs> {
-    return this.repositoryRefQueries.search(repoSelector, query, limit, includeQualifiedRefs)
+    return this.repositoryRefQueries.search(
+      repoSelector,
+      query,
+      limit,
+      includeQualifiedRefs,
+      namespace
+    )
   }
 
   protected async resolveHostedReviewTarget(args: {

@@ -11,30 +11,24 @@ import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import { evaluateTuiIdle, isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
-import { USER_INPUT_HOLD_CAP_MS } from '../../claude-open-dialog-hold'
-import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'
-import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox-owner'
-
-import type { OrcaRuntimeWithResolveWaiter } from '../../orca-runtime-resolve-waiter'
+import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
+import {
+  readTerminalComposerTypedText,
+  type TerminalCursorContext
+} from '../../../../shared/terminal/input/terminal-composer-draft'
+import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
+import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
 
 const DIALOG_HOLD_RECHECK_MS = 2000
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
-  protected abstract resolveWaiter(
-    ...args: Parameters<OrcaRuntimeWithResolveWaiter['resolveWaiter']>
-  ): ReturnType<OrcaRuntimeWithResolveWaiter['resolveWaiter']>
-
-  protected abstract removeWaiter(
-    ...args: Parameters<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-  ): ReturnType<OrcaRuntimeWithResolveWaiter['removeWaiter']>
-
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     for (const waiter of this.terminalWaiters.forPty(ptyId)) {
       if (waiter.condition === 'exit') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
+        this.terminalWaiters.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'exit', pty))
       } else {
         // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
-        this.removeWaiter(waiter)
+        this.terminalWaiters.remove(waiter)
         waiter.reject(buildPtyTerminalWaitExitError(pty))
       }
     }
@@ -51,12 +45,15 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const verdict = this.evaluateTuiIdleForPty(pty)
     for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
-        this.resolveWaiter(
+        this.terminalWaiters.resolve(
           waiter,
           buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, verdict.reason)
         )
       } else if (verdict.kind === 'ready-strong') {
-        this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
+        this.terminalWaiters.resolve(
+          waiter,
+          buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
+        )
       }
     }
   }
@@ -147,9 +144,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
-    const draft = state
-      ? readTerminalComposerTypedText(state.emulator.getCursorLineContext())
-      : null
+    const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
@@ -158,14 +153,22 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     const restoring = !state && this.headlessHydrationState.get(ptyId) === 'pending'
     const unattributedSince = facts.noteUnattributedDraft(
       ptyId,
-      unattributed && (!!draft || restoring)
+      unattributed && (draft || restoring)
     )
     const holdSince = drivingInputAt ?? unattributedSince
     return (
-      (!!draft || (unattributed && restoring)) &&
+      (draft || (unattributed && restoring)) &&
       holdSince !== null &&
       Date.now() - holdSince <= USER_INPUT_HOLD_CAP_MS
     )
+  }
+
+  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
+  private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
+    const agent = this.getPaneTerminalAgent(ptyId)
+    return (agent === 'opencode' || agent === 'opencode2') && context
+      ? openCodeComposerHoldsDraft(context)
+      : !!readTerminalComposerTypedText(context)
   }
 
   protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {

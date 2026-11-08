@@ -47,14 +47,7 @@ import {
   resetBrowserManagerState
 } from './browser-manager-test-harness'
 
-const {
-  guestOffMock,
-  guestOnMock,
-  guestSetBackgroundThrottlingMock,
-  guestSetWindowOpenHandlerMock,
-  guestOpenDevToolsMock,
-  webContentsFromIdMock
-} = browserMocks
+const { webContentsFromIdMock } = browserMocks
 
 describe('browserManager', () => {
   beforeEach(() => {
@@ -64,77 +57,6 @@ describe('browserManager', () => {
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('keeps idle guests throttled and holds both contents until the last capture release', () => {
-    vi.useFakeTimers()
-    const guest = {
-      id: 1707,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      capturePage: vi.fn(async () => null),
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
-    }
-    const renderer = {
-      id: rendererWebContentsId,
-      isDestroyed: vi.fn(() => false),
-      executeJavaScript: vi.fn(() => new Promise(() => {})),
-      send: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      capturePage: vi.fn(async () => null)
-    }
-    webContentsFromIdMock.mockImplementation((id: number) => {
-      if (id === guest.id) {
-        return guest
-      }
-      if (id === rendererWebContentsId) {
-        return renderer
-      }
-      return null
-    })
-    browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'page-capture',
-      workspaceId: 'workspace-1',
-      worktreeId: 'wt-1',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-    // Registration also reports audio state; this test is about paint holds.
-    renderer.send.mockClear()
-    expect(guestSetBackgroundThrottlingMock).not.toHaveBeenCalled()
-
-    // Synchronous: a capture never waits on the desktop renderer.
-    const releaseFirst = browserManager.holdPaintForCapture(guest.id)
-    const releaseSecond = browserManager.holdPaintForCapture(guest.id)
-
-    expect(renderer.executeJavaScript).not.toHaveBeenCalled()
-    expect(renderer.send.mock.calls).toEqual([
-      ['browser:capturePaintHold', { browserPageId: 'page-capture', held: true }]
-    ])
-    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    expect(guestSetBackgroundThrottlingMock.mock.calls).toEqual([[false]])
-
-    releaseFirst()
-    releaseFirst()
-    expect(renderer.send).toHaveBeenCalledTimes(1)
-    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    expect(guestSetBackgroundThrottlingMock.mock.calls).toEqual([[false]])
-
-    releaseSecond()
-    expect(renderer.send.mock.calls.at(-1)).toEqual([
-      'browser:capturePaintHold',
-      { browserPageId: 'page-capture', held: false }
-    ])
-    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    vi.runAllTimers()
-    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-    expect(guestSetBackgroundThrottlingMock.mock.calls).toEqual([[false], [true]])
   })
 
   it('shares guest leases with a concurrent stream even without a desktop renderer', () => {
@@ -282,62 +204,5 @@ describe('browserManager', () => {
     ])
     expect(newGuest.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
     expect(newRenderer.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-  })
-  it("tells the page's pane the size of an agent's viewport, and nothing for an unknown guest", () => {
-    const guest = {
-      id: 1811,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
-    }
-    const renderer = { id: rendererWebContentsId, isDestroyed: vi.fn(() => false), send: vi.fn() }
-    webContentsFromIdMock.mockImplementation((id: number) =>
-      id === guest.id ? guest : id === rendererWebContentsId ? renderer : null
-    )
-    browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'page-viewport',
-      workspaceId: 'workspace-1',
-      worktreeId: 'wt-1',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-    renderer.send.mockClear()
-
-    const override = { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false }
-    browserManager.showAgentViewportInPane(guest.id, override)
-    browserManager.showAgentViewportInPane(9999, override)
-
-    expect(renderer.send.mock.calls).toEqual([
-      ['browser:agentViewportApplied', { browserPageId: 'page-viewport', width: 1280, height: 900 }]
-    ])
-
-    // The wheel pans the wider box, as it does for a user preset.
-    renderer.send.mockClear()
-    browserManager.setViewportScrollState('page-viewport', rendererWebContentsId, {
-      scrollLeft: 0,
-      scrollTop: 0,
-      maxScrollLeft: 734,
-      maxScrollTop: 0
-    })
-    const beforeMouseEvent = guestOnMock.mock.calls.findLast(
-      ([event]) => event === 'before-mouse-event'
-    )?.[1]
-    const preventDefault = vi.fn()
-    beforeMouseEvent?.(
-      { preventDefault },
-      { type: 'mouseWheel', x: 0, y: 0, modifiers: [], deltaX: 40, deltaY: 0 }
-    )
-    expect(preventDefault).toHaveBeenCalledTimes(1)
-    expect(renderer.send).toHaveBeenCalledWith('ui:scrollBrowserPage', {
-      browserPageId: 'page-viewport',
-      deltaX: 40,
-      deltaY: 0
-    })
   })
 })

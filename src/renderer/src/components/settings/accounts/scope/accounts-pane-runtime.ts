@@ -7,31 +7,33 @@ import type {
 import { resolveLocalAccountRuntimeTarget } from '../../../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../../../lib/renderer-app-platform'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { LocalAccountRuntime } from '../accounts-pane-types'
 
 export const EMPTY_WSL_DISTROS: string[] = []
 
-export function getHostRuntimeLabel(): string {
+export function getHostRuntimeLabel(t: Translate = translate): string {
   return navigator.userAgent.includes('Windows')
     ? 'Windows'
-    : translate('auto.components.settings.AccountsPane.9baf45d071', 'This device')
+    : t('auto.components.settings.AccountsPane.9baf45d071', 'This device')
 }
 
 // System default has no saved identity; show live host login or custom-provider detail, falling back when signed out.
 export function getCodexSystemDefaultSubtitle(
   identity: CodexSystemDefaultIdentity | undefined,
-  runtimeSentenceLabel: string
+  runtimeSentenceLabel: string,
+  t: Translate = translate
 ): string {
   if (identity?.authKind === 'oauth' && identity.email) {
     return identity.email
   }
   if (identity?.authKind === 'api-key') {
-    return translate(
+    return t(
       'auto.components.settings.AccountsPane.codexSystemDefaultCustomProvider',
       'Custom provider — no usage tracked.'
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.AccountsPane.fcc4093fc1',
     'Use your current {{value0}} Codex login.',
     { value0: runtimeSentenceLabel }
@@ -65,7 +67,8 @@ export function getSelectedAccountRuntime(
   wslDistros: string[],
   wslCapabilitiesLoading: boolean,
   /** A WSL host's distro: its accounts are this desktop's for that distro, with no location to pick. */
-  wslHostDistro: string | null = null
+  wslHostDistro: string | null = null,
+  t: Translate = translate
 ): LocalAccountRuntime {
   // Display the concrete target behind persisted auto policy.
   const resolvedRuntime = wslHostDistro
@@ -75,7 +78,7 @@ export function getSelectedAccountRuntime(
     if (!wslHostDistro && !wslAvailable && !wslCapabilitiesLoading) {
       return {
         runtime: 'wsl',
-        label: translate('auto.components.settings.AccountsPane.8619f9afa9', 'WSL')
+        label: t('auto.components.settings.AccountsPane.8619f9afa9', 'WSL')
       }
     }
     const configuredDistro = resolvedRuntime.wslDistro?.trim() || null
@@ -89,10 +92,10 @@ export function getSelectedAccountRuntime(
       wslDistro: selectedDistro,
       label: selectedDistro
         ? `WSL ${selectedDistro}`
-        : translate('auto.components.settings.AccountsPane.2358ac71d2', 'WSL default')
+        : t('auto.components.settings.AccountsPane.2358ac71d2', 'WSL default')
     }
   }
-  return { runtime: 'host', label: getHostRuntimeLabel() }
+  return { runtime: 'host', label: getHostRuntimeLabel(t) }
 }
 
 // Standalone runtime labels need sentence casing when interpolated into prose.
@@ -102,8 +105,11 @@ export function getRuntimeSentenceLabel(runtime: LocalAccountRuntime): string {
     : runtime.label
 }
 
-export function formatAccountTimestamp(timestamp: number): string {
-  return new Date(timestamp).toLocaleString(getIntlLocale(), {
+export function formatAccountTimestamp(
+  timestamp: number,
+  intlLocale: string = getIntlLocale()
+): string {
+  return new Date(timestamp).toLocaleString(intlLocale, {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',

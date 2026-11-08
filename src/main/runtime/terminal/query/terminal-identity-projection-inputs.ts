@@ -1,5 +1,5 @@
 import type { DispatchCreator } from '../../orchestration/db/dispatch-depth'
-import type { AgentSessionRecordReader } from '../../orchestration/structured-session-lineage'
+import type { AgentSessionRecordReader } from '../../orchestration/addressing/session-lineage/structured-session-lineage'
 import { captureAgentSessionRecordInputs } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 
 /** Raw projection captures share the owning identity generation, including successful nulls. */

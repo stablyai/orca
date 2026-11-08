@@ -1,6 +1,6 @@
 import { app, shell } from 'electron'
 
-import { DOC_PREVIEW_SCHEME } from '../../../../shared/doc-preview-scheme'
+import { DOC_PREVIEW_SCHEME } from '../../../../shared/document-preview/doc-preview-scheme'
 import { BROWSER_EXTENSION_API_SCHEME } from '../../../../shared/browser/extensions/browser-extension-worker-api'
 import {
   browserPagePromptOrigin,

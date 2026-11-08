@@ -3,7 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 
-vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
+vi.mock('@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh', () => ({
   refreshTerminalImeInputContext: vi.fn()
 }))
 

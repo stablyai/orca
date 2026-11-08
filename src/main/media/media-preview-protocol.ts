@@ -1,12 +1,12 @@
 import { protocol } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import { MEDIA_PREVIEW_SCHEME } from '../../shared/media-file-extensions'
+import { MEDIA_PREVIEW_SCHEME } from '../../shared/file-preview/media-preview-scheme'
 import {
   filePreviewForPath,
   isDocumentPreview,
   streamsPreviewByRange,
   type FilePreview
-} from '../../shared/file-preview-kind'
+} from '../../shared/file-preview/file-preview-kind'
 import {
   assertLocalPreviewRasterHeader,
   assertPreviewableRasterHeader,
@@ -18,7 +18,8 @@ import {
   prefixFitsDocumentPreview
 } from './preview-document-signature'
 import { openLocalPreviewGrantFile } from './local-preview-grant-file'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
+import { remoteFilePath } from '../../shared/file-access/remote-file-locator'
 import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
 import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
@@ -36,7 +37,8 @@ import { readRegisteredPairingRevision } from '../ipc/runtime-environments/runti
 import {
   grants,
   mintPreviewUrl,
-  remoteSnapshot,
+  remotePreviewReader,
+  remotePreviewVersion,
   revokeGrant,
   type LocalPreviewTarget,
   type PreviewGrant,
@@ -98,13 +100,13 @@ export async function readLocalFilePreview(
   return mintPreviewUrl(event.sender, target, store, preview, undefined, size)
 }
 
-/** A paired runtime's file as an `orca-media://` URL, streamed by range over files.stat/readChunk. */
+/** A paired runtime's file as an `orca-media://` URL, streamed by range over its stat/readChunk methods. */
 export async function grantRemoteFilePreview(
   event: { sender: PreviewSender },
   address: RemoteFilePreviewAddress,
   store: Store
 ): Promise<PreviewUrl | null> {
-  const preview = filePreviewForPath(address.relativePath)
+  const preview = filePreviewForPath(remoteFilePath(address))
   if (!preview) {
     return null
   }
@@ -158,8 +160,7 @@ export async function grantRemoteFilePreview(
 async function handleRemotePreviewRequest(
   request: Request,
   token: string,
-  grant: PreviewGrant,
-  remote: RemoteFilePreviewAddress
+  grant: PreviewGrant
 ): Promise<Response> {
   // Electron's request.signal may never abort; close() also cancels the in-flight chunk.
   const controller = new AbortController()
@@ -171,12 +172,17 @@ async function handleRemotePreviewRequest(
   }
   try {
     // Re-stat (at most once a second) like a local file re-opens per request, so a growing recording keeps playing.
-    const { size } = await remoteSnapshot(grant, remote)
+    const version = await remotePreviewVersion(grant)
+    const { size } = version.snapshot
+    const read = remotePreviewReader(grant, version)
     // The file can change after mint; check the bytes this response serves.
-    await assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal)
+    await read((remote) =>
+      assertRemotePreviewRasterHeader(grant.preview, remote, size, controller.signal)
+    )
     return await createMediaRangeResponse(request, grant.mimeType, {
       size,
-      read: (offset, length) => readRemotePreviewChunk(remote, offset, length, controller.signal),
+      read: (offset, length) =>
+        read((remote) => readRemotePreviewChunk(remote, offset, length, controller.signal)),
       close: async () => {
         request.signal.removeEventListener('abort', forwardAbort)
         controller.abort()
@@ -205,7 +211,7 @@ export async function handleMediaPreviewRequest(request: Request): Promise<Respo
   }
   const { target, store, mimeType } = grant
   if ('remote' in target) {
-    return handleRemotePreviewRequest(request, token, grant, target.remote)
+    return handleRemotePreviewRequest(request, token, grant)
   }
   try {
     // This process cannot serve SSH filesystems.

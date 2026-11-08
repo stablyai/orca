@@ -1,6 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { isStructuredWorkerHandle } from '../../../../../../shared/structured-worker-handle'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { completeWorkerTerminalRelease } from './worker-release-completion'
 
 /** Release the failed attempt's terminal on retry-of: archive output, preserve user takeover and retain interrupted cleanup for recovery.
@@ -20,8 +19,7 @@ export function releaseRetriedWorkerTerminal(
     if (
       db.getWorkerDispatch(retryOf)?.state !== 'failed' ||
       owned?.ownership_state !== 'owned' ||
-      owned.release_state !== 'not_requested' ||
-      isStructuredWorkerHandle(owned.terminal_handle)
+      owned.release_state !== 'not_requested'
     ) {
       return
     }

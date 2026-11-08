@@ -15,9 +15,12 @@ import {
 
 const TITLE_PARSE_CONCURRENCY = 4
 
+/** A title the scanner already saw, with its transcript when the title's kind is not known yet. */
+export type CachedAiVaultSessionTitle = AiVaultSessionTitle & { transcriptPath?: string }
+
 export type AiVaultSessionTitleCache = {
-  get(request: AiVaultSessionTitleRequest): AiVaultSessionTitle | null
-  set(title: AiVaultSessionTitle): void
+  get(request: AiVaultSessionTitleRequest): CachedAiVaultSessionTitle | null
+  set(title: CachedAiVaultSessionTitle): void
 }
 
 async function readOneTitle(
@@ -30,7 +33,17 @@ async function readOneTitle(
   }
   const transcriptPath = request.transcriptPath?.trim()
   if (!transcriptPath) {
-    return cache?.get(request) ?? null
+    const cached = cache?.get(request)
+    if (!cached) {
+      return null
+    }
+    const { transcriptPath: cachedPath, ...title } = cached
+    // Why: History caches titles from parse rows saved before titles carried a kind; reading that
+    // transcript here classifies it once (the result replaces the cached entry, so this cannot repeat).
+    // A failed reread (a stalled WSL distro) still returns the cached title, unclassified.
+    return !title.kind && cachedPath
+      ? ((await readOneTitle({ ...request, transcriptPath: cachedPath }, signal, cache)) ?? title)
+      : title
   }
   try {
     const home = request.agent === 'codex' ? codexHomeFromSessionFilePath(transcriptPath) : null
@@ -40,7 +53,12 @@ async function readOneTitle(
         return null
       }
       if (title) {
-        const resolved = { agent: request.agent, sessionId: request.sessionId, title }
+        const resolved: AiVaultSessionTitle = {
+          agent: request.agent,
+          sessionId: request.sessionId,
+          title,
+          kind: 'named'
+        }
         cache?.set(resolved)
         return resolved
       }
@@ -50,22 +68,41 @@ async function readOneTitle(
       return null
     }
     // Raw lstat matches scanner keys only for providers without content dependencies: Claude and Codex.
-    const session = await parseAgentSessionFileCached(
-      {
-        agent: request.agent,
-        file: {
-          path: transcriptPath,
-          mtimeMs: stats.mtimeMs,
-          modifiedAt: stats.mtime.toISOString(),
-          sizeBytes: stats.size
-        },
-        codexHome: null
+    const candidate = {
+      agent: request.agent,
+      file: {
+        path: transcriptPath,
+        mtimeMs: stats.mtimeMs,
+        modifiedAt: stats.mtime.toISOString(),
+        sizeBytes: stats.size
       },
+      codexHome: null
+    }
+    let session = await parseAgentSessionFileCached(
+      candidate,
       process.platform,
       undefined,
       undefined,
       signal
     )
+    // Why: entries cached before titles carried their kind would rank every name as a stand-in; reread
+    // such a transcript once so the cache learns the kind, instead of invalidating every cached session.
+    if (
+      session?.agent === request.agent &&
+      session.sessionId === request.sessionId &&
+      !session.titleKind &&
+      !signal?.aborted
+    ) {
+      // A failed reread keeps the first result, unclassified.
+      session =
+        (await parseAgentSessionFileCached(
+          candidate,
+          process.platform,
+          undefined,
+          'whole',
+          signal
+        ).catch(() => null)) ?? session
+    }
     if (
       signal?.aborted ||
       session?.agent !== request.agent ||
@@ -74,12 +111,14 @@ async function readOneTitle(
     ) {
       return null
     }
-    const title = {
+    const title: AiVaultSessionTitle = {
       agent: request.agent,
       sessionId: request.sessionId,
-      title: session.title.trim()
+      title: session.title.trim(),
+      ...(session.titleKind ? { kind: session.titleKind } : {})
     }
-    cache?.set(title)
+    // An unclassified title keeps its transcript so a later session-id-only request can still classify it.
+    cache?.set(title.kind ? title : { ...title, transcriptPath })
     return title
   } catch {
     return null

@@ -4,11 +4,13 @@ import {
   GRAB_SAFE_ATTRIBUTE_NAMES,
   GRAB_SECRET_PATTERNS
 } from '../../../shared/browser-grab-types'
+import { isSafeDisplayCharacter } from '../../../shared/display-text-safety'
+import { resolveDocPreviewUrlFilePath } from '../document-preview/doc-preview-grant-registry'
 
 const SAFE_GRAB_URL_PROTOCOLS = new Set(['http:', 'https:', 'file:'])
 
 /** Revalidate untrusted guest payloads before forwarding them to renderer chrome. */
-export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
+export function clampGrabPayload(raw: unknown, documentUrl = ''): BrowserGrabPayload | null {
   if (!raw || typeof raw !== 'object') {
     return null
   }
@@ -128,12 +130,19 @@ export function clampGrabPayload(raw: unknown): BrowserGrabPayload | null {
     }
   }
 
+  // Preview URLs carry a grant and are blanked; name the previewed file if it is display-safe.
+  const previewFilePath = resolveDocPreviewUrlFilePath(documentUrl)
+  const pageUrl =
+    previewFilePath && [...previewFilePath].every(isSafeDisplayCharacter)
+      ? previewFilePath
+      : sanitizeUrl(page.sanitizedUrl)
+
   const accessibility = target.accessibility as Record<string, unknown> | null | undefined
   const computedStyles = target.computedStyles as Record<string, unknown> | null | undefined
 
   return {
     page: {
-      sanitizedUrl: sanitizeUrl(page.sanitizedUrl),
+      sanitizedUrl: pageUrl,
       title: safeStr(page.title, 500),
       viewportWidth: safeNum(page.viewportWidth),
       viewportHeight: safeNum(page.viewportHeight),

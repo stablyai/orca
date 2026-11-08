@@ -1,11 +1,11 @@
 import { useAppStore } from '@/store'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
-import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tab-rpc-timeout'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { WEB_SESSION_TAB_RPC_TIMEOUT_MS } from '@/runtime/web-session-tabs-sync/actions/web-session-tab-rpc-timeout'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   isDisconnectedRuntimeHostState,
   runtimeHostConnectionStateForEntry
-} from '@/runtime/runtime-host-connection-state'
+} from '@/runtime/hosts/connections/runtime-host-connection-state'
 
 /** Published rows can precede PTY handles; missing handles remain unverifiable, never exited (#19735, ssh-execution-boundary.md). Replay on handle/retraction/deadline without authorizing local replacement. Reconnects/outages invalidate the budget; sustained churn may legitimately keep recovery parked. */
 export const HOST_MIRROR_HANDLE_GAP_DEADLINE_MS = WEB_SESSION_TAB_RPC_TIMEOUT_MS

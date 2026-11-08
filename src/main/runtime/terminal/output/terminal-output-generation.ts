@@ -4,9 +4,13 @@ import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runt
 import { findLastCompleteOscTitleRange } from './terminal-osc-title-range'
 import { extractLastOscTitle } from '../../../../shared/agent-status/title/osc-title-extraction'
 import type { RuntimeTerminalDataMeta } from './runtime-terminal-stream-consumers'
+import { TerminalPublishedOutputRings } from './terminal-published-output-ring'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
+import { readLaunchCommandOutput } from '../wait/launched-agent-exit-watch'
 
 export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector {
   private readonly ptyLifecycleCancellation = new Map<string, AbortController>()
+  private readonly publishedOutputRings = new TerminalPublishedOutputRings()
 
   protected getPtyLifecycleSignal(ptyId: string): AbortSignal {
     let controller = this.ptyLifecycleCancellation.get(ptyId)
@@ -118,8 +122,14 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     // Why: a provider response belongs to the process generation that issued
     // it; a respawn must neither reuse its frame nor join its in-flight call.
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.forgetProviderVisibleState(ptyId)
+    // A phone that saw the previous process gets a fresh snapshot, never a resume across the respawn.
+    this.resetPublishedTerminalOutputCoverage(ptyId)
+  }
+
+  /** Ends resume onto output published so far: the phone's next subscribe gets a snapshot. */
+  protected resetPublishedTerminalOutputCoverage(ptyId: string): void {
+    this.publishedOutputRings.get(ptyId)?.resetCoverage(this.getPtyOutputSequence(ptyId))
   }
 
   synchronizePtyOutputSequenceFromProvider(
@@ -213,7 +223,34 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     return this.terminalStreamConsumers.subscribe(ptyId, listener)
   }
 
+  /** Keeps this PTY's published output from now on, so a phone stream can later resume from it. */
+  retainPublishedTerminalOutput(ptyId: string): ReturnType<TerminalPublishedOutputRings['retain']> {
+    return this.publishedOutputRings.retain(ptyId, {
+      seq: this.getPtyOutputSequence(ptyId),
+      size: () => this.getTerminalSize(ptyId),
+      subscribe: (listener) => this.subscribeToTerminalData(ptyId, listener)
+    })
+  }
+
   readRecentTerminalOutput(ptyId: string): string | undefined {
     return this.recentPtyOutputById.get(ptyId)?.read()
+  }
+
+  /** The exit frees the buffer, so keep what the PTY's last command printed for its start failure. */
+  protected releaseRecentPtyOutput(ptyId: string, pty: RuntimePtyWorktreeRecord | undefined): void {
+    const recent = this.recentPtyOutputById.get(ptyId)
+    // A repeated exit report finds the buffer already freed and keeps what the first one saved.
+    if (pty && recent) {
+      pty.lastExitOutput = {
+        incarnationId: pty.incarnationId,
+        text: readLaunchCommandOutput(recent.read(), { ptyExited: true })
+      }
+    }
+    this.recentPtyOutputById.delete(ptyId)
+  }
+
+  readExitedLaunchOutput(ptyId: string, incarnationId: string): string | undefined {
+    const saved = this.ptysById.get(ptyId)?.lastExitOutput
+    return saved?.incarnationId === incarnationId ? saved.text : undefined
   }
 }

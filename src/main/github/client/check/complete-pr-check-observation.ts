@@ -8,17 +8,18 @@ export async function readCompletePRCheckObservation(
   repository: GitHubApiRepository,
   number: number,
   headSha: string | undefined,
-  options: GhExecOptions
+  options: GhExecOptions,
+  pageLimit?: number
 ): Promise<unknown[] | undefined> {
   if (!headSha) {
     return undefined
   }
   try {
     await assertRateLimitBudget('graphql', repository, options)
-    return await readGraphQLPRCheckRollup(repository, number, headSha, options)
+    return await readGraphQLPRCheckRollup(repository, number, headSha, options, pageLimit)
   } catch {
     try {
-      return await readRestPRCheckRollup(repository, headSha, options)
+      return await readRestPRCheckRollup(repository, headSha, options, pageLimit)
     } catch {
       return undefined
     }

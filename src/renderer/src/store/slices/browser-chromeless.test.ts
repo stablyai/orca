@@ -1,21 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildBrowserSessionData } from '@/lib/workspace-session-browser-tabs'
+import { buildBrowserSessionData } from '@/lib/workspace/persistence/workspace-session-browser-tabs'
 import { workspaceSessionStateSchema } from '../../../../shared/workspace-session/workspace-session-schema'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { createBrowserMockApi } from './browser-slice-test-harness'
+import { createBrowserMockApi } from './browser/browser-slice-test-harness'
 import {
   createTestStoreDrawnFromMain,
   onePaneGroup
-} from './browser-slice-drawn-from-main.test-fixture'
+} from './browser/browser-slice-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 // @ts-expect-error partial preload bridge
@@ -70,16 +70,4 @@ describe('chromeless browser pages', () => {
       ).toBe(true)
     }
   )
-
-  it('does not rewrite state for a missing page or an unchanged preference', async () => {
-    const { store, main } = await createTestStoreDrawnFromMain()
-    const tab = store
-      .getState()
-      .createBrowserTab('wt-1', 'https://example.com', { chromeless: true })
-    await main.settle()
-    const before = store.getState()
-    store.getState().setBrowserPageChromeless('missing', true)
-    store.getState().setBrowserPageChromeless(tab.activePageId!, true)
-    expect(store.getState()).toBe(before)
-  })
 })

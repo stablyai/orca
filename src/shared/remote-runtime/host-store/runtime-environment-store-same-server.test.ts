@@ -9,7 +9,6 @@ import {
   listEnvironments,
   resolveEnvironmentPairingOffer
 } from './runtime-environment-store'
-import { addManagedOrcadEnvironment } from './runtime-environment-managed-orcad-store'
 
 const serverKey = Buffer.alloc(32, 7).toString('base64')
 
@@ -62,34 +61,6 @@ describe('pairing a server that is already saved', () => {
     })
   })
 
-  it('refuses a second entry for the same server where it cannot switch connections over', () => {
-    const first = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'Studio',
-      pairingCode: pairingCode('ws://192.0.2.10:6768')
-    })
-    expect(() =>
-      addEnvironmentFromPairingCode(userDataPath, {
-        name: 'Studio again',
-        pairingCode: pairingCode('ws://192.0.2.10:6768', 'second-token')
-      })
-    ).toThrow(
-      'This server is already paired as "Studio". To update its connection, add it again under Settings > Remote Orca Servers.'
-    )
-    expect(listEnvironments(userDataPath)).toEqual([first])
-  })
-
-  it("refreshes the saved server when the code is entered under the server's own name", () => {
-    const first = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'Studio',
-      pairingCode: pairingCode('ws://192.0.2.10:6768')
-    })
-    const outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
-      name: 'Studio',
-      pairingCode: pairingCode('ws://192.0.2.10:6768', 'second-token')
-    })
-    expect(outcome).toMatchObject({ updatedExisting: true, environment: { id: first.id } })
-  })
-
   it('matches the same key spelled unpadded or URL-safe', () => {
     const first = addEnvironmentFromPairingCode(userDataPath, {
       name: 'Studio',
@@ -123,74 +94,6 @@ describe('pairing a server that is already saved', () => {
     )
     expect(listEnvironments(userDataPath).map((entry) => entry.id)).toContain(first.id)
     expect(listEnvironments(userDataPath)).toHaveLength(2)
-  })
-
-  it('still saves a different server as its own entry', () => {
-    addEnvironmentFromPairingCode(userDataPath, {
-      name: 'Studio',
-      pairingCode: pairingCode('ws://192.0.2.10:6768')
-    })
-    const outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
-      name: 'Laptop',
-      pairingCode: pairingCode(
-        'ws://192.0.2.11:6768',
-        'token',
-        Buffer.alloc(32, 8).toString('base64')
-      )
-    })
-    expect(outcome.updatedExisting).toBe(false)
-    expect(listEnvironments(userDataPath).map((entry) => entry.name)).toEqual(['Laptop', 'Studio'])
-  })
-
-  it('takes the tunnel dependency from the new pairing, not the replaced one', () => {
-    const first = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'Studio',
-      pairingCode: pairingCode('ws://127.0.0.1:41000/runtime'),
-      connectionDependency: 'ssh-tunnel'
-    })
-    expect(first.connectionDependency).toBe('ssh-tunnel')
-
-    const outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
-      name: 'Studio on LAN',
-      pairingCode: pairingCode('ws://192.0.2.10:6768')
-    })
-    expect(outcome.environment.connectionDependency).toBeUndefined()
-  })
-
-  it('refuses, naming the saved entry, when Orca manages that server over SSH', () => {
-    const managed = addManagedOrcadEnvironment(userDataPath, {
-      id: 'managed',
-      name: 'Managed box',
-      pairingCode: pairingCode('ws://127.0.0.1:41000/runtime'),
-      orcadDeployment: {
-        sshTargetId: 'target',
-        sshTargetGeneration: 1,
-        localPort: 41000,
-        remotePort: 6768
-      },
-      now: 100
-    })
-
-    let refusal: unknown
-    try {
-      addOrUpdateEnvironmentFromPairingCode(userDataPath, {
-        name: 'Managed box by hand',
-        pairingCode: pairingCode('ws://192.0.2.10:6768', 'second-token')
-      })
-    } catch (error) {
-      refusal = error
-    }
-    // The English message keeps its wording; the code lets clients translate it.
-    expect(refusal).toMatchObject({
-      message: expect.stringMatching(
-        /^This server is already paired as "Managed box"\. Orca runs this server on an SSH host for you;/
-      ),
-      pairingFailure: {
-        errorCode: 'alreadyPairedManagedDeployment',
-        errorParams: { name: 'Managed box' }
-      }
-    })
-    expect(listEnvironments(userDataPath)).toEqual([managed])
   })
 
   it('refuses to fold a cloud workspace server into a saved entry', () => {

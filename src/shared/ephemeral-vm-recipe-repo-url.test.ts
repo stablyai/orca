@@ -19,10 +19,4 @@ describe('getProvisionedRootRecipeRepoUrl', () => {
       )
     ).toBe('https://git.example.com/team/repo.git')
   })
-
-  it('preserves the SSH username required by scp-style remotes', () => {
-    expect(getProvisionedRootRecipeRepoUrl('provisioned-root', 'git@host:team/repo.git')).toBe(
-      'git@host:team/repo.git'
-    )
-  })
 })

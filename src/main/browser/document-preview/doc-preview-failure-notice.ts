@@ -1,7 +1,7 @@
 import {
   DOC_PREVIEW_LOAD_FAILURE_CHANNEL,
   type DocPreviewFailure
-} from '../../../shared/doc-preview-scheme'
+} from '../../../shared/document-preview/doc-preview-scheme'
 
 type DocPreviewFailureSink = {
   send: (channel: string, payload: DocPreviewFailure) => void

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../shared/repo-types'
 import { normalizeSparseDirectories } from '../../ipc/sparse-checkout-directories'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 type RuntimeRepositorySparsePresetDependencies = {

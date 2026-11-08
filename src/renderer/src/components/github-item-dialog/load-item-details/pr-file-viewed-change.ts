@@ -5,7 +5,7 @@ import { setPRFileViewedForRepo } from '@/components/github/github-work-item-com
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { translate } from '@/i18n/i18n'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { GitHubItemDialogProjectOrigin } from './github-item-dialog-types'
 import {
   EMPTY_VIEWED_PATHS,

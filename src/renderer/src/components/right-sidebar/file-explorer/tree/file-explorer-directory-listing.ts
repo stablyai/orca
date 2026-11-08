@@ -1,17 +1,17 @@
 import { useAppStore } from '@/store/index'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
-import type { DirEntry } from '../../../../../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../../../../../shared/file-name-sort'
+import type { DirEntry } from '../../../../../../shared/file-listing/directory-entry'
+import { sortDirEntries } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   readRuntimeDirectoryPage,
   runtimeDirectoryPagesSupported
-} from '@/runtime/runtime-directory-page-client'
+} from '@/runtime/files/reads/runtime-directory-page-client'
 import { readUserOpenedDirectory } from '@/lib/user-opened-local-path'
 import {
   FILE_READ_DIR_MAX_PAGE_ENTRIES,
   isDirListingTooLargeForRemoteError,
   type DirEntryCursor
-} from '../../../../../../shared/file-dir-page'
+} from '../../../../../../shared/file-listing/file-dir-page'
 import type {
   DirCache,
   FileExplorerDirMore,

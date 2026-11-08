@@ -1,8 +1,8 @@
 import { MobileQueuedMessageComposerContext } from '../mobile-queued-message-composer-context'
-import { useCallback, useLayoutEffect, useMemo } from 'react'
+import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
-import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { useMobileNativeChatProjection } from './transcript/use-mobile-native-chat-projection'
 import { nativeChatDockedTaskList } from '../../../../src/shared/native-chat/input/native-chat-task-list-state'
 import type { MobileNativeChatImageAttachments } from './composer/use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -21,9 +21,11 @@ import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-cha
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from '../mobile-native-chat-notice-context'
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
+import type { MobileNativeChatHostOutage } from './mobile-native-chat-host-outage'
 import { useMobileNativeChatMarkdownLinks } from './use-mobile-native-chat-markdown-links'
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
-import type { ConnectionState } from '../../transport/types'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {
   controller: MobileNativeChatController
@@ -52,12 +54,36 @@ type Props = {
   keyboardInset: number
   /** The Orca host that runs this chat, named for notices; null when unnamed. */
   hostName: string | null
+  /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
+  onOpenAccounts?: () => void
   /** Offered for tapped links; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
+  /** Opens a host terminal tab in this chat's workspace running `command`. */
+  onRunInTerminal: (command: string) => void
+  hostOutage?: MobileNativeChatHostOutage | null
 }
 
-// Keep the terminal subscription and streaming gate above view toggles; the chat list unmounts below this boundary.
-export function MobileNativeChatOverlay({
+// Hide the last chat behind its terminal instead of unmounting it, so returning keeps its rows and parsed markdown.
+export function MobileNativeChatOverlay(props: Props): React.JSX.Element | null {
+  const shown = props.controller.showNativeChat
+  // While hidden, the live lane is starved to an empty chat; draw the last shown props so the hidden tree does no work.
+  const [lastShown, setLastShown] = useState<Props | null>(null)
+  if (shown && lastShown !== props) {
+    setLastShown(props)
+  }
+  const drawn = shown ? props : lastShown
+  // The same element while hidden lets React skip the hidden tree.
+  const content = useMemo(
+    () => (drawn ? <MobileNativeChatOverlayContent {...drawn} /> : null),
+    [drawn]
+  )
+  if (!content) {
+    return null
+  }
+  return <Activity mode={shown ? 'visible' : 'hidden'}>{content}</Activity>
+}
+
+function MobileNativeChatOverlayContent({
   controller,
   imageSource,
   worktreePath,
@@ -81,17 +107,27 @@ export function MobileNativeChatOverlay({
   getSendCompletionGeneration,
   keyboardInset,
   hostName,
-  onOpenUrlInOrca
-}: Props): React.JSX.Element | null {
+  onOpenUrlInOrca,
+  onRunInTerminal,
+  hostOutage = null,
+  onOpenAccounts
+}: Props): React.JSX.Element {
   const session = controller.nativeChatSession
   const agent = controller.nativeChatAgent ?? ''
   const fullContent = useMobileNativeChatMessageDetail(
     session.messages,
     controller.nativeChatItemSource
   )
-  const folded = useMemo(
-    () => foldMobileNativeChatMessages(fullContent.messages, agent),
-    [fullContent.messages, agent]
+  const folded = useMobileNativeChatProjection(
+    fullContent.messages,
+    agent,
+    [
+      sendSurfaceId,
+      sessionId,
+      controller.nativeChatItemSource?.client,
+      controller.nativeChatItemSource?.sessionId
+    ],
+    controller.nativeChatShowsCiResultLines
   )
   const taskList = useMemo(() => nativeChatDockedTaskList(folded), [folded])
   const streaming = controller.nativeChatStreamingText ?? null
@@ -148,6 +184,9 @@ export function MobileNativeChatOverlay({
     () => ({
       agent,
       structured: structuredComposer ?? null,
+      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
+        (entry) => entry.id === 'interactionMode'
+      ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,
       filePaths: controller.nativeChatFilePaths,
@@ -164,6 +203,7 @@ export function MobileNativeChatOverlay({
     [
       agent,
       structuredComposer,
+      controller.nativeChatSessionOptions,
       controller.nativeChatSkills,
       controller.loadNativeChatSkills,
       controller.nativeChatFilePaths,
@@ -178,9 +218,43 @@ export function MobileNativeChatOverlay({
       onMicPressOut
     ]
   )
-  const noticeNames = useMemo(
-    () => ({ hostName, ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}) }),
-    [hostName, agent]
+  // Why a ref: rows read this through context, and the route's callback changes every render.
+  const runInTerminalRef = useRef(onRunInTerminal)
+  useLayoutEffect(() => {
+    runInTerminalRef.current = onRunInTerminal
+  }, [onRunInTerminal])
+  const runInTerminal = useCallback((command: string) => runInTerminalRef.current(command), [])
+  const t = useMobileTranslation()
+  const continuation = controller.nativeChatInterruptedContinue
+  const noticeView = useMemo(
+    () => ({
+      hostName,
+      ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {}),
+      onRunInTerminal: runInTerminal,
+      usageLimit: controller.nativeChatUsageLimit,
+      ...(onOpenAccounts ? { openAccounts: onOpenAccounts } : {}),
+      ...(continuation
+        ? {
+            continuation: {
+              ...continuation,
+              // A Continue tap is the person's newer action, so it clears the composer's error.
+              continueNow: () => {
+                onClearSendError()
+                continuation.continueNow()
+              }
+            }
+          }
+        : {})
+    }),
+    [
+      hostName,
+      agent,
+      continuation,
+      onClearSendError,
+      runInTerminal,
+      controller.nativeChatUsageLimit,
+      onOpenAccounts
+    ]
   )
   const markdownLinks = useMobileNativeChatMarkdownLinks({
     enabled: controller.showNativeChat,
@@ -190,14 +264,13 @@ export function MobileNativeChatOverlay({
     worktreePath,
     isWorking: controller.nativeChatTurnActive
   })
-  if (!controller.showNativeChat) {
-    return null
-  }
+  const continueFailed = sendErrorMessage === null && continuation?.failed === true
   return (
     <MobileNativeChatRowOverlaysHost
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
       onOpenUrlInOrca={onOpenUrlInOrca}
+      rewind={controller.nativeChatRewind}
     >
       <MobileMarkdownLinksContext.Provider value={markdownLinks}>
         <MobileQueuedMessageComposerContext.Provider value={queuedComposerContext}>
@@ -205,7 +278,7 @@ export function MobileNativeChatOverlay({
             <MobileNativeChatVisualContext.Provider value={visuals}>
               <MobileNativeChatRootItemSourceContext.Provider value={detailSource}>
                 <MobileNativeChatReplyRevealsContext.Provider value={replyReveals}>
-                  <MobileNativeChatNoticeContext.Provider value={noticeNames}>
+                  <MobileNativeChatNoticeContext.Provider value={noticeView}>
                     <MobileNativeChatView
                       messages={session.messages}
                       folded={folded}
@@ -286,7 +359,16 @@ export function MobileNativeChatOverlay({
                       onMicPressIn={onMicPressIn}
                       onMicPressOut={onMicPressOut}
                       inputLockReason={inputLockReason}
-                      sendErrorMessage={sendErrorMessage}
+                      hostOutage={hostOutage}
+                      sendErrorMessage={
+                        continueFailed
+                          ? t(
+                              'chat.interruptedContinue.failed',
+                              "Couldn't continue this chat. Try again, or send a message."
+                            )
+                          : sendErrorMessage
+                      }
+                      onDismissSendError={continueFailed ? continuation?.dismissFailure : undefined}
                       onClearSendError={onClearSendError}
                       filePaths={controller.nativeChatFilePaths}
                       onNeedFiles={controller.loadNativeChatFiles}

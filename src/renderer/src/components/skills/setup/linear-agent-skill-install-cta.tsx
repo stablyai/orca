@@ -23,7 +23,7 @@ import type { LinearAgentSkillPromptSettings } from '../../sidebar/linear-agent-
 import { useIntegrationSubordinateRowClass } from '../../integrations/presentation/integration-card-presentation'
 import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
 import { recheckSurfacesAfterAgentSkillInstall } from '../../../hooks/agent-skill-recheck-surface-sync'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type LinearAgentSkillInstallCtaProps = {
   settings: LinearAgentSkillPromptSettings | null | undefined
@@ -33,6 +33,7 @@ type LinearAgentSkillInstallCtaProps = {
 function BundledLinearAgentSkillInstallCta({
   settings
 }: LinearAgentSkillInstallCtaProps): React.JSX.Element {
+  const t = useTranslate()
   // Match sidebar runtime resolution so both surfaces scan/install on the same host or WSL distro.
   const remote = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const activeRuntime = useActiveProjectSkillRuntime()
@@ -75,35 +76,26 @@ function BundledLinearAgentSkillInstallCta({
     <div className={subordinateRowClass}>
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-xs font-medium text-foreground">
-          {translate(
-            'auto.components.settings.linear.agent.skill.install.cta.skillLabel',
-            'Agent skill:'
-          )}{' '}
+          {t('auto.components.settings.linear.agent.skill.install.cta.skillLabel', 'Agent skill:')}{' '}
           <span className="font-mono text-[11px]">{ORCA_LINEAR_SKILL_NAME}</span>
         </p>
         {unsupported ? (
           <SkillUnsupportedStatusPill reason={unsupported} />
         ) : needsAttention ? (
           <IntegrationStatusPill tone="attention">
-            {translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')}
+            {t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')}
           </IntegrationStatusPill>
         ) : skill.loading ? (
           <IntegrationStatusPill tone="neutral">
-            {translate(
-              'auto.components.settings.linear.agent.skill.install.cta.checking',
-              'Checking...'
-            )}
+            {t('auto.components.settings.linear.agent.skill.install.cta.checking', 'Checking...')}
           </IntegrationStatusPill>
         ) : skill.installed || action.kind === 'none' ? (
           <IntegrationStatusPill tone="connected">
-            {translate(
-              'auto.components.settings.linear.agent.skill.install.cta.installed',
-              'Installed'
-            )}
+            {t('auto.components.settings.linear.agent.skill.install.cta.installed', 'Installed')}
           </IntegrationStatusPill>
         ) : (
           <IntegrationStatusPill tone="attention">
-            {translate(
+            {t(
               'auto.components.settings.linear.agent.skill.install.cta.notInstalled',
               'Not installed'
             )}
@@ -118,7 +110,7 @@ function BundledLinearAgentSkillInstallCta({
           disabled={skill.loading}
         >
           <RefreshCw className={cn('size-3', skill.loading && 'animate-spin')} />
-          {translate('auto.components.settings.linear.agent.skill.install.cta.recheck', 'Re-check')}
+          {t('auto.components.settings.linear.agent.skill.install.cta.recheck', 'Re-check')}
         </Button>
       </div>
       {skill.error ? <p className="text-xs text-destructive">{skill.error}</p> : null}
@@ -126,7 +118,7 @@ function BundledLinearAgentSkillInstallCta({
         <>
           {skill.installed ? null : (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.linear.agent.skill.install.cta.description',
                 'Let agents read and edit Linear tasks. Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
               )}
@@ -149,26 +141,17 @@ function BundledLinearAgentSkillInstallCta({
                 <Download className="size-3" />
               )}
               {installing
-                ? translate(
-                    'auto.components.settings.AgentSkillSetupPanel.installing',
-                    'Installing...'
-                  )
+                ? t('auto.components.settings.AgentSkillSetupPanel.installing', 'Installing...')
                 : replacePaths
-                  ? translate(
+                  ? t(
                       'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
                       "Replace with Orca's copy"
                     )
                   : action.kind === 'run' && action.changes
-                    ? bundledSkillSetupActionLabel(action.changes)
+                    ? bundledSkillSetupActionLabel(action.changes, t)
                     : skill.installed
-                      ? translate(
-                          'auto.components.settings.AgentSkillSetupPanel.updateLabel',
-                          'Update'
-                        )
-                      : translate(
-                          'auto.components.skills.SkillInstallDialog.39acb9e8f4',
-                          'Install skill'
-                        )}
+                      ? t('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
+                      : t('auto.components.skills.SkillInstallDialog.39acb9e8f4', 'Install skill')}
             </Button>
           )}
           <BundledSkillInstallStatus
@@ -183,7 +166,7 @@ function BundledLinearAgentSkillInstallCta({
           />
           {remote || agentRuntime.runtime === 'wsl' ? (
             <p className="text-[11px] text-muted-foreground/70">
-              {getLinearAgentSkillSetupInlineRuntimeCopy(remote, agentRuntime)}
+              {getLinearAgentSkillSetupInlineRuntimeCopy(remote, agentRuntime, t)}
             </p>
           ) : null}
         </>

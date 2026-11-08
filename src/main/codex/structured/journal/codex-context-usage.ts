@@ -1,7 +1,7 @@
 import type { AgentSessionContextUsage } from '../../../../shared/agent-session/agent-session-context-usage'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { writeAgentJournalTurnRow } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'

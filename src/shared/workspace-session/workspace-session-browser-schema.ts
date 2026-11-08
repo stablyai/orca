@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { BrowserWorkspace } from '../browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from './workspace-doc-history'
-import { isDocPreviewUrl } from '../doc-preview-scheme'
+import { isDocPreviewUrl } from '../document-preview/doc-preview-scheme'
 import { salvagingArray } from '../zod-salvage'
 
 const browserLoadErrorSchema = z.object({

@@ -43,7 +43,10 @@ import {
   useMobileBackgroundTaskStops,
   type MobileBackgroundTaskStopping as Stopping
 } from '../../use-mobile-background-task-stops'
-import { mobileAgentChildRowName, mobileAgentChildRowText } from '../../mobile-agent-child-row-text'
+import {
+  mobileAgentChildRowName,
+  mobileAgentChildRowText
+} from '../../../worktree/mobile-agent-child-row-text'
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
 
 type TaskKind = AgentSessionBackgroundTask['kind']

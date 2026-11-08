@@ -1,9 +1,9 @@
 import { ArrowLeft, ArrowRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser-page-records'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import {
   BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE,
   BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS
@@ -45,6 +45,7 @@ export function BrowserNavigationControlRow({
   rowRef?: React.Ref<HTMLDivElement>
   children?: React.ReactNode
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const chromeless = useAppStore((s) =>
     browserPageId ? findPage(s.browserPagesByWorkspace, browserPageId)?.chromeless === true : false
   )
@@ -63,7 +64,7 @@ export function BrowserNavigationControlRow({
         className="h-7 w-7"
         onClick={controls.goBack}
         disabled={!controls.canGoBack}
-        aria-label={translate('browser.navigation.back', 'Back')}
+        aria-label={t('browser.navigation.back', 'Back')}
       >
         <ArrowLeft className="size-4" />
       </Button>
@@ -73,7 +74,7 @@ export function BrowserNavigationControlRow({
         className="h-7 w-7"
         onClick={controls.goForward}
         disabled={!controls.canGoForward}
-        aria-label={translate('browser.navigation.forward', 'Forward')}
+        aria-label={t('browser.navigation.forward', 'Forward')}
       >
         <ArrowRight className="size-4" />
       </Button>
@@ -83,7 +84,7 @@ export function BrowserNavigationControlRow({
           variant="ghost"
           className="h-7 w-7"
           onClick={controls.reload}
-          aria-label={reloadLabel ?? translate('browser.navigation.reload', 'Reload')}
+          aria-label={reloadLabel ?? t('browser.navigation.reload', 'Reload')}
         >
           {reloadShowsStop ? <X className="size-4" /> : <RefreshCw className="size-4" />}
         </Button>

@@ -12,7 +12,7 @@ import {
 } from '../../../../shared/dashboard-snapshot'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 
 /** Routing payload for focusing an agent's pane in the main window. */
@@ -41,6 +41,7 @@ function AgentTerminalFrame({
   onReveal,
   onBrowserForeground
 }: AgentTerminalFrameProps): React.JSX.Element {
+  const t = useTranslate()
   const reveal = (): void => {
     onReveal({
       repoId: card.repoId,
@@ -71,7 +72,7 @@ function AgentTerminalFrame({
           onClick={() => onOpenChange(false)}
         >
           <XIcon className="size-4" />
-          <span className="sr-only">{translate('dashboardPopout.terminal.close', 'Close')}</span>
+          <span className="sr-only">{t('dashboardPopout.terminal.close', 'Close')}</span>
         </Button>
       </div>
       {card.ptyId ? (
@@ -101,13 +102,13 @@ function AgentTerminalFrame({
         />
       ) : (
         <div className="min-h-0 flex-1 px-2.5 pb-2 text-[11px] text-muted-foreground">
-          {terminalPreviewUnavailableMessage({ hostKind: card.hostKind })}
+          {terminalPreviewUnavailableMessage({ hostKind: card.hostKind }, t)}
         </div>
       )}
       <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
         <Button type="button" variant="outline" size="xs" className="ml-auto" onClick={reveal}>
           <SquareArrowOutUpRight className="size-3" />
-          {translate('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
+          {t('dashboardPopout.terminal.focusWorktree', 'Open worktree')}
         </Button>
       </div>
     </>

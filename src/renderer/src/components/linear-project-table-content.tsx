@@ -4,7 +4,7 @@ import { ArrowRight, ExternalLink } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
 import {
@@ -48,7 +48,8 @@ function LinearProjectStatusBadge({
 }: {
   project: LinearProjectPresentation
 }): React.JSX.Element {
-  const label = linearProjectUnknownText(project.status) ?? linearProjectBacklogLabel()
+  const t = useTranslate()
+  const label = linearProjectUnknownText(project.status) ?? linearProjectBacklogLabel(t)
   return (
     <Badge variant="outline" className="max-w-full truncate text-[11px] font-medium">
       {label}
@@ -79,29 +80,27 @@ function LinearProjectTableSkeleton(): React.JSX.Element {
 }
 
 function LinearProjectTableEmpty({ hasError }: { hasError?: boolean }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="px-4 py-10 text-center">
       <p className="text-sm font-medium text-foreground">
         {hasError
-          ? translate(
+          ? t(
               'auto.components.linear.project.view.surfaces.c9b6e9f90d',
               'Unable to load Linear projects'
             )
-          : translate(
+          : t(
               'auto.components.linear.project.view.surfaces.a2f31c4cd6',
               'No Linear projects found'
             )}
       </p>
       <p className="mt-2 text-sm text-muted-foreground">
         {hasError
-          ? translate(
+          ? t(
               'auto.components.linear.project.view.surfaces.f4c79cff5f',
               'Review the workspace error below, then refresh.'
             )
-          : translate(
-              'auto.components.linear.project.view.surfaces.30402d2c6e',
-              'Try search or refresh.'
-            )}
+          : t('auto.components.linear.project.view.surfaces.30402d2c6e', 'Try search or refresh.')}
       </p>
     </div>
   )
@@ -117,6 +116,8 @@ export function LinearProjectTableContent({
   onOpenProject,
   onUseProjectIssues
 }: LinearProjectTableContentProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   if (loading && projects.length === 0) {
     return <LinearProjectTableSkeleton />
   }
@@ -175,17 +176,17 @@ export function LinearProjectTableContent({
             </div>
             <span className="truncate text-[12px] text-muted-foreground">
               {linearProjectUnknownText(presentation.health) ??
-                translate('auto.components.linear.project.view.surfaces.8bbecb2510', 'None')}
+                t('auto.components.linear.project.view.surfaces.8bbecb2510', 'None')}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
-              {linearProjectPriorityLabel(presentation.priority, presentation.priorityLabel)}
+              {linearProjectPriorityLabel(presentation.priority, presentation.priorityLabel, t)}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
               {linearProjectUnknownText(presentation.lead) ??
-                translate('auto.components.linear.project.view.surfaces.df4bd63c1d', 'Unassigned')}
+                t('auto.components.linear.project.view.surfaces.df4bd63c1d', 'Unassigned')}
             </span>
             <span className="truncate text-[12px] text-muted-foreground">
-              {linearProjectDateLabel(project.targetDate)}
+              {linearProjectDateLabel(project.targetDate, t, intlLocale)}
             </span>
             <span className="text-[12px] text-muted-foreground">
               {typeof project.issueCount === 'number'
@@ -207,7 +208,7 @@ export function LinearProjectTableContent({
                         event.stopPropagation()
                         onUseProjectIssues(project)
                       }}
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.linear.project.view.surfaces.7616c986c6',
                         'Open {{value0}} issues',
                         { value0: project.name }
@@ -217,7 +218,7 @@ export function LinearProjectTableContent({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    {translate('auto.components.linear.project.view.surfaces.ee3d2caabd', 'Issues')}
+                    {t('auto.components.linear.project.view.surfaces.ee3d2caabd', 'Issues')}
                   </TooltipContent>
                 </Tooltip>
               ) : null}
@@ -230,7 +231,7 @@ export function LinearProjectTableContent({
                       event.stopPropagation()
                       onOpenProject(project)
                     }}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.linear.project.view.surfaces.openInLinear',
                       'Open {{value0}} in Linear',
                       { value0: project.name }
@@ -240,10 +241,7 @@ export function LinearProjectTableContent({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" sideOffset={6}>
-                  {translate(
-                    'auto.components.linear.project.view.surfaces.aac9a4afc6',
-                    'Open in Linear'
-                  )}
+                  {t('auto.components.linear.project.view.surfaces.aac9a4afc6', 'Open in Linear')}
                 </TooltipContent>
               </Tooltip>
             </div>

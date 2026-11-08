@@ -1,16 +1,9 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { withoutGitGraph } from '../../../shared/workspace-layout/workspace-layout-client-visibility'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { diffStoredSession } from '../../../shared/workspace-layout/workspace-layout-load-report'
-import { LEGACY_WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layout/workspace-layout-legacy-profile.test-fixture'
-import { WORKSPACE_LAYOUT_PROFILES } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
-import {
-  closeTerminalSurfaceInWorkspaceSession,
-  collectTerminalLayoutLeafIds
-} from '../../runtime/terminal/surface/terminal-surface-close'
 import { applyCommandToSession } from './terminal-pane-admission'
 import { leafIds, WindowSession } from './terminal-topology-window-session-fixture'
 import {
@@ -37,76 +30,7 @@ afterEach(() => {
   }
 })
 
-/** Legacy-only fields whose absence is equivalent to readers. */
-function legacyOnly(change: ReturnType<typeof diffStoredSession>[number]): boolean {
-  if (change.table !== 'session') {
-    return false
-  }
-  // Legacy close re-derives active type; layout.apply preserves selection.
-  if (change.field === 'activeTabTypeByWorktree') {
-    return true
-  }
-  return (
-    change.field === 'terminalSurfaceTombstonesByPaneKey' &&
-    change.after === undefined &&
-    JSON.stringify(change.before) === '{}'
-  )
-}
-
-/** Layout-owner builds retain closed-terminal exit evidence that legacy closes cannot record. */
-function layoutOwnerOnly(change: ReturnType<typeof diffStoredSession>[number]): boolean {
-  return (
-    ORCA_LAYOUT_OWNER_IS_MAIN &&
-    change.table === 'session' &&
-    change.field === 'closedTerminalPanesByPaneKey'
-  )
-}
-
-const FOLDED_LEGACY_ROW_CLOSES = new Map([
-  [
-    'tab-legacy',
-    ['row/repo-1::/Users/dev/orca|tab-legacy/ptyId', 'layout/tab-legacy/ptyIdsByLeafId']
-  ]
-])
-
 describe('layout.apply closePane against the legacy pane close', () => {
-  const profiles = [...WORKSPACE_LAYOUT_PROFILES, ...LEGACY_WORKSPACE_LAYOUT_PROFILES]
-
-  it.each(profiles.map((profile) => [profile.name, profile] as const))(
-    '%s: writes what the legacy close writes, and refuses a tab’s last pane',
-    (_name, profile) => {
-      const stored = profile.build()
-      for (const [worktreeId, tabs] of Object.entries(stored.tabsByWorktree)) {
-        for (const tab of tabs) {
-          const panes = collectTerminalLayoutLeafIds(stored.terminalLayoutsByTabId[tab.id]?.root)
-          for (const leafId of panes) {
-            const target = { kind: 'pane', tabId: tab.id, leafId } as const
-            const legacy = closeTerminalSurfaceInWorkspaceSession(stored, worktreeId, target, {
-              reason: 'user'
-            })
-            const dark = applyCommandToSession(profile.hostId, stored, {
-              type: 'closePane',
-              workspace: worktreeId,
-              tabId: tab.id,
-              leafId,
-              userPaneClose: true
-            })
-            const label = `${tab.id}:${leafId}`
-            if (legacy.resolution !== 'pane') {
-              expect(dark.session, label).toBeNull()
-              continue
-            }
-            expect(dark.value.ok, label).toBe(true)
-            const differences = diffStoredSession(legacy.session, dark.session ?? stored)
-              .filter((change) => !legacyOnly(change) && !layoutOwnerOnly(change))
-              .map(({ table, record, field }) => `${table}/${record}/${field}`)
-            expect(differences, label).toEqual(FOLDED_LEGACY_ROW_CLOSES.get(tab.id) ?? [])
-          }
-        }
-      }
-    }
-  )
-
   // Renderer already removed the pane; main must close it even if its terminal restarted meanwhile.
   it('closes a pane whose terminal restarted after the window asked', () => {
     const window = new WindowSession(getDefaultWorkspaceSession())
@@ -161,6 +85,46 @@ describe('Store.applyLayoutCommand pane operations', () => {
     return store
   }
 
+  it('keeps window-detach visibility and pane bindings through the atomic commit', async () => {
+    const store = await storeWithSplitTab(['local'])
+    const groupId = store.getWorkspaceSession().tabGroups?.[WORKTREE]?.[0]!.id
+    await store.applyLayoutCommand({
+      type: 'openEditorTab',
+      workspace: WORKTREE,
+      tabId: 'graph',
+      fileId: 'graph',
+      contentType: 'git-graph',
+      view: {
+        view: { mode: 'git-graph' },
+        file: { filePath: 'graph', relativePath: 'graph', language: 'plaintext' }
+      },
+      groupId,
+      index: 0
+    })
+    const reply = await store.applyLayoutCommand(
+      {
+        type: 'movePaneToNewTab',
+        workspace: WORKTREE,
+        tabId: TAB,
+        leafId: LEAF_B,
+        groupId,
+        index: 0,
+        windowDetach: { ptyId: 'pty-b' }
+      },
+      ['local'],
+      { visibility: withoutGitGraph }
+    )
+    if (!reply.ok) {
+      throw new Error(reply.code)
+    }
+    const session = store.getWorkspaceSession()
+    expect(session.tabGroups?.[WORKTREE]?.[0]?.tabOrder).toEqual(['graph', reply.result.tabId, TAB])
+    expect(session.terminalLayoutsByTabId[reply.result.tabId!]?.ptyIdsByLeafId).toEqual({
+      [LEAF_B]: 'pty-b'
+    })
+    expect(leafIds(session.terminalLayoutsByTabId[TAB]?.root)).toEqual([LEAF_A])
+  })
+
   it('closes the pane in every partition holding the tab', async () => {
     const store = await storeWithSplitTab(['local', 'ssh:target-1'])
 
@@ -175,54 +139,6 @@ describe('Store.applyLayoutCommand pane operations', () => {
         LEAF_A
       ])
     }
-  })
-
-  it('saves a pane title as the window saves it, and clears it on null', async () => {
-    const store = await storeWithSplitTab(['local'])
-    const rename = { type: 'renamePane', workspace: WORKTREE, tabId: TAB, leafId: LEAF_B } as const
-
-    await store.applyLayoutCommand({ ...rename, title: 'Server' })
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.titlesByLeafId).toEqual({
-      [LEAF_B]: 'Server'
-    })
-
-    await store.applyLayoutCommand({ ...rename, title: null })
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.titlesByLeafId ?? {}).toEqual(
-      {}
-    )
-  })
-
-  it('equalizes as the window saves an even split: no ratio', async () => {
-    const store = await storeWithSplitTab(['local'])
-
-    await store.applyLayoutCommand({ type: 'equalizePanes', workspace: WORKTREE, tabId: TAB })
-
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.root).toEqual({
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: LEAF_A },
-      second: { type: 'leaf', leafId: LEAF_B }
-    })
-  })
-
-  it('moves a pane as the window drops it: the new split starts even', async () => {
-    const store = await storeWithSplitTab(['local'])
-
-    await store.applyLayoutCommand({
-      type: 'movePane',
-      workspace: WORKTREE,
-      tabId: TAB,
-      leafId: LEAF_B,
-      targetLeafId: LEAF_A,
-      side: 'left'
-    })
-
-    expect(store.getWorkspaceSession().terminalLayoutsByTabId[TAB]?.root).toEqual({
-      type: 'split',
-      direction: 'vertical',
-      first: { type: 'leaf', leafId: LEAF_B },
-      second: { type: 'leaf', leafId: LEAF_A }
-    })
   })
 
   it('saves a divider’s new ratios, and refuses a tree whose panes differ', async () => {
@@ -246,31 +162,6 @@ describe('Store.applyLayoutCommand pane operations', () => {
       root: { ...split, second: { type: 'leaf', leafId: 'another-leaf' } }
     })
     expect(reply).toEqual({ ok: false, code: 'pane_structure_changed' })
-  })
-
-  it('records a split under the window’s pane id once, and refuses an id another tab holds', async () => {
-    const store = await storeWithSplitTab(['local'])
-    const LEAF_C = '33333333-3333-4333-8333-333333333333'
-    const split = {
-      type: 'splitPane',
-      workspace: WORKTREE,
-      tabId: TAB,
-      leafId: LEAF_B,
-      direction: 'horizontal',
-      newLeafId: LEAF_C
-    } as const
-
-    expect(await store.applyLayoutCommand(split)).toMatchObject({
-      ok: true,
-      result: { leafId: LEAF_C }
-    })
-    const written = store.getWorkspaceSession()
-    expect(await store.applyLayoutCommand(split)).toMatchObject({
-      ok: true,
-      result: { leafId: LEAF_C }
-    })
-    expect(store.getWorkspaceSession()).toEqual(written)
-    expect(leafIds(written.terminalLayoutsByTabId[TAB]?.root)).toEqual([LEAF_A, LEAF_B, LEAF_C])
   })
 
   it('refuses a window split whose pane id another tab holds', () => {

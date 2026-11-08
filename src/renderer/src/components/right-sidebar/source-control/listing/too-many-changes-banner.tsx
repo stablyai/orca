@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { StatusRetryButton } from './status-retry-button'
 
 export function TooManyChangesBanner({
@@ -16,6 +16,8 @@ export function TooManyChangesBanner({
   onStageAll?: () => Promise<void>
   isStageAllDisabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div
       data-testid="too-many-changes-banner"
@@ -24,10 +26,10 @@ export function TooManyChangesBanner({
       <div className="flex items-start gap-2">
         <AlertTriangle className="mt-px size-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <span className="min-w-0 flex-1 text-xs text-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.SourceControl.tooManyChanges',
             'Too many changes detected. Only the first {{value0}} changes are shown.',
-            { value0: limit.toLocaleString(getIntlLocale()) }
+            { value0: limit.toLocaleString(intlLocale) }
           )}
         </span>
       </div>
@@ -40,7 +42,7 @@ export function TooManyChangesBanner({
             disabled={isStageAllDisabled}
             onClick={() => void onStageAll()}
           >
-            {translate(
+            {t(
               'auto.components.right.sidebar.source.control.primary.action.18a0fca877',
               'Stage All'
             )}

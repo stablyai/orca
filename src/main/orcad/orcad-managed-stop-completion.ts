@@ -1,6 +1,6 @@
 // Request shutdown without signaling; only kernel identity, owner change or PID absence proves exit.
 import { setTimeout as delay } from 'node:timers/promises'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import {
   OrcadManagedStopRequestSchema,
   orcadManagedStopRequestKey,

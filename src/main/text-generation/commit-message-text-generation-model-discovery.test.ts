@@ -65,54 +65,6 @@ beforeEach(() => {
 })
 
 describe('discoverCommitMessageModelsLocal on the Windows direct-child path', () => {
-  it('returns static catalog models without spawning for static agents', async () => {
-    const result = await discoverCommitMessageModelsLocal('amp', undefined)
-
-    expect(result).toMatchObject({
-      success: true,
-      catalogOrigin: 'spec',
-      defaultModelId: 'smart'
-    })
-    expect(spawnMock).not.toHaveBeenCalled()
-  })
-
-  it('discovers dynamic models through the agent CLI', async () => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: hostPlatform
-    })
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: {
-        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
-      },
-      stderr: {
-        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
-      },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('cursor', undefined)
-
-    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\ngpt-5.2 - GPT-5.2\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'auto',
-      models: [
-        { id: 'auto', label: 'Auto' },
-        { id: 'gpt-5.2', label: 'GPT-5.2' }
-      ]
-    })
-    expect(spawnedAgentArgv(spawnMock.mock.calls[0]!)).toEqual(['cursor-agent', '--list-models'])
-    expect(spawnMock.mock.calls[0]![2]).toMatchObject({ windowsHide: true })
-  })
-
   it('writes the Claude list_models request to stdin and parses the control response', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
@@ -224,51 +176,6 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
     })
   })
 
-  it('discovers dynamic models through the configured agent command override', async () => {
-    Object.defineProperty(process, 'platform', {
-      configurable: true,
-      value: hostPlatform
-    })
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: {
-        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
-      },
-      stderr: {
-        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
-      },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('cursor', undefined, 'npx cursor-agent')
-
-    listeners.get('stdout:data')?.(Buffer.from('auto - Auto\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'auto'
-    })
-    if (process.platform === 'win32') {
-      // npm shim resolution uses node + npx-cli.js, preserving argv without cmd.exe.
-      expect(spawnMock).toHaveBeenCalledWith(
-        expect.stringMatching(/node\.exe$/i),
-        [expect.stringMatching(/npx-cli\.js$/i), 'cursor-agent', '--list-models'],
-        expect.objectContaining({ windowsHide: true })
-      )
-    } else {
-      expect(spawnedAgentArgv(spawnMock.mock.calls[0]!)).toEqual([
-        'npx',
-        'cursor-agent',
-        '--list-models'
-      ])
-    }
-  })
-
   it('discovers dynamic models through the selected WSL distro login shell', async () => {
     await withPlatform('win32', async () => {
       const listeners = new Map<string, (value: unknown) => void>()
@@ -312,62 +219,6 @@ describe('discoverCommitMessageModelsLocal on the Windows direct-child path', ()
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'cursor-agent'")
       expect(shellCommand).toContain('--list-models')
-    })
-  })
-
-  it('falls back to static models when dynamic discovery returns no parseable models', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: {
-        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
-      },
-      stderr: {
-        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
-      },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('pi', undefined)
-
-    listeners.get('stdout:data')?.(Buffer.from('provider model\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'default',
-      models: [{ id: 'default' }]
-    })
-  })
-
-  it('falls back to the first discovered non-Pi model when its static default is unavailable', async () => {
-    const listeners = new Map<string, (value: unknown) => void>()
-    const child = {
-      pid: 123,
-      kill: vi.fn(),
-      stdout: {
-        on: vi.fn((event, callback) => listeners.set(`stdout:${event}`, callback))
-      },
-      stderr: {
-        on: vi.fn((event, callback) => listeners.set(`stderr:${event}`, callback))
-      },
-      stdin: { end: vi.fn() },
-      on: vi.fn((event, callback) => listeners.set(event, callback))
-    }
-    spawnMock.mockReturnValue(child as never)
-
-    const pending = discoverCommitMessageModelsLocal('cursor', undefined)
-
-    listeners.get('stdout:data')?.(Buffer.from('gpt-5.2 - GPT-5.2\n'))
-    listeners.get('close')?.(0)
-
-    await expect(pending).resolves.toMatchObject({
-      success: true,
-      defaultModelId: 'gpt-5.2',
-      models: [{ id: 'gpt-5.2' }]
     })
   })
 

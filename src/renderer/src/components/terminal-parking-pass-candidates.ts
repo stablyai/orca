@@ -4,9 +4,9 @@ import {
   canParkTerminalWorktreeRenderers,
   selectColdParkedTerminalWorktrees,
   type TerminalWorktreeColdParkCandidate
-} from './terminal-pane/terminal-hidden-view-parking'
-import { getTerminalParkingPolicyOverrides } from './terminal-pane/terminal-parking-e2e-overrides'
-import { canWatcherCoverParkedTerminalTab } from './terminal-pane/terminal-parked-tab-watchers'
+} from './terminal-pane/parking/retention/terminal-hidden-view-parking'
+import { getTerminalParkingPolicyOverrides } from './terminal-pane/parking/instrumentation/terminal-parking-e2e-overrides'
+import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
 import { getHeldTerminalPrewarmWorktrees } from './terminal/terminal-worktree-prewarm'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 

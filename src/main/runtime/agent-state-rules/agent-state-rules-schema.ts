@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { RuntimeTerminalWaitBlockedReason } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../shared/runtime-terminal-contracts'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { findUnsafePatternReason } from './agent-state-rule-pattern-safety'

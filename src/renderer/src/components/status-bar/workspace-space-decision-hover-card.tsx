@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { HoverCardContent } from '../ui/hover-card'
 import { formatBytes, getWorkspaceSpaceBranchLabel } from './workspace-space-format'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceDecisionDetails } from './workspace-space-decision-details'
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
 import { WorkspaceSpaceStatusBadge } from './workspace-space-status-badge'
@@ -68,10 +68,11 @@ export function WorkspaceDecisionHoverCard({
   gitRefreshState?: WorkspaceGitRefreshState
   onOpenWorkspace: () => void
 }): React.JSX.Element {
-  const deleteDecision = getDeleteDecisionLabel(worktree, details)
+  const t = useTranslate()
+  const deleteDecision = getDeleteDecisionLabel(worktree, details, t)
   const issueLabel =
     [details.issueLabel, details.linearIssueLabel].filter(Boolean).join(' · ') ||
-    translate('auto.components.status.bar.workspaceSpaceDecision.noLinkedIssue', 'No linked issue')
+    t('auto.components.status.bar.workspaceSpaceDecision.noLinkedIssue', 'No linked issue')
   return (
     <HoverCardContent
       align="end"
@@ -95,7 +96,7 @@ export function WorkspaceDecisionHoverCard({
       <div className="space-y-3 px-4 py-3">
         <DecisionLine
           icon={<Trash2 />}
-          label={translate(
+          label={t(
             'auto.components.status.bar.WorkspaceSpaceManagerPanel.d384a4ce9f',
             'Delete decision'
           )}
@@ -104,68 +105,50 @@ export function WorkspaceDecisionHoverCard({
         />
         <DecisionLine
           icon={<Bot />}
-          label={translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.a8d9e0de79',
-            'Agents'
-          )}
-          value={getAgentDecisionLabel(details)}
+          label={t('auto.components.status.bar.WorkspaceSpaceManagerPanel.a8d9e0de79', 'Agents')}
+          value={getAgentDecisionLabel(details, t)}
         />
         <DecisionLine
           icon={<Terminal />}
-          label={translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.e9528a89b3',
-            'Terminals'
-          )}
-          value={getTerminalDecisionLabel(details)}
+          label={t('auto.components.status.bar.WorkspaceSpaceManagerPanel.e9528a89b3', 'Terminals')}
+          value={getTerminalDecisionLabel(details, t)}
         />
         <DecisionLine
           icon={<FileWarning />}
-          label={translate(
+          label={t(
             'auto.components.status.bar.WorkspaceSpaceManagerPanel.0bc756efaf',
             'Git changes'
           )}
-          value={getGitDecisionLabel(details, gitRefreshState)}
+          value={getGitDecisionLabel(details, gitRefreshState, t)}
           tone={
             (details.changedFileCount ?? 0) > 0 || gitRefreshState?.error ? 'warning' : 'default'
           }
         />
         <DecisionLine
           icon={<FileWarning />}
-          label={translate(
+          label={t(
             'auto.components.status.bar.WorkspaceSpaceManagerPanel.c432278ec7',
             'Editor buffers'
           )}
-          value={getEditorDecisionLabel(details)}
+          value={getEditorDecisionLabel(details, t)}
           tone={details.dirtyEditorBufferCount > 0 ? 'warning' : 'default'}
         />
         <DecisionLine
           icon={<GitBranch />}
-          label={translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.b9b4a3a25d',
-            'Branch'
-          )}
-          value={details.branchStatus ?? getWorkspaceSpaceBranchLabel(worktree)}
+          label={t('auto.components.status.bar.WorkspaceSpaceManagerPanel.b9b4a3a25d', 'Branch')}
+          value={details.branchStatus ?? getWorkspaceSpaceBranchLabel(worktree, t)}
         />
         <DecisionLine
           icon={<GitPullRequest />}
-          label={translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.fb2069acb7',
-            'Review'
-          )}
+          label={t('auto.components.status.bar.WorkspaceSpaceManagerPanel.fb2069acb7', 'Review')}
           value={
             details.reviewLabel ??
-            translate(
-              'auto.components.status.bar.workspaceSpaceDecision.noLinkedReview',
-              'No linked PR'
-            )
+            t('auto.components.status.bar.workspaceSpaceDecision.noLinkedReview', 'No linked PR')
           }
         />
         <DecisionLine
           icon={<ExternalLink />}
-          label={translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.66870929fb',
-            'Issue'
-          )}
+          label={t('auto.components.status.bar.WorkspaceSpaceManagerPanel.66870929fb', 'Issue')}
           value={issueLabel}
         />
       </div>
@@ -173,7 +156,7 @@ export function WorkspaceDecisionHoverCard({
       <div className="flex items-center justify-between gap-3 border-t border-border/60 px-4 py-3">
         <div className="min-w-0 truncate font-mono text-[11px] text-muted-foreground">
           {details.browserTabCount > 0
-            ? translate(
+            ? t(
                 'auto.components.status.bar.workspaceSpaceDecision.browserTabsOpen',
                 '{{count}} browser tabs open',
                 { count: details.browserTabCount, defaultValue_one: '{{count}} browser tab open' }
@@ -193,10 +176,7 @@ export function WorkspaceDecisionHoverCard({
           className="shrink-0 gap-1.5"
         >
           <ExternalLink className="size-3.5" />
-          {translate(
-            'auto.components.status.bar.WorkspaceSpaceManagerPanel.c28643d3da',
-            'Go to workspace'
-          )}
+          {t('auto.components.status.bar.WorkspaceSpaceManagerPanel.c28643d3da', 'Go to workspace')}
         </Button>
       </div>
     </HoverCardContent>

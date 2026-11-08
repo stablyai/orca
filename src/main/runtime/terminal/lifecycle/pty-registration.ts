@@ -2,7 +2,7 @@ import {
   classifyTerminalCreationFailure,
   terminalExitError
 } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty-spawn-result'
 import { OrcaRuntimeWithInvalidateAllHandlesForPty } from './pty-handle-invalidation'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

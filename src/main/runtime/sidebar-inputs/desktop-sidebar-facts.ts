@@ -17,7 +17,7 @@ import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   runtimeVisibleFolderWorkspaces,
   runtimeVisibleRepos
@@ -47,6 +47,8 @@ export type DesktopSidebarFactSources = {
   sshStateOf: (targetId: string) => Pick<SshConnectionState, 'status'> | undefined
   /** Empty where WSL hosts cannot exist. */
   wslStatuses: readonly Pick<WslHostStatus, 'environmentId' | 'distro' | 'state'>[]
+  /** This store's identity (host-descriptor.ts); absent until its file exists. */
+  installationId?: string
 }
 
 /** Read on demand: every fact already lives in this host's store or connection registries. */
@@ -98,6 +100,7 @@ export function readDesktopSidebarFacts(sources: DesktopSidebarFactSources): Des
     ),
     focusedHostId: getSettingsFocusedExecutionHostId(settings),
     hostLabels: Object.fromEntries(getHostDisplayLabelOverrides(settings)),
-    showPinnedInGroups: settings?.showPinnedWorktreesInGroups === true
+    showPinnedInGroups: settings?.showPinnedWorktreesInGroups === true,
+    ...(sources.installationId ? { installationId: sources.installationId } : {})
   }
 }

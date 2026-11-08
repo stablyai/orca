@@ -7,9 +7,10 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useAppStore } from '@/store/index'
 import { AgentSkillSetupPanel } from '../../skills/setup/AgentSkillSetupPanel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ComputerUseSkillSetupPanel(): React.JSX.Element {
+  const t = useTranslate()
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const {
     installed: computerUseSkillDetected,
@@ -23,11 +24,9 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
 
   return (
     <AgentSkillSetupPanel
-      title={translate(
-        'auto.components.settings.ComputerUsePane.93255aaf18',
-        'Orca Computer Use skill'
-      )}
-      description={translate(
+      variant="inline"
+      title={t('auto.components.settings.ComputerUsePane.93255aaf18', 'Orca Computer Use skill')}
+      description={t(
         'auto.components.settings.ComputerUsePane.1735461723',
         'Enables agents to inspect and operate local desktop apps.'
       )}

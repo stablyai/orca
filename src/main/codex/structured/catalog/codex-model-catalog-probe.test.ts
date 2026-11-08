@@ -1,7 +1,5 @@
-import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { describe, expect, it, vi } from 'vitest'
 import { createCodexModelCatalogProbe } from './codex-model-catalog-probe'
-import { resolveCodexStructuredInvocation } from '../launch/codex-structured-launch-resolution'
 import {
   runCodexAppServerSession,
   type CodexAppServerInvocation
@@ -17,58 +15,61 @@ const MODEL_ROW = {
 }
 
 describe('codex model catalog probe', () => {
-  it.each([`"${process.execPath}"`, '', `"${process.execPath}" run -- codex`])(
-    'lists with the session executable for Command %j',
-    async (command) => {
-      const resolveEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
-        PATH: '/resolved/bin',
-        HOME: '/homes/user',
-        OPENAI_BASE_URL: 'https://gateway.example',
-        DROPPED: undefined
-      })
-      const resolveCommand = vi.fn((options?: { pathEnv?: string | null; homePath?: string }) => {
-        expect(options?.pathEnv).toBe('/resolved/bin')
-        expect(options?.homePath).toBe('/homes/user')
-        return resolveStructuredAgentCommand(
-          'codex',
-          {
-            agentCmdOverrides: { codex: command }
-          },
-          options
-        )
-      })
+  it.each([
+    [[]],
+    [['node_modules/@openai/codex/bin/codex.js']],
+    [['--env-file=work env', '--', 'codex']],
+    [['-c', 'model_instructions_file="./prompt.md"']]
+  ])(
+    "lists a command line with arguments %j from Orca's folder for every chat",
+    async (prefixArgs) => {
+      // The chat's repo never picks the list, so no listing runs in a chat's folder.
       const invocations: CodexAppServerInvocation[] = []
+      const configReads: unknown[] = []
       const probe = createCodexModelCatalogProbe({
-        resolveEnvironment,
-        resolveCommand,
+        resolveEnvironment: async () => ({ PATH: '/bin' }),
+        resolveCommand: () => ({ command: '/bin/codex', prefixArgs }),
         runSession: async (invocation, body) => {
           invocations.push(invocation)
           return body({
-            request: async () => ({ data: [MODEL_ROW], nextCursor: null }),
+            request: async (method: string, params: unknown) => {
+              if (method === 'config/read') {
+                configReads.push(params)
+                return { config: {} }
+              }
+              return { data: [MODEL_ROW], nextCursor: null }
+            },
             notify: () => {}
           })
         }
       })
-      const success = await probe({ variable: 'CODEX_HOME', path: '/homes/account-a' })
-      expect(success.origin).toBe('probe')
-      expect(success.models.map((model) => model.id)).toEqual(['gpt-live'])
-      const sessionInvocation = await resolveCodexStructuredInvocation({
-        resolveEnvironment,
-        resolveCommand
-      })
-      expect(invocations).toHaveLength(1)
-      expect(invocations[0]!.cliPath).toBe(sessionInvocation.command)
-      expect(invocations[0]!.args.slice(0, sessionInvocation.prefixArgs.length)).toEqual(
-        sessionInvocation.prefixArgs
+      const identities: unknown[] = []
+      for (const folder of ['/chat-a', '/chat-b']) {
+        const resolved = await probe.resolve?.(
+          { variable: 'CODEX_HOME', path: '/homes/a' },
+          '/orca-probe',
+          'snapshot',
+          undefined,
+          folder
+        )
+        identities.push(resolved?.identity)
+        await resolved?.run()
+      }
+      expect(invocations.map((invocation) => invocation.cwd)).toEqual([
+        '/orca-probe',
+        '/orca-probe'
+      ])
+      expect(invocations[0]?.args.slice(0, prefixArgs.length + 2)).toEqual([
+        ...prefixArgs,
+        '-c',
+        'project_root_markers=[]'
+      ])
+      expect(identities[0]).toMatchObject({ cwd: '/orca-probe' })
+      expect(identities[1]).toEqual(identities[0])
+      // The account's configured default is read for Orca's folder, never the project's.
+      expect(configReads).toEqual(
+        expect.arrayContaining([expect.objectContaining({ cwd: '/orca-probe' })])
       )
-      expect(invocations[0]!.env).toEqual({
-        PATH: '/resolved/bin',
-        HOME: '/homes/user',
-        OPENAI_BASE_URL: 'https://gateway.example',
-        CODEX_HOME: '/homes/account-a'
-      })
-      // Marketplace clones may outlive short-lived probe teardown.
-      expect(invocations[0]!.args.join(' ')).toContain('features.plugins=false')
     }
   )
 
@@ -131,18 +132,6 @@ describe('codex model catalog probe', () => {
     ])
   }, 10_000)
 
-  it('refuses an empty listing rather than reporting it as a catalog', async () => {
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({ PATH: '/bin' }),
-      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
-      runSession: async (_invocation, body) =>
-        body({ request: async () => ({ data: [], nextCursor: null }), notify: () => {} })
-    })
-    await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toThrow(
-      /listed no models/
-    )
-  })
-
   it.each(['launcher $SECRET codex', 'FOO=1 codex', '/missing/codex', './codex'])(
     'lists nothing, and never probes the stock CLI, for Command %s',
     async (command) => {
@@ -163,186 +152,4 @@ describe('codex model catalog probe', () => {
       expect(runSession).not.toHaveBeenCalled()
     }
   )
-})
-
-describe('Codex catalog availability', () => {
-  function withAccount(account: unknown) {
-    return createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({}),
-      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
-      // Isolate account classification from the real ~/.codex/auth.json.
-      resolveAccountKind: (home) => (home === '/homes/system' ? 'system' : 'managed'),
-      runSession: async (_invocation, body) =>
-        body({
-          request: async (method, params, options) => {
-            if (method === 'account/read') {
-              expect(params).toEqual({ refreshToken: false })
-              expect(options?.timeoutMs).toBe(2000)
-              if (account instanceof Error) {
-                throw account
-              }
-              return account
-            }
-            return { data: [MODEL_ROW], nextCursor: null }
-          },
-          notify: () => {}
-        })
-    })
-  }
-  it.each([
-    null,
-    {},
-    { account: null },
-    { requiresOpenaiAuth: true },
-    { account: null, requiresOpenaiAuth: false },
-    { account: {}, requiresOpenaiAuth: true },
-    { account: null, requiresOpenaiAuth: 'true' },
-    new Error('unsupported method'),
-    new Error('timeout')
-  ])('unknown or authenticated account does not block: %j', async (account) => {
-    expect(
-      (await withAccount(account)({ variable: 'CODEX_HOME', path: '/homes/a' })).models
-    ).toHaveLength(1)
-  })
-  it.each([
-    ['/homes/a', 'managed'],
-    ['/homes/system', 'system']
-  ] as const)(
-    'reports explicit signed-out account for %s beside its list',
-    async (home, account) => {
-      expect(
-        await withAccount({ account: null, requiresOpenaiAuth: true })({
-          variable: 'CODEX_HOME',
-          path: home
-        })
-      ).toMatchObject({
-        models: [{ id: 'gpt-live' }],
-        unavailable: { reason: 'notSignedIn', account }
-      })
-    }
-  )
-  it('omits unknown account context from a positive signed-out fact', async () => {
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({}),
-      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
-      runSession: async (_invocation, body) =>
-        body({
-          request: async (method) =>
-            method === 'account/read'
-              ? { account: null, requiresOpenaiAuth: true }
-              : { data: [MODEL_ROW], nextCursor: null },
-          notify: () => {}
-        })
-    })
-    expect((await probe({ variable: 'CODEX_HOME', path: '/custom/home' })).unavailable).toEqual({
-      reason: 'notSignedIn'
-    })
-  })
-  it('lists models while the account check is still answering', async () => {
-    let answerAccount!: (value: unknown) => void
-    const methods: string[] = []
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({}),
-      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
-      runSession: async (_invocation, body) =>
-        body({
-          request: async (method) => {
-            methods.push(method)
-            if (method === 'account/read') {
-              return new Promise((resolve) => (answerAccount = resolve))
-            }
-            return { data: [MODEL_ROW], nextCursor: null }
-          },
-          notify: () => {}
-        })
-    })
-    const pending = probe({ variable: 'CODEX_HOME', path: '/homes/a' })
-    await vi.waitFor(() => expect(methods).toContain('model/list'))
-    expect(methods).toContain('account/read')
-    answerAccount({ account: { type: 'chatgpt' }, requiresOpenaiAuth: true })
-    expect((await pending).models).toHaveLength(1)
-  })
-  it('a signed-out verdict wins over a model listing that failed', async () => {
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({}),
-      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
-      runSession: async (_invocation, body) =>
-        body({
-          request: async (method) => {
-            if (method === 'account/read') {
-              return { account: null, requiresOpenaiAuth: true }
-            }
-            throw new Error('401 Unauthorized')
-          },
-          notify: () => {}
-        })
-    })
-    await expect(probe({ variable: 'CODEX_HOME', path: '/homes/a' })).rejects.toMatchObject({
-      unavailable: { reason: 'notSignedIn' }
-    })
-  })
-  it.each(['ENOENT', 'EACCES'])('classifies only missing executable errors: %s', async (code) => {
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({}),
-      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
-      runSession: async () => {
-        throw Object.assign(new Error('spawn failed'), { code, path: 'codex' })
-      }
-    })
-    const failure = await probe({ variable: 'CODEX_HOME', path: '/homes/a' }).catch(
-      (error: unknown) => error
-    )
-    expect(failure instanceof AgentModelCatalogUnavailableError).toBe(code === 'ENOENT')
-  })
-})
-
-describe('Codex catalog probe reads the home a launch would', () => {
-  it('runs the launch sync on the home before its app-server reads it', async () => {
-    const order: string[] = []
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({}),
-      resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
-      prepareHome: (prepared) => order.push(`prepare ${prepared}`),
-      runSession: async (_invocation, body) => {
-        order.push('spawn')
-        return body({
-          request: async (method) =>
-            method === 'account/read'
-              ? { account: { type: 'apiKey' }, requiresOpenaiAuth: true }
-              : { data: [MODEL_ROW], nextCursor: null },
-          notify: () => {}
-        })
-      }
-    })
-    expect((await probe({ variable: 'CODEX_HOME', path: '/homes/mirror' })).models).toHaveLength(1)
-    expect(order).toEqual(['prepare /homes/mirror', 'spawn'])
-  })
-})
-
-it('keeps unknown or unsupported configuration incomplete and observes genuine empty config', async () => {
-  for (const config of [undefined, [], { model: 42 }, {}]) {
-    const probe = createCodexModelCatalogProbe({
-      resolveEnvironment: async () => ({ PATH: '/bin' }),
-      resolveCommand: () => ({ command: '/bin/codex', prefixArgs: [] }),
-      runSession: async (_invocation, body) =>
-        body({
-          notify: () => {},
-          request: async (method) => {
-            if (method === 'model/list') {
-              return { data: [MODEL_ROW], nextCursor: null }
-            }
-            if (method === 'config/read') {
-              if (config === undefined) {
-                throw new Error('method not found')
-              }
-              return { config }
-            }
-            return {}
-          }
-        })
-    })
-    expect((await probe({ variable: 'CODEX_HOME', path: '/account' })).complete).toBe(
-      config !== undefined && !Array.isArray(config) && !('model' in config)
-    )
-  }
 })

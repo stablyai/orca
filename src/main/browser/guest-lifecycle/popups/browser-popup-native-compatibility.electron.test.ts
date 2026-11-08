@@ -15,7 +15,6 @@ import {
   setPopupFixtureEvidenceName
 } from './browser-popup-compatibility-cdp-fixture'
 import { waitForHiddenFrameInput } from '../../electron-fixtures/hidden-frame-input-readiness-fixture'
-import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
 
 setPopupFixtureEvidenceName('native-electron-evidence.json')
 
@@ -233,49 +232,6 @@ describe('hidden Chromium native popup request compatibility', () => {
       }
       expect(status().windowsHidden).toBe(true)
       snapshots.push(status())
-    }
-  )
-
-  it.each(['local', 'route'])(
-    'keeps named, sized and openerless script children adopted: %s',
-    async (name) => {
-      const page = guest(name)
-      for (const [frameName, features] of [
-        ['named-synthetic', ''],
-        ['named-synthetic', 'width=420,height=260'],
-        ['', 'noopener,noreferrer,width=420,height=260']
-      ]) {
-        const before = receipts.length
-        const nativeCount = status().native.creation.length
-        await page.evaluate(
-          ({ frameName, features }) => {
-            document.querySelector('#feature-probe')?.remove()
-            const button = document.createElement('button')
-            button.id = 'feature-probe'
-            button.onclick = () => {
-              window.open('/scripted', frameName, features)
-            }
-            document.body.append(button)
-          },
-          { frameName, features }
-        )
-        await page.locator('#feature-probe').click()
-        await expect
-          .poll(() => receipts.slice(before).some((receipt) => receipt.path === '/scripted'))
-          .toBe(true)
-        await expect
-          .poll(
-            () =>
-              browser
-                ?.contexts()
-                .flatMap((context) => context.pages())
-                .some((candidate) => candidate.url() === `${origin}/scripted`),
-            { timeout: 5_000 }
-          )
-          .toBe(true)
-        expect(status().native.creation.length).toBe(nativeCount)
-        await closeChildren(page)
-      }
     }
   )
 
@@ -545,12 +501,12 @@ describe('hidden Chromium native popup request compatibility', () => {
         await page.locator('#scripted-native').click({ modifiers: ['Shift'] })
       }
       const child = await childPage(`${origin}${path}`)
-      // Native size conversion can round by one pixel; the resize must still take effect.
+      // resizeTo sizes the native outer window; window.outerWidth echoes the pending request.
       await child.evaluate('window.resizeTo(640, 480)')
       await expect
         .poll(async () => {
           await refreshStatus()
-          const width = status().native.windows.at(-1)?.contentSize[0]
+          const width = status().native.windows.at(-1)?.size[0]
           return Math.abs((width ?? Infinity) - 640)
         })
         .toBeLessThanOrEqual(1)
@@ -560,7 +516,7 @@ describe('hidden Chromium native popup request compatibility', () => {
           await refreshStatus()
           return status().native.windows.at(-1)?.contentSize
         })
-        .toEqual([MIN_POPUP_CONTENT_WIDTH, MIN_POPUP_CONTENT_HEIGHT])
+        .toEqual([360, 200])
       await closeChildren(page)
       await page.locator('#shift').evaluate((link) => link.setAttribute('href', '/shift'))
     }

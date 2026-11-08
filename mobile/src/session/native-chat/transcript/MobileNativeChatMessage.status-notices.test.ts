@@ -9,9 +9,10 @@ import { agentSessionFailureFact } from '../../../../../src/shared/agent-session
 import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import {
   MobileNativeChatNoticeContext,
-  type MobileNativeChatNoticeNames
+  type MobileNativeChatNoticeView
 } from '../../mobile-native-chat-notice-context'
 
 vi.mock('react-native', async () => {
@@ -51,6 +52,8 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
+  CircleCheck: 'CircleCheck',
+  CircleX: 'CircleX',
   Copy: 'Copy',
   Eye: 'Eye',
   FileMinus2: 'FileMinus2',
@@ -104,7 +107,7 @@ describe('MobileNativeChatMessage status notices', () => {
       observedAt: 2,
       body
     })!
-  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeNames) => {
+  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeView) => {
     act(() => {
       renderer = create(
         createElement(
@@ -118,6 +121,48 @@ describe('MobileNativeChatMessage status notices', () => {
       (node) => String(node.type) === 'Text' && node.props.selectable === true
     )[0]!
   }
+
+  it('links a CI result line to its pull request and commit through the link sheet', () => {
+    const openLink = vi.fn()
+    act(() => {
+      renderer = create(
+        createElement(
+          MarkdownLinkHandlerContext.Provider,
+          { value: openLink },
+          createElement(MobileNativeChatMessage, {
+            message: {
+              // The journal key percent-encodes the line's client message id.
+              id: 'orca:pr-event%3Agithub.com%2Facme%2Frepo%233%3A8d5f74b0c1%3A1',
+              role: 'system',
+              blocks: [
+                {
+                  type: 'text',
+                  text: 'CI failing on repo#3 at 8d5f74b',
+                  presentation: 'pull-request-event',
+                  tone: 'failure'
+                }
+              ],
+              timestamp: 0,
+              source: 'transcript'
+            }
+          })
+        )
+      )
+    })
+    const links = renderer!.root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'link'
+    )
+    // The whole lead is the PR's target, so a lead the ellipsis cuts still opens it.
+    expect(links.map((link) => link.props.accessibilityLabel ?? link.props.children)).toEqual([
+      'CI failing on repo#3',
+      '8d5f74b'
+    ])
+    links.forEach((link) => act(() => link.props.onPress()))
+    expect(openLink.mock.calls).toEqual([
+      ['https://github.com/acme/repo/pull/3'],
+      ['https://github.com/acme/repo/commit/8d5f74b0c1']
+    ])
+  })
 
   it.each(['without reset', 'with reset', 'from an old host'] as const)(
     'draws an OpenCode usage warning %s',
@@ -147,12 +192,13 @@ describe('MobileNativeChatMessage status notices', () => {
         }
         const text = renderNotice(body, { hostName: null, agentName: 'OpenCode' })
         const tree = renderer!
-        // An old host's stored advice gives way to desktop's sentence from the fact.
-        expect(text.props.children).toEqual(
-          hasReset
-            ? expect.stringMatching(/^OpenCode hit its usage limit\. It resets at \S.*\.$/u)
-            : 'OpenCode hit its usage limit.'
-        )
+        // An old host's stored advice gives way to the headline from the fact; the reset sits below it.
+        expect(text.props.children).toBe('OpenCode hit its usage limit.')
+        expect(
+          tree.root
+            .findAll((node) => String(node.type) === 'Text')
+            .some((node) => /^Resets at \S/u.test(String(node.props.children)))
+        ).toBe(hasReset)
         expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
         expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
           colors.statusAmber
@@ -171,6 +217,40 @@ describe('MobileNativeChatMessage status notices', () => {
       } finally {
         now.mockRestore()
       }
+    }
+  )
+
+  it.each([
+    ['Claude', 'system', 'claude auth login'],
+    ['Claude', 'managed', 'claude auth login'],
+    ['Codex', 'system', 'codex login --device-auth'],
+    ['Codex', 'managed', null],
+    ['Grok', undefined, 'grok login --device-auth'],
+    ['Antigravity', undefined, null]
+  ] as const)(
+    'offers %s (%s account) sign-in in a host terminal',
+    (agentName, account, command) => {
+      const onRunInTerminal = vi.fn()
+      renderNotice(
+        {
+          kind: 'status',
+          tone: 'error',
+          ...agentSessionFailureWords(
+            agentSessionFailureFact('notSignedIn', account ? { account } : {}),
+            { surface: 'row', agentName }
+          )
+        },
+        { hostName: null, agentName, onRunInTerminal }
+      )
+      const signIn = renderer!.root.findAll(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityHint !== undefined
+      )
+      if (command === null) {
+        expect(signIn).toHaveLength(0)
+        return
+      }
+      act(() => signIn[0]!.props.onPress())
+      expect(onRunInTerminal).toHaveBeenCalledWith(command)
     }
   )
 

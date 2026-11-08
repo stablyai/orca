@@ -1,5 +1,6 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/wsl-distro-stopped-hold'
+import { RuntimeLineageError } from '../lineage/runtime-lineage-error'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree-first-surface'
@@ -17,7 +18,7 @@ import {
   mergeRuntimeFolderWorkspace
 } from '../catalog/runtime-folder-workspace'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 import type {
   WorktreeStartupDraftPaste,
@@ -70,6 +71,13 @@ export async function createRuntimeFolderWorktree(args: {
   deps: RuntimeFolderWorktreeCreateDeps
 }): Promise<CreateWorktreeResult> {
   const { request, repo, deps } = args
+  // Inferred parents fall away here, as same-machine folder creates record none.
+  if (request.lineage?.crossStoreParent && !request.lineage.crossStoreParentInferredFrom) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      "A folder workspace can't have a parent on another machine yet."
+    )
+  }
   const now = Date.now()
   const settings = deps.store.getSettings()
   const instanceId = randomUUID()

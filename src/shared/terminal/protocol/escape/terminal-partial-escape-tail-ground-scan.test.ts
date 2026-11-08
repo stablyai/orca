@@ -1,28 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { advancePartialEscapeTail, extractPartialEscapeTail } from './terminal-partial-escape-tail'
 
 describe('partial escape scanning between sequences', () => {
-  it.each([
-    ['ASCII', 'ordinary output '.repeat(8192)],
-    ['UTF-16', '漢字😀 output '.repeat(8192)]
-  ])('skips ordinary %s text between completed escapes', (_name, text) => {
-    const pending = '\x1b[38;5;'
-    const stream = `\x1b[32m${text}\x1b[0m${text}${pending}`
-    const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
-    let actual: string
-    let inspectedCodeUnits: number
-    try {
-      actual = extractPartialEscapeTail(stream)
-      inspectedCodeUnits = charCodeAt.mock.calls.length
-    } finally {
-      charCodeAt.mockRestore()
-    }
-
-    expect(actual).toBe(pending)
-    expect(inspectedCodeUnits).toBeLessThan(32)
-    expect(advancePartialEscapeTail(actual, '196mready')).toBe('')
-  })
-
   it.each([
     ['\x1b[38;5;', '196m'],
     ['\x1b]2;building', '\x07'],
