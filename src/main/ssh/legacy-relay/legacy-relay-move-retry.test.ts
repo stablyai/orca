@@ -114,9 +114,11 @@ describe('the last bridged relay terminal', () => {
 
   it('never lets an exit a replaced bridge saw count for its successor', () => {
     const report = vi.fn()
-    noteBridgedExit({}, TARGET, { report })
+    const replaced = { snapshot: () => [] }
+    const successor = { snapshot: () => [] }
+    noteBridgedExit(replaced, TARGET, { report })
 
-    settleBridgedExits({}, () => true)
+    settleBridgedExits(successor, () => true)
 
     expect(report).toHaveBeenCalledWith(TARGET, 'terminal_exited', 0)
     expect(lastExits).toEqual([])

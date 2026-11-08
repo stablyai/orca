@@ -4,9 +4,13 @@
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
  */
 import type { LegacyRelayBridgeHost } from './legacy-relay-bridge-registry'
+import type { LegacyRelayTargetBridge } from './legacy-relay-target-bridge'
+
+/** Exits are keyed by bridge instance, so a replaced bridge's exit never counts for the next. */
+export type MoveRetryBridge = Pick<LegacyRelayTargetBridge, 'snapshot'>
 
 /** Bridges with a relay-proven exit since their last pane publication; disposed ones drop out. */
-const exitedSincePublish = new WeakMap<object, string>()
+const exitedSincePublish = new WeakMap<MoveRetryBridge, string>()
 let lastExitListener: ((targetId: string) => void) | null = null
 const retrying = new Set<string>()
 
@@ -15,7 +19,7 @@ export function onLastBridgedTerminalExit(listener: ((targetId: string) => void)
 }
 
 export function noteBridgedExit(
-  bridge: object,
+  bridge: MoveRetryBridge,
   targetId: string,
   host: Pick<LegacyRelayBridgeHost, 'report'>
 ): void {
@@ -24,7 +28,7 @@ export function noteBridgedExit(
 }
 
 /** `servesNone`: no pane is left, live or unverifiable, and no closed tab's stop is owed. */
-export function settleBridgedExits(bridge: object, servesNone: () => boolean): void {
+export function settleBridgedExits(bridge: MoveRetryBridge, servesNone: () => boolean): void {
   const targetId = exitedSincePublish.get(bridge)
   exitedSincePublish.delete(bridge)
   if (targetId !== undefined && servesNone()) {
