@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import './terminal-link-handlers'
 import { openDetectedFilePath } from './terminal-file-open-routing'
+import { handleTerminalFileLink } from './terminal-file-link-actions'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   createDeferred,
@@ -12,8 +13,15 @@ import {
 
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
-const { storeState, deps, openFileMock, openFilePathMock, setPendingEditorRevealMock, statMock } =
-  doubles
+const {
+  storeState,
+  deps,
+  openFileMock,
+  openFileForLinkMock,
+  openFilePathMock,
+  setPendingEditorRevealMock,
+  statMock
+} = doubles
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -76,6 +84,35 @@ describe('handleOscLink', () => {
         column: 3,
         matchLength: 0
       })
+    )
+  })
+})
+
+describe('handleTerminalFileLink', () => {
+  it('opens a local file in the Floating Workspace on Cmd+Alt+click', async () => {
+    setPlatform('Macintosh')
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the node test env has no MouseEvent; the link path reads only these fields.
+    const event = {
+      button: 0,
+      metaKey: true,
+      altKey: true,
+      ctrlKey: false,
+      shiftKey: false,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent
+
+    expect(handleTerminalFileLink('/tmp/src/report.ts', null, null, event, deps)).toBe(true)
+    await flushAsyncWork()
+
+    expect(openFileForLinkMock).not.toHaveBeenCalled()
+    expect(openFileMock).toHaveBeenCalledTimes(1)
+    expect(openFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/src/report.ts',
+        worktreeId: 'global-floating-terminal',
+        runtimeEnvironmentId: null
+      }),
+      expect.objectContaining({ suppressActiveRuntimeFallback: true })
     )
   })
 })
