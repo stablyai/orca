@@ -90,11 +90,11 @@ async function startOrcadRuntime(
   const { resolveDaemonSessionScrollbackRows } =
     await import('../daemon/sessions/daemon-session-scrollback-window')
   const { collectOrcadHealth } = await import('./orcad-health')
-  const { agentHookServer } = await import('../agent-hooks/server')
-  await import('../agent-hooks/managed-agent-hook-controls')
-  const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
+  const { agentHookServer } = await import('../agent-hooks/server/agent-hook-server')
+  await import('../agent-hooks/installation/managed-agent-hook-controls')
+  const { agentHookRuntimeDeps } = await import('../agent-hooks/runtime/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
-    await import('../agent-hooks/hook-status-session-tabs-republish')
+    await import('../agent-hooks/runtime/hook-status-session-tabs-republish')
   const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
     await import('./orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =

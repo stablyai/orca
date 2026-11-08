@@ -1,6 +1,9 @@
 import { connect, createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../../ssh/orcad-stdio-bridge'
+import {
+  checkOrcadStdioBridge,
+  openOrcadStdioBridgeChannel
+} from '../../managed-server/lifecycle/orcad-stdio-bridge'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'
 import { WslOrcadBridgeActivity } from './wsl-orcad-bridge-activity'
 import {

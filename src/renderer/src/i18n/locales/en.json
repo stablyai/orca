@@ -15280,7 +15280,9 @@
             "needsIsolatedFrames": "This panel is not available: it needs isolated plugin frames, which are turned off."
           },
           "activityBar": {
-            "error": "Error"
+            "error": "Error",
+            "disablePlugin": "Disable Plugin",
+            "disableFailed": "Could not disable plugin."
           },
           "AiVaultSessionLimitMenu": {
             "historyDepth": "History depth: {{value0}}",
@@ -16705,6 +16707,7 @@
           "kernelStartFailed": "The kernel failed to start.",
           "noPython": "Python was not found on this computer. Install it from [python.org](https://www.python.org/downloads/), then run the cell again.",
           "kernelDied": "The kernel died.",
+          "outputTruncated": "Output truncated: Orca kept the start of this cell's output and discarded the rest. To keep all of it, write it to a file instead.",
           "localOnly": "Notebook cells can only run for files on this computer.",
           "pythonOnly": "Only Python notebooks can run in Orca.",
           "ownerUnresolved": "Orca can't tell which computer this notebook is on yet, so its cells can't run.",

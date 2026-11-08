@@ -8,7 +8,7 @@ import {
   ORCAD_STDIO_BRIDGE_REFUSED,
   orcadPosixStdioBridgeCommand
 } from '../../../managed-server/lifecycle/orcad-stdio-bridge-script'
-import type { OrcadStdioBridge } from '../../../ssh/orcad-stdio-bridge'
+import type { OrcadStdioBridge } from '../../../managed-server/lifecycle/orcad-stdio-bridge'
 
 export type FakeWslBridgeChildren = {
   spawn: PipedProcessSpawner

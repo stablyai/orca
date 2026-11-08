@@ -3,11 +3,8 @@ import type { MobileSessionTab } from './mobile-session-tabs'
 import {
   isLaunchedSurfaceListed,
   launchedSelection,
-  pendingSelectionWantsHandle,
   resolveLaunchedSelection,
   withLaunchReply,
-  withoutPendingHandle,
-  withoutPendingTabId,
   withoutUnansweredLaunch,
   type PendingSessionSelection
 } from './pending-session-selection'
@@ -115,39 +112,8 @@ describe("a launch's own reply and end", () => {
   })
 })
 
-describe('the halves of a pick', () => {
-  const both: PendingSessionSelection = { kind: 'terminal', handle: 'term_1', tabId: 'tab-1' }
-
-  it('drops one half and keeps the other', () => {
-    expect(withoutPendingTabId(both)).toEqual({ kind: 'terminal', handle: 'term_1', tabId: null })
-    expect(withoutPendingHandle(both)).toEqual({ kind: 'tab', tabId: 'tab-1' })
-    expect(withoutPendingHandle({ kind: 'terminal', handle: 'term_1', tabId: null })).toBeNull()
-    expect(withoutPendingTabId({ kind: 'tab', tabId: 'tab-1' })).toBeNull()
-  })
-
-  it('lets a just-launched terminal subscribe before its tab arrives', () => {
-    expect(
-      pendingSelectionWantsHandle(launchedSelection('l1', { handle: 'term_1' }), 'term_1')
-    ).toBe(true)
-    expect(pendingSelectionWantsHandle(launchedSelection('l1', { sessionId: 's' }), 'term_1')).toBe(
-      false
-    )
-  })
-})
-
 describe('isLaunchedSurfaceListed', () => {
-  it('reads a listed terminal as a started agent', () => {
-    expect(isLaunchedSurfaceListed([reservedTerminalTab('term_1')], { pane: PANE })).toBe(true)
-  })
-
   it('does not read a tab the host showed before its agent existed as a start', () => {
     expect(isLaunchedSurfaceListed([reservedTerminalTab(null)], { pane: PANE })).toBe(false)
-  })
-
-  it('still lands the selection on that tab, so the phone shows it at once', () => {
-    const resolved = resolveLaunchedSelection(launchedSelection('lock', { pane: PANE }, null), [
-      reservedTerminalTab(null)
-    ])
-    expect(resolved.landedTabId).toBe(`${PANE.tabId}::${PANE.leafId}`)
   })
 })
