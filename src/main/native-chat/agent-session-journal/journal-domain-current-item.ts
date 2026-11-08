@@ -16,6 +16,11 @@ import { reportedTurnItemId } from './queued-messages/journal-queue-failure-poli
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import { normalizeJournalDomainItemBody } from './journal-domain-item-normalization'
 import { observeJournalDomainTurnScope } from './journal-domain-turn-scope'
+import {
+  observeJournalDomainInputItem,
+  refreshJournalDomainAcceptedHandover,
+  type JournalDomainInputItemObservation
+} from './journal-domain-input-ends'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
@@ -26,6 +31,7 @@ export type JournalDomainCurrentItemWrite = {
   executionOwner?: number | null
   writtenSequence?: number
   stopSettle?: JournalStopSettleFact
+  inputObservation?: JournalDomainInputItemObservation
 }
 
 function nextJournalDomainItemOrdinal(
@@ -127,6 +133,10 @@ export function writeJournalDomainCurrentItem(
     input.previous
   )
   observeJournalDomainTurnScope(db, target, next.itemId, input.previous?.item, next)
+  if (input.inputObservation && item.itemId === input.inputObservation.itemId) {
+    observeJournalDomainInputItem(db, target, item, input.inputObservation)
+  }
+  refreshJournalDomainAcceptedHandover(db, target, next.itemId)
   const oldReport =
     previousReport?.queue_failure_report_turn_item_id == null
       ? null

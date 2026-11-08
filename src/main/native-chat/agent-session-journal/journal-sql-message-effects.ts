@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { refreshJournalDomainAcceptedHandover } from './journal-domain-input-ends'
 import type {
   AgentJournalMessageItem,
   AgentJournalSubmission,
@@ -10,6 +11,11 @@ import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDispatchRowApplies } from './projection/journal-dispatch-settlement'
 import { readJournalDomainQueueRow } from './journal-domain-queue-rows'
+import type { JournalDomainSubmissionStoredFacts } from './journal-domain-submission-records'
+import {
+  JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
+  journalDomainSubmissionColumns
+} from './journal-domain-submission-columns'
 import {
   journalDomainEditLeaseDeadline,
   retireJournalDomainEditHolds
@@ -52,26 +58,24 @@ export function acceptJournalSqlMessageEcho(
   row: JournalItemRow,
   submission?: AgentJournalSubmission
 ): AgentJournalAcceptanceReceipt | undefined {
-  if (!submission) {
-    const stored = db
-      .prepare(`SELECT payload_json FROM journal_submission_attempts
+  const stored = db
+    .prepare(`SELECT payload_json,facts_json FROM journal_submission_attempts
       WHERE session_id=? AND epoch=? AND item_id=? AND current=1`)
-      .get(...prefix, itemId)
-    submission = stored ? JSON.parse(String(stored.payload_json)) : undefined
-  }
-  if (!submission) {
+    .get(...prefix, itemId)
+  if (!stored) {
     return undefined
   }
-  if (!journalDispatchRowApplies(submission)) {
+  const current: AgentJournalSubmission = submission ?? JSON.parse(String(stored.payload_json))
+  if (!journalDispatchRowApplies(current)) {
     db.prepare(`UPDATE journal_submission_attempts SET echo_observed=1,admission_body_json=NULL
       WHERE session_id=? AND epoch=? AND message_id=? AND current=1 AND echo_observed=0`).run(
       ...prefix,
-      submission.clientMessageId
+      current.clientMessageId
     )
     return undefined
   }
   const accepted: AgentJournalSubmission = {
-    ...submission,
+    ...current,
     fence: row.fence,
     dispatchState: 'accepted',
     providerItemId: rawId,
@@ -79,24 +83,28 @@ export function acceptJournalSqlMessageEcho(
     resolvedAt: row.ts
   }
   delete accepted.recovered
-  db.prepare(`UPDATE journal_submission_attempts SET dispatch_state='accepted',candidate=0,payload_json=?,
-      echo_observed=1,dispatch_fence=?,signed_out=0,recovered=0,admission_body_json=NULL
+  const facts: JournalDomainSubmissionStoredFacts = JSON.parse(String(stored.facts_json))
+  db.prepare(`UPDATE journal_submission_attempts SET candidate=0,payload_json=?,
+      ${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.map((column) => `${column}=?`).join(',')},
+      echo_observed=1,admission_body_json=NULL
     WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
     JSON.stringify(accepted),
-    row.fence,
+    ...journalDomainSubmissionColumns(accepted, facts.carries),
     ...prefix,
     accepted.clientMessageId
   )
+  refreshJournalDomainAcceptedHandover(db, { sessionId: prefix[0], epoch: prefix[1] }, itemId)
   const receipt: AgentJournalAcceptanceReceipt = {
     clientMessageId: accepted.clientMessageId,
     providerItemId: rawId,
     cursor: { epoch: row.epoch, sequence: row.seq },
     acceptedAt: row.ts
   }
-  db.prepare(`INSERT INTO journal_send_receipts(session_id,epoch,message_id,payload_json) VALUES(?,?,?,?)
-    ON CONFLICT(session_id,epoch,message_id) DO UPDATE SET payload_json=excluded.payload_json`).run(
+  db.prepare(`INSERT INTO journal_send_receipts(session_id,epoch,message_id,cursor_sequence,payload_json) VALUES(?,?,?,?,?)
+    ON CONFLICT(session_id,epoch,message_id) DO UPDATE SET cursor_sequence=excluded.cursor_sequence,payload_json=excluded.payload_json`).run(
     ...prefix,
     accepted.clientMessageId,
+    receipt.cursor.sequence,
     JSON.stringify(receipt)
   )
   return receipt

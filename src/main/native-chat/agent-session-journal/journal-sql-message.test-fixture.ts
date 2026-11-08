@@ -1,3 +1,4 @@
+import { insertJournalDomainImportedSubmission } from './journal-domain-import-submissions'
 import {
   JOURNAL_DOMAIN_ITEM_COLUMNS,
   journalDomainItemColumns
@@ -115,16 +116,32 @@ export function messageFixture(db = new Database(':memory:')) {
       body: { ...body, blocks: [...body.blocks] },
       turnScope: { kind: 'thread' }
     })
-    db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,dispatch_state,candidate,admitted_personal,payload_json)
-      VALUES(?,?,?,1,0,1,?,1,1,1,?,'unknown',1,1,?)`).run(
-      'chat',
-      'epoch',
-      'send',
-      itemId,
-      submission.payloadFingerprint,
-      JSON.stringify(submission)
-    )
-    return submission
+    insertJournalDomainImportedSubmission(db, target, {
+      submission,
+      sequence: 1,
+      index: 0,
+      ordinal: 1,
+      candidate: true,
+      admittedPersonal: true,
+      echoObserved: false,
+      admission: {
+        body,
+        providerHandle: null,
+        fence: 1,
+        scope: null,
+        familyId: null,
+        origin: 'client',
+        sourceKind: 'user',
+        options: null
+      },
+      handover: null,
+      handoverPlace: null,
+      carries: [],
+      rejection: null,
+      presentationMember: false,
+      normalizedHandOff: false,
+      ended: false
+    })
   }
   return { db, batch, published, commit, item, seedItem, seedSend }
 }

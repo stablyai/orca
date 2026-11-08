@@ -82,18 +82,22 @@ function publicJournalSqlValue(
   value: unknown,
   cursor: AgentJournalCursor
 ): unknown {
-  switch (command.operation.kind) {
-    case 'item':
-    case 'item-claiming':
-    case 'prompt-mutate':
-    case 'steps':
-      return value && typeof value === 'object' ? { ...value, cursor } : value
-    case 'submission':
-    case 'dispatch':
-    case 'lifecycle':
-    case 'tombstone':
-      return value == null ? value : cursor
-    default:
-      return value
+  const operation = command.operation.kind
+  if (
+    operation === 'item' ||
+    operation === 'item-claiming' ||
+    operation === 'prompt-mutate' ||
+    operation === 'steps'
+  ) {
+    return value && typeof value === 'object' ? { ...value, cursor } : value
   }
+  if (
+    operation === 'submission' ||
+    operation === 'dispatch' ||
+    operation === 'lifecycle' ||
+    operation === 'tombstone'
+  ) {
+    return value == null ? value : cursor
+  }
+  return value
 }

@@ -1,5 +1,8 @@
 import type Database from '../../sqlite/sync-database'
-import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import {
+  JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
+  journalDomainSubmissionColumns
+} from './journal-domain-submission-columns'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { stoppedHistoryCandidate } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
@@ -23,19 +26,14 @@ export function writeJournalDomainDispatchAttempt(
   attempt: JournalDomainSubmissionAttempt
 ): void {
   const { submission: next, candidate, handover } = attempt
-  db.prepare(`UPDATE journal_submission_attempts SET dispatch_state=?,candidate=?,payload_json=?,dispatch_fence=?,signed_out=?,recovered=?,
+  db.prepare(`UPDATE journal_submission_attempts SET candidate=?,payload_json=?,
+      ${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.map((column) => `${column}=?`).join(',')},
       handover_fence=?,facts_json=?,
       admission_body_json=CASE WHEN ? THEN admission_body_json ELSE NULL END
       WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
-    next.dispatchState,
     Number(candidate),
     JSON.stringify(next),
-    next.fence,
-    Number(
-      next.dispatchState === 'rejected' &&
-        readWholeAgentSessionFailureFact(next.rejection)?.kind === 'notSignedIn'
-    ),
-    Number(next.recovered === true),
+    ...journalDomainSubmissionColumns(next, attempt.carries),
     handover?.fence ?? null,
     journalDomainSubmissionFactsJson(attempt),
     Number(

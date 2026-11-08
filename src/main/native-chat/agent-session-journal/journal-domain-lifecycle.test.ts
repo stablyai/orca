@@ -126,27 +126,22 @@ it('rolls back the entire lifecycle mutation group and its receipt if any write 
   expect(retried.publication?.items).toMatchObject([{ itemId: 'orca:prefix', revision: 1 }])
 })
 
-it('keeps FIFO settlement retry authority bounded without reordering a duplicate', async () => {
+it('retains settlement retry authority after more than 4096 unrelated settlements', async () => {
   const f = domainLifecycleFixture(cleanups)
-  const insert = f.db.prepare(`INSERT INTO journal_settlements VALUES('chat','epoch',?,?)`)
+  const insert = f.db.prepare(`INSERT INTO journal_settlements VALUES('chat','epoch',?)`)
   for (let index = 0; index < 4096; index++) {
-    insert.run(`receipt-${index}`, index + 1)
+    insert.run(`receipt-${index}`)
   }
-  await f.run({
-    kind: 'lifecycle',
-    input: { settlementId: 'receipt-0', fence: 1, mutations: [status('duplicate')] }
-  })
   await f.run({
     kind: 'lifecycle',
     input: { settlementId: 'new', fence: 1, mutations: [status('new')] }
   })
-  expect(f.item('orca:duplicate')).toBeUndefined()
-  expect(
-    f.db.prepare(`SELECT settlement_id FROM journal_settlements ORDER BY ordinal LIMIT 1`).get()
-  ).toEqual({ settlement_id: 'receipt-1' })
-  expect(f.db.prepare(`SELECT COUNT(*) AS total FROM journal_settlements`).get()).toEqual({
-    total: 4096
+  await f.run({
+    kind: 'lifecycle',
+    input: { settlementId: 'receipt-0', fence: 1, mutations: [status('duplicate')] }
   })
+  expect(f.item('orca:duplicate')).toBeUndefined()
+  expect(f.item('orca:new')?.body).toEqual({ kind: 'status', text: 'new' })
 })
 
 it('returns direct personal input on start failure and lets an earlier handover win', async () => {

@@ -79,6 +79,7 @@ export type JournalDomainSubmissionAttempt = {
   rejection: JournalDomainSubmissionRejection | null
   presentationMember: boolean
   normalizedHandOff: boolean
+  ended?: boolean
 }
 
 export type JournalDomainSubmissionCoordinate = {
@@ -112,14 +113,22 @@ export type JournalDomainSubmissionStoredFacts = Pick<
   | 'rejection'
   | 'presentationMember'
   | 'normalizedHandOff'
+  | 'ended'
 > & {
   admission: Omit<JournalDomainSubmissionAdmission, 'body' | 'familyId'>
 }
 
 export function journalDomainSubmissionFactsJson(attempt: JournalDomainSubmissionAttempt): string {
   const { body: _body, familyId: _family, ...admission } = attempt.admission
-  const { handover, handoverPlace, carries, rejection, presentationMember, normalizedHandOff } =
-    attempt
+  const {
+    handover,
+    handoverPlace,
+    carries,
+    rejection,
+    presentationMember,
+    normalizedHandOff,
+    ended
+  } = attempt
   const facts: JournalDomainSubmissionStoredFacts = {
     admission,
     handover,
@@ -127,7 +136,8 @@ export function journalDomainSubmissionFactsJson(attempt: JournalDomainSubmissio
     carries,
     rejection,
     presentationMember,
-    normalizedHandOff
+    normalizedHandOff,
+    ended: ended === true
   }
   return JSON.stringify(facts)
 }

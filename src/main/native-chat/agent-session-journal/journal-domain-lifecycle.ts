@@ -19,6 +19,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { spendJournalSqlCommandCards } from './journal-sql-message-effects'
 import { writeJournalDomainLifecycleItem } from './journal-domain-lifecycle-item'
+import { observeJournalDomainInputItem } from './journal-domain-input-ends'
 
 export type JournalDomainLifecycleCommit = JournalWriterPublication & {
   cursor: AgentJournalCursor
@@ -65,17 +66,8 @@ function recordSettlement(
   settlementId: string
 ): void {
   const prefix = [target.sessionId, target.epoch] as const
-  db.prepare(`INSERT OR IGNORE INTO journal_settlements(session_id,epoch,settlement_id,ordinal)
-    SELECT ?,?,?,COALESCE(MAX(ordinal),0)+1 FROM journal_settlements WHERE session_id=? AND epoch=?`).run(
-    ...prefix,
-    settlementId,
-    ...prefix
-  )
-  db.prepare(`DELETE FROM journal_settlements WHERE session_id=? AND epoch=? AND ordinal <=
-    (SELECT ordinal FROM journal_settlements WHERE session_id=? AND epoch=? ORDER BY ordinal DESC LIMIT 1 OFFSET 4096)`).run(
-    ...prefix,
-    ...prefix
-  )
+  db.prepare(`INSERT OR IGNORE INTO journal_settlements(session_id,epoch,settlement_id)
+    VALUES(?,?,?)`).run(...prefix, settlementId)
 }
 
 /** Current dispatches precede the atomic mutation groups, exactly at this writer position. */
@@ -124,6 +116,9 @@ export function applyJournalDomainLifecycle(
     }
     const sequence = result.cursor.sequence + 1
     const changedItems: JournalWriterPublication['items'] = []
+    const inputObservations: ReturnType<
+      typeof writeJournalDomainLifecycleItem
+    >['inputObservation'][] = []
     const removedItemIds: string[] = []
     const head = db
       .prepare(`SELECT highest_fence FROM journal_chat_state WHERE session_id=? AND epoch=?`)
@@ -193,6 +188,7 @@ export function applyJournalDomainLifecycle(
         )
         deleted.delete(revived)
         changedItems.push(...commit.items)
+        inputObservations.push(commit.inputObservation)
         result.receipts.push(...commit.receipts)
         result.inputChanged ||= commit.receipts.length > 0
         result.acceptedInputs = commit.acceptedInputs ?? result.acceptedInputs
@@ -200,6 +196,12 @@ export function applyJournalDomainLifecycle(
     }
     if (oversized && changedItems.length === 0 && removedItemIds.length === 0) {
       continue
+    }
+    const currentItems = new Map(changedItems.map((item) => [item.itemId, item]))
+    for (const { item, source } of inputObservations) {
+      if (item.itemId === source.itemId && currentItems.get(source.itemId)?.body === item.body) {
+        observeJournalDomainInputItem(db, target, item, source)
+      }
     }
     const spent = spendJournalSqlCommandCards(db, [target.sessionId, target.epoch], savedAt)
     result.cards.push(...spent.cards)

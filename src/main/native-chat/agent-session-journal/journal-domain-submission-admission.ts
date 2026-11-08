@@ -29,6 +29,10 @@ import {
 import { readJournalDomainTurnScope } from './journal-domain-turn-scope'
 import { writeJournalDomainQueueReopenMark } from './journal-domain-queue-pauses'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
+import {
+  JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
+  journalDomainSubmissionColumns
+} from './journal-domain-submission-columns'
 
 /** Accepted input, queue ownership and attachment claims precede provider dispatch atomically. */
 export function applyJournalDomainSubmission(
@@ -155,17 +159,17 @@ export function applyJournalDomainSubmission(
     )
   }
   db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,attempt_index,current,
-    item_id,ordinal,submitted_at,accepted_sequence,fingerprint,dispatch_state,candidate,admitted_personal,payload_json,
-    admission_body_json,admission_family_id,facts_json,dispatch_fence)
-    VALUES(?,?,?,?,0,1,?,?,?,?,?,'pending',1,?,?,?,?,?,?)`).run(
+    item_id,ordinal,candidate,admitted_personal,payload_json,
+    admission_body_json,admission_family_id,facts_json,${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.join(',')})
+    VALUES(${Array.from({ length: 14 + JOURNAL_DOMAIN_SUBMISSION_COLUMNS.length }, () => '?').join(',')})`).run(
     ...prefix,
     input.clientMessageId,
     sequence,
+    0,
+    1,
     itemId,
     ordinal,
-    savedAt,
-    submission.acceptedSequence ?? null,
-    input.payloadFingerprint,
+    1,
     Number(
       familyId !== undefined
         ? selected !== null && journalDomainAdmittedPersonal(selected.card)
@@ -188,9 +192,10 @@ export function applyJournalDomainSubmission(
       carries: [],
       rejection: null,
       presentationMember: false,
-      normalizedHandOff: false
+      normalizedHandOff: false,
+      ended: false
     }),
-    input.fence
+    ...journalDomainSubmissionColumns(submission, [])
   )
   const blocked = db
     .prepare(`SELECT 1 FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?

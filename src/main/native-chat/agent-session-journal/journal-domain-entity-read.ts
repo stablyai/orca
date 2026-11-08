@@ -51,6 +51,8 @@ export function readJournalDomainEntity(
         WHERE session_id=? AND epoch=?`)
         .get(...prefix)!
       const sequence = Number(head.last_sequence)
+      const historyOrigin: JournalHistoryOrigin | null =
+        head.history_origin_json === null ? null : JSON.parse(String(head.history_origin_json))
       return {
         kind: 'metadata',
         cursor: {
@@ -61,10 +63,7 @@ export function readJournalDomainEntity(
         oldestSequence: Number(head.retained_sequence),
         highestFence: Number(head.highest_fence),
         lastActivityAt: Number(head.last_activity_at),
-        historyOrigin:
-          head.history_origin_json === null
-            ? null
-            : (JSON.parse(String(head.history_origin_json)) as JournalHistoryOrigin)
+        historyOrigin
       }
     }
     case 'item': {
@@ -72,22 +71,18 @@ export function readJournalDomainEntity(
         .prepare(`SELECT payload_json FROM journal_items
         WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
         .get(...prefix, operation.itemId)
-      return {
-        kind: 'item',
-        item: row ? (JSON.parse(String(row.payload_json)) as AgentJournalRenderItem) : null
-      }
+      const item: AgentJournalRenderItem | null = row ? JSON.parse(String(row.payload_json)) : null
+      return { kind: 'item', item }
     }
     case 'submission': {
       const row = db
         .prepare(`SELECT payload_json FROM journal_submission_attempts
         WHERE session_id=? AND epoch=? AND message_id=? AND current=1`)
         .get(...prefix, operation.clientMessageId)
-      return {
-        kind: 'submission',
-        submission: row
-          ? (JSON.parse(String(row.payload_json)) as AgentJournalSubmission)
-          : undefined
-      }
+      const submission: AgentJournalSubmission | undefined = row
+        ? JSON.parse(String(row.payload_json))
+        : undefined
+      return { kind: 'submission', submission }
     }
     case 'submission-body':
       return {
@@ -184,13 +179,9 @@ export function readJournalDomainEntity(
         .prepare(`SELECT queue_latest_stop_json FROM journal_chat_state
         WHERE session_id=? AND epoch=?`)
         .get(...prefix)!
-      return {
-        kind: 'latest-stop',
-        stop:
-          row.queue_latest_stop_json === null
-            ? null
-            : (JSON.parse(String(row.queue_latest_stop_json)) as JournalLatestStop)
-      }
+      const stop: JournalLatestStop | null =
+        row.queue_latest_stop_json === null ? null : JSON.parse(String(row.queue_latest_stop_json))
+      return { kind: 'latest-stop', stop }
     }
     case 'turn-removed':
       return {

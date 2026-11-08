@@ -29,7 +29,7 @@ const fixture = () => {
 it('compacts expired replay holes atomically while retaining current bodies, receipts and younger events', async () => {
   const { db, commit, item } = fixture()
   await commit(message('the current body'))
-  db.exec(`INSERT INTO journal_send_receipts VALUES('chat','epoch','accepted','{"acceptedAt":100}');
+  db.exec(`INSERT INTO journal_send_receipts(session_id,epoch,message_id,payload_json) VALUES('chat','epoch','accepted','{"acceptedAt":100}');
     UPDATE journal_chat_state SET last_sequence=65;
     INSERT INTO journal_events VALUES('chat','epoch',12,86400000,'{}')`)
   const insert = db.prepare(`INSERT INTO journal_events VALUES('chat','epoch',?,100,'{}')`)

@@ -15,7 +15,6 @@ import type { UnopenedSendJournal } from '../delivery/structured-agent-session-u
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 
 export type DeadGenerationJournal = UnopenedSendJournal & {
-  appendPlannedLifecycleBatch: AgentSessionJournal['appendPlannedLifecycleBatch']
   pendingSubmissions?: AgentSessionJournal['pendingSubmissions']
   itemFence: AgentSessionJournal['itemFence']
 }

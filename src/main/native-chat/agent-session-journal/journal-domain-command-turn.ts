@@ -178,6 +178,13 @@ export function applyJournalDomainCommandTurn(
         }
         step.items.push(
           ...writeJournalDomainCurrentItem(db, target, {
+            inputObservation: {
+              itemId: mutation.itemId,
+              seq: sequence,
+              fence: dispatch.fence,
+              ownerFence: stored?.ownerFence ?? dispatch.fence,
+              turnScope: mutation.turnScope
+            },
             item: stored ? journalItemRevisionValue(stored.item, next) : next,
             ...(stored ? { previous: stored } : {}),
             stopSettle,

@@ -72,7 +72,9 @@ export function turnVerdictFromReplacedRuntime(
 }
 
 export function lastProvenTurnLiveAt(
-  journal: Pick<AgentSessionJournal, 'stopMarks' | 'itemFence' | 'lastProviderActivityAt'>,
+  journal: Pick<AgentSessionJournal, 'itemFence' | 'lastProviderActivityAt'> & {
+    stopMarks: Pick<AgentSessionJournal['stopMarks'], 'latest'>
+  },
   item: AgentJournalRenderItem
 ): number | undefined {
   const stop = journal.stopMarks.latest()
@@ -85,7 +87,7 @@ export function lastProvenTurnLiveAt(
 
 /** Personal Stop owns these interrupted turns, suppressing provider-failure notices. */
 export function endedByPersonsStop(
-  journal: Pick<AgentSessionJournal, 'stopMarks'>,
+  journal: { stopMarks: Pick<AgentSessionJournal['stopMarks'], 'personStopDecides'> },
   turnEnds: readonly JournalLifecycleMutationInput[]
 ): boolean {
   const interrupted = turnEnds.flatMap((mutation) => {

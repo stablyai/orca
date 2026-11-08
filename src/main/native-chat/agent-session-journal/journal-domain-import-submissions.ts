@@ -2,7 +2,10 @@ import { readAnsweredTurn } from './projection/journal-dispatch-reducer'
 import type Database from '../../sqlite/sync-database'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import {
+  JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
+  journalDomainSubmissionColumns
+} from './journal-domain-submission-columns'
 import { stoppedHistoryCandidate } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { JournalReducerState } from './projection/journal-reducer'
 import {
@@ -41,6 +44,7 @@ export function restoredJournalDomainSubmission(
     candidate: state.inputs.candidates.has(id),
     admittedPersonal,
     echoObserved: state.inputs.echoes.has(agentJournalSubmissionKey(id)),
+    ended: state.inputs.ended.has(id),
     admission: {
       body:
         submission.dispatchState === 'pending' ||
@@ -99,34 +103,25 @@ export function insertJournalDomainImportedSubmission(
 ): void {
   const { submission, admission, handover } = attempt
   db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,
-    attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,
-    fingerprint,dispatch_state,candidate,admitted_personal,dispatch_fence,signed_out,recovered,payload_json,echo_observed,
-    admission_body_json,admission_family_id,handover_fence,facts_json)
-    VALUES(?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`).run(
+    attempt_sequence,attempt_index,current,item_id,ordinal,candidate,admitted_personal,payload_json,echo_observed,
+    admission_body_json,admission_family_id,handover_fence,facts_json,${JOURNAL_DOMAIN_SUBMISSION_COLUMNS.join(',')})
+    VALUES(${Array.from({ length: 16 + JOURNAL_DOMAIN_SUBMISSION_COLUMNS.length }, () => '?').join(',')}) ON CONFLICT DO NOTHING`).run(
     target.sessionId,
     target.epoch,
     submission.clientMessageId,
     attempt.sequence,
     attempt.index,
+    1,
     agentJournalSubmissionKey(submission.clientMessageId),
     attempt.ordinal,
-    submission.submittedAt,
-    submission.acceptedSequence ?? null,
-    submission.payloadFingerprint,
-    submission.dispatchState,
     Number(attempt.candidate),
     Number(attempt.admittedPersonal),
-    submission.fence,
-    Number(
-      submission.dispatchState === 'rejected' &&
-        readWholeAgentSessionFailureFact(submission.rejection)?.kind === 'notSignedIn'
-    ),
-    Number(submission.recovered === true),
     JSON.stringify(submission),
     Number(attempt.echoObserved),
     admission.body === null ? null : JSON.stringify(admission.body),
     admission.familyId,
     handover?.fence ?? null,
-    journalDomainSubmissionFactsJson(attempt)
+    journalDomainSubmissionFactsJson(attempt),
+    ...journalDomainSubmissionColumns(submission, attempt.carries)
   )
 }

@@ -184,11 +184,8 @@ it('imports settlement identity order and live lifecycle facts, discarding both 
     maintain(db, { kind: 'import-page', target: imported, page })
   }
   expect(
-    db.prepare('SELECT settlement_id,ordinal FROM journal_settlements ORDER BY ordinal').all()
-  ).toEqual([
-    { settlement_id: 'older', ordinal: 1 },
-    { settlement_id: 'newer', ordinal: 2 }
-  ])
+    db.prepare('SELECT settlement_id FROM journal_settlements ORDER BY settlement_id DESC').all()
+  ).toEqual([{ settlement_id: 'older' }, { settlement_id: 'newer' }])
   expect(
     db
       .prepare("SELECT item_id,lifecycle_state,live_work FROM journal_items WHERE item_id='tool'")
@@ -218,7 +215,7 @@ it('imports settlement identity order and live lifecycle facts, discarding both 
   }
   maintain(db, { kind: 'import-finish', header: resumed })
   expect(
-    db.prepare('SELECT settlement_id FROM journal_settlements ORDER BY ordinal').all()
+    db.prepare('SELECT settlement_id FROM journal_settlements ORDER BY settlement_id DESC').all()
   ).toEqual([{ settlement_id: 'older' }, { settlement_id: 'newer' }])
 })
 

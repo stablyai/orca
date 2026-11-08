@@ -125,6 +125,7 @@ export function writeJournalDomainLifecycleItem(
   }
   return {
     items,
+    inputObservation: { item: items[0]!, source: { ...row, ...mutation.linkage } },
     receipts: receipt ? [receipt] : [],
     ...(receipt ? { acceptedInputs: readJournalSqlAcceptedInputs(db, prefix) } : {})
   }

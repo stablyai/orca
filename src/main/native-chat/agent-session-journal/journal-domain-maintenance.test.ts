@@ -64,10 +64,10 @@ it('prunes proven retired epochs with atomic rollback while preserving incomplet
     db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,
       attempt_index,current,item_id,ordinal,submitted_at,fingerprint,dispatch_state,payload_json)
       VALUES(?,?,'send',1,0,1,'body',1,1,'fingerprint','accepted','accepted body')`).run(...prefix)
-    db.prepare(`INSERT INTO journal_send_receipts VALUES(?,?,'send','accepted receipt')`).run(
-      ...prefix
-    )
-    db.prepare(`INSERT INTO journal_settlements VALUES(?,?,'settlement',1)`).run(...prefix)
+    db.prepare(
+      `INSERT INTO journal_send_receipts(session_id,epoch,message_id,payload_json) VALUES(?,?,'send','accepted receipt')`
+    ).run(...prefix)
+    db.prepare(`INSERT INTO journal_settlements VALUES(?,?,'settlement')`).run(...prefix)
     db.prepare(
       `INSERT INTO journal_queue_cards VALUES(?,?,'queued',1,'waiting',1,NULL,'domain body')`
     ).run(...prefix)
@@ -355,7 +355,9 @@ it('packs retired payload bytes across tables and lets one oversized row progres
   insert.run('second', JSON.stringify({ text: 'α'.repeat(150 * 1024) }))
   db.prepare(`UPDATE journal_items SET original_stop_note_json=?
     WHERE item_id='second'`).run('x'.repeat(600 * 1024))
-  const receipt = db.prepare(`INSERT INTO journal_send_receipts VALUES('chat','before',?,?)`)
+  const receipt = db.prepare(
+    `INSERT INTO journal_send_receipts(session_id,epoch,message_id,payload_json) VALUES('chat','before',?,?)`
+  )
   receipt.run('first', JSON.stringify({ text: 'x'.repeat(600 * 1024) }))
   receipt.run('oversized', JSON.stringify({ text: 'x'.repeat(2 * 1024 * 1024) }))
   const prune = () =>

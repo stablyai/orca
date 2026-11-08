@@ -190,6 +190,7 @@ export function applyJournalDomainItem(
   }
   const rendered = journalRenderItem(itemId, revision, row.body, row, scope)
   const items = writeJournalDomainCurrentItem(db, target, {
+    inputObservation: row,
     item: previous ? journalItemRevisionValue(previous, rendered) : rendered,
     ...(previous
       ? {

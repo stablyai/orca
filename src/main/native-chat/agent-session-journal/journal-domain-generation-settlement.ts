@@ -2,13 +2,9 @@ import type Database from '../../sqlite/sync-database'
 import type { JournalWriterOperation } from './journal-writer-command'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalLifecycleBatchInput } from './journal-store-contracts'
-import {
-  planStaleStructuredAgentSessionState,
-  type StaleStructuredAgentSessionStateJournal
-} from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
+import { planStaleStructuredAgentSessionState } from '../agent-session-wire/termination/structured-agent-session-stale-state-settlement'
 import { planStructuredAgentSessionDeadGeneration } from '../agent-session-wire/termination/structured-agent-session-dead-generation-settlement'
 import { runningTurnLifecycleRevisions } from '../agent-session-wire/termination/structured-agent-session-stale-turn-verdict'
-import type { DeadGenerationJournal } from '../agent-session-wire/termination/structured-agent-session-unfinished-work'
 import { STALE_SESSION_ROW_PREFIX } from '../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import { isRootAgentJournalItem } from '../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -128,9 +124,7 @@ export function applyJournalDomainGenerationSettlement(
         ? { completedAt: exit.verdict.completedAt, ownerFence: exit.ownerFence }
         : undefined
     )
-    // The existing pure planner signatures include unused journal mutation methods.
-    const journal = reads as unknown as StaleStructuredAgentSessionStateJournal &
-      DeadGenerationJournal
+    const journal = reads
     if (operation.kind === 'stale-settle') {
       const plan = planStaleStructuredAgentSessionState({ ...operation.input, journal })
       value = plan.mutations.length

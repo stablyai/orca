@@ -40,12 +40,12 @@ export type StaleStructuredAgentSessionStateJournal = Pick<
   | 'itemBody'
   | 'submissions'
   | 'statusRead'
-  | 'inputOrder'
-  | 'stopMarks'
   | 'lastProviderActivityAt'
   | 'cursor'
-  | 'appendPlannedLifecycleBatch'
->
+> & {
+  inputOrder: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
+  stopMarks: Pick<AgentSessionJournal['stopMarks'], 'latest' | 'personStopDecides'>
+}
 
 export type StaleStructuredAgentSessionStateInput = {
   journal: StaleStructuredAgentSessionStateJournal

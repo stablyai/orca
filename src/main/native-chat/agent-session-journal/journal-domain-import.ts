@@ -20,7 +20,10 @@ import {
   foldQueuedHandOffInDoubt,
   placeQueuedHandOffInDoubt
 } from './submissions/journal-submission-fold'
-import { journalInputPresentationMember } from './input-order/journal-input-obligations'
+import {
+  journalInputPresentationMember,
+  type JournalInputEnd
+} from './input-order/journal-input-obligations'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { journalOutcomeSource } from './outcomes/journal-outcome-format'
 import { memoryJournalMap, memoryJournalSet } from './journal-memory-collections'
@@ -42,6 +45,7 @@ export type JournalDomainImportHead = {
   lastActivityAt: number
   derivedTurnItemId: string | null
   historyOrigin: JournalHistoryOrigin | null
+  acceptedHandoverSequence?: number
   queuePauseMarks: Omit<JournalQueuePauseMarks, 'cleared'> & {
     cleared?: Omit<NonNullable<JournalQueuePauseMarks['cleared']>, 'messageIds'>
   }
@@ -77,7 +81,11 @@ export type JournalDomainImportPage =
   | { kind: 'activity'; rows: { fence: number; lastActivityAt: number }[] }
   | { kind: 'queue-clear-members'; rows: { messageId: string }[] }
   | { kind: 'removed-turns'; rows: { turnId: string }[] }
-  | { kind: 'settlements'; rows: { settlementId: string; ordinal: number }[] }
+  | { kind: 'settlements'; rows: { settlementId: string }[] }
+  | {
+      kind: 'input-end-observations'
+      rows: { sourceItemKey: string; observation: JournalInputEnd }[]
+    }
 
 export type JournalDomainImportHeader = {
   sessionId: string
@@ -134,6 +142,7 @@ export function prepareJournalDomainImport(
       lastActivityAt: state.lastActivityAt,
       derivedTurnItemId: state.derivedTurnScope.snapshot(),
       historyOrigin: state.historyOrigin,
+      acceptedHandoverSequence: journalInputOrder(state).links.acceptedHandover(),
       queuePauseMarks: {
         ...pauseMarks,
         ...(cleared
@@ -238,9 +247,13 @@ function* importPages(
   yield* paged('receipts', [...memoryJournalMap(state.receipts).values()])
   yield* paged(
     'settlements',
-    [...memoryJournalSet(state.appliedSettlementIds)].map((settlementId, index) => ({
-      settlementId,
-      ordinal: index + 1
+    [...memoryJournalSet(state.appliedSettlementIds)].map((settlementId) => ({ settlementId }))
+  )
+  yield* paged(
+    'input-end-observations',
+    [...memoryJournalMap(state.inputs.ends)].map(([sourceItemKey, observation]) => ({
+      sourceItemKey,
+      observation
     }))
   )
   yield* paged('cards', [...cards.values()])

@@ -133,10 +133,15 @@ export function insertJournalDomainImportPage(
       break
     case 'receipts': {
       const insert =
-        db.prepare(`INSERT INTO journal_send_receipts(session_id,epoch,message_id,payload_json)
-        VALUES(?,?,?,?) ON CONFLICT DO NOTHING`)
+        db.prepare(`INSERT INTO journal_send_receipts(session_id,epoch,message_id,cursor_sequence,payload_json)
+        VALUES(?,?,?,?,?) ON CONFLICT DO NOTHING`)
       for (const receipt of page.rows) {
-        insert.run(...prefix, receipt.clientMessageId, JSON.stringify(receipt))
+        insert.run(
+          ...prefix,
+          receipt.clientMessageId,
+          receipt.cursor.sequence,
+          JSON.stringify(receipt)
+        )
       }
       break
     }
@@ -148,11 +153,19 @@ export function insertJournalDomainImportPage(
       }
       break
     case 'settlements': {
+      const insert = db.prepare(`INSERT INTO journal_settlements(session_id,epoch,settlement_id)
+        VALUES(?,?,?) ON CONFLICT DO NOTHING`)
+      for (const { settlementId } of page.rows) {
+        insert.run(...prefix, settlementId)
+      }
+      break
+    }
+    case 'input-end-observations': {
       const insert =
-        db.prepare(`INSERT INTO journal_settlements(session_id,epoch,settlement_id,ordinal)
+        db.prepare(`INSERT INTO journal_input_end_observations(session_id,epoch,source_item_key,observation_json)
         VALUES(?,?,?,?) ON CONFLICT DO NOTHING`)
-      for (const { settlementId, ordinal } of page.rows) {
-        insert.run(...prefix, settlementId, ordinal)
+      for (const { sourceItemKey, observation } of page.rows) {
+        insert.run(...prefix, sourceItemKey, JSON.stringify(observation))
       }
       break
     }
@@ -201,7 +214,7 @@ export function finishJournalDomainImport(
   db.prepare(`INSERT INTO journal_chat_state(workspace_id,session_id,epoch,last_sequence,retained_sequence,
     highest_fence,context_boundary,last_activity_at,derived_turn_item_id,history_origin_json,queue_latest_stop_json,
     queue_manual_stop_json,queue_resumed_sequence,queue_reopened_sequence,queue_clear_sequence,
-    queue_clear_operation_id,queue_clear_lifted,queue_failure_boundary) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    queue_clear_operation_id,queue_clear_lifted,queue_failure_boundary,accepted_handover_sequence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     ON CONFLICT(session_id) DO UPDATE SET
       epoch=excluded.epoch,last_sequence=excluded.last_sequence,retained_sequence=excluded.retained_sequence,
       highest_fence=excluded.highest_fence,context_boundary=excluded.context_boundary,
@@ -210,7 +223,8 @@ export function finishJournalDomainImport(
       queue_latest_stop_json=excluded.queue_latest_stop_json,queue_manual_stop_json=excluded.queue_manual_stop_json,
       queue_resumed_sequence=excluded.queue_resumed_sequence,queue_reopened_sequence=excluded.queue_reopened_sequence,
       queue_clear_sequence=excluded.queue_clear_sequence,queue_clear_operation_id=excluded.queue_clear_operation_id,
-      queue_clear_lifted=excluded.queue_clear_lifted,queue_failure_boundary=excluded.queue_failure_boundary
+      queue_clear_lifted=excluded.queue_clear_lifted,queue_failure_boundary=excluded.queue_failure_boundary,
+      accepted_handover_sequence=excluded.accepted_handover_sequence
     WHERE journal_chat_state.epoch IS NULL`).run(
     header.workspaceId,
     header.sessionId,
@@ -231,7 +245,8 @@ export function finishJournalDomainImport(
     head.queuePauseMarks.cleared?.sequence ?? null,
     head.queuePauseMarks.cleared?.operationId ?? null,
     Number(head.queuePauseMarks.cleared?.lifted ?? false),
-    head.queueFailureBoundary
+    head.queueFailureBoundary,
+    head.acceptedHandoverSequence ?? 0
   )
   const state = journalDomainImportState(db, header.sessionId)
   if (state.state !== 'ready') {

@@ -7,7 +7,10 @@ import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/a
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { claudeAgentRowFacts } from '../../claude/claude-subagent-journaled-identities'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
-import { journalItemLifecycleState } from './journal-item-status-metadata'
+import {
+  journalItemLifecycleState,
+  journalItemStatusMetadata
+} from './journal-item-status-metadata'
 import { lostLiveWorkJournalBody } from './item-lifecycle/journal-subagent-liveness'
 import { isUnverifiedEndAgentJournalToolCall } from '../../../shared/agent-journal-tool-call-lifecycle'
 
@@ -98,12 +101,16 @@ export const JOURNAL_DOMAIN_ITEM_COLUMNS = [
   'live_work',
   'context_window',
   'unverified_end',
-  'turn_completed_at'
+  'turn_completed_at',
+  'command_entry',
+  'assistant_prose',
+  'turn_scope_kind'
 ] as const
 
 /** One payload projection supplies import, current writes and derived Stop revisions. */
 export function journalDomainItemColumns(item: AgentJournalRenderItem, payload: string) {
   const metadata = journalDomainHistoryMetadata(item, payload)
+  const [, commandEntry, , assistantProse, turnScopeKind] = journalItemStatusMetadata(item)
   return {
     metadata,
     values: [
@@ -114,7 +121,10 @@ export function journalDomainItemColumns(item: AgentJournalRenderItem, payload: 
       metadata.wireBytes,
       item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null,
       ...journalDomainItemReadColumns(item),
-      ...journalDomainItemLifecycleColumns(item)
+      ...journalDomainItemLifecycleColumns(item),
+      commandEntry,
+      assistantProse,
+      turnScopeKind
     ]
   }
 }

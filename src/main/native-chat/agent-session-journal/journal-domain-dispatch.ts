@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { refreshJournalDomainAcceptedHandover } from './journal-domain-input-ends'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
@@ -221,6 +222,9 @@ export function applyJournalDomainDispatch(
         result.items = result.items.filter((item) => item.itemId !== itemId)
       }
     }
+    if (input.state === 'accepted') {
+      refreshJournalDomainAcceptedHandover(db, target, itemId)
+    }
     if (input.state === 'accepted' && next.providerItemId) {
       db.prepare(`INSERT INTO journal_item_aliases(session_id,epoch,provider_item_id,item_id) VALUES(?,?,?,?)
         ON CONFLICT(session_id,epoch,provider_item_id) DO UPDATE SET item_id=excluded.item_id`).run(
@@ -234,10 +238,11 @@ export function applyJournalDomainDispatch(
         cursor: nextCursor,
         acceptedAt: savedAt
       }
-      db.prepare(`INSERT INTO journal_send_receipts(session_id,epoch,message_id,payload_json) VALUES(?,?,?,?)
-        ON CONFLICT(session_id,epoch,message_id) DO UPDATE SET payload_json=excluded.payload_json`).run(
+      db.prepare(`INSERT INTO journal_send_receipts(session_id,epoch,message_id,cursor_sequence,payload_json) VALUES(?,?,?,?,?)
+        ON CONFLICT(session_id,epoch,message_id) DO UPDATE SET cursor_sequence=excluded.cursor_sequence,payload_json=excluded.payload_json`).run(
         ...prefix,
         input.clientMessageId,
+        receipt.cursor.sequence,
         JSON.stringify(receipt)
       )
       result.receipts.push(receipt)
