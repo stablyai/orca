@@ -13,7 +13,7 @@ import {
 import {
   createPathExistenceBatch,
   requirePathExistenceResults
-} from '../../../../src/shared/path-existence-batch'
+} from '../../../../src/shared/file-access/path-existence-batch'
 import { resolveTerminalFileLink } from '../../../../src/shared/terminal/links/terminal-links'
 import { getRepoIdFromWorktreeId } from '../../../../src/shared/worktree/id'
 import {

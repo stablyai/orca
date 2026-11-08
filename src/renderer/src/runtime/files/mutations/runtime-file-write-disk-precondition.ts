@@ -10,11 +10,11 @@ import {
   type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../../../shared/file-write-disk-precondition'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
 import {
   getDiskBaselineSignature,
   getWrittenContentDiskSignature
-} from '../../../../../shared/disk-baseline-signature'
+} from '../../../../../shared/file-write/disk-baseline-signature'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike

@@ -8,7 +8,7 @@ import { runtimePathsExist } from '@/runtime/files/metadata/runtime-path-existen
 import {
   PATH_EXISTENCE_BATCH_MAX,
   type PathExistenceResult
-} from '../../../shared/path-existence-batch'
+} from '../../../shared/file-access/path-existence-batch'
 import {
   getLocalWindowsWslAliasOption,
   getOpenFileRuntimeOwner,

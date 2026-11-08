@@ -6,7 +6,7 @@ import {
   hardenExistingSecureFile,
   isUnreadableError,
   writeSecureJsonFile
-} from '../../../../../shared/secure-file'
+} from '../../../../../shared/secure-storage/secure-file'
 import {
   E2EE_KEYPAIR_FILENAME as KEYPAIR_FILENAME,
   MAX_E2EE_KEYPAIR_FILE_BYTES as MAX_KEYPAIR_FILE_BYTES

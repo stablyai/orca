@@ -5,7 +5,7 @@ import {
   realpathAcrossWslDriveMount,
   windowsFsPath
 } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
-import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../../../shared/local-file-access'
+import { PATH_OUTSIDE_ALLOWED_DIRECTORIES } from '../../../../shared/file-access/local-file-access'
 import { getAllowedRoots } from './filesystem-allowed-roots'
 import { isDescendantOrEqual, isENOENT, normalizeExistingPath } from './filesystem-path-containment'
 import {

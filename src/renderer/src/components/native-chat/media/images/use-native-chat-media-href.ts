@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { RuntimeTerminalPathResolution } from '../../../../../../shared/runtime-file-contracts'
+import type { RuntimeTerminalPathResolution } from '../../../../../../shared/terminal/runtime-terminal-file-path'
 import {
   createNativeChatFileHref,
   routeNativeChatHref

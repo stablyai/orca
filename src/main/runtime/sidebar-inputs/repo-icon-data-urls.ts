@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { RepoIcon } from '../../../shared/repo-icon'
 import type { Repo } from '../../../shared/repo-types'
-import { readRasterImageDimensions } from '../../../shared/raster-image-dimensions'
+import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import {
   MAX_REPO_ICON_DATA_URL_BYTES,
   repoIconFeedKey,

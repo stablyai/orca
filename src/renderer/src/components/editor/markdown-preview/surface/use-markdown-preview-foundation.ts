@@ -6,7 +6,7 @@ import {
   sortMarkdownReviewNotes,
   type MarkdownReviewNote
 } from '@/lib/markdown-review-notes'
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { createMarkdownDocumentIndex } from '../../markdown/documents/markdown-doc-links'
 import { exceedsMarkdownRichModeSizeLimit } from '../../markdown/render-mode/markdown-rich-size-limit'
 import { previewHasAnnotationBlockKey } from '../review/markdown-preview-annotation-shortcut'

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
-import { normalizeQuickOpenRgLine } from '../../../../shared/quick-open-filter'
+import { normalizeQuickOpenRgLine } from '../../../../shared/quick-open/quick-open-filter'
 
 describe.skipIf(process.platform === 'win32')('real POSIX filename collision', () => {
   it('opens both literal-backslash and nested files without changing identity', async () => {

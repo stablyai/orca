@@ -19,7 +19,7 @@ import {
 import {
   TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY,
   type RuntimeTerminalPathResolution
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/terminal/runtime-terminal-file-path'
 import { HostFileRefusal, hostAbsentRefusal } from './host-file-refusal'
 import { isHtmlFilePath } from '../links/files/local-html-file-destinations'
 import {
