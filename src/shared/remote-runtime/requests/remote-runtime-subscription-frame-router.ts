@@ -4,6 +4,7 @@ import type { RemoteRuntimeHandshakeState } from '../remote-runtime-client-hands
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { RuntimeRpcEnvelopeSchema, type RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
+import { openSealedFrame, readSealedFrame } from '../remote-runtime-sealed-frame'
 
 type SubscriptionFrameRouterOptions<TResult> = {
   handshake: PairedE2EEClientHandshake
@@ -28,11 +29,11 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
   constructor(private readonly options: SubscriptionFrameRouterOptions<TResult>) {}
 
   handleFrame(data: WebSocket.RawData, isBinary: boolean): void {
-    if (isBinary) {
-      this.handleBinaryFrame(new Uint8Array(data as Buffer))
+    const frame = readSealedFrame(data, isBinary)
+    if (typeof frame !== 'string') {
+      this.handleBinaryFrame(frame)
       return
     }
-    const frame = data.toString()
     if (this.state === 'awaiting_ready') {
       this.handleReadyFrame(frame)
       return
@@ -155,8 +156,8 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
       )
       return
     }
-    const plaintext = this.options.handshake.channel.openBinary(frame)
-    if (plaintext === null) {
+    const opened = openSealedFrame(this.options.handshake, frame)
+    if (opened === null) {
       this.options.fail(
         new RemoteRuntimeClientError(
           'invalid_runtime_response',
@@ -165,7 +166,11 @@ export class RemoteRuntimeSubscriptionFrameRouter<TResult> {
       )
       return
     }
-    this.deliver(() => this.options.callbacks.onBinary?.(plaintext))
+    if (opened.kind === 'text') {
+      this.handleRpcFrame(opened.text)
+      return
+    }
+    this.deliver(() => this.options.callbacks.onBinary?.(opened.bytes))
   }
 
   // ws invokes this directly; route consumer throws to finishError instead of crashing the process.

@@ -2,6 +2,7 @@ import type { PairedE2EEClientHandshake } from '../e2ee/paired-e2ee-client-hands
 import type WebSocket from 'ws'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import { serializeRemoteRuntimePayload } from '../remote-runtime-memory-limits'
+import { openSealedText, type RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
 import {
   invalidRemoteRuntimeResponseError,
   parseRemoteRuntimeRpcFrame
@@ -12,7 +13,7 @@ import type {
 } from './remote-runtime-shared-control-types'
 
 export function parseSharedControlFrame(
-  frame: string,
+  frame: RemoteRuntimeSealedFrame,
   handshake: PairedE2EEClientHandshake | null,
   state: SharedControlConnectionState
 ):
@@ -28,7 +29,7 @@ export function parseSharedControlFrame(
       error: invalidRemoteRuntimeResponseError('Remote Orca runtime returned a frame before E2EE.')
     }
   }
-  const plaintext = handshake.channel.openText(frame)
+  const plaintext = openSealedText(handshake, frame)
   if (plaintext === null) {
     return {
       type: 'error',

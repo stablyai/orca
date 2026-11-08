@@ -1,4 +1,7 @@
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../remote-runtime-memory-limits'
+import {
+  REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
+  REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+} from '../remote-runtime-memory-limits'
 
 /**
  * A text or binary frame the host gzipped and sealed as a binary frame: a 6-byte header (kind,
@@ -6,6 +9,13 @@ import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../remote-runtime-memory
  * without base64's third, and the kind byte keeps it apart from terminal (0x74) and screencast frames.
  */
 export const COMPRESSED_FRAMES_CLIENT_CAPABILITY = 'transport.compressed-frames.v1' as const
+
+/** Field rollback without a release: a host stops compressing, a desktop or CLI stops asking. */
+export function compressedFramesDisabled(): boolean {
+  return (
+    typeof process !== 'undefined' && process.env?.ORCA_DISABLE_MOBILE_COMPRESSED_FRAMES === '1'
+  )
+}
 
 const COMPRESSED_FRAME_KIND = 0x7a
 const HEADER_BYTES = 6
@@ -76,7 +86,11 @@ export function inflateCompressedFrame(
   }
   const { payloadKind, inflatedByteLength, gzipped } = compressed
   // Why: the host never sends a frame above its outbound cap, so a larger claim is a corrupt frame.
-  if (inflatedByteLength > REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES) {
+  const maxBytes =
+    payloadKind === 'text'
+      ? REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
+      : REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES
+  if (inflatedByteLength > maxBytes) {
     throw new Error(`Compressed frame claims ${inflatedByteLength} bytes`)
   }
   // One byte past the claim lets a member that inflates larger fail the length check, not overrun.

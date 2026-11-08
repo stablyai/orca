@@ -8,6 +8,11 @@ import {
 } from '../../runtime-rpc-envelope'
 import { parseRemoteRuntimeJsonText } from './remote-runtime-request-frames'
 import type { RuntimeStatus } from '../../runtime-session-contracts'
+import {
+  acceptSealedReady,
+  openSealedText,
+  type RemoteRuntimeSealedFrame
+} from '../remote-runtime-sealed-frame'
 
 type RequestResponseRouterOptions<TResult> = {
   handshake: PairedE2EEClientHandshake
@@ -42,12 +47,12 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
         : 'runtime'
   }
 
-  handleTextFrame(frame: string): void {
+  handleFrame(frame: RemoteRuntimeSealedFrame): void {
     if (this.state === 'awaiting_ready') {
       this.handleReadyFrame(frame)
       return
     }
-    const plaintext = this.options.handshake.channel.openText(frame)
+    const plaintext = openSealedText(this.options.handshake, frame)
     if (plaintext === null) {
       this.options.finishError(
         new RemoteRuntimeClientError(
@@ -68,8 +73,8 @@ export class RemoteRuntimeRequestResponseRouter<TResult> {
     this.handleRpcFrame(plaintext)
   }
 
-  private handleReadyFrame(frame: string): void {
-    const readyFrame = this.options.handshake.acceptReadyText(frame)
+  private handleReadyFrame(frame: RemoteRuntimeSealedFrame): void {
+    const readyFrame = acceptSealedReady(this.options.handshake, frame)
     if (readyFrame !== 'accepted') {
       this.options.finishError(
         new RemoteRuntimeClientError(
