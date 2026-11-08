@@ -110,8 +110,8 @@ export function getClientHostedBrowserRowSelection(): ClientHostedBrowserRowSele
 }
 
 export function useClientHostedBrowserRowSelection(): ClientHostedBrowserRowSelection | null {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return selection
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () => selection)
 }
 
 /** Expire selection when the underlying group’s active tab changes, regardless of click/keyboard/palette source. */
