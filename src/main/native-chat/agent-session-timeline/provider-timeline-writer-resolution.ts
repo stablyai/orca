@@ -12,8 +12,10 @@ import {
   readAgentJournalTurn
 } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { cancelledJournalPromptBody } from '../agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/writing/journal-lifecycle-mutation'
-import type { JournalLifecycleIdentityMutationInput } from '../agent-session-journal/writing/journal-lifecycle-mutation'
+import type {
+  JournalLifecycleIdentityMutationInput,
+  JournalLifecycleMutationInput
+} from '../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { JournalTimelineView } from '../agent-session-journal/writing/journal-timeline-view'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import {
