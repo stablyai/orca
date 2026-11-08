@@ -144,7 +144,7 @@ export async function catchUpCodexThread(input: {
       const staging = createCodexHistoryImportPlan({
         sessionId: input.sessionId,
         threadId: input.threadId,
-        epoch: history.epoch,
+        epoch: history.cursor().epoch,
         reads: history.reads,
         nativePromptKeys: view.nativePromptKeys,
         subagentExecutions: input.subagentExecutions,

@@ -34,13 +34,10 @@ export function createStructuredAgentSessionResolvedAppend(
       run: async (bound) => {
         const result = await bound.journal.appendSteps([
           {
-            kind: 'command',
-            step: {
-              kind: 'resolved-item',
-              reservedBytes,
-              resolution,
-              options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
-            }
+            kind: 'resolved-item',
+            reservedBytes,
+            resolution,
+            options: structuredAgentSessionJournalAppendOptions(bound.fence, options)
           }
         ])
         if (result.failure) {

@@ -8,7 +8,7 @@ import type {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type { JournalStepOutcome } from '../../agent-session-journal/writing/journal-writer-step'
@@ -152,7 +152,7 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
 }
 
 export type StructuredAgentSessionEventTarget = {
-  journal: AgentSessionJournal
+  journal: SqlAgentSessionJournal
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
   publishLiveText?: (items: readonly AgentJournalRenderItem[]) => void

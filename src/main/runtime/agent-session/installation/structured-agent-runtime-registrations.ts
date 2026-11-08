@@ -11,10 +11,11 @@ import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-s
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
-import { restoreJournal } from '../../../native-chat/agent-session-journal/replay/journal-open'
+import { journalSqlReads } from '../../../native-chat/agent-session-journal/journal-sql-reads'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../../../acp/acp-launch-specs'
 import { acpStructuredAgentDefinition } from '../../../acp/acp-structured-agent-definitions'
+import type { AcpSavedSessionReads } from '../../../acp/acp-structured-resume-history'
 import { createAcpAgentConnection } from '../../../acp/acp-agent-connection'
 import { createOpenCodeAcpConnection } from '../../../opencode/opencode-acp-connection'
 import { acpStructuredLaunchPart } from '../../../acp/acp-structured-launch-resolution'
@@ -141,11 +142,17 @@ function createAcpAdapter(
 ): StructuredAgentRuntimeRegistration['createAdapter'] {
   return (context) => {
     const { deps, followUps } = context
-    const readJournal = (sessionId: string) => restoreJournal(context.journalDatabase.db, sessionId)
+    const { readers } = context.journalDatabase
+    const savedSession: AcpSavedSessionReads = {
+      hasProviderTurn: (sessionId, nativeId) =>
+        journalSqlReads(readers, sessionId).hasProviderTurn(nativeId),
+      savedItemIds: async (sessionId, itemIds) =>
+        new Set(await journalSqlReads(readers, sessionId).savedItemIds(itemIds))
+    }
     const definition = acpStructuredAgentDefinition(spec)
     const sources = structuredAgentLaunchSources(context)
     const part = acpStructuredLaunchPart(spec, {
-      readJournal,
+      savedSession,
       ...deps.acpLaunchCommand,
       dataDirectory: deps.stateDirectory,
       logger: deps.logger

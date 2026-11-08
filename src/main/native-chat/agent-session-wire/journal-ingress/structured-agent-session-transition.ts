@@ -1,10 +1,9 @@
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { JournalStep } from '../../agent-session-journal/writing/journal-step-writer'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type {
   JournalStepOutcome,
   JournalStepsResult,
-  JournalWriterSettlementResolution
+  JournalWriterSettlementResolution,
+  JournalWriterStep
 } from '../../agent-session-journal/writing/journal-writer-step'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
 import type {
@@ -15,17 +14,6 @@ import type { StructuredAgentSessionSinkQueue } from './structured-agent-session
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 // Admit each event’s writes whole so producer state cannot advance after partial admission.
 // The writer resolves every step in one command; failure retains the written prefix and skips later steps.
-
-export type StructuredAgentSessionTransitionJournal = Pick<
-  AgentSessionJournal,
-  | 'epoch'
-  | 'visitItems'
-  | 'itemBody'
-  | 'item'
-  | 'visitItemsWithLinkage'
-  | 'canonicalItemId'
-  | 'presentationRemoved'
->
 
 export type StructuredAgentSessionTransitionStep =
   | {
@@ -60,14 +48,12 @@ export type StructuredAgentSessionTransitionSink = {
   tryAppendTransition?(
     transition: StructuredAgentSessionTransition
   ): StructuredAgentSessionSinkAdmission
-  /** null until the sink binds to a journal. */
-  journalItems?(): StructuredAgentSessionTransitionJournal | null
 }
 
 export function createStructuredAgentSessionTransitionMembers(
   queue: StructuredAgentSessionSinkQueue
 ): Required<StructuredAgentSessionTransitionSink> {
-  return { tryAppendTransition: transitionAppend(queue), journalItems: queue.journalItems }
+  return { tryAppendTransition: transitionAppend(queue) }
 }
 
 function transitionAppend(
@@ -81,26 +67,24 @@ function transitionAppend(
       run: async (bound) => {
         const { journal, fence } = bound
         const result = await journal.appendSteps(
-          transition.steps.map((step): JournalStep => ({
-            kind: 'command',
-            step:
-              step.kind === 'item'
-                ? {
-                    kind: 'resolved-item',
-                    reservedBytes: step.reservedBytes,
-                    resolution: step.resolution,
-                    options: structuredAgentSessionJournalAppendOptions(fence, step.options)
-                  }
-                : {
-                    kind: 'settlement',
-                    settlementId: step.settlementId,
-                    reservedBytes: step.reservedBytes,
-                    fence,
-                    ownerFence: fence,
-                    recovered: step.recovered,
-                    resolution: step.resolution
-                  }
-          })),
+          transition.steps.map((step): JournalWriterStep =>
+            step.kind === 'item'
+              ? {
+                  kind: 'resolved-item',
+                  reservedBytes: step.reservedBytes,
+                  resolution: step.resolution,
+                  options: structuredAgentSessionJournalAppendOptions(fence, step.options)
+                }
+              : {
+                  kind: 'settlement',
+                  settlementId: step.settlementId,
+                  reservedBytes: step.reservedBytes,
+                  fence,
+                  ownerFence: fence,
+                  recovered: step.recovered,
+                  resolution: step.resolution
+                }
+          ),
           transition.beforeRun
         )
         transition.onResolved?.(result.outcomes, result)

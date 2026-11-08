@@ -1,12 +1,7 @@
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 
 /** Compare provider history against the existing chat at open. */
 export type StructuredAgentSessionHistoryJournal = Pick<
-  AgentSessionJournal,
-  'epoch' | 'reads' | 'readInOrder'
->
-
-export type StructuredAgentSessionLinkageJournal = Pick<
-  AgentSessionJournal,
-  'epoch' | 'visitItemsWithLinkage' | 'threadGoal' | 'threadGoalSource'
+  SqlAgentSessionJournal,
+  'cursor' | 'reads' | 'readInOrder'
 >

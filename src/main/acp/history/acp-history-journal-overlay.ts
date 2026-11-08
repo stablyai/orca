@@ -7,7 +7,6 @@ import {
   type JournalLifecycleMutationInput
 } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
-import type { StructuredAgentSessionTransitionJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { resolveJournalTimelineItem } from '../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
 import { journalTimelineItemsView } from '../../native-chat/agent-session-journal/writing/journal-timeline-view'
 import { resolveProviderTimelineSettlement } from '../../native-chat/agent-session-timeline/provider-timeline-writer-resolution'
@@ -24,28 +23,14 @@ export class AcpHistoryJournalOverlay {
       mutation: AcpHistoryItem
     }
   >()
-  readonly journal: StructuredAgentSessionTransitionJournal
   readonly sink: ProviderTimelineSink
 
-  constructor(epoch: string) {
+  constructor() {
     const item = (key: string) => this.staged.get(key)?.item ?? null
-    const visitItemsWithLinkage: StructuredAgentSessionTransitionJournal['visitItemsWithLinkage'] =
-      (visit) =>
-        this.staged.forEach(({ item }) => visit(item.itemId, item.sequence, item.body, item, item))
-    this.journal = {
-      epoch,
-      item,
-      canonicalItemId: (key) => key,
-      presentationRemoved: () => false,
-      itemBody: (key) => item(key)?.body ?? null,
-      visitItems: visitItemsWithLinkage,
-      visitItemsWithLinkage
-    }
     const view = journalTimelineItemsView(item, () =>
       [...this.staged.values()].map((staged) => staged.item)
     )
     this.sink = {
-      journalItems: () => this.journal,
       tryAppendTransition: (transition) => {
         const outcomes: JournalStepOutcome[] = []
         for (const step of transition.steps) {

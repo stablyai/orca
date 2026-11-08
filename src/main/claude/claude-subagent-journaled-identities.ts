@@ -1,6 +1,6 @@
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { namedSubagents } from '../../shared/native-chat/transcript/native-chat-subagent-items'
-import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import type { JournalItemLinkageVisitor } from '../native-chat/agent-session-journal/journal-store-contracts'
 import { isBoundedClaudeTaskId } from './claude-background-task-frames'
 import type { JournalThreadGoalSource } from '../native-chat/agent-session-journal/projection/journal-thread-goal-source'
 
@@ -41,10 +41,14 @@ export function claudeAgentRowFacts({
   return { agentId, parentRef: aliases ? providerParentRef : null, attempt: attempt ?? 1 }
 }
 
+/** The memory journal's fold; the SQL journal reads the same facts from claudeAgentRowFacts columns. */
+type ClaudeLinkageJournal = {
+  visitItemsWithLinkage(visit: JournalItemLinkageVisitor): void
+  threadGoalSource(): JournalThreadGoalSource
+}
+
 /** Visit visible items in insertion order, as the memory journal does. */
-export function readClaudeJournalSnapshot(
-  journal: Pick<StructuredAgentSessionLinkageJournal, 'visitItemsWithLinkage' | 'threadGoalSource'>
-): ClaudeJournalSnapshot {
+export function readClaudeJournalSnapshot(journal: ClaudeLinkageJournal): ClaudeJournalSnapshot {
   const reading = read(journal)
   return {
     canonicalByToolUse: [...reading.canonicalByToolUse],
@@ -84,9 +88,7 @@ export class ClaudeJournaledSubagents {
   }
 }
 
-function read(
-  journal: Pick<StructuredAgentSessionLinkageJournal, 'visitItemsWithLinkage'>
-): Reading {
+function read(journal: Pick<ClaudeLinkageJournal, 'visitItemsWithLinkage'>): Reading {
   const reading: Reading = {
     canonicalByToolUse: new Map(),
     attemptByAgent: new Map(),
