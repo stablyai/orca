@@ -45,6 +45,7 @@ export type ClaudeJournalTranslator = {
   readonly openTurnInLiveProviderCycle: boolean
   readonly openTurnHasInputWork: boolean
   flush: () => void
+  childTaskParent?: (taskId: string) => string | undefined
   childToolOwner?: ClaudeChildToolQueries['childToolOwner']
   childActivity?: ClaudeChildToolQueries['childActivity']
   retryPendingTaskRows?: () => StructuredAgentSessionSinkAdmission

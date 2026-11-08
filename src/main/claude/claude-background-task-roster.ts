@@ -4,7 +4,8 @@ import {
   record,
   taskDescription,
   taskId,
-  taskName
+  taskName,
+  taskAliasId
 } from './claude-background-task-frames'
 import type {
   ClaudeBackgroundTaskChange,
@@ -15,11 +16,21 @@ import type {
 export function observeClaudeBackgroundTaskRoster(
   tasks: unknown[],
   rows: Map<string, ClaudeBackgroundTaskRow>,
-  revise: (id: string, change: ClaudeBackgroundTaskChange) => void
+  revise: (id: string, change: ClaudeBackgroundTaskChange) => void,
+  admitOwned?: (id: string, task: Record<string, unknown>) => void
 ): void {
   for (const entry of tasks) {
     const task = record(entry)
     const id = task === null ? null : taskId(task)
+    if (
+      task &&
+      id &&
+      taskAliasId(task.parent_task_id) &&
+      task.ambient !== true &&
+      task.skip_transcript !== true
+    ) {
+      admitOwned?.(id, task)
+    }
     const row = id === null ? undefined : rows.get(id)
     if (
       task === null ||

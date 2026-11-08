@@ -137,7 +137,10 @@ export function projectNativeChatTranscript(
   const own: NativeChatMessage[] = []
   const byAgent = new Map<string, NativeChatMessage[]>()
   for (const message of sorted) {
-    const agentId = agentJournalItemSubagentId(message)
+    const agentId =
+      message.producerKind === 'background' && message.parentAgentId !== undefined
+        ? message.parentAgentId
+        : agentJournalItemSubagentId(message)
     if (agentId === null) {
       own.push(message)
     } else {

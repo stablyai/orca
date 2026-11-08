@@ -6,6 +6,8 @@ import { isBoundedClaudeTaskId } from './claude-background-task-tracker'
 type Reading = {
   canonicalByToolUse: Map<string, string>
   attemptByAgent: Map<string, number>
+  parents: Map<string, string>
+  backgrounds: Map<string, AgentJournalProducerLinkage>
   subagents: Set<string>
 }
 
@@ -22,6 +24,11 @@ export class ClaudeJournaledSubagents {
 
   /** Zero means no journaled attempt. */
   attempt = (agentId: string): number => this.current()?.attemptByAgent.get(agentId) ?? 0
+
+  parent = (taskId: string): string | undefined => this.current()?.parents.get(taskId)
+
+  background = (taskId: string): AgentJournalProducerLinkage | undefined =>
+    this.current()?.backgrounds.get(taskId)
 
   isSubagent = (taskId: string): boolean => this.current()?.subagents.has(taskId) === true
 
@@ -43,9 +50,19 @@ function read(journal: StructuredAgentSessionLinkageJournal): Reading {
   const reading: Reading = {
     canonicalByToolUse: new Map(),
     attemptByAgent: new Map(),
+    parents: new Map(),
+    backgrounds: new Map(),
     subagents: new Set()
   }
   journal.visitItemsWithLinkage((_itemId, _sequence, body, linkage) => {
+    if (linkage.agentId !== undefined) {
+      if (linkage.parentAgentId !== undefined) {
+        reading.parents.set(linkage.agentId, linkage.parentAgentId)
+      }
+      if (linkage.producerKind === 'background') {
+        reading.backgrounds.set(linkage.agentId, linkage)
+      }
+    }
     readAgentRow(reading, linkage)
     if (body.kind === 'message' && linkage.agentId === undefined) {
       for (const entry of body.blocks.flatMap(namedSubagents)) {

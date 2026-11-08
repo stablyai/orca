@@ -94,6 +94,8 @@ export function createClaudeJournalTranslator(
     sink: deps.sink,
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     rosteredByEarlierRun: journaled.isSubagent,
+    parentOf: subagents.parentOf,
+    journaledBackground: journaled.background,
     // Task output must open a resumed turn so the session does not appear idle while producing rows.
     openOutputTurn: (frame, observedAt) =>
       turn.ensureOpen(frame, claudeStreamTurnSource(frame), observedAt),
@@ -269,6 +271,7 @@ export function createClaudeJournalTranslator(
       return turn.isOpen && turn.inputChoiceWorkObserved
     },
     flush,
+    childTaskParent: subagents.parentOf,
     childToolOwner: childQueries.childToolOwner,
     childActivity: childQueries.childActivity,
     retryPendingTaskRows: () => backgroundTasks.retryPendingWrites(),

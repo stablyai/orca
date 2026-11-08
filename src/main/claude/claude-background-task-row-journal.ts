@@ -127,7 +127,7 @@ export function writeClaudeBackgroundTaskRow(
   lifecycle = false
 ): StructuredAgentSessionSinkAdmission {
   const body = claudeBackgroundTaskBody(row.block)
-  const serialized = JSON.stringify(body)
+  const serialized = JSON.stringify([body, row.linkage])
   if (serialized === row.lastSerialized) {
     return ADMITTED
   }
@@ -135,6 +135,7 @@ export function writeClaudeBackgroundTaskRow(
   const identity = claudeBackgroundTaskIdentity(id, row.generation)
   // A reused row belongs to the current run, so it must count as executing.
   const appendOptions = {
+    ...row.linkage,
     turnScope: turnScope(),
     executes: true as const,
     ...(lifecycle ? { lifecycle: true } : {})

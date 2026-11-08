@@ -1,3 +1,4 @@
+import { record, taskAliasId, taskId } from './claude-background-task-frames'
 import { BoundedMap } from '../../shared/bounded-map'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import type { ClaudeJournaledSubagents } from './claude-subagent-journaled-identities'
@@ -11,7 +12,7 @@ import { readClaudeSubagentTaskFrame } from './claude-subagent-task-frames'
 /** Bound live run attribution; older entries can fall back to journaled attempts. */
 const MAX_KNOWN_SUBAGENTS = 1024
 
-type KnownSubagent = { run: string | null; attempt: number }
+type KnownSubagent = { run: string | null; attempt: number; parentTaskId?: string }
 
 export type ClaudeSubagentIdentitiesDeps = {
   /** Top-level spawn calls can still receive an announcement; sidechain-only calls cannot. */
@@ -39,11 +40,29 @@ export class ClaudeSubagentIdentities {
       },
       isForwardedParentTool: deps.isForwardedParentTool,
       childOwnerRefOf: deps.childOwnerRefOf,
+      parentTaskOf: this.parentOf,
       spawnRefOf: (canonicalId) => this.known.get(canonicalId)?.run ?? null
     })
   }
 
+  parentOf = (taskId: string): string | undefined =>
+    this.known.get(taskId)?.parentTaskId ?? this.deps.journaled?.parent(taskId)
+
   observeSystemFrame(message: Record<string, unknown>): boolean {
+    if (message.type === 'system') {
+      const entries =
+        message.subtype === 'background_tasks_changed' && Array.isArray(message.tasks)
+          ? message.tasks
+          : [message]
+      for (const entry of entries) {
+        const task = record(entry)
+        const id = task && taskId(task)
+        const parent = task && taskAliasId(task.parent_task_id)
+        if (id && parent && task?.ambient !== true && task?.skip_transcript !== true) {
+          this.known.set(id, { run: null, attempt: 0, ...this.known.get(id), parentTaskId: parent })
+        }
+      }
+    }
     const frame = readClaudeSubagentTaskFrame(message)
     if (!frame) {
       return false
@@ -80,6 +99,6 @@ export class ClaudeSubagentIdentities {
       return
     }
     const previous = known?.attempt ?? this.deps.journaled?.attempt(taskId) ?? 0
-    this.known.set(taskId, { run, attempt: previous + 1 })
+    this.known.set(taskId, { run, attempt: previous + 1, parentTaskId: known?.parentTaskId })
   }
 }

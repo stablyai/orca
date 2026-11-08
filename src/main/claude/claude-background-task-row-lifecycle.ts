@@ -1,3 +1,4 @@
+import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   canReplaceBackgroundTaskState,
   isSettledBackgroundTaskState
@@ -19,6 +20,7 @@ import {
 
 export type ClaudeBackgroundTaskRow = {
   block: NativeChatBackgroundTaskBlock
+  linkage?: AgentJournalProducerLinkage
   lastSerialized: string | null
   /** Immutable alias for persistence/coalescing; the final frame may enrich the block's parent. */
   toolUseId?: string
@@ -207,4 +209,32 @@ export function reviseClaudeBackgroundTaskRow(
     }
   }
   row.block = next
+}
+
+export function attributeClaudeBackgroundTaskRow(
+  id: string,
+  row: ClaudeBackgroundTaskRow,
+  source: {
+    parentOf?: (taskId: string) => string | undefined
+    journaledBackground?: (taskId: string) => AgentJournalProducerLinkage | undefined
+  },
+  message?: Record<string, unknown>
+): void {
+  const recovered = source.journaledBackground?.(id)
+  const parent =
+    (message && taskAliasId(message.parent_task_id)) ??
+    row.linkage?.parentAgentId ??
+    source.parentOf?.(id) ??
+    recovered?.parentAgentId
+  if (parent) {
+    const toolUseId = row.block.parentToolUseId
+    row.linkage = {
+      ...recovered,
+      ...row.linkage,
+      agentId: id,
+      parentAgentId: parent,
+      producerKind: 'background',
+      ...(toolUseId ? { providerParentRef: toolUseId } : {})
+    }
+  }
 }

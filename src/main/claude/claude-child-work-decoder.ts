@@ -1,14 +1,6 @@
 // Roster changes, turn endings and spawn results cannot settle a child.
 
-import type {
-  AgentChildWorkKind,
-  AgentChildWorkOperation,
-  AgentChildWorkOutcome
-} from '../../shared/agent-status/child-work/agent-status-child-work'
-import type {
-  AgentChildWorkEvidence,
-  AgentChildWorkLiveObservation
-} from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import {
   classifyClaudeBackgroundTaskKind,
   liveClaudeTaskRunState,
@@ -21,88 +13,57 @@ import {
   taskUsageTotalTokens,
   terminalClaudeTaskRunState
 } from './claude-background-task-frames'
-import { isClaudeSubagentTask } from './claude-subagent-task-frames'
+import { claudeStartedTaskKind } from './claude-subagent-task-frames'
 import { ClaudeAgentWaitCalls } from './claude-agent-wait-calls'
-import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../shared/orca-cli-invocations'
 import {
   claudeChildWorkOutcome,
+  claudeChildWorkObservation,
+  type DecodedClaudeTask,
+  type EndedClaudeTask,
   claudeTaskProgressFacts,
   type ClaudeTaskFacts
 } from './claude-child-work-evidence'
-
-type DecodedClaudeTask = {
-  kind: AgentChildWorkKind
-  backgrounded: boolean
-  /** Monitors stay monitoring until the provider reports them running. */
-  running: boolean
-  name?: string
-  description?: string
-  toolUseId?: string
-  /** Runs `orca orchestration check --wait`: waiting on worker agents, so agent work. */
-  awaitsAgents?: true
-}
 
 type ClaudeToolOwner = (toolUseId: string) => string | null
 
 type PendingEdge = (observedAt: number) => AgentChildWorkEvidence
 
-function observation(
-  id: string,
-  task: DecodedClaudeTask,
-  facts: ClaudeTaskFacts,
-  observedAt: number,
-  waiting: boolean
-): AgentChildWorkLiveObservation {
-  const operation: AgentChildWorkOperation | undefined = facts.toolName
-    ? { toolName: facts.toolName, basis: 'reported', observedAt }
-    : task.awaitsAgents
-      ? {
-          toolName: 'Bash',
-          input: ORCA_ORCHESTRATION_WAIT_COMMAND,
-          basis: 'reported',
-          observedAt
-        }
-      : undefined
-  return {
-    handle: {
-      idKind: 'task_id',
-      id,
-      ...(task.toolUseId !== undefined ? { runId: task.toolUseId } : {})
-    },
-    kind: task.kind,
-    residency: task.backgrounded ? 'background' : 'foreground',
-    state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
-    ...(task.name ? { name: task.name, agentType: task.name } : {}),
-    ...(task.description ? { description: task.description } : {}),
-    ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
-    ...(operation ? { operation } : {}),
-    ...(facts.lastMessage ? { lastMessage: facts.lastMessage } : {}),
-    // Only background tasks expose a stop target.
-    stoppable: task.backgrounded
-  }
-}
-
 export class ClaudeChildWorkDecoder {
   private readonly live = new Map<string, DecodedClaudeTask>()
   /** Retain ended runs for the session to distinguish wakes from late starts. */
-  private readonly ended = new Map<
-    string,
-    {
-      run: string | undefined
-      outcome: AgentChildWorkOutcome
-      task?: DecodedClaudeTask
-    }
-  >()
+  private readonly ended = new Map<string, EndedClaudeTask>()
+  private readonly childrenByOwner = new Map<string, Set<string>>()
   private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
   private readonly agentWaits = new ClaudeAgentWaitCalls()
   /** `ownerOf` names the subagent that made a child tool call; an ending task wakes it. */
-  observe(message: Record<string, unknown>, ownerOf?: ClaudeToolOwner): void {
+  observe(
+    message: Record<string, unknown>,
+    ownerOf?: ClaudeToolOwner,
+    parentOf?: (taskId: string) => string | undefined
+  ): void {
     if (message.type === 'assistant') {
       this.agentWaits.observe(message)
       return
     }
     if (message.type !== 'system') {
+      return
+    }
+    if (message.subtype === 'background_tasks_changed') {
+      if (Array.isArray(message.tasks)) {
+        for (const entry of message.tasks) {
+          const task = record(entry)
+          const id = task && taskId(task)
+          if (
+            task &&
+            id &&
+            !this.ended.has(id) &&
+            (taskAliasId(task.parent_task_id) || this.live.get(id)?.parentTaskId || parentOf?.(id))
+          ) {
+            this.started(id, { ...task, is_backgrounded: true }, parentOf)
+          }
+        }
+      }
       return
     }
     const id = taskId(message)
@@ -111,7 +72,7 @@ export class ClaudeChildWorkDecoder {
     }
     switch (message.subtype) {
       case 'task_started':
-        this.started(id, message)
+        this.started(id, message, parentOf)
         return
       case 'task_progress':
         this.progressed(id, message)
@@ -147,6 +108,7 @@ export class ClaudeChildWorkDecoder {
   clear(): void {
     this.live.clear()
     this.ended.clear()
+    this.childrenByOwner.clear()
     this.agentWaits.clear()
     this.waiting = new Set()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
@@ -158,7 +120,11 @@ export class ClaudeChildWorkDecoder {
     return pending.map((edge) => edge(observedAt))
   }
 
-  private started(id: string, message: Record<string, unknown>): void {
+  private started(
+    id: string,
+    message: Record<string, unknown>,
+    parentOf?: (id: string) => string | undefined
+  ): void {
     const toolUseId = taskAliasId(message.tool_use_id)
     const awaitsAgents = this.agentWaits.take(toolUseId)
     if (message.ambient === true || message.skip_transcript === true) {
@@ -171,7 +137,7 @@ export class ClaudeChildWorkDecoder {
     if (ended?.run !== undefined && ended.run === toolUseId && ended.outcome !== 'succeeded') {
       return
     }
-    const kind = startedTaskKind(message)
+    const kind = claudeStartedTaskKind(message)
     this.upsert(
       id,
       {
@@ -185,6 +151,8 @@ export class ClaudeChildWorkDecoder {
         name: taskName(message) ?? existing?.name,
         description: taskDescription(message.description) ?? existing?.description,
         toolUseId: toolUseId ?? existing?.toolUseId,
+        parentTaskId:
+          taskAliasId(message.parent_task_id) ?? existing?.parentTaskId ?? parentOf?.(id),
         ...(awaitsAgents || existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
       },
       {},
@@ -193,8 +161,12 @@ export class ClaudeChildWorkDecoder {
   }
 
   /** Claude resumes a finished subagent when a task it launched notifies; show it working from that frame, not its restart a moment later. */
-  private wakeOwner(toolUseId: string | undefined, ownerOf: ClaudeToolOwner | undefined): void {
-    const ownerId = toolUseId ? ownerOf?.(toolUseId) : null
+  private wakeOwner(
+    toolUseId: string | undefined,
+    ownerOf: ClaudeToolOwner | undefined,
+    parentTaskId?: string
+  ): void {
+    const ownerId = parentTaskId ?? (toolUseId ? ownerOf?.(toolUseId) : null)
     const owner = ownerId ? this.ended.get(ownerId) : undefined
     if (ownerId && owner?.outcome === 'succeeded' && owner.task?.kind === 'agent') {
       this.upsert(ownerId, { ...owner.task, running: true }, {}, true)
@@ -230,7 +202,6 @@ export class ClaudeChildWorkDecoder {
       }
       return
     }
-    // Late updates cannot reopen an ended task.
     if (!existing && this.ended.has(id)) {
       return
     }
@@ -251,6 +222,7 @@ export class ClaudeChildWorkDecoder {
         name: name ?? existing?.name,
         description: description ?? existing?.description,
         toolUseId: existing?.toolUseId,
+        parentTaskId: existing?.parentTaskId,
         ...(existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
       },
       {},
@@ -264,9 +236,38 @@ export class ClaudeChildWorkDecoder {
     facts: ClaudeTaskFacts,
     restart = false
   ): void {
+    const ownerBecameLive = !this.live.has(id) || restart
     this.ended.delete(id)
+    this.removeOwnerIndex(id)
     this.live.set(id, task)
+    if (task.parentTaskId) {
+      const children = this.childrenByOwner.get(task.parentTaskId) ?? new Set<string>()
+      children.add(id)
+      this.childrenByOwner.set(task.parentTaskId, children)
+    }
     this.report(id, task, facts, restart)
+    // Admission can resolve a child's raw owner only after that owner's live edge.
+    if (!ownerBecameLive) {
+      return
+    }
+    for (const childId of this.childrenByOwner.get(id) ?? []) {
+      const child = this.live.get(childId)
+      if (child && childId !== id) {
+        this.report(childId, child, {})
+      }
+    }
+  }
+
+  private removeOwnerIndex(id: string): void {
+    const parent = this.live.get(id)?.parentTaskId
+    if (parent === undefined) {
+      return
+    }
+    const children = this.childrenByOwner.get(parent)
+    children?.delete(id)
+    if (children?.size === 0) {
+      this.childrenByOwner.delete(parent)
+    }
   }
 
   /** Read waiting state at drain so all queued live edges agree. */
@@ -274,7 +275,7 @@ export class ClaudeChildWorkDecoder {
     this.pending.push((observedAt) => ({
       type: 'live',
       observedAt,
-      child: observation(id, task, facts, observedAt, this.waiting.has(id)),
+      child: claudeChildWorkObservation(id, task, facts, observedAt, this.waiting.has(id)),
       ...(restart ? { restart: true } : {})
     }))
   }
@@ -290,6 +291,7 @@ export class ClaudeChildWorkDecoder {
     ownerOf?: ClaudeToolOwner
   ): void {
     const task = this.live.get(id)
+    this.removeOwnerIndex(id)
     this.live.delete(id)
     const outcome = claudeChildWorkOutcome(status)
     this.ended.set(id, {
@@ -300,7 +302,7 @@ export class ClaudeChildWorkDecoder {
     })
     // Every ending but a stop notifies, which wakes the subagent that launched the task.
     if (outcome !== 'cancelled') {
-      this.wakeOwner(reported.runId ?? task?.toolUseId, ownerOf)
+      this.wakeOwner(reported.runId ?? task?.toolUseId, ownerOf, task?.parentTaskId)
     }
     this.pending.push((observedAt) => ({
       type: 'ended',
@@ -315,11 +317,4 @@ export class ClaudeChildWorkDecoder {
       ...(reported.totalTokens !== undefined ? { totalTokens: reported.totalTokens } : {})
     }))
   }
-}
-
-/** Releases predating `task_type` still name an agent in `subagent_type`. */
-function startedTaskKind(message: Record<string, unknown>): AgentChildWorkKind {
-  return isClaudeSubagentTask(message)
-    ? 'agent'
-    : classifyClaudeBackgroundTaskKind(message.task_type)
 }

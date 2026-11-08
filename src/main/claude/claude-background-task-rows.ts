@@ -1,9 +1,11 @@
+import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { isSettledBackgroundTaskState } from '../../shared/native-chat/input/native-chat-background-task-row'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { BoundedMap } from '../../shared/bounded-map'
 import { record, taskAliasId } from './claude-background-task-frames'
 import {
+  attributeClaudeBackgroundTaskRow,
   claudeBackgroundTaskPatchChange,
   claudeBackgroundTaskToolUseId,
   canonicalClaudeBackgroundTaskId,
@@ -44,6 +46,8 @@ export type ClaudeBackgroundTaskRowsDeps = {
   /** Require a forwarded top-level invocation on first admission to exclude nested children. */
   isForwardedParentTool: (toolUseId: string) => boolean
   /** Recover earlier-run subagent ownership when Claude does not repeat its announcement. */
+  parentOf?: (taskId: string) => string | undefined
+  journaledBackground?: (taskId: string) => AgentJournalProducerLinkage | undefined
   rosteredByEarlierRun?: (taskId: string) => boolean
   /** Reopen provider-resumed turns before journaling output so the session reports working. */
   openOutputTurn?: (frame: Record<string, unknown>, observedAt: number) => void
@@ -126,8 +130,19 @@ export class ClaudeBackgroundTaskRows {
       if (!Array.isArray(message.tasks)) {
         return false
       }
-      observeClaudeBackgroundTaskRoster(message.tasks, this.rows, (id, change) =>
-        this.revise(id, change)
+      observeClaudeBackgroundTaskRoster(
+        message.tasks,
+        this.rows,
+        (id, change) => this.revise(id, change),
+        (id, task) => {
+          const row = this.rows.get(id)
+          if (row) {
+            this.attribute(id, row, task)
+            this.write(id)
+          } else if (!this.ledgers.terminalTaskIds.has(id)) {
+            this.observeStart(id, { ...task, is_backgrounded: true })
+          }
+        }
       )
       return true
     }
@@ -139,15 +154,7 @@ export class ClaudeBackgroundTaskRows {
       return false
     }
     if (message.subtype === 'task_started') {
-      return observeClaudeBackgroundTaskStart({
-        id,
-        message,
-        rows: this.rows,
-        ledgers: this.ledgers,
-        isForwardedParentTool: this.deps.isForwardedParentTool,
-        openRow: (taskId, frame) => this.openRow(taskId, frame),
-        maxRows: MAX_TASK_ROWS
-      })
+      return this.observeStart(id, message)
     }
     if (this.ledgers.foreign.has(id)) {
       return true
@@ -160,6 +167,21 @@ export class ClaudeBackgroundTaskRows {
       return this.observeNotification(id, message)
     }
     return this.observePatch(id, message)
+  }
+
+  private observeStart(id: string, message: Record<string, unknown>): boolean {
+    return observeClaudeBackgroundTaskStart({
+      id,
+      message,
+      rows: this.rows,
+      ledgers: this.ledgers,
+      parentOf: this.deps.parentOf,
+      isForwardedParentTool: this.deps.isForwardedParentTool,
+      openRow: (taskId, frame) => this.openRow(taskId, frame),
+      attribute: (id, row, frame) => this.attribute(id, row, frame),
+      write: (id) => this.write(id),
+      maxRows: MAX_TASK_ROWS
+    })
   }
 
   settleSession(): void {
@@ -186,7 +208,9 @@ export class ClaudeBackgroundTaskRows {
 
   private openRow(id: string, message: Record<string, unknown>): void {
     const generation = this.ledgers.generations.next(id)
-    this.rows.set(id, newClaudeBackgroundTaskRow(id, message, this.now(), generation))
+    const row = newClaudeBackgroundTaskRow(id, message, this.now(), generation)
+    this.rows.set(id, row)
+    this.attribute(id, row, message)
     this.write(id)
   }
 
@@ -274,6 +298,14 @@ export class ClaudeBackgroundTaskRows {
     this.writeRow(id, row, openOutputTurn, lifecycle)
   }
 
+  private attribute(
+    id: string,
+    row: ClaudeBackgroundTaskRow,
+    message?: Record<string, unknown>
+  ): void {
+    attributeClaudeBackgroundTaskRow(id, row, this.deps, message)
+  }
+
   private writeRow(
     id: string,
     row: ClaudeBackgroundTaskRow,
@@ -281,6 +313,7 @@ export class ClaudeBackgroundTaskRows {
     lifecycle = false
   ): void {
     const journaling = this.journaling
+    this.attribute(id, row)
     this.writer.write(
       id,
       row,
