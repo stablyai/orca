@@ -14,6 +14,7 @@ export function AgentLaunchSetupSubmenu({
   renderAnchor,
   disabled,
   label,
+  returnFocus,
   children
 }: {
   open: boolean
@@ -21,10 +22,13 @@ export function AgentLaunchSetupSubmenu({
   renderAnchor: (trigger: ReactElement) => ReactElement
   disabled?: boolean
   label: string
-  children: ReactNode
+  /** Caller owns keyboard focus (a search input): hover-open leaves it there and closing returns it. */
+  returnFocus?: () => void
+  children: (focusPanel: boolean) => ReactNode
 }) {
   const trigger = useRef<HTMLDivElement>(null)
   const segment = useRef<HTMLButtonElement>(null)
+  const [focusPanel, setFocusPanel] = useState(true)
   const content = useRef<HTMLDivElement>(null)
   const [sideOffset, setSideOffset] = useState(4)
   useLayoutEffect(() => {
@@ -48,15 +52,37 @@ export function AgentLaunchSetupSubmenu({
       observer.disconnect()
     }
   }, [open])
+  const wasOpen = useRef(open)
+  useLayoutEffect(() => {
+    const closed = wasOpen.current && !open
+    wasOpen.current = open
+    const active = document.activeElement
+    // Why: a close the caller drives (hover grace, another row) unmounts a focused panel; keep typing in the caller's input.
+    if (
+      closed &&
+      returnFocus &&
+      (!active || active === document.body || content.current?.contains(active))
+    ) {
+      returnFocus()
+    }
+  }, [open, returnFocus])
   const segmentRelease = useRef(false)
   const focusSearch = () =>
     content.current?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')?.focus({
       preventScroll: true
     })
-  const close = (returnFocus: 'row' | 'segment') => {
+  const openExplicitly = () => {
+    setFocusPanel(true)
+    onOpenChange(true)
+    focusSearch()
+  }
+  const close = (target: 'row' | 'segment') => {
     onOpenChange(false)
-    const target = returnFocus === 'row' ? trigger.current : segment.current
-    target?.focus()
+    if (returnFocus) {
+      returnFocus()
+    } else {
+      ;(target === 'row' ? trigger.current : segment.current)?.focus()
+    }
   }
   return (
     <DropdownMenuSub
@@ -99,8 +125,7 @@ export function AgentLaunchSetupSubmenu({
         onKeyDown={(event) => {
           if (!disabled && event.key === 'ArrowRight') {
             event.preventDefault()
-            onOpenChange(true)
-            focusSearch()
+            openExplicitly()
           }
         }}
       >
@@ -109,13 +134,17 @@ export function AgentLaunchSetupSubmenu({
             ref={segment}
             variant="menu-segment"
             size="icon-sm"
+            // Why: stretch to the row so compact omnibox rows keep their height.
+            className="h-auto min-h-6 self-stretch"
             type="button"
             aria-label={label}
             aria-haspopup="menu"
             aria-expanded={open}
             disabled={disabled}
-            onPointerEnter={(event) => {
-              if (!disabled && event.pointerType === 'mouse') {
+            // Why move, not enter: like Radix's sub-trigger, rows shifting under a resting pointer must not open setup.
+            onPointerMove={(event) => {
+              if (!disabled && event.pointerType === 'mouse' && !open) {
+                setFocusPanel(!returnFocus)
                 onOpenChange(true)
               }
             }}
@@ -123,8 +152,7 @@ export function AgentLaunchSetupSubmenu({
             onClick={(event) => {
               event.stopPropagation()
               trigger.current?.focus()
-              onOpenChange(true)
-              focusSearch()
+              openExplicitly()
             }}
             onKeyDown={(event) => {
               event.stopPropagation()
@@ -155,14 +183,34 @@ export function AgentLaunchSetupSubmenu({
         variant="picker"
         className="flex w-104 min-w-0 max-w-[calc(100vw-1rem)] max-h-(--radix-dropdown-menu-content-available-height) flex-col"
         onFocusCapture={(event) => {
-          if (event.target === event.currentTarget) {
+          if (event.target !== event.currentTarget) {
+            return
+          }
+          // Why: after a keystroke Radix autofocuses even a hover-opened panel (rows can shift under a resting pointer).
+          if (!focusPanel && returnFocus) {
+            returnFocus()
+          } else {
             focusSearch()
+          }
+        }}
+        onPointerMove={() => {
+          if (!focusPanel) {
+            setFocusPanel(true)
           }
         }}
         onClick={(event) => event.stopPropagation()}
         onFocusOutside={(event) => {
           const row = trigger.current?.closest('[data-agent-launch-row]')
           const menu = trigger.current?.closest('[data-slot="dropdown-menu-content"]')
+          if (returnFocus && event.target === menu) {
+            // Radix focuses the root menu when the pointer leaves the row; keep typing where it was.
+            const previous = event.detail.originalEvent.relatedTarget
+            if (previous instanceof HTMLElement && content.current?.contains(previous)) {
+              previous.focus({ preventScroll: true })
+            } else {
+              returnFocus()
+            }
+          }
           // Nested option menus and pointer grace may move focus outside this portal.
           if (
             !(
@@ -206,7 +254,7 @@ export function AgentLaunchSetupSubmenu({
           }
         }}
       >
-        {children}
+        {children(focusPanel)}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )
