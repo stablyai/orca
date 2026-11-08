@@ -295,7 +295,10 @@ export async function switchBranchGuarded(
         (commitTarget && (await readCurrentBranch(worktreePath, options)) !== null)
       ) {
         if (commitTarget) {
-          throw new Error(gitFailureLine(readGitCommandFailureStderr(error) ?? '') ?? undefined)
+          throw new Error(
+            gitFailureLine(readGitCommandFailureStderr(error) ?? '') ??
+              "Orca couldn't check out this commit. Check this repository in a terminal, then try again."
+          )
         }
         throw typeof target === 'string' ? error : branchSwitchFailure(error, branch)
       }
