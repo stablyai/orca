@@ -5,6 +5,9 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { personStopDecidesTurn } from '../../native-chat/agent-session-journal/context-epochs/journal-stop-turn-end'
 import { createJournalReducerState } from '../../native-chat/agent-session-journal/projection/journal-reducer'
 import { ClaudeControlRequestError } from '../claude-agent-sdk-control-requests'
+import { journalTimelineItemsView } from '../../native-chat/agent-session-journal/writing/journal-timeline-view'
+import { resolveJournalTimelineItem } from '../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
+import type { StructuredAgentSessionEventSink } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   PROVIDER_SESSION_ID,
   USER_MESSAGE,
@@ -33,6 +36,32 @@ async function runningChat(claude: ReturnType<typeof fakeClaude>): Promise<{
   const bodies = new Map<string, AgentJournalItemBody>()
   const journal = createJournalReducerState('session-1', 'epoch-1')
   const adapter = adapterFor(claude)
+  const view = journalTimelineItemsView(
+    (itemId) => {
+      const body = bodies.get(itemId)
+      return body ? { itemId, revision: 1, body, sequence: 1, observedAt: 1 } : null
+    },
+    () => [],
+    (turnId, endedAt) => personStopDecidesTurn(journal, turnId, endedAt)
+  )
+  const revise: NonNullable<StructuredAgentSessionEventSink['tryReviseResolvedItem']> = (
+    reservedBytes,
+    resolution,
+    options,
+    onOutcome
+  ) => {
+    const result = resolveJournalTimelineItem(view, resolution, options.turnScope, reservedBytes)
+    const stopped = result.stopped ? { stopped: true as const } : {}
+    if (result.kind === 'resolved') {
+      bodies.set(agentJournalItemKey(result.item.identity), result.item.body)
+    }
+    onOutcome?.(
+      result.kind === 'resolved'
+        ? { kind: 'committed', wrote: true, ...stopped }
+        : { kind: 'dropped', ...stopped }
+    )
+    return { accepted: true }
+  }
   await adapter.acquire({
     identity: identityFor(),
     fence: 7,
@@ -41,7 +70,9 @@ async function runningChat(claude: ReturnType<typeof fakeClaude>): Promise<{
       appendItem: (identity, body) => bodies.set(agentJournalItemKey(identity), body),
       appendTombstone: (identity) => bodies.delete(agentJournalItemKey(identity)),
       publish: vi.fn(),
-      journalStopDecidesTurn: (turnId, endedAt) => personStopDecidesTurn(journal, turnId, endedAt)
+      // Resolve revisions as the writer would, against this chat's recorded Stop.
+      tryReviseResolvedItem: revise,
+      tryReviseResolvedItemAndPublish: revise
     }
   })
   await adapter.dispatch({

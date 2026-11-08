@@ -66,6 +66,9 @@ export class JournalStepWriter {
       dropped = plan === null
       return plan ?? []
     })
+    if (outcome?.kind === 'committed') {
+      return { ...outcome, wrote: rows.length > 0 }
+    }
     return (
       outcome ?? (dropped ? { kind: 'dropped' } : { kind: 'committed', wrote: rows.length > 0 })
     )

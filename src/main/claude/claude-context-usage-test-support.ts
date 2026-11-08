@@ -77,7 +77,6 @@ export function journal({ deferred = false } = {}) {
       }
     })
   const sink: StructuredAgentSessionEventSink = {
-    journalStopDecidesTurn: (turnId, at) => personStopDecidesTurn(stopState, turnId, at),
     appendItem: (...args) => run(() => appendItem(...args)),
     tryReviseResolvedItem: revise,
     tryReviseResolvedItemAndPublish: revise,

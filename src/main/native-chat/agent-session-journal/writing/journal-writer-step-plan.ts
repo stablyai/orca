@@ -37,6 +37,9 @@ export function planJournalWriterStep(
       onResolved(resolved)
       return null
     }
+    if (resolved.stopped) {
+      onResolved({ kind: 'committed', wrote: true, stopped: true })
+    }
     return planJournalWriterStep(
       state,
       { kind: 'item', ...resolved.item, options: step.options, reservedBytes: step.reservedBytes },

@@ -88,9 +88,6 @@ export class StructuredAgentSessionSinkQueue {
     }
   }
 
-  journalStopDecidesTurn = (turnId: string, endedAt: number): boolean =>
-    this.target?.journal.stopMarks.personStopDecides(turnId, endedAt) ?? false
-
   bindReadingControl(control: StructuredAgentSessionReadingControl): () => void {
     this.readingControl = control
     this.hasBoundReadingControl = true

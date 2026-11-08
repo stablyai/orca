@@ -75,12 +75,21 @@ export type JournalTimelineItemResolution =
       failureItemId: string
       write: AgentJournalTurnRowWrite
     }
+  /** A person's Stop at the write position picks one of a provider result's two readings. */
+  | {
+      kind: 'stop-decided'
+      turnId: string
+      endedAt: number
+      ran: JournalTimelineItemResolution | null
+      stopped: JournalTimelineItemResolution | null
+    }
 
-export type JournalTimelineItemResult =
+export type JournalTimelineItemResult = (
   | { kind: 'resolved'; item: JournalResolvedItem }
   | { kind: 'dropped'; reason: 'turn-settled'; turnItemId: string }
   | { kind: 'dropped'; reason: 'item-settled' }
   | { kind: 'dropped' }
+) & { stopped?: true }
 
 const nothing = { kind: 'dropped' } as const
 
@@ -146,6 +155,14 @@ export function resolveJournalTimelineItem(
           resolution.write
         )
       )
+    case 'stop-decided': {
+      const stopped = view.stopDecidesTurn(resolution.turnId, resolution.endedAt)
+      const chosen = stopped ? resolution.stopped : resolution.ran
+      const result = chosen
+        ? resolveJournalTimelineItem(view, chosen, placement, reservedBytes)
+        : nothing
+      return stopped ? { ...result, stopped: true } : result
+    }
     case 'text-snapshot':
     case 'guarded-item':
       return resolveGuardedItem(view, resolution, placement)

@@ -7,6 +7,7 @@ import { structuredAgentSessionJournalAppendOptions } from './structured-agent-s
 import type { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
+import type { JournalStepOutcome } from '../../agent-session-journal/writing/journal-writer-step'
 
 /** The writer resolves each item at its queue position, seeing prior writes and no later ones. */
 export function createStructuredAgentSessionResolvedAppend(
@@ -25,7 +26,8 @@ export function createStructuredAgentSessionResolvedAppend(
     reservedBytes: number,
     resolution: JournalTimelineItemResolution,
     options: StructuredAgentSessionItemAppendOptions,
-    publish: boolean
+    publish: boolean,
+    onOutcome?: (outcome: JournalStepOutcome) => void
   ) =>
     queue.submit({
       bytes: reservedBytes + (publish ? 1 : 0),
@@ -48,6 +50,9 @@ export function createStructuredAgentSessionResolvedAppend(
         if (publish && outcome?.kind === 'committed' && outcome.wrote) {
           bound.publish()
         }
+        if (outcome) {
+          onOutcome?.(outcome)
+        }
       }
     })
   const identityOnly =
@@ -62,10 +67,10 @@ export function createStructuredAgentSessionResolvedAppend(
   return {
     tryAppendResolvedItem: identityOnly(false),
     tryAppendResolvedItemAndPublish: identityOnly(true),
-    tryReviseResolvedItem: (reservedBytes, resolution, options) =>
-      revise(reservedBytes, resolution, options, false),
-    tryReviseResolvedItemAndPublish: (reservedBytes, resolution, options) =>
-      revise(reservedBytes, resolution, options, true),
+    tryReviseResolvedItem: (reservedBytes, resolution, options, onOutcome) =>
+      revise(reservedBytes, resolution, options, false, onOutcome),
+    tryReviseResolvedItemAndPublish: (reservedBytes, resolution, options, onOutcome) =>
+      revise(reservedBytes, resolution, options, true, onOutcome),
     tryAppendLifecycleTransition: (identitySizeBound, resolution, options) =>
       revise(
         estimateStructuredAgentSessionItemBytes(identitySizeBound, resolution.choice.body),

@@ -14,7 +14,7 @@ import {
   claudeTokenUsage,
   type ClaudeMainThreadModel
 } from './claude-context-usage'
-import type { ClaudeOpenTurn } from './claude-open-turn'
+import type { ClaudeOpenTurn, ClaudeStoppedTurnEnd } from './claude-open-turn'
 import { claudeRecord, claudeText } from './structured/journal/claude-structured-item-translation'
 import type { ClaudeTurnEnd } from './claude-turn-lifecycle-item'
 import { isRootClaudeFrame } from './claude-turn-opening'
@@ -145,7 +145,11 @@ export class ClaudeContextFacts {
     )
   }
 
-  settle(message: Record<string, unknown>, end: ClaudeTurnEnd): void {
+  settle(
+    message: Record<string, unknown>,
+    end: ClaudeTurnEnd,
+    stopped?: ClaudeStoppedTurnEnd
+  ): void {
     const tokens = this.windowReported
       ? null
       : claudeContextWindowFromResult(message, this.mainModel)
@@ -156,12 +160,12 @@ export class ClaudeContextFacts {
     }
     const settled = this.turn.identity
     if (settled === null) {
-      this.turn.settle(end)
+      this.turn.settle(end, undefined, stopped)
       if (facts) {
         this.write(facts)
       }
     } else {
-      this.turn.settle(end, facts)
+      this.turn.settle(end, facts, stopped)
     }
     this.requestReport(settled)
   }

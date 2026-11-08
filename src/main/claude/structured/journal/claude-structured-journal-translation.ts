@@ -18,6 +18,7 @@ import { ClaudeProvisionalRowCorrections } from '../../claude-provisional-row-co
 import { createClaudeStreamedThinking } from '../../claude-streamed-thinking'
 import { ClaudeSubagentIdentities } from '../../claude-subagent-identities'
 import { ClaudeJournaledSubagents } from '../../claude-subagent-journaled-identities'
+import type { ClaudeStopCheck } from '../../claude-stop-readings'
 import { createClaudeStreamedBlockRegistry } from '../../claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from '../../claude-streamed-text-checkpoints'
 import {
@@ -151,12 +152,16 @@ export function createClaudeJournalTranslator(
     acceptStartupFailure: deps.acceptStartupFailure
   }
 
-  const finish = (observedAt: number, failed: boolean): void => {
+  const finish = (
+    observedAt: number,
+    failed: boolean,
+    stopCheck: ClaudeStopCheck | null = null
+  ): void => {
     prompts.retryPendingCancellations()
     flush()
     corrections.abandon()
     backgroundTasks.settleSession()
-    settleClaudeInterruptedTurn(turn, observedAt, failed)
+    settleClaudeInterruptedTurn(turn, observedAt, failed, stopCheck)
   }
   return {
     handle: withClaudeConversationContent((event) => {

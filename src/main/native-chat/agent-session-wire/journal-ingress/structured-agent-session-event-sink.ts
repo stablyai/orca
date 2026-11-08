@@ -10,6 +10,7 @@ import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
+import type { JournalStepOutcome } from '../../agent-session-journal/writing/journal-writer-step'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
 import type { StructuredAgentSessionSnapshotSource } from './structured-agent-session-sink-snapshots'
@@ -106,12 +107,14 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   tryReviseResolvedItem?(
     reservedBytes: number,
     resolution: JournalTimelineItemResolution,
-    options: StructuredAgentSessionRevisionOptions
+    options: StructuredAgentSessionRevisionOptions,
+    onOutcome?: (outcome: JournalStepOutcome) => void
   ): StructuredAgentSessionSinkAdmission
   tryReviseResolvedItemAndPublish?(
     reservedBytes: number,
     resolution: JournalTimelineItemResolution,
-    options: StructuredAgentSessionRevisionOptions
+    options: StructuredAgentSessionRevisionOptions,
+    onOutcome?: (outcome: JournalStepOutcome) => void
   ): StructuredAgentSessionSinkAdmission
   /** The writer chooses the row's identity at its position and may write nothing. */
   tryAppendLifecycleTransition?(
@@ -126,8 +129,6 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   journalSnapshot?(): ClaudeJournalSnapshot | null
   snapshotCurrent?(): Promise<void>
   journalHistory?(): StructuredAgentSessionHistoryJournal | null
-  /** Apply the journal’s personal-Stop cancellation rule; false until bound. */
-  journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
   appendLifecycleBatch?(
     settlementId: string,
     mutations: readonly JournalLifecycleIdentityMutationInput[],
@@ -274,7 +275,6 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       journalSnapshot: queue.snapshots.current,
       snapshotCurrent: queue.snapshots.settled,
       journalHistory: queue.journalHistory,
-      journalStopDecidesTurn: queue.journalStopDecidesTurn,
       appendLifecycleBatch: (settlementId, mutations) => {
         const admission = appendLifecycleBatch(settlementId, mutations)
         if (!admission.accepted) {
