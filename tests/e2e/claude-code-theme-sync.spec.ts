@@ -203,7 +203,12 @@ test('an existing user accepts the offer, then Claude Code follows the Orca them
   const offer = orcaPage.locator('[data-sonner-toast]').filter({ hasText: offerTitle })
   // Agent detection for a typed `claude` can lag its first frame.
   await expect(offer).toBeVisible({ timeout: 30_000 })
+  // Shoot once the slide-in settled, so the proof shows the toast as users see it.
+  await expect(offer).toHaveAttribute('data-mounted', 'true')
+  await expect(offer).toBeInViewport({ ratio: 1 })
+  await expect(offer).toHaveCSS('opacity', '1')
   await windowShot('offer-toast-dark')
+  await offer.screenshot({ path: testInfo.outputPath('offer-toast-dark-closeup.png') })
   await offer.getByRole('button', { name: 'Match Theme' }).click()
   await expect.poll(readTheme, { timeout: 30_000 }).toBe('custom:orca')
   await expect.poll(readThemeFile, { timeout: 30_000 }).toContain('"promptBorder": "#7aa2f7"')
@@ -277,7 +282,12 @@ test('an existing user who declines the offer keeps Claude Code as it was and is
   const offer = orcaPage.locator('[data-sonner-toast]').filter({ hasText: offerTitle })
   // Agent detection for a typed `claude` can lag its first frame.
   await expect(offer).toBeVisible({ timeout: 30_000 })
+  // Shoot once the slide-in settled, so the proof shows the toast as users see it.
+  await expect(offer).toHaveAttribute('data-mounted', 'true')
+  await expect(offer).toBeInViewport({ ratio: 1 })
+  await expect(offer).toHaveCSS('opacity', '1')
   await windowShot('offer-toast-light')
+  await offer.screenshot({ path: testInfo.outputPath('offer-toast-light-closeup.png') })
   await offer.getByRole('button', { name: 'No Thanks' }).click()
   await expect(offer).toHaveCount(0)
   await expect

@@ -4,6 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { TRAILING_ACTIONS_CLASS_NAMES } from '@/components/ui/sonner'
 import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
 
 const OFFER_TOAST_ID = 'claude-theme-sync-offer'
@@ -24,6 +25,7 @@ function showClaudeThemeSyncOffer(): void {
       'Claude Code on this computer would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.'
     ),
     duration: Infinity,
+    classNames: TRAILING_ACTIONS_CLASS_NAMES,
     action: {
       label: translate('terminal.claudeThemeSyncOffer.accept', 'Match Theme'),
       onClick: () => {
