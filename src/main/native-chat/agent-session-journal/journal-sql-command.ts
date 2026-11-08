@@ -1,10 +1,9 @@
-import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type Database from '../../sqlite/sync-database'
 import type { JournalWriterCommand } from './journal-writer-command'
-import type { JournalWriterCommit, JournalWriterPublication } from './journal-writer-changes'
-import { applyJournalWriterEffect, type JournalWriterCoordinate } from './journal-writer-effects'
-import { applyJournalDomainItem } from './journal-domain-item'
+import type { JournalWriterCommit } from './journal-writer-changes'
+import { finishJournalSqlCommand } from './journal-sql-command-result'
+import { applyJournalSqlItemCommand } from './journal-sql-item-command'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
@@ -12,7 +11,10 @@ import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery
 import { applyJournalDomainCommandTurn } from './journal-domain-command-turn'
 import { applyJournalDomainContextCommand } from './journal-domain-context-command'
 import { applyJournalDomainTombstone } from './journal-domain-item-removal'
-import { applyJournalSqlMessageSteps, type JournalSqlMessage } from './journal-sql-message-commit'
+import { applyJournalDomainLifecycle } from './journal-domain-lifecycle'
+import { applyJournalDomainGenerationSettlement } from './journal-domain-generation-settlement'
+import { applyJournalDomainPromptMutation } from './journal-domain-prompt-mutation'
+import { applyJournalSqlStepCommand } from './journal-sql-step-command'
 
 /** Every command decides against current rows at its position on the sole writer. */
 export class JournalSqlCommand {
@@ -26,40 +28,17 @@ export class JournalSqlCommand {
       throw new Error('journal SQL command requires its transaction')
     }
     const savedAt = command.savedAt ?? now
+    command = { ...command, savedAt }
     const { operation, target } = command
     switch (operation.kind) {
       case 'item':
-      case 'item-claiming': {
-        const result = applyJournalDomainItem(
+      case 'item-claiming':
+        return applyJournalSqlItemCommand(
           this.db,
-          target,
-          { ...operation, kind: 'item' },
+          this.stateDirectory,
+          { ...command, operation },
           savedAt
         )
-        const itemId = agentJournalItemKey(operation.identity)
-        const written = result.items.find((item) => item.itemId === itemId) ?? result.items[0]
-        return this.finish(
-          command,
-          result,
-          written
-            ? {
-                cursor: result.cursor,
-                itemId: written.itemId,
-                revision: written.revision
-              }
-            : null,
-          result.outcome.kind === 'committed' && result.outcome.wrote
-            ? [
-                {
-                  kind: 'item',
-                  epoch: target.epoch,
-                  seq: result.cursor.sequence
-                }
-              ]
-            : [],
-          result.items.map((item) => item.itemId)
-        )
-      }
       case 'submission': {
         if (!command.facts) {
           throw new Error('journal submission omitted its identity facts')
@@ -72,7 +51,9 @@ export class JournalSqlCommand {
           command.facts,
           savedAt
         )
-        return this.finish(
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
           command,
           result,
           result.value,
@@ -88,7 +69,9 @@ export class JournalSqlCommand {
       case 'accept-late':
       case 'late-dispatch': {
         const result = applyJournalDomainDispatch(this.db, target, operation, savedAt)
-        return this.finish(
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
           command,
           result,
           result.value,
@@ -116,7 +99,9 @@ export class JournalSqlCommand {
                 command.facts ?? {},
                 savedAt
               )
-        return this.finish(
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
           command,
           result,
           result.value,
@@ -152,7 +137,9 @@ export class JournalSqlCommand {
             : operation,
           savedAt
         )
-        return this.finish(
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
           command,
           result,
           result.cursor,
@@ -161,7 +148,7 @@ export class JournalSqlCommand {
               position.kind === 'context-item' || position.kind === 'replacement-item'
                 ? 'item'
                 : 'tombstone',
-            epoch: result.cursor.epoch,
+            epoch: position.cursor.epoch,
             seq: position.cursor.sequence
           })),
           [...result.items.map((item) => item.itemId), ...result.removedItemIds]
@@ -169,7 +156,9 @@ export class JournalSqlCommand {
       }
       case 'tombstone': {
         const result = applyJournalDomainTombstone(this.db, target, operation, savedAt)
-        return this.finish(
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
           command,
           { ...result, cards: [], receipts: [], inputChanged: true },
           result.cursor,
@@ -199,7 +188,9 @@ export class JournalSqlCommand {
                 : result.result.kind === 'queue-withdraw'
                   ? result.result.cards
                   : undefined
-        return this.finish(
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
           command,
           { ...result, items: [], receipts: [] },
           value,
@@ -208,91 +199,78 @@ export class JournalSqlCommand {
             : []
         )
       }
-      case 'steps': {
-        const text = textSteps(operation.steps)
-        if (!text) {
-          throw new Error('journal non-text steps are not migrated')
+      case 'lifecycle': {
+        if (command.effects) {
+          throw new Error('journal lifecycle batches carry no receipt')
         }
-        const result = applyJournalSqlMessageSteps(this.db, {
+        const result = applyJournalDomainLifecycle(
+          this.db,
           target,
-          steps: operation.dropped ? [] : text,
-          savedAt
-        })
-        if (operation.dropped) {
-          result.outcomes = text.map(() => ({ kind: 'dropped' }))
-        }
-        return this.finish(
+          operation.input,
+          savedAt,
+          command.facts?.stopSettle
+        )
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
           command,
           result,
-          {
-            outcomes: result.outcomes,
-            cursor: result.cursor,
-            items: result.items,
-            ...(result.failure ? { failure: result.failure } : {})
-          },
-          []
+          result.cursor,
+          result.coordinates,
+          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
         )
       }
+      case 'stale-settle':
+      case 'dead-generation-settle':
+      case 'unheld-turns-settle':
+      case 'start-failure-settle': {
+        if (command.effects) {
+          throw new Error('journal generation settlements carry no receipt')
+        }
+        const result = applyJournalDomainGenerationSettlement(
+          this.db,
+          target,
+          operation,
+          savedAt,
+          command.facts?.stopSettle
+        )
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
+          command,
+          result,
+          result.value,
+          result.coordinates,
+          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
+        )
+      }
+      case 'prompt-mutate': {
+        const result = applyJournalDomainPromptMutation(
+          this.db,
+          target,
+          operation.input,
+          savedAt,
+          command.facts?.stopSettle
+        )
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
+          command,
+          result,
+          result.value,
+          result.coordinates,
+          result.items.map((item) => item.itemId)
+        )
+      }
+      case 'steps':
+        return applyJournalSqlStepCommand(
+          this.db,
+          this.stateDirectory,
+          { ...command, operation },
+          savedAt
+        )
       default:
         throw new Error(`journal command ${operation.kind} is not migrated`)
     }
   }
-
-  private finish(
-    command: JournalWriterCommand,
-    result: JournalWriterPublication & {
-      cursor: JournalWriterCommit['cursor']
-      inputChanged: boolean
-    },
-    value: unknown,
-    coordinates: readonly JournalWriterCoordinate[],
-    invalidatedItemIds: string[] = []
-  ): JournalWriterCommit {
-    const effects =
-      coordinates.length > 0
-        ? (command.effects ?? []).map((effect) =>
-            applyJournalWriterEffect(this.db, this.stateDirectory, effect, coordinates)
-          )
-        : []
-    return {
-      cursor: result.cursor,
-      inputChanged: result.inputChanged,
-      keys: [],
-      inputKeys: [],
-      items: [
-        ...result.items.map((item) => ({
-          itemId: item.itemId,
-          deleted: false as const,
-          revision: item.revision,
-          sequence: item.sequence,
-          sequenceIndex: item.sequenceIndex ?? 0
-        })),
-        ...(result.removedItemIds ?? []).map((itemId) => ({
-          itemId,
-          deleted: true as const,
-          revision: 0
-        }))
-      ],
-      publication: { ...result, invalidatedItemIds },
-      value,
-      effects,
-      ...(coordinates.length > 0 && command.effects ? { receiptWritten: true as const } : {})
-    }
-  }
-}
-
-function textSteps(
-  steps: Extract<JournalWriterCommand['operation'], { kind: 'steps' }>['steps']
-): JournalSqlMessage[] | null {
-  if (steps.length === 0) {
-    return null
-  }
-  const messages: JournalSqlMessage[] = []
-  for (const step of steps) {
-    if (step.kind !== 'resolved-item' || step.resolution.kind !== 'text-snapshot') {
-      return null
-    }
-    messages.push({ ...step.resolution, options: step.options })
-  }
-  return messages
 }

@@ -1,4 +1,7 @@
-import { journalDomainItemReadColumns } from './journal-domain-item-read-columns'
+import {
+  journalDomainItemReadColumns,
+  journalDomainItemLifecycleColumns
+} from './journal-domain-item-read-columns'
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -11,6 +14,8 @@ import {
   refreshJournalDomainQueueFailureReports
 } from './journal-domain-queue-failures'
 import { reportedTurnItemId } from './queued-messages/journal-queue-failure-policy'
+import type { JournalStopSettleFact } from './journal-writer-host-facts'
+import { normalizeJournalDomainItemBody } from './journal-domain-item-normalization'
 import { observeJournalDomainTurnScope } from './journal-domain-turn-scope'
 
 export type JournalDomainCurrentItemWrite = {
@@ -21,6 +26,7 @@ export type JournalDomainCurrentItemWrite = {
   ownerFence: number
   executionOwner?: number | null
   writtenSequence?: number
+  stopSettle?: JournalStopSettleFact
 }
 
 export function nextJournalDomainItemOrdinal(
@@ -48,9 +54,17 @@ export function writeJournalDomainCurrentItem(
     throw new Error('journal item persistence requires its writer transaction')
   }
   const prefix = [target.sessionId, target.epoch] as const
-  const stopNote = journalDomainStopNote(input.item, (id) => {
+  const body = normalizeJournalDomainItemBody(
+    db,
+    target,
+    input.item,
+    input.previous?.item,
+    input.stopSettle
+  )
+  const item = body === input.item.body ? input.item : { ...input.item, body }
+  const stopNote = journalDomainStopNote(item, (id) => {
     if (id === input.item.itemId) {
-      return input.item
+      return item
     }
     const row = db
       .prepare(`SELECT payload_json FROM journal_items
@@ -75,8 +89,8 @@ export function writeJournalDomainCurrentItem(
   db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,execution_owner,payload_json,
       hidden,root,subagent_row,subagent_group_key,turn_marker,wire_bytes,turn_item_id,original_stop_note_json,
       queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id,
-      placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
+      placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out,lifecycle_state,live_work,context_window,unverified_end,turn_completed_at)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
       ordinal=excluded.ordinal, revision=excluded.revision, sequence=excluded.sequence, sequence_index=excluded.sequence_index,
       owner_fence=excluded.owner_fence, execution_owner=excluded.execution_owner, payload_json=excluded.payload_json,
       hidden=excluded.hidden, root=excluded.root, subagent_row=excluded.subagent_row, subagent_group_key=excluded.subagent_group_key,
@@ -89,7 +103,8 @@ export function writeJournalDomainCurrentItem(
       turn_id=excluded.turn_id,opener_item_id=excluded.opener_item_id,context_clear=excluded.context_clear,
       goal_transition=excluded.goal_transition,producer_agent_id=excluded.producer_agent_id,
       producer_parent_ref=excluded.producer_parent_ref,producer_attempt=excluded.producer_attempt,
-      prompt=excluded.prompt,signed_out=excluded.signed_out`).run(
+      prompt=excluded.prompt,signed_out=excluded.signed_out,lifecycle_state=excluded.lifecycle_state,live_work=excluded.live_work,
+      context_window=excluded.context_window,unverified_end=excluded.unverified_end,turn_completed_at=excluded.turn_completed_at`).run(
     ...prefix,
     next.itemId,
     input.ordinal,
@@ -113,7 +128,8 @@ export function writeJournalDomainCurrentItem(
     failure.witnessedThrough,
     failure.reportTurnItemId,
     journalDomainItemPlacement(next),
-    ...journalDomainItemReadColumns(next)
+    ...journalDomainItemReadColumns(next),
+    ...journalDomainItemLifecycleColumns(next)
   )
   writeJournalDomainItemNames(
     db,
