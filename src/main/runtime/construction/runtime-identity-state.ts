@@ -214,8 +214,18 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
       viewMode?: 'terminal' | 'chat'
       /** Retain launch delivery over bare renderer PTYs; silent settlement would lose the command (STA-3214). */
       startupCommand?: string
+      /** The viewer env this paired create resolved; its window-drawn pane spawns its own shell without it (#39852). */
+      remoteViewerEnv?: Record<string, string>
     }
   >()
+
+  /** What a paired viewer's create resolved for a window-drawn tab, if that create is still settling. */
+  pendingRemoteViewerCreateEnv(
+    worktreeId: string,
+    tabId: string
+  ): Record<string, string> | undefined {
+    return this.pendingMobileTerminalCreatesByKey.get(`${worktreeId}::${tabId}`)?.remoteViewerEnv
+  }
 
   protected mobileSessionTabListeners = new Set<{
     listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void

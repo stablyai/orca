@@ -113,6 +113,16 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
         ? selectWindowJcodeRuntimeDir(ctx.stablePaneKey, ctx.isDaemonHostSpawn)
         : undefined
   })
+  // A paired create's window-drawn pane spawns its own shell; restore the viewer env its create resolved (#39852).
+  if (typeof args.worktreeId === 'string' && typeof args.tabId === 'string') {
+    const remoteViewerEnv = ctx.deps.runtime?.pendingRemoteViewerCreateEnv(
+      args.worktreeId,
+      args.tabId
+    )
+    if (remoteViewerEnv) {
+      ctx.baseEnv = { ...remoteViewerEnv, ...ctx.baseEnv }
+    }
+  }
   ctx.validatedPaneKey = ctx.stablePaneKey
   // Tab/leaf metadata still identifies the pane when its supplied ORCA_PANE_KEY was unproved.
   ctx.reservationPaneKey = ctx.metadataPaneKey ?? ctx.validatedPaneKey

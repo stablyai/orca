@@ -225,7 +225,9 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
         paired: pairedCreate,
         selectIfNoActiveTab: true,
         ...(startupCommand.command ? { startupCommand: startupCommand.command } : {}),
-        ...(opts.viewMode ? { viewMode: opts.viewMode } : {})
+        ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+        // The renderer drops a command-less create's env, but its pane's spawn still owes the viewer that env (#39852).
+        ...(startupCommand.env ? { remoteViewerEnv: startupCommand.env } : {})
       })
       try {
         // Spawn and tabCreate replies race across IPC channels; publish already-registered PTYs without waiting for graph sync.

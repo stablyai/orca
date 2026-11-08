@@ -168,9 +168,12 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
     ) {
       return Promise.reject(new Error('host_not_owned'))
     }
+    // A paired viewer's create drew this tab; its window-started shell keeps the viewer's clipboard env (#39852).
+    const remoteViewerEnv = this.pendingRemoteViewerCreateEnv(worktreeId, pane.tabId)
     // Background: the window already shows the tab, so main reveals nothing.
     return this.createTerminal(`id:${worktreeId}`, {
       ...opts,
+      ...(remoteViewerEnv ? { env: { ...remoteViewerEnv, ...opts.env } } : {}),
       ...pane,
       presentation: 'background',
       keepPaneOnStartFailure: true,
