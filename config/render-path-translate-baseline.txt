@@ -228,7 +228,6 @@
 9 src/renderer/src/components/diff-comments/DiffCommentDraftCard.tsx
 7 src/renderer/src/components/diff-comments/DiffCommentPopover.tsx
 1 src/renderer/src/components/diff-comments/useDiffCommentDecorator.tsx
-3 src/renderer/src/components/editor/MonacoGutterContextMenu.tsx
 2 src/renderer/src/components/editor/markdown-preview/render-tree/use-markdown-preview-components.tsx
 3 src/renderer/src/components/editor/review-note-delivery/ReviewNotesSendMenuContent.tsx
 1 src/renderer/src/components/emulator-pane/EmulatorPane.tsx
