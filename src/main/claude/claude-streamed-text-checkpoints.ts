@@ -3,6 +3,7 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session/journa
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
+  agentSessionTextCheckpointDueIn,
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
@@ -25,7 +26,7 @@ export type ClaudeStreamedTextCheckpointDeps = {
 export type ClaudeStreamedBlockEnd = { completedAt?: number }
 
 export type ClaudeStreamedTextCheckpoints = {
-  /** Coalesce deltas and widen checkpoint intervals to avoid per-token journal rewrites. */
+  /** Coalesce deltas and space checkpoints in time to avoid per-token journal rewrites. */
   append: (
     identity: AgentJournalItemIdentity,
     text: string,
@@ -66,7 +67,7 @@ export function createClaudeStreamedTextCheckpoints(
   /** Last written linkage, used only to skip revisions that change nothing. */
   const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
   const latestText = new Map<string, string>()
-  const checkpointLengths = new Map<string, number>()
+  const savedAt = new Map<string, number>()
 
   /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
   const producerOptions = (key: string): StructuredAgentSessionAppendOptions => {
@@ -77,19 +78,14 @@ export function createClaudeStreamedTextCheckpoints(
     return agentJournalLinkageFields(deps.producer.settledLinkageFor(scope).linkage)
   }
 
-  const persist = (key: string, text: string, force: boolean): void => {
+  const persist = (key: string, text: string): void => {
     latestText.set(key, text)
-    const checkpointLength = checkpointLengths.get(key) ?? 0
-    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
-    if (!force && checkpointLength > 0 && text.length < nextLength) {
-      return
-    }
     const identity = identities.get(key)
     if (!identity) {
       return
     }
     const options = producerOptions(key)
-    checkpointLengths.set(key, text.length)
+    savedAt.set(key, performance.now())
     writtenLinkage.set(key, options)
     deps.persist(identity, text, options)
   }
@@ -97,7 +93,9 @@ export function createClaudeStreamedTextCheckpoints(
   const coalescer = createAgentSessionDeltaCoalescer({
     ...(deps.coalesceMs === undefined ? {} : { windowMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
-    emit: (key, text) => persist(key, text, false)
+    // A time gate, unlike a growth gate, keeps the wait between saves flat as the reply grows.
+    dueIn: (key) => agentSessionTextCheckpointDueIn(savedAt.get(key)),
+    emit: (key, text) => persist(key, text)
   })
 
   const drop = (key: string): void => {
@@ -106,7 +104,7 @@ export function createClaudeStreamedTextCheckpoints(
     scopes.delete(key)
     writtenLinkage.delete(key)
     latestText.delete(key)
-    checkpointLengths.delete(key)
+    savedAt.delete(key)
   }
 
   return {
@@ -118,11 +116,6 @@ export function createClaudeStreamedTextCheckpoints(
     },
     flush: () => {
       coalescer.flushAll()
-      for (const [key, text] of latestText) {
-        if (checkpointLengths.get(key) !== text.length) {
-          persist(key, text, true)
-        }
-      }
     },
     reattribute: () => {
       for (const [key, identity] of identities) {
@@ -146,8 +139,8 @@ export function createClaudeStreamedTextCheckpoints(
         if (only && !only(key)) {
           continue
         }
-        coalescer.flush(key)
-        const text = latestText.get(key)
+        // The ending save carries any buffered tail, so no running save precedes it.
+        const text = coalescer.snapshot(key)?.text ?? latestText.get(key)
         if (text !== undefined) {
           deps.persist(identity, text, producerOptions(key), ended)
         }
@@ -168,7 +161,7 @@ export function createClaudeStreamedTextCheckpoints(
       scopes.clear()
       writtenLinkage.clear()
       latestText.clear()
-      checkpointLengths.clear()
+      savedAt.clear()
     }
   }
 }

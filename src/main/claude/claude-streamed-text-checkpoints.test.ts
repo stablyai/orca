@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -74,6 +74,10 @@ function checkpoints(producer: ClaudeSubagentLinkageSource = unconsultedProducer
   }
 }
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('claude streamed text checkpoints', () => {
   it('rewrites a block row with the full text accumulated so far', () => {
     const { store, rows, runWindow } = checkpoints()
@@ -98,7 +102,25 @@ describe('claude streamed text checkpoints', () => {
     expect(rows).toEqual([{ uuid: 'block-1', text: 'partial answer' }])
   })
 
-  it('flushes text the widening checkpoint interval has not written yet', () => {
+  it('saves the buffered tail of a long reply that pauses, with no further delta or barrier', () => {
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+    const { store, rows, runWindow } = checkpoints()
+    const head = 'a'.repeat(1000)
+
+    store.append(identityOf('block-1'), head)
+    runWindow()
+    clock.mockReturnValue(100)
+    store.append(identityOf('block-1'), ' tail')
+    clock.mockReturnValue(1_000)
+    runWindow()
+
+    expect(rows).toEqual([
+      { uuid: 'block-1', text: head },
+      { uuid: 'block-1', text: `${head} tail` }
+    ])
+  })
+
+  it('flushes text the next checkpoint has not written yet', () => {
     const { store, rows } = checkpoints()
 
     store.append(identityOf('block-1'), 'x')

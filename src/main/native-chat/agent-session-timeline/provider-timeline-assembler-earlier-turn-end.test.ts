@@ -20,6 +20,7 @@ describe("an earlier turn's late end leaves the open turn alone", () => {
     rig.assembler.apply({ ...delta, text: 'Hello' })
     rig.assembler.apply({ type: 'turn.end', turn: 't1', at: 2_100, state: 'completed' })
     rig.assembler.apply({ ...delta, text: ' world' })
+    rig.assembler.flush()
     const texts = (await rig.rows()).flatMap((row) =>
       row.body.kind === 'message' ? [[row.turnScope, messageText(row.body)]] : []
     )

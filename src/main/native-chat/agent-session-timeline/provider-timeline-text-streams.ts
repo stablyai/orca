@@ -9,6 +9,7 @@ import {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import {
+  agentSessionTextCheckpointDueIn,
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
@@ -44,8 +45,8 @@ export type ProviderTimelineStream = {
   named: boolean
   channel: ProviderTimelineTextChannel
   producer: AgentJournalProducerLinkage | undefined
-  /** Whitespace-only streams cannot complete a message. */
-  written: boolean
+  /** Host time of the last admitted write; whitespace-only streams cannot complete a message. */
+  savedAt?: number
   /** Once a write finds a settled turn, later text cannot land. */
   stoppedIn: string | null
 }
@@ -69,6 +70,7 @@ export class ProviderTimelineTextStreams {
       ...(deps.schedule ? { schedule: deps.schedule } : {}),
       // Live identities must survive until the provider closes them or their turn ends.
       isProtected: () => true,
+      dueIn: (id) => agentSessionTextCheckpointDueIn(this.byId.get(id)?.savedAt),
       emit: (id, text) => this.flushOnWindow(id, text)
     })
   }
@@ -125,7 +127,6 @@ export class ProviderTimelineTextStreams {
       named,
       channel: input.channel,
       producer: input.producer,
-      written: false,
       stoppedIn: null
     }
   }
@@ -231,7 +232,7 @@ export class ProviderTimelineTextStreams {
     providerFinal = false
   ): void {
     const empty = providerFinal ? text.length === 0 : text.trim().length === 0
-    if (!stream.written && empty) {
+    if (stream.savedAt === undefined && empty) {
       plan.onAdmitted(() => this.coalescer.markFlushed(stream.id))
       return
     }
@@ -242,7 +243,7 @@ export class ProviderTimelineTextStreams {
       options: { ...stream.producer, turnScope: stream.scope }
     })
     plan.onAdmitted(() => {
-      stream.written = true
+      stream.savedAt = performance.now()
       this.coalescer.markFlushed(stream.id)
     })
   }

@@ -10,6 +10,7 @@ import { type JournalReducerState, applyJournalRow } from '../projection/journal
 import { isolateJournalTransition } from '../projection/journal-reducer-transition'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { journalRowReadBack } from '../durable-rows/journal-row-table'
+import { isJournalOutputRevision } from '../writing/journal-streamed-text-revision'
 import {
   encodeJournalOutcomes,
   journalOutcomeScalars,
@@ -60,8 +61,10 @@ export function readJournalOutcomes(
   }
 }
 
-/** Runs inside the receipt transaction and only inserts: no record is ever updated or rewritten. A
- * row the reader would reject is refused, as an input insert refuses it; the caller rolls back. */
+/** Runs inside the receipt transaction. Records are never updated; an output revision replaces the
+ * item's previous revision, keeping its first record, so streamed text is stored once rather than per
+ * checkpoint. A row the reader would reject is refused, as an input insert refuses it; the caller
+ * rolls back. */
 export function persistJournalOutcomeRows(
   db: Database.Database,
   state: JournalReducerState,
@@ -86,8 +89,13 @@ export function persistJournalOutcomeRows(
     journalInputOrder(transition.state).completeQueueConversion(transition.state)
   }
   journalInputOrder(transition.state).introduceOverlays(transition.state)
-  const previous = db.prepare(`SELECT ordinal, deleted FROM journal_outcomes
+  const previous = db.prepare(`SELECT seq, ordinal, deleted FROM journal_outcomes
     WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq DESC LIMIT 1`)
+  // Historical readers take a key's first record as admission evidence, so it is never replaced.
+  const first = db.prepare(`SELECT seq FROM journal_outcomes
+    WHERE generation = ? AND field = ? AND entry_key = ? ORDER BY seq LIMIT 1`)
+  const replace = db.prepare(`DELETE FROM journal_outcomes
+    WHERE generation = ? AND seq = ? AND field = ? AND entry_key = ?`)
   const insert = db.prepare(`INSERT INTO journal_outcomes
     (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
@@ -95,6 +103,7 @@ export function persistJournalOutcomeRows(
     // Folding what a reload reads keeps live state equal to it: an annotation the reader drops as
     // unusable never reaches the model, so it is never refused by the strict record encoder.
     const { stored } = journalRowReadBack(state.sessionId, row)
+    const outputRevision = isJournalOutputRevision(transition.state, stored)
     applyJournalRow(transition.state, transition.input(stored), savedAt ?? row.ts)
     if (row === rows.at(-1)) {
       finish?.(transition.state)
@@ -142,6 +151,14 @@ export function persistJournalOutcomeRows(
           : !kept && source.prefix > 0 && change
             ? JOURNAL_PREFIX_ORDINAL
             : appended(row.seq, index)
+      if (
+        outputRevision &&
+        value.field === 'items' &&
+        typeof kept?.seq === 'number' &&
+        kept.seq !== first.get(source.generation, value.field, value.key)?.seq
+      ) {
+        replace.run(source.generation, kept.seq, value.field, value.key)
+      }
       insert.run(
         source.generation,
         value.seq,
