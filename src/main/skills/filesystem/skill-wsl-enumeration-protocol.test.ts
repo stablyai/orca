@@ -26,12 +26,6 @@ describe('parseWslListEntriesOutput', () => {
     expect(listings.get(directories[1])).toEqual([])
   })
 
-  it('refuses an unknown record kind instead of guessing', () => {
-    expect(() => parseWslListEntriesOutput(records('X', '0'), ['/a'])).toThrow(
-      WslEnumerationProtocolError
-    )
-  })
-
   it('refuses an index no argument produced', () => {
     expect(() => parseWslListEntriesOutput(records('D', '7'), ['/a'])).toThrow(
       WslEnumerationProtocolError

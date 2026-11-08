@@ -8237,7 +8237,6 @@
       "tests/tools/windows-pty-native-capability-smoke/packaged-node-pty-capability-probe.test.mjs": 261,
       "tests/tools/windows-pty-native-capability-smoke/run.test.mjs": 49,
       "src/main/skills/sharing/agent-skill-selection.test.ts": 103,
-      "src/main/skills/discovery/antigravity-skill-discovery.test.ts": 128,
       "src/main/skills/bundled-skill-install/bundled-skill-auto-update-eligibility.test.ts": 400,
       "src/main/skills/bundled-skill-install/bundled-skill-backup-permissions.test.ts": 246,
       "src/main/skills/bundled-skill-install/bundled-skill-classification.test.ts": 229,
