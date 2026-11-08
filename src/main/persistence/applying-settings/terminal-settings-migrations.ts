@@ -83,6 +83,8 @@ type RetiredGlobalSettings = {
   orchestrationHeartbeatIntervalMinutes?: unknown
   // Full-access plugins now need only their own approval.
   pluginFullAccessEnabled?: unknown
+  // Per-repo agent folder trust answers were reverted; every repo is pre-trusted again.
+  agentWorkspaceTrustExistingReposMigrated?: unknown
 }
 
 export function stripRetiredGlobalSettings(
@@ -102,6 +104,7 @@ export function stripRetiredGlobalSettings(
     orchestrationHeartbeatsEnabled: _retiredHeartbeatsEnabled,
     orchestrationHeartbeatIntervalMinutes: _retiredHeartbeatInterval,
     pluginFullAccessEnabled: _retiredPluginFullAccessSwitch,
+    agentWorkspaceTrustExistingReposMigrated: _retiredAgentTrustReposMigration,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _retiredChatPermissionCopies
@@ -117,6 +120,7 @@ export function stripRetiredGlobalSettings(
   void _retiredHeartbeatsEnabled
   void _retiredHeartbeatInterval
   void _retiredPluginFullAccessSwitch
+  void _retiredAgentTrustReposMigration
   return rest
 }
 

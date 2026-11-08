@@ -25,10 +25,6 @@ import { getRepositoryPaneSearchEntries } from './repository-search'
 import { RepositoryHostSetupsSection } from './execution/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './execution/RepositoryForkSyncSection'
-import {
-  getRepositoryAgentTrustSearchEntry,
-  RepositoryAgentTrustSection
-} from './RepositoryAgentTrustSection'
 import { RepositoryGitHubAccountSection } from './RepositoryGitHubAccountSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './execution/RepositoryWindowsRuntimeSection'
@@ -184,7 +180,6 @@ export function RepositoryPane({
     t('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
     t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
     t('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
-    getRepositoryAgentTrustSearchEntry().title,
     t('auto.components.settings.repository.search.keepForkUpToDate', 'Keep Fork Up to Date'),
     t('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
     t('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
@@ -309,12 +304,6 @@ export function RepositoryPane({
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}
-          repo={repo}
-          updateRepo={updateSelectedRepo}
-          forceVisible={forceFullPaneForRepoMatch}
-        />
-
-        <RepositoryAgentTrustSection
           repo={repo}
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}

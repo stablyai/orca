@@ -1,6 +1,7 @@
 import {
   closeTestStores,
   createSqliteTestStore,
+  makeRepo,
   readPersistedStateJson,
   writePersistedStateJson
 } from '../persistence-test-harness'
@@ -108,5 +109,29 @@ describe('persisted state survives a save/load round trip', () => {
     loaded.flush()
     expect(readPersistedStateJson(dataFile)).not.toContain('opencodeGoApiKey')
     expect(openStore(dataFile).getSettings()).not.toHaveProperty('opencodeGoApiKey')
+  })
+
+  it('loads per-repo agent trust answers from earlier dev builds without using them', () => {
+    const dataFile = join(
+      realpathSync(mkdtempSync(join(tmpdir(), 'orca-retired-agent-trust-'))),
+      'state.json'
+    )
+    const first = openStore(dataFile)
+    first.addRepo(makeRepo({ id: 'repo-asks', path: '/tmp/repo-asks' }))
+    first.flush()
+    const persisted = JSON.parse(readPersistedStateJson(dataFile))
+    persisted.settings.agentWorkspaceTrustExistingReposMigrated = true
+    persisted.repos[0].agentWorkspaceTrust = 'agent-asks'
+    writePersistedStateJson(dataFile, JSON.stringify(persisted))
+
+    const loaded = openStore(dataFile)
+    expect(loaded.getRepo('repo-asks')?.path).toBe('/tmp/repo-asks')
+    expect(loaded.getSettings().agentWorkspaceTrustEnabled).toBe(true)
+    expect(loaded.getSettings()).not.toHaveProperty('agentWorkspaceTrustExistingReposMigrated')
+    loaded.updateSettings({ agentWorkspaceTrustEnabled: true })
+    loaded.flush()
+    expect(readPersistedStateJson(dataFile)).not.toContain(
+      'agentWorkspaceTrustExistingReposMigrated'
+    )
   })
 })

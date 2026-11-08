@@ -19,9 +19,7 @@ export type IpcPtySpawnResponse = PtyConnectResult & {
 export async function spawnIpcPty(
   transportOptions: IpcPtyTransportOptions,
   connectOptions: PtyConnectOptions,
-  admittedSessionId?: string,
-  /** The user's "let agents ask" answer for this launch. */
-  skipAgentWorkspaceTrust = false
+  admittedSessionId?: string
 ): Promise<IpcPtySpawnResponse> {
   if (
     !admittedSessionId &&
@@ -146,7 +144,6 @@ export async function spawnIpcPty(
     ...(placement && !admittedSessionId ? { placement } : {}),
     ...(spawnIntent ? { spawnIntent } : {}),
     ...(connectOptions.wslPassiveRestore ? { wslPassiveRestore: true as const } : {}),
-    ...(skipAgentWorkspaceTrust ? { skipAgentWorkspaceTrust: true as const } : {}),
     ...(replacesPtyId ? { replacesPtyId } : {}),
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),

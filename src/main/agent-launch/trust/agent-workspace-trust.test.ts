@@ -144,7 +144,7 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('respects the section repo choice and preserves ordinary root trust for outside starts', async () => {
+  it('trusts the section root, ignoring saved repo answers, and keeps root trust for outside starts', async () => {
     const workspaceRoot = join(root, 'folder')
     const outsideCwd = join(root, 'attached-worktree')
     mkdirSync(workspaceRoot)
@@ -157,7 +157,11 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
       launchAgent: 'claude',
       worktreeId: 'folder:section-parent',
       cwd: outsideCwd,
-      store: { getFolderWorkspace: () => ({ folderPath: workspaceRoot }) },
+      // Earlier dev builds saved per-repo answers; any left on a repo no longer change the launch.
+      store: {
+        getFolderWorkspace: () => ({ folderPath: workspaceRoot }),
+        getRepo: () => ({ agentWorkspaceTrust: 'agent-asks' })
+      },
       isFreshLaunch: true,
       settings: {},
       spawnOptions: {}
@@ -168,22 +172,7 @@ describe('applyAgentWorkspaceTrust for Claude', () => {
     })
     await applyAgentWorkspaceTrustToSpawn({
       ...spawn,
-      trustWorktreeId: `repo::${outsideCwd}`,
-      store: {
-        ...spawn.store,
-        getRepo: () => ({ agentWorkspaceTrust: 'agent-asks' })
-      }
-    })
-    expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
-      projects: { [workspaceRoot]: { hasTrustDialogAccepted: true } }
-    })
-    await applyAgentWorkspaceTrustToSpawn({
-      ...spawn,
-      trustWorktreeId: `repo::${outsideCwd}`,
-      store: {
-        ...spawn.store,
-        getRepo: () => ({ agentWorkspaceTrust: 'pre-trust' })
-      }
+      trustWorktreeId: `repo::${outsideCwd}`
     })
     expect(JSON.parse(readFileSync(config, 'utf8'))).toEqual({
       projects: {
