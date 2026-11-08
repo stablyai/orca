@@ -1,3 +1,7 @@
+import {
+  structuredMessageSteeringOptionsDiffer,
+  compileCodexMessageOptions
+} from '../../../../shared/agent-session/options/codex-message-compiler'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
 import {
   applyStructuredAgentSessionOptions,
@@ -9,7 +13,11 @@ import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/pr
 import { describe, expect, it, vi } from 'vitest'
 import { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { optionSession } from '../catalog/codex-structured-option-session.test-fixture'
-import { resolvedCodexMessageOptions } from './codex-structured-message-options'
+import {
+  resolvedCodexMessageOptions,
+  readCodexAppliedInputOptions,
+  readCodexMessageSteeringInputs
+} from './codex-structured-message-options'
 import { startCodexTurn } from './codex-structured-turn-start'
 import { CodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
@@ -210,4 +218,55 @@ it('sends native Plan and Build on fresh turns while a steer keeps its running m
   })
   expect(request.mock.calls.at(-1)?.[0]).toBe('turn/steer')
   expect(request.mock.calls.at(-1)?.[1]).not.toHaveProperty('collaborationMode')
+})
+
+it('compiles copied live steering inputs with exact sparse defaults and tier semantics', async () => {
+  const session = optionSession(vi.fn(async () => ({})))
+  seedMessageDefaults(session)
+  session.options = new Map([['effort', 'high']])
+  session.appliedTurnOptions = { model: 'model-a', effort: 'low', serviceTier: 'default' }
+  const binding = { fence: 1, acquisitionGeneration: 'generation-1' }
+  const input = readCodexMessageSteeringInputs(session, binding)
+  if (input.kind !== 'codex') {
+    throw new Error('missing live inputs')
+  }
+  expect(structuredMessageSteeringOptionsDiffer(input, undefined)).toBe(true)
+  expect(structuredMessageSteeringOptionsDiffer(input, {})).toBe(false)
+  expect(await resolvedCodexMessageOptions(session, undefined)).toBeUndefined()
+  expect(
+    compileCodexMessageOptions(input.compiler, { model: 'model-a', fastMode: 'true' })
+  ).toEqual({ model: 'model-a', serviceTier: 'default' })
+  expect(
+    compileCodexMessageOptions(input.compiler, { model: 'model-b', fastMode: 'true' })
+  ).toEqual({ model: 'model-b', serviceTier: 'fast' })
+  expect(
+    compileCodexMessageOptions(input.compiler, {
+      model: 'model-a',
+      fastMode: 'true',
+      serviceTier: 'priority'
+    })
+  ).toEqual({ model: 'model-a', serviceTier: 'priority' })
+  session.reportedOptions.serviceTier = 'configured'
+  const configured = readCodexMessageSteeringInputs(session, binding)
+  if (configured.kind !== 'codex') {
+    throw new Error('missing configured inputs')
+  }
+  expect(compileCodexMessageOptions(configured.compiler, { serviceTier: 'configured' })).toEqual({
+    serviceTier: 'configured'
+  })
+  expect(
+    readCodexAppliedInputOptions(session, { ...binding, next: { serviceTier: 'configured' } })?.next
+  ).toEqual({ model: 'model-a', effort: 'low', serviceTier: 'configured' })
+  session.options.set('effort', 'low')
+  session.appliedTurnOptions = { model: 'model-b', effort: 'high' }
+  expect(input.compiler.active).toEqual({ model: 'model-a', effort: 'low', serviceTier: 'default' })
+  expect(structuredMessageSteeringOptionsDiffer(input, undefined)).toBe(true)
+  expect(readCodexMessageSteeringInputs(session, { ...binding, fence: 2 })).toEqual({
+    kind: 'codex-unavailable'
+  })
+  expect(structuredMessageSteeringOptionsDiffer({ kind: 'codex-unavailable' }, undefined)).toBe(
+    true
+  )
+  expect(structuredMessageSteeringOptionsDiffer({ kind: 'codex-unavailable' }, {})).toBe(false)
+  expect(structuredMessageSteeringOptionsDiffer({ kind: 'other' }, { effort: 'high' })).toBe(false)
 })

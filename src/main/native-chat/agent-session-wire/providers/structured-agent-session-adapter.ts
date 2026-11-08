@@ -1,3 +1,4 @@
+import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
 import type { CodexAccountUsageRead } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
@@ -297,13 +298,12 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   ): Promise<void | Readonly<Record<string, string>>>
   /** Opt in only when setOption can update idle metadata without a provider turn. */
   canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
-  /** Applied inputs for this exact child; observations never decide message admission. */
-  readAppliedInputOptions?(input: {
+  /** Finite live compiler facts for this exact child, without a proposed card. */
+  captureMessageSteeringInputs?(input: {
     sessionId: string
     fence: number
     acquisitionGeneration: string | null
-    next: AgentSessionExecutionOptions | undefined
-  }): { active: AgentSessionExecutionOptions; next: AgentSessionExecutionOptions } | null
+  }): StructuredMessageSteeringInputs
   /** Synchronous capability projection; never acquires inventory or changes saved intent. */
   projectOptions?(
     sessionId: string,

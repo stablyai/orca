@@ -150,7 +150,7 @@ export class StructuredAgentSessionHost {
     sessions: this.sessions,
     serialize: this.serialize,
     readCommands: this.clientDelivery.readCommandsSettled,
-    conversation: (id) => this.lifetime.conversation(id)
+    conversation: (sessionId) => this.lifetime.conversation(sessionId)
   }))
   sessionAgent = this.reads.sessionAgent
   attentionReads = this.reads.attentionReads
@@ -303,9 +303,7 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
-  observeConversationPublications = this.sessions.observeConversationPublications.bind(
-    this.sessions
-  )
+  observeConversationPublications = this.sessions.observeConversationPublications
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   namingPrompt = this.reads.namingPrompt
   automationRun = this.reads.automationRun
@@ -322,7 +320,8 @@ export class StructuredAgentSessionHost {
 
   currentWork = this.clientDelivery.readCurrentWork
   currentWorkAtRest = this.reads.currentWorkAtRest
-  readCurrentRequests = this.backgroundTasks.currentRequests.bind(this.backgroundTasks)
+  readCurrentRequests: BackgroundTasks['currentRequests'] = (...args) =>
+    this.backgroundTasks.currentRequests(...args)
 
   observeJournalPublications = this.clientDelivery.observeJournalPublications
 

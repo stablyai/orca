@@ -159,7 +159,10 @@ export class StructuredAgentSessionConversations extends Map<
   snapshotSource: StructuredAgentSessionSnapshotRoutes['observe'] = (...args) =>
     this.snapshots.observe(...args)
 
-  observeConversationPublications(sessionId: string, observer: PublicationObserver): () => void {
+  observeConversationPublications = (
+    sessionId: string,
+    observer: PublicationObserver
+  ): (() => void) => {
     if (this.ended) {
       this.deliverHint(observer, { kind: 'end', source: null, journal: null }, () => {})
       return () => {}

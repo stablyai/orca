@@ -22,7 +22,7 @@ import {
 } from '../catalog/codex-structured-session-options'
 import {
   prepareCodexMessageDispatch,
-  readCodexAppliedInputOptions
+  readCodexMessageSteeringInputs
 } from '../turns/codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
@@ -321,8 +321,9 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
-  readAppliedInputOptions: NonNullable<SessionAdapter['readAppliedInputOptions']> = (input) =>
-    readCodexAppliedInputOptions(this.sessions.get(input.sessionId), input)
+  captureMessageSteeringInputs: NonNullable<SessionAdapter['captureMessageSteeringInputs']> = (
+    input
+  ) => readCodexMessageSteeringInputs(this.sessions.get(input.sessionId), input)
 
   projectOptions = (sessionId: string, options: Readonly<Record<string, string>>) =>
     projectCodexSessionOptions(this.sessions.get(sessionId), options)
