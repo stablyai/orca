@@ -83,6 +83,16 @@ export abstract class SqlJournalAppends {
     return this.answerOf(this.write({ kind: 'lifecycle', input }))
   }
 
+  settleTakenStop(turnId: string, fence: number, completedAt: number): Promise<boolean> {
+    return this.answerOf(
+      this.write({
+        kind: 'lifecycle',
+        input: { settlementId: `stop-settled:${turnId}`, fence, mutations: [] },
+        takenStop: { turnId, completedAt }
+      })
+    )
+  }
+
   appendSteps(
     steps: readonly JournalWriterStep[],
     beforeRun?: () => boolean

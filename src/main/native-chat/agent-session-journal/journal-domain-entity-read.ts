@@ -9,12 +9,15 @@ import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import { readJournalDomainSubmissionBody } from './journal-domain-submission-records'
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
+import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
   {
     kind:
       | 'metadata'
+      | 'provider-turn-in-namespace'
+      | 'saved-item-ids'
       | 'item'
       | 'submission'
       | 'submission-body'
@@ -44,6 +47,29 @@ export function readJournalDomainEntity(
     return alias ? String(alias.item_id) : itemId
   }
   switch (operation.kind) {
+    case 'provider-turn-in-namespace': {
+      const prefixKey = `p:${providerTimelineKeyPart(operation.namespace)}:`
+      return {
+        kind: operation.kind,
+        present:
+          db
+            .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_named_turn
+          WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL
+          AND turn_id>=? AND turn_id<? LIMIT 1`)
+            .get(...prefix, prefixKey, `${prefixKey.slice(0, -1)};`) !== undefined
+      }
+    }
+    case 'saved-item-ids':
+      return {
+        kind: operation.kind,
+        itemIds: db
+          .prepare(`SELECT item.item_id FROM json_each(?) wanted
+          CROSS JOIN journal_items item
+          WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value
+          AND item.hidden=0 ORDER BY wanted.key`)
+          .all(JSON.stringify(operation.itemIds), ...prefix)
+          .map((row) => String(row.item_id))
+      }
     case 'metadata': {
       const head = db
         .prepare(`SELECT last_sequence,retained_sequence,highest_fence,

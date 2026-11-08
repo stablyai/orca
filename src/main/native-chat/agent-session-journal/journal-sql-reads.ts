@@ -4,6 +4,11 @@ import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-re
 import type { AgentSessionJournalReads } from './journal-reads'
 import type { JournalSqlPointRead, JournalSqlPointReadResult } from './journal-sql-point-read'
 import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type { AgentSessionForkedFrom } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type {
+  AgentJournalSnapshot,
+  AgentJournalRenderItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalSqlQueueRead, JournalSqlQueueReadResult } from './journal-sql-queued-messages'
 import type {
@@ -13,6 +18,19 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  hasProviderTurn(nativeId: string): Promise<boolean>
+  savedItemIds(itemIds: readonly string[]): Promise<string[]>
+  forkMarkerGroup(
+    boundary: AgentSessionForkedFrom['childBoundary'],
+    previousSequence?: number
+  ): Promise<AgentJournalSnapshot>
+  projectedStopNotes(
+    afterOrdinal?: number,
+    limit?: number
+  ): Promise<{
+    items: AgentJournalRenderItem[]
+    nextOrdinal: number | null
+  }>
   generation(input?: JournalGenerationRead): Promise<JournalGenerationResult>
   observer(input: JournalObserverRead): Promise<JournalObserverResult>
   work(input: JournalSqlWorkRead): Promise<JournalSqlWorkResult>
@@ -63,6 +81,13 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    hasProviderTurn: async (namespace) =>
+      (await read({ kind: 'provider-turn-in-namespace', namespace })).present,
+    savedItemIds: async (itemIds) => (await read({ kind: 'saved-item-ids', itemIds })).itemIds,
+    forkMarkerGroup: async (boundary, previousSequence) =>
+      (await read({ kind: 'fork-marker-group', boundary, previousSequence })).snapshot,
+    projectedStopNotes: async (afterOrdinal = -1, limit = 128) =>
+      read({ kind: 'projected-stop-notes', afterOrdinal, limit }),
     generation: async (input = {}) => (await read({ kind: 'generation', input })).generation,
     work: async (input) => (await read({ kind: 'work', input })).answer,
     observer: async (input) => (await read({ kind: 'observer', input })).observation,

@@ -1,8 +1,9 @@
+import { applyJournalDomainControlCommand } from './journal-domain-control-command'
 import { agentSessionJournalProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type Database from '../../sqlite/sync-database'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit } from './journal-writer-changes'
-import { finishJournalSqlCommand } from './journal-sql-command-result'
+import { finishJournalSqlCommand, journalSqlInputCoordinates } from './journal-sql-command-result'
 import { applyJournalSqlItemCommand } from './journal-sql-item-command'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
@@ -11,8 +12,8 @@ import { applyJournalDomainInputRecovery } from './journal-domain-input-recovery
 import { applyJournalDomainCommandTurn } from './journal-domain-command-turn'
 import { applyJournalDomainContextCommand } from './journal-domain-context-command'
 import { applyJournalDomainTombstone } from './journal-domain-item-removal'
-import { applyJournalDomainLifecycle } from './journal-domain-lifecycle'
 import { applyJournalDomainGenerationSettlement } from './journal-domain-generation-settlement'
+import { applyJournalDomainLifecycleOperation } from './journal-domain-taken-stop'
 import { applyJournalDomainPromptMutation } from './journal-domain-prompt-mutation'
 import { applyJournalSqlStepCommand } from './journal-sql-step-command'
 
@@ -57,11 +58,7 @@ export class JournalSqlCommand {
           command,
           result,
           result.value,
-          result.coordinates.map((position) => ({
-            kind: position.kind === 'queue-reopen' ? 'tombstone' : position.kind,
-            epoch: target.epoch,
-            seq: position.cursor.sequence
-          })),
+          journalSqlInputCoordinates(target.epoch, result.coordinates),
           result.items.map((item) => item.itemId)
         )
       }
@@ -75,11 +72,7 @@ export class JournalSqlCommand {
           command,
           result,
           result.value,
-          result.coordinates.map((position) => ({
-            kind: position.kind === 'queue-reopen' ? 'tombstone' : position.kind,
-            epoch: target.epoch,
-            seq: position.cursor.sequence
-          })),
+          journalSqlInputCoordinates(target.epoch, result.coordinates),
           [...result.items.map((item) => item.itemId), ...result.removedItemIds]
         )
       }
@@ -210,10 +203,10 @@ export class JournalSqlCommand {
         if (command.effects) {
           throw new Error('journal lifecycle batches carry no receipt')
         }
-        const result = applyJournalDomainLifecycle(
+        const result = applyJournalDomainLifecycleOperation(
           this.db,
           target,
-          operation.input,
+          operation,
           savedAt,
           command.facts?.stopSettle
         )
@@ -222,7 +215,7 @@ export class JournalSqlCommand {
           this.stateDirectory,
           command,
           result,
-          result.cursor,
+          result.value,
           result.coordinates,
           [...result.items.map((item) => item.itemId), ...result.removedItemIds]
         )
@@ -267,6 +260,29 @@ export class JournalSqlCommand {
           result.value,
           result.coordinates,
           result.items.map((item) => item.itemId)
+        )
+      }
+      case 'stop':
+      case 'stop-accept':
+      case 'queue-resume':
+      case 'queue-reopen':
+      case 'queue-reopen-mark':
+      case 'shutdown-cut': {
+        const result = applyJournalDomainControlCommand(
+          this.db,
+          target,
+          operation,
+          command.facts ?? {},
+          savedAt
+        )
+        return finishJournalSqlCommand(
+          this.db,
+          this.stateDirectory,
+          command,
+          result,
+          result.value,
+          result.coordinates,
+          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
         )
       }
       case 'steps':

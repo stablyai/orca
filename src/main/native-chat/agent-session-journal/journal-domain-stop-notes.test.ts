@@ -14,6 +14,7 @@ import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import type { JournalRow } from './durable-rows/journal-row-schema'
 import { messageFixture, target } from './journal-sql-message.test-fixture'
+import { readJournalSqlPoint } from './journal-sql-point-read'
 
 const close: (() => void)[] = []
 afterEach(() => close.splice(0).forEach((fn) => fn()))
@@ -71,6 +72,12 @@ it('commits Stop display revisions with the turn, catches up by ordinary identit
     body: { kind: 'status', text: 'Cancellation requested.' }
   })
   expect(item(noteId)!.body).not.toHaveProperty('failure')
+  expect(
+    readJournalSqlPoint(db, {
+      sessionId: 'chat',
+      operation: { kind: 'projected-stop-notes', afterOrdinal: -1, limit: 128 }
+    })
+  ).toMatchObject({ kind: 'projected-stop-notes', items: [{ itemId: noteId }], nextOrdinal: null })
   const seen: string[] = []
   const cursors: number[] = []
   let cursor = noted.cursor
@@ -96,6 +103,12 @@ it('commits Stop display revisions with the turn, catches up by ordinary identit
   expect(cursors).toEqual([13, 14, 15])
   expect(seen).toEqual(['orca:large-1', 'orca:large-2', turnId, noteId])
   expect(turn('completed').items.at(-1)!.body).toEqual(original)
+  expect(
+    readJournalSqlPoint(db, {
+      sessionId: 'chat',
+      operation: { kind: 'projected-stop-notes', afterOrdinal: -1, limit: 128 }
+    })
+  ).toMatchObject({ kind: 'projected-stop-notes', items: [], nextOrdinal: null })
   expect(item(noteId)).toMatchObject({ revision: 3, sequence: 12, observedAt: 20, body: original })
   write('stop:turn-1', { kind: 'status', text: 'Confirmed.' }, turnId)
   expect(

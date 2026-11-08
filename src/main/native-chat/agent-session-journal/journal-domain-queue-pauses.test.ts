@@ -8,6 +8,8 @@ import {
 } from './journal-domain-queue-pauses'
 import { readJournalDomainTurnScope } from './journal-domain-turn-scope'
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { readJournalSqlQueue } from './journal-sql-queued-messages'
+import { JournalSqlScope } from './journal-sql-scope'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -61,6 +63,12 @@ it('holds a failed command only with agent evidence, and Resume must follow its 
     'orca:command-turn%3Asend'
   )
   expect(context().pauses).toEqual([{ reason: 'failed', since: { epoch: 'epoch', sequence: 12 } }])
+  expect(
+    readJournalSqlQueue(new JournalSqlScope(db, 'chat', 'epoch'), {
+      kind: 'failure-holds',
+      facts: { reopenFloor: null }
+    })
+  ).toEqual({ kind: 'failure-holds', held: true })
   db.prepare('UPDATE journal_chat_state SET queue_resumed_sequence=12').run()
   expect(context().pauses).toEqual([{ reason: 'failed', since: { epoch: 'epoch', sequence: 12 } }])
   await append('command-turn:send', {

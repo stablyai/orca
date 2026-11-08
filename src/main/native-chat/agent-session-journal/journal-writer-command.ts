@@ -16,7 +16,11 @@ export type JournalWriterTarget = { sessionId: string; epoch: string; ownerToken
 export type JournalWriterCoreOperation =
   | ({ kind: 'item' } & JournalItemAppendInput)
   | { kind: 'tombstone'; identity: AgentJournalItemIdentity; fence: number }
-  | { kind: 'lifecycle'; input: JournalLifecycleBatchInput }
+  | {
+      kind: 'lifecycle'
+      input: JournalLifecycleBatchInput
+      takenStop?: { turnId: string; completedAt: number }
+    }
   | { kind: 'dispatch'; input: ResolveDispatchInput; onlyIfUnsettled?: true }
   | { kind: 'stop'; event: Omit<JournalStopEvent, 'at'>; fence: number }
   | { kind: 'queue-resume'; fence: number }

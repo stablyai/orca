@@ -22,6 +22,29 @@ const status = (id: string): JournalLifecycleMutationInput => ({
   turnScope: { kind: 'thread' }
 })
 
+it('settles only the named Stop turn at the writer position and reports unopened turns', async () => {
+  const f = domainLifecycleFixture(cleanups)
+  for (const id of ['target', 'other']) {
+    await f.run({
+      kind: 'item',
+      identity: identity(id),
+      body: { kind: 'turn', turnId: id, state: 'running' },
+      options
+    })
+  }
+  const settle = (turnId: string) =>
+    f.run({
+      kind: 'lifecycle',
+      input: { settlementId: `stop-settled:${turnId}`, fence: 1, mutations: [] },
+      takenStop: { turnId, completedAt: 300 }
+    })
+  expect((await settle('missing')).value).toBe(false)
+  expect((await settle('target')).value).toBe(true)
+  expect(f.item('orca:target')?.body).toMatchObject({ state: 'interrupted', completedAt: 300 })
+  expect(f.item('orca:other')?.body).toMatchObject({ state: 'running' })
+  expect((await settle('target')).publication?.items).toEqual([])
+})
+
 it('publishes complete lifecycle groups and preserves revised placement and durable retry authority', async () => {
   const f = domainLifecycleFixture(cleanups)
   await f.run({

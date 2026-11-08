@@ -4,6 +4,11 @@ import {
   type JournalGenerationResult
 } from './journal-generation-read'
 import { readJournalDomainAcceptedSendUnopened } from './journal-domain-accepted-unopened'
+import {
+  readJournalDomainPublication,
+  type JournalPublicationRead,
+  type JournalPublicationReadResult
+} from './journal-domain-publication-read'
 import { readJournalDomainEntity } from './journal-domain-entity-read'
 import { readJournalDomainLifecycle } from './journal-sql-lifecycle-reads'
 import type Database from '../../sqlite/sync-database'
@@ -50,6 +55,8 @@ import {
 export type JournalSqlPointRead = {
   sessionId: string
   operation:
+    | { kind: 'provider-turn-in-namespace'; namespace: string }
+    | { kind: 'saved-item-ids'; itemIds: readonly string[] }
     | { kind: 'generation'; input: JournalGenerationRead }
     | { kind: 'observer'; input: JournalObserverRead }
     | { kind: 'work'; input: JournalSqlWorkRead }
@@ -74,9 +81,12 @@ export type JournalSqlPointRead = {
     | { kind: 'turn-removed'; turnId: string }
     | { kind: 'queue'; operation: JournalSqlQueueRead }
     | JournalSqlItemRead
+    | JournalPublicationRead
 }
 
 export type JournalSqlPointReadResult =
+  | { kind: 'provider-turn-in-namespace'; present: boolean }
+  | { kind: 'saved-item-ids'; itemIds: string[] }
   | { kind: 'generation'; generation: JournalGenerationResult }
   | { kind: 'observer'; observation: JournalObserverResult }
   | { kind: 'work'; answer: JournalSqlWorkResult }
@@ -112,6 +122,7 @@ export type JournalSqlPointReadResult =
   | { kind: 'turn-removed'; removed: boolean }
   | { kind: 'queue'; result: JournalSqlQueueReadResult }
   | JournalSqlItemReadResult
+  | JournalPublicationReadResult
 
 /** Point procedures decode only the named entity and its captured incarnations. */
 export function readJournalSqlPoint(
@@ -126,6 +137,9 @@ function read(
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
+    case 'fork-marker-group':
+    case 'projected-stop-notes':
+      return readJournalDomainPublication(scope, operation)
     case 'generation':
       return { kind: 'generation', generation: readJournalGeneration(scope, operation.input) }
     case 'work':
@@ -187,6 +201,8 @@ function read(
         operation
       )
     case 'metadata':
+    case 'provider-turn-in-namespace':
+    case 'saved-item-ids':
     case 'item':
     case 'submission':
     case 'submission-body':

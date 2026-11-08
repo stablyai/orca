@@ -36,6 +36,61 @@ const message = (text: string): AgentJournalMessageItem => ({
   role: 'user',
   blocks: [{ type: 'text', text }]
 })
+
+it('answers opening and owed phase membership in one work snapshot and honors a hidden newer raw turn', () => {
+  const { db, context } = fixture([
+    {
+      ...base,
+      kind: 'submission',
+      clientMessageId: 'send',
+      payloadFingerprint: 'fp',
+      body: message('Go'),
+      providerHandle,
+      handoverRecorded: true,
+      origin: 'client'
+    },
+    {
+      ...base,
+      kind: 'dispatch',
+      clientMessageId: 'send',
+      state: 'pending',
+      providerItemId: null,
+      reason: null
+    }
+  ])
+  const authority = {
+    handle: 'owner',
+    record: {
+      currentFence: 1,
+      ownerObservation: { claimStatus: 'live' as const, unreconciled: false, handoffStage: null }
+    },
+    child: { fence: 1 },
+    handingOver: [],
+    continuingUnadmitted: [],
+    finalizing: [],
+    openedThrough: { epoch: 'epoch', sequence: 0 },
+    operationalRevision: 0
+  }
+  const read = (fence: number) =>
+    readJournalSqlWork(context(), {
+      authority,
+      operation: { kind: 'opening-send', fence }
+    }).result
+  expect(read(1)).toEqual({ kind: 'opening-send', opening: true })
+  expect(read(2)).toEqual({ kind: 'opening-send', opening: false })
+  expect(
+    readJournalSqlWork(context(), { authority, operation: { kind: 'state' } }).result
+  ).toMatchObject({
+    kind: 'state',
+    state: {
+      owedEnteredSubmissions: [{ clientMessageId: 'send' }],
+      owedSendingSubmissions: [{ clientMessageId: 'send' }]
+    }
+  })
+  db.exec(`UPDATE journal_items SET hidden=1,turn_marker=1,context_clear=0,root=1,
+    sequence=99 WHERE item_id='orca:send'`)
+  expect(read(1)).toEqual({ kind: 'opening-send', opening: false })
+})
 const cleanup: Database.Database[] = []
 afterEach(() => {
   for (const db of cleanup.splice(0)) {

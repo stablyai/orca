@@ -57,6 +57,10 @@ CREATE INDEX journal_items_queue_failure_report ON journal_items(session_id, epo
   WHERE hidden=0 AND queue_failure_report_turn_item_id IS NOT NULL;
 CREATE INDEX journal_items_stop_turn ON journal_items(session_id, epoch, turn_item_id)
   WHERE hidden=0 AND turn_item_id IS NOT NULL;
+CREATE INDEX journal_items_original_stop_note ON journal_items(session_id,epoch,ordinal)
+  WHERE hidden=0 AND original_stop_note_json IS NOT NULL;
+CREATE INDEX journal_items_teardown_turn ON journal_items(session_id,epoch,sequence,sequence_index,ordinal)
+  WHERE hidden=0 AND root=1 AND turn_id IS NOT NULL AND queue_command_turn=0;
 CREATE INDEX journal_events_saved_at ON journal_events(saved_at,session_id,epoch,sequence);
 CREATE INDEX journal_items_kind ON journal_items(session_id, epoch, kind, ordinal) WHERE hidden=0;
 CREATE INDEX journal_items_user_message ON journal_items(session_id, epoch, ordinal)

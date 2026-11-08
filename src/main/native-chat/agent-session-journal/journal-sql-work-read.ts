@@ -74,6 +74,8 @@ export function readJournalSqlWorkState(
     allowsObservation: work.allowsObservation(),
     working: work.working(),
     owesAnySend: work.owesAnySend(),
+    owedEnteredSubmissions: owedPhaseSubmissions(context, work, 'entered-submissions'),
+    owedSendingSubmissions: owedPhaseSubmissions(context, work, 'sending-submissions'),
     activeTurn: work.activeTurn(),
     latestTurn: work.publishedLatestTurn(
       latestStructuredAgentSessionTurn(boundary ? [boundary] : [])
@@ -83,6 +85,18 @@ export function readJournalSqlWorkState(
     viewKey: work.viewKey(),
     workViewKey: work.workViewKey()
   }
+}
+
+function owedPhaseSubmissions(
+  context: JournalSqlStatusContext,
+  work: StructuredAgentSessionWorkPolicy,
+  kind: 'entered-submissions' | 'sending-submissions'
+) {
+  const result = readJournalSqlInput(context.scope, { kind })
+  if (result.kind !== kind) {
+    throw new Error('journal phase read returned a different answer')
+  }
+  return result.submissions.filter((send) => work.owesSend(send))
 }
 
 export function readJournalSqlWork(

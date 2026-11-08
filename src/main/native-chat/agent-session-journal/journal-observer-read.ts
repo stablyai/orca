@@ -54,6 +54,8 @@ export type JournalObserverResult = {
     allowsObservation: boolean
     working: boolean
     owesAnySend: boolean
+    owedEnteredSubmissions: AgentJournalSubmission[]
+    owedSendingSubmissions: AgentJournalSubmission[]
     activeTurn: { item: AgentJournalRenderItem; turnId: string } | null
     latestTurn: AgentSessionLatestTurn | null
     actionablePrompts: AgentJournalRenderItem[]

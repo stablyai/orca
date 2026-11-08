@@ -1,3 +1,4 @@
+import { JOURNAL_STOP_EVENT_ITEM_ID } from './context-epochs/journal-stop-and-resume-rows'
 import type Database from '../../sqlite/sync-database'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -59,12 +60,6 @@ export type JournalDomainControlCommit = Omit<
   JournalDomainSubmissionCommit<JournalDomainControlValue>,
   'coordinates'
 > & { coordinates: JournalWriterCoordinate[] }
-
-// Same reserved source item key as the legacy Stop row, so ended observations stay keyed alike.
-const JOURNAL_STOP_EVENT_ITEM_ID = agentJournalItemKey({
-  provider: 'orca',
-  clientMessageId: 'stop-event'
-})
 
 // Host-held sends prove non-delivery.
 const STOP_WITHDRAWAL = agentSessionFailureWords(

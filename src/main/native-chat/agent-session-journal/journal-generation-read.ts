@@ -6,6 +6,7 @@ import type {
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalSqlScope } from './journal-sql-scope'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { readJournalDomainGeneration } from './journal-domain-generation-reads'
 
 export type JournalGenerationRead = {
@@ -14,6 +15,7 @@ export type JournalGenerationRead = {
   exitScope?: { completedAt: number; ownerFence: number }
   /** Prior unfinished identities may now be settled and outside the eligible lifecycle index. */
   itemIds?: readonly string[]
+  teardownAnchors?: boolean
 }
 
 export type JournalGenerationResult = {
@@ -37,6 +39,38 @@ export function readJournalGeneration(
     input.exitScope
   )
   const items = new Map(generation.snapshot().items.map((item) => [item.itemId, item]))
+  if (input.teardownAnchors) {
+    const anchor = scope.db
+      .prepare(`SELECT payload_json FROM journal_items
+      INDEXED BY journal_items_teardown_turn WHERE session_id=? AND epoch=? AND hidden=0
+      AND root=1 AND turn_id IS NOT NULL AND queue_command_turn=0
+      ORDER BY sequence DESC,sequence_index DESC,ordinal DESC LIMIT 1`)
+      .get(...scope.prefix)
+    if (anchor) {
+      const item = scope.decode<AgentJournalRenderItem>(anchor.payload_json)
+      items.set(item.itemId, item)
+      const turn = readAgentJournalTurn(item.body)
+      if (turn?.userItemId) {
+        const opener = scope.db
+          .prepare(`SELECT payload_json FROM journal_items
+          WHERE session_id=? AND epoch=? AND hidden=0 AND item_id=?`)
+          .get(...scope.prefix, turn.userItemId)
+        if (opener) {
+          const user = scope.decode<AgentJournalRenderItem>(opener.payload_json)
+          items.set(user.itemId, user)
+        }
+      }
+    }
+    const user = scope.db
+      .prepare(`SELECT payload_json FROM journal_items
+      INDEXED BY journal_items_status_prompt WHERE session_id=? AND epoch=? AND hidden=0
+      AND prompt=1 ORDER BY sequence DESC,sequence_index DESC,ordinal DESC LIMIT 1`)
+      .get(...scope.prefix)
+    if (user) {
+      const item = scope.decode<AgentJournalRenderItem>(user.payload_json)
+      items.set(item.itemId, item)
+    }
+  }
   for (const itemId of input.itemIds ?? []) {
     const row = scope.db
       .prepare(
@@ -50,7 +84,12 @@ export function readJournalGeneration(
   }
   return {
     cursor: generation.cursor(),
-    items: [...items.values()],
+    items: [...items.values()].sort(
+      (a, b) =>
+        a.sequence - b.sequence ||
+        (a.sequenceIndex ?? 0) - (b.sequenceIndex ?? 0) ||
+        a.itemId.localeCompare(b.itemId)
+    ),
     submissions: generation.submissions(),
     itemFences: [...items.keys()].map((itemId) => [itemId, generation.itemFence(itemId)]),
     stop: generation.stopMarks.latest()

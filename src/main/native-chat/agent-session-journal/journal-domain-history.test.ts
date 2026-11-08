@@ -195,7 +195,11 @@ it('excludes a retained body and submission by stored size before reading either
   const tail = read({ direction: 'tail' }, small)
   expect(sequences(tail)).toEqual([3, 4])
   expect(tail.page).toMatchObject({ hasOlder: true, window: { nextCursor: { sequence: 3 } } })
-  const forward = read({ direction: 'after', cursor: { epoch: 'epoch', sequence: 0 } }, small)
+  const forward = read({
+    direction: 'after',
+    cursor: { epoch: 'epoch', sequence: 0 },
+    reader: { form: 'bounded', budgetBytes: 4096 }
+  })
   expect(sequences(forward)).toEqual([1])
   expect(forward.page).toMatchObject({ hasNewer: true, window: { nextCursor: { sequence: 1 } } })
 })

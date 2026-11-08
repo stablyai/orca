@@ -83,11 +83,15 @@ function publicJournalSqlValue(
   cursor: AgentJournalCursor
 ): unknown {
   const operation = command.operation.kind
+  if (operation === 'lifecycle' && command.operation.takenStop) {
+    return value
+  }
   if (
     operation === 'item' ||
     operation === 'item-claiming' ||
     operation === 'prompt-mutate' ||
-    operation === 'steps'
+    operation === 'steps' ||
+    operation === 'shutdown-cut'
   ) {
     return value && typeof value === 'object' ? { ...value, cursor } : value
   }
@@ -95,9 +99,32 @@ function publicJournalSqlValue(
     operation === 'submission' ||
     operation === 'dispatch' ||
     operation === 'lifecycle' ||
-    operation === 'tombstone'
+    operation === 'tombstone' ||
+    operation === 'context-clear' ||
+    operation === 'context-rewind' ||
+    operation === 'epoch-replace' ||
+    operation === 'stop' ||
+    operation === 'queue-resume' ||
+    operation === 'queue-reopen'
   ) {
     return value == null ? value : cursor
   }
+  if (operation === 'stop-accept' && value && typeof value === 'object') {
+    return { ...value, mark: cursor }
+  }
   return value
+}
+
+export function journalSqlInputCoordinates(
+  epoch: string,
+  positions: readonly {
+    kind: 'submission' | 'dispatch' | 'queue-reopen'
+    cursor: AgentJournalCursor
+  }[]
+): JournalWriterCoordinate[] {
+  return positions.map((position) => ({
+    kind: position.kind === 'queue-reopen' ? 'tombstone' : position.kind,
+    epoch,
+    seq: position.cursor.sequence
+  }))
 }
