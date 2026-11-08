@@ -22,7 +22,7 @@ export function* sqlJournalStatusItems(
       single = true
       break
     case 'boundary':
-      predicates.push('(turn_id IS NOT NULL OR context_clear=1)')
+      predicates.push('turn_marker=1')
       single = true
       break
     case 'turns':
@@ -39,7 +39,7 @@ export function* sqlJournalStatusItems(
       break
     case 'prompt':
     case 'users':
-      predicates.push("root=1 AND message_role='user' AND command_entry=0")
+      predicates.push('prompt=1')
       if (selection.kind === 'users' && selection.unknown) {
         predicates.push("turn_scope_kind='unknown'")
       }
@@ -66,7 +66,7 @@ export function* sqlJournalStatusItems(
     case 'tools':
       predicates.push(
         selection.running
-          ? "root=1 AND kind='tool-call' AND lifecycle_state='running'"
+          ? "root=1 AND kind='tool-call' AND lifecycle_state='running' AND (lifecycle_state IN ('running','pending') OR live_work=1)"
           : "root=1 AND kind IN ('tool-call','diff')"
       )
       predicates.push('(sequence,sequence_index,ordinal)>(?,?,?)')
@@ -86,15 +86,16 @@ export function* sqlJournalStatusItems(
       ? ` AND (${columns.join(',')})${ascending ? '>' : '<'}(${columns.map(() => '?').join(',')})`
       : ''
     const rows = scope.db
-      .prepare(`SELECT entry_key,sequence,sequence_index,ordinal
-      FROM journal_proj_items WHERE ${predicates.join(' AND ')}${cursor}
+      .prepare(`SELECT item_id,sequence,sequence_index,ordinal
+      FROM journal_items ${selection.kind === 'tools' && selection.running ? 'INDEXED BY journal_items_unsettled' : ''}
+      WHERE ${predicates.join(' AND ')}${cursor}
       ${unordered ? '' : `ORDER BY ${order}`} LIMIT ?`)
       .all(...params, ...(after ?? []), single ? 1 : PAGE)
     for (const row of rows) {
       scope.examined(row)
     }
     for (const row of rows) {
-      const current = item(String(JSON.parse(String(row.entry_key))))
+      const current = item(String(row.item_id))
       if (current) {
         yield {
           item: current,
