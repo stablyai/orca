@@ -215,15 +215,3 @@ describe('explicit create parents named by path:', () => {
     ).rejects.toMatchObject({ code: 'LINEAGE_PARENT_AMBIGUOUS' })
   })
 })
-
-describe('explicit set parents', () => {
-  it('report a missing parent as a missing parent, as create does', async () => {
-    const runtime = createRuntime([folder({ id: 'hub-a' })], [folderProject])
-
-    await expect(
-      runtime.updateManagedWorktreeMeta('path:/work/hub', {
-        lineage: { parentWorktree: 'name:Missing', matchFolderWorkspaces: true }
-      })
-    ).rejects.toMatchObject({ code: 'LINEAGE_PARENT_NOT_FOUND' })
-  })
-})

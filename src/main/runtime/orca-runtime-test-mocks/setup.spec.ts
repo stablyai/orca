@@ -1,5 +1,5 @@
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
-import { vi, type Mock } from 'vitest'
+import { vi, type Mock as TestMock } from 'vitest'
 
 import type * as GitUsernameModule from '../../git/git-username'
 import type * as GitRepoDefaultBaseRefModule from '../../git/repo-default-base-ref'
@@ -12,9 +12,7 @@ export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIG
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
 
-type TestMock = Mock
-
-export const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = await getWorktreeOwnerMocks()
   return {
@@ -716,6 +714,8 @@ export {
   getIssueMock,
   deleteWorktreeHistoryDirMock
 }
+
+export { reconcileClaudeAgentViewMock }
 
 vi.mock(import('../../preflight/installed-agent-detection'), async (importOriginal) => ({
   ...(await importOriginal()),

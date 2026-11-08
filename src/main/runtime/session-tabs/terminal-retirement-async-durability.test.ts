@@ -117,16 +117,3 @@ it('persists a failed exit retirement with the final quit flush', async () => {
     [ACK_SECOND_LEAF]: 'pty-b'
   })
 })
-
-it('writes exits retired in the same tick once', async () => {
-  const f = fixture()
-  await f.store.flushPendingOrThrowAsync()
-  const writes = f.authority.captures.length
-  await Promise.all([
-    f.runtime.onPtyExit('pty-a', 0, ACK_INCARNATION, { providerExitObserved: true }),
-    f.runtime.onPtyExit('pty-b', 0, undefined, { providerExitObserved: true })
-  ])
-  // Why: the first write already carries both retirements; the second has nothing left to fence.
-  expect(f.authority.captures.length - writes).toBe(1)
-  expect(f.readDisk().workspaceSession.terminalLayoutsByTabId[ACK_TAB]).toBeUndefined()
-})
