@@ -9,6 +9,7 @@ import type {
   DashboardCardTerminalInput
 } from '../../../../shared/dashboard-snapshot'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { useAppStore } from '@/store'
 import { AgentTerminalDialog, AgentTerminalPanel } from './AgentTerminalDialog'
 
 // Stub xterm/IPC to inspect the routing props passed to the preview.
@@ -61,6 +62,7 @@ function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
 
 afterEach(() => {
   cleanup()
+  useAppStore.setState({ keybindings: {} })
 })
 
 // This prop is the only path carrying relayed host-input facts into the preview; omission silently falls back to client-OS routing.
@@ -84,6 +86,71 @@ describe('AgentTerminalDialog', () => {
 
     fireEvent.keyDown(document.body, { key: 'Escape' })
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('opens the displayed agent worktree with its custom terminal shortcut', () => {
+    useAppStore.setState({
+      keybindings: { 'dashboard.openWorktree': ['Mod+Alt+O'] }
+    })
+    function Host() {
+      const [open, setOpen] = useState(true)
+      const [revealedWorktree, setRevealedWorktree] = useState<string | null>(null)
+      return (
+        <>
+          {revealedWorktree ? <p>Revealed {revealedWorktree}</p> : null}
+          {open ? (
+            <AgentTerminalPanel
+              card={card()}
+              onOpenChange={setOpen}
+              onReveal={(args) => setRevealedWorktree(args.worktreeId)}
+            />
+          ) : null}
+        </>
+      )
+    }
+    render(<Host />)
+
+    fireEvent.keyDown(screen.getByTestId('preview'), {
+      key: 'o',
+      code: 'KeyO',
+      ctrlKey: true,
+      altKey: true
+    })
+
+    expect(screen.getByText('Revealed w1')).toBeInTheDocument()
+    expect(screen.queryByTestId('preview')).not.toBeInTheDocument()
+  })
+
+  it('opens the displayed agent worktree with a double-tap modifier shortcut', () => {
+    useAppStore.setState({
+      keybindings: { 'dashboard.openWorktree': ['DoubleTap+Ctrl'] }
+    })
+    function Host() {
+      const [open, setOpen] = useState(true)
+      const [revealedWorktree, setRevealedWorktree] = useState<string | null>(null)
+      return (
+        <>
+          {revealedWorktree ? <p>Revealed {revealedWorktree}</p> : null}
+          {open ? (
+            <AgentTerminalPanel
+              card={card()}
+              onOpenChange={setOpen}
+              onReveal={(args) => setRevealedWorktree(args.worktreeId)}
+            />
+          ) : null}
+        </>
+      )
+    }
+    render(<Host />)
+    const preview = screen.getByTestId('preview')
+    const tap = { key: 'Control', code: 'ControlLeft', ctrlKey: true }
+
+    fireEvent.keyDown(preview, tap)
+    fireEvent.keyUp(preview, tap)
+    fireEvent.keyDown(preview, tap)
+
+    expect(screen.getByText('Revealed w1')).toBeInTheDocument()
+    expect(screen.queryByTestId('preview')).not.toBeInTheDocument()
   })
 })
 
