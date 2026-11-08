@@ -2,7 +2,6 @@ import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { messageFixture } from './journal-sql-message.test-fixture'
 import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journal-sql-maintenance'
-import { JOURNAL_DOMAIN_MAINTENANCE_SCHEMA } from './journal-domain-maintenance-schema'
 
 const databases: Database.Database[] = []
 afterEach(() => {
@@ -16,8 +15,6 @@ function fixture() {
   databases.push(db)
   db.pragma('auto_vacuum=INCREMENTAL')
   messageFixture(db)
-  // Temporary until the maintenance DDL joins the central numbered migration list.
-  db.exec(JOURNAL_DOMAIN_MAINTENANCE_SCHEMA)
   return db
 }
 

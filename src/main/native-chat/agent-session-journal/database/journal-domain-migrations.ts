@@ -3,6 +3,7 @@ import type { SqliteBindings } from '../../../sqlite/sqlite-statement'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDomainHistoryMetadata } from '../journal-domain-history-metadata'
 import { JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA } from '../journal-domain-edit-lease-schema'
+import { JOURNAL_DOMAIN_MAINTENANCE_SCHEMA } from '../journal-domain-maintenance-schema'
 import { migrateJournalDomainQueueSchema } from '../journal-domain-queue-schema'
 import { JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA } from '../journal-domain-current-queue-schema'
 import { ensureJournalOutcomeTables } from '../outcomes/journal-outcome-format'
@@ -40,7 +41,8 @@ export const JOURNAL_DOMAIN_MIGRATIONS: readonly {
       session_id, epoch, json_extract(payload_json, '$.turnScope.turnItemId'))
       WHERE hidden=0 AND json_extract(payload_json, '$.body.kind')='status'
         AND json_extract(payload_json, '$.body.failure.kind')='cancelUnconfirmed';`)
-  }
+  },
+  { version: 12, migrate: (db) => db.exec(JOURNAL_DOMAIN_MAINTENANCE_SCHEMA) }
 ]
 
 export const JOURNAL_DOMAIN_SCHEMA_VERSION = JOURNAL_DOMAIN_MIGRATIONS.at(-1)!.version

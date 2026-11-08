@@ -5,7 +5,6 @@ import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { JournalSqlBackgroundMaintenance } from './journal-sql-background-maintenance'
 import { JournalSqlActivity } from './journal-sql-activity'
 import { readJournalDomainHistoryPage } from './journal-domain-history-page'
-import { JOURNAL_DOMAIN_MAINTENANCE_SCHEMA } from './journal-domain-maintenance-schema'
 
 const databases: Database.Database[] = []
 const maintainers: JournalSqlBackgroundMaintenance[] = []
@@ -22,8 +21,6 @@ afterEach(async () => {
 
 const fixture = () => {
   const value = messageFixture()
-  // Temporary until the maintenance DDL joins the central numbered migration list.
-  value.db.exec(JOURNAL_DOMAIN_MAINTENANCE_SCHEMA)
   databases.push(value.db)
   return value
 }
