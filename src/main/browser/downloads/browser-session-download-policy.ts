@@ -7,6 +7,10 @@ export const handleWillDownload = (
   item: Electron.DownloadItem,
   webContents: Electron.WebContents
 ): void => {
+  // Why first: Electron drops an item an earlier listener refused and never sends its done.
+  if (event.defaultPrevented) {
+    return
+  }
   // Prevent SSH-driven pages from writing host-chosen files into desktop Downloads.
   if (isRemoteCliDrivenGuest(webContents.id)) {
     event.preventDefault()
@@ -14,6 +18,12 @@ export const handleWillDownload = (
     return
   }
   browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
+  // Why after the emit: a later listener can still refuse the item the manager just took.
+  queueMicrotask(() => {
+    if (event.defaultPrevented) {
+      browserManager.forgetRefusedDownload(item)
+    }
+  })
 }
 
 // will-download omits the partition; attach each partition's selected policy to its session.

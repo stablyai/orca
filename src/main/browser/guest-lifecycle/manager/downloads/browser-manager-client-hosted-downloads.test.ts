@@ -33,7 +33,11 @@ import { mkdtemp, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { browserManager } from '../browser-manager'
-import { BrowserClientDownloadRelay } from '../../../client-hosts/file-transfers/browser-client-download-relay'
+import {
+  BrowserClientDownloadRelay,
+  type BrowserClientDownloadDestination,
+  type BrowserClientDownloadRouteOutcome
+} from '../../../client-hosts/file-transfers/browser-client-download-relay'
 import { BrowserClientFileChannelTransport } from '../../../client-hosts/file-transfers/browser-client-file-channel-transport'
 import type { BrowserClientHostedPageInventory } from '../../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
@@ -42,7 +46,10 @@ import {
   setBrowserClientRouteWebContentsProbe
 } from '../../../client-hosts/file-transfers/browser-client-download-routing'
 import { createBrowserClientPageGuestBinding } from '../../../client-pages/lifecycle/browser-client-page-guest-binding'
-import { resetBrowserRouteGuestPopupOwnership } from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
+import {
+  registerBrowserRouteGuestPopup,
+  resetBrowserRouteGuestPopupOwnership
+} from '../../../routing/guest-authority/browser-route-guest-popup-ownership'
 import {
   createDownloadItem,
   getDownloadItemEventHandler,
@@ -170,6 +177,147 @@ describe('client-hosted downloads', () => {
       await vi.waitFor(async () => expect(await readdir(stagingRoot)).toEqual([]))
     } finally {
       await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('tells chrome.downloads how an item ended only after its remote save, and lets it cancel that save', async () => {
+    const commits: PromiseWithResolvers<BrowserClientDownloadDestination>[] = []
+    const route = {
+      transferId: 'transfer-1',
+      browserPageId: BROWSER_PAGE_ID,
+      stagingPath: '/staging/download',
+      complete: vi.fn(() => {
+        const commit = Promise.withResolvers<BrowserClientDownloadDestination>()
+        commits.push(commit)
+        return commit.promise
+      }),
+      abort: vi.fn(async () => {})
+    }
+    registerBrowserClientDownloadRouter('env-a', { route: () => ({ kind: 'remote', route }) })
+    const startRemoteSave = async (): Promise<{
+      item: Electron.DownloadItem
+      onFinished: ReturnType<typeof vi.fn>
+    }> => {
+      const item = createDownloadItem()
+      const onFinished = vi.fn()
+      const commitsBefore = commits.length
+      browserManager.markExtensionDownload(item, onFinished)
+      browserManager.handleGuestWillDownload({ guestWebContentsId: GUEST_WEB_CONTENTS_ID, item })
+      getDownloadItemEventHandler(item, 'once', 'done')?.({} as Electron.Event, 'completed')
+      await vi.waitFor(() => expect(commits).toHaveLength(commitsBefore + 1))
+      return { item, onFinished }
+    }
+
+    const saved = await startRemoteSave()
+    expect(browserManager.tracksDownload(saved.item)).toBe(true)
+    expect(saved.onFinished).not.toHaveBeenCalled()
+    const destination = { workspaceRelativePath: '.orca/browser-downloads/a.csv', hostLabel: 'box' }
+    commits[0].resolve(destination)
+    await vi.waitFor(() => expect(saved.onFinished).toHaveBeenCalledOnce())
+    expect(saved.onFinished.mock.calls[0][0]).toMatchObject({
+      status: 'completed',
+      remoteDestination: destination
+    })
+
+    const canceled = await startRemoteSave()
+    expect(browserManager.cancelExtensionDownload(canceled.item)).toBe(true)
+    expect(route.abort).toHaveBeenCalledOnce()
+    expect(canceled.onFinished.mock.calls).toEqual([
+      [expect.objectContaining({ status: 'canceled', error: null }), undefined, true]
+    ])
+    expect(browserManager.tracksDownload(canceled.item)).toBe(false)
+  })
+
+  it('tells chrome.downloads which items it is saving to the remote workspace', () => {
+    const route = {
+      transferId: 'transfer-1',
+      browserPageId: BROWSER_PAGE_ID,
+      stagingPath: '/staging/download',
+      complete: vi.fn(() => new Promise<BrowserClientDownloadDestination>(() => {})),
+      abort: vi.fn(async () => {})
+    }
+    let outcome: BrowserClientDownloadRouteOutcome = { kind: 'remote', route }
+    registerBrowserClientDownloadRouter('env-a', { route: () => outcome })
+    const remote = createDownloadItem()
+    browserManager.handleGuestWillDownload({
+      guestWebContentsId: GUEST_WEB_CONTENTS_ID,
+      item: remote
+    })
+    outcome = { kind: 'local-fallback' }
+    const fallback = createDownloadItem()
+    browserManager.handleGuestWillDownload({
+      guestWebContentsId: GUEST_WEB_CONTENTS_ID,
+      item: fallback
+    })
+
+    expect(
+      [remote, fallback, createDownloadItem()].map((item) =>
+        browserManager.downloadSavesRemotely(item)
+      )
+    ).toEqual([true, false, false])
+  })
+
+  it('keeps telling chrome.downloads an item is remote until its failed save finishes aborting', async () => {
+    const abort = Promise.withResolvers<void>()
+    const route = {
+      transferId: 'transfer-1',
+      browserPageId: BROWSER_PAGE_ID,
+      stagingPath: '/staging/download',
+      complete: vi.fn(() => new Promise<BrowserClientDownloadDestination>(() => {})),
+      abort: vi.fn(() => abort.promise)
+    }
+    registerBrowserClientDownloadRouter('env-a', { route: () => ({ kind: 'remote', route }) })
+    const item = createDownloadItem()
+    const onFinished = vi.fn()
+    browserManager.markExtensionDownload(item, onFinished)
+    browserManager.handleGuestWillDownload({ guestWebContentsId: GUEST_WEB_CONTENTS_ID, item })
+
+    getDownloadItemEventHandler(item, 'once', 'done')?.({} as Electron.Event, 'interrupted')
+    expect(route.abort).toHaveBeenCalledOnce()
+    expect(browserManager.downloadSavesRemotely(item)).toBe(true)
+
+    abort.resolve()
+    await vi.waitFor(() =>
+      expect(onFinished.mock.calls).toEqual([
+        [expect.objectContaining({ status: 'failed' }), undefined, true]
+      ])
+    )
+    expect(browserManager.downloadSavesRemotely(item)).toBe(false)
+  })
+
+  it('tells chrome.downloads that a shutdown, not the user, ended an item', () => {
+    setBrowserClientRouteWebContentsProbe(() => false)
+    const item = createDownloadItem()
+    const onFinished = vi.fn()
+    browserManager.markExtensionDownload(item, onFinished)
+    browserManager.handleGuestWillDownload({ guestWebContentsId: GUEST_WEB_CONTENTS_ID, item })
+
+    browserManager.unregisterAll()
+
+    expect(onFinished.mock.calls).toEqual([
+      [expect.objectContaining({ status: 'canceled' }), 'shutdown', false]
+    ])
+  })
+
+  it('asks whether downloads are client-hosted for the page that owns them', () => {
+    const POPUP_ID = 6200
+    const EXTENSION_PAGE_ID = 6300
+    setBrowserClientRouteWebContentsProbe((id) => id === GUEST_WEB_CONTENTS_ID)
+    registerBrowserRouteGuestPopup({
+      popupWebContentsId: POPUP_ID,
+      openerWebContentsId: GUEST_WEB_CONTENTS_ID
+    })
+    browserManager.setUnownedDownloadOwnerResolver((id) =>
+      id === EXTENSION_PAGE_ID ? BROWSER_PAGE_ID : null
+    )
+    try {
+      expect(
+        [GUEST_WEB_CONTENTS_ID, POPUP_ID, EXTENSION_PAGE_ID, SERVER_GUEST_WEB_CONTENTS_ID].map(
+          (id) => browserManager.downloadRoutesToClient(id)
+        )
+      ).toEqual([true, true, true, false])
+    } finally {
+      browserManager.setUnownedDownloadOwnerResolver(() => null)
     }
   })
 })

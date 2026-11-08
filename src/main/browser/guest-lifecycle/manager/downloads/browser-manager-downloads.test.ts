@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -42,6 +43,7 @@ vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
 
 import { browserManager } from '../browser-manager'
 import { browserDownloadDestinationReservations } from '../../../downloads/browser-download-destination'
+import { handleWillDownload } from '../../../downloads/browser-session-download-policy'
 import {
   createDownloadItem,
   getDownloadItemEventHandler,
@@ -181,5 +183,116 @@ describe('browserManager', () => {
     const managerState = browserManager as unknown as { downloadsById: Map<string, unknown> }
     expect(managerState.downloadsById.size).toBe(0)
     expect(browserDownloadDestinationReservations.reserve('report.csv').filename).toBe('report.csv')
+  })
+
+  it("keeps a later download's file when one reserved before a reset finishes after it", () => {
+    webContentsFromIdMock.mockReturnValue(null)
+    const item = createDownloadItem()
+    browserManager.handleGuestWillDownload({ guestWebContentsId: 430, item })
+    browserDownloadDestinationReservations.clear()
+    expect(browserDownloadDestinationReservations.reserve('report.csv').filename).toBe('report.csv')
+
+    getDownloadItemEventHandler(item, 'once', 'done')?.({} as Electron.Event, 'cancelled')
+    expect(browserDownloadDestinationReservations.reserve('report.csv').filename).toBe(
+      'report (1).csv'
+    )
+  })
+
+  describe('items a will-download listener refuses', () => {
+    // What Electron's will-download event records: whether a listener refused the item.
+    function willDownloadEvent(): { defaultPrevented: boolean; preventDefault: () => void } {
+      return {
+        defaultPrevented: false,
+        preventDefault() {
+          this.defaultPrevented = true
+        }
+      }
+    }
+
+    // The session policy, with a refusing listener before or after it, as Electron runs them.
+    function emitWillDownload(refuse: 'before' | 'after', item: Electron.DownloadItem, id: number) {
+      const session = new EventEmitter()
+      const refuser = (event: Electron.Event): void => event.preventDefault()
+      session.on('will-download', refuse === 'before' ? refuser : handleWillDownload)
+      session.on('will-download', refuse === 'before' ? handleWillDownload : refuser)
+      session.emit('will-download', willDownloadEvent(), item, { id })
+    }
+
+    function guestFor(id: number, rendererSendMock: ReturnType<typeof vi.fn>) {
+      const guest = {
+        id,
+        isDestroyed: () => false,
+        isCurrentlyAudible: () => false,
+        getType: () => 'webview',
+        on: guestOnMock,
+        off: guestOffMock,
+        setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+        setWindowOpenHandler: guestSetWindowOpenHandlerMock
+      }
+      webContentsFromIdMock.mockImplementation((wanted: number) =>
+        wanted === id ? guest : { isDestroyed: () => false, send: rendererSendMock }
+      )
+      browserManager.attachGuestPolicies(guest as never)
+      return guest
+    }
+
+    const register = (id: number): boolean =>
+      browserManager.registerGuest({
+        browserPageId: 'browser-1',
+        webContentsId: id,
+        rendererWebContentsId
+      })
+    const downloadSends = (send: ReturnType<typeof vi.fn>): string[] =>
+      send.mock.calls.map(([channel]) => channel).filter((c) => c.startsWith('browser:download-'))
+
+    it('takes no item an earlier listener refused, and leaves an agent claim waiting', () => {
+      const send = vi.fn()
+      const guest = guestFor(440, send)
+      const claim = browserManager.claimNextDownload(guest.id, join('/work', 'claimed.csv'))
+      const item = createDownloadItem()
+      emitWillDownload('before', item, guest.id)
+
+      expect(item.setSavePath).not.toHaveBeenCalled()
+      register(guest.id)
+      expect(downloadSends(send)).toEqual([])
+      const next = createDownloadItem()
+      browserManager.handleGuestWillDownload({ guestWebContentsId: guest.id, item: next })
+      expect(next.setSavePath).toHaveBeenCalledWith(join('/work', 'claimed.csv'))
+      claim.release()
+    })
+
+    it('ends and forgets an item a later listener refused before its page registered', async () => {
+      const send = vi.fn()
+      const guest = guestFor(441, send)
+      const item = createDownloadItem()
+      emitWillDownload('after', item, guest.id)
+      await Promise.resolve()
+
+      expect(item.off).toHaveBeenCalledWith('done', expect.any(Function))
+      expect(browserDownloadDestinationReservations.reserve('report.csv').filename).toBe(
+        'report.csv'
+      )
+      register(guest.id)
+      expect(downloadSends(send)).toEqual([])
+    })
+
+    it("ends the row of an item a later listener refused on a registered tab, and tells the agent's claim", async () => {
+      const send = vi.fn()
+      const guest = guestFor(442, send)
+      register(guest.id)
+      const claim = browserManager.claimNextDownload(guest.id, join('/work', 'claimed.csv'))
+      emitWillDownload('after', createDownloadItem(), guest.id)
+      await Promise.resolve()
+
+      expect(downloadSends(send)).toEqual([
+        'browser:download-requested',
+        'browser:download-finished'
+      ])
+      expect(send).toHaveBeenCalledWith(
+        'browser:download-finished',
+        expect.objectContaining({ status: 'failed', error: null })
+      )
+      await expect(claim.finished).resolves.toMatchObject({ status: 'failed' })
+    })
   })
 })

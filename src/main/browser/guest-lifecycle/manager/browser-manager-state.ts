@@ -7,7 +7,10 @@ import type { KeybindingOverrides } from '../../../../shared/keybindings/types'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
 import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { BrowserPagePromptTarget } from '../prompts/browser-page-prompts'
-import type { ActiveDownload } from './downloads/browser-active-download'
+import type {
+  ActiveDownload,
+  BrowserDownloadFinishCause
+} from './downloads/browser-active-download'
 import type { CdpUserAgentOverrideState } from './navigation/browser-user-agent-override-state'
 import type { PendingMainFrameNavigation } from './navigation/browser-main-frame-navigation'
 import type { PendingPermissionEvent, PendingPopupEvent } from './browser-manager-event-forwarding'
@@ -98,7 +101,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected abstract cancelDownloadInternal(
     downloadId: string,
     reason: string,
-    status?: 'canceled' | 'failed'
+    status?: 'canceled' | 'failed',
+    cause?: BrowserDownloadFinishCause
   ): void
   protected abstract bindDownloadToTab(downloadId: string, browserTabId: string): void
   protected abstract flushDownloadSnapshot(downloadId: string): void
@@ -119,7 +123,8 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected abstract finishDownloadInternal(
     downloadId: string,
     status: BrowserDownloadFinishedEvent['status'],
-    error: string | null
+    error: string | null,
+    cause?: BrowserDownloadFinishCause
   ): void
   protected abstract getDownloadReceivedBytes(item: Electron.DownloadItem): number
   protected abstract isAwaitingDownloadFrom(
