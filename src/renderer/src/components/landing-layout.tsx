@@ -1,7 +1,7 @@
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
 import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import logo from '../../../../resources/logo.svg'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type LandingShortcutItem = {
   id: string
@@ -13,6 +13,7 @@ export const LANDING_ACTION_BUTTON_CLASS =
   'inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors'
 
 export function LandingBrand(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <div
@@ -21,12 +22,12 @@ export function LandingBrand(): React.JSX.Element {
       >
         <img
           src={logo}
-          alt={translate('auto.components.Landing.520304a067', 'Orca logo')}
+          alt={t('auto.components.Landing.520304a067', 'Orca logo')}
           className="size-12"
         />
       </div>
       <h1 className="text-4xl font-bold text-foreground tracking-tight">
-        {translate('auto.components.Landing.6ca6ff404e', 'ORCA')}
+        {t('auto.components.Landing.6ca6ff404e', 'ORCA')}
       </h1>
     </>
   )

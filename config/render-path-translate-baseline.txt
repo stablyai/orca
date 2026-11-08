@@ -18,7 +18,7 @@
 2 src/renderer/src/components/JiraIssueWorkspace.tsx
 2 src/renderer/src/components/JiraLinkedWorkspaceAction.tsx
 10 src/renderer/src/components/JiraPromptTemplatePopover.tsx
-14 src/renderer/src/components/Landing.tsx
+12 src/renderer/src/components/Landing.tsx
 3 src/renderer/src/components/LinearIssueMarkdownDescriptionEditor.tsx
 14 src/renderer/src/components/LinearIssueMarkdownToolbar.tsx
 2 src/renderer/src/components/LinearIssueTextEditor.tsx

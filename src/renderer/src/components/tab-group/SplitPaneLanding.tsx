@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Bot, Globe, TerminalSquare } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
@@ -29,11 +29,12 @@ export function SplitPaneLanding({
   groupId: string
   autoFocus: boolean
 }): React.JSX.Element {
-  const newAgentLabel = translate('components.tabGroup.splitPaneLanding.newAgent', 'New Agent')
-  const newTerminalLabel = translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')
-  const newBrowserLabel = translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')
-  const newMarkdownLabel = translate('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')
-  const closeLabel = translate(
+  const t = useTranslate()
+  const newAgentLabel = t('components.tabGroup.splitPaneLanding.newAgent', 'New Agent')
+  const newTerminalLabel = t('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')
+  const newBrowserLabel = t('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')
+  const newMarkdownLabel = t('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')
+  const closeLabel = t(
     'auto.components.tab.group.TabGroupPanel.closePaneColumn',
     'Close split pane'
   )
@@ -123,7 +124,7 @@ export function SplitPaneLanding({
         <div className="flex flex-col items-center gap-4 py-8">
           <LandingBrand />
           <p className="text-sm text-muted-foreground text-center">
-            {translate(
+            {t(
               'components.tabGroup.splitPaneLanding.subtitle',
               'Choose what to open in this pane.'
             )}
