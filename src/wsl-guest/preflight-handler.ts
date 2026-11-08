@@ -151,6 +151,8 @@ async function probeCommandVersion(executablePath: string): Promise<string | nul
           ? `${executableDir}${path.delimiter}${inheritedPath}`
           : executableDir
       },
+      // Why: a CLI wrapper that never exits keeps its children alive after a root-only kill.
+      terminationBarrier: true,
       timeoutMs: 5_000,
       maxOutputBytes: 4_096
     })

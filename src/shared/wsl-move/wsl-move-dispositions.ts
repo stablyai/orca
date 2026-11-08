@@ -63,6 +63,9 @@ export const PERSISTED_STATE_DISPOSITIONS = {
   },
   worktreeLineageById: moveDisposition(16),
   workspaceLineageByChildKey: moveDisposition(17),
+  crossStoreLineageByChildKey: moveDisposition(17, {
+    note: 'Moves with its child; the parent names another store and is never rewritten.'
+  }),
   settings: notApplicableDisposition(62, 'Desktop-global; see SETTINGS_KEYS_NAMING_A_PATH.'),
   ui: { disposition: 'per-field', item: 38 },
   githubCache: notApplicableDisposition(21, 'Cache keyed by repoId, which the move keeps.'),

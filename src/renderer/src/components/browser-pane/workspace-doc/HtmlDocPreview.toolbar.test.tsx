@@ -89,7 +89,7 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdFromState: () => 'ssh-1'
 }))
 
-vi.mock('@/components/terminal-pane/terminal-remote-file-download-open', () => ({
+vi.mock('@/components/terminal-pane/links/files/terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: (_context: unknown, filePath: string) => {
     store.downloads.push(filePath)
     return Promise.resolve()
@@ -233,7 +233,8 @@ describe('HtmlDocPreview browser chrome', () => {
     const { hasLiveBrowserGuest, webviewRegistry } = await import('../host-guest/webview-registry')
     const { worktreeHoldsLiveBrowserGuests, selectBrowserGuestEvictionWorktreeIds } =
       await import('../host-guest/browser-guest-worktree-retention')
-    const { destroyWorktreeBrowserGuests } = await import('@/store/slices/browser-webview-cleanup')
+    const { destroyWorktreeBrowserGuests } =
+      await import('@/store/slices/browser/cleanup/browser-webview-cleanup')
     const guest = await renderPreview(container, root)
     expect(hasLiveBrowserGuest('preview-1')).toBe(true)
     expect(await renderPreview(container, root, { isActive: false })).toBe(guest)

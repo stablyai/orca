@@ -1,3 +1,4 @@
+import { isStructuredAgentSessionHostTabId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { createHash, randomUUID } from 'node:crypto'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type {
@@ -142,7 +143,12 @@ export function buildHeadlessMobileSessionTabGroups(
 ): RuntimeMobileSessionTabGroup[] {
   const arrivalOrder = collectHeadlessTopLevelTabOrder(tabs)
   // Retain stored tab positions; materializing idle surfaces can move their incoming array entries.
-  const liveTopLevelIds = new Set(arrivalOrder)
+  const liveTopLevelIds = new Set([
+    ...arrivalOrder,
+    ...(existingGroups ?? []).flatMap((group) =>
+      group.tabOrder.filter(isStructuredAgentSessionHostTabId)
+    )
+  ])
   const tabOrder: string[] = []
   const placed = new Set<string>()
   for (const group of existingGroups ?? []) {
@@ -161,15 +167,7 @@ export function buildHeadlessMobileSessionTabGroups(
   }
   const topLevelOf = (tab: RuntimeMobileSessionSnapshotTab): string =>
     tab.type === 'terminal' ? tab.parentTabId : tab.id
-  const activeTopLevelId =
-    (activeTab ? topLevelOf(activeTab) : null) ??
-    existingGroups?.[0]?.activeTabId ??
-    (() => {
-      const active = tabs.find((tab) => tab.isActive)
-      return active ? topLevelOf(active) : null
-    })() ??
-    tabOrder[0] ??
-    null
+  const activeTopLevelId = activeTab ? topLevelOf(activeTab) : null
 
   if (existingGroups && existingGroups.length > 1) {
     return distributeHeadlessTabsAcrossGroups(
@@ -187,7 +185,11 @@ export function buildHeadlessMobileSessionTabGroups(
       activeTabId:
         activeTopLevelId && tabOrder.includes(activeTopLevelId)
           ? activeTopLevelId
-          : (tabOrder[0] ?? null),
+          : existingGroups?.[0]
+            ? existingGroups[0].activeTabId && tabOrder.includes(existingGroups[0].activeTabId)
+              ? existingGroups[0].activeTabId
+              : null
+            : (tabOrder[0] ?? null),
       tabOrder
     }
   ]
@@ -230,7 +232,9 @@ export function distributeHeadlessTabsAcrossGroups(
             ? activeTopLevelId
             : group.activeTabId && nextOrder.includes(group.activeTabId)
               ? group.activeTabId
-              : (nextOrder[0] ?? null)
+              : group.activeTabId
+                ? (nextOrder[0] ?? null)
+                : null
       }
     })
     .filter((group) => group.tabOrder.length > 0)

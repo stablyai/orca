@@ -5,6 +5,8 @@ import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { AgentStateDot } from '../components/AgentStateDot'
+import { ArrivalFade } from '../components/ArrivalFade'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { useNow } from '../hooks/use-now'
 import { agentDotState, agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
 import {
@@ -26,6 +28,28 @@ import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 const DOUBLE_TAP_RENAME_MS = 300
+
+// A tab drawn before it had any agent state (a strip from the phone's store) fades its dot in when one lands.
+function SessionTabAgentDot({ state }: { state: AgentDotState | undefined }) {
+  const [startedEmpty] = useState(state === undefined)
+  if (startedEmpty) {
+    return <ArrivingSessionTabAgentDot state={state} />
+  }
+  return state && state !== 'idle' ? <AgentStateDot state={state} /> : null
+}
+
+// Mounted with the bare tab, so the motion preference is read before the dot arrives.
+function ArrivingSessionTabAgentDot({ state }: { state: AgentDotState | undefined }) {
+  const reducedMotion = useReducedMotionEnabled()
+  if (!state || state === 'idle') {
+    return null
+  }
+  return (
+    <ArrivalFade animate={reducedMotion === false}>
+      <AgentStateDot state={state} />
+    </ArrivalFade>
+  )
+}
 
 export function MobileSessionTabStrip({
   controller,
@@ -225,7 +249,7 @@ export function MobileSessionTabStrip({
                 delayLongPress={400}
               >
                 <View style={styles.tabLabelRow}>
-                  {tabState && tabState !== 'idle' ? <AgentStateDot state={tabState} /> : null}
+                  <SessionTabAgentDot state={tabState} />
                   <View style={styles.tabIcon}>
                     {tab.type === 'browser' && (
                       <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />

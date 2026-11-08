@@ -7,6 +7,7 @@ import type {
   LinearDisplayProperty
 } from '../../../../../shared/linear/issue-view-resume-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { TaskPageJiraLoadError } from '@/components/task-page/jira/task-page-jira-load-state'
 import React from 'react'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
@@ -38,7 +39,8 @@ export function compareLinearIssues(
 }
 export function getLinearIssueGroup(
   issue: LinearIssue,
-  groupBy: LinearGroupBy
+  groupBy: LinearGroupBy,
+  t: Translate = translate
 ): {
   key: string
   label: string
@@ -53,8 +55,7 @@ export function getLinearIssueGroup(
     return {
       key: `assignee:${issue.assignee?.id ?? 'unassigned'}`,
       label:
-        issue.assignee?.displayName ??
-        translate('auto.components.TaskPage.groupUnassigned', 'Unassigned')
+        issue.assignee?.displayName ?? t('auto.components.TaskPage.groupUnassigned', 'Unassigned')
     }
   }
   if (groupBy === 'priority') {
@@ -71,27 +72,28 @@ export function getLinearIssueGroup(
   }
   return {
     key: 'all',
-    label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues')
+    label: t('auto.components.TaskPage.dfc0c79bd8', 'Issues')
   }
 }
 export function groupLinearIssues(
   issues: LinearIssue[],
   groupBy: LinearGroupBy,
-  orderBy: LinearOrderBy
+  orderBy: LinearOrderBy,
+  t: Translate = translate
 ): LinearGroupSection[] {
   const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
   if (groupBy === 'none') {
     return [
       {
         key: 'all',
-        label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues'),
+        label: t('auto.components.TaskPage.dfc0c79bd8', 'Issues'),
         issues: sorted
       }
     ]
   }
   const sections = new Map<string, LinearGroupSection>()
   for (const issue of sorted) {
-    const group = getLinearIssueGroup(issue, groupBy)
+    const group = getLinearIssueGroup(issue, groupBy, t)
     const section = sections.get(group.key)
     if (section) {
       section.issues.push(issue)
@@ -114,6 +116,7 @@ export function TaskPageJiraErrorBanner({
   open: boolean
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Collapsible
       open={open}
@@ -134,7 +137,7 @@ export function TaskPageJiraErrorBanner({
                   className="-ml-1 mt-1 h-6 px-1.5 text-destructive hover:bg-destructive/10 hover:text-destructive"
                 >
                   {open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
-                  {translate('auto.components.TaskPage.40eaf2c27c', 'Details')}
+                  {t('auto.components.TaskPage.40eaf2c27c', 'Details')}
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent>

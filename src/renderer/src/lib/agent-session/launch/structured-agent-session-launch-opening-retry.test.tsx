@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { newAgentLaunchRequestId } from '../../agent-launch-request-id'
+import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import {
@@ -12,7 +12,7 @@ import {
   start,
   draft,
   deferred
-} from '../../structured-agent-session-launch-create-message.test-fixture'
+} from './structured-agent-session-launch-create-message.test-fixture'
 import {
   startStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch,
@@ -34,13 +34,13 @@ import { markStructuredAgentSessionLaunchPublished } from './structured-agent-se
 import {
   settleStructuredAgentSessionSendsFromJournal,
   resetStructuredAgentSessionSendsForTests
-} from '@/components/native-chat/structured-agent-session-message-sender'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
-import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
-import { NativeChatComposerNotices } from '@/components/native-chat/NativeChatComposerNotices'
-import { writeNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
+import { structuredSessionNotices } from '../../../components/native-chat/messages/notices/native-chat-structured-session-notices'
+import { NativeChatComposerNotices } from '@/components/native-chat/composer/controls/NativeChatComposerNotices'
+import { writeNativeChatDraftCache } from '@/components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import { CreateIntentParams } from '../../../../../shared/rpc-contract/structured-agent-session-params'
 
 let restore: (() => void) | undefined

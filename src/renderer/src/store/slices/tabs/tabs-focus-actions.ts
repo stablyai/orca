@@ -1,10 +1,7 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import {
-  findTabAndWorktree,
-  findTabByEntityInGroup,
-  pushRecentTabId,
-  sanitizeRecentTabIds
-} from '../tab-group-state'
+import { findTabAndWorktree, findTabByEntityInGroup } from './tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
+import { selectActiveTabForWorktree } from './active-tab-selection'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -77,21 +74,7 @@ export function createTabsFocusActions(
   return {
     getTab: (tabId) => findTabAndWorktree(get().unifiedTabsByWorktree, tabId)?.tab ?? null,
 
-    getActiveTab: (worktreeId) => {
-      const state = get()
-      const groupId = state.activeGroupIdByWorktree[worktreeId]
-      const group = (state.groupsByWorktree[worktreeId] ?? []).find(
-        (candidate) => candidate.id === groupId
-      )
-      if (!group?.activeTabId) {
-        return null
-      }
-      return (
-        (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
-          (tab) => tab.id === group.activeTabId
-        ) ?? null
-      )
-    },
+    getActiveTab: (worktreeId) => selectActiveTabForWorktree(get(), worktreeId),
 
     findTabForEntityInGroup: (worktreeId, groupId, entityId, contentType) =>
       findTabByEntityInGroup(

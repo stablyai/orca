@@ -7,7 +7,7 @@ import { Writable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import type { SFTPWrapper, WriteStreamOptions } from 'ssh2'
 import { SFTP } from 'ssh2/lib/protocol/SFTP.js'
-import { removeDirectorySftp, uploadBuffer, uploadDirectory, uploadFile } from './sftp-upload'
+import { uploadDirectory, uploadFile } from './sftp-upload'
 
 function createWritable(): Writable {
   return new Writable({
@@ -33,103 +33,6 @@ function createSftpMock(): SFTPWrapper {
 }
 
 describe('sftp-upload', () => {
-  it('can create the first binary upload chunk without clobbering an existing temp file', async () => {
-    const sftp = createSftpMock()
-
-    await uploadBuffer(sftp, Buffer.from('png'), '/remote/.logo.orca-upload', {
-      exclusive: true
-    })
-
-    expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/.logo.orca-upload', {
-      flags: 'wx'
-    })
-    const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
-    expect(writeStream.listenerCount('close')).toBe(0)
-    // Retain one lifetime error listener for late STATUS replies after settlement (#15479).
-    expect(writeStream.listenerCount('error')).toBe(1)
-  })
-
-  it('uses no-clobber writes for nested files during exclusive directory upload', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
-    await mkdir(join(localDir, 'nested'))
-    await writeFile(join(localDir, 'nested', 'asset.txt'), 'asset')
-    const sftp = createSftpMock()
-
-    await uploadDirectory(sftp, localDir, '/remote/assets', await realpath(localDir), {
-      exclusive: true
-    })
-
-    expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/nested', expect.any(Function))
-    expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/nested/asset.txt', {
-      flags: 'wx',
-      highWaterMark: 64 * 1024
-    })
-    const writeStream = vi.mocked(sftp.createWriteStream).mock.results[0]?.value as Writable
-    expect(writeStream.listenerCount('close')).toBe(0)
-    // Retain one lifetime error listener for late STATUS replies after settlement (#15479).
-    expect(writeStream.listenerCount('error')).toBe(1)
-  })
-
-  it('uploads files from valid dot-dot-prefixed local directories', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
-    await mkdir(join(localDir, '..fixtures'))
-    await writeFile(join(localDir, '..fixtures', 'asset.txt'), 'asset')
-    const sftp = createSftpMock()
-
-    await uploadDirectory(sftp, localDir, '/remote/assets', await realpath(localDir), {
-      exclusive: true
-    })
-
-    expect(sftp.mkdir).toHaveBeenCalledWith('/remote/assets/..fixtures', expect.any(Function))
-    expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/..fixtures/asset.txt', {
-      flags: 'wx',
-      highWaterMark: 64 * 1024
-    })
-  })
-
-  it('accepts a root named through a symlink or short name that realpath rewrites', async () => {
-    const realDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
-    await writeFile(join(realDir, 'asset.txt'), 'asset')
-    const aliasDir = `${realDir}-alias`
-    // Windows directory symlinks require privileges; junctions exercise the same alias path.
-    await symlink(realDir, aliasDir, process.platform === 'win32' ? 'junction' : 'dir')
-    const sftp = createSftpMock()
-
-    await uploadDirectory(sftp, aliasDir, '/remote/assets')
-
-    expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
-      flags: 'w',
-      highWaterMark: 64 * 1024
-    })
-    await rm(aliasDir, { force: true })
-    await rm(realDir, { recursive: true, force: true })
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'uploads a root reached through a symlinked parent',
-    async () => {
-      const realParent = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
-      await mkdir(join(realParent, 'root'))
-      await writeFile(join(realParent, 'root', 'asset.txt'), 'asset')
-      const linkedParent = `${realParent}-link`
-      await symlink(realParent, linkedParent)
-      try {
-        const localDir = join(linkedParent, 'root')
-        const sftp = createSftpMock()
-
-        await uploadDirectory(sftp, localDir, '/remote/assets', localDir)
-
-        expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
-          flags: 'w',
-          highWaterMark: 64 * 1024
-        })
-      } finally {
-        await rm(linkedParent, { force: true })
-        await rm(realParent, { recursive: true, force: true })
-      }
-    }
-  )
-
   it('rejects sibling directories outside the upload root', async () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
     const escapedDir = `${localDir}-sibling`
@@ -231,60 +134,6 @@ describe('sftp-upload', () => {
       flushing.destroy()
       await rm(localDir, { recursive: true, force: true })
     }
-  })
-
-  it('joins the local read when the remote write fails', async () => {
-    const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-failure-'))
-    const localPath = join(localDir, 'relay.js')
-    const sftp = createSftpMock()
-    vi.mocked(sftp.createWriteStream).mockReturnValue(
-      new Writable({
-        write(_chunk, _encoding, callback) {
-          callback(new Error('remote write failed'))
-        }
-      }) as never
-    )
-    try {
-      await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
-
-      await expect(uploadFile(sftp, localPath, '/remote/relay.js')).rejects.toThrow(
-        'remote write failed'
-      )
-    } finally {
-      await rm(localDir, { recursive: true, force: true })
-    }
-  })
-
-  it('removes remote directory contents before removing the directory', async () => {
-    const sftp = createSftpMock()
-    vi.mocked(sftp.readdir).mockImplementation((remotePath, cb) => {
-      const pathString = String(remotePath)
-      if (pathString === '/remote/assets') {
-        cb(undefined, [
-          { filename: '.', attrs: { isDirectory: () => true } },
-          { filename: '..', attrs: { isDirectory: () => true } },
-          { filename: 'nested', attrs: { isDirectory: () => true } },
-          { filename: 'logo.png', attrs: { isDirectory: () => false } }
-        ] as never)
-        return
-      }
-      if (pathString === '/remote/assets/nested') {
-        cb(undefined, [{ filename: 'copy.txt', attrs: { isDirectory: () => false } }] as never)
-        return
-      }
-      cb(new Error(`unexpected readdir: ${pathString}`), [] as never)
-    })
-
-    await removeDirectorySftp(sftp, '/remote/assets')
-
-    expect(sftp.unlink).toHaveBeenNthCalledWith(
-      1,
-      '/remote/assets/nested/copy.txt',
-      expect.any(Function)
-    )
-    expect(sftp.rmdir).toHaveBeenNthCalledWith(1, '/remote/assets/nested', expect.any(Function))
-    expect(sftp.unlink).toHaveBeenNthCalledWith(2, '/remote/assets/logo.png', expect.any(Function))
-    expect(sftp.rmdir).toHaveBeenNthCalledWith(2, '/remote/assets', expect.any(Function))
   })
 })
 

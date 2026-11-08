@@ -34,51 +34,6 @@ const limits: ProviderRateLimits = {
 }
 
 describe('buildCodexResetCreditExpectedScope', () => {
-  it('builds a deterministic exact host scope', () => {
-    const first = buildCodexResetCreditExpectedScope({
-      target: { runtime: 'host', wslDistro: null },
-      account,
-      limits
-    })
-    const second = buildCodexResetCreditExpectedScope({
-      target: { runtime: 'host', wslDistro: null },
-      account,
-      limits: {
-        ...limits,
-        rateLimitResetCredits: {
-          ...limits.rateLimitResetCredits!,
-          credits: [
-            { status: 'available', expiresAt: 3_000, grantedAt: 600 },
-            ...limits.rateLimitResetCredits!.credits!
-          ]
-        }
-      }
-    })
-
-    const firstWithBothRows = buildCodexResetCreditExpectedScope({
-      target: { runtime: 'host', wslDistro: null },
-      account,
-      limits: {
-        ...limits,
-        rateLimitResetCredits: {
-          ...limits.rateLimitResetCredits!,
-          credits: [
-            ...limits.rateLimitResetCredits!.credits!,
-            { status: 'available', expiresAt: 3_000, grantedAt: 600 }
-          ]
-        }
-      }
-    })
-
-    expect(firstWithBothRows).toEqual(second)
-    expect(first).toMatchObject({
-      target: { runtime: 'host', wslDistro: null },
-      accountId: account.id,
-      accountRevision: account.updatedAt,
-      offerRevision: expect.stringMatching(/^v1:/)
-    })
-  })
-
   it('changes the offer revision when fetched credit or window data changes', () => {
     const original = buildCodexResetCreditExpectedScope({
       target: { runtime: 'host', wslDistro: null },

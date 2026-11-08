@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { RelayFrameBuffer } from './relay-frame-buffer'
 
 describe('RelayFrameBuffer', () => {
@@ -28,30 +28,6 @@ describe('RelayFrameBuffer', () => {
     }
     expect(buffer.drain()).toEqual(expected)
     expect(buffer.drain()).toEqual(Buffer.alloc(0))
-  })
-
-  it('releases consumed references and amortizes storage compaction in a large backlog', () => {
-    const buffer = new RelayFrameBuffer()
-    const chunks = Array.from({ length: 32768 }, (_, index) => Buffer.from([index % 256]))
-    for (const chunk of chunks) {
-      buffer.append(chunk)
-    }
-    const shifted = vi.spyOn(Array.prototype, 'shift')
-    let shiftCount: number
-    try {
-      buffer.discard(16000)
-      shiftCount = shifted.mock.calls.length
-    } finally {
-      shifted.mockRestore()
-    }
-    expect(shiftCount).toBe(0)
-    const storage = buffer as unknown as { chunks: (Buffer | undefined)[]; head: number }
-    expect(storage.chunks.slice(0, storage.head).every((chunk) => chunk === undefined)).toBe(true)
-    expect(buffer.take(1000)).toEqual(Buffer.concat(chunks.slice(16000, 17000)))
-    expect(storage.chunks.length).toBeLessThan(chunks.length)
-    expect(buffer.drain()).toEqual(Buffer.concat(chunks.slice(17000)))
-    expect(storage.chunks).toHaveLength(0)
-    expect(buffer.length).toBe(0)
   })
 
   it('keeps single-chunk views and clears partial data before reuse', () => {

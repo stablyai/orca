@@ -1,3 +1,4 @@
+import { wipeHostStore } from '../device-store/device-store'
 import {
   deleteHostPageCache,
   forgetHostUpdateFailures
@@ -24,4 +25,5 @@ export async function removeHostAndCloseClient(
   // After commit, cache cleanup must not delay/fail removal; later eviction can reclaim failures.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
   void deleteHostPageCache(hostId).catch(() => undefined)
+  void wipeHostStore(hostId).catch(() => undefined)
 }

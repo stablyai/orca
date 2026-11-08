@@ -1,5 +1,6 @@
 import type { SkillDiscoverySource, SkillSourceKind } from '../../../shared/skills'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** Unread roots mean unknown skills, not absent; a never-read root has no cached answer to prevent misleading Install actions. */
 export function hasUnreadableAgentSkillSource(
@@ -33,7 +34,8 @@ export type InstalledAgentSkillVerdict = {
 
 /** Doubt negative scans with unread roots or no answer; positive findings and already-held answers remain evidence despite refresh failure. */
 export function getInstalledAgentSkillVerdict(
-  scan: InstalledAgentSkillScan
+  scan: InstalledAgentSkillScan,
+  t: Translate = translate
 ): InstalledAgentSkillVerdict {
   const installedUnverifiable =
     scan.enabled &&
@@ -45,7 +47,7 @@ export function getInstalledAgentSkillVerdict(
     error:
       scan.error ??
       (installedUnverifiable
-        ? translate(
+        ? t(
             'auto.hooks.useInstalledAgentSkills.unreadableSkillSource',
             'A skill folder did not respond, so this status may be incomplete.'
           )

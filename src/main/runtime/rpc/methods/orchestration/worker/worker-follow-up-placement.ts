@@ -1,10 +1,10 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { OrchestrationParty } from '../../../../orchestration/orchestration-party'
+import type { OrchestrationPartyIdentity as OrchestrationParty } from '../../../../../../shared/orchestration-party-identity'
 import { CHAT_WORKER_AUTHORITY } from '../chat-assignee-admission'
 import type { WorkerResumeSession } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   resolveStructuredWorkerIdentity,
   structuredWorkerSession

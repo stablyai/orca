@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isAgentSessionSurfaceTabId } from '../agent-session/view/agent-session-surface-tab-id'
 import { Identifier } from './structured-agent-session-identifiers'
 

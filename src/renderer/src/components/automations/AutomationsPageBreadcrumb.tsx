@@ -1,7 +1,7 @@
 import React from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function AutomationsPageBreadcrumb({
   current,
@@ -16,9 +16,10 @@ export function AutomationsPageBreadcrumb({
   automationName?: string
   onBackToAutomation?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <nav
-      aria-label={translate(
+      aria-label={t(
         'auto.components.automations.AutomationsPageBreadcrumb.ariaLabel',
         'Automations breadcrumb'
       )}
@@ -30,7 +31,7 @@ export function AutomationsPageBreadcrumb({
         className="h-8 px-0 font-normal text-muted-foreground"
         onClick={onBackToAutomations}
       >
-        {translate('auto.components.automations.AutomationsPage.77c2778945', 'Automations')}
+        {t('auto.components.automations.AutomationsPage.77c2778945', 'Automations')}
       </Button>
       <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground" />
       {current === 'automation' ? (
@@ -55,20 +56,17 @@ export function AutomationsPageBreadcrumb({
               className="h-8 px-0 font-normal text-muted-foreground"
               onClick={onBackToRuns}
             >
-              {translate('auto.components.automations.AutomationRunsDashboard.runs', 'Runs')}
+              {t('auto.components.automations.AutomationRunsDashboard.runs', 'Runs')}
             </Button>
           )}
           <ChevronRight className="mx-1 size-3.5 shrink-0 text-muted-foreground" />
           <span className="truncate font-medium" aria-current="page">
-            {translate(
-              'auto.components.automations.AutomationsPageBreadcrumb.runDetails',
-              'Run details'
-            )}
+            {t('auto.components.automations.AutomationsPageBreadcrumb.runDetails', 'Run details')}
           </span>
         </>
       ) : (
         <span className="truncate font-medium" aria-current="page">
-          {translate('auto.components.automations.AutomationRunsDashboard.runs', 'Runs')}
+          {t('auto.components.automations.AutomationRunsDashboard.runs', 'Runs')}
         </span>
       )}
     </nav>

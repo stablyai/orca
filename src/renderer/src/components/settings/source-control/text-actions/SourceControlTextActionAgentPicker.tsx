@@ -7,8 +7,8 @@ import { shallow } from 'zustand/shallow'
 import { useShallow } from 'zustand/react/shallow'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useAppStore } from '@/store/index'
-import { getIndexedReposById } from '@/store/worktree-repo-index'
-import { translate } from '@/i18n/i18n'
+import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId
@@ -74,6 +74,7 @@ export function SourceControlTextActionAgentPicker(props: TextActionPickerProps)
 
 const TextActionPicker = memo(
   function TextActionPicker(props: TextActionPickerProps) {
+    const t = useTranslate()
     useUiLanguageRevision()
     const settings = useAppStore(
       useShallow(
@@ -253,7 +254,7 @@ const TextActionPicker = memo(
     const agentArgs = props.draft.agentArgs ?? ''
     const ownerKey = JSON.stringify([operation, hostKey, agentArgs])
     const entries = catalogEntries.map((entry) =>
-      textActionPickerEntryView(entry, ownerKey, agentArgs, discovery.listing === entry.agent)
+      textActionPickerEntryView(entry, ownerKey, agentArgs, discovery.listing === entry.agent, t)
     )
     const draftForEntry = (entry: AgentPickerEntry): AgentPickerDraft => {
       const saved = readSourceControlAiModelChoiceForHost(choice, hostKey, entry.agent)
@@ -285,7 +286,7 @@ const TextActionPicker = memo(
         : undefined
     const setByArguments =
       active?.textGeneration?.modelInArguments || active?.textGeneration?.effortInArguments
-    const customLabel = translate(
+    const customLabel = t(
       'auto.components.settings.SourceControlAiActionRecipeDefaults.0740d30915',
       'Custom command'
     )
@@ -296,7 +297,7 @@ const TextActionPicker = memo(
           ? props.defaultAgentLabel
           : [
               setByArguments
-                ? translate('agentPicker.setByArguments', 'Set by your Arguments')
+                ? t('agentPicker.setByArguments', 'Set by your Arguments')
                 : model?.label,
               active?.label,
               !setByArguments
@@ -316,7 +317,7 @@ const TextActionPicker = memo(
           draftForEntry,
           triggerLabel:
             triggerLabel ||
-            translate(
+            t(
               'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
               'Use default agent'
             ),
@@ -362,7 +363,7 @@ const TextActionPicker = memo(
             <>
               <DropdownMenuItem onSelect={() => props.onAgentChange('__default_agent__')}>
                 {props.defaultAgentLabel ??
-                  translate(
+                  t(
                     'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
                     'Use default agent'
                   )}

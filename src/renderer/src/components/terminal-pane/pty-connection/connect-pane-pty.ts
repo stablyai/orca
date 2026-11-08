@@ -1,46 +1,82 @@
-import { installPtyKittyFileReader } from './pty-kitty-file-reader'
-import { installSpawnDeferredSleep } from './spawn-deferred-sleep'
-import type { PaneManager, ManagedPane } from '@/lib/pane-manager/pane-manager'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { isMainTerminalSideEffectAuthorityForPty } from '../pty-transport/output/terminal-side-effect-facts-handler'
+import { isRendererHiddenPtyDeliveryGateEnabled } from '../pty-transport/delivery/terminal-hidden-delivery-gate'
+import { installPtyKittyFileReader } from './host-ownership/pty-kitty-file-reader'
+import { installSpawnDeferredSleep } from './spawn/spawn-deferred-sleep'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store'
-import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
+import { createPaneWindowsPtyModel } from './geometry/pane-windows-pty-model'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
-import { resolvePaneKeyboardProtocolAgent } from '../terminal-keyboard-protocol-pane-agent'
+import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
 import { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import type { PtyConnectionDeps } from '../pty-connection-types'
-import { registerTerminalPaneRecoveryInstance } from '../terminal-pane-recovery'
+import type { PtyConnectionDeps } from './pty-connection-deps'
+import { registerTerminalPaneRecoveryInstance } from '../render-health/recovery/terminal-pane-recovery'
 import { captureTabRecoveryGeneration } from '@/store/terminals/terminal-tab-recovery-ledger'
-import { TerminalIdleCursorReset } from '../terminal-idle-cursor-reset'
-import { TerminalStreamPosition } from '../terminal-stream-position'
+import { TerminalIdleCursorReset } from '../emulation/terminal-idle-cursor-reset'
+import { TerminalStreamPosition } from '../pty-transport/delivery/terminal-stream-position'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { createTerminalStructuralReplayCoordinator } from '@/lib/pane-manager/terminal-structural-replay-coordinator'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 
-import { shouldWritePtyOutputForeground } from './foreground-output-scan'
-import { exposeE2eTerminalPtyOutputDebug } from './e2e-terminal-pty-harness'
-import type { PanePtyBinding } from './pane-pty-binding'
+import { shouldWritePtyOutputForeground } from './output/foreground-output-visibility'
+import { exposeE2eTerminalPtyOutputDebug } from './instrumentation/e2e-terminal-pty-harness'
+
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import {
   isAgentTaskCompleteNotificationEnabled,
   isAgentTaskCompleteTrackingEnabled
-} from './agent-task-complete-settings'
+} from './notifications/agent-task-complete-settings'
 
 import { installRunDeferredConnect } from './run-deferred-connect'
 
-import { installSleepingRecordAccess } from './sleeping-record-access'
-import { installShellCommandInference } from './shell-command-inference'
-import { installInterruptInputIntent } from './interrupt-input-intent'
-import { installTerminalKeydownFit } from './terminal-keydown-fit'
-import { installPtyExitHibernate } from './pty-exit-hibernate'
-import { installTitleSpawnBell } from './title-spawn-bell'
-import { installAgentTaskCompleteNotify } from './agent-task-complete-notify'
-import { installPaneHostCapabilityFlags } from './pane-host-capability-flags'
-import { installPtyInputRecovery } from './pty-input-recovery'
-import { installAgentPreReadyTypedDraft } from './agent-pre-ready-typed-draft'
-import { installPtyInputForward } from './pty-input-forward'
-import { installPtyResizeGeometry } from './pty-resize-geometry'
-import { installSessionReconcileDispose } from './session-reconcile-dispose'
+import { installSleepingRecordAccess } from './startup/sleeping-record-access'
+import { installShellCommandInference } from './agent-identity/shell-command-inference'
+import { installInterruptInputIntent } from './agent-identity/interrupt-input-intent'
+import { installTerminalKeydownIntent } from './input/terminal-keydown-intent'
+import { bindPanePtyFit, bindPanePtyFitRelease } from './geometry/pane-pty-fit-binding'
+import { bindPaneSideEffectFacts } from './output/pane-side-effect-facts'
+
+import { installPaneAgentCompletion } from './agent-identity/pane-agent-completion'
+import { installTerminalLaunchInputAttempt } from './startup/terminal-launch-input-attempt'
+import { bindPaneAgentStatusRouting } from './agent-identity/pane-agent-status-routing'
+import { initializePanePtyExit, bindPanePtyExit } from './lifecycle/pane-pty-exit'
+import { installHibernatedPaneWake } from './lifecycle/hibernated-pane-wake'
+
+import { installPaneTitleObservation } from './agent-identity/pane-title-observation'
+import { bindInitialAgentStatus } from './startup/initial-agent-status'
+import { bindCommandCodeOutputStatus } from './agent-identity/command-code-pane-status'
+import { installActivePanePtyBinding } from './lifecycle/active-pane-pty-binding'
+import { installTerminalBellCompletionArbitration } from './notifications/terminal-bell-completion-arbitration'
+import { installAgentTaskCompleteNotify } from './notifications/agent-task-complete-notify'
+import { installPaneAgentTitleLifecycle } from './agent-identity/pane-agent-title-lifecycle'
+import { initializePaneConnectionContext } from './pane-connection-context'
+import { installNativeWindowsPanePolicy } from './emulation/native-windows-pane-policy'
+import { bindPaneProjectRuntime } from './host-ownership/pane-project-runtime'
+import { installRendererOwnedPaneStatus } from './agent-identity/renderer-owned-pane-status'
+import { installCommandCodeOutputStatusDetector } from './agent-identity/command-code-output-status'
+import {
+  initializeTerminalInputActivityState,
+  installTerminalInputActivity,
+  bindAcceptedTerminalInputActivity
+} from './input/terminal-input-activity'
+
+import { installPaneTransport } from './host-ownership/pane-transport-bootstrap'
+import {
+  bindDesktopCapabilityReplyGate,
+  installPaneCapabilityReplies
+} from './emulation/pane-capability-replies'
+import { bindHiddenPaneMode2031Facts } from './emulation/pane-mode-2031-state'
+
+import { installPaneViewportClaim } from './geometry/pane-viewport-claim'
+import { installPtyInputRecovery } from './lifecycle/pty-input-recovery'
+import { installAgentPreReadyTypedDraft } from './startup/agent-pre-ready-typed-draft'
+import { installPtyInputForward } from './input/pty-input-forward'
+import { installPtyResizeForward } from './geometry/pty-resize-forward'
+import { installPtyResizeGeometry } from './geometry/pty-resize-geometry'
+import { type PanePtyBinding, createPanePtyBinding } from './pane-pty-binding'
 import { findTerminalTabForPane } from './terminal-tab-id'
 
 export function connectPanePty(
@@ -159,11 +195,36 @@ export function connectPanePty(
   installSleepingRecordAccess(session)
   installShellCommandInference(session)
   installInterruptInputIntent(session)
-  installTerminalKeydownFit(session)
-  installPtyExitHibernate(session)
+  installTerminalKeydownIntent(session)
+  bindPanePtyFit(session)
+  bindPaneSideEffectFacts(session)
+  bindPanePtyFitRelease(session)
+  installPaneAgentCompletion(session)
+
+  installTerminalLaunchInputAttempt(session)
+  initializePanePtyExit(session)
+  installHibernatedPaneWake(session)
+  bindPanePtyExit(session)
+
+  // Seed idle cache timing only on reattach; already-idle restored Claude emits no transition, while fresh idle launches have no prompt cache.
+  session.hasConsideredInitialCacheTimerSeed = false
+  session.allowInitialIdleCacheSeed = false
+  bindPaneAgentStatusRouting(session)
   installSpawnDeferredSleep(session)
-  installTitleSpawnBell(session)
+  installPaneTitleObservation(session)
+  bindInitialAgentStatus(session)
+  bindCommandCodeOutputStatus(session)
+
+  installActivePanePtyBinding(session)
+  installTerminalBellCompletionArbitration(session)
   installAgentTaskCompleteNotify(session)
+  installPaneAgentTitleLifecycle(session)
+  initializePaneConnectionContext(session)
+  session.windowsPtyModel = createPaneWindowsPtyModel(() => ({
+    terminal: session.pane.terminal,
+    owner: session.ownerContext,
+    transport: session.transport ?? null
+  }))
   const backendContext = {
     userAgent: navigator.userAgent,
     osRelease: window.api.platform?.get?.()?.osRelease,
@@ -175,9 +236,9 @@ export function connectPanePty(
   }
   // Capture backend policy before the tracker and transport copy xterm's initial capability flags.
   const keyboardProtocol = buildTerminalKeyboardProtocolOptions(backendContext)
+  session.windowsPtyModel.apply()
   Object.assign(
     session.pane.terminal.options,
-    buildWindowsPtyCompatibilityOptions(backendContext),
     keyboardProtocol,
     // Merge: replacing vtExtensions would re-enable xterm's own mode-2031 reports.
     keyboardProtocol.vtExtensions
@@ -201,7 +262,50 @@ export function connectPanePty(
     session.deps.paneKittyKeyboardModesRef.current.set(session.pane.id, created)
     return created
   })()
-  installPaneHostCapabilityFlags(session)
+
+  session.shellOverride = session.tab?.shellOverride
+  // Why: a serve/remote-runtime pane has no SSH connectionId and a Linux cwd, so
+  // the native-Windows ConPTY heuristic misfires on a Windows client and wrongly
+  // enables ConPTY synchronized-output protection, which strips an agent's
+  // transient cursor-show (?25h) and leaves the cursor invisible. The execution
+  // host is the authoritative signal: only a 'local' host is a local native PTY.
+  session.executionHostId = session.ownerContext.executionHostId
+  installNativeWindowsPanePolicy(session)
+  bindPaneProjectRuntime(session)
+  installRendererOwnedPaneStatus(session)
+
+  // Choose one side-effect consumer at transport creation; main facts replace title/bell/agent byte parsers.
+  session.mainSideEffectAuthority = isMainTerminalSideEffectAuthorityForPty({
+    settings: session.state.settings,
+    runtimeEnvironmentId: session.runtimeEnvironmentId
+  })
+  // Choose hidden gating once under main authority so 2031 subscription facts and byte scans never both own the record.
+  session.hiddenDeliveryGateActive =
+    session.mainSideEffectAuthority &&
+    isRendererHiddenPtyDeliveryGateEnabled(session.state.settings)
+  // Share the structural gate predicate with subscription recording; a fact can outrun the hidden mark set by data delivery.
+  session.isHiddenDeliveryGateManagedPty = (ptyId: string | null): ptyId is string =>
+    session.hiddenDeliveryGateActive && Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
+  installCommandCodeOutputStatusDetector(session)
+
+  session.shouldDeliverStartupViaTerminalPaste = session.paneStartup?.delivery === 'terminal-paste'
+  session.hadExistingPaneTransportAtConnect = session.deps.paneTransportsRef.current.size > 0
+  initializeTerminalInputActivityState(session)
+
+  session.hasReceivedPtyOutput = false
+  session.deferredReattachLiveData = null
+  session.reattachLiveDataDeferralDepth = 0
+  session.deferredReattachLiveDataOwners = new Map<number, { failed: boolean }>()
+  session.transportStreamGeneration = 0
+  installTerminalInputActivity(session)
+  bindAcceptedTerminalInputActivity(session)
+  installPaneTransport(session)
+  bindDesktopCapabilityReplyGate(session)
+  bindHiddenPaneMode2031Facts(session)
+
+  session.deps.paneTransportsRef.current.set(session.pane.id, session.transport)
+  installPaneCapabilityReplies(session)
+  installPaneViewportClaim(session)
   installPtyInputRecovery(session)
   installAgentPreReadyTypedDraft(session)
   // Async callbacks may outlive PaneManager; use durable leaf identity and require current transport ownership.
@@ -230,7 +334,8 @@ export function connectPanePty(
   }
   installPtyKittyFileReader(session)
   installPtyInputForward(session)
+  installPtyResizeForward(session)
   installPtyResizeGeometry(session)
   installRunDeferredConnect(session)
-  return installSessionReconcileDispose(session)
+  return createPanePtyBinding(session)
 }

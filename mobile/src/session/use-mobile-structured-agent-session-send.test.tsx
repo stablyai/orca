@@ -3,7 +3,8 @@ import {
   resetMobileNativeChatDraftInputsForTests
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement, useState } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalDispatchState } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import '../../../src/shared/agent-session/requests/structured-agent-session-dispatch-rejection'
@@ -137,6 +138,7 @@ describe('mobile structured send actions', () => {
       agent: 'codex',
       sessionCommands,
       sendStructured: (...args) => hook!.sendWithOutcome(...args),
+      holdUnconfirmed: (...args) => hook!.holdUnconfirmed(...args),
       onSendError
     })
     return createElement(Harness)
@@ -144,7 +146,7 @@ describe('mobile structured send actions', () => {
 
   async function mountSession(ordinary = false): Promise<void> {
     act(() => {
-      renderer = create(createElement(ordinary ? BridgeHarness : Harness))
+      renderer = createWithQueryClient(createElement(ordinary ? BridgeHarness : Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
     act(() => listener?.(snapshotEvent()))

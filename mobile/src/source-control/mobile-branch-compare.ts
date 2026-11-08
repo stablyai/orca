@@ -1,4 +1,4 @@
-import { compareFileNames } from '../../../src/shared/file-name-sort'
+import { compareFileNames } from '../../../src/shared/file-listing/file-name-sort'
 import { translate } from '../i18n/mobile-i18n'
 import type {
   MobileGitBranchChangeEntry,

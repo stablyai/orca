@@ -19,7 +19,7 @@ import {
   createTestStore,
   deferred,
   issue
-} from '../../src/renderer/src/store/slices/linear-slice-test-harness'
+} from '../../src/renderer/src/store/slices/linear/linear-slice-test-harness'
 
 const linearStatus = vi.fn()
 const linearConnect = vi.fn()
@@ -39,27 +39,41 @@ const linearTestConnection = vi.fn()
 const linearSelectWorkspace = vi.fn()
 const linearDisconnectWorkspace = vi.fn()
 
-vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
+vi.mock('@/runtime/linear/runtime-linear-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     linearConnect: (...args: unknown[]) => linearConnect(...args),
     linearDisconnect: (...args: unknown[]) => linearDisconnect(...args),
     linearDisconnectWorkspace: (...args: unknown[]) => linearDisconnectWorkspace(...args),
-    linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
-    linearGetProject: (...args: unknown[]) => linearGetProject(...args),
-    linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
-    linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
-    linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
-    linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
     linearListIssues: (...args: unknown[]) => linearListIssues(...args),
-    linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
-    linearListProjects: (...args: unknown[]) => linearListProjects(...args),
-    linearListTeams: (...args: unknown[]) => linearListTeams(...args),
     linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
     linearSelectWorkspace: (...args: unknown[]) => linearSelectWorkspace(...args),
     linearStatus: (...args: unknown[]) => linearStatus(...args),
     linearTestConnection: (...args: unknown[]) => linearTestConnection(...args)
+  }
+})
+
+vi.mock('@/runtime/linear/runtime-linear-issue-client', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    linearGetIssue: (...args: unknown[]) => linearGetIssue(...args)
+  }
+})
+
+vi.mock('@/runtime/linear/runtime-linear-project-client', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
+    linearGetProject: (...args: unknown[]) => linearGetProject(...args),
+    linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
+    linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
+    linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
+    linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
+    linearListProjects: (...args: unknown[]) => linearListProjects(...args),
+    linearListTeams: (...args: unknown[]) => linearListTeams(...args)
   }
 })
 

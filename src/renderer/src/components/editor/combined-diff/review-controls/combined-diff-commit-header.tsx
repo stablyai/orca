@@ -1,6 +1,6 @@
 import type React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getCombinedDiffCommitMessageBody } from './combined-diff-commit-message'
 
 export function CombinedDiffCommitHeader({

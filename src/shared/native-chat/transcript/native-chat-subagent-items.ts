@@ -50,18 +50,25 @@ export function subagentFoldKey(block: NativeChatSubagentBlock): string {
     : JSON.stringify([block.groupId, block.parentId])
 }
 
+const subagentBlocks = new WeakMap<readonly NativeChatBlock[], NativeChatSubagentBlock | null>()
+
 /** The subagent a row is, when it is one: its block, beside nothing but its twin sentence. */
 export function subagentItemBlock(
   message: Pick<NativeChatMessage, 'blocks'>
 ): NativeChatSubagentBlock | null {
+  if (subagentBlocks.has(message.blocks)) {
+    return subagentBlocks.get(message.blocks)!
+  }
   let found: NativeChatSubagentBlock | null = null
   for (const block of message.blocks) {
     if (isSubagentBlock(block) && found === null) {
       found = block
     } else if (block.type !== 'text') {
+      subagentBlocks.set(message.blocks, null)
       return null
     }
   }
+  subagentBlocks.set(message.blocks, found)
   return found
 }
 
@@ -72,17 +79,15 @@ const foldedGroups = new WeakMap<NativeChatMessage, Folded>()
 const foldedEntries = new WeakMap<NativeChatSubagentBlock, NativeChatSubagentEntry>()
 
 /** Fold sibling rows at the first sibling’s position; preserve every unrelated row. */
-export function foldSubagentItems(
+export function nativeChatSubagentGroups(
   messages: readonly NativeChatMessage[]
-): readonly NativeChatMessage[] {
+): Map<string, NativeChatMessage[]> {
   const groups = new Map<string, NativeChatMessage[]>()
-  let any = false
   for (const message of messages) {
     const block = subagentItemBlock(message)
     if (block === null) {
       continue
     }
-    any = true
     const key = subagentFoldKey(block)
     const siblings = groups.get(key)
     if (siblings) {
@@ -91,7 +96,14 @@ export function foldSubagentItems(
       groups.set(key, [message])
     }
   }
-  if (!any) {
+  return groups
+}
+
+export function foldSubagentItems(
+  messages: readonly NativeChatMessage[],
+  groups: ReadonlyMap<string, readonly NativeChatMessage[]> = nativeChatSubagentGroups(messages)
+): readonly NativeChatMessage[] {
+  if (groups.size === 0) {
     return messages
   }
   const rows = new Map<NativeChatMessage, NativeChatMessage | null>()

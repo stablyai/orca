@@ -2,10 +2,24 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const loadSnapshot = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
+const loadSnapshot = vi.hoisted(() =>
+  vi.fn((_client: unknown, _worktree: string) => new Promise(() => {}))
+)
+// Each build's notes-and-files read; status comes from the shared git.status query, held pending here.
+vi.mock('./mobile-diff-review-snapshot-loader', () => ({
+  startMobileDiffReviewSnapshot: (
+    client: unknown,
+    worktree: string,
+    input: { status: Promise<unknown> }
+  ) => {
+    input.status.catch(() => {})
+    return { snapshot: loadSnapshot(client, worktree), branch: Promise.resolve({ result: null }) }
+  },
+  withMobileDiffReviewBranch: (state: unknown) => state
+}))
 vi.mock('./mobile-diff-review-loaders', () => ({
-  loadMobileDiffReviewSnapshot: loadSnapshot,
-  loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
+  loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' }),
+  mobileReviewDiffInput: vi.fn(() => ({}))
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -17,6 +31,15 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({
+  ArrowDown: 'Icon',
+  ArrowDownUp: 'Icon',
+  ArrowUp: 'Icon',
+  Check: 'Icon',
+  CloudUpload: 'Icon',
+  GitBranch: 'Icon',
+  GitPullRequestArrow: 'Icon',
+  History: 'Icon',
+  RefreshCw: 'Icon',
   ChevronsUpDown: 'Icon',
   CircleAlert: 'Icon',
   FileText: 'Icon',
@@ -43,8 +66,10 @@ import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 
 let tree: ReactTestRenderer | null = null
+let queries = documentQueryClient()
 
 afterEach(() => {
   act(() => tree?.unmount())
@@ -98,7 +123,8 @@ function ReviewWhileUnreachable({
 
 async function render(onReconnect: ((hostId: string) => void) | null): Promise<ReactTestRenderer> {
   await act(async () => {
-    tree = create(createElement(ReviewWhileUnreachable, { onReconnect }))
+    queries = documentQueryClient()
+    tree = create(queries.wrap(createElement(ReviewWhileUnreachable, { onReconnect })))
     await Promise.resolve()
   })
   if (tree === null) {
@@ -140,7 +166,13 @@ describe('the review Retry while the host is unreachable', () => {
     const client = createFakeRpcClient()
     await act(async () => {
       rendered.update(
-        createElement(ReviewWhileUnreachable, { onReconnect: null, client, connState: 'connected' })
+        queries.wrap(
+          createElement(ReviewWhileUnreachable, {
+            onReconnect: null,
+            client,
+            connState: 'connected'
+          })
+        )
       )
     })
     expect(loadSnapshot).toHaveBeenCalledTimes(1)

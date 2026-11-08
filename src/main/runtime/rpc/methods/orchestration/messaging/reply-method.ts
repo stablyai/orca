@@ -1,7 +1,7 @@
-import { acceptedAnswerSender } from '../../../../orchestration/accepted-answer-sender'
-import { answerSenderRelayReport } from '../../../../orchestration/answer-sender-relay-report'
+import { acceptedAnswerSender } from '../../../../orchestration/mailbox/senders/accepted-answer-sender'
+import { answerSenderRelayReport } from '../../../../orchestration/mailbox/senders/answer-sender-relay-report'
 import { defineMethod } from '../../../core'
-import { deliverQuestionAnswer } from '../../../../orchestration/question-answer-delivery'
+import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
 import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
@@ -15,7 +15,7 @@ import { resolveReplyRecipient } from './recipient-routing'
 import { helperQuestionAnswerer } from './helper-question-answerer'
 import { replyToRemoteRunHome } from './reply-remote'
 import { withAnswerNext } from '../receipt-next'
-import { ReplyParams } from '../schemas'
+import { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 
 export const ORCHESTRATION_REPLY_METHOD = defineMethod({
   name: 'orchestration.reply',

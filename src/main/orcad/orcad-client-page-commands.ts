@@ -15,6 +15,7 @@ import {
   retireRuntimeBrowserClientPage
 } from '../runtime/browser/client-pages/browser-client-page-close'
 import {
+  canPlacePairedPage,
   createBrowserClientPage,
   createBrowserPageOnPairedHost,
   DEFAULT_BROWSER_PROFILE_ID,
@@ -106,7 +107,7 @@ function createTab(
     !params?.placement &&
     !caller?.pairedDeviceId &&
     !engineAvailable() &&
-    hasPairedPageHost(host)
+    canPlacePairedPage(host)
   ) {
     return createBrowserPageOnPairedHost(
       host,

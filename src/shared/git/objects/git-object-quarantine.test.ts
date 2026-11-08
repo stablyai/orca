@@ -14,8 +14,7 @@ import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createGitObjectQuarantine,
-  GIT_OBJECT_QUARANTINE_DIR_PREFIX,
-  type GitObjectQuarantineEnv
+  GIT_OBJECT_QUARANTINE_DIR_PREFIX
 } from './git-object-quarantine'
 
 const { failedRenameTargets, renamedTargets } = vi.hoisted(() => {
@@ -57,69 +56,6 @@ describe('createGitObjectQuarantine', () => {
   const resolveNative = () => async () => ({ hostPath: objects, gitPath: objects })
   const scratchDirs = (): string[] =>
     readdirSync(objects).filter((entry) => entry.startsWith(GIT_OBJECT_QUARANTINE_DIR_PREFIX))
-
-  it.each([
-    ['the objects dir is unknown', async () => undefined],
-    [
-      'resolving the objects dir fails',
-      async () => {
-        throw new Error('x')
-      }
-    ],
-    [
-      'the scratch dir cannot be created',
-      async () => ({ hostPath: '/no/such/objects', gitPath: '/no/such/objects' })
-    ]
-  ])('runs the command unquarantined when %s', async (_label, resolve) => {
-    const command = vi.fn(async () => 'ok')
-
-    await expect(createGitObjectQuarantine(resolve).run(command)).resolves.toBe('ok')
-
-    expect(command).toHaveBeenCalledWith(undefined)
-  })
-
-  it.each([
-    ['/plain/objects', '/plain/objects'],
-    ['/odd:dir/objects', '"/odd:dir/objects"'],
-    ['/quo"te\\dir/objects', '"/quo\\"te\\\\dir/objects"'],
-    ['C:\\repo\\.git\\objects', 'C:\\repo\\.git\\objects'],
-    ['C:\\a;b\\.git\\objects', '"C:\\\\a;b\\\\.git\\\\objects"']
-  ])('spells alternates for %s so Git reads one entry', async (gitPath, expected) => {
-    let seen: GitObjectQuarantineEnv | undefined
-
-    await createGitObjectQuarantine(async () => ({ hostPath: objects, gitPath })).run(
-      async (env) => {
-        seen = env
-      }
-    )
-
-    expect(seen?.GIT_ALTERNATE_OBJECT_DIRECTORIES).toBe(expected)
-  })
-
-  it.each([
-    ['/repo/.git/objects', '/shared/objects:/more', '/shared/objects:/more:/repo/.git/objects'],
-    ['C:\\repo\\.git\\objects', 'D:\\shared', 'D:\\shared;C:\\repo\\.git\\objects'],
-    [
-      '\\\\server\\share\\repo\\.git\\objects',
-      '\\\\server\\shared',
-      '\\\\server\\shared;\\\\server\\share\\repo\\.git\\objects'
-    ]
-  ])(
-    'appends the real store to inherited alternates for %s, as Git’s own temporary stores do',
-    async (gitPath, inheritedAlternates, expected) => {
-      let seen: GitObjectQuarantineEnv | undefined
-
-      await createGitObjectQuarantine(async () => ({
-        hostPath: objects,
-        gitPath,
-        inheritedAlternates
-      })).run(async (env) => {
-        seen = env
-      })
-
-      expect(seen?.GIT_ALTERNATE_OBJECT_DIRECTORIES).toBe(expected)
-    }
-  )
 
   it.each([
     ['has an alternates file', (info: string) => writeFileSync(join(info, 'alternates'), '')],

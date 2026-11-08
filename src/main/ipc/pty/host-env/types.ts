@@ -32,7 +32,7 @@ export type BuildPtyHostEnvOptions = {
   networkProxySettings?: NetworkProxySettings
   /** Headless paired runtimes hand browser launches to the client-hosted Orca browser. */
   routeBrowserOpensToClient?: boolean
-  /** Keep indexed Git config off the sparse daemon wire; the daemon appends guard entries after merging its inherited env. */
+  /** The daemon reapplies the Git credential guard after merging its inherited env, so askpass reflects the final pane env. */
   deferGitConfigGuardToDaemon?: boolean
 }
 

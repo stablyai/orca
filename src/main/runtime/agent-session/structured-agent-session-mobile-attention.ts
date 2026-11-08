@@ -24,8 +24,8 @@ import { isNotificationSourceEnabled } from '../../../shared/notification-source
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { buildNotificationOptions } from '../../ipc/notification-options'
 import type { MobileNotificationDispatchEvent } from '../push/notifications/runtime-mobile-notification-controller'
-import type { RuntimeStore } from '../runtime-store-contract'
-import { getRuntimeDesktopSurface } from '../runtime-desktop-surface'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { getRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 
 export type StructuredAttentionWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
 

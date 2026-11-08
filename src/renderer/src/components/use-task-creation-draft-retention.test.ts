@@ -14,7 +14,7 @@ import {
   writeNewLinearProjectDraft,
   writeNewJiraIssueDraft
 } from './task-page/task-page-draft-storage'
-import { deferred } from '../store/slices/linear-slice-test-harness'
+import { deferred } from '../store/slices/linear/linear-slice-test-harness'
 import {
   createElement,
   Suspense,

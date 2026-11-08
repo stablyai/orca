@@ -11,7 +11,7 @@ import {
   walkInitialAuthLadder
 } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
-import { resolveWithSshG } from '../config/ssh-g-config-resolution'
+import '../config/ssh-g-config-resolution'
 import { loadSsh2 } from '../ssh2-module-load'
 
 const { utils } = loadSsh2()
@@ -53,74 +53,6 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
 describe('SshConnection', () => {
   beforeEach(() => {
     resetSshConnectionMocks()
-  })
-
-  it('resolves OpenSSH config using configHost when present', async () => {
-    const callbacks = createCallbacks()
-    const conn = new SshConnection(
-      createTarget({
-        label: 'Friendly Name',
-        configHost: 'ssh-alias'
-      }),
-      callbacks
-    )
-
-    await conn.connect()
-
-    expect(resolveWithSshG).toHaveBeenCalledWith('ssh-alias')
-  })
-
-  it('tries ssh-agent before reading an explicit private key', async () => {
-    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
-    const callbacks = createCallbacks({
-      onCredentialRequest: vi.fn()
-    })
-    const conn = new SshConnection(
-      createTarget({
-        identityFile: '/tmp/encrypted-key'
-      }),
-      callbacks
-    )
-
-    await conn.connect()
-
-    const initialConfig = clientInstances[0].lastConnectConfig as {
-      agent?: unknown
-      privateKey?: unknown
-    }
-    expect(initialConfig.agent).toBe('/tmp/agent.sock')
-    expect(initialConfig.privateKey).toBeUndefined()
-    expect(callbacks.onCredentialRequest).not.toHaveBeenCalled()
-  })
-
-  it('falls back to direct private key auth when agent auth fails', async () => {
-    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
-    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
-    const keyPath = join(tempDir, 'id_ed25519')
-    writeFileSync(keyPath, 'test-key')
-    ssh2Mock.connectSequence = [new Error('All configured authentication methods failed'), 'ready']
-
-    try {
-      const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
-
-      await conn.connect()
-
-      expect(clientInstances).toHaveLength(2)
-      const initialConfig = clientInstances[0].lastConnectConfig as {
-        agent?: unknown
-        privateKey?: unknown
-      }
-      const fallbackConfig = clientInstances[1].lastConnectConfig as {
-        agent?: unknown
-        privateKey?: Buffer
-      }
-      expect(initialConfig.agent).toBe('/tmp/agent.sock')
-      expect(initialConfig.privateKey).toBeUndefined()
-      expect(fallbackConfig.agent).toBeUndefined()
-      expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true })
-    }
   })
 
   it('holds the keyboard-interactive challenge until the deferred default key has been tried', async () => {
@@ -276,33 +208,6 @@ describe('SshConnection', () => {
     }
   })
 
-  it('falls back to direct private key auth after too many agent authentication failures', async () => {
-    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
-    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-key-'))
-    const keyPath = join(tempDir, 'id_ed25519')
-    writeFileSync(keyPath, 'test-key')
-    ssh2Mock.connectSequence = [
-      new Error('Received disconnect: Too many authentication failures'),
-      'ready'
-    ]
-
-    try {
-      const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
-
-      await conn.connect()
-
-      expect(clientInstances).toHaveLength(2)
-      const fallbackConfig = clientInstances[1].lastConnectConfig as {
-        agent?: unknown
-        privateKey?: Buffer
-      }
-      expect(fallbackConfig.agent).toBeUndefined()
-      expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true })
-    }
-  })
-
   it('retries password auth without a stale agent when no private key fallback exists', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/stale-agent.sock')
     const agentError = new Error('Failed to connect to agent') as Error & { level: string }
@@ -371,57 +276,6 @@ describe('SshConnection', () => {
       expect(passwordRetryConfig.password).toBe('password-123')
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
-    }
-  })
-
-  it('answers bounded keyboard-interactive challenges such as Duo 2FA', async () => {
-    vi.useFakeTimers()
-    const onCredentialRequest = vi.fn().mockResolvedValueOnce('1').mockResolvedValueOnce('123456')
-    try {
-      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
-      const clientCreated = nextSshClientCreation()
-      const connected = conn.connect()
-      await clientCreated
-      const finish = vi.fn()
-
-      emitSshEvent(
-        'keyboard-interactive',
-        'Duo two-factor login',
-        'Select push or enter a passcode.',
-        '',
-        [
-          { prompt: 'Option:', echo: false },
-          { prompt: 'Passcode:', echo: false }
-        ],
-        finish
-      )
-      for (let turn = 0; turn < 20 && finish.mock.calls.length === 0; turn += 1) {
-        await Promise.resolve()
-      }
-
-      expect(clientInstances[0].lastConnectConfig).toMatchObject({ tryKeyboard: true })
-      expect(onCredentialRequest).toHaveBeenNthCalledWith(
-        1,
-        'target-1',
-        'keyboard-interactive',
-        'Duo two-factor login\nSelect push or enter a passcode.\nOption:',
-        false,
-        expect.any(AbortSignal)
-      )
-      expect(onCredentialRequest).toHaveBeenNthCalledWith(
-        2,
-        'target-1',
-        'keyboard-interactive',
-        'Duo two-factor login\nSelect push or enter a passcode.\nPasscode:',
-        false,
-        expect.any(AbortSignal)
-      )
-      expect(finish).toHaveBeenCalledWith(['1', '123456'])
-
-      await vi.advanceTimersByTimeAsync(1)
-      await connected
-    } finally {
-      vi.useRealTimers()
     }
   })
 

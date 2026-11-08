@@ -76,7 +76,7 @@ function Host({ withSidebar = false }: { withSidebar?: boolean }) {
         <textarea aria-label="Composer" />
         {withSidebar ? (
           <div data-testid="sidebar">
-            <AiVaultSidebarPanel />
+            <AiVaultSidebarPanel focusSearch={false} onFocusSearchHandled={() => {}} />
           </div>
         ) : null}
         {open ? <AiVaultSessionHistoryDialog /> : null}

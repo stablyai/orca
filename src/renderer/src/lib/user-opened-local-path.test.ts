@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 // These paths use supplied file context without resolving its editor connection.
 const boundaryMocks = vi.hoisted(() => ({
@@ -15,11 +15,13 @@ vi.mock('@/lib/connection-context', () => ({
 
 const mocks = vi.hoisted(() => ({ statRuntimePath: vi.fn(), readRuntimeDirectory: vi.fn() }))
 
-vi.mock('@/runtime/runtime-file-routing', () => ({ isRemoteRuntimeFileOperation: () => false }))
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
+  isRemoteRuntimeFileOperation: () => false
+}))
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
   statRuntimePath: mocks.statRuntimePath
 }))
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-directory-read', () => ({
   readRuntimeDirectory: mocks.readRuntimeDirectory
 }))
 

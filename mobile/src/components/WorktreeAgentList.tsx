@@ -17,11 +17,11 @@ import { agentDotState, type AgentDotState } from '../worktree/agent-row-display
 import { WorktreeAgentChildToggle, WorktreeAgentIdleGroupRow } from './WorktreeAgentChildDisclosure'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
+import { useSharedNow } from '../hooks/use-now'
 import { worktreeAgentChildRows } from '../worktree/worktree-agent-child-rows'
 
 type Props = {
   agents: RuntimeWorktreeAgentRow[]
-  now: number
   unvisited: boolean
   statusLive?: boolean
   isReadOnly?: boolean
@@ -43,7 +43,6 @@ const idleDisclosureKey = (paneKey: string) => `idle:${paneKey}`
 // Nest spawn lineage under its parent, matching desktop WorktreeCardAgents: children start collapsed.
 export function WorktreeAgentList({
   agents,
-  now,
   unvisited,
   statusLive = false,
   isReadOnly = false,
@@ -51,6 +50,8 @@ export function WorktreeAgentList({
   onAgentLongPress,
   fullList = false
 }: Props) {
+  // Only lists that draw agent times tick, so the rest of the host list skips the 30 s clock.
+  const now = useSharedNow(30_000)
   const roots = useMemo(
     () => flattenAgentRowLineage(agents).filter((node) => node.depth === 0),
     [agents]

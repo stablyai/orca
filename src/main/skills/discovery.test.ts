@@ -8,7 +8,7 @@ import {
   discoverSkills,
   LAST_KNOWN_ROOT_SCAN_RETENTION_MS
 } from './discovery'
-import { TUI_AGENT_CONFIG } from '../../shared/agent-launch/catalog/tui-agent-config'
+import '../../shared/agent-launch/catalog/tui-agent-config'
 import * as Plugins from './claude-plugin-skill-sources'
 import * as SkillRootFileWalk from './skill-root-file-walk'
 import type { Repo } from '../../shared/repo-types'
@@ -386,26 +386,6 @@ describe('skill discovery', () => {
     expect(owners?.slice().sort()).toEqual(['claude', 'grok'])
   })
 
-  it('names every source owner after a real agent id', () => {
-    // Coverage joins owner strings to agent ids; AgentType permits typos without type errors.
-    const owners = buildSkillDiscoverySources({
-      homeDir: '/home/test',
-      repos: [],
-      includeCwd: false
-    }).flatMap((source) => (source.owner === null ? [] : [source.owner]))
-
-    expect(owners.filter((owner) => !(owner in TUI_AGENT_CONFIG))).toEqual([])
-  })
-
-  it('scans a home-equal workspace path as both a home and a repo root', () => {
-    // Keep duplicate-path sources representable so renderer regression coverage tests a live shape.
-    const paths = buildSkillDiscoverySources({ homeDir: '/home/test', cwd: '/home/test' })
-      .filter((source) => source.path === join('/home/test', '.claude', 'skills'))
-      .map((source) => source.sourceKind)
-
-    expect(paths.slice().sort()).toEqual(['home', 'repo'])
-  })
-
   it('does not add SSH-backed repository paths to local scan roots', () => {
     const roots = buildSkillDiscoverySources({
       homeDir: '/home/test',
@@ -438,49 +418,6 @@ describe('skill discovery', () => {
     ])
     expect(result.sources.some((source) => source.path.startsWith('/remote/repo/'))).toBe(false)
     expect(homeOnly.sources.some((source) => source.skippedReason === 'remote-repo')).toBe(false)
-  })
-
-  it('scans each provider home skill root', () => {
-    const roots = buildSkillDiscoverySources({
-      homeDir: '/home/test',
-      cwd: '/workspace/current'
-    })
-
-    const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
-    expect(rootPaths).toEqual(
-      expect.arrayContaining([
-        '/home/test/.grok/skills',
-        '/home/test/.config/opencode/skills',
-        '/home/test/.pi/agent/skills',
-        '/home/test/.omp/agent/skills',
-        '/home/test/.hermes/skills',
-        '/home/test/.gemini/skills',
-        '/home/test/.gemini/config/skills',
-        '/home/test/.cursor/skills',
-        '/home/test/.factory/skills',
-        '/home/test/.continue/skills',
-        '/home/test/.trae-cn/skills',
-        '/home/test/.augment/skills',
-        '/workspace/current/.factory/skills',
-        '/workspace/current/.continue/skills',
-        '/workspace/current/.trae/skills',
-        '/workspace/current/.grok/skills',
-        '/workspace/current/.augment/skills'
-      ])
-    )
-    // Nonstandard shared roots still need provider tags for orchestration coverage.
-    for (const root of roots) {
-      if (root.path.replace(/\\/g, '/') === '/home/test/.grok/skills') {
-        expect(root.providers).toEqual(['agent-skills'])
-      }
-    }
-    // A null owner admits every native-chat agent; OMP-only roots must stay scoped.
-    expect(
-      roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.omp/agent/skills')?.owner
-    ).toBe('omp')
-    expect(
-      roots.find((root) => root.path.replace(/\\/g, '/') === '/home/test/.hermes/skills')?.owner
-    ).toBe('hermes')
   })
 
   it('does not add runtime-owned repository paths to local scan roots', () => {

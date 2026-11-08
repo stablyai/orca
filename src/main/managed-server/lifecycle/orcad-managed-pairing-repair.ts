@@ -128,6 +128,16 @@ export class ManagedOrcadPairingRepairs<
     )
   }
 
+  /** Hold a refusal no repair can clear (another server key) so callers stop instead of rebuilding. */
+  recordStandingRefusal(
+    environmentId: string,
+    revision: number,
+    epoch: number,
+    error: Error
+  ): Error {
+    return this.stand(environmentId, revision, epoch, error)
+  }
+
   /** Explicit connects clear both cached failure and attempt cap. */
   forgetFailures(environmentId: string): void {
     this.standing.delete(environmentId)
@@ -171,10 +181,11 @@ export class ManagedOrcadPairingRepairs<
     const pairingCode = publishedPairingCode(readiness, deployment.localPort, fail)
     const offer = parsePairingCode(pairingCode)
     const pinned = getPreferredPairingOffer(environment)
-    // Host access alone cannot authorize a different server key.
+    // Host access alone cannot authorize a different server key. Never call this a replaced server:
+    // the refusal that led here was sealed by the pinned key, so a server holding it just answered.
     if (!offer || offer.publicKeyB64 !== pinned.publicKeyB64) {
       throw fail(
-        new OrcadManagedIdentityError(
+        OrcadManagedIdentityError.foreignPort(
           deployment.remotePort,
           "the host's server now publishes a different host key than the one this desktop pinned"
         )
@@ -231,7 +242,12 @@ export class ManagedOrcadPairingRepairs<
 
 export type ManagedOrcadPairingGate = Pick<
   ManagedOrcadPairingRepairs,
-  'standingFailure' | 'repair' | 'recordRefusedAfterRepair' | 'resetEpoch' | 'forgetFailures'
+  | 'standingFailure'
+  | 'repair'
+  | 'recordRefusedAfterRepair'
+  | 'recordStandingRefusal'
+  | 'resetEpoch'
+  | 'forgetFailures'
 >
 
 function capSpentError(attempts: number): Error {

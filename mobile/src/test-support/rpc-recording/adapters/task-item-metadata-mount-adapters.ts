@@ -213,6 +213,7 @@ export function taskItemMetadataMountAdapters(
         refreshJiraConnection: async () => {},
         query: '',
         refreshTasks: () => {},
+        repoListEnsureLoaded: async () => [HOSTED_REPO],
         selectGitHubProject: async () => {},
         showCreateTask: false,
         showGitHubProjectPicker: false,
