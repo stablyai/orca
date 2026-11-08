@@ -1309,7 +1309,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..cfc6385982b16b8c46b1eff1bbd6a177
    }
  }
 diff --git a/src/browser/renderer/dom/DomRendererRowFactory.ts b/src/browser/renderer/dom/DomRendererRowFactory.ts
-index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2522b89ae 100644
+index 6ae089a4387de14488f39f5dab7024cffdcd9d10..ae0e74a7cf7f63de8c5681ddc689369a49718a5b 100644
 --- a/src/browser/renderer/dom/DomRendererRowFactory.ts
 +++ b/src/browser/renderer/dom/DomRendererRowFactory.ts
 @@ -15,7 +15,7 @@ import { JoinedCellData } from '../../services/CharacterJoinerService';
@@ -1335,7 +1335,60 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2
  
  export class DomRendererRowFactory {
    private _workCell: CellData = new CellData();
-@@ -354,6 +361,13 @@ export class DomRendererRowFactory {
+@@ -89,6 +96,7 @@ export class DomRendererRowFactory {
+     }
+ 
+     let charElement: HTMLSpanElement | undefined;
++    let textElement: HTMLElement | undefined;
+     let cellAmount = 0;
+     let text = '';
+     let i;
+@@ -228,7 +236,7 @@ export class DomRendererRowFactory {
+            * - create new span, reset state holders cellAmount & text
+            */
+           if (cellAmount) {
+-            charElement.textContent = text;
++            textElement!.textContent = text;
+           }
+           charElement = this._document.createElement('span');
+           cellAmount = 0;
+@@ -236,6 +244,7 @@ export class DomRendererRowFactory {
+         }
+       }
+       // preserve conditions for next merger eval round
++      textElement = charElement;
+       oldBg = cell.bg;
+       oldFg = cell.fg;
+       oldExt = cell.extended.ext;
+@@ -306,7 +315,16 @@ export class DomRendererRowFactory {
+       }
+ 
+       if (cell.isUnderline()) {
+-        classes.push(`${RowCss.UNDERLINE_CLASS}-${cell.extended.underlineStyle}`);
++        const underlineClass = `${RowCss.UNDERLINE_CLASS}-${cell.extended.underlineStyle}`;
++        if (!isLinkHover && (cell.isOverline() || cell.isStrikethrough())) {
++          // Keep the underline's style separate from solid overline/strikethrough.
++          textElement = this._document.createElement('u');
++          textElement.className = underlineClass;
++          textElement.style.textDecorationColor = 'inherit';
++          charElement.appendChild(textElement);
++        } else {
++          classes.push(underlineClass);
++        }
+         if (text === ' ') {
+           text = '\xa0'; // = &nbsp;
+         }
+@@ -325,6 +343,9 @@ export class DomRendererRowFactory {
+ 
+       if (cell.isOverline()) {
+         classes.push(RowCss.OVERLINE_CLASS);
++        if (cell.isStrikethrough()) {
++          charElement.style.textDecorationLine = 'overline line-through';
++        }
+         if (text === ' ') {
+           text = '\xa0'; // = &nbsp;
+         }
+@@ -354,6 +375,13 @@ export class DomRendererRowFactory {
          bgColorMode = temp2;
        }
  
@@ -1349,7 +1402,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2
        // Apply any decoration foreground/background overrides, this must happen after inverse has
        // been applied
        let bgOverride: IColor | undefined;
-@@ -411,7 +425,7 @@ export class DomRendererRowFactory {
+@@ -411,7 +439,7 @@ export class DomRendererRowFactory {
            break;
          case Attributes.CM_RGB:
            resolvedBg = channels.toColor(bg >> 16, bg >> 8 & 0xFF, bg & 0xFF);
@@ -1358,7 +1411,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2
            break;
          case Attributes.CM_DEFAULT:
          default:
-@@ -448,7 +462,7 @@ export class DomRendererRowFactory {
+@@ -448,7 +476,7 @@ export class DomRendererRowFactory {
              (fg      ) & 0xFF
            );
            if (!this._applyMinimumContrast(charElement, resolvedBg, color, cell, bgOverride, fgOverride)) {
@@ -1367,7 +1420,27 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2
            }
            break;
          case Attributes.CM_DEFAULT:
-@@ -513,7 +527,7 @@ export class DomRendererRowFactory {
+@@ -472,7 +500,7 @@ export class DomRendererRowFactory {
+       if (!isCursorCell && !isJoined && !isDecorated && isValidJoinRange) {
+         cellAmount++;
+       } else {
+-        charElement.textContent = text;
++        textElement.textContent = text;
+       }
+       // apply letter-spacing rule
+       if (spacing !== this.defaultSpacing) {
+@@ -484,8 +512,8 @@ export class DomRendererRowFactory {
+     }
+ 
+     // postfix text of last merged span
+-    if (charElement && cellAmount) {
+-      charElement.textContent = text;
++    if (textElement && cellAmount) {
++      textElement.textContent = text;
+     }
+ 
+     return elements;
+@@ -513,7 +541,7 @@ export class DomRendererRowFactory {
      }
  
      if (adjustedColor) {
@@ -1376,7 +1449,7 @@ index 6ae089a4387de14488f39f5dab7024cffdcd9d10..9deba6019223f2e26bcf7534fc43eae2
        return true;
      }
  
-@@ -527,10 +541,6 @@ export class DomRendererRowFactory {
+@@ -527,10 +555,6 @@ export class DomRendererRowFactory {
      return this._themeService.colors.contrastCache;
    }
  
