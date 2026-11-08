@@ -21484,6 +21484,16 @@
       }
     }
   },
+  "floatingWorkspaceWindow": {
+    "recoverableError": {
+      "title": "Orca floating workspace hit an error.",
+      "description": "The floating workspace could not finish rendering. Retry to remount it, or reopen it."
+    },
+    "dock": "Dock",
+    "starting": "Starting terminal...",
+    "otherTab": "This tab opens in the main window.",
+    "empty": "No terminal is open."
+  },
   "dashboardPopout": {
     "recoverableError": {
       "title": "Orca dashboard hit an error.",

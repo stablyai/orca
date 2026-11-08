@@ -6,6 +6,7 @@ import './assets/main.css'
 import { StrictMode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DashboardPopoutRoot } from './components/dashboard-popout/DashboardPopoutRoot'
+import { FloatingWorkspaceWindowRoot } from './components/floating-workspace-window/FloatingWorkspaceWindowRoot'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   installRendererCrashDiagnostics,
@@ -24,6 +25,7 @@ import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
 import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
+import { FLOATING_WORKSPACE_WINDOW_SURFACE } from '../../shared/floating-workspace-window'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
@@ -31,8 +33,11 @@ const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 // Each popout has a separate React root/DOM/JS context; run full renderer bootstrap despite sharing preload/window.api.
 recordRendererCrashBreadcrumb('popout_bootstrap_started', { dev: import.meta.env.DEV })
-installRendererCrashDiagnostics('dashboard-popout')
-setReactCommitCascadeRendererSurface('dashboard-popout')
+const isFloatingWorkspaceWindow =
+  new URLSearchParams(window.location.search).get('surface') === FLOATING_WORKSPACE_WINDOW_SURFACE
+const rendererSurface = isFloatingWorkspaceWindow ? 'floating-workspace-window' : 'dashboard-popout'
+installRendererCrashDiagnostics(rendererSurface)
+setReactCommitCascadeRendererSurface(rendererSurface)
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
   applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
@@ -108,15 +113,29 @@ function PopoutRoot(): React.JSX.Element {
   useTranslation()
   return (
     <RecoverableRenderErrorBoundary
-      boundaryId="dashboard-popout.root"
-      surface="dashboard-popout"
-      title={translate('dashboardPopout.recoverableError.title', 'Orca dashboard hit an error.')}
-      description={translate(
-        'dashboardPopout.recoverableError.description',
-        'The dashboard could not finish rendering. Retry to remount it, or reopen it.'
-      )}
+      boundaryId={`${rendererSurface}.root`}
+      surface={rendererSurface}
+      title={
+        isFloatingWorkspaceWindow
+          ? translate(
+              'floatingWorkspaceWindow.recoverableError.title',
+              'Orca floating workspace hit an error.'
+            )
+          : translate('dashboardPopout.recoverableError.title', 'Orca dashboard hit an error.')
+      }
+      description={
+        isFloatingWorkspaceWindow
+          ? translate(
+              'floatingWorkspaceWindow.recoverableError.description',
+              'The floating workspace could not finish rendering. Retry to remount it, or reopen it.'
+            )
+          : translate(
+              'dashboardPopout.recoverableError.description',
+              'The dashboard could not finish rendering. Retry to remount it, or reopen it.'
+            )
+      }
     >
-      <DashboardPopoutRoot />
+      {isFloatingWorkspaceWindow ? <FloatingWorkspaceWindowRoot /> : <DashboardPopoutRoot />}
     </RecoverableRenderErrorBoundary>
   )
 }

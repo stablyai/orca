@@ -12,6 +12,7 @@ type PreviewInstance = {
   options: ITerminalOptions
   container: HTMLElement | null
   dispose: ReturnType<typeof vi.fn>
+  focus: ReturnType<typeof vi.fn>
   writeCallbacks: (() => void)[]
 }
 const harness = vi.hoisted(() => ({
@@ -226,4 +227,22 @@ it('retains the replacement frame on the same DOM and ignores retired parsed wri
   expect(fit).toHaveBeenCalledExactlyOnceWith('pty-1', 50, 15)
   expect(frames.size).toBe(0)
   expect([pending, afterOldWrites]).toEqual([1, 1])
+})
+
+it('a resync takes focus unless focusOnResync is false; the first replay always does', async () => {
+  let deliver: Parameters<Window['api']['terminalPreview']['onData']>[0] = () => {}
+  window.api.terminalPreview.onData = (listener) => {
+    deliver = listener
+    return vi.fn()
+  }
+  const quiet = render(<AgentTerminalPreview ptyId="pty-1" focusOnResync={false} />)
+  await act(async () => {})
+  await act(async () => deliver({ type: 'resync', ptyId: 'pty-1' }))
+  expect(connect).toHaveBeenCalledTimes(2)
+  expect(harness.instances[0]?.focus).toHaveBeenCalledOnce()
+  quiet.unmount()
+  render(<AgentTerminalPreview ptyId="pty-1" />)
+  await act(async () => {})
+  await act(async () => deliver({ type: 'resync', ptyId: 'pty-1' }))
+  expect(harness.instances[1]?.focus).toHaveBeenCalledTimes(2)
 })

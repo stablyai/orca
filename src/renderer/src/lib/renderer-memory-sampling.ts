@@ -15,7 +15,7 @@ const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
 /** Footprint thresholds catch growth outside V8, including scrollback backing stores/GL atlases. A reported 618MB renderer held only 150MB of a 4192MB heap limit, too low for heap-ratio census to fire. */
 const RENDERER_PRIVATE_HIGHWATER_MB = [600, 1000] as const
 
-export type RendererSurface = 'main' | 'dashboard-popout'
+export type RendererSurface = 'main' | 'dashboard-popout' | 'floating-workspace-window'
 
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number
