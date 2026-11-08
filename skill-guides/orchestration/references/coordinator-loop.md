@@ -20,28 +20,6 @@ A later `run-create` keeps your earlier Runs: their mail still wakes you, but
 commands without `--run` use the newest Run, so pass `--run <id>` for an earlier
 one. `run-use` keeps only the Run it names.
 
-For a fresh Claude, Codex, Cursor, Antigravity, or Muse terminal, `--model`
-accepts an opaque provider model ID. Pass it only when the user named a model;
-otherwise omit it so the worker inherits the user's configured agent default.
-Add `--effort` only when that model supports it:
-
-```text
-ORCA orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
-ORCA orchestration worker-start --task <task_id> --worktree current --agent muse --model muse-spark-1.3 --json
-```
-
-OpenCode also accepts `--model` in an existing worktree when the execution host
-verifies its CLI version and model availability. Creating a new worktree with an
-OpenCode model override is unsupported; use `--worktree current` or an existing
-worktree selector, or omit `--model`. OpenCode effort is unsupported. Omit the
-model to inherit its configuration; unsupported or unknown hosts refuse the
-override explicitly.
-
-`--effort` requires `--model`; neither option combines with `--terminal`. A
-connected worker server must advertise launch-preference support before Orca
-forwards either field. Compare `launch.requested` with `launch.effective`; never
-claim a model or effort from requested arguments alone.
-
 ## Configured worker roles
 
 When the user names a saved worker role, use `--role <name>` instead of guessing

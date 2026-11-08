@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient } from '../runtime-client'
 import { ORCHESTRATION_WORKER_LAUNCH_HANDLER } from './orchestration/worker-launch-handler'
-import { ORCHESTRATION_WORKER_ROLE_ROUTING_RUNTIME_CAPABILITY } from '../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_WORKER_ROLE_ROUTING_RUNTIME_CAPABILITY } from '../../shared/orchestration/orchestration-runtime-capabilities'
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 

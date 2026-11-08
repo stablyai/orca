@@ -31,6 +31,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from '../themes/TerminalThemeSections'
+import { ClaudeCodeThemeSyncSetting } from '../themes/ClaudeCodeThemeSyncSetting'
 import { TerminalWindowSection } from '../TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
@@ -41,7 +42,7 @@ import { WarpThemeImportModal } from '../themes/WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from '../themes/useWarpThemeImport'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import ghosttyIcon from '../../../../../../../resources/ghostty.svg'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type TerminalAppearanceSectionProps = {
   settings: GlobalSettings
@@ -82,9 +83,9 @@ export function TerminalAppearanceSection({
   warpThemes,
   forceVisiblePrimary = false
 }: TerminalAppearanceSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
-  const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
   const showDesktopThemeImports = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
@@ -190,7 +191,7 @@ export function TerminalAppearanceSection({
         <section className="space-y-3 pt-2">
           <SettingsSubsectionHeader
             className="items-center"
-            title={translate(
+            title={t(
               'auto.components.settings.TerminalAppearanceSection.048aac8a64',
               'Terminal Typography'
             )}
@@ -204,7 +205,7 @@ export function TerminalAppearanceSection({
                     onClick={() => void terminalConfigImport.handleClick('ghostty')}
                   >
                     <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
-                    {translate(
+                    {t(
                       'auto.components.settings.TerminalAppearanceSection.855a76343a',
                       'Import from Ghostty'
                     )}
@@ -216,7 +217,7 @@ export function TerminalAppearanceSection({
                     onClick={() => void terminalConfigImport.handleClick('kitty')}
                   >
                     <Cat className="size-4" aria-hidden="true" />
-                    {translate(
+                    {t(
                       'auto.components.settings.TerminalAppearanceSection.kitty_import',
                       'Import from Kitty'
                     )}
@@ -234,7 +235,7 @@ export function TerminalAppearanceSection({
             />
 
             <SearchableSetting
-              title={translate(
+              title={t(
                 'auto.components.settings.TerminalAppearanceSection.a408266e67',
                 'Font Family'
               )}
@@ -245,7 +246,7 @@ export function TerminalAppearanceSection({
               forceVisible={forceVisiblePrimary}
             >
               <SettingsRow
-                label={translate(
+                label={t(
                   'auto.components.settings.TerminalAppearanceSection.a408266e67',
                   'Font Family'
                 )}
@@ -280,8 +281,6 @@ export function TerminalAppearanceSection({
           key={`theme-catalog-${preferredThemeTarget ?? 'manual'}`}
           settings={settings}
           systemPrefersDark={systemPrefersDark}
-          themeSearch={themeSearch}
-          setThemeSearch={setThemeSearch}
           updateSettings={updateSettings}
           previewFontFamily={previewFontFamily}
           importedHighlightSignal={warpThemes.importSignal}
@@ -290,6 +289,10 @@ export function TerminalAppearanceSection({
           preferredTarget={preferredThemeTarget}
           renderAdvancedContent={renderPreviewAdvancedContent}
         />
+      ) : null}
+
+      {showDesktopThemeImports ? (
+        <ClaudeCodeThemeSyncSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showDesktopThemeImports ? (

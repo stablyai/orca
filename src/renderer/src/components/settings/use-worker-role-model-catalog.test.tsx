@@ -7,14 +7,14 @@ import { useWorkerRoleModelCatalog } from './use-worker-role-model-catalog'
 import {
   readHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
-} from '@/runtime/host-model-catalog-snapshots'
+} from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 
 const fixture = vi.hoisted(() => ({
   read: vi.fn(),
   capabilities: vi.fn(),
   settings: { activeCodexManagedAccountId: 'work' }
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (...args: unknown[]) => fixture.read(...args)
 }))
 vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({

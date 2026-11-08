@@ -21,7 +21,7 @@ import {
   type ActiveWorkspaceContext,
   type PairedWorkspaceContextSource
 } from './active-worktree-context-fallback'
-import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
+import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from '../../orchestration/workers/transcripts/worker-provider-session'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
@@ -48,8 +48,6 @@ export abstract class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRunt
   ): TerminalInteractiveWaitEvidence | Promise<TerminalInteractiveWaitEvidence | undefined>
 
   abstract getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus>
-
-  protected abstract getLeafKey(tabId: string, leafId: string): string
 
   protected abstract getPtyRecordForPaneKey(
     paneKey: string,

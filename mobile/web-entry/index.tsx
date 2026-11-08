@@ -1,6 +1,7 @@
 // Web shell entry for the phone’s h/[hostId] route tree, packaged by build:mobile-web.
 import { useEffect, type PropsWithChildren } from 'react'
 import { createRoot } from 'react-dom/client'
+import type { QueryClient } from '@tanstack/react-query'
 import { ExpoRoot } from 'expo-router'
 import {
   applyMobileColorScheme,
@@ -21,6 +22,10 @@ import {
   refreshPageTerminalSettings
 } from '../src/mobile-web-shell/bridge/page-async-storage'
 import {
+  createPageDeviceStore,
+  publishPageDeviceStore
+} from '../src/mobile-web-shell/bridge/page-device-store'
+import {
   RouteScreenPaintProvider,
   createRouteScreenPaintReporter
 } from '../src/mobile-web-shell/bridge/page-first-paint'
@@ -36,15 +41,24 @@ import { publishHapticsNotifier } from '../src/platform/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blur.web'
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
 // Select the page-client provider explicitly; the builder aliases extensionless screen imports to this same web module.
-import { RpcClientProvider } from '../src/transport/client-context.web'
+import { RpcClientProvider } from '../src/transport/connection/client-context.web'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider.web'
+import { createOrcaQueryClient } from '../src/query/orca-query-client'
+import {
+  awaitFirstPaintRestore,
+  startPageQueryPersistence
+} from '../src/query/page-query-persistence'
 // Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
 import routeContext from './route-manifest'
 import { preloadBootRoutes } from './boot-route-preload'
 
 // The h/ tree omits the native root provider, so supply ExpoRoot’s wrapper after init gives us a client.
 // Router suspense handles pending chunks; rejected chunks belong to the outer fault boundary.
-function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
+function createRootProviders(
+  client: BridgeRpcClient,
+  target: PageMountTarget,
+  queryClient: QueryClient
+) {
   // Wait for the second frame before dropping the shell’s cover; a React commit alone proves no paint.
   const reportRouteScreenPaint = createRouteScreenPaintReporter(
     {
@@ -64,13 +78,22 @@ function createRootProviders(client: BridgeRpcClient, target: PageMountTarget) {
     }, [])
     return (
       <RpcClientProvider client={client}>
-        <OrcaQueryProvider>
+        <OrcaQueryProvider client={queryClient}>
           <RouteScreenPaintProvider report={reportRouteScreenPaint}>
             {children}
           </RouteScreenPaintProvider>
         </OrcaQueryProvider>
       </RpcClientProvider>
     )
+  }
+}
+
+// The shell's `open` target paints first; a target that can't be parsed boots the document's own route.
+function bootRoute(openTarget: string | undefined): URL {
+  try {
+    return new URL(openTarget ?? window.location.href, window.location.href)
+  } catch {
+    return new URL(window.location.href)
   }
 }
 
@@ -164,34 +187,45 @@ bootstrapShellPage({
             ).value
         : null
     )
+    const deviceStore = createPageDeviceStore(client)
+    publishPageDeviceStore(deviceStore)
+    // An open-target boot paints the shell's target first, so that is the screen to preload and restore.
+    const route = bootRoute(session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM])
+    const queryClient = createOrcaQueryClient()
+    // One store read for the first screen's stored data, alongside the catalog and route loads.
+    const firstPaintRestore = startPageQueryPersistence(
+      queryClient,
+      deviceStore,
+      session.host?.id ?? '',
+      route
+    )
     client.onStorageUpdate(() => {
       const current = client.getShellSession()
       if (current !== null) {
         refreshPageTerminalSettings(current.storage, current.storageOversize)
       }
     })
-    // Open-target boots stay lazy: the stack moves the URL to the target only when it mounts after the container.
-    const bootRoutes = session.route?.params?.[BRIDGE_OPEN_ROUTE_PARAM]
-      ? null
-      : preloadBootRoutes(window.location.pathname)
+    const bootRoutes = preloadBootRoutes(route.pathname)
     // Activation settles to English on failure and preloads settle either way, so the page always mounts.
-    void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes]).then(() =>
-      createRoot(container).render(
-        // Catch outside ExpoRoot so route-resolution/import failures cannot bypass the page boundary.
-        <PageFaultBoundary
-          onFault={(error) => {
-            client.notifyPageFault(error)
-          }}
-        >
-          <ExpoRoot
-            context={routeContext}
-            // Pass the post-init URL explicitly; ExpoRoot’s import-time location predates bridge frames and still names /.
-            location={new URL(window.location.href)}
-            wrapper={createRootProviders(client, target)}
-          />
-        </PageFaultBoundary>
+    void Promise.all([settleLatest(() => uiLocaleActivation), bootRoutes])
+      .then(() => awaitFirstPaintRestore(firstPaintRestore))
+      .then(() =>
+        createRoot(container).render(
+          // Catch outside ExpoRoot so route-resolution/import failures cannot bypass the page boundary.
+          <PageFaultBoundary
+            onFault={(error) => {
+              client.notifyPageFault(error)
+            }}
+          >
+            <ExpoRoot
+              context={routeContext}
+              // Pass the post-init URL explicitly; ExpoRoot’s import-time location predates bridge frames and still names /.
+              location={new URL(window.location.href)}
+              wrapper={createRootProviders(client, target, queryClient)}
+            />
+          </PageFaultBoundary>
+        )
       )
-    )
   },
   refuseUnroutedShell: () => {
     renderShellTooOldPanel(container)

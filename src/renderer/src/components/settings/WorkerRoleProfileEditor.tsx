@@ -1,4 +1,4 @@
-import { sayNativeChatSessionOptionTranslated as say } from '../native-chat/native-chat-session-option-labels-text'
+import { sayNativeChatSessionOptionTranslated as say } from '../native-chat/session/options/controls/native-chat-session-option-labels-text'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import {
@@ -10,7 +10,7 @@ import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-a
 import type { WorkerRoleProfile } from '../../../../shared/orchestration-worker-roles'
 import { useWorkerRoleModelCatalog } from './use-worker-role-model-catalog'
 import { nativeChatSessionChoiceLabel } from '../../../../shared/native-chat/input/native-chat-session-option-labels'
-import { sayAgentSessionFailureTranslated } from '../native-chat/agent-session-failure-words-text'
+import { sayAgentSessionFailureTranslated } from '../native-chat/messages/notices/agent-session-failure-words-text'
 import { notSignedInSentence } from '../../../../shared/agent-session/agent-session-availability-sentences'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'

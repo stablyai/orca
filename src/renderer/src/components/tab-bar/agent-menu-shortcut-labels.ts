@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/keybindings'
 import { resolveWindowShortcutAction } from '../../../../shared/window-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import {
   readAgentTabShortcutActions,
   resolveAgentTabShortcutAction

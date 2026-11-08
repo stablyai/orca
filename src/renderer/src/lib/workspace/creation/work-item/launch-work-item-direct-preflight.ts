@@ -1,3 +1,4 @@
+import { invalidTerminalArgsMessage } from './launch-work-item-direct-messages'
 import {
   planAgentCliArgsSuffix,
   type AgentStartupShell
@@ -10,7 +11,6 @@ import {
   ensureDetectedAgentsForRepo,
   loadProjectLaunchContext
 } from '../../../agent-detection-target-inventory'
-import { toast } from 'sonner'
 import { CLIENT_PLATFORM } from '../../../new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '../../../local-preflight-context'
 import {
@@ -189,12 +189,16 @@ export async function resolveDirectProspectiveAgent(
 export function directWorkItemAgentArgsError(
   agentArgs: string | null | undefined,
   shell: AgentStartupShell,
-  nativeChat: boolean
+  nativeChat: boolean,
+  agent?: TuiAgent
 ): string | null {
   if (nativeChat) {
     return null
   }
   // Reject malformed saved arguments before creating a workspace.
+  if (agent) {
+    return invalidTerminalArgsMessage(agent, agentArgs, shell)
+  }
   const plan = planAgentCliArgsSuffix(agentArgs, shell)
   return plan.ok ? null : plan.error
 }
@@ -217,8 +221,7 @@ export function prepareDirectLaunchContext(
   // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#27971).
   const repoLaunchFact = resolveRepoExecutionHostPlatform(store, repo, () => repoProjectRuntime)
   if (repoLaunchFact.kind === 'withheld') {
-    toast.error(repoLaunchFact.reason)
-    return null
+    return { unavailable: repoLaunchFact }
   }
   const repoLaunchHost = refineLocalLaunchPlatform(repoLaunchFact, args.launchPlatform)
   const shell: AgentStartupShell = repoLaunchHost.platform === 'win32' ? 'powershell' : 'posix'

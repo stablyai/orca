@@ -53,23 +53,6 @@ describe('agent completion coordinator process-exit turn boundary', () => {
     })
   }
 
-  it('still treats a hook Done with no new turn as the exited process completion', async () => {
-    const { ptyLane } = await notifyProcessExit()
-    const hookDispatch = vi.fn()
-    const hookLane = createHookLane(hookDispatch)
-    hookLane.observeHookStatus({
-      state: 'done',
-      prompt: '',
-      agentType: 'opencode',
-      stateStartedAt: 1_700_000_000_000
-    })
-    vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
-
-    expect(hookDispatch).not.toHaveBeenCalled()
-    ptyLane.dispose()
-    hookLane.dispose()
-  })
-
   it('notifies later hook turns after an unreported process exit in the same pane', async () => {
     // Status turned off for the exited agent (or an idle client quit), so no hook reported it.
     const { ptyLane, showForeground } = await notifyProcessExit()

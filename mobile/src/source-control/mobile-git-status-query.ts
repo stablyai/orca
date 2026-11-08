@@ -1,7 +1,11 @@
+import * as z from 'zod'
 import { translate } from '../i18n/mobile-i18n'
 import { defineHostQuery } from '../query/host-query'
-import type { RpcClient } from '../transport/rpc-client'
-import type { MobileGitStatusHostPayload } from './git-status-reply-schema'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import {
+  gitStatusHostPayloadSchema,
+  type MobileGitStatusHostPayload
+} from './git-status-reply-schema'
 import { gitStatusHostPayloadRead } from './mobile-git-read-operations'
 import {
   isMobileGitTransientRefreshError,
@@ -56,6 +60,19 @@ export const gitStatusQuery = defineHostQuery({
   family: 'git.status',
   staleTime: 3_000,
   refetchOnWindowFocus: true,
-  fetch: (client, target, _input: Record<string, never>, previous: GitStatusRead | undefined) =>
-    readGitStatus(client, target.worktree ?? '', previous !== undefined)
+  // Rows from an earlier launch are shown but unconfirmed, so that first read runs at full priority.
+  fetch: (
+    client,
+    target,
+    _input: Record<string, never>,
+    previous: GitStatusRead | undefined,
+    { previousFromStore }
+  ) => readGitStatus(client, target.worktree ?? '', previous !== undefined && !previousFromStore),
+  persist: {
+    version: 1,
+    dataSchema: z.discriminatedUnion('kind', [
+      z.object({ kind: z.literal('ready'), status: gitStatusHostPayloadSchema }),
+      z.object({ kind: z.literal('unavailable') })
+    ])
+  }
 })

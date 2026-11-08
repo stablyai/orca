@@ -8,7 +8,7 @@ import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mo
 import {
   registerManagedServerActions,
   type ManagedServerActions
-} from '../../runtime/managed-server-actions-registry'
+} from '../../runtime/hosts/management/managed-server-actions-registry'
 import { removeRedundantManagedPairing } from './runtime-environment-redundant-managed-removal'
 
 const forgetRedundant = vi.fn<ManagedServerActions['forgetRedundant']>()

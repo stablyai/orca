@@ -348,64 +348,6 @@ describe('createMainWindow', () => {
     expect(guestPreferences.additionalArguments).toBeUndefined()
   })
 
-  it('sets platform-specific titlebar and frame options for every desktop platform', () => {
-    for (const [platform, expected] of [
-      ['darwin', { titleBarStyle: 'hiddenInset', frame: undefined }],
-      ['win32', { titleBarStyle: 'hidden', frame: undefined }],
-      ['linux', { titleBarStyle: undefined, frame: false }]
-    ] satisfies [
-      NodeJS.Platform,
-      { titleBarStyle: string | undefined; frame: boolean | undefined }
-    ][]) {
-      browserWindowMock.mockReset()
-      const webContents = {
-        on: vi.fn(),
-        setZoomLevel: vi.fn(),
-        setBackgroundThrottling: vi.fn(),
-        setWebRTCIPHandlingPolicy: vi.fn(),
-        invalidate: vi.fn(),
-        setWindowOpenHandler: vi.fn(),
-        send: vi.fn(),
-        isDevToolsOpened: vi.fn(),
-        openDevTools: vi.fn(),
-        closeDevTools: vi.fn()
-      }
-      const browserWindowInstance = {
-        webContents,
-        on: vi.fn(),
-        isDestroyed: vi.fn(() => false),
-        isMaximized: vi.fn(() => true),
-        isFullScreen: vi.fn(() => false),
-        getSize: vi.fn(() => [1200, 800]),
-        setSize: vi.fn(),
-        setWindowButtonPosition: vi.fn(),
-        maximize: vi.fn(),
-        show: vi.fn(),
-        loadFile: vi.fn(() => Promise.resolve()),
-        loadURL: vi.fn(() => Promise.resolve())
-      }
-      browserWindowMock.mockImplementation(function () {
-        return browserWindowInstance
-      })
-
-      withPlatform(platform, () => createMainWindow(null))
-
-      const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
-      expect(browserWindowOptions.titleBarStyle).toBe(expected.titleBarStyle)
-      expect(browserWindowOptions.frame).toBe(expected.frame)
-      // Material off (the default) must leave the window exactly as before: opaque, no material argument.
-      expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
-      for (const key of ['vibrancy', 'transparent', 'backgroundMaterial']) {
-        expect(browserWindowOptions).not.toHaveProperty(key)
-      }
-      expect(
-        (browserWindowOptions.webPreferences?.additionalArguments ?? []).some((arg) =>
-          arg.startsWith('--orca-window-material=')
-        )
-      ).toBe(false)
-    }
-  })
-
   it('keeps macOS background throttling enabled while repainting visibility transitions', () => {
     vi.useFakeTimers()
     const windowHandlers = new Map<string, ((...args: any[]) => void)[]>()

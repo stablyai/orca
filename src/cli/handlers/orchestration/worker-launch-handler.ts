@@ -7,7 +7,7 @@ import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_ROLE_ROUTING_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'

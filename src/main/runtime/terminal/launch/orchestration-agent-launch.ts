@@ -115,9 +115,18 @@ export abstract class OrcaRuntimeWithOrchestrationAgentLaunch extends OrcaRuntim
   ): Promise<void> {
     const store = this.requireStore()
     const settings = store.getSettings()
-    const workspace = target.repo
-      ? newWorktreeLaunchScope(await this.resolveRepoSelector(target.repo), settings)
-      : await this.resolveTerminalWorkspaceLaunchScope(target.worktree!)
+    let workspace: ReturnType<typeof newWorktreeLaunchScope>
+    if (target.repo) {
+      workspace = newWorktreeLaunchScope(await this.resolveRepoSelector(target.repo), settings)
+    } else if (target.worktree) {
+      workspace = await this.resolveTerminalWorkspaceLaunchScope(target.worktree)
+    } else {
+      throw new OrchestrationError(
+        'invalid_argument',
+        'Worker launch requires a repository or workspace.',
+        { effectsApplied: false }
+      )
+    }
     const launchRuntime = resolveAgentLaunchRuntime(store, workspace, undefined, agent)
     const inputs = resolveAgentStartupPlanInputs({
       agent,

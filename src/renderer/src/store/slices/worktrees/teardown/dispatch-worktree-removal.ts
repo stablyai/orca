@@ -3,8 +3,8 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../sh
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
-import type { RemoveWorktreeOptions } from '../../worktree-removal-options'
+import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
+import type { RemoveWorktreeOptions } from './worktree-removal-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import {
   isWorktreeRemovalReplyLost,

@@ -58,7 +58,7 @@ class ExpoTwoWayAudioModule : Module() {
          }
 
          Function("restart") {
-             audioEngine?.resumeRecording()
+             audioEngine?.regainAudioFocus()
              sendEvent(ON_RECORDING_CHANGE_EVENT, mapOf(
                  "data" to (audioEngine?.isRecording ?: false)
              ))

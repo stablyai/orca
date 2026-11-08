@@ -13,7 +13,7 @@ import { rewriteWorktreeIdPath } from '../../../shared/worktree/id'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 
 import { wslMoveRepoPaths } from '../../persistence/moving-wsl-projects/wsl-move-scope'
-import type { WindowsDriveMount } from '../../runtime/wsl-guest-drive-mountinfo'
+import type { WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 import { wslUncPathIsWindowsDriveFolder } from './wsl-drive-unc-mounts'
 
 export type WslDriveUncRefusal =

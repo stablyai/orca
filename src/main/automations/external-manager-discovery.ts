@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import type {
   ExternalAutomationManager,
   ExternalAutomationProvider
-} from '../../shared/automations-types'
+} from '../../shared/automations/external/external-automation'
 import { mapOpenClawJobs } from './external-job-mappers'
 import { isExternalAutomationCommandOnPath } from './external-manager-local-command'
 

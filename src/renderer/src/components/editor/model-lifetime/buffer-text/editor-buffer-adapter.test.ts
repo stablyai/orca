@@ -4,7 +4,7 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
 import { createEditorModelRegistry } from '@/lib/editor-model-registry'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { applyEditorBufferText } from './editor-buffer-adapter'
 

@@ -62,7 +62,7 @@ function takeMockTransport(options: Record<string, unknown>): MockTransport {
   return transport
 }
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync: fixture.mocks.scheduleRuntimeGraphSync
 }))
 

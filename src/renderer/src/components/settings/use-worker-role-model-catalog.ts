@@ -12,7 +12,7 @@ import {
   type AgentSessionUnavailable
 } from '../../../../shared/agent-session/agent-session-availability'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import { loadHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { loadHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'

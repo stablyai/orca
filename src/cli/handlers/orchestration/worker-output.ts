@@ -1,5 +1,5 @@
 import type { RuntimeTerminalRead } from '../../../shared/runtime-types'
-import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration-worker-output'
+import type { OrchestrationWorkerReadResult } from '../../../shared/orchestration/workers/orchestration-worker-output'
 import { formatWorkerTranscriptMessage } from '../../../shared/worker-transcript-text'
 
 export type LegacyWorkerReadResult = {

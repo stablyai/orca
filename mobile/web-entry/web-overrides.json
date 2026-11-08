@@ -10,7 +10,7 @@
       "reason": "The phone session renders in the host-served page. Suggestions must escape the queued editor’s scrolling clip while staying inside the chat’s stacking and visibility ancestry. DOM geometry and ancestor scroll/resize events anchor that portal; the native fallback retains its existing inline rendering."
     },
     {
-      "file": "src/transport/client-context.web.tsx",
+      "file": "src/transport/connection/client-context.web.tsx",
       "reason": "The page has no websocket transport and no pairing keychain. This is the single transport substitution point: it serves the BridgeRpcClient the entry built, for every hostId, because the bridge protocol names no host. The entry mounts nothing until init lands, so this provider never holds a client that cannot answer."
     },
     {
@@ -26,15 +26,19 @@
       "reason": "The page is one document standing in for one screen, so a route it does not render has to be handed to the app that does. The native file is the router; this one posts a navigate notify for a target outside the page's routes and pushes locally for one inside them."
     },
     {
-      "file": "src/transport/host-store.web.ts",
+      "file": "src/transport/hosts/host-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, so the real store answers loadHosts() with an empty array and every screen that looks this host up paints \"Host not found\" over the host the shell just opened. This one serves the profile init carried, without the credential the bridge already holds."
     },
     {
-      "file": "src/transport/host-removal-lifecycle.web.ts",
+      "file": "src/transport/hosts/host-descriptor-persistence.web.ts",
+      "reason": "Last-known descriptors belong to the native host list; the page owns no descriptor persistence."
+    },
+    {
+      "file": "src/transport/hosts/host-removal-lifecycle.web.ts",
       "reason": "Removing a host is pairing work and the page holds neither the host list nor the credential, so the real lifecycle's removeHost resolved without doing anything and the screen reported success for a host that was still paired. This one refuses with PageHostRemovalUnavailableError, whose message names the app's host list. It is also the fence that keeps push-registration.ts out of the page bundle: the native file's import of it was that subsystem's only path into a page route, and the page has neither the device token nor the gateway client push needs."
     },
     {
-      "file": "src/transport/host-device-token-store.web.ts",
+      "file": "src/transport/hosts/host-device-token-store.web.ts",
       "reason": "expo-secure-store resolves to {} on web, and the bridge carries the RPC, so the page holds no device token."
     },
     {
@@ -126,7 +130,7 @@
       "reason": "Not an RN Web API gap but a transport one that exists only in the page: a screencast frame crosses the bridge as one message under BRIDGE_MAX_MESSAGE_BYTES, and a phone's mobile view at the native device scale factor produces a worst-case JPEG larger than that. This file budgets the mobile view's area against the cap, the envelope it measures rather than names, and one worst-case bytes-per-pixel constant. Web view mode is untouched, because a letterboxed desktop viewport is not an area the page can predict."
     },
     {
-      "file": "src/session/terminal-snapshot-byte-budget.web.ts",
+      "file": "src/terminal/session/terminal-snapshot-byte-budget.web.ts",
       "reason": "Not an RN Web API gap but a transport one that exists only in the page. A terminal's first frame is its scrollback snapshot, which the desktop trims to 512 KiB of raw terminal text while the bridge measures the serialized event against BRIDGE_MAX_MESSAGE_BYTES. An ANSI snapshot is mostly ESC bytes and JSON spends six on each, so a colour-dense 80-column screen comes back at 669,268 bytes against a 655,360-byte cap and the stream ends with overflow before a live byte is painted. This file derives the budget the page sends in terminal.subscribe from the cap less the event envelope; the native sibling sends nothing, because a socket frame has no ceiling above it and a budget there would shrink a phone's scrollback for a limit that does not exist."
     },
     {
@@ -194,7 +198,7 @@
       "reason": "react-native-web's keydown handler withholds onSubmitEditing whenever the Enter keydown reports a composition — nativeEvent.isComposing, or the Android keyCode 229 that stands for it — which is a soft keyboard's normal state mid-word, so Enter on the page neither sent the line nor cleared the field while native Android's editor action fired as it always does. Both terminal fields reach their send through onSubmitEditing alone and both are bound here: the live input's carriage return, and the buffered command field's draft. The native file binds nothing, because that editor action needs no help; this one listens for beforeinput and acts on insertLineBreak and insertParagraph, the browser's own end-of-line signals. react-native-web calls preventDefault on every keydown it does submit on, so those events exist only in the cases it dropped and never produce a second carriage return; an IME still choosing a candidate reports insertCompositionText and is left alone."
     },
     {
-      "file": "src/transport/host-app-version-store.web.ts",
+      "file": "src/transport/hosts/host-app-version-store.web.ts",
       "reason": "The page keeps no record of the host's status.get app version because nothing in it reads one — the reader is the native troubleshoot screen's — and a key the page only writes is not page state, so it is not admitted through page-storage-keys.ts and every mount's write was refused and logged instead."
     },
     {
@@ -218,7 +222,7 @@
       "reason": "The fold is a native reserved region the WebView cannot see: WebKit exposes no viewport segments, and the native file reads an Expo module the page does not have. This one reads the fold the shell measured over the page from `init`, already in the page's px."
     },
     {
-      "file": "src/session/shell-terminal-key-rail.web.ts",
+      "file": "src/terminal/session/shell-terminal-key-rail.web.ts",
       "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
     },
     {

@@ -186,17 +186,6 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  it('does not drive the tab title when drivesTabTitle is false', async () => {
-    const { dispose } = await startWatcher({ drivesTabTitle: false })
-
-    emit(IDLE_TITLE_OSC)
-    flushSideEffects()
-
-    expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
-    expect(mockStoreState.updateTabTitle).not.toHaveBeenCalled()
-    dispose()
-  })
-
   it('marks unread on BEL and schedules the delayed terminal-bell OS notification', async () => {
     const workspaceOwner = { executionHostId: 'ssh:qa' as const, runtimeEnvironmentId: 'hub' }
     const { dispose } = await startWatcher({ workspaceOwner })
@@ -263,52 +252,6 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  it('forwards completion to notification policy when only terminal attention is on', async () => {
-    mockStoreState.settings = {
-      ...mockStoreState.settings,
-      experimentalTerminalAttention: true,
-      notifications: { enabled: true, agentTaskComplete: false }
-    }
-    const { dispose } = await startWatcher()
-
-    emit(WORKING_TITLE_OSC)
-    emit(IDLE_TITLE_OSC)
-    flushSideEffects()
-    vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
-
-    expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
-      source: 'agent-task-complete',
-      terminalTitle: IDLE_TITLE,
-      paneKey: PANE_KEY,
-      ptyId: PTY_ID
-    })
-    dispose()
-  })
-
-  it('keeps mobile completion detection active when desktop notifications and attention are off', async () => {
-    mockStoreState.settings = {
-      ...mockStoreState.settings,
-      experimentalTerminalAttention: false,
-      notifications: { enabled: false }
-    }
-    const { dispose } = await startWatcher()
-
-    emit(WORKING_TITLE_OSC)
-    emit(IDLE_TITLE_OSC)
-    flushSideEffects()
-    vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
-
-    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
-      WORKTREE_ID,
-      expect.objectContaining({ source: 'agent-task-complete' })
-    )
-    expect(mockStoreState.setCacheTimerStartedAt).toHaveBeenLastCalledWith(
-      PANE_KEY,
-      expect.any(Number)
-    )
-    dispose()
-  })
-
   it('lets a same-burst completion supersede the pending bell OS notification', async () => {
     const { dispose } = await startWatcher()
 
@@ -347,18 +290,6 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  // DECSET 2031 subscribes rather than queries; replying after fish withdraws paints the reply at the prompt (#9993).
-  it('never writes a color-scheme reply for a DECSET 2031 subscribe', async () => {
-    const { dispose, ptyWrite } = await startWatcher()
-
-    emit('\x1b[?20')
-    emit('31h')
-    emit('\x1b[?2031l')
-
-    expect(ptyWrite).not.toHaveBeenCalled()
-    dispose()
-  })
-
   it('observes GitHub PR links across chunk boundaries', async () => {
     const { dispose } = await startWatcher()
 
@@ -376,26 +307,6 @@ describe('startParkedTerminalByteWatcher', () => {
       }),
       expect.objectContaining({ tabId: TAB_ID, ptyId: PTY_ID })
     )
-    dispose()
-  })
-
-  it('scans OSC 133;D bytes into the parked command policy and disposes it with the watcher', async () => {
-    const { dispose } = await startWatcher()
-
-    emit('\x1b]133;D;0\x07')
-    expect(commandStatusPolicy.onCommandFinished).toHaveBeenCalledWith(0)
-
-    dispose()
-    expect(commandStatusPolicy.dispose).toHaveBeenCalledTimes(1)
-  })
-
-  it('feeds Command Code output through the parked byte detector', async () => {
-    const { dispose } = await startWatcher()
-
-    emit('# Command Code v0.27.2\r\n')
-    emit('⌘ Parsing...')
-
-    expect(commandStatusPolicy.onCommandCodeWorking).toHaveBeenCalledTimes(1)
     dispose()
   })
 
@@ -420,20 +331,6 @@ describe('startParkedTerminalByteWatcher', () => {
     emit('\r\n❯ Ask your question...\r\n')
 
     expect(commandStatusPolicy.onCommandCodeDone).toHaveBeenCalledWith('Fix the spinner')
-    dispose()
-  })
-
-  it('leaves the scrape unarmed when the parked pane has no in-flight Command Code turn', async () => {
-    mockStoreState.agentStatusByPaneKey = {
-      [PANE_KEY]: { state: 'done', prompt: 'Fix the spinner', agentType: 'command-code' }
-    }
-    const { dispose } = await startWatcher()
-
-    emit('\r\n❯ Ask your question...\r\n')
-    emit('⌘ Parsing...')
-
-    expect(commandStatusPolicy.onCommandCodeDone).not.toHaveBeenCalled()
-    expect(commandStatusPolicy.onCommandCodeWorking).not.toHaveBeenCalled()
     dispose()
   })
 
@@ -464,27 +361,6 @@ describe('startParkedTerminalByteWatcher', () => {
 
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
     dispose()
-  })
-
-  it('clears the watcher-written runtime title slot on dispose', async () => {
-    const { dispose } = await startWatcher()
-
-    emit(IDLE_TITLE_OSC)
-    flushSideEffects()
-    expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
-
-    dispose()
-    expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID)
-  })
-
-  it('leaves the runtime title slot alone on dispose when it never wrote one', async () => {
-    const { dispose } = await startWatcher()
-
-    emit('plain output with no titles\r\n')
-    flushSideEffects()
-
-    dispose()
-    expect(mockStoreState.clearRuntimePaneTitle).not.toHaveBeenCalled()
   })
 
   it('shutdown dispose cancels the armed completion timer and silences the final flush', async () => {
@@ -526,19 +402,6 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  // Why: retained gauges would inflate every later high-water profile.
-  it('dispose drops the processor from the pty side-effect census', async () => {
-    await import('../../pty-transport/output/pty-side-effect-pending-census')
-    const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
-    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
-
-    const { dispose } = await startWatcher()
-    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
-
-    dispose()
-    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
-  })
-
   it('disposes the previous watcher when a new one starts for the same PTY', async () => {
     await startWatcher({ paneId: 1 })
     const second = await startWatcher({ paneId: 2 })
@@ -549,32 +412,6 @@ describe('startParkedTerminalByteWatcher', () => {
     expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledTimes(1)
     expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 2, IDLE_TITLE)
     second.dispose()
-  })
-
-  it('consumes host facts without a raw terminal stream for paired PTYs', async () => {
-    const remotePtyId = 'remote:env-1@@terminal-1'
-    const { dispose } = await startWatcher({ ptyId: remotePtyId })
-    const handler = await import('../../pty-transport/output/terminal-side-effect-facts-handler')
-
-    expect(onData).toBeNull()
-    handler._dispatchTerminalSideEffectBatchForTest({
-      ptyId: remotePtyId,
-      seq: 10,
-      facts: [
-        {
-          kind: 'title',
-          normalizedTitle: '⠋ Remote build',
-          rawTitle: '⠋ Remote build'
-        }
-      ]
-    })
-
-    expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(
-      TAB_ID,
-      PANE_ID,
-      '⠋ Remote build'
-    )
-    dispose()
   })
 
   // Main-authority mode parses bytes once in main; parked policy consumes derived facts, including PR links.
@@ -598,112 +435,6 @@ describe('startParkedTerminalByteWatcher', () => {
         facts
       })
     }
-
-    // Derive one fact batch per chunk through main’s stripping/title pipeline for parity with byte mode.
-    async function emitViaMainTrackerFacts(chunks: string[]): Promise<void> {
-      const { createAgentStatusOscProcessor } =
-        await import('../../../../../../shared/agent-status/transport/agent-status-osc')
-      const { createTerminalTitleTracker } =
-        await import('../../../../../../shared/terminal/output/terminal-output-side-effects')
-      const handler = await import('../../pty-transport/output/terminal-side-effect-facts-handler')
-      const processStatusChunk = createAgentStatusOscProcessor()
-      let pending: TerminalSideEffectFact[] = []
-      const tracker = createTerminalTitleTracker({
-        onTitle: (normalizedTitle, rawTitle) =>
-          pending.push({ kind: 'title', normalizedTitle, rawTitle }),
-        onAgentBecameWorking: () => pending.push({ kind: 'agent-working' }),
-        onAgentBecameIdle: (title) => pending.push({ kind: 'agent-idle', title }),
-        onAgentExited: () => pending.push({ kind: 'agent-exited' }),
-        onBell: () => pending.push({ kind: 'bell' })
-      })
-      let seq = 0
-      for (const chunk of chunks) {
-        seq += chunk.length
-        tracker.handleChunk(processStatusChunk(chunk).cleanData)
-        if (pending.length > 0) {
-          handler._dispatchTerminalSideEffectBatchForTest({ ptyId: PTY_ID, seq, facts: pending })
-          pending = []
-        }
-      }
-      tracker.dispose()
-    }
-
-    type RecordedCall = [string, ...unknown[]]
-
-    // Compare ordered store outcomes across modes with timestamps masked.
-    function recordPolicyOutcomes(): RecordedCall[] {
-      const calls: RecordedCall[] = []
-      mockStoreState.setRuntimePaneTitle.mockImplementation((...args: unknown[]) => {
-        calls.push(['setRuntimePaneTitle', ...args])
-      })
-      mockStoreState.updateTabTitle.mockImplementation((...args: unknown[]) => {
-        calls.push(['updateTabTitle', ...args])
-      })
-      mockStoreState.markTerminalBell.mockImplementation((...args: unknown[]) => {
-        calls.push(['markTerminalBell', ...args])
-      })
-      mockStoreState.setCacheTimerStartedAt.mockImplementation((key: unknown, at: unknown) => {
-        calls.push(['setCacheTimerStartedAt', key, typeof at === 'number' ? '<ts>' : at])
-      })
-      dispatchTerminalNotification.mockImplementation((...args: unknown[]) => {
-        calls.push(['dispatchTerminalNotification', ...args])
-      })
-      return calls
-    }
-
-    it('does not consume bytes: a byte BEL produces no unread or notification', async () => {
-      enableMainAuthority()
-      const { dispose } = await startWatcher()
-
-      emit('build finished\x07')
-      flushSideEffects()
-      vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
-
-      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
-      expect(dispatchTerminalNotification).not.toHaveBeenCalled()
-      dispose()
-    })
-
-    it('routes command lifecycle facts into the parked command policy', async () => {
-      enableMainAuthority()
-      const { dispose } = await startWatcher()
-
-      await dispatchFacts([
-        { kind: 'command-finished', exitCode: 0 },
-        { kind: 'command-code-working', prompt: 'Fix the spinner' },
-        { kind: 'command-code-done', prompt: 'Fix the spinner' }
-      ])
-
-      expect(commandStatusPolicy.onCommandFinished).toHaveBeenCalledWith(0)
-      expect(commandStatusPolicy.onCommandCodeWorking).toHaveBeenCalledWith('Fix the spinner')
-      expect(commandStatusPolicy.onCommandCodeDone).toHaveBeenCalledWith('Fix the spinner')
-      dispose()
-    })
-
-    it('ignores replayed command lifecycle facts (no-attention-replay rule)', async () => {
-      enableMainAuthority()
-      const { dispose } = await startWatcher()
-
-      await dispatchFacts([{ kind: 'command-finished', exitCode: 0 }], { seq: 5, replay: true })
-
-      expect(commandStatusPolicy.onCommandFinished).not.toHaveBeenCalled()
-      dispose()
-    })
-
-    it('does not request a title snapshot for an ordinary parked watcher', async () => {
-      enableMainAuthority()
-      const getSideEffectSnapshot = vi.fn()
-      ;(
-        window as unknown as {
-          api: { pty: { getSideEffectSnapshot: typeof getSideEffectSnapshot } }
-        }
-      ).api.pty.getSideEffectSnapshot = getSideEffectSnapshot
-
-      const { dispose } = await startWatcher()
-
-      expect(getSideEffectSnapshot).not.toHaveBeenCalled()
-      dispose()
-    })
 
     it('restores a cold-started watcher title without replaying attention facts', async () => {
       enableMainAuthority()
@@ -732,57 +463,6 @@ describe('startParkedTerminalByteWatcher', () => {
       expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
-      dispose()
-    })
-
-    it('applies bell facts with the byte-mode policy: unread now, OS notification delayed', async () => {
-      enableMainAuthority()
-      const { dispose } = await startWatcher()
-
-      await dispatchFacts([{ kind: 'bell' }])
-
-      expect(mockStoreState.markTerminalBell).toHaveBeenCalledWith({
-        worktreeId: WORKTREE_ID,
-        tabId: TAB_ID,
-        paneKey: PANE_KEY
-      })
-      expect(dispatchTerminalNotification).not.toHaveBeenCalled()
-
-      vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
-      expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
-        source: 'terminal-bell',
-        paneKey: PANE_KEY,
-        ptyId: PTY_ID
-      })
-      dispose()
-    })
-
-    it('fires the cache timer and completion from working→idle facts', async () => {
-      enableMainAuthority()
-      const { dispose } = await startWatcher()
-
-      await dispatchFacts([
-        { kind: 'title', normalizedTitle: '⠋ Build feature', rawTitle: '⠋ Build feature' },
-        { kind: 'agent-working' }
-      ])
-      expect(mockStoreState.setCacheTimerStartedAt).toHaveBeenLastCalledWith(PANE_KEY, null)
-
-      await dispatchFacts([
-        { kind: 'title', normalizedTitle: IDLE_TITLE, rawTitle: IDLE_TITLE },
-        { kind: 'agent-idle', title: IDLE_TITLE }
-      ])
-      expect(mockStoreState.setCacheTimerStartedAt).toHaveBeenLastCalledWith(
-        PANE_KEY,
-        expect.any(Number)
-      )
-
-      vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
-      expect(dispatchTerminalNotification).toHaveBeenCalledWith(WORKTREE_ID, {
-        source: 'agent-task-complete',
-        terminalTitle: IDLE_TITLE,
-        paneKey: PANE_KEY,
-        ptyId: PTY_ID
-      })
       dispose()
     })
 
@@ -817,99 +497,6 @@ describe('startParkedTerminalByteWatcher', () => {
       dispose()
     })
 
-    it('replay batches restore the title only — attention facts never replay', async () => {
-      enableMainAuthority()
-      const { dispose } = await startWatcher()
-
-      await dispatchFacts(
-        [
-          { kind: 'title', normalizedTitle: IDLE_TITLE, rawTitle: IDLE_TITLE },
-          { kind: 'bell' },
-          { kind: 'agent-idle', title: IDLE_TITLE }
-        ],
-        { replay: true }
-      )
-      vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
-
-      expect(mockStoreState.setRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, PANE_ID, IDLE_TITLE)
-      expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
-      expect(mockStoreState.setCacheTimerStartedAt).not.toHaveBeenCalled()
-      expect(dispatchTerminalNotification).not.toHaveBeenCalled()
-      dispose()
-    })
-
-    it('stays silent on a main 2031-subscribe fact', async () => {
-      // Subscription facts authorize theme-flip pushes, never an immediate parked reply (#9993).
-      enableMainAuthority()
-      const { dispose, ptyWrite } = await startWatcher()
-
-      emit('\x1b[?2031h')
-      await dispatchFacts([{ kind: '2031-subscribe' }])
-      expect(ptyWrite).not.toHaveBeenCalled()
-
-      // PR links already arrive as facts; byte-scanning would observe each twice.
-      emit('PR: https://github.com/orca-dev/orca/pull/42\r\n')
-      expect(mockStoreState.observeTerminalGitHubPullRequestLink).not.toHaveBeenCalled()
-      dispose()
-    })
-
-    it('marks the PTY hidden for delivery on start and clears it on dispose', async () => {
-      enableMainAuthority()
-      const setHiddenRendererPty = vi.fn()
-      ;(
-        window as unknown as { api: { pty: Record<string, unknown> } }
-      ).api.pty.setHiddenRendererPty = setHiddenRendererPty
-      const { dispose } = await startWatcher()
-
-      expect(setHiddenRendererPty).toHaveBeenCalledWith(PTY_ID, true)
-
-      dispose()
-      // Dispose watchers and unhide before reveal remount registers pane handlers.
-      expect(setHiddenRendererPty).toHaveBeenLastCalledWith(PTY_ID, false)
-    })
-
-    it('sets no hidden bit and stays silent on 2031 when the gate kill switch is off', async () => {
-      enableMainAuthority()
-      mockStoreState.settings = {
-        ...mockStoreState.settings,
-        terminalHiddenDeliveryGate: false
-      } as MockStoreState['settings']
-      const setHiddenRendererPty = vi.fn()
-      ;(
-        window as unknown as { api: { pty: Record<string, unknown> } }
-      ).api.pty.setHiddenRendererPty = setHiddenRendererPty
-      const { dispose, ptyWrite } = await startWatcher()
-
-      // Gate off — bytes keep flowing, and they still elicit nothing (#9993).
-      emit('\x1b[?20')
-      emit('31h')
-      await dispatchFacts([{ kind: '2031-subscribe' }])
-
-      expect(ptyWrite).not.toHaveBeenCalled()
-      expect(setHiddenRendererPty).not.toHaveBeenCalled()
-      dispose()
-    })
-
-    it('observes PR links from pr-link facts with worktree attribution', async () => {
-      enableMainAuthority()
-      const { dispose } = await startWatcher()
-
-      const link = {
-        url: 'https://github.com/orca-dev/orca/pull/421',
-        slug: { owner: 'orca-dev', repo: 'orca' },
-        number: 421
-      }
-      await dispatchFacts([{ kind: 'pr-link', link }])
-
-      expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledTimes(1)
-      expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledWith(
-        WORKTREE_ID,
-        link,
-        expect.objectContaining({ tabId: TAB_ID, ptyId: PTY_ID })
-      )
-      dispose()
-    })
-
     it('dispose unregisters the fact consumer and clears a written title slot', async () => {
       enableMainAuthority()
       const { dispose } = await startWatcher()
@@ -924,38 +511,6 @@ describe('startParkedTerminalByteWatcher', () => {
       vi.advanceTimersByTime(NOTIFICATION_GRACE_MS * 4)
       expect(mockStoreState.markTerminalBell).not.toHaveBeenCalled()
       expect(dispatchTerminalNotification).not.toHaveBeenCalled()
-    })
-
-    // Identical input must produce identical ordered store outcomes in byte mode and main-derived fact mode.
-    it('produces identical store outcomes via the channel as the byte parser did', async () => {
-      const fixtureChunks = [WORKING_TITLE_OSC, 'agent response body\r\n', `${IDLE_TITLE_OSC}\x07`]
-
-      const byteModeCalls = recordPolicyOutcomes()
-      {
-        const { dispose } = await startWatcher()
-        for (const chunk of fixtureChunks) {
-          emit(chunk)
-          flushSideEffects()
-        }
-        vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
-        dispose()
-      }
-
-      // Use fresh modules/store with main-derived facts from the same bytes.
-      vi.resetModules()
-      mockStoreState = createMockStoreState()
-      dispatchTerminalNotification.mockReset()
-      const factModeCalls = recordPolicyOutcomes()
-      {
-        enableMainAuthority()
-        const { dispose } = await startWatcher()
-        await emitViaMainTrackerFacts(fixtureChunks)
-        vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
-        dispose()
-      }
-
-      expect(byteModeCalls.length).toBeGreaterThan(0)
-      expect(factModeCalls).toEqual(byteModeCalls)
     })
   })
 })

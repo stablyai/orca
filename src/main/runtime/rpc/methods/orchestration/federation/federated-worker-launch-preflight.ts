@@ -3,8 +3,8 @@ import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-ag
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
-import { orchestrationMigrationData } from '../../../../../../shared/orchestration-rpc-contract'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { orchestrationMigrationData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { WorkerStartInput } from '../worker/worker-start-schema'

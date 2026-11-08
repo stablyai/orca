@@ -1,7 +1,7 @@
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { AppStarSource } from '../../shared/gh-star-source'
 import type { GhAuthDiagnostic } from '../../shared/github/auth-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../shared/github/check-types'
 import type {
   GitHubCommentResult,

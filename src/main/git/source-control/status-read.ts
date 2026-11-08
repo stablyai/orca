@@ -4,7 +4,6 @@ import type {
   GitStatusResult,
   GitUpstreamStatus
 } from '../../../shared/git/status/git-status-types'
-import { StatusPorcelainParser } from '../../../shared/git/status/git-status-porcelain-parser'
 import { resolveGitStatusLimit } from '../../../shared/git/status/git-status-limit'
 import { stableInFlightKey } from '../../../shared/in-flight-promise-dedupe'
 import { beginGitStatusLineStatsCacheWrite } from '../../../shared/git/status/git-status-line-stats-write-token'
@@ -14,7 +13,8 @@ import {
 } from '../../../shared/git/status/git-status-line-stats-cache'
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
 import { readGitCommandFailureStderr } from '../../../shared/git/commands/git-command-failure-text'
-import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
+import { readStatusPorcelain } from './status-porcelain-stream'
+import { waitForIndexLockRelease } from './status-index-lock-wait'
 import {
   findExistingWorktreeSymlinkPaths,
   getSafeRelativePath
@@ -123,57 +123,22 @@ async function runGetStatus(
   let readError: string | undefined
   const limit = resolveGitStatusLimit(options.limit)
 
+  // Inside the shared lease, so callers arriving during the wait join this read.
+  await waitForIndexLockRelease(worktreePath, options)
   const conflictPromise = detectConflictOperation(worktreePath, options)
-  // Keep non-ASCII paths readable instead of Git's octal escapes.
-  const statusArgs = [
-    '-c',
-    'core.quotePath=false',
-    'status',
-    '--porcelain=v2',
-    '--branch',
-    '--untracked-files=all'
-  ]
-  if (options.includeIgnored) {
-    statusArgs.push('--ignored=matching')
-  }
-
-  // Bound streaming status so huge unignored folders cannot exhaust process memory.
-  const parser = new StatusPorcelainParser()
-  let didHitLimit = false
-  // Own rejections before marker I/O so fast Git failures cannot become unhandled.
-  const statusSettlementPromise = Promise.allSettled([
-    (async () => {
-      const result = await gitStreamStdout(statusArgs, {
-        cwd: worktreePath,
-        wslDistro: options.wslDistro,
-        admissionTier: options.admissionTier,
-        preferWslDirectGit: true,
-        // Read-only polls must not compete with terminal Git for index.lock.
-        env: gitOptionalLocksDisabledEnv(),
-        signal: options.signal,
-        onStdout: (chunk) => parser.update(chunk, limit)
-      })
-      if (!result.stoppedEarly) {
-        parser.finish()
-      }
-      return result
-    })()
-  ])
+  const statusReadPromise = readStatusPorcelain(worktreePath, options, limit)
   const conflictOperation = await conflictPromise
-
-  try {
-    const [statusResult] = await statusSettlementPromise
-    if (statusResult.status === 'rejected') {
-      throw statusResult.reason
-    }
-    didHitLimit = statusResult.value.stoppedEarly
+  const { parser, stoppedEarly, error: statusError } = await statusReadPromise
+  let didHitLimit = false
+  if (statusError === undefined) {
+    didHitLimit = stoppedEarly
     statusSucceeded = true
-  } catch (error) {
+  } else {
     // Cancellation must reject rather than look like an empty status.
     if (options.signal?.aborted) {
-      throw error
+      throw statusError
     }
-    readError = describeStatusReadError(error)
+    readError = describeStatusReadError(statusError)
   }
 
   let entries: GitStatusEntry[] = []

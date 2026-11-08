@@ -1,5 +1,5 @@
 import type { PluginThemeBackground } from '../../../shared/plugins/artifacts/plugin-theme-background'
-import { useThemeBackgroundStore } from '@/store/theme-background'
+import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import { syncWindowMaterialWithThemeBackground } from './window-material-runtime'
 
 const SIZE: Record<

@@ -1,5 +1,5 @@
 import { createWebRuntimeSessionTerminalResult } from './web-runtime-terminal-create-operation'
-import { resolveWebRuntimeSessionEnvironmentId } from '../../web-runtime-session-workspace-routing'
+import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
 import { useAppStore } from '../../../store/index'
 import type {
   CreateWebRuntimeSessionTerminalArgs,

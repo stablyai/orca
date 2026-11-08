@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { useAppStore } from '@/store'
@@ -9,7 +9,7 @@ import {
   sourceParts,
   type DiffCommentOwner,
   type DiffCommentView
-} from '@/store/diff-comment-owner'
+} from '@/store/slices/diff-comments/diff-comment-owner'
 import type { WorkspaceCopySource } from '@/lib/workspace-copy-owner'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 

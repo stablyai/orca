@@ -1,4 +1,4 @@
-import type { ManagedOrcadDeploymentSummary } from '../../../shared/managed-orcad-execution-host'
+import type { ManagedOrcadDeploymentSummary } from '../../../shared/execution-host/managed-orcad-execution-host'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { RuntimeEnvironmentSource } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'

@@ -18,7 +18,7 @@ import {
 } from './sync-projections'
 import { resolveMobileTerminalTheme } from './mobile-terminal-theme'
 import type { RuntimeMobileSessionSyncKey } from './types'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 function getTerminalThemeSystemPrefersDark(
   state: Pick<AppState, 'settings'>,

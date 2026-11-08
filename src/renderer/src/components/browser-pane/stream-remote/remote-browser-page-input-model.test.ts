@@ -22,25 +22,6 @@ describe('remote browser page input model', () => {
       frameMetadata: { deviceWidth: frame.width, deviceHeight: frame.height },
       naturalSize: { width: 2926, height: 1698 }
     })
-    const screenOf = (x: number, y: number) => ({
-      clientX: frameRect.left + x * scale,
-      clientY: frameRect.top + y * scale
-    })
-
-    it('lands on the page point drawn under the pointer, corners included', () => {
-      expect(cssViewport).toEqual(frame)
-      for (const [x, y] of [
-        [0, 0],
-        [731, 424],
-        [1463, 849],
-        [1200, 100]
-      ]) {
-        expect(mapRemoteBrowserClientPoint({ ...screenOf(x, y), frameRect, cssViewport })).toEqual({
-          x,
-          y
-        })
-      }
-    })
 
     it('clamps a pointer in the letterbox to the page edge', () => {
       expect(

@@ -6,6 +6,7 @@ import type {
   AgentTabActionId,
   KeybindingActionId,
   KeybindingDefinition,
+  KeybindingOverrides,
   PluginKeybindingActionId
 } from './types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
@@ -53,9 +54,11 @@ export const LEGACY_TAB_SWITCH_BINDINGS: Readonly<Partial<Record<KeybindingActio
   'tab.previousAllTypes': ['Mod+Alt+BracketLeft']
 }
 
-export const LEGACY_MAC_SEARCH_BINDINGS: Readonly<Partial<Record<KeybindingActionId, string[]>>> = {
-  'worktree.palette': ['Mod+J'],
-  'terminal.clear': ['Mod+K']
+export function getLegacySearchBindings(platform: NodeJS.Platform): KeybindingOverrides {
+  return {
+    'worktree.palette': [platform === 'darwin' ? 'Mod+J' : 'Mod+Shift+J'],
+    'terminal.clear': ['Mod+K']
+  }
 }
 
 export const DEFINITIONS_BY_ID = new Map<KeybindingActionId, KeybindingDefinition>(

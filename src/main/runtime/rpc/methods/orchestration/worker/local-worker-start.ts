@@ -9,7 +9,7 @@ import type {
   TaskRow
 } from '../../../../orchestration/db/orchestration-records'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
@@ -124,7 +124,9 @@ export async function startLocalWorker(args: {
       launch.preferences,
       createsWorktree
         ? { repo: creationTarget?.repoSelector ?? params.repo }
-        : { worktree: `id:${resolvedWorktree!.id}` }
+        : resolvedWorktree
+          ? { worktree: `id:${resolvedWorktree.id}` }
+          : {}
     )
   }
 

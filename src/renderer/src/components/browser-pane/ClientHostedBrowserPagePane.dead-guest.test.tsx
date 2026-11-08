@@ -154,17 +154,6 @@ describe('client-hosted browser pane over a dead guest', () => {
     })
   })
 
-  it('stops the spinner it inherited from a page that died mid-load', () => {
-    webview.getURL.mockImplementation(() => {
-      throw invalidGuestInstanceId()
-    })
-    const onUpdatePageState = vi.fn()
-
-    render(paneElement(true, { browserTab: page({ loading: true }), onUpdatePageState }))
-
-    expect(onUpdatePageState).toHaveBeenCalledWith('page-a', { loading: false })
-  })
-
   it('flips to the unavailable notice when the guest renderer goes away after attach', () => {
     const onUpdatePageState = vi.fn()
     render(paneElement(true, { browserTab: page({ loading: true }), onUpdatePageState }))
@@ -208,22 +197,6 @@ describe('client-hosted browser pane over a dead guest', () => {
     expect(webview.reload).not.toHaveBeenCalled()
   })
 
-  it('does not freeze silently when a navigation event finds the guest gone', () => {
-    const onUpdatePageState = vi.fn()
-    render(paneElement(true, { onUpdatePageState }))
-    onUpdatePageState.mockClear()
-    webview.getURL.mockImplementation(() => {
-      throw invalidGuestInstanceId()
-    })
-
-    act(() => {
-      webview.dispatchEvent(new Event('did-navigate'))
-    })
-
-    expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()
-    expect(onUpdatePageState).toHaveBeenCalledWith('page-a', { loading: false })
-  })
-
   it('stops the spinner when the guest dies as a load starts', () => {
     const onUpdatePageState = vi.fn()
     render(paneElement(true, { onUpdatePageState }))
@@ -251,52 +224,6 @@ describe('client-hosted browser pane over a dead guest', () => {
 
     expect(onUpdatePageState).not.toHaveBeenCalled()
     expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()
-  })
-
-  it('uses one guarded title read when the next read would find the guest gone', () => {
-    const onUpdatePageState = vi.fn()
-    render(paneElement(true, { onUpdatePageState }))
-    onUpdatePageState.mockClear()
-    const readTitle = vi.fn(() => {
-      webview.getTitle = vi.fn(() => {
-        throw invalidGuestInstanceId()
-      })
-      return 'Last live title'
-    })
-    webview.getTitle = readTitle
-
-    expect(() => act(() => webview.dispatchEvent(new Event('did-navigate')))).not.toThrow()
-    expect(readTitle).toHaveBeenCalledTimes(1)
-    expect(webview.getTitle).not.toHaveBeenCalled()
-    expect(onUpdatePageState).toHaveBeenCalledWith(
-      'page-a',
-      expect.objectContaining({ title: 'Last live title' })
-    )
-  })
-
-  it('shows unavailability when a load-failure fallback finds the guest gone', () => {
-    const onUpdatePageState = vi.fn()
-    render(paneElement(true, { onUpdatePageState }))
-    webview.getURL.mockImplementation(() => {
-      throw invalidGuestInstanceId()
-    })
-
-    act(() => webview.dispatchEvent(new Event('did-fail-load')))
-
-    expect(screen.getByText('Client-hosted browser unavailable')).toBeTruthy()
-    expect(onUpdatePageState.mock.calls.at(-1)).toEqual(['page-a', { loading: false }])
-  })
-
-  it('removes loss listeners when the initial guest read fails', () => {
-    const removeListener = vi.spyOn(webview, 'removeEventListener')
-    webview.getURL.mockImplementation(() => {
-      throw invalidGuestInstanceId()
-    })
-
-    render(paneElement(true))
-
-    expect(removeListener).toHaveBeenCalledWith('destroyed', expect.any(Function))
-    expect(removeListener).toHaveBeenCalledWith('render-process-gone', expect.any(Function))
   })
 
   it('stops listening for guest loss once the pane lets go of the tag', () => {

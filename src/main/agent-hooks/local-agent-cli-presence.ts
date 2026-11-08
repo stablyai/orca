@@ -10,6 +10,7 @@ import {
 } from '../../shared/managed-agent-command-token'
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-environment-path'
 import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
@@ -50,6 +51,7 @@ type DetectOptions = {
 type CommandOverrideSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined
 
 const DEFAULT_WINDOWS_EXTENSIONS = ['.COM', '.EXE', '.BAT', '.CMD']
+const CANDIDATE_PROBE_CONCURRENCY = 8
 
 function pathApiForPlatform(platform: NodeJS.Platform) {
   return platform === 'win32' ? path.win32 : path.posix
@@ -212,17 +214,15 @@ export async function detectLocalManagedAgentCliPresence(
       candidates.add(override)
     }
   }
+  // Candidates probe independently; each keeps its own ordered PATH walk so first-match wins.
+  const uniqueCandidates = [...candidates]
+  const probed = await mapWithConcurrency(uniqueCandidates, CANDIDATE_PROBE_CONCURRENCY, (c) =>
+    probePathCandidate(c, dirs, platform, fileProbe, options.pathExt)
+  )
   const found = new Map<string, string>()
-  for (const candidate of candidates) {
-    const executablePath = await probePathCandidate(
-      candidate,
-      dirs,
-      platform,
-      fileProbe,
-      options.pathExt
-    )
+  for (const [index, executablePath] of probed.entries()) {
     if (executablePath) {
-      found.set(candidate, executablePath)
+      found.set(uniqueCandidates[index], executablePath)
     }
   }
   const result: LocalCliPresenceByAgent = {}

@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { LocalizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { CreateHostedReviewBasePicker } from './CreateHostedReviewBasePicker'
 import { CreateHostedReviewComposerMessage } from './CreateHostedReviewComposerMessage'
@@ -78,6 +78,7 @@ export function CreateHostedReviewComposerFields({
   strippedBranch,
   baseSameAsBranch
 }: CreateHostedReviewComposerFieldsProps): React.JSX.Element {
+  const t = useTranslate()
   // Own editing state here so stack options step aside while base results would overlap them.
   const [baseEditing, setBaseEditing] = useState(false)
   const draftFieldId = useId()
@@ -87,7 +88,7 @@ export function CreateHostedReviewComposerFields({
     <>
       <div className="relative space-y-1.5">
         <Input
-          aria-label={translate(
+          aria-label={t(
             'auto.components.right.sidebar.SourceControl.a6eda33521',
             '{{value0}} title',
             { value0: copy.titleLabel }
@@ -95,13 +96,13 @@ export function CreateHostedReviewComposerFields({
           value={title}
           disabled={fieldsLocked}
           onChange={(event) => setTitle(event.target.value)}
-          placeholder={translate('auto.components.right.sidebar.SourceControl.7d6a8f0082', 'Title')}
+          placeholder={t('auto.components.right.sidebar.SourceControl.7d6a8f0082', 'Title')}
           className={cn(COMPOSER_FIELD_CLASS, 'px-2 font-medium')}
         />
 
         <GitHubImageTextarea
           imageUpload={imageUpload}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.right.sidebar.SourceControl.a8873e1d62',
             '{{value0}} description',
             { value0: copy.titleLabel }
@@ -110,7 +111,7 @@ export function CreateHostedReviewComposerFields({
           value={body}
           disabled={fieldsLocked}
           onValueChange={setBody}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.right.sidebar.SourceControl.a0dc20fc93',
             'Description (optional)'
           )}
@@ -126,7 +127,7 @@ export function CreateHostedReviewComposerFields({
             <div className="pointer-events-auto flex items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-[11px] text-muted-foreground shadow-xs">
               <Sparkles className="size-3 animate-pulse text-foreground" />
               <span>
-                {translate(
+                {t(
                   'auto.components.right.sidebar.SourceControl.9484270f45',
                   'Generating title & description…'
                 )}
@@ -171,7 +172,7 @@ export function CreateHostedReviewComposerFields({
                 className="min-w-0 flex-1 flex-col items-start gap-0.5 text-xs leading-snug"
               >
                 <span className="text-foreground">
-                  {translate(
+                  {t(
                     'auto.components.right.sidebar.CreateHostedReviewComposerFields.90cabf6cfc',
                     'Stack this PR above #{{value0}}',
                     { value0: stackParentReview.number }
@@ -179,7 +180,7 @@ export function CreateHostedReviewComposerFields({
                 </span>
                 {stacked ? null : (
                   <span className="text-[11px] font-normal text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.right.sidebar.CreateHostedReviewComposerFields.ff81473a57',
                       "Creates a GitHub Stack or extends the parent's existing stack."
                     )}
@@ -207,7 +208,7 @@ export function CreateHostedReviewComposerFields({
                   />
                   <span className="truncate text-foreground">{strippedBranch}</span>
                   <span className="shrink-0 text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.right.sidebar.CreateHostedReviewComposerFields.29732f2fb0',
                       'new PR'
                     )}
@@ -228,10 +229,7 @@ export function CreateHostedReviewComposerFields({
               className={COMPOSER_CHECKBOX_CLASS}
             />
             <Label htmlFor={draftFieldId} className="min-w-0 flex-1 truncate text-xs">
-              {translate(
-                'auto.components.right.sidebar.SourceControl.78ddfd0bb4',
-                'Create as draft'
-              )}
+              {t('auto.components.right.sidebar.SourceControl.78ddfd0bb4', 'Create as draft')}
             </Label>
           </div>
         ) : null}

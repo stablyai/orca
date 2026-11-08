@@ -7,7 +7,7 @@ import {
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_ROLE_ROUTING_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 
 const harness = createOrchestrationRpcHarness()
 let state: ReturnType<typeof harness.setup>

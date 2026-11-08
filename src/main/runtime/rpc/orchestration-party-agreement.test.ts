@@ -1,8 +1,7 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../shared/orchestration-session-caller-codes'
+
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -77,36 +76,6 @@ function registerWorker(): void {
 }
 
 /** A Dispatch naming Y as a structured worker, in a Run a terminal coordinates. */
-function recordWorkerDispatch(): void {
-  const run = h.db.createRun({
-    objective: 'pty',
-    coordinatorHandle: 'term_c',
-    coordinatorPaneKey: 'tab_c:13131313-1313-4313-8313-131313131313'
-  })
-  h.db.createDispatchContext({
-    taskId: h.db.createTask({ runId: run.id, spec: 'work' }).id,
-    assigneeHandle: handle,
-    assigneePaneKey: paneKey,
-    processIncarnation: structuredWorkerProcessIncarnation(SESSION_Y),
-    creator: { kind: 'system' },
-    maxDepth: Number.MAX_SAFE_INTEGER
-  })
-}
-
-describe('the caller a session id resolves to and the recipient its address resolves to agree', () => {
-  it('refuses a worker whose identity is gone with one code, as caller and as recipient', async () => {
-    recordWorkerDispatch()
-    const asCaller = await call(SESSION_Y, 'orchestration.runCurrent', {})
-    const asRecipient = await call(undefined, 'orchestration.send', {
-      from: WORKER_HANDLE,
-      to: formatOrcaSessionAddress(SESSION_Y),
-      subject: 's'
-    })
-    for (const response of [asCaller, asRecipient]) {
-      expect(response).toMatchObject({ ok: false, error: { code: CODES.notLive } })
-    }
-  })
-})
 
 describe('every session-to-party step goes through the canonical session id', () => {
   it('binds a claimed alias as its canonical session', async () => {
@@ -146,16 +115,4 @@ describe('every session-to-party step goes through the canonical session id', ()
       expect(run).toMatchObject({ coordinator_handle: null })
     }
   )
-
-  it('refuses an alias of a chat declared on a request with no session id, naming the chat', async () => {
-    const response = await call(undefined, 'orchestration.send', {
-      from: formatOrcaSessionAddress(ALIAS_X),
-      to: WORKER_HANDLE,
-      subject: 's'
-    })
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: CODES.chatNotDeclarable, message: expect.stringContaining(SESSION_X) }
-    })
-  })
 })

@@ -27,16 +27,18 @@ type IndexEntry = { bytes: number; usedAt: number }
 
 // Per-root byte total kept in memory. Caps apply once the launch seed has walked the root; until then writes
 // are bounded by the value cap. Without `exact`, files not touched this session are counted in `total` as a
-// per-bucket upper bound and have no entry, so LRU order needs an exact pass first.
+// per-bucket upper bound and have no entry, so LRU order needs an exact pass first. Without `complete`, the
+// last pass missed files it could not list or count, and `total` lacks them until a pass runs again.
 export type RootIndex = {
   seeded: boolean
   exact: boolean
+  complete: boolean
   total: number
   readonly entries: Map<string, IndexEntry>
 }
 
 export function createRootIndex(): RootIndex {
-  return { seeded: false, exact: false, total: 0, entries: new Map() }
+  return { seeded: false, exact: false, complete: false, total: 0, entries: new Map() }
 }
 
 export function recordIndexedFile(
@@ -73,6 +75,7 @@ export function resetRootIndex(index: RootIndex): void {
   index.entries.clear()
   index.total = 0
   index.exact = true
+  index.complete = true
 }
 
 // Drops the per-bucket estimates before an exact pass re-adds every file it finds.
@@ -84,6 +87,7 @@ export function keepOnlyIndexedFiles(index: RootIndex): void {
 }
 
 // Drafts are never evicted, so a write that would cross their cap is refused and the owner keeps the text in memory.
+// A pass that missed files undercounts, so it may let a write past the cap but never refuses one wrongly.
 export function wouldExceedCap(
   index: RootIndex,
   cap: number,
@@ -93,9 +97,12 @@ export function wouldExceedCap(
     return false
   }
   let projected = index.total
+  // Changes apply in order, so a key changed twice replaces its own earlier change, not the file on disk.
+  const changed = new Map<string, number>()
   for (const { uri, size } of changes) {
-    projected -= index.entries.get(uri)?.bytes ?? 0
-    projected += size === null ? 0 : chargedBytes(size)
+    const bytes = size === null ? 0 : chargedBytes(size)
+    projected += bytes - (changed.get(uri) ?? index.entries.get(uri)?.bytes ?? 0)
+    changed.set(uri, bytes)
   }
   return projected > cap
 }
@@ -130,18 +137,36 @@ export type RootSeed = {
   readonly exact: boolean
   // Null skips the orphan sweep: an unreadable host list must never wipe a paired host's data.
   loadPairedHostIds(): Promise<readonly string[] | null>
-  // Each slice runs as its own store task so writes interleave and keep the totals current. A failed
-  // slice is skipped, so one unreadable host never leaves a root unseeded and uncapped for the session.
-  readonly runSlice: (slice: () => Promise<void>) => Promise<void>
+  // Each slice runs as its own store task so writes interleave and keep the totals current. Resolves false
+  // when the slice threw: the pass goes on, so one unreadable host never leaves a root unseeded and uncapped.
+  readonly runSlice: (slice: () => Promise<void>) => Promise<boolean>
 }
 
-// One launch pass per root: drop hosts that are no longer paired, expire old drafts, recover drafts a crash
-// left only in .tmp, and build the index. Listings are synchronous JSI, so each runs in its own idle slice:
-// the root, then one bucket of files at a time.
+function yieldToIdleCallback(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(() => resolve())
+    } else {
+      setTimeout(resolve, 0)
+    }
+  })
+}
+
+// One pass per root: drop hosts that are no longer paired, expire old drafts, recover drafts a crash left only
+// in .tmp, and build the index. Listings are synchronous JSI, so each runs in its own idle slice: the root,
+// then one bucket of files at a time. An exact pass skips files already indexed, so it can run again to count
+// what an earlier pass missed.
 export async function seedRootIndex(seed: RootSeed): Promise<void> {
   const { fs, rootUri } = seed
+  let complete = true
+  const runSlice = async (slice: () => Promise<void>): Promise<void> => {
+    await yieldToIdleCallback()
+    if (!(await seed.runSlice(slice))) {
+      complete = false
+    }
+  }
   let hostDirectories: readonly GenerationDirectoryEntry[] = []
-  await seed.runSlice(async () => {
+  await runSlice(async () => {
     hostDirectories = await fs.list(rootUri)
   })
   // Read after the listing, so a host paired since then is either listed here or has no directory yet.
@@ -149,21 +174,23 @@ export async function seedRootIndex(seed: RootSeed): Promise<void> {
   const pairedHostKeys = pairedHostIds ? new Set(pairedHostIds.map(deriveHostCacheKey)) : null
   for (const hostDirectory of hostDirectories) {
     if (hostDirectory.isDirectory) {
-      await seedHostDirectory(seed, joinUri(rootUri, hostDirectory.name), pairedHostKeys)
+      await seedHostDirectory(seed, runSlice, joinUri(rootUri, hostDirectory.name), pairedHostKeys)
     }
   }
   seed.index.seeded = true
   seed.index.exact = seed.exact
+  seed.index.complete = complete
 }
 
 async function seedHostDirectory(
   seed: RootSeed,
+  runSlice: (slice: () => Promise<void>) => Promise<void>,
   hostUri: string,
   pairedHostKeys: ReadonlySet<string> | null
 ): Promise<void> {
   const { fs, index } = seed
   if (pairedHostKeys && !pairedHostKeys.has(hostUri.slice(hostUri.lastIndexOf('/') + 1))) {
-    await seed.runSlice(async () => {
+    await runSlice(async () => {
       await fs.delete(hostUri)
       forgetIndexedDirectory(index, hostUri)
     })
@@ -171,24 +198,31 @@ async function seedHostDirectory(
   }
   for (const bucket of DEVICE_STORE_BUCKETS) {
     const bucketUri = joinUri(hostUri, bucket)
-    await seed.runSlice(() =>
+    await runSlice(() =>
       seed.exact ? seedBucket(seed, bucketUri) : estimateBucket(seed, bucketUri)
     )
   }
 }
 
-// An upper bound: files this session already indexed are counted again until an exact pass.
+// An upper bound: each file is charged at most its size plus one block, and files this session already
+// indexed are counted again until an exact pass.
 async function estimateBucket(seed: RootSeed, bucketUri: string): Promise<void> {
   const { size, entryCount } = await seed.fs.summarizeDirectory(bucketUri)
-  seed.index.total += Math.max(size, entryCount * MIN_CHARGED_BYTES)
+  seed.index.total += size + entryCount * MIN_CHARGED_BYTES
 }
 
 async function seedBucket(seed: RootSeed, bucketUri: string): Promise<void> {
   const files = await seed.fs.listFiles(bucketUri)
   const names = new Set(files.map((file) => file.name))
+  let missed = 0
   for (const file of files) {
-    // A file can go between steps of a recovery; skip it rather than the bucket.
-    await seedFile(seed, bucketUri, file, names).catch(() => undefined)
+    // A file can go between steps of a recovery; count the rest, and fail the slice so a later pass retries it.
+    await seedFile(seed, bucketUri, file, names).catch(() => {
+      missed += 1
+    })
+  }
+  if (missed > 0) {
+    throw new Error(`[device-store] ${String(missed)} files in a bucket were not counted`)
   }
 }
 

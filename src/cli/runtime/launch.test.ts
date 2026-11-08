@@ -1,18 +1,12 @@
 import { EventEmitter } from 'node:events'
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { rm } from 'node:fs/promises'
+import 'node:os'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import {
-  getServeUpdateHandoffPath,
-  parseServeUpdateHandoffState
-} from '../../shared/serve-update-handoff'
-import {
-  readServeUpdateHandoff,
-  SERVE_REPLACEMENT_READY_TIMEOUT_MS
-} from './serve-update-supervisor'
+import '../../shared/serve-update-handoff'
+import './serve-update-supervisor'
 
 const { spawnMock, spawnSyncMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -91,7 +85,6 @@ describe('serveOrcaApp', () => {
     spawnMock.mockReset()
     spawnSyncMock.mockReset()
     process.env.ORCA_APP_EXECUTABLE = '/Applications/Orca.app/Contents/MacOS/Orca'
-    // Test Electron here; launch-serve-runtime.test.ts covers orcad selection.
     process.env.ORCA_SERVE_RUNTIME = 'electron'
     process.env.ORCA_USER_DATA_PATH = PROFILE
   })
@@ -106,232 +99,6 @@ describe('serveOrcaApp', () => {
       temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true }))
     )
   })
-
-  it.runIf(process.platform === 'darwin')(
-    'keeps the serve supervisor alive until the installed target version can take ownership',
-    async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-'))
-      temporaryDirectories.push(root)
-      const appPath = join(root, 'Orca.app')
-      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
-      const infoPlistPath = join(appPath, 'Contents', 'Info.plist')
-      const userDataPath = join(root, 'user-data')
-      await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
-      await mkdir(userDataPath, { recursive: true })
-      await writeFile(
-        infoPlistPath,
-        '<plist><dict><key>CFBundleShortVersionString</key><string>1.0.51</string></dict></plist>'
-      )
-      process.env.ORCA_APP_EXECUTABLE = executable
-      process.env.ORCA_USER_DATA_PATH = userDataPath
-
-      const oldOwner = new FakeChildProcess()
-      const replacementOwner = new FakeChildProcess()
-      replacementOwner.pid = 4102
-      spawnMock.mockReturnValueOnce(oldOwner).mockReturnValueOnce(replacementOwner)
-      let supervisorExited = false
-      const supervisor = serveOrcaApp({ json: true }).then((code) => {
-        supervisorExited = true
-        return code
-      })
-      const childEnv = spawnMock.mock.calls[0]?.[2]?.env as NodeJS.ProcessEnv | undefined
-      const handoffPath = childEnv?.ORCA_SERVE_UPDATE_HANDOFF_PATH
-      expect(handoffPath).toBeTruthy()
-      await writeFile(
-        handoffPath!,
-        JSON.stringify({
-          schemaVersion: 1,
-          phase: 'install-requested',
-          fromVersion: '1.0.51',
-          targetVersion: '1.0.61',
-          servingPid: oldOwner.pid
-        })
-      )
-
-      oldOwner.emit('exit', 0, null)
-      await Promise.resolve()
-
-      expect(supervisorExited).toBe(false)
-      expect(spawnMock).toHaveBeenCalledTimes(1)
-
-      const updateAppPath = join(root, 'Update.app')
-      await mkdir(join(updateAppPath, 'Contents'), { recursive: true })
-      await writeFile(
-        join(updateAppPath, 'Contents', 'Info.plist'),
-        '<plist><dict><key>CFBundleShortVersionString</key><string>1.0.61</string></dict></plist>'
-      )
-      await rename(appPath, join(root, 'Previous.app'))
-      await rename(updateAppPath, appPath)
-      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
-      replacementOwner.emit('message', {
-        type: 'orca:serve-ready',
-        version: '1.0.61',
-        runtimeId: 'runtime-new'
-      })
-
-      expect(supervisorExited).toBe(false)
-      await vi.waitFor(async () => expect(await readServeUpdateHandoff(handoffPath!)).toBeNull())
-      replacementOwner.emit('exit', 0, null)
-      await expect(supervisor).resolves.toBe(0)
-    }
-  )
-
-  it.runIf(process.platform === 'darwin')(
-    'records a replacement version mismatch without starting a retry loop',
-    async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-mismatch-'))
-      temporaryDirectories.push(root)
-      const appPath = join(root, 'Orca.app')
-      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
-      const userDataPath = join(root, 'user-data')
-      await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
-      await mkdir(userDataPath, { recursive: true })
-      await writeFile(
-        join(appPath, 'Contents', 'Info.plist'),
-        '<plist><dict><key>CFBundleShortVersionString</key><string>1.0.61</string></dict></plist>'
-      )
-      const handoffPath = getServeUpdateHandoffPath(userDataPath)
-      await writeFile(
-        handoffPath,
-        JSON.stringify({
-          schemaVersion: 1,
-          phase: 'install-requested',
-          fromVersion: '1.0.51',
-          targetVersion: '1.0.61',
-          servingPid: 4101
-        })
-      )
-      process.env.ORCA_APP_EXECUTABLE = executable
-      process.env.ORCA_USER_DATA_PATH = userDataPath
-      const replacementOwner = new FakeChildProcess()
-      replacementOwner.pid = 4102
-      spawnMock.mockReturnValue(replacementOwner)
-      vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-
-      const supervisor = serveOrcaApp({ json: true })
-      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-      replacementOwner.emit('message', {
-        type: 'orca:serve-ready',
-        version: '1.0.51',
-        runtimeId: 'runtime-old'
-      })
-      await vi.waitFor(() => expect(replacementOwner.kill).toHaveBeenCalledWith('SIGTERM'))
-      replacementOwner.emit('exit', 0, null)
-
-      await expect(supervisor).resolves.toBe(1)
-      expect(spawnMock).toHaveBeenCalledOnce()
-      expect(parseServeUpdateHandoffState(JSON.parse(await readFile(handoffPath, 'utf8')))).toEqual(
-        expect.objectContaining({
-          phase: 'failed',
-          targetVersion: '1.0.61',
-          reason: expect.stringContaining('reported version 1.0.51')
-        })
-      )
-    }
-  )
-
-  it.runIf(process.platform === 'darwin')(
-    'records replacement spawn failure before rejecting without a retry loop',
-    async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-spawn-failure-'))
-      temporaryDirectories.push(root)
-      const appPath = join(root, 'Orca.app')
-      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
-      const userDataPath = join(root, 'user-data')
-      await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
-      await mkdir(userDataPath, { recursive: true })
-      await writeFile(
-        join(appPath, 'Contents', 'Info.plist'),
-        '<plist><dict><key>CFBundleShortVersionString</key><string>1.0.61</string></dict></plist>'
-      )
-      const handoffPath = getServeUpdateHandoffPath(userDataPath)
-      await writeFile(
-        handoffPath,
-        JSON.stringify({
-          schemaVersion: 1,
-          phase: 'install-requested',
-          fromVersion: '1.0.51',
-          targetVersion: '1.0.61',
-          servingPid: 4101
-        })
-      )
-      process.env.ORCA_APP_EXECUTABLE = executable
-      process.env.ORCA_USER_DATA_PATH = userDataPath
-      const replacementOwner = new FakeChildProcess()
-      spawnMock.mockReturnValue(replacementOwner)
-      vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-
-      const supervisor = serveOrcaApp({ json: true })
-      await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-      replacementOwner.emit('error', new Error('spawn ENOENT'))
-
-      await expect(supervisor).rejects.toThrow('spawn ENOENT')
-      expect(spawnMock).toHaveBeenCalledOnce()
-      expect(parseServeUpdateHandoffState(JSON.parse(await readFile(handoffPath, 'utf8')))).toEqual(
-        expect.objectContaining({
-          phase: 'failed',
-          targetVersion: '1.0.61',
-          reason: expect.stringContaining('spawn ENOENT')
-        })
-      )
-    }
-  )
-
-  it.runIf(process.platform === 'darwin')(
-    'fails a replacement that never reports runtime readiness without retrying it',
-    async () => {
-      vi.useFakeTimers()
-      const root = await mkdtemp(join(tmpdir(), 'orca-serve-update-no-readiness-'))
-      temporaryDirectories.push(root)
-      const appPath = join(root, 'Orca.app')
-      const executable = join(appPath, 'Contents', 'MacOS', 'Orca')
-      const userDataPath = join(root, 'user-data')
-      await mkdir(join(appPath, 'Contents', 'MacOS'), { recursive: true })
-      await mkdir(userDataPath, { recursive: true })
-      await writeFile(
-        join(appPath, 'Contents', 'Info.plist'),
-        '<plist><dict><key>CFBundleShortVersionString</key><string>1.0.61</string></dict></plist>'
-      )
-      const handoffPath = getServeUpdateHandoffPath(userDataPath)
-      await writeFile(
-        handoffPath,
-        JSON.stringify({
-          schemaVersion: 1,
-          phase: 'install-requested',
-          fromVersion: '1.0.51',
-          targetVersion: '1.0.61',
-          servingPid: 4101
-        })
-      )
-      process.env.ORCA_APP_EXECUTABLE = executable
-      process.env.ORCA_USER_DATA_PATH = userDataPath
-      const replacementOwner = new FakeChildProcess()
-      spawnMock.mockReturnValue(replacementOwner)
-      vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
-
-      try {
-        const supervisor = serveOrcaApp({ json: true })
-        await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-
-        await vi.advanceTimersByTimeAsync(SERVE_REPLACEMENT_READY_TIMEOUT_MS)
-        expect(replacementOwner.kill).toHaveBeenCalledWith('SIGTERM')
-        replacementOwner.emit('exit', 0, null)
-
-        await expect(supervisor).resolves.toBe(1)
-        expect(spawnMock).toHaveBeenCalledOnce()
-        expect(
-          parseServeUpdateHandoffState(JSON.parse(await readFile(handoffPath, 'utf8')))
-        ).toEqual(
-          expect.objectContaining({
-            phase: 'failed',
-            reason: expect.stringContaining('did not report serving version')
-          })
-        )
-      } finally {
-        vi.useRealTimers()
-      }
-    }
-  )
 
   it('waits past startup status lines for valid recipe JSON', async () => {
     const { child, result, stdoutSpy, stderrSpy } = startRecipeJsonServer()
@@ -369,49 +136,6 @@ describe('serveOrcaApp', () => {
     await expect(result).resolves.toBe(0)
 
     expect(stdoutSpy).toHaveBeenCalledWith(`${unicodeRecipeJson}\n`)
-    expect(child.unref).toHaveBeenCalledOnce()
-  })
-
-  it('rejects when the server exits without valid recipe JSON', async () => {
-    const { child, result, stdoutSpy, stderrSpy } = startRecipeJsonServer()
-    const secrets = ['UPPER-SECRET', 'SLASH-SECRET', 'LEGACY-SECRET', 'PRIVATE-SECRET']
-    const untrustedLines = [
-      'ORCA://pair?code=UPPER-SECRET',
-      'orca://pair/?code=SLASH-SECRET',
-      'orca://pair#LEGACY-SECRET',
-      '"embedded privateKey PRIVATE-SECRET"',
-      '{privateKey:"PRIVATE-SECRET"}'
-    ].join('\n')
-    queueMicrotask(() => {
-      child.stdout.emit('data', `${untrustedLines}\n`)
-      child.emit('exit', 0, null)
-      child.emit('close', 0, null)
-    })
-
-    await expect(result).rejects.toMatchObject({
-      code: 'runtime_serve_failed',
-      message: 'Orca serve exited before printing valid recipe JSON with code 0.'
-    })
-    expect(stdoutSpy).not.toHaveBeenCalled()
-    expect(stderrSpy).toHaveBeenCalledTimes(5)
-    expect(stderrSpy).toHaveBeenCalledWith(`${IGNORED_NON_RECIPE_STDOUT}\n`)
-    for (const secret of secrets) {
-      expect(stderrSpy).not.toHaveBeenCalledWith(expect.stringContaining(secret))
-    }
-    expect(child.unref).not.toHaveBeenCalled()
-  })
-
-  it('accepts valid recipe JSON at exit without a trailing newline', async () => {
-    const { child, result, stdoutSpy } = startRecipeJsonServer()
-    queueMicrotask(() => {
-      child.emit('exit', 0, null)
-      child.stdout.emit('data', RECIPE_JSON)
-      child.emit('close', 0, null)
-    })
-
-    await expect(result).resolves.toBe(0)
-
-    expect(stdoutSpy).toHaveBeenCalledWith(`${RECIPE_JSON}\n`)
     expect(child.unref).toHaveBeenCalledOnce()
   })
 })

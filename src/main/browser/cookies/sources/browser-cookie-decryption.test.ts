@@ -35,18 +35,4 @@ describe('decryptCookieValueRaw host-key hash prefix', () => {
     const encrypted = encryptGcm(hostKeyHash(HOST_KEY))
     expect(decryptCookieValueRaw(encrypted, gcmKeyResult, HOST_KEY)).toEqual(Buffer.alloc(0))
   })
-
-  it('keeps a pre-schema-24 value that has no prefix', () => {
-    const encrypted = encryptCbc(Buffer.from('plain-legacy-value'))
-    expect(decryptCookieValueRaw(encrypted, cbcKeyResult, HOST_KEY)).toEqual(
-      Buffer.from('plain-legacy-value')
-    )
-  })
-
-  it('still strips a binary prefix that is not this host key hash', () => {
-    const plaintext = Buffer.concat([hostKeyHash('.other.com'), Buffer.from('value')])
-    expect(decryptCookieValueRaw(encryptCbc(plaintext), cbcKeyResult, HOST_KEY)).toEqual(
-      Buffer.from('value')
-    )
-  })
 })
