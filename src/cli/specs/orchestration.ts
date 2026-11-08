@@ -12,7 +12,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     identityFlagRoles: { from: 'caller' },
     notes: [
       'A Run is a namespace and home inbox. It never schedules or places workers. worker-start --spec creates one when none is bound; use run-create for Task graphs or a new goal.',
-      '--external, with --environment <saved-environment> outside any Orca terminal, binds the Run to that paired device instead of a terminal.',
+      '--external, with --environment <saved-environment> outside any Orca terminal, binds the Run to that pairing instead of a terminal.',
       '--retry-request is only for exact recovery after an unknown mutation result.'
     ]
   },

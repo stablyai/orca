@@ -108,7 +108,7 @@ Later commands route by Dispatch ID; do not repeat `--on`.
 
 ## External coordinators
 
-A process that is not an Orca terminal, such as a daemon, an MCP server, or a CI supervisor, can coordinate a Run without borrowing a pane. Its identity is a saved runtime environment: the paired device, not a token of its own.
+A process that is not an Orca terminal, such as a daemon, an MCP server, or a CI supervisor, can coordinate a Run without borrowing a pane. Its identity is a saved runtime environment: the pairing's caller fingerprint, not a token of its own. Device keys forked from one legacy pairing token share that fingerprint, so authority belongs to the pairing lineage, not to one device.
 
 Pair it once. To pair with the Orca on this computer, generate a pairing link in Settings for **This computer** (or run `orca pair` on the host, which also opens network access), then save it:
 
@@ -119,11 +119,11 @@ orca orchestration worker-start --spec "Bump eslint and fix lint" --worktree id:
 orca orchestration check --wait --types worker_done,escalation,question --environment this-mac
 ```
 
-- Run it outside any Orca terminal or agent session. With `--environment` and no terminal of its own, a command that would name its coordinator terminal names that paired device instead; inside an Orca terminal the same command still acts as the terminal.
+- Run it outside any Orca terminal or agent session. With `--environment` and no terminal of its own, a command that would name its coordinator terminal names that pairing instead; inside an Orca terminal the same command still acts as the terminal.
 - There is no pane to wake, so the loop is `check --wait`. `run-current`, `reply`, `check --ack`, `send`, `task-*`, `gate-*` and `dispatch` work as for a terminal coordinator. Mail it sends comes from `run:<runId>`, so replies land in its Run.
 - It has no workspace of its own, so `worker-start` needs `--worktree` naming an existing workspace (`id:<id>` or a path); `current`, `new-child` and `new-top-level` are refused.
 - After a restart, keep using the same environment; `run-current` shows its Run. A terminal that runs `run-use` on the Run takes it over, and the external coordinator's pending `check --wait` ends with `consumer_fenced`.
-- Any process of the same user that can read the saved environment acts as the same coordinator; keep it as private as the pairing itself. Requires an Orca that advertises `orchestration.external-coordinator.v1`.
+- Any process of the same user that can read the saved environment acts as the same coordinator, even one in a terminal whose Orca environment variables were removed; keep it as private as the pairing itself. Requires an Orca that advertises `orchestration.external-coordinator.v1`.
 
 ## Low-level dispatch (custom topology)
 
