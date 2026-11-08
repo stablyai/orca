@@ -49,18 +49,18 @@ function repo(id: string, projectGroupId: string | null, connectionId?: string):
   }
 }
 
-/** The main worktree of `owner`. */
-function worktree(owner: Repo): Worktree {
+/** A worktree of `owner` on `branch`. */
+function worktree(owner: Repo, branch = 'main'): Worktree {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: row grouping reads only these fields.
   return {
-    id: `${owner.id}::/${owner.id}/main`,
+    id: `${owner.id}::/${owner.id}/${branch}`,
     repoId: owner.id,
-    path: `/${owner.id}/main`,
-    displayName: 'main',
-    branch: 'refs/heads/main',
+    path: `/${owner.id}/${branch}`,
+    displayName: branch,
+    branch: `refs/heads/${branch}`,
     head: 'abc',
     isBare: false,
-    isMainWorktree: true,
+    isMainWorktree: branch === 'main',
     linkedIssue: null,
     linkedPR: null,
     linkedLinearIssue: null,
@@ -75,10 +75,10 @@ function worktree(owner: Repo): Worktree {
   } as Worktree
 }
 
-/** A host or header row's label, with a group's count; other rows have none. */
+/** A host or header row's label, with a host's workspace badge or a group's count; other rows have none. */
 function headerLabels(row: HostSectionRow): string[] {
   if (row.type === 'host-header') {
-    return [row.key]
+    return [`${row.key}(${row.count})`]
   }
   if (row.type !== 'header') {
     return []
@@ -90,11 +90,12 @@ function headerLabels(row: HostSectionRow): string[] {
 function sidebarOrder(
   repos: Repo[],
   projectGroups: ProjectGroup[],
-  collapsedGroupIds: string[]
+  collapsedGroupIds: string[],
+  extraWorktrees: Worktree[] = []
 ): string[] {
   const rows = buildRows(
     'repo',
-    repos.map(worktree),
+    [...repos.map((entry) => worktree(entry)), ...extraWorktrees],
     new Map(repos.map((entry) => [entry.id, entry])),
     null,
     new Set(collapsedGroupIds.map(getProjectGroupHeaderKey)),
@@ -132,7 +133,7 @@ describe('collapsed project groups in host sections', () => {
         [group('bank')],
         ['bank']
       )
-    ).toEqual(['host:local', 'bank:2', 'cms', 'host:ssh:work', 'bank:1', 'api'])
+    ).toEqual(['host:local(3)', 'bank:2', 'cms', 'host:ssh:work(2)', 'bank:1', 'api'])
   })
 
   it('keeps an expanded parent above its collapsed child', () => {
@@ -142,6 +143,18 @@ describe('collapsed project groups in host sections', () => {
         [group('clients'), group('archive', 'clients', 0), group('live', null, 1)],
         ['archive']
       )
-    ).toEqual(['host:local', 'clients:1', 'archive:1', 'host:ssh:work', 'live:1', 'cms'])
+    ).toEqual(['host:local(1)', 'clients:1', 'archive:1', 'host:ssh:work(1)', 'live:1', 'cms'])
+  })
+
+  it("counts every workspace of a collapsed group's projects in the host badge", () => {
+    const payments = repo('payments', 'bank')
+    expect(
+      sidebarOrder(
+        [payments, repo('api', null, 'work')],
+        [group('bank')],
+        ['bank'],
+        [worktree(payments, 'fix-fees'), worktree(payments, 'refunds')]
+      )
+    ).toEqual(['host:local(3)', 'bank:3', 'host:ssh:work(1)', 'api'])
   })
 })
