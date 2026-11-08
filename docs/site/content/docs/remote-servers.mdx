@@ -226,6 +226,7 @@ Copies of a machine image share the server identity: the pairing key, the paired
 - When `ORCA_INSTANCE_ID` is not set, Orca never changes the identity on its own.
 - If Orca cannot write the new identity (for example on a full or read-only disk), it keeps serving the current one unchanged, logs an error, and tries again on the next start.
 - `orca serve reset-identity` does the same reset on demand. Stop Orca on that machine first; the command asks for confirmation, or pass `--yes`.
+- Each reset moves the replaced files into a new folder under `orca-identity-backups` in the Orca data directory (the five most recent are kept). To undo an unwanted reset, stop Orca and copy the files from that folder back into the data directory.
 
 ### Mobile from a headless server
 

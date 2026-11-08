@@ -355,6 +355,7 @@
 3 src/main/orcad/orcad-data-root-privacy.ts
 4 src/main/orcad/orcad-host-account-launch-env-store.ts
 1 src/main/orcad/orcad-host-adapters.ts
+1 src/main/orcad/orcad-host-identity-reset.ts
 2 src/main/orcad/orcad-idle-stop-record.ts
 3 src/main/orcad/orcad-instance-lock-hold.ts
 16 src/main/orcad/orcad-instance-lock-reclaim.ts
@@ -474,6 +475,7 @@
 7 src/main/runtime/agent-session/records/agent-session-runtime-end-record.ts
 1 src/main/runtime/agent-session/structured-agent-session-attachment-wiring.ts
 1 src/main/runtime/client/navigation/desktop-chat-creation-history.ts
+8 src/main/runtime/host-instance-identity.ts
 4 src/main/runtime/hosts/platform-probe/host-descriptor.ts
 5 src/main/runtime/mobile-cloud-relay/relay-region-preference.ts
 2 src/main/runtime/mobile-cloud-relay/relay-revoke-outbox.ts
