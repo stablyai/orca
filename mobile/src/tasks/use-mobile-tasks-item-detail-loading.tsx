@@ -135,7 +135,9 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             repo: `id:${actionItem.source.repoId}`,
             iid: actionItem.source.number,
             type: actionItem.source.type,
-            projectRef: actionItem.source.projectRef
+            projectRef: actionItem.source.projectRef,
+            // A refresh is how a lost comment settles, so only it asks the host to mark the viewer's notes.
+            ...(canonical ? { markViewerComments: true } : {})
           },
           { timeoutMs: 30_000 }
         )

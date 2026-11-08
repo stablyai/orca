@@ -77,16 +77,19 @@ async function readPRComments(
       const { issueComments, reviewSummaries, reviewComments } = conversation
 
       // REST has no viewerDidAuthor, so conversation comments match the reading account's login instead.
+      // Only an explicit refresh, the read that settles a phone's lost comment, pays for that lookup.
+      const markViewer = options?.noCache === true
       const readRestSource = async (endpoint: string, reviews: boolean): Promise<PRComment[]> => {
         await assertRateLimitBudget('core', ownerRepo, ghOptions).catch((error: unknown) => {
           restBudgetFailed = true
           throw error
         })
         try {
-          noteRepositoryRateLimitSpend(ownerRepo, 'core', reviews ? 1 : 2, ghOptions)
+          const withViewer = markViewer && !reviews
+          noteRepositoryRateLimitSpend(ownerRepo, 'core', withViewer ? 2 : 1, ghOptions)
           const [{ stdout }, viewerLogin] = await Promise.all([
             ghExecFileAsync(['api', ...cacheArgs, endpoint], ghOptions),
-            reviews ? null : readViewerLogin(ghOptions)
+            withViewer ? readViewerLogin(ghOptions) : null
           ])
           return parseRestPRComments(stdout, reviews, viewerLogin)
         } catch (error) {

@@ -123,6 +123,7 @@ export async function mountDetail(
 ) {
   const transport = detailClient()
   const observation: { state?: DetailState } = {}
+  const detailRefreshRequested = { current: false }
   let renderer: ReactTestRenderer | undefined
   const commands = {
     select: (_item: ActionableTaskItem | null): void => {},
@@ -149,7 +150,7 @@ export async function mountDetail(
       detailRequestItem: selection.detailRequestItem,
       client,
       detailRefreshSeq,
-      detailRefreshRequested: { current: false },
+      detailRefreshRequested,
       hydrateActionItem: selection.hydrateActionItem,
       setItems,
       setDetailPayload,
@@ -174,7 +175,9 @@ export async function mountDetail(
     async select(item: ActionableTaskItem | null) {
       await act(async () => commands.select(item))
     },
-    async refresh() {
+    // requested: the user or a lost comment send asked for it, as requestDetailRefresh does.
+    async refresh(requested = false) {
+      detailRefreshRequested.current = requested
       await act(async () => commands.refresh())
     },
     async replaceClient(client: RpcClient) {

@@ -81,6 +81,17 @@ describe('task detail request lifetime', () => {
   })
 })
 
+describe('GitLab viewer comment marks', () => {
+  it('asks the host to mark the viewer notes only on a requested refresh', async () => {
+    const fixture = await mount(gitlabItem())
+    await fixture.transport.answer(success(GITLAB_DETAILS))
+    await fixture.refresh(true)
+    await fixture.transport.answer(success(GITLAB_DETAILS))
+    expect(fixture.transport.requests[0]?.params).not.toHaveProperty('markViewerComments')
+    expect(fixture.transport.requests[1]?.params).toMatchObject({ markViewerComments: true })
+  })
+})
+
 describe('other detail providers', () => {
   it('ignores a GitLab reply after switching provider', async () => {
     const initial = gitlabItem()

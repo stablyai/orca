@@ -156,7 +156,7 @@ export async function getIssueBodyAndComments(
         }
         return { body: '', comments: [], assignees: [], timelineItems: [] }
       }
-      noteRepositoryRateLimitSpend(repository, 'core', 3, ghOptions)
+      noteRepositoryRateLimitSpend(repository, 'core', fresh ? 3 : 2, ghOptions)
       const [issueResult, commentsResult, timelineItems, viewerLogin] = await Promise.all([
         ghExecFileAsync(
           [
@@ -176,7 +176,8 @@ export async function getIssueBodyAndComments(
           ghOptions
         ),
         getIssueTimelineItems(repository, issueNumber, ghOptions, fresh),
-        readViewerLogin(ghOptions)
+        // Only an explicit refresh, the read that settles a phone's lost comment, pays for the viewer lookup.
+        fresh ? readViewerLogin(ghOptions) : null
       ])
       const issue = JSON.parse(issueResult.stdout) as {
         body?: string | null

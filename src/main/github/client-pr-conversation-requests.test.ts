@@ -130,33 +130,40 @@ describe('PR conversation request reuse', () => {
     ])
   })
 
-  it('marks only the REST conversation comments the reading account wrote', async () => {
-    const restComment = (id: number, login: string) => ({
-      id,
-      user: { login, avatar_url: '' },
-      body: 'LGTM',
-      created_at: `2026-04-01T00:0${id}:00Z`,
-      html_url: `https://example.test/comment-${id}`
-    })
-    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args.includes('graphql')) {
-        return response(null)
-      }
-      if (args.includes('user')) {
-        return { stdout: 'Me\n' }
-      }
-      return {
-        stdout: JSON.stringify(
-          args.some((arg) => arg.includes('/issues/7/comments'))
-            ? [restComment(1, 'alice'), restComment(2, 'me')]
-            : []
-        )
-      }
-    })
-    const comments = await getPRComments('/repo', 7, { ...options, noCache: true })
-    expect(comments.map((c) => [c.author, c.viewerDidAuthor])).toEqual([
-      ['alice', undefined],
-      ['me', true]
-    ])
-  })
+  it.each([
+    { noCache: true, mine: true },
+    // Ordinary reads never settle a phone's lost comment, so they skip the viewer lookup.
+    { noCache: false, mine: undefined }
+  ])(
+    'marks only the reading account REST conversation comments on refresh reads: %o',
+    async ({ noCache, mine }) => {
+      const restComment = (id: number, login: string) => ({
+        id,
+        user: { login, avatar_url: '' },
+        body: 'LGTM',
+        created_at: `2026-04-01T00:0${id}:00Z`,
+        html_url: `https://example.test/comment-${id}`
+      })
+      ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        if (args.includes('graphql')) {
+          return response(null)
+        }
+        if (args.includes('user')) {
+          return { stdout: 'Me\n' }
+        }
+        return {
+          stdout: JSON.stringify(
+            args.some((arg) => arg.includes('/issues/7/comments'))
+              ? [restComment(1, 'alice'), restComment(2, 'me')]
+              : []
+          )
+        }
+      })
+      const comments = await getPRComments('/repo', 7, { ...options, noCache })
+      expect(comments.map((c) => [c.author, c.viewerDidAuthor])).toEqual([
+        ['alice', undefined],
+        ['me', mine]
+      ])
+    }
+  )
 })

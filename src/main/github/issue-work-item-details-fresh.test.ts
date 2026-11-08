@@ -43,7 +43,11 @@ describe('explicit task refresh conversation reads', () => {
       )?.[0]
     ).toEqual(expect.arrayContaining(['--paginate', '--slurp']))
   })
-  it('marks only the comments the reading gh account wrote', async () => {
+  it.each([
+    { fresh: true, mine: true },
+    // Ordinary reads never settle a phone's lost comment, so they skip the viewer lookup.
+    { fresh: false, mine: undefined }
+  ])('marks only the reading gh account comments on refresh reads: %o', async ({ fresh, mine }) => {
     const comment = (id: number, login: string) => ({
       id,
       user: { login, avatar_url: '' },
@@ -60,10 +64,10 @@ describe('explicit task refresh conversation reads', () => {
             ? ''
             : JSON.stringify({ body: 'current' })
     }))
-    const result = await getIssueBodyAndComments('/repo', 42, repository, null, {}, true)
+    const result = await getIssueBodyAndComments('/repo', 42, repository, null, {}, fresh)
     expect(result.comments.map((c) => [c.author, c.viewerDidAuthor])).toEqual([
       ['alice', undefined],
-      ['me', true]
+      ['me', mine]
     ])
   })
   it.each(['body', 'comments', 'timeline'] as const)(

@@ -141,7 +141,9 @@ export const WorkItemDetails = RepoSelector.extend({
   iid: z.number().int().positive(),
   type: z.enum(['issue', 'mr']),
   projectRef: GitLabProjectRef,
-  includeReviewDetails: z.boolean().optional()
+  includeReviewDetails: z.boolean().optional(),
+  // Only the phone asks: marking the viewer's notes costs a `glab api user` read. Older hosts strip it and always mark.
+  markViewerComments: z.boolean().optional()
 })
 
 export const WorkItemByPath = RepoSelector.extend({
