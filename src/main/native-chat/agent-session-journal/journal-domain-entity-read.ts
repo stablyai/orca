@@ -73,7 +73,7 @@ export function readJournalDomainEntity(
     case 'metadata': {
       const head = db
         .prepare(`SELECT last_sequence,retained_sequence,highest_fence,
-        last_activity_at,context_boundary,history_origin_json FROM journal_chat_state
+        last_activity_at,context_boundary,history_origin_json,queue_revision FROM journal_chat_state
         WHERE session_id=? AND epoch=?`)
         .get(...prefix)!
       const sequence = Number(head.last_sequence)
@@ -88,6 +88,7 @@ export function readJournalDomainEntity(
         physicalCursor: { epoch: scope.epoch, sequence },
         oldestSequence: Number(head.retained_sequence),
         highestFence: Number(head.highest_fence),
+        queueRevision: `${scope.epoch}:${Number(head.queue_revision)}`,
         lastActivityAt: Number(head.last_activity_at),
         historyOrigin
       }

@@ -87,9 +87,8 @@ export function readJournalSqlQueue(
         card: journalDomainQueueRow(db, target, operation.messageId)?.card ?? null
       }
     case 'revision': {
-      // Every queue command appends an event, so the head sequence moves whenever a card does.
-      const { lastSequence } = readJournalDomainQueueHead(db, target)
-      return { kind: 'revision', revision: `${target.epoch}:${lastSequence}` }
+      const { queueRevision } = readJournalDomainQueueHead(db, target)
+      return { kind: 'revision', revision: `${target.epoch}:${queueRevision}` }
     }
     case 'cleared-through':
       return {
@@ -190,12 +189,15 @@ export class SqlJournalQueuedMessages {
   /** Mail the orchestration owner cannot confirm now; the host installs it once. */
   mailUnavailable: ((card: QueuedMessageRow) => boolean) | undefined
   readonly editLeases: SqlQueuedMessageEditLeases
+  private revisionKey: string
 
   constructor(
     private readonly port: JournalSqlQueuePort,
     private readonly reopenFloor: () => AgentJournalCursor | null,
-    private readonly now: () => number
+    private readonly now: () => number,
+    revision: string
   ) {
+    this.revisionKey = revision
     this.editLeases = new SqlQueuedMessageEditLeases(port.edit, now)
   }
 
@@ -227,8 +229,9 @@ export class SqlJournalQueuedMessages {
     return (await this.read({ kind: 'get', messageId }, 'get')).card
   }
 
-  async revision(): Promise<string> {
-    return (await this.read({ kind: 'revision' }, 'revision')).revision
+  revision = (): string => this.revisionKey
+  adoptRevision = (revision: string): void => {
+    this.revisionKey = revision
   }
 
   async clearedThrough(): Promise<number> {

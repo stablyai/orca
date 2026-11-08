@@ -163,6 +163,7 @@ export class JournalSqlDatabase {
       const target = { sessionId: identity.sessionId, epoch, ownerToken: randomUUID() }
       const commit: JournalWriterCommit = {
         cursor: head.cursor,
+        queueRevision: head.queueRevision,
         value: head.physicalCursor,
         inputChanged: false,
         items: [],

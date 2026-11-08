@@ -17,6 +17,7 @@ import { applyJournalDomainLifecycleOperation } from './journal-domain-taken-sto
 import { applyJournalDomainPromptMutation } from './journal-domain-prompt-mutation'
 import { applyJournalSqlStepCommand } from './journal-sql-step-command'
 import { applyJournalSqlEditLeaseCommand } from './journal-sql-edit-lease-command'
+import { trackJournalDomainQueueRevision } from './journal-domain-queue-revision'
 
 /** Every command decides against current rows at its position on the sole writer. */
 export class JournalSqlCommand {
@@ -26,9 +27,12 @@ export class JournalSqlCommand {
   ) {}
 
   async apply(command: JournalWriterCommand, now: number): Promise<JournalWriterCommit> {
-    if (!this.db.isTransaction) {
-      throw new Error('journal SQL command requires its transaction')
-    }
+    return trackJournalDomainQueueRevision(this.db, command.target.sessionId, () =>
+      this.execute(command, now)
+    )
+  }
+
+  private async execute(command: JournalWriterCommand, now: number): Promise<JournalWriterCommit> {
     const savedAt = command.savedAt ?? now
     command = { ...command, savedAt }
     const { operation, target } = command
@@ -203,41 +207,30 @@ export class JournalSqlCommand {
             : []
         )
       }
-      case 'lifecycle': {
-        if (command.effects) {
-          throw new Error('journal lifecycle batches carry no receipt')
-        }
-        const result = applyJournalDomainLifecycleOperation(
-          this.db,
-          target,
-          operation,
-          savedAt,
-          command.facts?.stopSettle
-        )
-        return finishJournalSqlCommand(
-          this.db,
-          this.stateDirectory,
-          command,
-          result,
-          result.value,
-          result.coordinates,
-          [...result.items.map((item) => item.itemId), ...result.removedItemIds]
-        )
-      }
+      case 'lifecycle':
       case 'stale-settle':
       case 'dead-generation-settle':
       case 'unheld-turns-settle':
       case 'start-failure-settle': {
         if (command.effects) {
-          throw new Error('journal generation settlements carry no receipt')
+          throw new Error('journal settlement batches carry no receipt')
         }
-        const result = applyJournalDomainGenerationSettlement(
-          this.db,
-          target,
-          operation,
-          savedAt,
-          command.facts?.stopSettle
-        )
+        const result =
+          operation.kind === 'lifecycle'
+            ? applyJournalDomainLifecycleOperation(
+                this.db,
+                target,
+                operation,
+                savedAt,
+                command.facts?.stopSettle
+              )
+            : applyJournalDomainGenerationSettlement(
+                this.db,
+                target,
+                operation,
+                savedAt,
+                command.facts?.stopSettle
+              )
         return finishJournalSqlCommand(
           this.db,
           this.stateDirectory,

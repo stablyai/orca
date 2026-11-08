@@ -53,7 +53,6 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   private acknowledged: AgentJournalCursor
   private closed = false
   private closing: Promise<void> | undefined
-  private admitted: Promise<unknown> = Promise.resolve()
   private listener: ((commit: JournalWriterCommit) => void) | undefined
   readonly epochReplacements = new JournalEpochReplacements()
 
@@ -79,7 +78,8 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           )
       },
       this.reopenFloor,
-      now
+      now,
+      opened.queueRevision ?? `${target.epoch}:0`
     )
     // The open operation returns its physical position before ordinary recovery.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the open command returns the physical cursor captured before recovery.
@@ -187,6 +187,9 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
         this.goalAttachments.adopt(commit.goals)
       }
       this.acknowledged = { ...commit.cursor }
+      if (commit.queueRevision !== undefined) {
+        this.queuedMessages.adoptRevision(commit.queueRevision)
+      }
       if (commit.publication?.editDeadline !== undefined) {
         this.queuedMessages.editLeases.adoptDeadline(commit.publication.editDeadline)
       } else if (operation.kind === 'epoch-replace') {
@@ -265,9 +268,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
         )
       )
     }
-    const result = this.database.serialize(this.identity.sessionId, run)
-    this.admitted = result.catch(() => {})
-    return result
+    return this.database.serialize(this.identity.sessionId, run)
   }
 }
 

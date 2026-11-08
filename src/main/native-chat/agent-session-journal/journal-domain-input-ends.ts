@@ -61,12 +61,14 @@ function observe(
 }
 
 function ended(db: Database.Database, target: Target, messageId: string) {
-  db.prepare(`UPDATE journal_submission_attempts SET facts_json=json_set(facts_json,'$.ended',json('true'))
-    WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
-    target.sessionId,
-    target.epoch,
-    messageId
-  )
+  const changed = db
+    .prepare(`UPDATE journal_submission_attempts SET facts_json=json_set(facts_json,'$.ended',json('true'))
+    WHERE session_id=? AND epoch=? AND message_id=? AND current=1
+      AND COALESCE(json_extract(facts_json,'$.ended'),0)=0`)
+    .run(target.sessionId, target.epoch, messageId)
+  if (changed.changes > 0) {
+    invalidateJournalDomainQueue(db, target)
+  }
 }
 
 function providerAttemptEnded(frame: AgentJournalStatusItem['providerFrame']) {
@@ -208,3 +210,4 @@ export function refreshJournalDomainAcceptedHandover(
     WHERE session_id=? AND epoch=?`).run(item.sequence, target.sessionId, target.epoch)
   }
 }
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'

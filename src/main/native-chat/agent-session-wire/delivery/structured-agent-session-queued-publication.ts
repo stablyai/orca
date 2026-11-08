@@ -9,7 +9,8 @@ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import {
   queuePauseLiftOnItsWay,
-  resumableQueuePause
+  resumableQueuePause,
+  type DerivedQueuePause
 } from '../../agent-session-journal/queued-messages/queued-message-pause'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 import {
@@ -84,7 +85,14 @@ function isPublishedPausedReason(
   return reason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
 }
 
-type ListMemo = { key: string; serialized: string; list: AgentSessionQueuedMessage[] }
+type ListMemo = {
+  key: string
+  floor: string
+  serialized: string
+  list: AgentSessionQueuedMessage[]
+  rows: QueuedMessageRow[]
+  pauses: DerivedQueuePause[]
+}
 /** Stable identity avoids repeated serialization on token frames. */
 const listMemos = new WeakMap<AgentSessionJournal, ListMemo>()
 const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
@@ -92,27 +100,30 @@ const publications = new WeakMap<AgentSessionJournal, QueuePublication>()
 export function readPublishedQueuedMessages(
   journal: AgentSessionJournal
 ): Promise<AgentSessionQueuedMessage[]> {
-  return journal.readInOrder(() => publishedQueuedMessages(journal))
+  return journal.readInOrder(async () => (await publishedQueueRows(journal)).list)
 }
 
-async function publishedQueuedMessages(
-  journal: AgentSessionJournal,
-  rows?: readonly QueuedMessageRow[]
-): Promise<AgentSessionQueuedMessage[]> {
-  const key = await journal.queuedMessages.revision()
+async function publishedQueueRows(journal: AgentSessionJournal): Promise<ListMemo> {
+  const key = journal.queuedMessages.revision()
+  const floor = JSON.stringify(journal.reopenFloor())
   const memo = listMemos.get(journal)
-  if (memo && memo.key === key) {
-    return memo.list
+  if (memo && memo.key === key && memo.floor === floor) {
+    return memo
   }
-  const list = computePublishedQueuedMessages(rows ?? (await journal.queuedMessages.list()))
-  // Belt for the identity dedup: equal recomputed content keeps the previous reference.
+  const rows = await journal.queuedMessages.list()
+  const pauses = await structuredQueuePauses(journal)
+  const list = computePublishedQueuedMessages(rows)
   const serialized = JSON.stringify(list)
-  if (memo && memo.serialized === serialized) {
-    listMemos.set(journal, { key, serialized, list: memo.list })
-    return memo.list
+  const next = {
+    key,
+    floor,
+    serialized,
+    list: memo?.serialized === serialized ? memo.list : list,
+    rows,
+    pauses
   }
-  listMemos.set(journal, { key, serialized, list })
-  return list
+  listMemos.set(journal, next)
+  return next
 }
 
 /** Compare presence first, including unknown reasons. */
@@ -128,11 +139,8 @@ export async function readQueuePublication(
   gate: QueueSendGate
 ): Promise<QueuePublication> {
   return journal.readInOrder(async () => {
-    const cardRows = await journal.queuedMessages.list()
-    const queuedMessages = await publishedQueuedMessages(journal, cardRows)
+    const { rows: cardRows, list: queuedMessages, pauses } = await publishedQueueRows(journal)
     // Show pauses only when Resume can send a card; hide old pauses after clear/reopen.
-    // Re-derive per emit because submission acceptance can lift a pause.
-    const pauses = await structuredQueuePauses(journal)
     const visible = Math.max(
       0,
       ...pauses

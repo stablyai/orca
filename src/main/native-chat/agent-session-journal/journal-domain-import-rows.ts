@@ -224,7 +224,7 @@ export function finishJournalDomainImport(
       queue_resumed_sequence=excluded.queue_resumed_sequence,queue_reopened_sequence=excluded.queue_reopened_sequence,
       queue_clear_sequence=excluded.queue_clear_sequence,queue_clear_operation_id=excluded.queue_clear_operation_id,
       queue_clear_lifted=excluded.queue_clear_lifted,queue_failure_boundary=excluded.queue_failure_boundary,
-      accepted_handover_sequence=excluded.accepted_handover_sequence
+      accepted_handover_sequence=excluded.accepted_handover_sequence,queue_revision=0
     WHERE journal_chat_state.epoch IS NULL`).run(
     header.workspaceId,
     header.sessionId,

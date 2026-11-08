@@ -63,9 +63,9 @@ export function readJournalDomainQueueList(
 export function readJournalDomainQueueHead(
   db: Database.Database,
   target: Target
-): { lastSequence: number; clearedThrough: number } {
+): { lastSequence: number; queueRevision: number; clearedThrough: number } {
   const head = db
-    .prepare(`SELECT last_sequence, queue_clear_sequence, queue_clear_operation_id
+    .prepare(`SELECT last_sequence, queue_revision, queue_clear_sequence, queue_clear_operation_id
     FROM journal_chat_state WHERE session_id=? AND epoch=?`)
     .get(target.sessionId, target.epoch)
   if (!head) {
@@ -73,6 +73,7 @@ export function readJournalDomainQueueHead(
   }
   return {
     lastSequence: Number(head.last_sequence),
+    queueRevision: Number(head.queue_revision),
     clearedThrough:
       head.queue_clear_operation_id === null ? 0 : Number(head.queue_clear_sequence ?? 0)
   }

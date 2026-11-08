@@ -28,6 +28,7 @@ import {
   type QueuedMessageRow
 } from './queued-messages/queued-message-table'
 import { queuedMessageUpdateDecision } from './queued-messages/queued-message-update'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -46,6 +47,7 @@ export type JournalDomainQueueCommit = {
   cursor: AgentJournalCursor
   result: JournalDomainQueueResult
   cards: QueuedMessageRow[]
+  insertedCardIds: string[]
   /** A move changes only these positions; card content stays as last published. */
   placements: JournalDomainQueuePlacement[]
   inputChanged: boolean
@@ -199,6 +201,9 @@ export function applyJournalDomainQueueCommand(
     cursor,
     result,
     cards: changes.map(({ card }) => card),
+    insertedCardIds: changes
+      .filter(({ prior }) => prior === null)
+      .map(({ card }) => card.messageId),
     placements,
     inputChanged: changes.length > 0 || placements.length > 0,
     ...(referencedUploads?.length ? { referencedUploads } : {})
@@ -237,6 +242,7 @@ function retireHolds(
   now: number
 ): void {
   if (retireJournalDomainEditHolds(db, target, messageIds)) {
+    invalidateJournalDomainQueue(db, target)
     commit.inputChanged = true
     commit.editDeadline = journalDomainEditLeaseDeadline(db, target, now)
   }

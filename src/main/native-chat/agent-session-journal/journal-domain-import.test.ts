@@ -10,7 +10,7 @@ import {
 } from './database/journal-domain-database'
 import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
-import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
+import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-epoch.test-fixture'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { prepareJournalDomainImport } from './journal-domain-import'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'

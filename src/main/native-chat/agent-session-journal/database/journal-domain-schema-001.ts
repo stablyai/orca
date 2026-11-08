@@ -57,6 +57,7 @@ CREATE TABLE journal_chat_state (
   derived_turn_item_id TEXT,
   history_origin_json TEXT,
   accepted_handover_sequence INTEGER NOT NULL DEFAULT 0,
+  queue_revision INTEGER NOT NULL DEFAULT 0,
   queue_latest_stop_json TEXT,
   queue_manual_stop_json TEXT,
   queue_resumed_sequence INTEGER NOT NULL DEFAULT 0,

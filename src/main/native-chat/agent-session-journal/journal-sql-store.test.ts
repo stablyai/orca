@@ -88,8 +88,27 @@ it('holds automatic delivery for every editor until committed release, expiry or
   ).toMatchObject({ status: 'held', remainingMs: 120_000 })
   await journal.queuedMessages.editLeases.release(desktop, 'draft')
   expect(await journal.queuedMessages.nextInputCard()).toBeNull()
+  const heldRevision = journal.queuedMessages.revision()
+  await journal.appendSteps([
+    {
+      kind: 'resolved-item',
+      resolution: {
+        kind: 'text-snapshot',
+        identity: { provider: 'orca', clientMessageId: 'text' },
+        body: {
+          kind: 'message',
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Still writing' }]
+        }
+      },
+      options: { fence: 1, turnScope: { kind: 'thread' } },
+      reservedBytes: 4096
+    }
+  ])
+  expect(journal.queuedMessages.revision()).toBe(heldRevision)
   now = 120_200
   await journal.queuedMessages.editLeases.expire()
+  expect(journal.queuedMessages.revision()).not.toBe(heldRevision)
   expect(await journal.queuedMessages.nextInputCard()).toMatchObject({ messageId: 'draft' })
   await journal.queuedMessages.editLeases.acquire(phone, {
     messageId: 'draft',

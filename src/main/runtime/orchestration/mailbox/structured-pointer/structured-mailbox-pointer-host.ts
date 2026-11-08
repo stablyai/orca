@@ -123,17 +123,17 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           return replaced && source !== null
         }
         const cards = commit.publication?.cards ?? []
+        const inserted = new Set(commit.publication?.insertedCardIds)
         const changedInput =
           commit.inputChanged &&
-          (cards.length === 0 ||
-            cards.some((card) => card.revision > 0 || card.state !== 'waiting'))
+          (cards.length === 0 || cards.some((card) => !inserted.has(card.messageId)))
         return (
           replaced ||
           changedInput ||
           commit.publication?.items.some(
             (item) => readAgentJournalTurn(item.body) || isAgentSessionContextClear(item.body)
           ) === true ||
-          commit.items.some((item) => item.deleted || item.revision === 0)
+          commit.items.some((item) => item.deleted || item.revision === 1)
         )
       }
       return host ? subscribeForRedrive(host, sessionId, onActivity, relevant) : () => {}

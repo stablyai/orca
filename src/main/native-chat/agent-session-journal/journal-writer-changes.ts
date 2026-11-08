@@ -12,6 +12,7 @@ import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 export type JournalWriterPublication = {
   items: AgentJournalRenderItem[]
   cards: QueuedMessageRow[]
+  insertedCardIds?: string[]
   receipts: AgentJournalAcceptanceReceipt[]
   removedItemIds?: string[]
   invalidatedItemIds?: string[]
@@ -25,6 +26,7 @@ export type JournalWriterCommit = {
   publication?: JournalWriterPublication
   cursor: AgentJournalCursor
   inputChanged: boolean
+  queueRevision?: string
   keys: { collection: string; key: unknown; deleted: boolean }[]
   items: (
     | { itemId: string; deleted: true; revision: number }

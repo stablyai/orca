@@ -12,6 +12,10 @@ import { refreshJournalDomainQueueFailureReports } from './journal-domain-queue-
 import { observeJournalDomainTurnScope } from './journal-domain-turn-scope'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { assertJournalFence } from './writing/journal-write-guards'
+import {
+  invalidateJournalDomainQueue,
+  journalDomainQueueItemDependency
+} from './journal-domain-queue-revision'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -65,6 +69,9 @@ export function removeJournalDomainItem(
     return { itemId, revision, removed: null, items: [] }
   }
   const removed: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
+  if (journalDomainQueueItemDependency(db, target, itemId) !== 'null') {
+    invalidateJournalDomainQueue(db, target, sequence)
+  }
   if (row.turn_marker) {
     exposeJournalDomainFailureBoundary(
       db,

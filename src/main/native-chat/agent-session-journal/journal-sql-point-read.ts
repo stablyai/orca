@@ -104,6 +104,7 @@ export type JournalSqlPointReadResult =
       physicalCursor: AgentJournalCursor
       oldestSequence: number
       highestFence: number
+      queueRevision: string
       lastActivityAt: number
       historyOrigin: JournalReducerState['historyOrigin']
     }

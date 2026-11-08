@@ -21,6 +21,10 @@ import {
   refreshJournalDomainAcceptedHandover,
   type JournalDomainInputItemObservation
 } from './journal-domain-input-ends'
+import {
+  invalidateJournalDomainQueue,
+  journalDomainQueueItemDependency
+} from './journal-domain-queue-revision'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
@@ -59,6 +63,7 @@ export function writeJournalDomainCurrentItem(
     throw new Error('journal item persistence requires its writer transaction')
   }
   const prefix = [target.sessionId, target.epoch] as const
+  const queueDependency = journalDomainQueueItemDependency(db, target, input.item.itemId)
   const ordinal =
     input.ordinal ?? input.previous?.ordinal ?? nextJournalDomainItemOrdinal(db, target)
   const body = normalizeJournalDomainItemBody(
@@ -148,6 +153,9 @@ export function writeJournalDomainCurrentItem(
       [oldReport, failure.reportTurnItemId],
       sequence
     )
+  }
+  if (queueDependency !== journalDomainQueueItemDependency(db, target, next.itemId)) {
+    invalidateJournalDomainQueue(db, target, sequence)
   }
   return [
     next,

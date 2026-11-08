@@ -4,6 +4,7 @@ import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { finishJournalSqlCommand } from './journal-sql-command-result'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
 export function applyJournalSqlEditLeaseCommand(
   db: Database.Database,
@@ -32,6 +33,7 @@ export function applyJournalSqlEditLeaseCommand(
   )
   const sequence = Number(head.last_sequence) + (outcome.changed ? 1 : 0)
   if (outcome.changed) {
+    invalidateJournalDomainQueue(db, target, sequence)
     appendJournalSqlEvent(db, target, sequence, savedAt, {
       items: [],
       submissions: [],

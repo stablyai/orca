@@ -1,5 +1,6 @@
 import type Database from '../../sqlite/sync-database'
 import type { JournalDomainEventChanges } from './journal-domain-schema'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
 export const JOURNAL_EVENT_HISTORY_MS = 24 * 60 * 60 * 1000
 const MAX_EVENT_SEQUENCES = 4096
@@ -17,6 +18,9 @@ export function appendJournalSqlEvent(
   const prefix = [target.sessionId, target.epoch] as const
   const json = JSON.stringify(changes)
   const oversized = Buffer.byteLength(json, 'utf8') > MAX_EVENT_BYTES
+  if (changes.cards.length > 0 || changes.submissions.length > 0) {
+    invalidateJournalDomainQueue(db, target, sequence)
+  }
   db.prepare(`UPDATE journal_chat_state SET last_sequence=?, retained_sequence=MAX(retained_sequence,?),
     highest_fence=MAX(highest_fence,?), last_activity_at=MAX(last_activity_at,?)
     WHERE session_id=? AND epoch=?`).run(
