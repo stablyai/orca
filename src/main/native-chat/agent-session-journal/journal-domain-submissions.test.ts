@@ -14,10 +14,6 @@ import {
   readJournalDomainSubmissionAttempt,
   type JournalDomainSubmissionFacts
 } from './journal-domain-submission-records'
-import {
-  JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
-  JOURNAL_DOMAIN_SUBMISSION_INDEXES
-} from './journal-domain-submission-schema'
 import { readJournalDomainDispatchItem } from './journal-domain-dispatch-placement'
 import { applyJournalDomainItem } from './journal-domain-item'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
@@ -62,11 +58,6 @@ function fixture() {
     rmSync(stateDirectory, { recursive: true, force: true })
   })
   migrateJournalDomainSchema(db)
-  // Test-only fragment application; the final integration folds these declarations into frozen001.
-  for (const column of JOURNAL_DOMAIN_SUBMISSION_COLUMNS.trim().split(',\n')) {
-    db.exec(`ALTER TABLE journal_submission_attempts ADD COLUMN ${column}`)
-  }
-  db.exec(JOURNAL_DOMAIN_SUBMISSION_INDEXES)
   ensureAgentSessionAttachmentClaimTables(db)
   db.prepare(
     `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES('chat','epoch',10,1)`
@@ -416,6 +407,49 @@ it.each(['dispatch-first', 'echo-first'])(
     })
   }
 )
+
+it('matches a changed provider echo after acceptance once, without claiming the next identical send', () => {
+  const f = fixture()
+  f.admit(f.submit('first', { body: body('same') }))
+  f.dispatch({
+    clientMessageId: 'first',
+    fence: 1,
+    state: 'accepted',
+    providerIdentity: { provider: 'claude', sessionId: 'provider', uuid: 'accepted-id' }
+  })
+  const echo = (uuid: string) =>
+    f.transaction(() =>
+      applyJournalDomainItem(
+        f.db,
+        target,
+        {
+          kind: 'item',
+          identity: { provider: 'claude', sessionId: 'provider', uuid },
+          body: body('same'),
+          options: { fence: 1, turnScope: { kind: 'thread' } }
+        },
+        now + 20
+      )
+    )
+  expect(echo('actual-echo').items[0]?.itemId).toBe('orca:first')
+  expect(
+    f.db
+      .prepare(`SELECT echo_observed,admission_body_json,signed_out,dispatch_fence
+    FROM journal_submission_attempts WHERE message_id='first'`)
+      .get()
+  ).toEqual({
+    echo_observed: 1,
+    admission_body_json: null,
+    signed_out: 0,
+    dispatch_fence: 1
+  })
+  f.admit(f.submit('second', { body: body('same') }))
+  expect(echo('second-echo').items[0]?.itemId).toBe('orca:second')
+  expect(f.db.prepare('SELECT item_id FROM journal_items ORDER BY ordinal').all()).toEqual([
+    { item_id: 'orca:first' },
+    { item_id: 'orca:second' }
+  ])
+})
 
 it('keeps effective handover scope separate from placement and replaces carried coverage on rebind', () => {
   const f = fixture()

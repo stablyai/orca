@@ -1,3 +1,4 @@
+import type { AgentSessionSubscribers } from '../publication/subscribers/structured-agent-session-subscribers'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import type { AgentSessionCreatePhaseRecorder } from '../../../observability/agent-session-instrumentation'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
@@ -25,7 +26,7 @@ export type StructuredAgentSessionAttachContext = {
   runtimeState: StructuredAgentSessionHostRuntimeState
   sessions: Map<string, StructuredAgentSessionHostSession> &
     Pick<StructuredAgentSessionConversations, 'observeSettledTurns' | 'snapshotSource'>
-  subscribers: {
+  subscribers: Pick<AgentSessionSubscribers, 'publishLiveText'> & {
     snapshot: (sessionId: string, journal: AgentSessionJournal, fence: number) => void
     publish: (
       sessionId: string,

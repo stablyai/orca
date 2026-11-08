@@ -35,7 +35,6 @@ import type { JournalWriterCommit } from './journal-writer-changes'
 import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import type { JournalWriterStep, JournalStepsResult } from './writing/journal-writer-step'
-import type { JournalSqlMessage } from './journal-sql-message-commit'
 import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifecycle/agent-session-stopped-history'
 import type { JournalWriterSettled } from './journal-writer-operations'
 import type { JournalCommandOpenResult } from './writing/journal-command-open'
@@ -47,11 +46,6 @@ import { restoreJournalSqlFailure } from './journal-sql-failure'
  */
 export abstract class SqlJournalAppends {
   abstract readonly reads: JournalSqlReads
-
-  protected abstract messages(
-    steps: readonly JournalSqlMessage[],
-    beforeRun?: () => boolean
-  ): Promise<JournalStepsResult>
 
   abstract write(
     operation: JournalSqlStoreOperation,
@@ -99,10 +93,6 @@ export abstract class SqlJournalAppends {
     steps: readonly JournalWriterStep[],
     beforeRun?: () => boolean
   ): Promise<JournalStepsResult> {
-    const messages = textMessages(steps)
-    if (messages) {
-      return this.messages(messages, beforeRun)
-    }
     const operation: Extract<JournalSqlStoreOperation, { kind: 'steps' }> = { kind: 'steps', steps }
     return this.answerOf(
       this.write(operation, () => {
@@ -232,28 +222,6 @@ export abstract class SqlJournalAppends {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the writer runs the named command's own procedure and returns its value unchanged.
     return (await commit).value as T
   }
-}
-
-/** Classify at the sender; lifecycle and identity resolution keep their named command path. */
-function textMessages(steps: readonly JournalWriterStep[]): JournalSqlMessage[] | null {
-  if (steps.length === 0) {
-    return null
-  }
-  const messages: JournalSqlMessage[] = []
-  for (const step of steps) {
-    if (step.kind !== 'resolved-item' || step.resolution.kind !== 'text-snapshot') {
-      return null
-    }
-    const { identity, body, scopeItemIds } = step.resolution
-    messages.push({
-      kind: 'text-snapshot',
-      identity,
-      body,
-      options: step.options,
-      scopeItemIds
-    })
-  }
-  return messages
 }
 
 function receipted(

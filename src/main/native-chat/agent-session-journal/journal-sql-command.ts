@@ -1,3 +1,4 @@
+import { applyJournalSqlMessageSteps, type JournalSqlMessage } from './journal-sql-message-commit'
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterCommand } from './journal-writer-command'
@@ -24,6 +25,42 @@ export class JournalSqlCommand {
       throw new Error('journal SQL command requires its transaction')
     }
     if (command.operation.kind === 'steps') {
+      const text = textSteps(command.operation.steps)
+      if (text) {
+        if (command.effects) {
+          throw new Error('journal text steps carry no host receipt')
+        }
+        const commit = applyJournalSqlMessageSteps(this.db, {
+          target: command.target,
+          steps: command.operation.dropped ? [] : text,
+          savedAt: command.savedAt ?? savedAt
+        })
+        if (command.operation.dropped) {
+          commit.outcomes = text.map(() => ({ kind: 'dropped' }))
+        }
+        return {
+          cursor: commit.cursor,
+          inputChanged: commit.inputChanged,
+          keys: [],
+          inputKeys: [],
+          effects: [],
+          items: commit.items.map((item) => ({
+            itemId: item.itemId,
+            deleted: false,
+            revision: item.revision,
+            sequence: item.sequence,
+            sequenceIndex: item.sequenceIndex ?? 0
+          })),
+          messageCommit: commit,
+          value: {
+            outcomes: commit.outcomes,
+            cursor: commit.cursor,
+            items: commit.items,
+            ...(commit.failure ? { failure: commit.failure } : {})
+          }
+        }
+      }
+
       const commit = await runJournalSqlSteps(
         this.db,
         { ...command, operation: command.operation },
@@ -112,4 +149,20 @@ function plainAnswer(value: unknown): unknown {
     return value
   }
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, plainAnswer(child)]))
+}
+
+function textSteps(
+  steps: Extract<JournalWriterCommand['operation'], { kind: 'steps' }>['steps']
+): JournalSqlMessage[] | null {
+  if (steps.length === 0) {
+    return null
+  }
+  const messages: JournalSqlMessage[] = []
+  for (const step of steps) {
+    if (step.kind !== 'resolved-item' || step.resolution.kind !== 'text-snapshot') {
+      return null
+    }
+    messages.push({ ...step.resolution, options: step.options })
+  }
+  return messages
 }

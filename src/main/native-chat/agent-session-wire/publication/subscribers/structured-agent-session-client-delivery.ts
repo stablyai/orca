@@ -4,6 +4,7 @@ import type { StructuredAgentSessionConversations } from '../../host/structured-
 import { StructuredAgentSessionSavedStatus } from '../../observations/structured-agent-session-saved-status'
 import { createStructuredAgentSessionHostRequestFailures } from '../../observations/structured-agent-session-host-request-failures'
 import { createStructuredAgentSessionCommandReads } from '../../options/structured-agent-session-command-reads'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
@@ -11,8 +12,8 @@ import type { AgentChildWorkView } from '../../../../../shared/agent-status/chil
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import type { SqlAgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import { SqlAgentSessionJournal as SqlJournal } from '../../../agent-session-journal/journal-sql-store'
-import { StructuredAgentSessionObservedWork } from '../../observations/structured-agent-session-observed-work'
-import type { StructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-current-work'
+import { StructuredAgentSessionObservedWork as ObservedWork } from '../../observations/structured-agent-session-observed-work'
+import type { StructuredAgentSessionCurrentWork as CurrentWork } from '../../observations/structured-agent-session-current-work'
 import type { SubscriberFieldHooks } from './agent-session-subscriber-frame-fields'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 import {
@@ -78,7 +79,8 @@ export class StructuredAgentSessionClientDelivery {
       StructuredAgentSessionConversations,
       'publish' | 'endPublications'
     >,
-    readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue']
+    readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue'],
+    readLiveText?: (id: string) => readonly AgentJournalRenderItem[]
   ) {
     this.requestFailures = createStructuredAgentSessionHostRequestFailures(sessions, deps)
     this.savedStatus = new StructuredAgentSessionSavedStatus(deps)
@@ -105,6 +107,7 @@ export class StructuredAgentSessionClientDelivery {
     )
     this.waitForSendSettlement = this.sendSettlement.wait
     this.subscribers = new AgentSessionSubscribers({
+      ...(readLiveText ? { readLiveText } : {}),
       readForkJournal: (id) => this.sessions.get(id)?.journal,
       readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),
       readCommands: (sessionId, commandsOnRequest) =>
@@ -299,20 +302,17 @@ export class StructuredAgentSessionClientDelivery {
     return source ? this.statusFeed.journalProjection(sessionId, source) : null
   }
 
-  private currentWork(
-    sessionId: string,
-    journal: AgentSessionJournal
-  ): StructuredAgentSessionCurrentWork
+  private currentWork(sessionId: string, journal: AgentSessionJournal): CurrentWork
   private currentWork(
     sessionId: string,
     journal: SqlAgentSessionJournal
-  ): Promise<StructuredAgentSessionObservedWork | null>
+  ): Promise<ObservedWork | null>
   private currentWork(sessionId: string, journal: AgentSessionJournal | SqlAgentSessionJournal) {
     if (journal instanceof SqlJournal) {
       return Promise.resolve(this.statusFeed.journalProjection(sessionId, journal)).then(
         (projection) =>
           projection?.work
-            ? new StructuredAgentSessionObservedWork(journal, projection.work, {
+            ? new ObservedWork(journal, projection.work, {
                 epoch: projection.epoch,
                 sequence: projection.sequence
               })

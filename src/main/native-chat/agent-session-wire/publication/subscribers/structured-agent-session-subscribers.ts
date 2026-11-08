@@ -1,3 +1,4 @@
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { ForkMarker } from '../history/agent-session-fork-marker'
 import { ForkMarkerSubscriptions } from './agent-session-fork-marker-delivery'
@@ -9,7 +10,6 @@ import type {
   AgentSessionTurnActivity
 } from '../../../../../shared/agent-session/agent-session-wire'
 import {
-  backgroundTaskFingerprint,
   emitSubscriberFrame,
   subscriberCommandsChanged,
   type SubscriberFieldHooks
@@ -19,6 +19,10 @@ import {
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import {
+  createSubscriberLiveTextPublisher,
+  republishSubscriberBackgroundTasks
+} from './agent-session-live-publications'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { readAgentSessionHydrationPage } from '../history/agent-session-history-page'
 import { withPublishedWork } from '../../observations/agent-session-published-work'
@@ -31,6 +35,7 @@ import type { StructuredAgentSessionCurrentWork } from '../../observations/struc
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
 export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
+  readLiveText?: (sessionId: string) => readonly AgentJournalRenderItem[]
   readForkMarker?: (sessionId: string) => ForkMarker | undefined
   readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
   onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
@@ -52,10 +57,6 @@ export class AgentSessionSubscribers {
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
-
-  get retainedActivityCountForTests(): number {
-    return this.activityBySession.size
-  }
 
   subscriberCountForTests(sessionId: string): number {
     return this.bySession.get(sessionId)?.size ?? 0
@@ -118,6 +119,13 @@ export class AgentSessionSubscribers {
       subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
       refreshPublishedWork(this.deliveryPort(), subscriber, input.journal, work, { hostNow })
     }
+    this.publishLiveText(
+      input.sessionId,
+      journal,
+      input.fence,
+      this.hooks.readLiveText?.(input.sessionId) ?? [],
+      [subscriber]
+    )
     const { sessionId, id } = subscriber
     return () => this.close(sessionId, id)
   }
@@ -153,6 +161,12 @@ export class AgentSessionSubscribers {
       this.hooks.onJournalPublished?.(sessionId, journal)
     }
   }
+
+  readonly publishLiveText = createSubscriberLiveTextPublisher(
+    () => this.deliveryPort(),
+    (id) => this.subscribers(id),
+    () => this.now()
+  )
 
   readQueuePublication(sessionId: string): QueuePublication | undefined {
     return this.hooks.readQueuePublication?.(sessionId)
@@ -210,30 +224,18 @@ export class AgentSessionSubscribers {
       subscriber.fence = fence
       refreshPublishedWork(this.deliveryPort(), subscriber, journal, work, { hostNow })
     }
+    this.publishLiveText(sessionId, journal, fence, this.hooks.readLiveText?.(sessionId) ?? [])
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
   republishBackgroundTasks(sessionId: string, fence: number): void {
-    const state = this.hooks.readBackgroundTasks?.(sessionId)
-    if (state === undefined) {
-      return
-    }
-    const fingerprint = backgroundTaskFingerprint(state)
-    const hostNow = this.now()
-    for (const subscriber of this.subscribers(sessionId)) {
-      if (subscriber.backgroundTasks === fingerprint) {
-        continue
-      }
-      this.emit(subscriber, {
-        type: 'batch',
-        sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence,
-        backgroundTasks: state,
-        hostNow
-      })
-      subscriber.fence = fence
-    }
+    republishSubscriberBackgroundTasks(
+      this.deliveryPort(),
+      this.subscribers(sessionId),
+      sessionId,
+      fence,
+      this.now()
+    )
   }
 
   republishCommands(retired?: (sessionId: string) => boolean): void {

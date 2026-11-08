@@ -113,7 +113,7 @@ export function writeJournalDomainCurrentItem(
     previousReport?.queue_failure_report_turn_item_id == null
       ? null
       : String(previousReport.queue_failure_report_turn_item_id)
-  if (oldReport !== failure.reportTurnItemId) {
+  if (oldReport !== failure.reportTurnItemId || input.previous?.hidden !== input.hidden) {
     refreshJournalDomainQueueFailureReports(
       db,
       target,

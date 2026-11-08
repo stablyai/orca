@@ -51,7 +51,7 @@ export function writeJournalDomainDispatchAttempt(
     handover ? JSON.stringify(handover.scope) : null,
     handoverPlace?.sequence ?? null,
     handoverPlace?.at ?? null,
-    handoverPlace ? JSON.stringify(handoverPlace.scope) : null,
+    handoverPlace?.scope === undefined ? null : JSON.stringify(handoverPlace.scope),
     JSON.stringify(carries),
     rejection?.sequence ?? null,
     rejection?.at ?? null,

@@ -37,7 +37,7 @@ export function placeJournalDomainDispatchItem(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,
   previous: JournalDomainDispatchItem,
-  place: { sequence: number; observedAt: number; turnScope: AgentJournalTurnScope } | null,
+  place: { sequence: number; observedAt: number; turnScope?: AgentJournalTurnScope } | null,
   hidden: boolean
 ): AgentJournalRenderItem[] {
   if (!place && previous.hidden === hidden) {

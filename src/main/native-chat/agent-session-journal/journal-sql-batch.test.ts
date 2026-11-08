@@ -2,7 +2,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { prepareJournalSqlRequest, takeJournalSqlReadyBatch } from './journal-sql-ready-batch'
-import { prepareJournalSqlMessages } from './journal-sql-message-commit'
 import { message } from './journal-sql-message.test-fixture'
 import type { JournalSqlRequest } from './journal-sql-protocol'
 
@@ -71,12 +70,20 @@ it('keeps bounded snapshot prefixes and controls in enqueue order', async () => 
   const { db, batch } = fixture()
   const stream = (id: number, steps: number, text = 'output'): JournalSqlRequest =>
     prepareJournalSqlRequest(id, {
-      type: 'messages',
-      job: prepareJournalSqlMessages({
-        target: { sessionId: `session${id}`, epoch: 'epoch' },
-        steps: Array.from({ length: steps }, () => message(text)),
+      type: 'write',
+      command: {
+        target: { sessionId: `session${id}`, epoch: 'epoch', ownerToken: 'owner' },
+        operation: {
+          kind: 'steps',
+          steps: Array.from({ length: steps }, () => ({
+            kind: 'resolved-item',
+            reservedBytes: 1024,
+            resolution: { ...message(text), kind: 'text-snapshot' },
+            options: { fence: 1, turnScope: { kind: 'thread' } }
+          }))
+        },
         savedAt: 100
-      })
+      }
     })
   const queue: JournalSqlRequest[] = [
     stream(1, 32),

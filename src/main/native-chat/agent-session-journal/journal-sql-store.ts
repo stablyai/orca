@@ -25,8 +25,6 @@ import { SqlJournalStopMarks } from './journal-sql-stop-marks'
 import { SqlJournalAppends } from './journal-sql-appends'
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import type { JournalWorkRead, JournalWorkAnswer } from './journal-work-read'
-import type { JournalSqlMessage } from './journal-sql-message-commit'
-import type { JournalStepsResult } from './writing/journal-writer-step'
 
 /** Every writer command a live handle sends; the open command belongs to the database. */
 export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
@@ -202,38 +200,6 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     return this.epochReplacements.notifyFor(operation.kind, written)
   }
 
-  protected messages(
-    steps: readonly JournalSqlMessage[],
-    beforeRun?: () => boolean
-  ): Promise<JournalStepsResult> {
-    return this.admit(async (writer) => {
-      if (beforeRun?.() === false) {
-        return { outcomes: steps.map(() => ({ kind: 'dropped' as const })) }
-      }
-      const commit = await writer.messages({ target: this.target, steps, savedAt: this.now() })
-      this.acknowledged = { ...commit.cursor }
-      this.listener?.({
-        cursor: commit.cursor,
-        inputChanged: commit.inputChanged,
-        keys: [],
-        items: commit.items.map((item) => ({
-          itemId: item.itemId,
-          deleted: false,
-          revision: item.revision,
-          sequence: item.sequence,
-          sequenceIndex: item.sequenceIndex ?? 0
-        })),
-        inputKeys: [],
-        effects: [],
-        messageCommit: commit
-      })
-      return {
-        outcomes: commit.outcomes,
-        ...(commit.failure ? { failure: commit.failure } : {})
-      }
-    })
-  }
-
   /** Mark preexisting cards; failed writes retain a conservative reopenFloor and throw. */
   markQueueReopen(fence: number, since?: number): Promise<void> {
     return this.reopenMarks.mark(
@@ -278,7 +244,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   }
 
   private admit<T>(
-    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects' | 'messages'>) => T | Promise<T>
+    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects'>) => T | Promise<T>
   ): Promise<T> {
     if (this.closed) {
       return Promise.reject(

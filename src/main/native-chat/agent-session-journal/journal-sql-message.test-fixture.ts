@@ -117,8 +117,8 @@ export function messageFixture(db = new Database(':memory:')) {
       body: { ...body, blocks: [...body.blocks] },
       turnScope: { kind: 'thread' }
     })
-    db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,dispatch_state,candidate,payload_json)
-      VALUES(?,?,?,1,0,1,?,1,1,1,?,'unknown',1,?)`).run(
+    db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,dispatch_state,candidate,admitted_personal,payload_json)
+      VALUES(?,?,?,1,0,1,?,1,1,1,?,'unknown',1,1,?)`).run(
       'chat',
       'epoch',
       'send',

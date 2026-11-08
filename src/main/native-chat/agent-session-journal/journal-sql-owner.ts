@@ -11,10 +11,6 @@ import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit } from './journal-writer-changes'
 import type { JournalWriterEffect, JournalWriterEffectResult } from './journal-writer-effects'
 import type { JournalSqlMaintenance, JournalSqlMaintenanceResult } from './journal-sql-maintenance'
-import {
-  prepareJournalSqlMessages,
-  type JournalSqlMessagesCommit
-} from './journal-sql-message-commit'
 
 export class JournalIndeterminateWriteError extends Error {
   override readonly name = 'JournalIndeterminateWriteError'
@@ -71,19 +67,6 @@ export class JournalSqlOwner {
     const response = await this.request({ type: 'write', command })
     if (response.type !== 'committed') {
       throw new Error('journal writer returned no commit')
-    }
-    return response.commit
-  }
-
-  async messages(
-    command: Parameters<typeof prepareJournalSqlMessages>[0]
-  ): Promise<JournalSqlMessagesCommit> {
-    const response = await this.request({
-      type: 'messages',
-      job: prepareJournalSqlMessages(command)
-    })
-    if (response.type !== 'messages') {
-      throw new Error('journal writer returned no message commit')
     }
     return response.commit
   }

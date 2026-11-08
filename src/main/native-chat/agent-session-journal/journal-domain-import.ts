@@ -1,4 +1,9 @@
 import type Database from '../../sqlite/sync-database'
+import {
+  restoredJournalDomainSubmission,
+  type JournalDomainImportAttempt
+} from './journal-domain-import-submissions'
+export type { JournalDomainImportAttempt } from './journal-domain-import-submissions'
 import type {
   AgentJournalAcceptanceReceipt,
   AgentJournalRenderItem,
@@ -54,13 +59,6 @@ export type JournalDomainImportItem = {
   queueFailedAt: number
   queueFailureWitnessedThrough: number
   queueFailureReportTurnItemId: string | null
-}
-
-export type JournalDomainImportAttempt = {
-  ordinal: number
-  candidate: boolean
-  admittedPersonal: boolean
-  submission: AgentJournalSubmission
 }
 
 /** Typed rows only; each kind has exactly one named insertion on the writer. */
@@ -215,12 +213,14 @@ function* importPages(
   const order = journalInputOrder(state)
   yield* paged(
     'attempts',
-    [...memoryJournalMap(state.submissions).values()].map((submission) => ({
-      ordinal: order.inputOrdinal(submission.clientMessageId),
-      candidate: state.inputs.candidates.has(submission.clientMessageId),
-      admittedPersonal: submission.queuedMessageId !== undefined && personal(submission),
-      submission
-    }))
+    [...memoryJournalMap(state.submissions).values()].map((submission) =>
+      restoredJournalDomainSubmission(
+        state,
+        submission,
+        order.inputOrdinal(submission.clientMessageId),
+        personal(submission)
+      )
+    )
   )
   yield* paged(
     'removed-turns',

@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
-import { openJournalDatabase } from './database/journal-database'
+import { openJournalDomainDatabase } from './database/journal-domain-database'
 import { JournalCheckpointOwner } from './database/journal-checkpoint-owner'
 import { JournalSqlBatch, JournalSqlBatchError } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
@@ -12,9 +12,6 @@ import { journalSqlFailure } from './journal-sql-failure'
 import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protocol'
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
-import { initializeJournalSqlProjection } from './journal-sql-schema-migration'
-import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { commitJournalSqlMessages } from './journal-sql-message-commit'
 
 if (
   !parentPort ||
@@ -39,13 +36,11 @@ const queue: JournalSqlRequest[] = []
 
 try {
   mkdirSync(dirname(workerData.filename), { recursive: true })
-  const opened = openJournalDatabase(workerData.filename)
+  const opened = openJournalDomainDatabase(workerData.filename)
   db = opened.db
   readOnly = opened.readOnly
   commands = new JournalSqlCommand(db, stateDirectory)
   if (!readOnly) {
-    initializeJournalSqlProjection(db)
-    migrateJournalDomainSchema(db)
     checkpoint = new JournalCheckpointOwner(db, workerData.filename)
   }
   batch = new JournalSqlBatch(db, checkpoint)
@@ -87,27 +82,14 @@ function reply(response: JournalSqlResponse): void {
 
 type WriteRequest = {
   id: number
-  command: Exclude<JournalSqlRequest['command'], { type: 'close' | 'messages' }>
+  command: Exclude<JournalSqlRequest['command'], { type: 'close' }>
 }
 type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' | 'maintenance' }>
-type MessageRequest = {
-  id: number
-  command: Extract<JournalSqlRequest['command'], { type: 'messages' }>
-}
-
 /** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
   const pending = takeJournalSqlReadyBatch(queue)
-  if (pending[0]?.command.type === 'messages') {
-    await drainMessages(
-      pending.filter((request): request is MessageRequest => request.command.type === 'messages')
-    )
-    scheduleNextDrain()
-    return
-  }
   const writes = pending.filter(
-    (request): request is WriteRequest =>
-      request.command.type !== 'close' && request.command.type !== 'messages'
+    (request): request is WriteRequest => request.command.type !== 'close'
   )
   const close = pending.find((request) => request.command.type === 'close')
   const database = db
@@ -184,61 +166,6 @@ async function drain(): Promise<void> {
     }
   }
   scheduleNextDrain()
-}
-
-async function drainMessages(requests: readonly MessageRequest[]): Promise<void> {
-  if (!db || !batch) {
-    throw new Error('journal message drain has no writer')
-  }
-  const acknowledged = new Set<number>()
-  let dispatched = false
-  try {
-    if (fault) {
-      throw fault
-    }
-    assertJournalWritable(readOnly, 'database')
-    dispatched = true
-    const result = await commitJournalSqlMessages(
-      db,
-      batch,
-      requests.map(({ command }) => command.job),
-      (commit, index) => {
-        const id = requests[index]!.id
-        reply({ type: 'messages', id, commit })
-        acknowledged.add(id)
-      }
-    )
-    for (const [index, outcome] of result.outcomes.entries()) {
-      if (!outcome.committed) {
-        const id = requests[index]!.id
-        reply({
-          type: 'failed',
-          id,
-          outcome: 'rolled-back',
-          error: journalSqlFailure(outcome.error)
-        })
-        acknowledged.add(id)
-      }
-    }
-  } catch (error) {
-    fault ??= batch.fault
-    for (const request of requests) {
-      if (!acknowledged.has(request.id)) {
-        reply({
-          type: 'failed',
-          id: request.id,
-          outcome:
-            error instanceof JournalSqlBatchError
-              ? error.outcome
-              : dispatched
-                ? 'indeterminate'
-                : 'not-dispatched',
-          fatal: fault !== undefined,
-          error: journalSqlFailure(error)
-        })
-      }
-    }
-  }
 }
 
 function scheduleNextDrain(): void {

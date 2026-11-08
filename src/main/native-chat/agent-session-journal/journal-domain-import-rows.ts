@@ -1,8 +1,7 @@
+import { insertJournalDomainImportedSubmission } from './journal-domain-import-submissions'
 import { journalDomainItemReadColumns } from './journal-domain-item-read-columns'
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import type Database from '../../sqlite/sync-database'
-import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
@@ -129,35 +128,11 @@ export function insertJournalDomainImportPage(
       }
       break
     }
-    case 'attempts': {
-      const insert =
-        db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,
-        attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,
-        fingerprint,dispatch_state,candidate,admitted_personal,dispatch_fence,signed_out,payload_json)
-        VALUES(?,?,?,?,0,1,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
-      for (const { ordinal, candidate, admittedPersonal, submission } of page.rows) {
-        insert.run(
-          ...prefix,
-          submission.clientMessageId,
-          submission.submittedSequence ?? 0,
-          agentJournalSubmissionKey(submission.clientMessageId),
-          ordinal,
-          submission.submittedAt,
-          submission.acceptedSequence ?? null,
-          submission.payloadFingerprint,
-          submission.dispatchState,
-          Number(candidate),
-          Number(admittedPersonal),
-          submission.fence,
-          Number(
-            submission.dispatchState === 'rejected' &&
-              readWholeAgentSessionFailureFact(submission.rejection)?.kind === 'notSignedIn'
-          ),
-          JSON.stringify(submission)
-        )
+    case 'attempts':
+      for (const attempt of page.rows) {
+        insertJournalDomainImportedSubmission(db, target, attempt)
       }
       break
-    }
     case 'receipts': {
       const insert =
         db.prepare(`INSERT INTO journal_send_receipts(session_id,epoch,message_id,payload_json)

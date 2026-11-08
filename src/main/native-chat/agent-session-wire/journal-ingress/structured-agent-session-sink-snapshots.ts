@@ -1,3 +1,4 @@
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { ClaudeJournalSnapshot } from '../../../claude/claude-subagent-journaled-identities'
 
 /** How a conversation's owner delivers saved facts and holds reading across a replacement. */
@@ -11,6 +12,26 @@ export type StructuredAgentSessionSnapshotSource = (
 
 /** One acquisition's saved facts, replaced whole per epoch, and the holds a replacement places. */
 export class StructuredAgentSessionSinkSnapshots {
+  private readonly liveSources = new Set<{
+    read(epoch: string): readonly AgentJournalRenderItem[]
+    flush(): void
+  }>()
+
+  bindLiveText = (source: {
+    read(epoch: string): readonly AgentJournalRenderItem[]
+    flush(): void
+  }): (() => void) => {
+    this.liveSources.add(source)
+    return () => {
+      this.liveSources.delete(source)
+    }
+  }
+  readLiveText = (epoch: string): readonly AgentJournalRenderItem[] =>
+    this.held || this.closed ? [] : [...this.liveSources].flatMap((source) => source.read(epoch))
+  flushLiveText = (): void => {
+    this.liveSources.forEach((source) => source.flush())
+  }
+
   private snapshot: ClaudeJournalSnapshot | null = null
   private release: (() => void) | undefined
   private holds = 0
@@ -49,6 +70,7 @@ export class StructuredAgentSessionSinkSnapshots {
 
   close(): void {
     this.closed = true
+    this.liveSources.clear()
     this.release?.()
     this.release = undefined
     this.resolveUnheld()

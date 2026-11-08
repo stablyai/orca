@@ -18,10 +18,7 @@ export function readJournalSqlAcceptedInputs(
   const person = db
     .prepare(`SELECT attempt.accepted_sequence FROM journal_submission_attempts AS attempt
     WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.dispatch_state='accepted' AND attempt.accepted_sequence IS NOT NULL
-      AND CASE WHEN json_type(attempt.payload_json,'$.queuedMessageId') IS NOT NULL
-        THEN attempt.admitted_personal=1
-        ELSE json_extract(attempt.payload_json,'$.source.kind')='user'
-          OR (json_type(attempt.payload_json,'$.source') IS NULL AND json_extract(attempt.payload_json,'$.origin')='client') END
+      AND attempt.admitted_personal=1
     ORDER BY attempt.accepted_sequence DESC LIMIT 1`)
     .get(...prefix)
   return {

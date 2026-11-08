@@ -176,18 +176,25 @@ export function readJournalDomainItems(
     }
     case 'items-by-kind': {
       const kinds = [...new Set(operation.kinds)]
-      const rows = kinds.length
-        ? db
-            .prepare(`SELECT payload_json, ordinal FROM journal_items INDEXED BY journal_items_kind
-            WHERE session_id=? AND epoch=? AND hidden=0 AND kind IN (${kinds.map(() => '?').join(',')})
-            AND ordinal>? ORDER BY ordinal LIMIT ?`)
-            .all(...prefix, ...kinds, operation.afterOrdinal, operation.limit + 1)
-        : []
-      const page = rows.slice(0, operation.limit)
+      const headers = kinds
+        .flatMap((kind) =>
+          db
+            .prepare(`SELECT item_id,ordinal FROM journal_items INDEXED BY journal_items_kind
+          WHERE session_id=? AND epoch=? AND hidden=0 AND kind=? AND ordinal>?
+          ORDER BY ordinal LIMIT ?`)
+            .all(...prefix, kind, operation.afterOrdinal, operation.limit + 1)
+        )
+        .sort((a, b) => Number(a.ordinal) - Number(b.ordinal))
+      const chosen = headers.slice(0, operation.limit)
+      const page = db
+        .prepare(`SELECT item.payload_json FROM json_each(?) chosen
+        CROSS JOIN journal_items item WHERE item.session_id=? AND item.epoch=?
+          AND item.item_id=chosen.value ORDER BY CAST(chosen.key AS INTEGER)`)
+        .all(JSON.stringify(chosen.map((header) => header.item_id)), ...prefix)
       return {
         kind: 'items-by-kind',
         items: page.map(parseItem),
-        nextOrdinal: rows.length > operation.limit ? Number(page.at(-1)!.ordinal) : null
+        nextOrdinal: headers.length > operation.limit ? Number(chosen.at(-1)!.ordinal) : null
       }
     }
     case 'context-floor': {

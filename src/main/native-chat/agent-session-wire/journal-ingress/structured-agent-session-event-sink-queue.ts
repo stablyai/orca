@@ -1,3 +1,4 @@
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   StructuredAgentSessionEventTarget,
   StructuredAgentSessionReadingControl,
@@ -50,6 +51,31 @@ export class StructuredAgentSessionSinkQueue {
   private readonly settledTurnListeners = new Set<(turnItemIds: readonly string[]) => void>()
   private releaseSettledTurns: (() => void) | undefined
   private readingPaused = false
+  bindLiveText = (
+    source: Parameters<StructuredAgentSessionSinkSnapshots['bindLiveText']>[0]
+  ): (() => void) => this.snapshots.bindLiveText(source)
+
+  liveText = (): readonly AgentJournalRenderItem[] => {
+    const target = this.target
+    return !target || this.closed || this.failure !== null || this.snapshots.held
+      ? []
+      : this.snapshots.readLiveText(target.journal.cursor().epoch)
+  }
+
+  flushLiveText = (): void => {
+    this.snapshots.flushLiveText()
+  }
+
+  publishLiveText = (): StructuredAgentSessionSinkAdmission =>
+    this.submit({
+      bytes: 1,
+      publicationKey: 'live-text',
+      run: (bound) => {
+        if (this.target === bound) {
+          bound.publishLiveText?.(this.liveText())
+        }
+      }
+    })
   readonly snapshots = new StructuredAgentSessionSinkSnapshots(() => this.syncReading())
 
   constructor(

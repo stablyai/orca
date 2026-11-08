@@ -3,6 +3,7 @@ import type { JournalStep } from '../../agent-session-journal/writing/journal-st
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type {
   JournalStepOutcome,
+  JournalStepsResult,
   JournalWriterSettlementResolution
 } from '../../agent-session-journal/writing/journal-writer-step'
 import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
@@ -50,7 +51,7 @@ export type StructuredAgentSessionTransition = {
   lifecycle: boolean
   publish: boolean
   beforeRun?: () => boolean
-  onResolved?: (outcomes: readonly JournalStepOutcome[]) => void
+  onResolved?: (outcomes: readonly JournalStepOutcome[], committed?: JournalStepsResult) => void
   /** Run after writes and parent publication, in queue order. */
   onPublished?: () => void
 }
@@ -102,7 +103,7 @@ function transitionAppend(
           })),
           transition.beforeRun
         )
-        transition.onResolved?.(result.outcomes)
+        transition.onResolved?.(result.outcomes, result)
         if (
           transition.publish &&
           result.outcomes.some((outcome) => outcome.kind === 'committed' && outcome.wrote)

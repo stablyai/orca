@@ -3,6 +3,7 @@ import type {
   AgentJournalAgentHandoffItem
 } from '../../../../shared/agent-session/journal/agent-journal-creation-facts'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalItemAppendInput, JournalItemAppendOptions } from '../journal-store-contracts'
 import type { JournalSqlFailure } from '../journal-sql-failure'
 import type { JournalLifecycleIdentityMutationInput } from './journal-lifecycle-mutation'
@@ -61,5 +62,7 @@ export type JournalStepOutcome =
 
 export type JournalStepsResult = {
   outcomes: JournalStepOutcome[]
+  cursor?: AgentJournalCursor
+  items?: AgentJournalRenderItem[]
   failure?: JournalSqlFailure
 }

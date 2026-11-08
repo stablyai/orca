@@ -2,7 +2,8 @@ import type { JournalItemEcho } from '../../agent-session-journal/projection/jou
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalItemBody,
-  AgentJournalProducerLinkage
+  AgentJournalProducerLinkage,
+  AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
@@ -66,6 +67,12 @@ export type StructuredAgentSessionItemAppendOptions = StructuredAgentSessionAppe
 export type StructuredAgentSessionRevisionOptions = StructuredAgentSessionItemAppendOptions
 
 export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSink & {
+  /** Reads the existing stream owner; no text is copied into the sink. */
+  bindLiveText?(source: {
+    read(epoch: string): readonly AgentJournalRenderItem[]
+    flush(): void
+  }): () => void
+  publishLiveText?(): StructuredAgentSessionSinkAdmission
   observeExit?: StructuredAgentSessionExitObservation['record']
   /** Adapters report only their acquisition's own spontaneous root exit, never a requested close. */
   observeRootExit?: StructuredAgentSessionRootExitReceipt['observe']
@@ -148,6 +155,7 @@ export type StructuredAgentSessionEventTarget = {
   journal: AgentSessionJournal
   fence: number
   publish: (activity?: AgentSessionTurnActivity | null) => void
+  publishLiveText?: (items: readonly AgentJournalRenderItem[]) => void
   /** Turn rows any writer's commit left terminal on this journal. */
   observeSettledTurns?: (listener: (turnItemIds: readonly string[]) => void) => () => void
 }
@@ -158,6 +166,7 @@ export type DeferredStructuredAgentSessionEventSink = {
   bind(target: StructuredAgentSessionEventTarget): void
   unbind(): void
   followSnapshots(source: StructuredAgentSessionSnapshotSource): Promise<void>
+  liveText(): readonly AgentJournalRenderItem[]
   close(): void
   drained(): Promise<StructuredAgentSessionSinkBarrier>
   lifecycleBarrier(): Promise<StructuredAgentSessionSinkBarrier>
@@ -263,6 +272,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
   return {
     exitObservation: () => exit,
     sink: {
+      bindLiveText: queue.bindLiveText,
+      publishLiveText: queue.publishLiveText,
       observeExit: exit.record,
       observeRootExit: rootExit.observe,
       onRootExit: rootExit.listen,
@@ -304,9 +315,16 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     bind: (next) => queue.bind(next),
     unbind: () => queue.unbind(),
     followSnapshots: (source) => queue.snapshots.follow(source),
-    close: () => queue.close(),
+    liveText: queue.liveText,
+    close: () => {
+      queue.flushLiveText()
+      queue.close()
+    },
     drained: queue.barrier,
-    lifecycleBarrier: queue.barrier,
+    lifecycleBarrier: () => {
+      queue.flushLiveText()
+      return queue.barrier()
+    },
     state: queue.state
   }
 }

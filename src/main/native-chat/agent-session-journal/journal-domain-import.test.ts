@@ -9,7 +9,7 @@ import {
   openJournalDomainDatabase
 } from './database/journal-domain-database'
 import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
-import { publishJournalSessionEpoch } from './durable-rows/journal-row-table'
+import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { prepareJournalDomainImport } from './journal-domain-import'
@@ -29,7 +29,7 @@ afterEach(() => {
 })
 
 /** The new file has no source history; the original stays separate and read-only. */
-function savedChat() {
+function savedChat(retained = true) {
   const root = mkdtempSync(join(tmpdir(), 'orca-domain-import-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const filename = join(root, 'agent-session-domain.db')
@@ -57,7 +57,11 @@ function savedChat() {
   })
   runJournalTransaction(source, () => {
     publishJournalSessionEpoch(source, { sessionId: 'session', workspaceId: 'workspace' }, 'epoch')
-    publishJournalOutcomeEpoch(source, 'session', 'epoch', rows)
+    if (retained) {
+      publishJournalOutcomeEpoch(source, 'session', 'epoch', rows)
+    } else {
+      rows.forEach((row) => insertJournalRow(source, 'session', row))
+    }
   })
   source.close()
   const reader = new Database(originalFilename, { readonly: true, fileMustExist: true })
@@ -102,7 +106,7 @@ function domainRows(db: Database.Database) {
 }
 
 it('imports a frozen saved chat as typed domain rows, ready last, and resumes after interruption', () => {
-  const { db, reader } = savedChat()
+  const { db, reader } = savedChat(false)
   reader.exec('BEGIN')
   expect(() => prepareJournalDomainImport(reader, 'session')).toThrow(/outside a transaction/)
   reader.exec('ROLLBACK')
@@ -126,6 +130,51 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
     expect(maintain(db, { kind: 'import-page', target: header, page })).toBe(true)
   }
   expect(maintain(db, { kind: 'import-finish', header })).toBe('epoch')
+  expect(
+    db
+      .prepare(`SELECT message_id,attempt_sequence,admission_family_id,admission_origin,
+    handover_sequence,handover_place_sequence,rejection_sequence,rejection_kept_message_id,
+    echo_observed,admission_body_json IS NULL AS body_released
+    FROM journal_submission_attempts ORDER BY message_id`)
+      .all()
+  ).toEqual([
+    {
+      message_id: 'first',
+      attempt_sequence: 5,
+      admission_family_id: 'command',
+      admission_origin: 'client',
+      handover_sequence: 6,
+      handover_place_sequence: 6,
+      rejection_sequence: null,
+      rejection_kept_message_id: null,
+      echo_observed: 0,
+      body_released: 1
+    },
+    {
+      message_id: 'retry',
+      attempt_sequence: 10,
+      admission_family_id: 'command',
+      admission_origin: 'client',
+      handover_sequence: 11,
+      handover_place_sequence: 11,
+      rejection_sequence: null,
+      rejection_kept_message_id: null,
+      echo_observed: 0,
+      body_released: 1
+    },
+    {
+      message_id: 'send',
+      attempt_sequence: 18,
+      admission_family_id: 'ordinary',
+      admission_origin: 'host',
+      handover_sequence: null,
+      handover_place_sequence: null,
+      rejection_sequence: null,
+      rejection_kept_message_id: null,
+      echo_observed: 1,
+      body_released: 1
+    }
+  ])
   const item = (item_id: string, revision: number, sequence: number) => ({
     item_id,
     revision,
@@ -181,7 +230,7 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
   })
   expect(
     readJournalDomainQueuePauseContext(db, { sessionId: 'session', epoch: 'epoch' }, null, []).marks
-  ).toMatchObject({ manualStop: null, resumedSequence: 17, reopenedSequence: 2 })
+  ).toMatchObject({ resumedSequence: 17, reopenedSequence: 2 })
   expect(
     readJournalDomainTurnScope(
       db,

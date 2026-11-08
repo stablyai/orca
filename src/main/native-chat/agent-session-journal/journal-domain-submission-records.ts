@@ -50,7 +50,7 @@ export type JournalDomainSubmissionHandover = {
 export type JournalDomainSubmissionHandoverPlace = {
   sequence: number
   at: number
-  scope: AgentJournalTurnScope
+  scope: AgentJournalTurnScope | undefined
 }
 
 export type JournalDomainSubmissionRejection = {
@@ -162,7 +162,10 @@ export function readJournalDomainSubmissionAttempt(
         : {
             sequence: Number(row.handover_place_sequence),
             at: Number(row.handover_place_at),
-            scope: JSON.parse(String(row.handover_place_scope_json))
+            scope:
+              row.handover_place_scope_json === null
+                ? undefined
+                : JSON.parse(String(row.handover_place_scope_json))
           },
     carries: row.carries_json === null ? [] : JSON.parse(String(row.carries_json)),
     rejection:

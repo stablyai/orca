@@ -42,7 +42,7 @@ export async function commitJournalSqlMessages(
   jobs: readonly JournalSqlMessageJob[],
   publish: (commit: JournalSqlMessagesCommit, index: number) => void
 ): Promise<JournalSqlBatchResult<JournalSqlMessagesCommit>> {
-  const result = await batch.run(jobs, (job) => applyMessageSteps(db, job))
+  const result = await batch.run(jobs, (job) => applyJournalSqlMessageSteps(db, job.command))
   for (const [index, outcome] of result.outcomes.entries()) {
     if (outcome.committed) {
       publish(outcome.value, index)
@@ -51,11 +51,11 @@ export async function commitJournalSqlMessages(
   return result
 }
 
-function applyMessageSteps(
+export function applyJournalSqlMessageSteps(
   db: Database.Database,
-  job: JournalSqlMessageJob
+  command: MessageCommand
 ): JournalSqlMessagesCommit {
-  const { target, steps, savedAt } = job.command
+  const { target, steps, savedAt } = command
   const head = db
     .prepare('SELECT last_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?')
     .get(target.sessionId, target.epoch)

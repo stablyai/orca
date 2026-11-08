@@ -10,19 +10,7 @@ export function prepareJournalSqlRequest(
   command: JournalSqlRequest['command']
 ): JournalSqlRequest {
   let batch: JournalSqlRequest['batch']
-  if (
-    command.type === 'messages' &&
-    command.job.command.steps.length > 0 &&
-    command.job.command.steps.every(
-      (step) => step.kind === 'text-snapshot' && streamingText(step.body)
-    )
-  ) {
-    batch = {
-      sessionId: command.job.command.target.sessionId,
-      steps: command.job.command.steps.length,
-      bytes: command.job.bytes
-    }
-  } else if (command.type === 'write' && !command.command.effects) {
+  if (command.type === 'write' && !command.command.effects) {
     const { operation } = command.command
     if (
       operation.kind === 'steps' &&

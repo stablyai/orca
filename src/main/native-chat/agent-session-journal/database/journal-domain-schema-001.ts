@@ -167,12 +167,42 @@ CREATE TABLE journal_submission_attempts (
   signed_out INTEGER NOT NULL DEFAULT 0 CHECK(signed_out IN (0,1)),
   candidate INTEGER NOT NULL DEFAULT 0,
   admitted_personal INTEGER NOT NULL DEFAULT 0 CHECK(admitted_personal IN (0,1)),
+  echo_observed INTEGER NOT NULL DEFAULT 0 CHECK(echo_observed IN (0,1)),
+  admission_body_json TEXT,
+  admission_provider_handle_json TEXT,
+  admission_fence INTEGER NOT NULL DEFAULT 0,
+  admission_scope_json TEXT,
+  admission_family_id TEXT,
+  admission_origin TEXT,
+  admission_source_kind TEXT,
+  admission_options_json TEXT,
+  handover_sequence INTEGER,
+  handover_at INTEGER,
+  handover_fence INTEGER,
+  handover_scope_json TEXT,
+  handover_place_sequence INTEGER,
+  handover_place_at INTEGER,
+  handover_place_scope_json TEXT,
+  carries_json TEXT,
+  rejection_sequence INTEGER,
+  rejection_at INTEGER,
+  rejection_fence INTEGER,
+  rejection_reason TEXT,
+  rejection_fact_json TEXT,
+  rejection_recovered INTEGER,
+  rejection_kept_message_id TEXT,
+  rejection_answered_turn_json TEXT,
+  presentation_member INTEGER NOT NULL DEFAULT 0 CHECK(presentation_member IN (0,1)),
+  normalized_handoff INTEGER NOT NULL DEFAULT 0 CHECK(normalized_handoff IN (0,1)),
   payload_json TEXT NOT NULL,
   PRIMARY KEY(session_id, epoch, message_id, attempt_sequence, attempt_index)
 );
 CREATE UNIQUE INDEX journal_submission_head ON journal_submission_attempts(session_id, epoch, message_id) WHERE current=1;
 CREATE UNIQUE INDEX journal_submission_item ON journal_submission_attempts(session_id, epoch, item_id) WHERE current=1;
 CREATE INDEX journal_submission_echo ON journal_submission_attempts(session_id, epoch, fingerprint, submitted_at, ordinal) WHERE current=1;
+CREATE INDEX journal_submission_person_acceptance ON journal_submission_attempts(session_id, epoch, accepted_sequence DESC) WHERE dispatch_state='accepted' AND admitted_personal=1;
+CREATE INDEX journal_submission_family ON journal_submission_attempts(session_id,epoch,admission_family_id,attempt_sequence,attempt_index,ordinal) WHERE current=1;
+CREATE INDEX journal_submission_ordinal ON journal_submission_attempts(session_id,epoch,ordinal);
 CREATE INDEX journal_submission_acceptance ON journal_submission_attempts(session_id, epoch, accepted_sequence DESC) WHERE dispatch_state='accepted';
 CREATE TABLE journal_send_receipts (
   session_id TEXT NOT NULL,
@@ -228,6 +258,8 @@ CREATE INDEX journal_edit_leases_message ON journal_edit_leases(session_id, epoc
 CREATE INDEX journal_edit_leases_deadline ON journal_edit_leases(session_id, epoch, expires_at);
 CREATE INDEX journal_items_root_position ON journal_items(session_id, epoch, sequence, sequence_index, ordinal)
   WHERE hidden=0 AND root=1;
+CREATE INDEX journal_items_queue_eligible_turn ON journal_items(session_id, epoch, sequence, sequence_index, ordinal)
+  WHERE hidden=0 AND turn_marker=1 AND (queue_command_turn=0 OR queue_failed_outcome=0 OR queue_failed_at>0);
 CREATE INDEX journal_items_turn_marker ON journal_items(session_id, epoch, sequence, sequence_index, ordinal)
   WHERE hidden=0 AND turn_marker=1;
 CREATE INDEX journal_items_visible_position ON journal_items(session_id, epoch, sequence, sequence_index, ordinal)

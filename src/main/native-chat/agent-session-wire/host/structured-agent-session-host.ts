@@ -18,7 +18,7 @@ import type { StructuredAgentSessionAttachContext } from '../acquisition/structu
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
 import { flushStructuredAgentSessionHost } from '../termination/structured-agent-session-host-teardown'
 import type * as HostTypes from './structured-agent-session-host-types'
-import { StructuredAgentSessionEventRecovery } from '../termination/structured-agent-session-event-recovery'
+import { StructuredAgentSessionEventRecovery as EventRecovery } from '../termination/structured-agent-session-event-recovery'
 import { StructuredAgentSessionBackgroundTaskChannel as BackgroundTasks } from '../publication/subscribers/structured-agent-session-background-task-channel'
 import { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import { createStructuredAgentSessionPublicationWiring } from './structured-agent-session-publication-wiring'
@@ -51,16 +51,16 @@ export class StructuredAgentSessionHost {
     (sessionId) => this.backgroundTasks.read(sessionId),
     (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false,
     this.sessions,
-    (sessionId) => this.usageLimitContinue?.readState(sessionId)
+    (sessionId) => this.usageLimitContinue?.readState(sessionId),
+    (sessionId) => this.runtimeState?.currentEventSink(sessionId)?.liveText() ?? []
   )
-  private readonly subscribers = this.clientDelivery.subscribers
   private readonly tasks = new StructuredAgentSessionTaskQueue()
   private readonly runtimeState: StructuredAgentSessionHostRuntimeState
   private readonly startup: ReturnType<typeof createStartupRecovery>
   readonly reconcileRestartLeases = () => this.startup.reconcileRestartLeases()
   private readonly lifetime: HostTypes.StructuredAgentSessionConversationLifetime
   private readonly conversationDelivery: conversation.StructuredAgentSessionConversationDelivery
-  private readonly eventRecovery: StructuredAgentSessionEventRecovery
+  private readonly eventRecovery: EventRecovery
   private readonly backgroundTasks: BackgroundTasks
   readonly restartResume: StructuredAgentSessionRestartResume
 
@@ -73,7 +73,7 @@ export class StructuredAgentSessionHost {
     this.backgroundTasks = new BackgroundTasks(
       deps,
       this.sessions,
-      this.subscribers,
+      this.clientDelivery.subscribers,
       (sessionId) => this.lifetime.conversation(sessionId),
       this.clientDelivery.readCurrentWork,
       this.clientDelivery.readChildWork,
@@ -103,7 +103,7 @@ export class StructuredAgentSessionHost {
       clientDelivery: this.clientDelivery
     })
     this.startup = createStartupRecovery(deps, this.runtimeState.reconcileLeases, this.runtimeState)
-    this.eventRecovery = new StructuredAgentSessionEventRecovery({
+    this.eventRecovery = new EventRecovery({
       deps,
       store: deps.store,
       sessions: this.sessions,
@@ -159,7 +159,7 @@ export class StructuredAgentSessionHost {
   childAccountHome = this.reads.childAccountHome
   prospectiveAccountHome = this.reads.prospectiveAccountHome
 
-  handleAdapterEvent = (event: Parameters<StructuredAgentSessionEventRecovery['handle']>[0]) =>
+  handleAdapterEvent = (event: Parameters<EventRecovery['handle']>[0]) =>
     this.eventRecovery.handle(event)
 
   // Keep inference so publishStatus stays required in the attach-context spread.
@@ -178,7 +178,7 @@ export class StructuredAgentSessionHost {
 
   private attachContext = (): StructuredAgentSessionAttachContext => ({
     ...this.lifetimeContext(),
-    subscribers: this.subscribers,
+    subscribers: this.clientDelivery.subscribers,
     tasks: this.tasks,
     reconcileLeases: (sessionId) => this.runtimeState.reconcileLeases(sessionId),
     serialize: (sessionId, task) => this.serialize(sessionId, task),
@@ -258,7 +258,7 @@ export class StructuredAgentSessionHost {
     mutationWiring.createStructuredAgentSessionHostMutationContext({
       deps: this.deps,
       sessions: this.sessions,
-      subscribers: this.subscribers,
+      subscribers: this.clientDelivery.subscribers,
       lifetime: this.lifetime,
       clientDelivery: this.clientDelivery,
       conversationDelivery: this.conversationDelivery,
@@ -304,9 +304,9 @@ export class StructuredAgentSessionHost {
 
   readonly continuationContext: ReturnType<typeof contextReader>
 
-  observeConversationPublications: typeof this.sessions.observeConversationPublications = (
-    ...args
-  ) => this.sessions.observeConversationPublications(...args)
+  observeConversationPublications = this.sessions.observeConversationPublications.bind(
+    this.sessions
+  )
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
   journalCurrentRead = this.reads.journalCurrentRead
   queuedSendAnswer = this.reads.queuedSendAnswer
@@ -334,7 +334,7 @@ export class StructuredAgentSessionHost {
   publishWorkChanged: (sessionId: string) => void = this.clientDelivery.publishGenerationEnded
 
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
-  unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
+  unsubscribe = (id: string, key: string): void => this.clientDelivery.subscribers.close(id, key)
 
   /** Retains no per-session subscription. */
   subscribeStatus = this.clientDelivery.subscribeStatus
@@ -350,7 +350,7 @@ export class StructuredAgentSessionHost {
 
   collaboratorsForTests = () => ({
     sessions: this.sessions,
-    subscribers: this.subscribers,
+    subscribers: this.clientDelivery.subscribers,
     runtimeState: this.runtimeState,
     conversationDelivery: this.conversationDelivery,
     lifetime: this.lifetime,

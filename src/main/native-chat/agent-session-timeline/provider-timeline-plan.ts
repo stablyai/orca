@@ -6,12 +6,18 @@ import type {
   StructuredAgentSessionSinkAdmission
 } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
-import type { JournalStepOutcome } from '../agent-session-journal/writing/journal-writer-step'
+import type {
+  JournalStepOutcome,
+  JournalStepsResult
+} from '../agent-session-journal/writing/journal-writer-step'
 
 export type ProviderTimelineSink = Required<
   Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>
 > &
-  Pick<StructuredAgentSessionEventSink, 'setActivity' | 'written' | 'observeSettledTurns'>
+  Pick<
+    StructuredAgentSessionEventSink,
+    'setActivity' | 'written' | 'observeSettledTurns' | 'bindLiveText' | 'publishLiveText'
+  >
 
 type ItemStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'item' }>
 type SettlementStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'settlement' }>
@@ -22,21 +28,25 @@ const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 export class ProviderTimelinePlan {
   private readonly steps: StructuredAgentSessionTransitionStep[] = []
   private readonly admitted: (() => void)[] = []
-  private readonly resolved: ((outcomes: readonly JournalStepOutcome[]) => void)[] = []
+  private readonly resolved: ((
+    outcomes: readonly JournalStepOutcome[],
+    committed: JournalStepsResult
+  ) => void)[] = []
+  private readonly published: (() => void)[] = []
   private lifecycle = false
 
   item(
     step: StepInput<ItemStep>,
     lifecycle = false,
-    onResolved?: (outcome: JournalStepOutcome) => void
+    onResolved?: (outcome: JournalStepOutcome, committed: JournalStepsResult) => void
   ): void {
     const index = this.steps.length
     this.steps.push({ kind: 'item', ...step })
     if (onResolved) {
-      this.resolved.push((outcomes) => {
+      this.resolved.push((outcomes, committed) => {
         const outcome = outcomes[index]
         if (outcome) {
-          onResolved(outcome)
+          onResolved(outcome, committed)
         }
       })
     }
@@ -52,26 +62,42 @@ export class ProviderTimelinePlan {
     this.admitted.push(change)
   }
 
+  onPublished(change: () => void): void {
+    this.published.push(change)
+  }
+
   submit(
     sink: ProviderTimelineSink,
     onPublished?: () => void
   ): StructuredAgentSessionSinkAdmission {
     let admitted = false
-    let synchronousOutcomes: readonly JournalStepOutcome[] | undefined
-    const resolve = (outcomes: readonly JournalStepOutcome[]) => {
+    let synchronousOutcomes: JournalStepsResult | undefined
+    let synchronousPublication = false
+    const published = () => {
+      if (!admitted) {
+        synchronousPublication = true
+        return
+      }
+      this.published.forEach((change) => change())
+      onPublished?.()
+    }
+    const resolve = (
+      outcomes: readonly JournalStepOutcome[],
+      committed = { outcomes: [...outcomes] }
+    ) => {
       if (admitted) {
-        this.resolved.forEach((change) => change(outcomes))
+        this.resolved.forEach((change) => change(outcomes, committed))
       } else {
-        synchronousOutcomes = outcomes
+        synchronousOutcomes = committed
       }
     }
-    if (this.steps.length > 0) {
+    if (this.steps.length > 0 || this.published.length > 0) {
       const admission = sink.tryAppendTransition({
         steps: this.steps,
         lifecycle: this.lifecycle,
         publish: true,
         onResolved: resolve,
-        ...(onPublished ? { onPublished } : {})
+        onPublished: published
       })
       if (!admission.accepted) {
         return admission
@@ -82,7 +108,10 @@ export class ProviderTimelinePlan {
     }
     admitted = true
     if (synchronousOutcomes) {
-      resolve(synchronousOutcomes)
+      resolve(synchronousOutcomes.outcomes, synchronousOutcomes)
+    }
+    if (synchronousPublication) {
+      published()
     }
     return ADMITTED
   }
@@ -91,13 +120,23 @@ export class ProviderTimelinePlan {
 export function providerTimelineSink(
   sink: StructuredAgentSessionEventSink
 ): ProviderTimelineSink | null {
-  const { tryAppendTransition, journalItems, setActivity, written, observeSettledTurns } = sink
+  const {
+    tryAppendTransition,
+    journalItems,
+    setActivity,
+    written,
+    observeSettledTurns,
+    bindLiveText,
+    publishLiveText
+  } = sink
   if (!tryAppendTransition || !journalItems) {
     return null
   }
   return {
     tryAppendTransition: (transition) => tryAppendTransition.call(sink, transition),
     journalItems: () => journalItems.call(sink),
+    ...(bindLiveText ? { bindLiveText: (source) => bindLiveText.call(sink, source) } : {}),
+    ...(publishLiveText ? { publishLiveText: () => publishLiveText.call(sink) } : {}),
     ...(observeSettledTurns
       ? { observeSettledTurns: (listener) => observeSettledTurns.call(sink, listener) }
       : {}),

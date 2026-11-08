@@ -94,22 +94,16 @@ export function readJournalDomainQueueFailure(db: Database.Database, target: Tar
   const prefix = [target.sessionId, target.epoch] as const
   const rows = db
     .prepare(`WITH newest AS (
-      SELECT source.sequence, source.sequence_index FROM journal_items source
+      SELECT source.sequence, source.sequence_index FROM journal_items source INDEXED BY journal_items_queue_eligible_turn
       WHERE source.session_id=? AND source.epoch=? AND source.hidden=0 AND source.turn_marker=1
-        AND (source.queue_command_turn=0 OR source.queue_failed_outcome=0 OR EXISTS(
-          SELECT 1 FROM journal_items report WHERE report.session_id=source.session_id
-            AND report.epoch=source.epoch AND report.hidden=0
-            AND report.queue_failure_report_turn_item_id=source.item_id))
+        AND (source.queue_command_turn=0 OR source.queue_failed_outcome=0 OR source.queue_failed_at>0)
       ORDER BY source.sequence DESC, source.sequence_index DESC LIMIT 1)
     SELECT source.item_id, source.queue_failed_at, source.queue_failure_witnessed_through,
       head.queue_failure_boundary FROM newest CROSS JOIN journal_items source
       JOIN journal_chat_state head ON head.session_id=source.session_id AND head.epoch=source.epoch
     WHERE source.session_id=? AND source.epoch=? AND source.hidden=0 AND source.turn_marker=1
       AND source.sequence=newest.sequence AND source.sequence_index=newest.sequence_index
-      AND (source.queue_command_turn=0 OR source.queue_failed_outcome=0 OR EXISTS(
-        SELECT 1 FROM journal_items report WHERE report.session_id=source.session_id
-          AND report.epoch=source.epoch AND report.hidden=0
-          AND report.queue_failure_report_turn_item_id=source.item_id)) LIMIT 200`)
+      AND (source.queue_command_turn=0 OR source.queue_failed_outcome=0 OR source.queue_failed_at>0) LIMIT 200`)
     .all(...prefix, ...prefix)
   const winner = rows.reduce<(typeof rows)[number] | undefined>(
     (prior, row) =>

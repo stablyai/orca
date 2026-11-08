@@ -152,7 +152,7 @@ export class JournalSqlDatabase {
   /** Planning and ordered reads share the chat's lane; ordinary readers see the last COMMIT. */
   serialize<T>(
     sessionId: string,
-    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects' | 'messages'>) => T | Promise<T>
+    run: (writer: Pick<JournalSqlOwner, 'write' | 'effects'>) => T | Promise<T>
   ): Promise<T> {
     this.assertOpen()
     const release = this.activity.hold()

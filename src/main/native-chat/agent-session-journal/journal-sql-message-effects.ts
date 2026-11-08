@@ -27,8 +27,7 @@ export function matchJournalSqlMessageEcho(
       WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.current=1 AND attempt.fingerprint=?
         AND attempt.dispatch_state<>'rejected'
         AND (?=0 OR COALESCE(attempt.accepted_sequence,0)>?)
-        AND NOT EXISTS(SELECT 1 FROM journal_item_aliases AS alias WHERE alias.session_id=attempt.session_id
-          AND alias.epoch=attempt.epoch AND alias.item_id=attempt.item_id AND alias.provider_item_id<>alias.item_id)
+        AND attempt.echo_observed=0
       ORDER BY attempt.submitted_at, attempt.ordinal`)
     .iterate(
       ...prefix,
@@ -60,7 +59,15 @@ export function acceptJournalSqlMessageEcho(
       .get(...prefix, itemId)
     submission = stored ? JSON.parse(String(stored.payload_json)) : undefined
   }
-  if (!submission || !journalDispatchRowApplies(submission)) {
+  if (!submission) {
+    return undefined
+  }
+  if (!journalDispatchRowApplies(submission)) {
+    db.prepare(`UPDATE journal_submission_attempts SET echo_observed=1,admission_body_json=NULL
+      WHERE session_id=? AND epoch=? AND message_id=? AND current=1 AND echo_observed=0`).run(
+      ...prefix,
+      submission.clientMessageId
+    )
     return undefined
   }
   const accepted: AgentJournalSubmission = {
@@ -72,9 +79,11 @@ export function acceptJournalSqlMessageEcho(
     resolvedAt: row.ts
   }
   delete accepted.recovered
-  db.prepare(`UPDATE journal_submission_attempts SET dispatch_state='accepted',candidate=0,payload_json=?
+  db.prepare(`UPDATE journal_submission_attempts SET dispatch_state='accepted',candidate=0,payload_json=?,
+      echo_observed=1,dispatch_fence=?,signed_out=0,admission_body_json=NULL
     WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
     JSON.stringify(accepted),
+    row.fence,
     ...prefix,
     accepted.clientMessageId
   )
