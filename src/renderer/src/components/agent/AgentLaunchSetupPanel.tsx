@@ -175,6 +175,7 @@ export function AgentLaunchSetupPanel({
         }
       }}
       onKeyDown={(event) => {
+        highlight.endKey()
         event.stopPropagation()
         if (
           !disabled &&

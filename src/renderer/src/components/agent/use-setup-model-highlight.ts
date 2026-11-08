@@ -14,31 +14,20 @@ export function useSetupModelHighlight(
 ) {
   const [reassert, setReassert] = useState(false)
   const navigating = useRef(false)
-  const restoring = useRef(false)
   const value = query ? undefined : start
   // Why: cmdk applies `value` only when the prop changes, so after its own pick we release it for
-  // one render and set it again, then bring that row into view as cmdk would.
+  // one render and set it again. A start that arrives or returns is brought into view.
   useLayoutEffect(() => {
     if (reassert) {
-      restoring.current = true
       setReassert(false)
-    } else if (restoring.current && value !== undefined) {
-      restoring.current = false
+    } else if (value !== undefined) {
       root.current
         ?.querySelector(`[cmdk-item][data-value="${CSS.escape(value)}"]`)
         ?.scrollIntoView({ block: 'nearest' })
     }
   }, [reassert, value, root])
-  // cmdk handles a navigation key or pointer move synchronously, so the flag lasts only for that event.
-  const markNavigating = (on: boolean) => {
-    navigating.current = on
-    if (on) {
-      queueMicrotask(() => {
-        navigating.current = false
-      })
-    }
-  }
   return {
+    // The flag spans one event: set before cmdk handles it, cleared once it bubbles past the list.
     command: {
       value: reassert ? undefined : value,
       onValueChange: (next: string) => {
@@ -46,11 +35,19 @@ export function useSetupModelHighlight(
           setReassert(true)
         }
       },
-      onPointerMoveCapture: () => markNavigating(true)
+      onPointerMoveCapture: () => {
+        navigating.current = true
+      },
+      onPointerMove: () => {
+        navigating.current = false
+      }
     },
-    onKeyDown: (event: KeyboardEvent) =>
-      markNavigating(
+    onKeyDown: (event: KeyboardEvent) => {
+      navigating.current =
         NAVIGATION_KEYS.has(event.key) || (event.ctrlKey && 'jknp'.includes(event.key))
-      )
+    },
+    endKey: () => {
+      navigating.current = false
+    }
   }
 }

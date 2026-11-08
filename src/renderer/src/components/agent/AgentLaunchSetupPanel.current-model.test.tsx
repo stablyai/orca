@@ -114,3 +114,25 @@ it('returns to the current model when a search is cleared without a key, as with
   fireEvent.change(search, { target: { value: '' } })
   expect(highlighted()).toBe('opencode/gpt-5.3-codex')
 })
+
+it('keeps a hovered model through a rerender, so Enter picks it instead of using the current one', () => {
+  render(listed, 'select')
+  const opus = document.querySelector('[cmdk-item][data-value="github-copilot/claude-opus-5"]')!
+  fireEvent.pointerMove(opus)
+  render(listed, 'select')
+  expect(highlighted()).toBe('github-copilot/claude-opus-5')
+  onUse.mockClear()
+  onDraftChange.mockClear()
+  fireEvent.keyDown(document.querySelector('[cmdk-input]')!, { key: 'Enter' })
+  expect(onUse).not.toHaveBeenCalled()
+  expect(onDraftChange).toHaveBeenCalledTimes(1)
+})
+
+it('returns to the current model after End at the last row and a keyless clear', () => {
+  render(listed)
+  const search = document.querySelector<HTMLInputElement>('[cmdk-input]')!
+  fireEvent.keyDown(search, { key: 'End' })
+  fireEvent.change(search, { target: { value: 'opus' } })
+  fireEvent.change(search, { target: { value: '' } })
+  expect(highlighted()).toBe('opencode/gpt-5.3-codex')
+})
