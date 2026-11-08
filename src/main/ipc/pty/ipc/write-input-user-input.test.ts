@@ -7,7 +7,8 @@ import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/
 
 const PTY_ID = 'pty-user-input'
 
-const { provider } = vi.hoisted(() => ({
+const { provider, observeTerminalUserInput } = vi.hoisted(() => ({
+  observeTerminalUserInput: vi.fn(),
   provider: {
     write: vi.fn(),
     hasPty: vi.fn(() => true),
@@ -15,6 +16,8 @@ const { provider } = vi.hoisted(() => ({
       vi.fn<(id: string, data: string) => WriteSettlement | Promise<WriteSettlement>>()
   }
 }))
+
+vi.mock('../../../telemetry/protected-milestones', () => ({ observeTerminalUserInput }))
 
 vi.mock('../provider/registry', () => ({
   tryGetProviderForPty: (id: string) => (id === PTY_ID ? provider : undefined)
@@ -39,6 +42,7 @@ beforeEach(() => {
   ptyOwnership.set(PTY_ID, 'local')
   provider.write.mockReset()
   provider.writeWithSettlement.mockReset()
+  observeTerminalUserInput.mockReset()
 })
 
 afterEach(() => {
@@ -76,5 +80,25 @@ describe('renderer PTY writes: input kind', () => {
 
     expect(provider.write).toHaveBeenCalledOnce()
     expect(facts.read(PTY_ID, 'inc-1').firstUserInputAt).toBeNull()
+  })
+})
+
+describe('renderer PTY writes: daily activity', () => {
+  it('marks activity only for accepted, typed driving input', async () => {
+    const writer = createWriteInput(new TerminalRunFactsRegister())
+    for (const [inputKind, data] of [
+      ['launch', 'claude\r'],
+      ['orchestration', 'mail\r'],
+      ['query-reply', '\x1b[3;4R'],
+      ['driving', '\x1b[3;4R'],
+      ['driving', '\x1b[I\x1b[O']
+    ] as const) {
+      await writer.writePtyInput({ id: PTY_ID, data, inputKind })
+    }
+    await writer.writePtyInput({ id: 'pty-without-provider', data: 'ls\r', inputKind: 'driving' })
+    expect(observeTerminalUserInput).not.toHaveBeenCalled()
+
+    await writer.writePtyInput({ id: PTY_ID, data: 'ls\r', inputKind: 'driving' })
+    expect(observeTerminalUserInput).toHaveBeenCalledOnce()
   })
 })

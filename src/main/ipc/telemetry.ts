@@ -30,6 +30,8 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'daemon_pty_cwd_readable',
   'star_nag_outcome',
   'feature_interaction_usage_bucket_reached',
+  'first_agent_interaction',
+  'meaningful_activity_day',
   'plugin_installed',
   'ssh_remote_runtime_resolved',
   'ssh_host_server_decided',

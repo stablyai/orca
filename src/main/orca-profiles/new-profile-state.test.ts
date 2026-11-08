@@ -68,7 +68,7 @@ describe('new desktop profile initialization', () => {
           activeTabId: null
         })
         expect(published.settings.telemetry).toEqual(
-          inherited ??
+          (inherited && { ...inherited, protectedMilestones: { installCohort: 'existing' } }) ??
             expect.objectContaining({
               existedBeforeTelemetryRelease: false,
               optedIn: true,

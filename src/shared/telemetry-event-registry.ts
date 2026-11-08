@@ -110,6 +110,10 @@ import {
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
 import { pluginInstalledSchema } from './telemetry-plugin-event-schemas'
+import {
+  firstAgentInteractionSchema,
+  meaningfulActivityDaySchema
+} from './telemetry-protected-milestone-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
 import { wslUsageSnapshotSchema } from './telemetry-wsl-usage-event-schemas'
 import {
@@ -134,6 +138,8 @@ export const eventSchemas = {
   app_starred_orca: appStarredOrcaSchema,
   star_nag_outcome: starNagOutcomeEventSchema,
   feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
+  first_agent_interaction: firstAgentInteractionSchema,
+  meaningful_activity_day: meaningfulActivityDaySchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
