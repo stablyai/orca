@@ -9,7 +9,7 @@ import { useCallback } from 'react'
 import type { RpcClient } from '../../../transport/rpc-client'
 import { useMediaPicker } from '../../../platform/media-picker'
 import type { PickedMobileFile } from '../../../platform/media-picker-contract'
-import { encodeBase64Bytes } from '../../../transport/base64-byte-codec'
+import { encodeBase64Bytes } from '../../../transport/encryption/base64-byte-codec'
 import { agentSessionPastedTextName } from '../../../../../src/shared/agent-session/agent-session-attachments'
 import { uploadMobileAgentSessionAttachment } from '../../mobile-agent-session-attachment-upload'
 import {

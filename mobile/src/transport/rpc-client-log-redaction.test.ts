@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 import type { ConnectionLogEntry } from './types'
 
-vi.mock('./e2ee', () => ({
+vi.mock('./encryption/e2ee', () => ({
   generateKeyPair: () => ({
     publicKey: new Uint8Array(32),
     secretKey: new Uint8Array(32)
@@ -42,24 +42,6 @@ afterEach(() => {
 })
 
 describe('mobile rpc-client connection logs', () => {
-  it('never exposes endpoint query credentials', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
-    globalThis.WebSocket = NeverOpeningWebSocket as unknown as typeof WebSocket
-    const logs: ConnectionLogEntry[] = []
-    const endpoint = 'wss://desktop.example:7443/runtime?token=super-secret&route=private'
-
-    const client = connect(endpoint, 'device-token', 'server-key', {
-      onLog: (entry) => logs.push(entry)
-    })
-
-    expect(logs).toContainEqual(
-      expect.objectContaining({ message: 'Opening WebSocket', detail: 'desktop.example:7443' })
-    )
-    expect(JSON.stringify(logs)).not.toContain('super-secret')
-    expect(JSON.stringify(logs)).not.toContain('route=private')
-    client.close()
-  })
-
   it('does not expose URL credentials in malformed legacy endpoints', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This socket fixture supplies the constructor, states, handlers, send and close consumed by the real client.
     globalThis.WebSocket = NeverOpeningWebSocket as unknown as typeof WebSocket

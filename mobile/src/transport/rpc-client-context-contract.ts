@@ -1,6 +1,6 @@
 import type { HostClientAcquisition } from './host-client-acquisition-registry'
 import type { RpcClient } from './rpc-client'
-import type { RelayHostReachability } from './relay-host-reachability'
+import type { RelayHostReachability } from './relay/relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 

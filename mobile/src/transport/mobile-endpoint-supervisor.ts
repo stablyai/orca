@@ -1,27 +1,27 @@
 import type { MobileEndpointSupervisorDependencies } from './mobile-endpoint-supervisor-contract'
-import { DirectReturnProbe } from './mobile-direct-return-probe'
-import { RelayReconnectController } from './mobile-relay-reconnect-controller'
-import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
+import { DirectReturnProbe } from './relay/mobile-direct-return-probe'
+import { RelayReconnectController } from './relay/mobile-relay-reconnect-controller'
+import { RelayLeaseRotationTimer } from './relay/mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import {
   liveRelayLeaseExpiry,
   suspendRelayIfStillConnected
 } from './mobile-endpoint-supervisor-support'
-import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
+import { selectDialableRelayCredentials } from './relay/mobile-relay-credential-selection'
 import { createRelayRecoveryLog, type RelayRecoveryLog } from './mobile-relay-recovery-log'
 import {
   mobileRelayCredentialNeedsRotation,
   rotateMobileRelayCredential
-} from './mobile-relay-credential-rotation'
+} from './relay/mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
-import { MobileRelayDirectGraceTimer } from './mobile-relay-direct-grace-timer'
-import { MobileRelaySessionEstablisher } from './mobile-relay-session-establisher'
-import * as recoveryPresentation from './mobile-relay-recovery-presentation'
+import { MobileRelayDirectGraceTimer } from './relay/mobile-relay-direct-grace-timer'
+import { MobileRelaySessionEstablisher } from './relay/mobile-relay-session-establisher'
+import * as recoveryPresentation from './relay/mobile-relay-recovery-presentation'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './types'
 import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { MobileRelayBackgroundGrace } from './mobile-relay-background-grace'
+import { MobileRelayBackgroundGrace } from './relay/mobile-relay-background-grace'
 import {
   logRelayConnected,
   logRelayCredentialUnavailable,

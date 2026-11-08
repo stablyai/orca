@@ -2,7 +2,7 @@ import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime/remote-r
 import {
   relayHostReachabilityForCloseCode,
   type RelayHostReachabilityFromCloseCode
-} from '../transport/relay-host-reachability'
+} from '../transport/relay/relay-host-reachability'
 import type {
   ConnectionLogEntry,
   ConnectionState,

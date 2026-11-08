@@ -71,8 +71,8 @@ export function transportStatusMountAdapters(
       }
     },
     'transport.pairing-race': ({ client, effect }: MountContext) => {
-      const race = modules.load<typeof import('../../../transport/pairing-candidate-race')>(
-        'mobile/src/transport/pairing-candidate-race.ts'
+      const race = modules.load<typeof import('../../../pairing/pairing-candidate-race')>(
+        'mobile/src/pairing/pairing-candidate-race.ts'
       ).racePairingCandidates
       let outcome: unknown = 'unraced'
       const candidate = (path: 'direct' | 'relay') => ({

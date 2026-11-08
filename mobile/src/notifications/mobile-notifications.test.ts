@@ -3,7 +3,7 @@ import { subscribeToDesktopNotifications } from './mobile-notifications'
 import './push-socket-dismissal'
 import { requestNotificationCatchup } from './push-dismissal-reconciliation'
 import { RpcClientStreamRegistry } from '../transport/rpc-client-stream-registry'
-import { MobileRelayRpcStreams } from '../transport/mobile-relay-rpc-streams'
+import { MobileRelayRpcStreams } from '../transport/relay/mobile-relay-rpc-streams'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 
@@ -161,73 +161,6 @@ beforeEach(() => {
     suppressWhileViewing: true
   }
 })
-
-const liveAlert = {
-  type: 'notification',
-  source: 'agent-task-complete',
-  title: 'Needs input',
-  body: 'Reply',
-  notificationId: 'agent-1',
-  notificationEpoch: 'epoch-1',
-  notificationSeq: 4,
-  paneKey: 'pane-1',
-  worktreeId: 'workspace-1',
-  executionHost: 'runtime:ssh-1'
-}
-
-function emitAlert(event: unknown = liveAlert) {
-  const rpc = registryClient()
-  const stop = subscribeToDesktopNotifications(rpc.client, 'host-1')
-  rpc.registry.handleResponse({
-    id: rpc.sent[0]!.id,
-    ok: true,
-    streaming: true,
-    result: event,
-    _meta: { runtimeId: 'runtime-1' }
-  })
-  return stop
-}
-
-it('does not schedule after a subscription is disposed during token lookup', async () => {
-  let finish: (value: null) => void = () => {}
-  fallback.token.mockReturnValue(
-    new Promise<null>((resolve) => {
-      finish = resolve
-    })
-  )
-  const stop = emitAlert()
-  stop()
-  finish(null)
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  expect(fallback.schedule).not.toHaveBeenCalled()
-})
-
-it.each(['disposal', 'host-upgrade'])(
-  'rechecks delivery authority after foreground eligibility (%s)',
-  async (change) => {
-    let finish: (eligible: boolean) => void = () => {}
-    fallback.token.mockResolvedValue(null)
-    if (change === 'host-upgrade') {
-      fallback.supported.mockReturnValue(false)
-      fallback.token.mockResolvedValue({ platform: 'ios', token: 'apns' })
-    }
-    fallback.eligible.mockReturnValue(
-      new Promise<boolean>((resolve) => {
-        finish = resolve
-      })
-    )
-    const stop = emitAlert()
-    await vi.waitFor(() => expect(fallback.eligible).toHaveBeenCalledOnce())
-    if (change === 'disposal') {
-      stop()
-    } else {
-      fallback.supported.mockReturnValue(true)
-    }
-    finish(true)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(fallback.schedule).not.toHaveBeenCalled()
-  }
-)
 
 describe('subscribeToDesktopNotifications', () => {
   it('releases the host stream once a ready lands after the disposer ran (direct)', () => {

@@ -13,12 +13,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
-import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
-import { getPairingScanErrorMessage } from '../src/transport/pairing-scan-error-message'
+import { decodePairingUrl, parsePairingCode } from '../src/pairing/pairing'
+import { getPairingScanErrorMessage } from '../src/pairing/pairing-scan-error-message'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
-} from '../src/transport/pre-profile-pairing-coordinator'
+} from '../src/pairing/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry } from '../src/transport/types'
 import type { PairingOffer } from '../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'

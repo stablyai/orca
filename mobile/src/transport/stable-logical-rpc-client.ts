@@ -4,10 +4,10 @@ import {
   forwardMigrationDialState,
   type MigrationDialStateForwarder
 } from './migration-dial-state-forwarder'
-import { waitForAuthenticated } from './replacement-session-authentication'
+import { waitForAuthenticated } from './relay/replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
-import type { RelayHostReachability } from './relay-host-reachability'
+import type { RelayHostReachability } from './relay/relay-host-reachability'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { LogicalClientCutoverError } from './logical-client-cutover-error'
 import { LogicalClientSuspendedError } from './logical-client-suspended-error'

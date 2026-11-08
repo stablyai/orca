@@ -6,11 +6,11 @@ import { ChevronLeft } from 'lucide-react-native'
 import {
   resolvePairConfirmRouteState,
   type PairConfirmRouteState
-} from '../src/transport/pair-confirm-state'
+} from '../src/pairing/pair-confirm-state'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
-} from '../src/transport/pre-profile-pairing-coordinator'
+} from '../src/pairing/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry } from '../src/transport/types'
 import { useRefreshHostClient } from '../src/transport/host-client-hooks'
 import { colors, spacing, radii, typography, pressedStyle } from '../src/theme/mobile-theme'

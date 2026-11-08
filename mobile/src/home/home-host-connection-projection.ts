@@ -1,4 +1,4 @@
-import type { RelayHostReachability } from '../transport/relay-host-reachability'
+import type { RelayHostReachability } from '../transport/relay/relay-host-reachability'
 import type { MobileConnectionPath } from '../transport/stable-logical-rpc-client'
 
 export type HomeHostConnectionProjectionEntry = {

@@ -36,7 +36,6 @@
 1 test-no-in-test-import-actual:src/renderer/src/hooks/useIpcEvents-rate-limit-hydration.test.ts
 1 test-no-in-test-import-actual:src/renderer/src/hooks/useIpcEvents-ssh-disconnect-cleanup.test.ts
 1 test-no-in-test-import-actual:src/renderer/src/lib/agent-session/launch/new-tab/agent-launch-caller-routing.test.ts
-1 test-no-polling-loop:mobile/src/transport/rpc-client-live-recovery.test.ts
 1 test-no-polling-loop:src/main/browser/cookies/browser-cookie-import-concurrency.test.ts
 1 test-no-polling-loop:src/main/claude/claude-stop-ack-race.test.ts
 1 test-no-polling-loop:src/main/claude/claude-stream-json-connection.test.ts
@@ -159,7 +158,6 @@
 1 test-no-real-time-wait:mobile/src/terminal/terminal-web-document-mount.test.ts
 1 test-no-real-time-wait:mobile/src/terminal/terminal-webview-tap-routing.test.ts
 1 test-no-real-time-wait:mobile/src/transport/mobile-relay-runtime-failover.test.ts
-4 test-no-real-time-wait:mobile/src/transport/rpc-client-live-recovery.test.ts
 1 test-no-real-time-wait:mobile/src/transport/rpc-operation-barrier.test.ts
 1 test-no-real-time-wait:mobile/src/transport/rpc-operation.test.ts
 1 test-no-real-time-wait:src/main/agent-hooks/posix-hook-json-stdin-reader.test.ts
@@ -488,9 +486,8 @@
 1 test-no-wall-clock:mobile/src/session/mobile-structured-send-new-action.test.ts
 1 test-no-wall-clock:mobile/src/session/native-chat/transcript/use-mobile-native-chat-message-send.test.ts
 1 test-no-wall-clock:mobile/src/transport/host-store.test.ts
-1 test-no-wall-clock:mobile/src/transport/mobile-relay-invite-director.test.ts
-3 test-no-wall-clock:mobile/src/transport/mobile-relay-resume-director.test.ts
-3 test-no-wall-clock:mobile/src/transport/rpc-client-live-recovery.test.ts
+1 test-no-wall-clock:mobile/src/pairing/mobile-relay-invite-director.test.ts
+1 test-no-wall-clock:mobile/src/transport/relay/mobile-relay-resume-director.test.ts
 1 test-no-wall-clock:src/cli/format.test.ts
 2 test-no-wall-clock:src/cli/runtime/serve-appimage-update.test.ts
 4 test-no-wall-clock:src/cli/runtime/serve-bundle-park.test.ts

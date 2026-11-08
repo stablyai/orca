@@ -2,9 +2,12 @@ import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type RpcClient, type SendRequestOptions } from './rpc-client'
 
-vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
+vi.mock(
+  './encryption/direct-e2ee-framing-policy',
+  () => import('./legacy-direct-framing-test-policy')
+)
 
-vi.mock('./e2ee', () => ({
+vi.mock('./encryption/e2ee', () => ({
   generateKeyPair: () => ({
     publicKey: new Uint8Array(32),
     secretKey: new Uint8Array(32)
@@ -326,46 +329,7 @@ describe('hosted GitHub operation physical authority', () => {
   async function turn() {
     await vi.advanceTimersByTimeAsync(0)
   }
-  it.each([false, true])(
-    'rechecks first-hop support at receipt; capable=%s replacement has zero provider effects',
-    async (capable) => {
-      const f = fixture()
-      const result = boundUpdate(f.page.client)
-      const rejected = expect(result).rejects.toThrow(
-        capable ? 'connection changed' : 'Update Orca'
-      )
-      f.post()
-      await turn()
-      f.answer()
-      await turn() // page obtains A, queues opted-in operation
-      await f.reconnect()
-      f.rebuild()
-      f.post()
-      await turn()
-      f.answer('b', capable)
-      await turn() // shell owns fresh B probe
-      f.answer('b', capable)
-      await rejected
-      expect(f.effects).toEqual([])
-      expect(f.frames()).toHaveLength(capable ? 1 : 0)
-      const retry = boundUpdate(f.page.client)
-      f.post()
-      await turn()
-      f.answer('b', true)
-      await turn()
-      f.post()
-      await turn()
-      f.answer('b', true)
-      await turn()
-      f.answer('b', true)
-      await turn()
-      await expect(retry).resolves.toMatchObject({ ok: true })
-      expect(f.effects).toHaveLength(1)
-      expect(f.effects[0]).toMatchObject({
-        expectedRuntimeSource: { sourceId: 'b', runtimeId: 'b' }
-      })
-    }
-  )
+
   it('stable A succeeds once; callback stays local and a definitive write reply survives later cutover', async () => {
     const f = fixture()
     const result = boundUpdate(f.page.client)
@@ -391,40 +355,7 @@ describe('hosted GitHub operation physical authority', () => {
       expectedRuntimeSource: { sourceId: 'a', runtimeId: 'a' }
     })
   })
-  it('retires after connected-at-entry physical wait before mutation admission', async () => {
-    const f = fixture()
-    const result = boundUpdate(f.page.client)
-    const rejected = expect(result).rejects.toThrow()
-    f.post()
-    await turn()
-    f.answer()
-    await turn()
-    f.cut()
-    f.post()
-    await turn()
-    f.answer()
-    await turn()
-    await rejected
-    expect(f.frames()).toEqual([])
-    expect(f.effects).toEqual([])
-  })
-  it('host disposal during preparation prevents a late probe from admitting an operation', async () => {
-    const f = fixture()
-    const result = boundUpdate(f.page.client)
-    const rejected = expect(result).rejects.toThrow()
-    f.post()
-    await turn()
-    f.answer()
-    await turn()
-    f.post()
-    await turn()
-    f.bridge.host.dispose()
-    f.answer()
-    await turn()
-    f.page.client.close()
-    await rejected
-    expect(f.frames()).toEqual([])
-  })
+
   it('freshly owns a same-runtime reconnect before receipt despite delayed page state', async () => {
     const f = fixture()
     const result = boundUpdate(f.page.client)

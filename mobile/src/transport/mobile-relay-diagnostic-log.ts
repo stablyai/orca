@@ -1,6 +1,6 @@
-import { RelayOuterError } from './mobile-relay-e2ee-link'
+import { RelayOuterError } from './encryption/mobile-relay-e2ee-link'
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
-import { RelayDirectorHttpError } from './mobile-relay-resume-director'
+import { RelayDirectorHttpError } from './relay/mobile-relay-resume-director'
 
 export function logRelayConnected(log: RelayRecoveryLog): void {
   log('runtime channel migrated to relay', undefined, {

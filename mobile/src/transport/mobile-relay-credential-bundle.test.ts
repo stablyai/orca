@@ -24,7 +24,7 @@ import {
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle
 } from './mobile-relay-credential-bundle'
-import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import type { MobileRelayPairingJournal } from '../pairing/mobile-relay-pairing-journal'
 import { resetPairingKeychainForTests } from './pairing-keychain'
 
 const journal = {

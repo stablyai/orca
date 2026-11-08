@@ -20,13 +20,13 @@ import {
   removeMobileRelayHostRoutings,
   saveMobileRelayHostRouting
 } from './mobile-relay-host-overlay-store'
-import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
+import { scheduleOrphanedMobileRelayCleanup } from './relay/mobile-relay-orphan-cleanup'
 import {
   getHostCredentialWriteRevision,
   markHostCredentialWrite,
   resetHostCredentialWriteRevisionsForTests
 } from './host-credential-write-revision'
-import { createUnpairedHostCredentialDeletion } from './unpaired-host-credential-deletion'
+import { createUnpairedHostCredentialDeletion } from '../pairing/unpaired-host-credential-deletion'
 import {
   loadStoredHostProfiles,
   readStoredHostProfilesForMutation,

@@ -13,10 +13,8 @@ const nodeFiles = [
   'src/components/mobile-markdown-parser-progress.test.ts',
   'src/components/rich-markdown/native-document-bundle.test.ts',
   'src/terminal/document/native-document-bundle.test.ts',
-  'src/transport/mobile-e2ee-v2-client-session.test.ts',
-  'src/transport/mobile-e2ee-v2-physical-channel.test.ts',
-  'src/transport/pairing-relay-served-recovery.test.ts',
-  'src/transport/mobile-relay-rpc-stream-cancellation.test.ts',
+  'src/transport/encryption/mobile-e2ee-v2-client-session.test.ts',
+  'src/transport/encryption/mobile-e2ee-v2-physical-channel.test.ts',
   'src/test-support/rpc-recording/subscription-recording.test.ts',
   'src/test-support/rpc-recording/family-recordings.test.ts',
   // Its goldens carry V8's TypeError wording, as family-recordings' do.

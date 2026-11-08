@@ -3,14 +3,14 @@ import {
   PairedE2EEDowngradeError,
   type PairedE2EEFraming
 } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
-import { MOBILE_PAIRED_E2EE_PRIMITIVES } from './mobile-paired-e2ee-primitives'
-import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
+import { MOBILE_PAIRED_E2EE_PRIMITIVES } from './encryption/mobile-paired-e2ee-primitives'
+import { MobileE2EEV2ClientSession } from './encryption/mobile-e2ee-v2-client-session'
 import {
   MobileE2EEAuthenticationError,
   MobileE2EEV2PhysicalChannel
-} from './mobile-e2ee-v2-physical-channel'
+} from './encryption/mobile-e2ee-v2-physical-channel'
 import type { ConnectionLogEmitter } from './types'
-import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { websocketPayloadToUint8 } from './encryption/websocket-payload-bytes'
 
 export type DirectSocketFramingEvents = {
   onReadyAccepted: () => void

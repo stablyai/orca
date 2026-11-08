@@ -1,6 +1,6 @@
 import { DirectRpcClient } from './direct-rpc-client'
 import type { RpcStreamSubscribeOptions } from './rpc-client-stream-request'
-import type { RelayHostReachability } from './relay-host-reachability'
+import type { RelayHostReachability } from './relay/relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, ConnectionState, ForegroundNudgeReason } from './types'
 import type { UnvalidatedRpcRequestPort } from './unvalidated-rpc-request-port'

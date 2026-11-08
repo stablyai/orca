@@ -3,7 +3,7 @@ import { processDeviceStore } from '../device-store/device-store'
 import { connect, type RpcClient } from './rpc-client'
 import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionLogSink, HostProfile } from './types'
-import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
+import { directPathForEndpoint } from './relay/mobile-direct-endpoint-probe'
 import { startMobileEndpointLifecycle } from './mobile-endpoint-lifecycle'
 import { watchHostRevocation } from './host-revocation-watch'
 

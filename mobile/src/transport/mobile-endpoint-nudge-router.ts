@@ -1,4 +1,4 @@
-import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
+import type { RelayReconnectController } from './relay/mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ForegroundNudgeReason } from './types'
 

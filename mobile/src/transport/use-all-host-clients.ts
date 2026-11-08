@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from './rpc-client'
-import type { RelayHostReachability } from './relay-host-reachability'
+import type { RelayHostReachability } from './relay/relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 import { useRpcClientContext } from './client-context'

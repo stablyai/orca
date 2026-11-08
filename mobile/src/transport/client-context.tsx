@@ -20,7 +20,7 @@ import {
 } from './host-client-acquisition-registry'
 import { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import { openHostClientEntry, type HostClientStoreEntry } from './host-entry-opener'
-import { shouldPreserveActiveRelay } from './relay-reconnect-preservation'
+import { shouldPreserveActiveRelay } from './relay/relay-reconnect-preservation'
 import { connectionLogStore, recordConnectionRevival } from './persisted-connection-log-store'
 import {
   createHostClientSelectors,

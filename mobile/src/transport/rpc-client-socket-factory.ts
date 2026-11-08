@@ -1,6 +1,6 @@
 import type { PairedE2EEFramingPolicy } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
-import { createDirectE2EEFramingPolicy } from './direct-e2ee-framing-policy'
-import { publicKeyFromBase64 } from './e2ee'
+import { createDirectE2EEFramingPolicy } from './encryption/direct-e2ee-framing-policy'
+import { publicKeyFromBase64 } from './encryption/e2ee'
 import { RpcClientSocketSession } from './rpc-client-socket-session'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogEmitter, ConnectionState, RpcResponse } from './types'

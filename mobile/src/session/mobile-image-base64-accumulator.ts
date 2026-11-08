@@ -1,4 +1,4 @@
-import { encodeBase64Bytes } from '../transport/base64-byte-codec'
+import { encodeBase64Bytes } from '../transport/encryption/base64-byte-codec'
 
 const MOBILE_IMAGE_BASE64_CHUNK_BYTES = 256 * 1024 - 1
 

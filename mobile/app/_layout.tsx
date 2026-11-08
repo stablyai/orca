@@ -30,7 +30,7 @@ import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-n
 import { loadHostCatalog } from '../src/transport/host-store'
 import { usePairingLinks } from '../src/navigation/use-pairing-links'
 import { consumeInitialLaunchIntent } from '../src/navigation/initial-launch-intent'
-import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
+import { recoverMobileRelayPairing } from '../src/pairing/mobile-relay-pairing-recovery'
 import { appUpdateChecker } from '../src/app-update/app-update-runtime'
 import { SideSafeArea } from '../src/layout/side-safe-area'
 import { SideRailProvider } from '../src/layout/side-rail'

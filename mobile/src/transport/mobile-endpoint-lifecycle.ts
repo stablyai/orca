@@ -3,8 +3,8 @@ import type { ConnectionLogSink, ForegroundNudgeReason, HostProfile } from './ty
 import type { MobileRelayEndpoint } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { connect } from './rpc-client'
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
-import { connectMobileRelayRpcSession } from './mobile-relay-rpc-session'
-import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
+import { connectMobileRelayRpcSession } from './relay/mobile-relay-rpc-session'
+import { resolveMobileRelayEndpoint } from './relay/mobile-relay-resume-director'
 import {
   readMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle
@@ -15,10 +15,10 @@ import {
   readLocalNetworkFingerprint,
   recordHostGoodPath
 } from './host-path-memory'
-import { upgradeDirectMobileRelay } from './mobile-relay-direct-upgrade'
-import { directPathForEndpoint } from './mobile-direct-endpoint-probe'
-import { directProbeTimeoutMsForEndpoint } from './mobile-direct-return-probe'
-import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
+import { upgradeDirectMobileRelay } from './relay/mobile-relay-direct-upgrade'
+import { directPathForEndpoint } from './relay/mobile-direct-endpoint-probe'
+import { directProbeTimeoutMsForEndpoint } from './relay/mobile-direct-return-probe'
+import { MobileRelayDirectUpgradeController } from './relay/mobile-relay-direct-upgrade-controller'
 import { defaultCancelTimer, defaultScheduleTimer } from './timer-scheduler'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 

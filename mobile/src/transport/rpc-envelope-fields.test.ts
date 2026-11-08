@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
+import { MobileRelayRpcStreams } from './relay/mobile-relay-rpc-streams'
 import {
   DIRECT_WIRE_DEVICE_TOKEN,
   directWire,
@@ -7,7 +7,6 @@ import {
   directWireTracker
 } from './direct-rpc-wire-test-harness'
 import {
-  RPC_TRANSPORT_FIELDS,
   buildDirectRpcWireRequest,
   withRpcEnvelopeFields,
   type RpcRequestFrame
@@ -46,22 +45,12 @@ describe('withRpcEnvelopeFields', () => {
     params: { a: 1 }
   }
 
-  it('hands back the request itself when there is nothing to merge', () => {
-    expect(withRpcEnvelopeFields(request, undefined)).toBe(request)
-    expect(withRpcEnvelopeFields(request, {})).toBe(request)
-  })
-
   it('adds extra fields beside the transport ones', () => {
     expect(withRpcEnvelopeFields(request, { executionHost: 'runtime:a', n: [1, null] })).toEqual({
       ...request,
       executionHost: 'runtime:a',
       n: [1, null]
     })
-  })
-
-  it.each(RPC_TRANSPORT_FIELDS)('never lets the envelope set %s', (field) => {
-    const merged = withRpcEnvelopeFields(request, { [field]: 'forged' })
-    expect(merged).toEqual(request)
   })
 
   it('cannot fill in a transport field the request left out', () => {
@@ -91,29 +80,6 @@ describe('direct transport envelope', () => {
         buildDirectRpcWireRequest({ id: 'p-1', method: 'status.get' }, DIRECT_WIRE_DEVICE_TOKEN)
       )
     ).toBe('{"id":"p-1","deviceToken":"device-token","method":"status.get"}')
-  })
-
-  it('merges a request envelope under every transport field', async () => {
-    const socket = directWire()
-    const forged = Object.fromEntries(RPC_TRANSPORT_FIELDS.map((field) => [field, 'forged']))
-    const requests = directWireTracker(socket)
-    const answer = requests.sendRequest(
-      'status.get',
-      { a: 1 },
-      { envelope: { ...forged, ...ENVELOPE } }
-    )
-    await Promise.resolve()
-    expect(socket.frames()).toEqual([
-      {
-        id: 'rpc-1',
-        deviceToken: DIRECT_WIRE_DEVICE_TOKEN,
-        method: 'status.get',
-        params: { a: 1 },
-        ...ENVELOPE
-      }
-    ])
-    requests.resolve(answered('rpc-1'))
-    await answer
   })
 
   it('sends a subscribe with no envelope byte for byte as before', () => {

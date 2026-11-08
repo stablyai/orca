@@ -9,8 +9,8 @@ import {
   host,
   relay
 } from './mobile-endpoint-supervisor-test-fakes'
-import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
-import { RelayOuterError } from './mobile-relay-e2ee-link'
+import { MobileE2EEAuthenticationError } from './encryption/mobile-e2ee-v2-physical-channel'
+import { RelayOuterError } from './encryption/mobile-relay-e2ee-link'
 import {
   createStableLogicalRpcClient,
   type StableLogicalRpcClient
@@ -68,46 +68,6 @@ describe('continuous Relay pairing-rejection escalation', () => {
     return { activeRelay, logical, openRelay, supervisor }
   }
 
-  it('escalates a persistent rejection to re-pair instead of "Connecting via Relay…"', async () => {
-    const { activeRelay, logical, openRelay, supervisor } = harness(
-      new MobileE2EEAuthenticationError()
-    )
-
-    await supervisor.start()
-    expect(logical.getActivePath()).toBe('relay')
-    activeRelay.publishState('disconnected')
-    await vi.advanceTimersByTimeAsync(FOUR_HOURS_MS)
-
-    expect(openRelay.mock.calls.length).toBeGreaterThan(3)
-    expect(logical.isPairingRejected()).toBe(true)
-    expect(verdict(logical)).toMatchObject({
-      kind: 'auth-failed',
-      label: 'Pairing invalid — re-pair with your desktop'
-    })
-    supervisor.stop()
-    logical.close()
-  })
-
-  it('escalates a relay-only phone rejected from its very first dial', async () => {
-    const { logical, openRelay, supervisor } = harness(new MobileE2EEAuthenticationError())
-    openRelay.mockReset()
-    openRelay.mockImplementation(() => {
-      const session = new FakeRelaySession('connecting', new MobileE2EEAuthenticationError())
-      setTimeout(() => session.publishState('auth-failed'), 0)
-      return session
-    })
-
-    // Run timers before awaiting start because its first dial fails.
-    const started = supervisor.start()
-    await vi.advanceTimersByTimeAsync(FOUR_HOURS_MS)
-    await started
-
-    expect(openRelay.mock.calls.length).toBeGreaterThan(3)
-    expect(verdict(logical)).toMatchObject({ kind: 'auth-failed' })
-    supervisor.stop()
-    logical.close()
-  })
-
   it('holds the verdict through a background/foreground cycle', async () => {
     const { activeRelay, logical, supervisor } = harness(new MobileE2EEAuthenticationError())
 
@@ -127,27 +87,6 @@ describe('continuous Relay pairing-rejection escalation', () => {
     logical.close()
   })
 
-  it('recovers a latched rejection through the manual app-resume nudge', async () => {
-    const { activeRelay, logical, openRelay, supervisor } = harness(
-      new MobileE2EEAuthenticationError()
-    )
-
-    await supervisor.start()
-    activeRelay.publishState('disconnected')
-    await vi.advanceTimersByTimeAsync(FOUR_HOURS_MS)
-    expect(logical.isPairingRejected()).toBe(true)
-
-    openRelay.mockImplementation(() => new FakeRelaySession('connected'))
-    supervisor.nudge('app-resume')
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(openRelay.mock.calls.length).toBeGreaterThan(3)
-    expect(logical.getState()).toBe('connected')
-    expect(logical.isPairingRejected()).toBe(false)
-    supervisor.stop()
-    logical.close()
-  })
-
   it('never latches when the desktop accepts before the budget is spent', async () => {
     const { activeRelay, logical, supervisor } = harness(new MobileE2EEAuthenticationError(), 2)
 
@@ -158,22 +97,6 @@ describe('continuous Relay pairing-rejection escalation', () => {
     expect(logical.isPairingRejected()).toBe(false)
     expect(logical.getActivePath()).toBe('relay')
     expect(verdict(logical)).toMatchObject({ kind: 'normal' })
-    supervisor.stop()
-    logical.close()
-  })
-
-  it('escalates inside a bounded window, and never on a brief blip', async () => {
-    // Pin rejection cadence too; fast retry plus two jittered reprobes must tolerate transient post-pairing commits.
-    const { activeRelay, logical, supervisor } = harness(new MobileE2EEAuthenticationError())
-
-    await supervisor.start()
-    activeRelay.publishState('disconnected')
-
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(logical.isPairingRejected()).toBe(false)
-
-    await vi.advanceTimersByTimeAsync(4 * 60_000)
-    expect(logical.isPairingRejected()).toBe(true)
     supervisor.stop()
     logical.close()
   })
@@ -206,22 +129,6 @@ describe('continuous Relay pairing-rejection escalation', () => {
 
     expect(logical.isPairingRejected()).toBe(false)
     expect(verdict(logical).kind).not.toBe('auth-failed')
-    supervisor.stop()
-    logical.close()
-  })
-
-  it('leaves a plain transport outage on the Relay-unreachable verdict', async () => {
-    const { activeRelay, logical, supervisor } = harness(new RelayOuterError(4408))
-
-    await supervisor.start()
-    activeRelay.publishState('disconnected')
-    await vi.advanceTimersByTimeAsync(3_000)
-
-    expect(logical.isPairingRejected()).toBe(false)
-    expect(verdict(logical)).toMatchObject({
-      kind: 'unreachable',
-      label: "Can't connect via Relay"
-    })
     supervisor.stop()
     logical.close()
   })

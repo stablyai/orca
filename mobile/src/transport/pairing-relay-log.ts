@@ -1,4 +1,4 @@
-import { RelayOuterError } from './mobile-relay-e2ee-link'
+import { RelayOuterError } from './encryption/mobile-relay-e2ee-link'
 import type { ConnectionLogLevel, ConnectionLogSink } from './types'
 
 export type PairingRelayLogger = (

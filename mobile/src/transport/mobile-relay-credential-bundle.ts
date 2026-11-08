@@ -1,7 +1,7 @@
 import { Platform } from 'react-native'
 import { z } from 'zod'
 import type { DeviceCredentialInstalled } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import type { MobileRelayPairingJournal } from '../pairing/mobile-relay-pairing-journal'
 import {
   deletePairingKeychainItem,
   readPairingKeychainItem,

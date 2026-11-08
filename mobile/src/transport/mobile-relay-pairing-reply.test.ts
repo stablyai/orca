@@ -3,7 +3,7 @@ import { RpcIncompatibleReplyError } from './rpc-incompatible-reply-error'
 import {
   relayCredentialProvision,
   relayPairingEndpointsRead
-} from './mobile-relay-pairing-operations'
+} from '../pairing/mobile-relay-pairing-operations'
 import type { RpcResponse } from './types'
 
 // Pin shared credential readers so centralizing interpretation preserves the shipped strict pairing contract.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useRpcClientContext } from './client-context'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
-import type { RelayHostReachability } from './relay-host-reachability'
+import type { RelayHostReachability } from './relay/relay-host-reachability'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 
 export function useReconnectAttempt(hostId: string | undefined): number {

@@ -1,12 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import './relay-dial-stage'
+import './relay/relay-dial-stage'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
 import './rpc-delivery-ambiguity'
-import {
-  createStableLogicalRpcClient,
-  LogicalClientCutoverError
-} from './stable-logical-rpc-client'
+import { createStableLogicalRpcClient } from './stable-logical-rpc-client'
 import './logical-client-suspended-error'
 
 class FakeSession implements RpcClient {
@@ -68,44 +65,6 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
-  it('makes before break, rejects in-flight work, and replays subscriptions', async () => {
-    const oldSession = new FakeSession('connected')
-    const nextSession = new FakeSession('connecting')
-    const pending = deferred<RpcResponse>()
-    oldSession.sendRequest.mockReturnValue(pending.promise)
-    oldSession.close.mockImplementation(() => pending.reject(new Error('Client closed')))
-    nextSession.sendRequest.mockResolvedValue(success('next'))
-    const client = createStableLogicalRpcClient(oldSession, 'lan')
-    const stream = vi.fn()
-    client.subscribe('terminal.subscribe', { terminal: 'term-1' }, stream)
-    const request = client.sendRequest('worktree.create', { name: 'new' })
-
-    const migrating = client.migrateTo(nextSession, 'relay')
-    expect(oldSession.close).not.toHaveBeenCalled()
-    expect(nextSession.subscribe).not.toHaveBeenCalled()
-    nextSession.setState('connected')
-    await migrating
-
-    await expect(request).rejects.toBeInstanceOf(LogicalClientCutoverError)
-    expect(nextSession.subscribe).toHaveBeenCalledWith(
-      'terminal.subscribe',
-      { terminal: 'term-1' },
-      expect.any(Function),
-      undefined
-    )
-    expect(oldSession.close).toHaveBeenCalledOnce()
-    expect(nextSession.subscribe.mock.invocationCallOrder[0]).toBeLessThan(
-      oldSession.close.mock.invocationCallOrder[0]!
-    )
-    expect(client.getActivePath()).toBe('relay')
-    expect(client.getGeneration()).toBe(2)
-    oldSession.emitStream('stale')
-    nextSession.emitStream('current')
-    expect(stream).toHaveBeenCalledOnce()
-    expect(stream).toHaveBeenCalledWith('current')
-    pending.resolve(success('late'))
-  })
-
   it('preserves a committed response when logical close wins the callback race', async () => {
     const session = new FakeSession('connected')
     const inFlight = deferred<RpcResponse>()

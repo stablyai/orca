@@ -1,7 +1,7 @@
 import type { RpcClient } from './rpc-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostClientStoreEntry } from './host-entry-opener'
-import type { RelayHostReachability } from './relay-host-reachability'
+import type { RelayHostReachability } from './relay/relay-host-reachability'
 import type { MobileConnectionPath, StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 

@@ -11050,7 +11050,7 @@
       "id": "transport-pairing-race-relay-completes-first",
       "operation": "transport.pairing-race",
       "family": "transport.pairing-race",
-      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
+      "sites": ["mobile/src/pairing/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11104,7 +11104,7 @@
       "id": "transport-pairing-race-direct-completes-first",
       "operation": "transport.pairing-race",
       "family": "transport.pairing-race",
-      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
+      "sites": ["mobile/src/pairing/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11158,7 +11158,7 @@
       "id": "transport-pairing-race-relay-wins-when-direct-refused",
       "operation": "transport.pairing-race",
       "family": "transport.pairing-race",
-      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
+      "sites": ["mobile/src/pairing/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11213,7 +11213,7 @@
       "id": "transport-pairing-race-both-refused",
       "operation": "transport.pairing-race",
       "family": "transport.pairing-race",
-      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
+      "sites": ["mobile/src/pairing/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11269,7 +11269,7 @@
       "id": "relay-rotation-installs-and-commits",
       "operation": "relay.credential-rotation",
       "family": "relay.credential-rotation",
-      "sites": ["mobile/src/transport/mobile-relay-credential-rotation.ts"],
+      "sites": ["mobile/src/transport/relay/mobile-relay-credential-rotation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11360,7 +11360,7 @@
       "id": "relay-rotation-resumes-committed-pending",
       "operation": "relay.credential-rotation",
       "family": "relay.credential-rotation",
-      "sites": ["mobile/src/transport/mobile-relay-credential-rotation.ts"],
+      "sites": ["mobile/src/transport/relay/mobile-relay-credential-rotation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11412,7 +11412,7 @@
       "id": "relay-direct-upgrade-commits",
       "operation": "relay.direct-upgrade",
       "family": "relay.direct-upgrade",
-      "sites": ["mobile/src/transport/mobile-relay-direct-upgrade.ts"],
+      "sites": ["mobile/src/transport/relay/mobile-relay-direct-upgrade.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11505,7 +11505,7 @@
       "id": "relay-direct-upgrade-unsupported-host-declines",
       "operation": "relay.direct-upgrade",
       "family": "relay.direct-upgrade",
-      "sites": ["mobile/src/transport/mobile-relay-direct-upgrade.ts"],
+      "sites": ["mobile/src/transport/relay/mobile-relay-direct-upgrade.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11537,7 +11537,7 @@
       "id": "relay-pairing-recovery-resume-committed",
       "operation": "relay.pairing-recovery",
       "family": "relay.pairing-recovery",
-      "sites": ["mobile/src/transport/mobile-relay-pairing-recovery.ts"],
+      "sites": ["mobile/src/pairing/mobile-relay-pairing-recovery.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11586,7 +11586,7 @@
       "id": "relay-pairing-recovery-invite-authorizes",
       "operation": "relay.pairing-recovery",
       "family": "relay.pairing-recovery",
-      "sites": ["mobile/src/transport/mobile-relay-pairing-recovery.ts"],
+      "sites": ["mobile/src/pairing/mobile-relay-pairing-recovery.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11703,8 +11703,8 @@
       "operation": "pairing.pre-profile",
       "family": "pairing.pre-profile",
       "sites": [
-        "mobile/src/transport/pre-profile-pairing-coordinator.ts",
-        "mobile/src/transport/pairing-candidate-race.ts"
+        "mobile/src/pairing/pre-profile-pairing-coordinator.ts",
+        "mobile/src/pairing/pairing-candidate-race.ts"
       ],
       "schedules": [],
       "steps": [
@@ -11809,8 +11809,8 @@
       "operation": "pairing.pre-profile",
       "family": "pairing.pre-profile",
       "sites": [
-        "mobile/src/transport/pre-profile-pairing-coordinator.ts",
-        "mobile/src/transport/pairing-candidate-race.ts"
+        "mobile/src/pairing/pre-profile-pairing-coordinator.ts",
+        "mobile/src/pairing/pairing-candidate-race.ts"
       ],
       "schedules": [],
       "steps": [
@@ -11880,8 +11880,8 @@
       "operation": "pairing.pre-profile",
       "family": "pairing.pre-profile",
       "sites": [
-        "mobile/src/transport/pre-profile-pairing-coordinator.ts",
-        "mobile/src/transport/pairing-candidate-race.ts"
+        "mobile/src/pairing/pre-profile-pairing-coordinator.ts",
+        "mobile/src/pairing/pairing-candidate-race.ts"
       ],
       "schedules": [],
       "steps": [

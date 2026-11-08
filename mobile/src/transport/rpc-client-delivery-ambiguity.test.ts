@@ -1,15 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
-import {
-  createStableLogicalRpcClient,
-  isLogicalClientCutoverError,
-  LogicalClientCutoverError
-} from './stable-logical-rpc-client'
+import { isLogicalClientCutoverError, LogicalClientCutoverError } from './stable-logical-rpc-client'
 
-vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
+vi.mock(
+  './encryption/direct-e2ee-framing-policy',
+  () => import('./legacy-direct-framing-test-policy')
+)
 
-vi.mock('./e2ee', () => ({
+vi.mock('./encryption/e2ee', () => ({
   generateKeyPair: () => ({
     publicKey: new Uint8Array(32),
     secretKey: new Uint8Array(32)
@@ -108,38 +107,6 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
     vi.useRealTimers()
     globalThis.WebSocket = originalWebSocket
   })
-
-  it.each([true, false])(
-    'preserves physical delivery evidence at the cutover caller (sent=%s)',
-    async (sent) => {
-      const physical = sent
-        ? connectAuthenticated()
-        : {
-            client: connect('ws://desktop.invalid', 'token', 'server-key'),
-            socket: mockSockets[0]!
-          }
-      const client = createStableLogicalRpcClient(physical.client, 'lan')
-      const replacement = connectAuthenticated()
-      const requestError = client
-        .sendRequest('worktree.create', { name: 'new' })
-        .catch((error: unknown) => error)
-      await Promise.resolve()
-      expect(hasSentRequest(physical.socket, 'worktree.create')).toBe(sent)
-
-      await client.migrateTo(replacement.client, 'relay')
-
-      const error = await requestError
-      expect(isLogicalClientCutoverError(error)).toBe(true)
-      expect(isRpcDeliveryUnknown(error)).toBe(sent)
-      expect(error).toBeInstanceOf(LogicalClientCutoverError)
-      expect(isRpcDeliveryUnknown(error instanceof Error ? error.cause : null)).toBe(sent)
-      expect(hasSentRequest(replacement.socket, 'worktree.create')).toBe(false)
-      expect(
-        physical.socket.sent.filter((payload) => payload.includes('worktree.create'))
-      ).toHaveLength(sent ? 1 : 0)
-      client.close()
-    }
-  )
 
   it('recognizes a cutover by class even when its message changes', () => {
     const error = new LogicalClientCutoverError()

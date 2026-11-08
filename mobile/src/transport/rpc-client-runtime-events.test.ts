@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect, type RpcClient } from './rpc-client'
 
-vi.mock('./direct-e2ee-framing-policy', () => import('./legacy-direct-framing-test-policy'))
+vi.mock(
+  './encryption/direct-e2ee-framing-policy',
+  () => import('./legacy-direct-framing-test-policy')
+)
 
-vi.mock('./e2ee', () => ({
+vi.mock('./encryption/e2ee', () => ({
   generateKeyPair: () => ({
     publicKey: new Uint8Array(32),
     secretKey: new Uint8Array(32)

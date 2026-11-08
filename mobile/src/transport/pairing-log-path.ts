@@ -1,4 +1,4 @@
-import type { PairingCandidatePath } from './pairing-candidate-race'
+import type { PairingCandidatePath } from '../pairing/pairing-candidate-race'
 import type { ConnectionLogSink } from './types'
 
 const PATH_PREFIX: Record<PairingCandidatePath, string> = {

@@ -1,5 +1,5 @@
-import { decodeBase64Bytes } from '../base64-byte-codec'
-import { pairedE2EENativeCodec } from '../paired-e2ee-native-codec'
+import { decodeBase64Bytes } from '../encryption/base64-byte-codec'
+import { pairedE2EENativeCodec } from '../encryption/paired-e2ee-native-codec'
 import { mobileWebBundleChunkRead, mobileWebBundleRangeRead } from './mobile-web-bundle-operations'
 import { decodeMobileWebBundleRange } from './mobile-web-bundle-range-decode'
 import type { MobileWebBundleManifestReply } from './mobile-web-bundle-reply-schemas'
