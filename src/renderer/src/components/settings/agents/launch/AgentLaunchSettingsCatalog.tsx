@@ -4,6 +4,7 @@ import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { useMemo } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import { toast } from 'sonner'
 import type {
   AgentLaunchSettings,
@@ -100,7 +101,7 @@ export function AgentLaunchSettingsCatalog({
     refresh
   } = useDetectedAgents(detectionTarget, 'all')
   const detectedIds = useMemo(() => (detected ? new Set(detected) : null), [detected])
-  useHostStructuredAgentsVersion()
+  const hostAgentsVersion = useHostStructuredAgentsVersion()
   const installedHere = useAppStateValue(readNativeDetectedAgents)
   const workspace =
     detectionTarget.kind === 'runtime'
@@ -115,9 +116,13 @@ export function AgentLaunchSettingsCatalog({
       : false
   )
   // The chat-or-CLI choice is this computer's, so a paired host's page doesn't offer it.
-  const chatAgents = local ? chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined) : []
+  const chatAgents = local
+    ? recomputeOn([hostAgentsVersion], () => chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined))
+    : []
   const managedChatAgents = new Set(
-    readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+    recomputeOn([hostAgentsVersion], () =>
+      readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+    )
       ?.filter((row) => row.managedRuntime)
       .map((row) => row.agent)
   )
