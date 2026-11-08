@@ -5,10 +5,14 @@ import { closeQuickCommandTabOnSuccess } from './quick-command-close-tab-on-succ
 
 const leaf = (leafId: string) => ({ type: 'leaf', leafId })
 
-const mockState = {
+const mockState: {
+  closeTab: ReturnType<typeof vi.fn>
+  tabsByWorktree: Record<string, { id: string }[]>
+  terminalLayoutsByTabId: Record<string, { root: unknown }>
+} = {
   closeTab: vi.fn(),
-  tabsByWorktree: {} as Record<string, { id: string }[]>,
-  terminalLayoutsByTabId: {} as Record<string, { root: unknown }>
+  tabsByWorktree: {},
+  terminalLayoutsByTabId: {}
 }
 
 vi.mock('@/store', () => ({

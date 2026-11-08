@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Switch } from '@/components/ui/switch'
 
 type TerminalQuickCommandAppendEnterSwitchProps = {
@@ -7,7 +8,7 @@ type TerminalQuickCommandAppendEnterSwitchProps = {
   compact?: boolean
 }
 
-export function TerminalQuickCommandFooterSwitch({
+function TerminalQuickCommandFooterSwitch({
   checked,
   ariaLabel,
   label,
@@ -23,6 +24,30 @@ export function TerminalQuickCommandFooterSwitch({
       <Switch checked={checked} aria-label={ariaLabel} onCheckedChange={onToggle} />
       <span className="truncate text-[11px] text-muted-foreground">{label}</span>
     </label>
+  )
+}
+
+export function TerminalQuickCommandCloseTabOnSuccessSwitch({
+  closeTabOnSuccess,
+  onToggle
+}: {
+  closeTabOnSuccess: boolean
+  onToggle: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <TerminalQuickCommandFooterSwitch
+      checked={closeTabOnSuccess}
+      ariaLabel={t(
+        'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.close_tab_on_success_aria',
+        'Toggle close tab after success'
+      )}
+      label={t(
+        'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.close_tab_on_success',
+        'Close tab after success'
+      )}
+      onToggle={onToggle}
+    />
   )
 }
 

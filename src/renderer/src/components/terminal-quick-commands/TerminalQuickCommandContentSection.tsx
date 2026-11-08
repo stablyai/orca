@@ -27,7 +27,7 @@ import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-ag
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
 import {
   TerminalQuickCommandAppendEnterSwitch,
-  TerminalQuickCommandFooterSwitch
+  TerminalQuickCommandCloseTabOnSuccessSwitch
 } from './TerminalQuickCommandAppendEnterSwitch'
 
 const QUICK_COMMAND_AGENT_OPTIONS = getTerminalQuickCommandAgentOptions()
@@ -263,16 +263,8 @@ export function TerminalQuickCommandContentSection({
                 onToggle={toggleAppendEnter}
                 compact
               />
-              <TerminalQuickCommandFooterSwitch
-                checked={draft.closeTabOnSuccess === true}
-                ariaLabel={translate(
-                  'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.close_tab_on_success_aria',
-                  'Toggle close tab after success'
-                )}
-                label={translate(
-                  'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.close_tab_on_success',
-                  'Close tab after success'
-                )}
+              <TerminalQuickCommandCloseTabOnSuccessSwitch
+                closeTabOnSuccess={draft.closeTabOnSuccess === true}
                 onToggle={toggleCloseTabOnSuccess}
               />
             </div>

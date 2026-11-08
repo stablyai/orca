@@ -13,7 +13,10 @@ function tabExists(tabId: string, worktreeId: string): boolean {
 }
 
 function handleCommandFinished(event: Event): void {
-  const { tabId, exitCode } = (event as CustomEvent<TerminalCommandFinishedEventDetail>).detail
+  if (!(event instanceof CustomEvent)) {
+    return
+  }
+  const { tabId, exitCode }: TerminalCommandFinishedEventDetail = event.detail
   for (const [armedTabId, worktreeId] of armedTabs) {
     if (!tabExists(armedTabId, worktreeId)) {
       armedTabs.delete(armedTabId)

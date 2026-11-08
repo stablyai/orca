@@ -149,19 +149,17 @@ export function TerminalQuickCommandDialog({
   }
 
   const toggleCloseTabOnSuccess = (): void => {
-    setDraft((current) => {
-      if (isTerminalAgentQuickCommand(current)) {
-        return current
-      }
-      const closeTabOnSuccess = current.closeTabOnSuccess !== true
-      draftMemoryRef.current = {
-        ...draftMemoryRef.current,
-        terminalCloseTabOnSuccess: closeTabOnSuccess
-      }
-      return closeTabOnSuccess
-        ? { ...current, closeTabOnSuccess: true }
-        : withoutCloseTabOnSuccess(current)
-    })
+    if (isTerminalAgentQuickCommand(draft)) {
+      return
+    }
+    const closeTabOnSuccess = draft.closeTabOnSuccess !== true
+    draftMemoryRef.current = {
+      ...draftMemoryRef.current,
+      terminalCloseTabOnSuccess: closeTabOnSuccess
+    }
+    setDraft(
+      closeTabOnSuccess ? { ...draft, closeTabOnSuccess: true } : withoutCloseTabOnSuccess(draft)
+    )
   }
 
   const saveDraft = async (): Promise<void> => {
