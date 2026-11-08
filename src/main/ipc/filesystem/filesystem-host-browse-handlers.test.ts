@@ -123,4 +123,18 @@ describe('host browse handlers', () => {
     // Why: workspace files are reached through allowed roots; no external grant is added.
     await expect(isPathAllowed(outsideLink, store)).resolves.toBe(false)
   })
+
+  it('keeps a workspace symlink that leaves the workspace outside it', async () => {
+    const workspace = join(root, 'workspace')
+    await mkdir(workspace)
+    const target = join(root, 'outside', 'notes.txt')
+    const link = join(workspace, 'notes-link.txt')
+    await symlink(target, link, 'file')
+
+    await expect(resolveHostBrowseEntry(link, undefined, workspace)).resolves.toEqual({
+      kind: 'file',
+      realPath: target,
+      workspaceRelativePath: null
+    })
+  })
 })
