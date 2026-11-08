@@ -6,6 +6,7 @@ import {
 } from '@/store/slices/editor/tabs/editor-view-placement'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { captureBrowserLinkReveal } from '@/lib/browser/navigation/browser-link-reveal'
+import { createBrowserLinkHostMatcher } from '@/lib/browser/navigation/browser-link-owner'
 import { beginLinkOpenRequest, subscribeLinkOpenRequests } from '@/lib/link-open-request'
 import { captureLinkOpenIntent } from '@/lib/link-open-intent'
 import { flushEditorFrames } from './save/flush/editor-pending-flush'
@@ -75,11 +76,22 @@ export async function openEditorHtmlPreview(
       return
     }
     const placement = editorViewPlacement(state, currentFile, source.id)
+    const initialHostId = editorViewPlacement(initial, file, source.id).executionHostId
+    if (
+      initialHostId &&
+      !createBrowserLinkHostMatcher(
+        state,
+        currentFile.worktreeId,
+        initialHostId
+      )(placement.executionHostId)
+    ) {
+      return
+    }
     await new Promise<void>((resolve) => {
       const plan = openFileInBrowserTab({
         filePath: currentFile.filePath,
         worktreeId: currentFile.worktreeId,
-        fileExecutionHostId: editorViewPlacement(initial, file, source.id).executionHostId,
+        fileExecutionHostId: placement.executionHostId,
         placementWorkspaceId: placement.placementWorkspaceId,
         linkContext: {
           linkIntent: captureLinkOpenIntent(state, placement.placementWorkspaceId, source.id, {

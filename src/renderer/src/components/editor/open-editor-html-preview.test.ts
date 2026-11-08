@@ -172,6 +172,15 @@ async function previewWhileFlushing(changeIntent: () => void): Promise<void> {
   }
 }
 
+it('refuses a local preview when the file gains remote host evidence during its flush', async () => {
+  await previewWhileFlushing(() => {
+    useAppStore.setState((state) => ({
+      openFiles: state.openFiles.map((file) => ({ ...file, externalSshTargetId: 'file-owner' }))
+    }))
+  })
+  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
+})
+
 it.each(['refused', 'rejected'] as const)(
   'keeps the editor selected when its guest flush is %s',
   async (failure) => {
