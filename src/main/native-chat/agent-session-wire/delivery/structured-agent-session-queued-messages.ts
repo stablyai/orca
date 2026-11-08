@@ -67,7 +67,8 @@ export async function maybeQueueStructuredAgentSessionSend(
     userSend?: true
     personsMessage?: true
     usageLimitContinuationOfTurnItemId?: string
-  }
+  },
+  clientKind?: 'mobile' | 'runtime'
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
   | { ok: false; refusal: AgentSessionWireRefusal }
@@ -110,7 +111,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     row = await ctx.journal.queuedMessages.insert(
       {
         messageId: clientMessageId,
-        chatAction: structuredChatAction(params),
+        chatAction: structuredChatAction(params, clientKind),
         body: params.body,
         deliveryMode: params.delivery === 'queue-if-active' ? 'queue' : 'steer',
         unattended: !params.userSend && !params.personsMessage,

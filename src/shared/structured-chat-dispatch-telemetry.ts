@@ -1,5 +1,8 @@
 import type { AgentKind } from './telemetry-events'
 
+export const STRUCTURED_CHAT_DISPATCH_TELEMETRY_RUNTIME_CAPABILITY =
+  'structured-chat-dispatch-telemetry-v1'
+
 export const STRUCTURED_CHAT_DISPATCH_TELEMETRY_CLIENT_CAPABILITY =
   'structured-chat-dispatch-telemetry-v1'
 

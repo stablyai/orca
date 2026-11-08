@@ -1,5 +1,3 @@
-import { recordStructuredChatMessageDispatch } from '../../../telemetry/structured-chat-dispatch'
-import { journalInputCaller } from '../input-order/journal-input-provenance'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
@@ -104,10 +102,9 @@ export class JournalSubmissionWriter {
   ): Promise<AgentJournalCursor> {
     const dispatch = journalDispatchRowBuilder(this.deps.state, input)
     if (!cards) {
-      return this.deps.rowWriter.append(dispatch, this.dispatchTelemetryReceipt(input))
+      return this.deps.rowWriter.append(dispatch)
     }
     let planned: JournalQueuePlan | undefined
-    const telemetry = this.dispatchTelemetryReceipt(input)
     return this.deps.rowWriter
       .enqueueRows(
         () => {
@@ -117,11 +114,9 @@ export class JournalSubmissionWriter {
         {
           write: (db) => {
             planned?.receipt.write(db)
-            telemetry.write(db)
           },
           committed: () => {
             planned?.receipt.committed()
-            telemetry.committed()
           }
         },
         (rows) => rows[0]
@@ -129,33 +124,9 @@ export class JournalSubmissionWriter {
       .then((rows) => rowCursor(rows.slice(0, 1)))
   }
 
-  private dispatchTelemetryReceipt(input: ResolveDispatchInput): JournalOperationReceipt {
-    let eligible = false
-    let readCaller: (() => string | undefined) | undefined
-    return {
-      write: (db) => {
-        const submission = this.deps.state().submissions.get(input.clientMessageId)
-        eligible =
-          !input.recovered &&
-          submission?.chatAction === 'message' &&
-          journalDispatchRowApplies(submission)
-        if (eligible && submission) {
-          readCaller = () => journalInputCaller(db, this.deps.identity.sessionId, submission)
-        }
-      },
-      committed: () => {
-        const outcome = this.deps.state().submissions.get(input.clientMessageId)?.dispatchState
-        if (eligible && (outcome === 'accepted' || outcome === 'rejected')) {
-          recordStructuredChatMessageDispatch(this.deps.identity, outcome, readCaller)
-        }
-      }
-    }
-  }
-
   /** Resolve late receipts on the write lane; settled sends append nothing. */
   async acceptLate(input: Extract<ResolveDispatchInput, { state: 'accepted' }>): Promise<void> {
     const { rowWriter, state } = this.deps
-    const telemetry = this.dispatchTelemetryReceipt(input)
     let witness: JournalQueuePlan | undefined
     await rowWriter.enqueueRows(
       () => {
@@ -168,11 +139,9 @@ export class JournalSubmissionWriter {
       {
         write: (db) => {
           witness?.receipt.write(db)
-          telemetry.write(db)
         },
         committed: () => {
           witness?.receipt.committed()
-          telemetry.committed()
         }
       }
     )

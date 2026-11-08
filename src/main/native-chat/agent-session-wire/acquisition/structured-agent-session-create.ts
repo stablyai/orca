@@ -33,7 +33,6 @@ import {
 } from '../providers/structured-agent-session-provider-support'
 import { performSend } from '../operations/structured-agent-session-turns'
 import { observedReceipt } from '../operations/structured-agent-session-operation-settlement'
-import { attachStructuredAgentSession } from './structured-agent-session-attach-orchestration'
 import { resolveAgentSessionReplayOutcome } from '../operations/structured-agent-session-replay-outcome'
 import { openingMessageOptions } from '../options/structured-agent-session-execution-options'
 
@@ -47,14 +46,14 @@ export type StructuredAgentSessionCreateOptions = {
 
 export function createStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
-  callerKey: string,
+  caller: StructuredAgentSessionCaller,
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionCreateOptions = {}
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   return context.tasks.trackAttach(
     context.serialize(params.envelope.sessionId, async () => {
       try {
-        return await foundConversation(context, callerKey, params, options)
+        return await foundConversation(context, caller, params, options)
       } catch (error) {
         if (isAgentSessionRefusalError(error)) {
           return { ok: false, refusal: error.refusal }
@@ -68,10 +67,11 @@ export function createStructuredAgentSession(
 
 async function foundConversation(
   context: StructuredAgentSessionAttachContext,
-  callerKey: string,
+  caller: StructuredAgentSessionCaller,
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionCreateOptions
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
+  const { callerKey, clientKind } = caller
   const { deps } = context
   const { store } = deps
   const sessionId = params.envelope.sessionId
@@ -225,7 +225,7 @@ async function foundConversation(
             ...first,
             payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, first.body),
             origin: 'client',
-            chatAction: structuredChatAction({ body: first.body, userSend: true }),
+            chatAction: structuredChatAction({ body: first.body, userSend: true }, clientKind),
             source: { kind: 'user' },
             ...(first.selection === undefined
               ? openingMessageOptions(candidate.record.options)
@@ -288,22 +288,5 @@ async function foundConversation(
     if (!committed && !existing) {
       await session.journal.close()
     }
-  }
-}
-
-export function structuredAgentSessionEntryDelegates(
-  context: () => StructuredAgentSessionAttachContext
-) {
-  return {
-    attach: (
-      caller: StructuredAgentSessionCaller,
-      params: AgentSessionAttachParams,
-      options?: Parameters<typeof attachStructuredAgentSession>[3]
-    ) => attachStructuredAgentSession(context(), caller.callerKey, params, options),
-    create: (
-      caller: StructuredAgentSessionCaller,
-      params: AgentSessionAttachParams,
-      options?: StructuredAgentSessionCreateOptions
-    ) => createStructuredAgentSession(context(), caller.callerKey, params, options)
   }
 }

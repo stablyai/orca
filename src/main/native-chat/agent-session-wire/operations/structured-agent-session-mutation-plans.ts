@@ -115,7 +115,8 @@ export function sendPlan(
     /** Host-sent personal text; userSend always implies this. */
     personsMessage?: true
     beforeRun?: () => void
-  }
+  },
+  clientKind?: 'mobile' | 'runtime'
 ): MutationPlan<AgentSessionSendResult> {
   // Match operation ID to optimistic client message ID for durable reconciliation.
   const clientMessageId = params.envelope.clientOperationId
@@ -132,7 +133,7 @@ export function sendPlan(
       const source = structuredSendSource(params)
       return performSend(ctx, {
         origin: params.userSend ? 'client' : 'host',
-        chatAction: structuredChatAction(params),
+        chatAction: structuredChatAction(params, clientKind),
         ...(source ? { source } : {}),
         clientMessageId,
         ...(params.options ? { options: params.options } : {}),

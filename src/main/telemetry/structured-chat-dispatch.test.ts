@@ -141,6 +141,7 @@ it('relays a committed Orcad send only to its caller and captures once using des
             ...BASE_COMMON,
             $process_person_profile: false,
             semantics_version: 2,
+            client: 'desktop',
             backend: 'structured',
             action: 'message',
             outcome: 'transport_acknowledged',

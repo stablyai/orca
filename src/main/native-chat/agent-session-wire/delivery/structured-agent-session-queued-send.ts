@@ -19,10 +19,11 @@ export async function runQueueableStructuredAgentSessionSend(
     userSend?: true
     personsMessage?: true
   },
-  immediate: () => Promise<TurnOutcome<AgentSessionSendResult>>
+  immediate: () => Promise<TurnOutcome<AgentSessionSendResult>>,
+  clientKind?: 'mobile' | 'runtime'
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   // Decide queueing first; blocked sends fall through to immediate refusal.
-  const queued = await maybeQueueStructuredAgentSessionSend(context, ctx, params)
+  const queued = await maybeQueueStructuredAgentSessionSend(context, ctx, params, clientKind)
   if (queued) {
     return queued
   }

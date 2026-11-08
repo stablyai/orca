@@ -224,6 +224,7 @@ export function keepFailedStartSends(
               }
             : {}),
           ...(send?.options ? { options: send.options } : {}),
+          ...(send?.chatAction ? { chatAction: send.chatAction } : {}),
           returned: { reason: dispatch.reason, rejection: dispatch.rejection }
         }
       })

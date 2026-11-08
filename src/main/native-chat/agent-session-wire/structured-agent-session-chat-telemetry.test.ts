@@ -1,3 +1,16 @@
+import { setStructuredAgentSessionHost } from './host/structured-agent-session-registry'
+import { sendStructuredAgentSessionForClient } from '../../runtime/rpc/methods/structured-sessions/conversation/structured-agent-session-send-compatibility'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { partialRuntimeStore } from '../../runtime/orca-runtime-tests/runtime-store-partial-fixture'
+import {
+  AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../shared/agent-session/agent-session-runtime-capabilities'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestMessage,
+  hostTestOperationId
+} from './host/testing/structured-agent-session-host-test-data'
 import { eventually } from './host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { track } from '../../telemetry/client'
@@ -5,7 +18,6 @@ import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
 } from './host/testing/structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './host/testing/structured-agent-session-host-test-data'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
@@ -15,6 +27,7 @@ beforeEach(async () => {
   vi.mocked(track).mockClear()
 })
 afterEach(async () => {
+  setStructuredAgentSessionHost(null)
   await rig.dispose()
 })
 const messages = () =>
@@ -131,3 +144,52 @@ it('carries the human action through automatic queue drain without counting the 
   await rig.settleAccepted(handoff.clientMessageId, 'queued')
   expect(messages()).toHaveLength(2)
 })
+
+it.each([false, true])(
+  'keeps phone sends out of desktop dispatch events (queued: %s)',
+  async (queued) => {
+    const first = queued ? await rig.workingSend() : null
+    vi.mocked(track).mockClear()
+    setStructuredAgentSessionHost(rig.host)
+    const id = hostTestOperationId()
+    const fields = {
+      body: hostTestMessage('phone question'),
+      ...(queued ? { delivery: 'queue-if-active' as const } : {})
+    }
+    const params = {
+      envelope: rig.envelope(fields, 'agentSession.send', id),
+      ...fields
+    }
+    const context = {
+      runtime: new OrcaRuntimeService(partialRuntimeStore()),
+      clientKind: 'mobile' as const,
+      clientId: 'phone-1',
+      clientCapabilities: [
+        STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+        AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
+      ]
+    }
+    expect(await sendStructuredAgentSessionForClient(params, context)).toMatchObject({ ok: true })
+    expect(await sendStructuredAgentSessionForClient(params, context)).toMatchObject({
+      ok: true,
+      replayed: true
+    })
+    expect(messages()).toEqual([
+      ['native_chat_message_sent', { agent_kind: 'codex', runtime: 'unknown', client: 'mobile' }]
+    ])
+    let submissionId = id
+    if (first) {
+      await rig.restartHostProcess()
+      await rig.settleAccepted(first, 'desktop-first')
+      expect(await rig.sendNow(id)).toMatchObject({ ok: true })
+      await eventually(async () => expect(await rig.handoff(id)).toBeDefined())
+      submissionId = (await rig.handoff(id))!.clientMessageId
+    } else {
+      await eventually(async () => expect((await rig.submission(id))?.handedOverAt).toBeDefined())
+    }
+    vi.mocked(track).mockClear()
+    await rig.settleAccepted(submissionId, 'phone-item')
+    expect(journal().submission(submissionId)?.dispatchState).toBe('accepted')
+    expect(messages()).toEqual([])
+  }
+)

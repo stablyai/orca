@@ -9,7 +9,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journa
 import { openTestJournalHostDatabase } from './store-lifecycle/journal-host-database-test-support'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
-const fixture = createFixture()
+const fixture = createFixture({ legacyInputs: false })
 beforeEach(() => {
   vi.mocked(track).mockClear()
   fixture.IDENTITY.hostId = 'runtime:host-fixture'
@@ -49,6 +49,7 @@ it('emits once after committed acceptance, never on admission, replay, or reopen
   ])
   expect(track).toHaveBeenCalledExactlyOnceWith('native_chat_message_sent', {
     semantics_version: 2,
+    client: 'desktop',
     action: 'message',
     backend: 'structured',
     outcome: 'transport_acknowledged',
@@ -189,5 +190,41 @@ it.each([false, true])(
       'native_chat_message_sent',
       expect.objectContaining({ outcome: 'transport_acknowledged' })
     )
+  }
+)
+
+it.each(['item', 'batch'] as const)(
+  'counts a provider %s echo after failed settlement, without recounting a receipt',
+  async (kind) => {
+    const journal = await fixture.open()
+    await submit(journal, 'message')
+    const transaction = vi.spyOn(openTestJournalHostDatabase(fixture.root), 'transaction')
+    transaction.mockImplementationOnce(() => {
+      throw new Error('commit failed')
+    })
+    await expect(journal.acceptLate(accept())).rejects.toThrow('commit failed')
+    expect(track).not.toHaveBeenCalled()
+    const identity = { provider: 'claude' as const, sessionId: 'native-1', uuid: 'echo-1' }
+    const body = fixture.message('private human text')
+    await (kind === 'item'
+      ? journal.appendItem(identity, body, { fence: 0, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+      : journal.appendLifecycleBatch({
+          settlementId: 'echo-batch',
+          fence: 0,
+          mutations: [{ kind: 'item', identity, body, turnScope: AGENT_JOURNAL_THREAD_SCOPE }]
+        }))
+    expect(journal.submission('send-1')?.dispatchState).toBe('accepted')
+    await journal.acceptLate(accept())
+    await journal.resolveDispatch(accept())
+    expect(track).toHaveBeenCalledExactlyOnceWith('native_chat_message_sent', {
+      semantics_version: 2,
+      client: 'desktop',
+      action: 'message',
+      backend: 'structured',
+      outcome: 'transport_acknowledged',
+      agent_kind: 'claude-code',
+      runtime: 'remote'
+    })
+    transaction.mockRestore()
   }
 )

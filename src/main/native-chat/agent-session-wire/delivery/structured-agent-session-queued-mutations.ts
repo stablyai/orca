@@ -133,7 +133,8 @@ export function sendQueuedStructuredAgentMessage(
             clientMessageId: submissionId,
             // Personal handoffs return as cards on close/restart.
             origin: 'client',
-            chatAction: queuedStructuredChatAction(row),
+            chatAction:
+              caller.clientKind === 'mobile' ? undefined : queuedStructuredChatAction(row),
             payloadFingerprint: row.fingerprint,
             body: row.body,
             ...(row.options ? { options: row.options } : {}),

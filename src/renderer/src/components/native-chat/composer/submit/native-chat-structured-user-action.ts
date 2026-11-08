@@ -1,3 +1,5 @@
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { STRUCTURED_CHAT_DISPATCH_TELEMETRY_RUNTIME_CAPABILITY } from '../../../../../../shared/structured-chat-dispatch-telemetry'
 import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
@@ -9,7 +11,7 @@ export function completeNativeChatStructuredUserAction(
   reveal: (() => void) | undefined,
   action: 'message' | 'command' | 'continue'
 ): void {
-  if (action !== 'message') {
+  const emit = () =>
     emitNativeChatMessageSent({
       agent,
       runtime: transport.runtime,
@@ -17,6 +19,19 @@ export function completeNativeChatStructuredUserAction(
       outcome: 'unconfirmed',
       backend: 'structured'
     })
+  if (action !== 'message') {
+    emit()
+  } else if (transport.runtime === 'remote' && transport.runtimeEnvironmentId) {
+    void runtimeEnvironmentSupportsCapability(
+      transport.runtimeEnvironmentId,
+      STRUCTURED_CHAT_DISPATCH_TELEMETRY_RUNTIME_CAPABILITY
+    )
+      .then((supported) => {
+        if (!supported) {
+          emit()
+        }
+      })
+      .catch(() => {})
   }
   reveal?.()
 }

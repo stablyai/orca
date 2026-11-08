@@ -8,12 +8,19 @@ import type { AgentSessionChatAction } from '../../../shared/agent-session/journ
 import { isSlashCommandDraft } from '../../../shared/native-chat/input/native-chat-slash-commands'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 
-export function structuredChatAction(input: {
-  body: AgentJournalMessageItem
-  userSend?: true
-  personsMessage?: true
-  usageLimitContinuationOfTurnItemId?: string
-}): AgentSessionChatAction | undefined {
+export function structuredChatAction(
+  input: {
+    body: AgentJournalMessageItem
+    userSend?: true
+    personsMessage?: true
+    usageLimitContinuationOfTurnItemId?: string
+  },
+  clientKind?: 'mobile' | 'runtime'
+): AgentSessionChatAction | undefined {
+  // Phones already record their sends at the RPC boundary.
+  if (clientKind === 'mobile') {
+    return undefined
+  }
   if (input.body.from || (!input.userSend && !input.personsMessage)) {
     return undefined
   }
@@ -46,7 +53,7 @@ export function queuedStructuredChatAction(card: {
   body: AgentJournalMessageItem
   chatAction?: AgentSessionChatAction
 }): AgentSessionChatAction | undefined {
-  return card.chatAction === 'message' || card.chatAction === 'command'
-    ? structuredChatAction({ body: card.body, userSend: true })
-    : card.chatAction
+  return card.chatAction === undefined
+    ? undefined
+    : structuredChatAction({ body: card.body, userSend: true })
 }
