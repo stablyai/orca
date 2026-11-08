@@ -7,10 +7,13 @@ import type {
   InstalledBrowserExtension
 } from '../../../shared/browser/extensions/browser-extension-types'
 
-const mocks = vi.hoisted(() => ({
-  installed: [] as InstalledBrowserExtension[],
-  reload: vi.fn(async (): Promise<BrowserExtensionActionResult> => ({ ok: true }))
-}))
+const mocks = vi.hoisted(() => {
+  const installed: InstalledBrowserExtension[] = []
+  return {
+    installed,
+    reload: vi.fn(async (): Promise<BrowserExtensionActionResult> => ({ ok: true }))
+  }
+})
 vi.mock('../sessions/browser-session-registry', () => ({ browserSessionRegistry: {} }))
 vi.mock('./installation/browser-extension-install-store', () => ({
   getBrowserExtensionInstallStore: () => ({ list: () => mocks.installed })
