@@ -1,12 +1,16 @@
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusResult } from '../../../shared/git/status/git-status-types'
 import { InFlightPromiseDedupe } from '../../../shared/in-flight-promise-dedupe'
-import { clearGitStatusLineStatsCache } from '../../../shared/git/status/git-status-line-stats-cache'
+import {
+  clearGitStatusLineStatsCache,
+  clearGitStatusLineStatsCacheKey
+} from '../../../shared/git/status/git-status-line-stats-cache'
 import { invalidateGitBranchLineTotalInFlight } from '../../../shared/git/status/git-branch-line-total'
 import { GitStatusReadLeaseOwner } from '../../../shared/git/status/git-status-read-lease-owner'
 import { invalidateGitUpstreamStatusReads } from './upstream'
 import { clearSubmodulePathsCache } from './submodule-paths'
 import { resolvedUpstreamNameCache } from './resolved-upstream-name-cache'
+import { getStatusLineStatsCacheKey } from './status-branch-line-total-input'
 import {
   FILE_DIFF_CACHE_LIMITS,
   NUMSTAT_CACHE_LIMITS,
@@ -37,9 +41,19 @@ export function invalidateGitReadCaches(): void {
 }
 
 // A change made outside Orca: later status reads must neither join a read begun before it nor reuse its line counts.
-export function invalidateGitStatusReads(): void {
-  statusReadLeaseOwner.invalidate()
-  clearGitStatusLineStatsCache()
+// `null` means the changed checkouts are unknown.
+export function invalidateGitStatusReads(worktreePaths: readonly string[] | null): void {
+  if (worktreePaths === null) {
+    statusReadLeaseOwner.invalidate()
+    clearGitStatusLineStatsCache()
+    return
+  }
+  for (const worktreePath of worktreePaths) {
+    // Status-read keys start with this one (getStatusReadKey).
+    const scope = getStatusLineStatsCacheKey(worktreePath)
+    statusReadLeaseOwner.invalidateWhere((key) => key.startsWith(`${scope}\0`))
+    clearGitStatusLineStatsCacheKey(scope)
+  }
 }
 
 export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>): Promise<T> {

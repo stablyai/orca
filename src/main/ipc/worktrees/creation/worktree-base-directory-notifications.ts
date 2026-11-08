@@ -11,7 +11,10 @@ import {
   mergeHeadIdentityScopes,
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
-import { cachedWorktreePathsForScope } from './worktree-head-identity-cached-paths'
+import {
+  allCachedWorktreePaths,
+  cachedWorktreePathsForScope
+} from './worktree-head-identity-cached-paths'
 import { invalidateGitStatusReads } from '../../../git/source-control/git-read-cache-invalidation'
 import { notifyWorktreeGitStatusMetadataChanged } from '../../worktree-remote'
 import {
@@ -94,10 +97,17 @@ export function scheduleWorktreeBaseNotification(
     const gitStatusWorktreePaths = supportsWorktreeHeadIdentityRefresh(watch)
       ? cachedWorktreePathsForScope(watch.headIdentityRefresh.cache, watch.pendingGitStatusScope)
       : null
+    // Structural and unattributed bursts may touch any checkout of this common dir, but no other repo's.
+    const changedWorktreePaths =
+      pendingStructure.length === 0 && gitStatusWorktreePaths
+        ? gitStatusWorktreePaths
+        : supportsWorktreeHeadIdentityRefresh(watch)
+          ? allCachedWorktreePaths(watch.headIdentityRefresh.cache)
+          : null
     clearPendingWorktreeBaseNotifications(watch)
     if (pendingStructure.length > 0 || sourceControlRepoIds.size > 0) {
       // Staging can keep a file's status letters, and a phone's re-read must not join a read begun before the change.
-      invalidateGitStatusReads()
+      invalidateGitStatusReads(changedWorktreePaths)
     }
     for (const repoId of pendingStructure) {
       notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)

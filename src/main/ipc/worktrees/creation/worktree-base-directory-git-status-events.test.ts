@@ -4,10 +4,15 @@ import { BrowserWindow } from 'electron'
 import { afterEach, expect, it, vi } from 'vitest'
 import { listWorktrees } from '../../../git/worktrees/catalog/worktree-scan-cache'
 import { listWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
+import { getStatusLineStatsCacheKey } from '../../../git/source-control/status-branch-line-total-input'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { partialRuntimeStore } from '../../../runtime/orca-runtime-tests/runtime-store-partial-fixture'
 import { makeStore } from '../../../runtime/paired-client-navigation-test-harness'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import {
+  applyCachedGitStatusLineStats,
+  storeGitStatusLineStats
+} from '../../../../shared/git/status/git-status-line-stats-cache'
 import { setWorktreeCatalogRemoteClientNotifier } from '../../watched-worktree-catalog-notification'
 import {
   scheduleWorktreeBaseNotification,
@@ -37,6 +42,31 @@ vi.mock('../../../git/worktrees/catalog/worktree-listing', async (importOriginal
   ...(await importOriginal<typeof WorktreeListingModule>()),
   listWorktreesStrict: vi.fn()
 }))
+
+// A watched common dir whose memo knows the linked checkout /tmp/feature.
+function watchWithFeatureCheckout(): WorktreeBaseNotificationWatch {
+  const headIdentityRefresh = createWorktreeHeadIdentityRefreshState()
+  headIdentityRefresh.cache.entries.set('feature', {
+    worktreePath: '/tmp/feature',
+    head: 'b',
+    branch: 'refs/heads/feature'
+  })
+  return {
+    key: 'git-common:/tmp/repo/.git',
+    kind: 'git-common',
+    path: '/tmp/repo/.git',
+    repos: new Map(),
+    mainWindow: new BrowserWindow(),
+    notifyTimer: null,
+    pendingStructureRepoIds: new Set(),
+    pendingGitStatusRepoIds: new Set(),
+    pendingHeadIdentityRepoIds: new Set(),
+    pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
+    pendingGitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE,
+    headIdentityRefresh,
+    disposed: false
+  }
+}
 
 afterEach(() => {
   vi.useRealTimers()
@@ -69,27 +99,7 @@ it('tells paired clients which worktree an index change touched', async () => {
   const events: RuntimeClientEvent[] = []
   runtime.onClientEvent((event) => events.push(event))
 
-  const headIdentityRefresh = createWorktreeHeadIdentityRefreshState()
-  headIdentityRefresh.cache.entries.set('feature', {
-    worktreePath: '/tmp/feature',
-    head: 'b',
-    branch: 'refs/heads/feature'
-  })
-  const watch: WorktreeBaseNotificationWatch = {
-    key: 'git-common:/tmp/repo/.git',
-    kind: 'git-common',
-    path: '/tmp/repo/.git',
-    repos: new Map(),
-    mainWindow: new BrowserWindow(),
-    notifyTimer: null,
-    pendingStructureRepoIds: new Set(),
-    pendingGitStatusRepoIds: new Set(),
-    pendingHeadIdentityRepoIds: new Set(),
-    pendingHeadIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE,
-    pendingGitStatusScope: EMPTY_HEAD_IDENTITY_SCOPE,
-    headIdentityRefresh,
-    disposed: false
-  }
+  const watch = watchWithFeatureCheckout()
   vi.useFakeTimers()
   scheduleWorktreeBaseNotification(watch, {
     gitStatusRepoIds: ['repo-1'],
@@ -100,4 +110,32 @@ it('tells paired clients which worktree an index change touched', async () => {
   expect(events.filter((event) => event.type === 'gitStatusChanged')).toEqual([
     { type: 'gitStatusChanged', repoId: 'repo-1', worktreeIds: ['repo-1::/tmp/feature'] }
   ])
+})
+
+it("drops reused line counts for the checkout an index change touched, not another repo's", async () => {
+  const counted = [{ path: 'a.txt', status: 'modified', area: 'staged', added: 3, removed: 1 }]
+  const touched = getStatusLineStatsCacheKey('/tmp/feature')
+  const otherRepo = getStatusLineStatsCacheKey('/tmp/other-repo')
+  for (const cacheKey of [touched, otherRepo]) {
+    storeGitStatusLineStats({ cacheKey, head: 'h', entries: counted, now: 0 })
+  }
+  const reusable = (cacheKey: string): boolean =>
+    applyCachedGitStatusLineStats({
+      cacheKey,
+      head: 'h',
+      entries: [{ path: 'a.txt', status: 'modified', area: 'staged' }],
+      now: 0
+    })
+
+  vi.useFakeTimers()
+  scheduleWorktreeBaseNotification(watchWithFeatureCheckout(), {
+    gitStatusRepoIds: ['repo-1'],
+    gitStatusScope: headIdentityScopeForEntry('feature')
+  })
+  await vi.advanceTimersByTimeAsync(250)
+
+  expect({ touched: reusable(touched), otherRepo: reusable(otherRepo) }).toEqual({
+    touched: false,
+    otherRepo: true
+  })
 })
