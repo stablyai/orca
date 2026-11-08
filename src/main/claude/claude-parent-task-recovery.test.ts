@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   producer,
+  frame,
   system,
   toolUse,
   toolResult
@@ -647,6 +648,11 @@ it('releases an alias-less roster against reopened ownership on binding without 
   await journals.closeAll()
   journal = await open()
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  deferred.sink.appendItem(
+    { provider: 'claude', sessionId: 'saved-session', uuid: 'before-bind' },
+    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Earlier queued write' }] },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
   const claude = fakeClaude()
   const evidence: AgentChildWorkEvidence[] = []
   const adapter = adapterAtPublishFor(
@@ -666,6 +672,16 @@ it('releases an alias-less roster against reopened ownership on binding without 
       })
     )
   roster()
+  claude.connections[0]!.handlers.onMessage?.(
+    frame({
+      type: 'assistant',
+      message: {
+        id: 'held-assistant',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'Later provider write' }]
+      }
+    })
+  )
   expect(evidence.filter((edge) => edge.type === 'live')).toEqual([])
   deferred.bind({ journal, fence: 1, publish: () => {} })
   expect(await deferred.drained()).toEqual({ ok: true })
@@ -678,6 +694,27 @@ it('releases an alias-less roster against reopened ownership on binding without 
       })
     })
   )
+  const liveIds = evidence
+    .filter((edge) => edge.type === 'live')
+    .map((edge) => edge.child.handle.id)
+  expect(liveIds).toContain('saved-shell')
+  expect(liveIds).not.toContain('saved-only')
+  const queuedMessages = journal
+    .snapshot()
+    .items.filter(
+      (row) =>
+        row.body.kind === 'message' &&
+        row.body.blocks.some(
+          (block) =>
+            block.type === 'text' &&
+            (block.text === 'Earlier queued write' || block.text === 'Later provider write')
+        )
+    )
+  expect(queuedMessages.map((row) => row.body)).toMatchObject([
+    { kind: 'message', blocks: [{ type: 'text', text: 'Earlier queued write' }] },
+    { kind: 'message', blocks: [{ type: 'text', text: 'Later provider write' }] }
+  ])
+  expect(queuedMessages[0]!.sequence).toBeLessThan(queuedMessages[1]!.sequence)
   expect(journal.item(originalId)).toMatchObject({
     agentId: 'saved-shell',
     parentAgentId: 'saved-owner',
