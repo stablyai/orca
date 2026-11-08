@@ -21,6 +21,7 @@ import type {
 import { EMPTY_DISABLED_TUI_AGENTS } from './shortcut-groups'
 import { useAppStore } from '../../../store/index'
 import { KeybindingsFileActions } from './KeybindingsFileActions'
+import { buildShortcutExportJson } from './shortcut-export-json'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import {
   hasCommonBindingOverride,
@@ -340,7 +341,11 @@ export function ShortcutsPane(): React.JSX.Element {
               {t('auto.components.settings.ShortcutsPane.4b7ae34062', 'directly.')}
             </>
           }
-          action={<KeybindingsFileActions />}
+          action={
+            <KeybindingsFileActions
+              getShortcutsJson={() => buildShortcutExportJson({ groups, keybindings, platform })}
+            />
+          }
         />
 
         <KeybindingFileDiagnostics diagnostics={keybindingSnapshot?.diagnostics ?? []} />

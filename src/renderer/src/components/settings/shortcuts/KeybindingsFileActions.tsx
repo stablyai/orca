@@ -1,6 +1,14 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import React from 'react'
-import { ChevronDown, Code2, ExternalLink, FileText, FolderOpen, RefreshCw } from 'lucide-react'
+import {
+  ChevronDown,
+  ClipboardCopy,
+  Code2,
+  ExternalLink,
+  FileText,
+  FolderOpen,
+  RefreshCw
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { useAppStore } from '../../../store/index'
@@ -29,7 +37,11 @@ function openFailureMessage(reason: string): string {
   }
 }
 
-export function KeybindingsFileActions(): React.JSX.Element {
+export function KeybindingsFileActions({
+  getShortcutsJson
+}: {
+  getShortcutsJson: () => string
+}): React.JSX.Element {
   const t = useTranslate()
   const keybindingSnapshot = useAppStore((state) => state.keybindingSnapshot)
   const ensureKeybindingsFile = useAppStore((state) => state.ensureKeybindingsFile)
@@ -118,6 +130,15 @@ export function KeybindingsFileActions(): React.JSX.Element {
     }
   }
 
+  const copyShortcutsJson = async (): Promise<void> => {
+    try {
+      await window.api.ui.writeClipboardText(getShortcutsJson())
+      toast.success(t('settings.shortcuts.copyAllJsonSuccess', 'Copied all shortcuts as JSON.'))
+    } catch {
+      toast.error(t('settings.shortcuts.copyAllJsonFailed', 'Failed to copy shortcuts.'))
+    }
+  }
+
   const openKeybindingsInExternalEditor = async (editorId: 'vscode' | 'cursor'): Promise<void> => {
     try {
       const filePath = await prepareKeybindingsPath()
@@ -197,6 +218,10 @@ export function KeybindingsFileActions(): React.JSX.Element {
             {t('auto.components.settings.KeybindingsFileActions.9e24c0e858', 'Open in Cursor')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void copyShortcutsJson()}>
+            <ClipboardCopy className="size-3.5" />
+            {t('settings.shortcuts.copyAllJson', 'Copy All Shortcuts as JSON')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => void revealKeybindingsFile()}>
             <FolderOpen className="size-3.5" />
             {t(
