@@ -1,5 +1,5 @@
 import { resolve as resolvePath } from 'node:path'
-import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
+import type { ComputerAppQuery } from '../shared/runtime-types'
 import { resolveFolderWorkspaceSelector } from './folder-workspace-selector'
 import { resolveCallerDistroPathSelector } from './wsl-caller-path-selector'
 import type { RuntimeClient } from './runtime-client'
@@ -162,24 +162,14 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  let worktreesUnavailable = false
-  const catalog = await readEnclosingWorkspaceCatalog(client, cwd, () =>
-    client
-      .call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
-      .then((response) => response.result.worktrees)
-      .catch(() => {
-        worktreesUnavailable = true
-        return []
-      })
-  ).catch((error: unknown) => {
-    // Only a missing worktree list keeps the runtime default; a folder-catalog failure could retarget.
-    if (worktreesUnavailable) {
+  // Only an Orca without a catalog method keeps the runtime default; any other failure could retarget.
+  const catalog = await readEnclosingWorkspaceCatalog(client, cwd).catch((error: unknown) => {
+    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
       return undefined
     }
     throw error
   })
-  // Without the worktree list neither cwd nor the terminal id can be checked; keep the runtime default.
-  if (worktreesUnavailable || !catalog) {
+  if (!catalog) {
     return undefined
   }
   const hostId = getCallerExecutionHostId()

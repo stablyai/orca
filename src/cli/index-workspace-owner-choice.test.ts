@@ -474,7 +474,7 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
     }
   })
 
-  it('retains optional no-match/unavailable fallback and deliberate scope bypasses', async () => {
+  it('retains optional no-match fallback, surfaces an unreadable catalog, and keeps scope bypasses', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
     const prior = process.exitCode
     const commands = [
@@ -515,6 +515,15 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
                 ? ['--pairing-code', 'remote-runtime']
                 : []
           await main([...args, ...scope, '--json'], root.path)
+          // An omitted browser target must not guess past an unreadable catalog.
+          if (mode === 'unavailable' && action === 'browser.snapshot') {
+            expect(process.exitCode).toBe(1)
+            expect(JSON.parse(log.mock.calls.flat().join('\n')).error.code).toBe(
+              'runtime_unavailable'
+            )
+            expect(callMock).not.toHaveBeenCalledWith(action, expect.anything())
+            continue
+          }
           expect(process.exitCode, JSON.stringify({ args, mode, output: log.mock.calls })).toBe(
             prior
           )
