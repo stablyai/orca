@@ -120,15 +120,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       editor: { textareaRef, setDraft, setCaret, setActiveSuggestion },
       setNotice
     })
-    const {
-      autocomplete,
-      classifySend,
-      clearSkillOrigin,
-      completeItem,
-      completeMention,
-      dismiss,
-      handleDraftOrCaretChange
-    } = picker
+    const { autocomplete, classifySend, clearSkillOrigin, completeItem, completeMention, dismiss } =
+      picker
     const mentionFiles = useNativeChatMentionFiles({
       query: autocomplete.mode === 'mention' ? autocomplete.query : null,
       terminalTabId,
@@ -355,7 +348,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setDraft,
       setCaret,
       setActiveSuggestion,
-      handleDraftOrCaretChange,
+      handleDraftOrCaretChange: picker.handleDraftOrCaretChange,
       flushDraftAppends,
       flushPendingAttachments: attachments.flushPendingAttachments
     })

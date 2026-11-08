@@ -64,41 +64,40 @@ export function ptyChatSubmissionSource(
 
 const SUBMISSION_HISTORY_TIMEOUT_MS = 5_000
 
+function createSubmissionHistory(key: string) {
+  let controller = new AbortController()
+  let priorSubmission: Promise<boolean> | undefined
+  return {
+    key,
+    submissionHistory: new Map<string, Promise<boolean>>(),
+    start: () => {
+      if (controller.signal.aborted) {
+        controller = new AbortController()
+        priorSubmission = undefined
+      }
+      const activeController = controller
+      return () => activeController.abort()
+    },
+    read: (source: NativeChatSubmissionSource | undefined) => {
+      if (!source || controller.signal.aborted) {
+        return Promise.resolve(false)
+      }
+      if (!priorSubmission) {
+        priorSubmission = source.readPriorSubmission(controller.signal).catch(() => false)
+      }
+      return priorSubmission
+    }
+  }
+}
+
 export function useNativeChatSubmissionHistory(key: string): {
   submissionHistory: Map<string, Promise<boolean>>
   readPriorSubmission: (source: NativeChatSubmissionSource | undefined) => Promise<boolean>
 } {
-  const state = useMemo<{
-    key: string
-    submissionHistory: Map<string, Promise<boolean>>
-    controller: AbortController
-    priorSubmission?: Promise<boolean>
-  }>(
-    () => ({
-      key,
-      submissionHistory: new Map<string, Promise<boolean>>(),
-      controller: new AbortController()
-    }),
-    [key]
-  )
-  useEffect(() => {
-    if (state.controller.signal.aborted) {
-      state.controller = new AbortController()
-      state.priorSubmission = undefined
-    }
-    const { controller } = state
-    return () => controller.abort()
-  }, [state])
+  const state = useMemo(() => createSubmissionHistory(key), [key])
+  useEffect(() => state.start(), [state])
   const readPriorSubmission = useCallback(
-    (source: NativeChatSubmissionSource | undefined) => {
-      if (!source || state.controller.signal.aborted) {
-        return Promise.resolve(false)
-      }
-      state.priorSubmission ??= source
-        .readPriorSubmission(state.controller.signal)
-        .catch(() => false)
-      return state.priorSubmission
-    },
+    (source: NativeChatSubmissionSource | undefined) => state.read(source),
     [state]
   )
   return { submissionHistory: state.submissionHistory, readPriorSubmission }

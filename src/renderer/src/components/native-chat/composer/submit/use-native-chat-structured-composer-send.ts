@@ -79,21 +79,23 @@ export function useNativeChatStructuredComposerSend({
   imageAttachments,
   structuredTransport,
   recallSource,
-  submissionSource = structuredTransport?.submissionSource,
+  submissionSource: explicitSubmissionSource,
   isComposing,
   clearSkillOrigin,
   setDraft,
   setCaret
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
+  const submissionSource = explicitSubmissionSource ?? structuredTransport?.submissionSource
   const submissionKey = submissionSource?.key ?? draftScopeKey
   const { submissionHistory, readPriorSubmission } = useNativeChatSubmissionHistory(submissionKey)
   return useCallback<NativeChatStructuredComposerSend>(
     async (text, attachments = imageAttachments, intent): Promise<boolean> => {
       // Picked commands must also wait for pending attachments to acquire paths.
-      if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
-        return false
-      }
-      if (!admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)) {
+      if (
+        !structuredTransport ||
+        attachments.some((attachment) => attachment.pending) ||
+        !admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)
+      ) {
         return false
       }
       const submitted = readNativeChatComposerDraft(draftScopeKey)
@@ -183,11 +185,7 @@ export function useNativeChatStructuredComposerSend({
           return
         }
         if (completeAddition) {
-          updateNativeChatComposerDraft(
-            draftScopeKey,
-            { ...left, document: left.document },
-            'immediate'
-          )
+          updateNativeChatComposerDraft(draftScopeKey, left, 'immediate')
         }
         if (hostCommand && !isCurrent()) {
           if (!completeAddition) {

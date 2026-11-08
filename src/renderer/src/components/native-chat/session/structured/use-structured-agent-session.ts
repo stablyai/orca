@@ -167,10 +167,9 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     enabled: providerVisible
   })
 
-  const { pending } = sends
   const commandWrite = useStructuredAgentSessionCommandWrite(sessionId, write)
   const agentName = structuredAgentLabel(agent)
-  const sending = pending.some((entry) => entry.phase === 'sending')
+  const sending = sends.pending.some((entry) => entry.phase === 'sending')
   // What the host refuses a rewind behind; a command's own hold is the runner's below.
   const conversationBusy = transportState.conversationBusy || prompts.length > 0 || sending
   const rewind = useStructuredAgentSessionRewind({
@@ -200,8 +199,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     send
   })
   const transcriptPending = useMemo(
-    () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, isWorking),
-    [isWorking, pending, queuedMessageIds]
+    () => pendingSendsOutsideQueuedCards(sends.pending, queuedMessageIds, isWorking),
+    [isWorking, sends.pending, queuedMessageIds]
   )
   const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
   // Project since the latest /clear and add a notice only for cut turns without an explaining row.
@@ -221,7 +220,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     hasPendingPrompt: prompts.length > 0,
     isWorking,
     // Hidden from the transcript, a queue send on its way reads as sending among the cards.
-    sending: pending,
+    sending: sends.pending,
     composerScopeKey: args.composerScopeKey,
     mutate,
     editTransport,
@@ -248,7 +247,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
       chat: transportState,
       prompts,
       rewindInFlight: rewind.blockedRef,
-      sends: pending,
+      sends: sends.pending,
       items: () => stateRef.current.items,
       onClearSent: contextClear.onClearSent,
       send: commandWrite
@@ -278,7 +277,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     retainHistory,
     trimHistory,
     prompts,
-    pending,
+    pending: sends.pending,
     /** A send is out, or a /clear holds sends; the chat takes none until it settles. */
     sendOut: sending || sends.held,
     /** The journal's rows for sent messages, which carry a rejected message's whole fact. */
