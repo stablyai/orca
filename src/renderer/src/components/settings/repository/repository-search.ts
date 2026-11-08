@@ -6,7 +6,8 @@ import {
 } from '../../../../../shared/execution-host'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
-import { translateSearchKeyword } from '../search/settings-search-keywords'
+import type { Translate } from '@/i18n/use-translate'
+import { searchKeywordTranslator } from '../search/settings-search-keywords'
 import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-search-entries'
 import { getRepositoryGitHooksSearchEntries } from './execution/repository-git-hooks-search-entries'
 import { getRepositoryGitWorktreeSearchEntries } from './execution/repository-git-worktree-search-entries'
@@ -20,19 +21,21 @@ type RepositoryPaneSearchOptions = {
 
 export function getRepositoryPaneSearchEntries(
   repo: Repo,
-  options: RepositoryPaneSearchOptions = {}
+  options: RepositoryPaneSearchOptions = {},
+  t: Translate = translate
 ): SettingsSearchEntry[] {
+  const translateSearchKeyword = searchKeywordTranslator(t)
   const isFolder = isFolderRepo(repo)
   const isLocalWindowsProject =
     options.isLocalWindowsProject ??
     (Boolean(options.windowsRuntimeSupported) &&
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
   return [
-    getRepositoryFormatterSearchEntry(),
+    getRepositoryFormatterSearchEntry(t),
     getRepositoryAgentTrustSearchEntry(),
     {
-      title: translate('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
-      description: translate(
+      title: t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
+      description: t(
         'components.RepositoryJiraProjectSection.description',
         'Default the Jira issue picker and Tasks list to this project. You can change it for each worktree.'
       ),
@@ -50,8 +53,8 @@ export function getRepositoryPaneSearchEntries(
       ]
     },
     {
-      title: translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
-      description: translate(
+      title: t('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
+      description: t(
         'auto.components.settings.repository.search.883aad2801',
         'Project-specific display details for the sidebar and tabs.'
       ),
@@ -69,8 +72,8 @@ export function getRepositoryPaneSearchEntries(
       ]
     },
     {
-      title: translate('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
-      description: translate(
+      title: t('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+      description: t(
         'auto.components.settings.repository.search.a1f3a2bd47',
         'Project icon and color used in the sidebar and tabs.'
       ),
@@ -105,11 +108,8 @@ export function getRepositoryPaneSearchEntries(
     ...(!isFolder
       ? [
           {
-            title: translate(
-              'auto.components.settings.repository.search.githubAccount',
-              'GitHub Account'
-            ),
-            description: translate(
+            title: t('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
+            description: t(
               'auto.components.settings.repository.search.githubAccountDescription',
               'Bind a keyring gh login for this project’s GitHub API calls.'
             ),
@@ -139,11 +139,11 @@ export function getRepositoryPaneSearchEntries(
     ...(repo.upstream && !isFolder
       ? [
           {
-            title: translate(
+            title: t(
               'auto.components.settings.repository.search.keepForkUpToDate',
               'Keep Fork Up to Date'
             ),
-            description: translate(
+            description: t(
               'auto.components.settings.repository.search.keepForkUpToDateDescription',
               'Safely fast-forward this fork from upstream.'
             ),
@@ -184,11 +184,11 @@ export function getRepositoryPaneSearchEntries(
       ? []
       : [
           {
-            title: translate(
+            title: t(
               'auto.components.settings.repository.search.projectRuntime',
               'Project Runtime'
             ),
-            description: translate(
+            description: t(
               'auto.components.settings.repository.search.projectRuntimeDescription',
               'Choose whether this project runs on Windows or WSL.'
             ),
@@ -222,10 +222,10 @@ export function getRepositoryPaneSearchEntries(
             ]
           }
         ]),
-    ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo)),
+    ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo, t)),
     {
-      title: translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),
-      description: translate(
+      title: t('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),
+      description: t(
         'auto.components.settings.repository.search.c86478c3d8',
         'Remove this project from Orca.'
       ),
@@ -247,6 +247,9 @@ export function getRepositoryPaneSearchEntries(
     },
     ...(isFolder
       ? []
-      : [...getRepositoryGitAuthorSearchEntries(repo), ...getRepositoryGitHooksSearchEntries(repo)])
+      : [
+          ...getRepositoryGitAuthorSearchEntries(repo, t),
+          ...getRepositoryGitHooksSearchEntries(repo, t)
+        ])
   ]
 }
