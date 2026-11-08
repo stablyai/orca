@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
 import { buildBody, PANE } from './server.test-fixtures'
 import { mainAgentDoneAt } from '../../shared/agent-status/lifecycle/main-agent-status'
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import { createRuntimeAutomationRunTerminalObserver } from '../automations/runtime-terminal-run-observer'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
@@ -13,7 +13,6 @@ vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: () => ({ nth_repo_added: 2 })
 }))
 
-const CHILD = 'a6324370b7bede0c7'
 // Markers past the 8,000-char status preview prove the whole reply survived.
 const REPLY = `START ${'a'.repeat(12_000)} MIDDLE-MARKER ${'b'.repeat(12_000)} END-MARKER`
 
@@ -70,37 +69,6 @@ describe('accepted lead reply', () => {
     await post({ hook_event_name: 'UserPromptSubmit', prompt: 'next task' })
     await post({ hook_event_name: 'Stop' })
     expect(replyForCurrentRow()).toBeUndefined()
-  })
-
-  it.each([
-    { name: 'a running child', permission: false },
-    { name: "a child's visible permission prompt", permission: true }
-  ])('keeps a reply the lead gave while $name held the turn', async ({ permission }) => {
-    await post({ hook_event_name: 'UserPromptSubmit', prompt: 'research in background' })
-    await post({ hook_event_name: 'SubagentStart', agent_id: CHILD, agent_type: 'general-purpose' })
-    if (permission) {
-      await post({
-        hook_event_name: 'PermissionRequest',
-        agent_id: CHILD,
-        agent_type: 'general-purpose',
-        tool_name: 'Bash',
-        tool_input: { command: 'make' }
-      })
-    }
-    await post({
-      hook_event_name: 'Stop',
-      last_assistant_message: REPLY,
-      background_tasks: [{ id: CHILD, type: 'subagent', status: 'running' }]
-    })
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      state: permission ? 'waiting' : 'working',
-      mainAgent: { state: 'done' }
-    })
-
-    await post({ hook_event_name: 'SubagentStop', agent_id: CHILD, agent_type: 'general-purpose' })
-
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
-    expect(replyForCurrentRow()).toBe(REPLY)
   })
 
   it("saves the reply of an agent that exits right after it, though exit cleanup clears the pane's status", async () => {

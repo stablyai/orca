@@ -68,9 +68,9 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
     const { ClaudeAtRestCommandCatalog } =
       await import('../../../../claude/claude-at-rest-commands')
     const { commandDiscoveryRig, OMP, DISCOVERY_SESSION } =
-      await import('../../../../acp/acp-command-discovery.test-fixture')
+      await import('../../../../acp/discovery/testing/acp-command-discovery.test-fixture')
     const { acpStructuredAgentDefinition } =
-      await import('../../../../acp/acp-structured-agent-definitions')
+      await import('../../../../acp/session/acp-structured-agent-definitions')
     const { CLAUDE_STRUCTURED_AGENT } =
       await import('../../../../claude/structured/claude-structured-agent-definition')
     const { structuredAgentsDeclaringNothing } =

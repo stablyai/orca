@@ -3,7 +3,7 @@ import { parseHostAuthorityKey } from '../../../../../shared/host-authority'
 import { reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 

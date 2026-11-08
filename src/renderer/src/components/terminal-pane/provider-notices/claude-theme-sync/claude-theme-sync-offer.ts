@@ -27,7 +27,7 @@ function showClaudeThemeSyncOffer(): void {
     duration: Infinity,
     classNames: TRAILING_ACTIONS_CLASS_NAMES,
     action: {
-      label: translate('terminal.claudeThemeSyncOffer.accept', 'Match Theme'),
+      label: translate('terminal.claudeThemeSyncOffer.accept', 'Match theme'),
       onClick: () => {
         // Why confirm only after the write: a failed save must not claim the sync is on.
         updateSettingsOrThrow({ claudeCodeThemeSync: true }).then(
@@ -58,7 +58,7 @@ function showClaudeThemeSyncOffer(): void {
       }
     },
     cancel: {
-      label: translate('terminal.claudeThemeSyncOffer.decline', 'No Thanks'),
+      label: translate('terminal.claudeThemeSyncOffer.decline', 'No thanks'),
       onClick: () => {}
     }
   })

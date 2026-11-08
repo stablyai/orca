@@ -32,7 +32,7 @@ import {
   type TaskSourceContext,
   buildTaskSourceContextFromRepo,
   normalizeTaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
 import {
   normalizeGitHubLinkedWorkItem,

@@ -8,7 +8,7 @@ import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context
 import { useTranslate } from '@/i18n/use-translate'
 import { buildLinearIssueBranchName } from '@/components/linear-issue-workspace-text'
 import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { copyLinearIssueText } from './linear-issue-clipboard'
 import { LinearIssueProjectSelector } from './linear-issue-project-selector'
 

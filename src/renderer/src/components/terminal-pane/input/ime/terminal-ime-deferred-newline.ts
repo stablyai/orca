@@ -1,3 +1,4 @@
+import { isEnterOrUnknownCode } from '@/lib/ime-composition-keyboard-event'
 import {
   capturePendingTerminalImeCompositionSessions,
   hasPendingTerminalImeComposition,
@@ -148,10 +149,9 @@ export function isTerminalImeProcessEnter(
     'key' | 'code' | 'keyCode' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
   >
 ): boolean {
-  const { code } = event
   return (
     isTerminalImeConsumedKey(event) &&
-    (!code || code === 'Unidentified' || code === 'Enter' || code === 'NumpadEnter') &&
+    isEnterOrUnknownCode(event.code) &&
     getTerminalImeModifiedEnterKind(event) !== null
   )
 }

@@ -3,7 +3,7 @@ import { RuntimeClientError } from './runtime/types'
 import {
   isOrchestrationRetryRequestId,
   RETRY_REQUEST_ID_GUIDANCE
-} from '../shared/orchestration-retry-request-id'
+} from '../shared/orchestration/orchestration-retry-request-id'
 
 /** Reject damaged identities: falling back to a fresh id could replay an already-applied mutation. */
 export function readRetryRequestFlag(flags: Map<string, string | boolean>): string | undefined {

@@ -16,8 +16,11 @@ import {
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
-import { getRuntimeOwnedSshTargetId } from '../ssh/connection/ssh-connection-store'
-import { isSshUserDisconnected, sshUserDisconnectCount } from '../ssh/ssh-user-disconnect'
+import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'
+import {
+  isSshUserDisconnected,
+  sshUserDisconnectCount
+} from '../ssh/connection/ssh-user-disconnect'
 import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-platform'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'

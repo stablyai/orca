@@ -23,7 +23,7 @@ import {
   HostAccountSignInFlowParams,
   HostAccountSignInCodeParams
 } from '../../../../../shared/rpc-contract/accounts-params'
-import { HostAccountLaunchEnvParams } from '../../../../../shared/host-account-launch-env'
+import { HostAccountLaunchEnvParams } from '../../../../../shared/agent-launch/startup/host-account-launch-env'
 import { withTimeout } from '../../../../../shared/promise-timeout-fallback'
 
 // Use a per-process counter: same-millisecond subscriptions must not evict each other's cleanup.

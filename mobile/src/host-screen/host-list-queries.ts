@@ -4,7 +4,7 @@ import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/m
 import type { Query, QueryClient } from '@tanstack/react-query'
 import { defineHostQuery } from '../query/host-query'
 import { hostQueryKey, type HostQueryTarget } from '../query/host-query-key'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   applyServerWorkspaces,
   fetchServerWorkspaces,

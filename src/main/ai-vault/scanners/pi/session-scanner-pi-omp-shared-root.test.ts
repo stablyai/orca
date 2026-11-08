@@ -122,14 +122,21 @@ async function writeSharedRootTranscripts(sessionsDir: string): Promise<void> {
 
 describe('scanAiVaultSessions with overlapping Pi and OMP roots', () => {
   const sameFolder = (sessionsDir: string): string => sessionsDir
+  const parentFolder = (sessionsDir: string): string => join(sessionsDir, '..')
   it.each([
     { layout: 'the same folder', piRoot: sameFolder, scope: {} },
     // PI_CODING_AGENT_DIR=<dir>: Pi walks <dir>, OMP walks <dir>/sessions.
-    { layout: 'a parent folder', piRoot: (dir: string) => join(dir, '..'), scope: {} },
+    { layout: 'a parent folder', piRoot: parentFolder, scope: {} },
     // A one-row cap sends the rest through scope recovery: Pi's buckets and OMP's walk.
     {
       layout: 'the same folder for a workspace',
       piRoot: sameFolder,
+      scope: { scopePaths: ['/repo/app'], limit: 1 }
+    },
+    // Scope recovery reads Pi's cwd buckets, which sit under the agent folder's sessions/.
+    {
+      layout: 'a parent folder for a workspace',
+      piRoot: parentFolder,
       scope: { scopePaths: ['/repo/app'], limit: 1 }
     }
   ])('lists each transcript once under its writer when Pi scans $layout', async (testCase) => {

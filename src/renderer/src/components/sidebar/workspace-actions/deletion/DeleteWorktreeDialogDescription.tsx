@@ -7,13 +7,14 @@ export function DeleteWorktreeDialogDescription({
   description,
   targetClassName,
   targetName,
-  showChangeLossWarning
+  showUnknownChangeLossWarning
 }: {
   /** Translated sentence from delete-worktree-dialog-copy with <target> / <descendants> tags. */
   description: string
   targetClassName: string
   targetName: string | undefined
-  showChangeLossWarning?: boolean
+  /** Default Delete forces removal, so warn while a target's Git status is unknown. */
+  showUnknownChangeLossWarning?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -26,7 +27,7 @@ export function DeleteWorktreeDialogDescription({
           descendants: <span className="font-medium text-foreground" />
         }}
       />
-      {showChangeLossWarning && (
+      {showUnknownChangeLossWarning && (
         <span className="mt-1 block">
           {t(
             'components.workspace.delete.changes.permanentLoss',

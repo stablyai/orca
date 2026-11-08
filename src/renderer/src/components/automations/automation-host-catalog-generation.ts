@@ -1,5 +1,5 @@
-import { ownerKey } from '../../../../shared/automation-owner-key'
-import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
+import type { StableAutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import {
   automationAuthorityCatalogKey,
   type AutomationHostCatalog,

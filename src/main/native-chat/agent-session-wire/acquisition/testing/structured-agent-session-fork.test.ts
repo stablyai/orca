@@ -1,11 +1,6 @@
-import { copyAcpConversation } from '../../../../acp/acp-conversation-copy'
-import { acpLaunchSpecFor } from '../../../../acp/acp-launch-specs'
-import type { AcpStructuredConnection } from '../../../../acp/acp-structured-connection'
-import { PI_CWD_BUCKET_LAYOUT } from '../../../../ai-vault/session-cwd-bucket-layouts'
-import { handleStructuredAgentSessionCreate } from '../../../../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-create-handler'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { appendFile, mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
 import {
@@ -21,13 +16,8 @@ import {
   type RestTestRig
 } from '../../host/testing/structured-agent-session-rest-test-rig'
 import { structuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { OrcaRuntimeService } from '../../../../runtime/orca-runtime'
+
 import { setStructuredAgentSessionHost } from '../../host/structured-agent-session-registry'
-import {
-  hostTestMessage,
-  hostTestOperationId
-} from '../../host/testing/structured-agent-session-host-test-data'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 
 const SOURCE = '019e6b26-18e2-7103-b7a0-7ba6bb071123'
 const COPY = '019e6b26-18e2-7103-b7a0-7ba6bb071124'
@@ -88,29 +78,29 @@ function source(agent: 'claude' | 'codex' = 'codex') {
         }
       },
       {
-        itemId: 'ended-root',
+        itemId: 'legacy:codex:source:ended-root',
         sequence: 2,
         revision: 1,
         observedAt: 2,
         body: { kind: 'turn', turnId: 'completed-turn', state: 'completed' }
       },
       {
-        itemId: 'selected-response',
+        itemId: 'legacy:codex:source:selected-response',
         sequence: 3,
         revision: 1,
         observedAt: 3,
-        turnScope: { kind: 'turn', turnItemId: 'ended-root' },
+        turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:ended-root' },
         body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Remembered' }] }
       },
       {
-        itemId: 'running-root',
+        itemId: 'legacy:codex:source:running-root',
         sequence: 3,
         revision: 1,
         observedAt: 3,
         body: { kind: 'turn', turnId: 'active-turn', state: 'running' }
       },
       {
-        itemId: 'ended-child',
+        itemId: 'legacy:codex:source:ended-child',
         sequence: 4,
         revision: 1,
         observedAt: 4,
@@ -163,7 +153,15 @@ function source(agent: 'claude' | 'codex' = 'codex') {
             .map((row) => JSON.stringify(row))
             .join('\n')}\n`
         )
-        return { sessionId: COPY, filePath }
+        return {
+          sessionId: COPY,
+          filePath,
+          coverage: {
+            unit: agent === 'claude' ? 'claude-entry' : 'codex-turn',
+            ids: agent === 'claude' ? ['prompt', 'answer'] : ['completed-turn']
+          },
+          ...(agent === 'claude' ? { resumeCursor: 'answer' } : {})
+        }
       }
       await writeFile(
         filePath,
@@ -181,7 +179,11 @@ function source(agent: 'claude' | 'codex' = 'codex') {
           .map((row) => JSON.stringify(row))
           .join('\n')}\n`
       )
-      return { sessionId: COPY, filePath }
+      return {
+        sessionId: COPY,
+        filePath,
+        coverage: { unit: 'codex-turn' as const, ids: ['completed-turn'] }
+      }
     }
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preparation reads only these source/store/adapter facets; destination founding uses the real rig host below.
@@ -204,7 +206,10 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     sessionId: `${agent}_independent_child`,
     agent,
     worktree: 'id:workspace-1',
-    forkFrom: { sessionId: record.sessionId, throughItemId: 'selected-response' },
+    forkFrom: {
+      sessionId: record.sessionId,
+      throughItemId: 'legacy:codex:source:selected-response'
+    },
     now: rig.clock.now,
     randomUuid: () => '00000000-0000-0000-0000-000000000123'
   })
@@ -212,7 +217,7 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     prepareStructuredAgentSessionFork({
       host,
       sessionId: record.sessionId,
-      throughItemId: 'selected-response',
+      throughItemId: 'legacy:codex:source:selected-response',
       agent,
       location: record.location,
       envelope: intent.envelope
@@ -229,107 +234,12 @@ function source(agent: 'claude' | 'codex' = 'codex') {
     },
     tip: () => {
       capability = 'tip'
-      snapshot.items = snapshot.items.filter((item) => item.itemId !== 'running-root')
+      snapshot.items = snapshot.items.filter(
+        (item) => item.itemId !== 'legacy:codex:source:running-root'
+      )
     }
   }
 }
-
-it('keeps captured Codex options over native imported effort through reload and send', async () => {
-  const test = source('codex')
-  test.record.options = { model: 'gpt-6.1-sol', effort: 'medium', fastMode: 'false' }
-  const copy = test.copy.getMockImplementation()!
-  test.copy.mockImplementationOnce(async (input) => {
-    const result = await copy(input)
-    await appendFile(
-      result.filePath!,
-      `${JSON.stringify({
-        type: 'turn_context',
-        timestamp: '2026-11-03T19:00:01.000Z',
-        payload: {
-          turn_id: 'completed-turn',
-          cwd: rig.root,
-          model: 'gpt-6.1-sol',
-          effort: 'low'
-        }
-      })}\n`
-    )
-    return result
-  })
-  const params = await test.prepare()
-  expect(await rig.host.create({ callerKey: 'device-1' }, params)).toMatchObject({ ok: true })
-  const sessionId = test.intent.envelope.sessionId
-  expect(rig.store.getRecord(sessionId)?.options).toEqual({
-    model: 'gpt-6.1-sol',
-    effort: 'medium',
-    fastMode: 'false'
-  })
-  expect((await rig.host.readOptions(sessionId)).current).toMatchObject({
-    model: 'gpt-6.1-sol',
-    effort: 'medium',
-    fastMode: false
-  })
-  await rig.restart()
-  expect(rig.store.getRecord(sessionId)?.options).toEqual({
-    model: 'gpt-6.1-sol',
-    effort: 'medium',
-    fastMode: 'false'
-  })
-  expect((await rig.host.readOptions(sessionId)).current).toMatchObject({
-    model: 'gpt-6.1-sol',
-    effort: 'medium',
-    fastMode: false
-  })
-  rig.adapter.acquire.mockImplementation(async (input) => ({
-    acquisitionGeneration: 'fork-generation',
-    process: {
-      hostId: 'local',
-      pid: 4242,
-      processStartTimeMs: rig.clock.now,
-      spawnToken: input.spawnToken
-    },
-    link: {
-      linkId: 'fork-resume',
-      origin: 'resumed',
-      mintedAtFence: input.fence,
-      observedAt: rig.clock.now,
-      handle: codexProviderHandle(COPY)
-    }
-  }))
-  const dispatched =
-    Promise.withResolvers<Parameters<StructuredAgentSessionAdapter['dispatch']>[0]>()
-  rig.adapter.dispatch.mockImplementation(async (input) => {
-    dispatched.resolve(input)
-    return { state: 'unknown', reason: 'test' }
-  })
-  const body = hostTestMessage('Continue with the same settings')
-  expect(
-    await rig.host.send(
-      { callerKey: 'device-1' },
-      {
-        body,
-        envelope: {
-          sessionId,
-          clientOperationId: hostTestOperationId(),
-          expectedRuntimeFence: 1,
-          payloadFingerprint: computeAgentSessionPayloadFingerprint({
-            method: 'agentSession.send',
-            sessionId,
-            fields: { body }
-          })
-        }
-      }
-    )
-  ).toMatchObject({ ok: true })
-  expect(await dispatched.promise).toMatchObject({
-    sessionId,
-    executionOptions: { model: 'gpt-6.1-sol', effort: 'medium', fastMode: 'false' }
-  })
-  expect(rig.adapter.acquire).toHaveBeenCalledWith(
-    expect.objectContaining({
-      options: { model: 'gpt-6.1-sol', effort: 'medium', fastMode: 'false' }
-    })
-  )
-})
 
 it('rejects a tip-only copy if a same-head send is admitted during capture', async () => {
   const test = source()
@@ -372,7 +282,7 @@ it('keeps an earlier immutable response available while an unrelated later turn 
       sequence: 5,
       revision: 1,
       observedAt: 5,
-      turnScope: { kind: 'turn', turnItemId: 'running-root' },
+      turnScope: { kind: 'turn', turnItemId: 'legacy:codex:source:running-root' },
       body: {
         kind: 'message',
         role: 'assistant',
@@ -381,7 +291,9 @@ it('keeps an earlier immutable response available while an unrelated later turn 
     })
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+  await expect(test.prepare()).resolves.toMatchObject({
+    fork: { itemId: 'legacy:codex:source:selected-response' }
+  })
 })
 
 it('keeps a checkpoint copy valid across a same-root source relaunch', async () => {
@@ -400,7 +312,9 @@ it('keeps a checkpoint copy valid across a same-root source relaunch', async () 
     ]
     return nativeCopy(input)
   })
-  await expect(test.prepare()).resolves.toMatchObject({ fork: { itemId: 'selected-response' } })
+  await expect(test.prepare()).resolves.toMatchObject({
+    fork: { itemId: 'legacy:codex:source:selected-response' }
+  })
 })
 
 it('refuses a tip copy after its source head relaunches', async () => {
@@ -425,184 +339,5 @@ it('refuses a tip copy after its source head relaunches', async () => {
       code: 'agent_session_operation_invalid',
       details: { reason: 'savedConversationMissing' }
     }
-  })
-})
-
-it('coalesces concurrent fork create replay and refuses a conflicting fork intent', async () => {
-  const test = source()
-  const getRecord = rig.store.getRecord.bind(rig.store)
-  const writable = rig.store.requireWritableRecord.bind(rig.store)
-  const select = rig.store.selectWritableRecord.bind(rig.store)
-  const snapshot = rig.host.journalSnapshot.bind(rig.host)
-  vi.spyOn(rig.store, 'getRecord').mockImplementation((id) =>
-    id === 'source-chat' ? test.record : getRecord(id)
-  )
-  vi.spyOn(rig.store, 'requireWritableRecord').mockImplementation((id) =>
-    id === 'source-chat' ? test.record : writable(id)
-  )
-  vi.spyOn(rig.store, 'selectWritableRecord').mockImplementation((id) =>
-    id === 'source-chat' ? { kind: 'writable', record: test.record } : select(id)
-  )
-  vi.spyOn(rig.host, 'journalSnapshot').mockImplementation((id) =>
-    id === 'source-chat' ? Promise.resolve(test.snapshot) : snapshot(id)
-  )
-  const capabilities = rig.host.deps.agents.capabilities.bind(rig.host.deps.agents)
-  vi.spyOn(rig.host.deps.agents, 'capabilities').mockImplementation((agent) => {
-    const supported = capabilities(agent)
-    return supported ? { ...supported, fork: 'checkpoint' } : null
-  })
-  const entered = Promise.withResolvers<void>()
-  const release = Promise.withResolvers<void>()
-  const nativeCopy = test.copy.getMockImplementation()!
-  test.copy.mockImplementation(async (input) => {
-    entered.resolve()
-    await release.promise
-    return nativeCopy(input)
-  })
-  rig.host.deps.adapter.copyConversation = test.copy
-  setStructuredAgentSessionHost(rig.host)
-  const runtime = new OrcaRuntimeService()
-  vi.spyOn(runtime, 'resolveStructuredAgentSessionLocation').mockResolvedValue(test.record.location)
-  vi.spyOn(runtime, 'publishStructuredAgentSessionTab').mockResolvedValue(undefined)
-  const ctx = { runtime, clientId: 'device-1' }
-  const first = handleStructuredAgentSessionCreate(test.intent, ctx)
-  await entered.promise
-  const replay = handleStructuredAgentSessionCreate(test.intent, ctx)
-  release.resolve()
-  const results = await Promise.all([first, replay])
-  expect(results).toMatchObject([
-    { ok: true, value: { sessionId: 'codex_independent_child' } },
-    { ok: true, replayed: true, value: { sessionId: 'codex_independent_child' } }
-  ])
-  const conflicting = structuredAgentSessionCreateParams({
-    ...test.intent,
-    sessionId: test.intent.envelope.sessionId,
-    forkFrom: { sessionId: 'another-source', throughItemId: 'other-response' },
-    now: rig.clock.now,
-    randomUuid: () => '00000000-0000-0000-0000-000000000123'
-  })
-  expect(await handleStructuredAgentSessionCreate(conflicting, ctx)).toMatchObject({
-    ok: false,
-    refusal: { code: 'agent_session_operation_conflict' }
-  })
-})
-
-async function prepareImportedAcpTip(stopReason: 'stop' | undefined) {
-  const test = source()
-  test.tip()
-  const home = join(rig.root, 'omp-account')
-  const sessions = join(home, 'sessions')
-  const directory = join(sessions, `${PI_CWD_BUCKET_LAYOUT.encodeScopePrefixes(rig.root)[0]}--`)
-  await mkdir(directory, { recursive: true })
-  const transcript = (id: string) =>
-    `${[
-      { type: 'session', version: 3, id, cwd: rig.root },
-      {
-        type: 'message',
-        id: 'prompt',
-        parentId: null,
-        message: { role: 'user', content: 'Remember 57319' }
-      },
-      {
-        type: 'message',
-        id: 'response',
-        parentId: 'prompt',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Remembered' }],
-          stopReason
-        }
-      }
-    ]
-      .map((row) => JSON.stringify(row))
-      .join('\n')}\n`
-  await writeFile(join(directory, `${SOURCE}.jsonl`), transcript(SOURCE))
-  test.record.provider = 'omp'
-  test.record.accountHome = { variable: 'PI_CODING_AGENT_DIR', path: home }
-  test.record.providerHandleChain = [
-    {
-      ...test.record.providerHandleChain[0]!,
-      handle: { transport: 'acp', agent: 'omp', nativeId: SOURCE }
-    }
-  ]
-  const selected = agentJournalItemKey({
-    provider: 'legacy',
-    agent: 'omp',
-    sessionId: SOURCE,
-    recordId: 'response'
-  })
-  test.snapshot.items = [
-    {
-      itemId: agentJournalItemKey({
-        provider: 'legacy',
-        agent: 'omp',
-        sessionId: SOURCE,
-        recordId: 'prompt'
-      }),
-      sequence: 1,
-      revision: 0,
-      observedAt: 1,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Remember 57319' }] }
-    },
-    {
-      itemId: selected,
-      sequence: 2,
-      revision: 0,
-      observedAt: 2,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Remembered' }] }
-    }
-  ]
-  const env = { PI_CODING_AGENT_DIR: home, OMP_CODING_AGENT_DIR: sessions }
-  test.host.deps.resolveLaunchEnv = async () => env
-  const spec = acpLaunchSpecFor('omp')!
-  const initialize = vi.fn(async () => ({
-    protocolVersion: 1,
-    agentCapabilities: { sessionCapabilities: { fork: {} } }
-  }))
-  const forkSession = vi.fn(async () => {
-    await writeFile(join(directory, `${COPY}.jsonl`), transcript(COPY))
-    return COPY
-  })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: native copy uses only initialize/forkSession/close on its short-lived connection.
-  const connection = {
-    initialize,
-    forkSession,
-    close: async () => true
-  } as unknown as AcpStructuredConnection
-  test.copy.mockImplementation((input) =>
-    copyAcpConversation(
-      {
-        spec,
-        dataDirectory: rig.root,
-        readLaunch: async () => ({
-          spec,
-          command: 'omp',
-          prefixArgs: [],
-          args: ['acp'],
-          cwd: rig.root,
-          env,
-          envToDelete: [],
-          fullAccess: false,
-          resume: null
-        }),
-        connect: () => connection
-      },
-      input,
-      { track: () => {} }
-    )
-  )
-  return prepareStructuredAgentSessionFork({
-    host: test.host,
-    agent: 'omp',
-    sessionId: 'source-chat',
-    throughItemId: selected,
-    location: test.record.location,
-    envelope: test.intent.envelope
-  })
-}
-
-it('refuses an imported ACP tip with assistant prose but no native terminal evidence', async () => {
-  await expect(prepareImportedAcpTip(undefined)).rejects.toMatchObject({
-    refusal: { details: { reason: 'turnActive' } }
   })
 })

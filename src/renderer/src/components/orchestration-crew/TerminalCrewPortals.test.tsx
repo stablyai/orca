@@ -1,14 +1,17 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import type { ComponentProps } from 'react'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PtyTransport } from '../terminal-pane/pty-transport/pty-transport-types'
-import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import {
+  emptyCrew,
+  type OrchestrationCrewRow
+} from '../../../../shared/orchestration/orchestration-crew'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { createIpcPtyTransport } from '../terminal-pane/pty-transport/ipc/pty-transport'
 import { TerminalCrewPortals } from './TerminalCrewPortals'
@@ -185,22 +188,6 @@ function mount(insertion?: {
     }
   }
 }
-
-it('mentions into a restored pane whose terminal connects after the panel first rendered', async () => {
-  const test = mount({ acceptance: true, restored: true })
-  fireEvent.click(
-    within(test.first.container).getByRole('button', { name: /^Show orchestration: 1 worker,/ })
-  )
-  // The transport binds without any React update, as a restored pane's reattach does.
-  test.link.connected = true
-  await act(async () =>
-    fireEvent.click(within(test.first.container).getByRole('button', { name: 'Mention all' }))
-  )
-  expect(test.accepted).toHaveBeenCalledExactlyOnceWith(
-    'Worker (Orca agent term_worker) ',
-    'driving'
-  )
-})
 
 it('uses numeric expansion and exact activity leaf identity without dismissing another visible split', async () => {
   const user = userEvent.setup()

@@ -1,6 +1,6 @@
 /** Finished automation runs travel as one blob; the signed manifest carries only its digest, so run
  * history never bounds the manifest. Format changes require a new capability. */
-import type { AutomationRun } from '../automations-types'
+import type { AutomationRun } from '../automations/history/automation-run'
 import type { OrcadMigrationBlobDescriptor } from './orcad-migration-blob-transfer'
 import {
   serializeOrcadMigrationValue,

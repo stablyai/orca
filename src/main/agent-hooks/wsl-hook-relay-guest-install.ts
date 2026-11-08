@@ -1,9 +1,14 @@
+import {
+  WSL_HOOK_FS_METHODS,
+  wslHookRelayEndpointFilePath
+} from '../../shared/wsl-hook-relay-contract'
+import type { WslRelayDistroState } from './wsl-hook-relay-state'
 import type { ManagedHookDetectionSettings } from './managed-hook-detection-commands'
 import type { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
 import { requestGuestOpenCodeOverlayDir } from './wsl-guest-plugin-install'
 import { installWslGuestHooks } from './wsl-hook-fs-adapter'
 import { REINSTALL_MIN_INTERVAL_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
-import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import type { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
 import { openCodePluginSettingsKey } from './opencode-plugin-settings'
 import type { PluginSources } from '../../wsl-guest/plugin-overlay'
 
@@ -163,4 +168,29 @@ export async function maybeRerunWslRelayGuestInstall(
       deps.warn(`[agent-hooks] WSL hook reinstall for '${state.distro}' failed: ${detail}`)
     }
   }
+}
+
+export async function installWslRelayGuestFromHome(
+  deps: GuestInstallDeps,
+  state: WslRelayDistroState,
+  mux: SshChannelMultiplexer,
+  instanceKey: string
+): Promise<void> {
+  const homeResult = (await mux.request(WSL_HOOK_FS_METHODS.home)) as {
+    ok?: boolean
+    home?: string
+    portFallback?: boolean
+    boundPort?: number
+  }
+  if (homeResult?.ok !== true || typeof homeResult.home !== 'string') {
+    throw new Error(`relay for '${state.distro}' returned no home dir`)
+  }
+  if (homeResult.portFallback === true) {
+    deps.warn(
+      `[agent-hooks] WSL hook relay (${state.distro}): preferred port occupied in guest; bound ${homeResult.boundPort ?? 'unknown'} (endpoint-file re-coordination)`
+    )
+  }
+  state.guestHome = homeResult.home
+  state.guestEndpointFilePath = wslHookRelayEndpointFilePath(homeResult.home, instanceKey)
+  await runWslRelayGuestInstall(deps, state, mux, homeResult.home)
 }

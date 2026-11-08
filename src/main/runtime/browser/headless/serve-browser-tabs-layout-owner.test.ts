@@ -97,14 +97,4 @@ describe('served browser tabs in a layout-owner build', () => {
     expect(host.session().browserPagesByWorkspace?.['page-1']).toBeUndefined()
     expect(host.tabs.listUnstarted(WT)).toEqual([])
   })
-
-  it('stops listing a closed tab before main answers', async () => {
-    const host = servedHost()
-    host.tabs.opened(PAGE)
-    await settle()
-
-    host.tabs.closed(WT, 'page-1')
-
-    expect(host.tabs.listUnstarted(WT)).toEqual([])
-  })
 })

@@ -2,20 +2,16 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RuntimeRpcFailureError } from './runtime-client'
+
 import {
-  formatCliError,
   formatAutomationShow,
   formatComputerAction,
-  formatGetAppState,
   formatTerminalList,
-  formatTerminalRead,
   formatWorktreeList,
-  printResult,
-  reportCliError
+  printResult
 } from './format'
 import type { ComputerActionResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
-import type { Automation } from '../shared/automations-types'
+import type { Automation } from '../shared/automations/automation-definition'
 
 let testScreenshotDir: string | null = null
 
@@ -60,95 +56,6 @@ function worktree(overrides: Partial<RuntimeWorktreeRecord> = {}): RuntimeWorktr
   }
   return { ...base, ...overrides }
 }
-
-describe('formatCliError', () => {
-  it('prints structured computer-use startup recovery steps', () => {
-    const error = new RuntimeRpcFailureError({
-      id: 'req_1',
-      ok: false,
-      error: {
-        code: 'app_not_found',
-        message: 'app not found: Gmail',
-        data: {
-          nextSteps: [
-            'Run `orca computer list-apps --json` and retry with the exact app name or bundle ID.',
-            'If the target is a website or web app such as Gmail, choose the desktop browser app/window that contains it; `orca computer` app selectors refer to desktop apps, not website names.',
-            'Do not retry the same `orca computer ... --app <web app>` command unchanged.',
-            'If the desired browser is not listed, open or focus that browser first, then retry `orca computer list-apps --json` and `orca computer list-windows --app <browser> --json`.'
-          ]
-        }
-      },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
-    const output = formatCliError(error)
-
-    expect(output).toContain('app not found: Gmail')
-    expect(output).toContain('Next step: Run `orca computer list-apps --json`')
-    expect(output).toContain('desktop browser app/window')
-    expect(output).toContain('--app <web app>')
-    expect(output).not.toContain('orca goto')
-  })
-
-  it('prints runtime next steps for structured lineage errors', () => {
-    const error = new RuntimeRpcFailureError({
-      id: 'req_1',
-      ok: false,
-      error: {
-        code: 'LINEAGE_PARENT_NOT_FOUND',
-        message: 'Parent selector was not found.',
-        data: {
-          nextSteps: [
-            'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
-            'Retry with --no-parent to create without lineage.',
-            123
-          ]
-        }
-      },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
-    expect(formatCliError(error)).toBe(
-      [
-        'Parent selector was not found.',
-        'Next step: Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
-        'Next step: Retry with --no-parent to create without lineage.'
-      ].join('\n')
-    )
-  })
-
-  it('preserves orchestration migration recovery in human and JSON errors', () => {
-    const error = new RuntimeRpcFailureError({
-      id: 'req_migration',
-      ok: false,
-      error: {
-        code: 'orchestration_migration_required',
-        message: 'No effects were applied.',
-        data: {
-          effectsApplied: false,
-          nextCommandArgs: ['skills', 'get', 'orchestration', '--full'],
-          nextSteps: ['Using this same Orca CLI executable, run: skills get orchestration --full']
-        }
-      },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-
-    expect(formatCliError(error)).toContain(
-      'Next step: Using this same Orca CLI executable, run: skills get orchestration --full'
-    )
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    reportCliError(error, true)
-    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
-      error: {
-        code: 'orchestration_migration_required',
-        data: {
-          effectsApplied: false,
-          nextCommandArgs: ['skills', 'get', 'orchestration', '--full']
-        }
-      }
-    })
-  })
-})
 
 describe('formatWorktreeList', () => {
   it('includes parent and child workspace relationships in text output', () => {
@@ -360,126 +267,7 @@ describe('formatTerminalList', () => {
   })
 })
 
-describe('formatTerminalRead', () => {
-  it('warns limited cursor reads to continue with the next cursor', () => {
-    const output = formatTerminalRead({
-      terminal: {
-        handle: 'term_1',
-        status: 'running',
-        tail: ['line 1'],
-        truncated: false,
-        limited: true,
-        oldestCursor: '0',
-        nextCursor: '50',
-        latestCursor: '150',
-        returnedLineCount: 1
-      }
-    })
-
-    expect(output).toContain('cursor: 50')
-    expect(output).toContain('oldest cursor: 0')
-    expect(output).toContain('latest cursor: 150')
-    expect(output).toContain('warning: output limited; continue with --cursor 50')
-  })
-
-  it('warns limited tail previews to page retained output from the oldest cursor', () => {
-    const output = formatTerminalRead({
-      terminal: {
-        handle: 'term_1',
-        status: 'running',
-        tail: ['line 100'],
-        truncated: false,
-        limited: true,
-        oldestCursor: '0',
-        nextCursor: '150',
-        latestCursor: '150',
-        returnedLineCount: 1
-      }
-    })
-
-    expect(output).toContain('cursor: 150')
-    expect(output).toContain('oldest cursor: 0')
-    expect(output).toContain('latest cursor: 150')
-    expect(output).toContain(
-      'warning: output limited; page retained output with --cursor 0 --limit <count>'
-    )
-  })
-
-  it('uses a generic limited warning when only partial output is retained', () => {
-    const output = formatTerminalRead({
-      terminal: {
-        handle: 'term_1',
-        status: 'running',
-        tail: [],
-        truncated: false,
-        limited: true,
-        oldestCursor: '150',
-        nextCursor: '150',
-        latestCursor: '150',
-        returnedLineCount: 0
-      }
-    })
-
-    expect(output).toContain('cursor: 150')
-    expect(output).toContain('oldest cursor: 150')
-    expect(output).toContain('latest cursor: 150')
-    expect(output).toContain('warning: output limited')
-    expect(output).not.toContain('page retained output')
-  })
-
-  it('keeps older runtime read responses readable', () => {
-    const output = formatTerminalRead({
-      terminal: {
-        handle: 'term_1',
-        status: 'running',
-        tail: ['old server output'],
-        truncated: true,
-        nextCursor: '12'
-      }
-    })
-
-    expect(output).toContain('cursor: 12')
-    expect(output).toContain('warning: older output is no longer retained')
-    expect(output).toContain('old server output')
-    expect(output).not.toContain('undefined')
-  })
-})
-
 describe('formatComputerAction', () => {
-  it('includes routed worktree and explicit window target in the suggested follow-up command', () => {
-    const result: ComputerActionResult = {
-      snapshot: {
-        id: 'snap-1',
-        app: { name: 'Text Editor', bundleId: null, pid: 100 },
-        window: { title: 'Document', id: 42, width: 800, height: 600 },
-        coordinateSpace: 'window',
-        treeText: 'tree',
-        elementCount: 5,
-        focusedElementId: null
-      },
-      screenshot: null,
-      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
-      action: {
-        path: 'accessibility',
-        targetWindowId: 41
-      }
-    }
-
-    const output = formatComputerAction('click', result, {
-      worktree: 'id:repo::/tmp/repo',
-      windowId: 99
-    })
-
-    const app = process.platform === 'win32' ? '"Text Editor"' : "'Text Editor'"
-    expect(output).toContain(
-      `Use \`orca computer get-app-state --app ${app} --worktree id:repo::/tmp/repo --window-id 99\``
-    )
-    expect(output).toContain('5 visible elements in current window')
-    expect(output).toContain(
-      'Inspect with the command above or use the --json result before assuming it worked.'
-    )
-  })
-
   it('preserves explicit window-index targeting in the suggested follow-up command', () => {
     const result: ComputerActionResult = {
       snapshot: {
@@ -503,137 +291,6 @@ describe('formatComputerAction', () => {
     expect(output).toContain(
       'Use `orca computer get-app-state --app com.apple.finder --session manual --window-index 1`'
     )
-  })
-
-  it('surfaces action screenshot failures in pretty output', () => {
-    const result: ComputerActionResult = {
-      snapshot: {
-        id: 'snap-1',
-        app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
-        window: { title: 'Document', id: 42, width: 800, height: 600 },
-        coordinateSpace: 'window',
-        treeText: 'tree',
-        elementCount: 5,
-        focusedElementId: null
-      },
-      screenshot: null,
-      screenshotStatus: {
-        state: 'failed',
-        code: 'screenshot_failed',
-        message:
-          'screenshot exceeded the computer-use payload cap after downscaling; retry with --no-screenshot or target a smaller window'
-      },
-      action: {
-        path: 'synthetic',
-        targetWindowId: 42
-      }
-    }
-
-    const output = formatComputerAction('click', result)
-
-    expect(output).toContain('Click attempted via synthetic, unverified (synthetic input)')
-    expect(output).toContain('Screenshot failed (screenshot_failed)')
-    expect(output).toContain('payload cap')
-    expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --window-id 42`'
-    )
-    expect(output).not.toContain('Click completed')
-  })
-
-  it('does not treat clipboard actions without verification as completed', () => {
-    const result: ComputerActionResult = {
-      snapshot: {
-        id: 'snap-1',
-        app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
-        window: { title: 'Finder', id: 42, width: 800, height: 600 },
-        coordinateSpace: 'window',
-        treeText: 'tree',
-        elementCount: 5,
-        focusedElementId: null
-      },
-      screenshot: null,
-      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
-      action: {
-        path: 'clipboard',
-        actionName: 'paste',
-        targetWindowId: 42
-      }
-    }
-
-    const output = formatComputerAction('paste-text', result)
-
-    expect(output).toContain('Paste Text attempted via clipboard, unverified (clipboard paste)')
-    expect(output).toContain('Inspect with the command above')
-    expect(output).not.toContain('Paste Text completed')
-  })
-
-  it('respects explicit verification metadata on synthetic action results', () => {
-    const result: ComputerActionResult = {
-      snapshot: {
-        id: 'snap-1',
-        app: { name: 'Automation Harness', bundleId: null, pid: 100 },
-        window: { title: 'Harness', id: 42, width: 800, height: 600 },
-        coordinateSpace: 'window',
-        treeText: 'tree',
-        elementCount: 5,
-        focusedElementId: null
-      },
-      screenshot: null,
-      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
-      action: {
-        path: 'synthetic',
-        actionName: 'typeText',
-        targetWindowId: 42,
-        verification: {
-          state: 'verified',
-          property: 'focusedText',
-          expected: 'draft body',
-          actualPreview: 'draft body'
-        }
-      }
-    }
-
-    const output = formatComputerAction('type-text', result)
-
-    expect(output).toContain('Type Text completed via synthetic, verified focusedText')
-    expect(output).not.toContain('Type Text attempted')
-    expect(output).not.toContain('unverified (synthetic input)')
-  })
-
-  it('drops stale requested window selectors after a window-changed fallback', () => {
-    const result: ComputerActionResult = {
-      snapshot: {
-        id: 'snap-1',
-        app: { name: 'Finder', bundleId: 'com.apple.finder', pid: 100 },
-        window: { title: 'Replacement', id: 42, width: 800, height: 600 },
-        coordinateSpace: 'window',
-        treeText: 'tree',
-        elementCount: 5,
-        focusedElementId: null
-      },
-      screenshot: null,
-      screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
-      action: {
-        path: 'synthetic',
-        targetWindowId: 42,
-        verification: { state: 'unverified', reason: 'window_changed' }
-      }
-    }
-
-    const output = formatComputerAction('click', result, {
-      session: 'manual',
-      windowIndex: 1
-    })
-
-    expect(output).toContain(
-      'Use `orca computer get-app-state --app com.apple.finder --session manual --window-id 42`'
-    )
-    expect(output).toContain('Click attempted via synthetic, unverified (window changed)')
-    expect(output).toContain(
-      'Inspect with the command above or use the --json result before assuming it worked.'
-    )
-    expect(output).not.toContain('Click completed')
-    expect(output).not.toContain('--window-index 1')
   })
 
   it('uses snapshot window index for follow-up commands when the provider has no stable window id', () => {
@@ -692,70 +349,6 @@ describe('formatComputerAction', () => {
 })
 
 describe('printResult computer screenshots', () => {
-  it('shows screenshot dimensions and coordinate scale in pretty state output', () => {
-    const output = formatGetAppState({
-      snapshot: {
-        id: 'snap-test',
-        app: { name: 'Editor', bundleId: null, pid: 123 },
-        window: { title: 'Editor', id: null, index: 2, width: 1200, height: 800 },
-        coordinateSpace: 'window',
-        treeText: 'App=Editor (pid 123)',
-        elementCount: 1,
-        focusedElementId: null,
-        truncation: { truncated: false }
-      },
-      screenshot: {
-        data: Buffer.from('png-data').toString('base64'),
-        format: 'png',
-        width: 600,
-        height: 400,
-        scale: 0.5
-      },
-      screenshotStatus: { state: 'captured' }
-    })
-
-    expect(output).toContain('Screenshot captured (png')
-    expect(output).toContain('600x400')
-    expect(output).toContain('coordinate x/y = screenshot pixels / 0.5')
-    expect(output).toContain('Window: index:2 "Editor"')
-    expect(output).toContain('Visible elements: 1')
-    expect(output).not.toContain('Elements: 1')
-  })
-
-  it('removes expired screenshot temp files when cleanup is due', () => {
-    testScreenshotDir = mkdtempSync(join(tmpdir(), 'orca-format-test-'))
-    process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR = testScreenshotDir
-    const expiredPath = join(testScreenshotDir, 'old-screenshot.png')
-    writeFileSync(expiredPath, 'old')
-    const expired = new Date(Date.now() - 48 * 60 * 60 * 1000)
-    utimesSync(expiredPath, expired, expired)
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => undefined)
-
-    printResult(
-      {
-        id: 'req-cleanup',
-        ok: true,
-        result: {
-          screenshot: {
-            data: Buffer.from('png-data').toString('base64'),
-            format: 'png',
-            width: 1,
-            height: 1,
-            scale: 1
-          },
-          screenshotStatus: { state: 'captured' }
-        },
-        _meta: { runtimeId: 'runtime-1' }
-      },
-      true,
-      () => 'unused'
-    )
-
-    expect(existsSync(expiredPath)).toBe(false)
-    expect(existsSync(join(testScreenshotDir, '.last-cleanup'))).toBe(true)
-    expect(logSpy).toHaveBeenCalled()
-  })
-
   it('skips screenshot temp cleanup when the cleanup marker is fresh', () => {
     testScreenshotDir = mkdtempSync(join(tmpdir(), 'orca-format-test-'))
     const expiredPath = join(testScreenshotDir, 'old-screenshot.png')

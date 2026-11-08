@@ -20,7 +20,7 @@ import {
   canonicalizeLinearIssueAttributeFilter,
   isEmptyLinearIssueAttributeFilter
 } from '../../../../shared/linear/issue-attribute-filter'
-import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
+import { LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 
 // Stores swallow ordinary read failures; rethrow typed mixed-version refusal so UI offers upgrade instead of falsely empty filtered results.
 export class LinearIssueAttributeFilterUnsupportedError extends Error {
