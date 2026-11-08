@@ -1,4 +1,6 @@
+import { app } from 'electron'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { installBestEffortSocketTypeOfService } from '../network/best-effort-socket-type-of-service'
 import { removeBootstrapFatalExitGuard } from './bootstrap-fatal-exit-guard'
 
 type FatalMainProcessErrorKind = 'main_uncaught_exception' | 'main_unhandled_rejection'
@@ -98,23 +100,22 @@ export function recordFatalMainProcessError(kind: FatalMainProcessErrorKind, err
 }
 
 export function installUncaughtPipeErrorGuard(): void {
+  let exiting = false
   const onUncaughtException = (error: unknown): void => {
     const errorCode = readErrorProperty(error, 'code')
-    if (errorCode === 'EIO' || errorCode === 'EPIPE') {
+    if (errorCode === 'EIO' || errorCode === 'EPIPE' || exiting) {
       return
     }
-
-    // #9441: the next rethrow leaves no macOS crash report; persist evidence first.
+    exiting = true
+    // #9441: exiting leaves no macOS crash report; persist evidence first.
     recordFatalMainProcessError('main_uncaught_exception', error)
-    process.off('uncaughtException', onUncaughtException)
-    // Throwing inside the handler exits with status 7; rethrow next tick to retain the real stack.
-    setImmediate(() => {
-      throw error
-    })
+    // Stay subscribed: Electron's own listener shows a modal alert that blocks main indefinitely (STA-14317).
+    app.exit(1)
   }
 
   process.on('uncaughtException', onUncaughtException)
   removeBootstrapFatalExitGuard()
+  installBestEffortSocketTypeOfService()
 }
 
 /** Node kills unhandled rejections by default; log and preserve other startup chains when one background restore task fails (#9441). */
