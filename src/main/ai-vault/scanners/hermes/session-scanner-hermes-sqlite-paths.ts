@@ -35,7 +35,7 @@ export function splitHermesSqliteCandidate(
     return null
   }
   const name = basename(dbPath).toLowerCase()
-  // Why: Hermes 0.19+ stores SQLite session databases as state.db or hermes*.db.
+  // Why: preserve support for state.db and Hermes-prefixed database filenames.
   if (name !== 'state.db' && !/^hermes(?:-[A-Za-z0-9_.-]+)?\.db$/i.test(name)) {
     return null
   }

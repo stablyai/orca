@@ -13,6 +13,7 @@ import {
   parseZcodeSqliteSessionViaWorker
 } from './scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
+import { splitHermesSqliteCandidate } from './scanners/hermes/session-scanner-hermes-sqlite-paths'
 import type { FileWithMtime } from './session-scanner-types'
 import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
 import { configureOpenCodeWslReaders } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
@@ -126,7 +127,8 @@ async function fileWithMtimeForPath(
 
   try {
     // Use the parser's scan lane so stat cannot jump the live-transcript queue.
-    const info = await wslGatedStat(filePath, 'scan')
+    const sqliteCandidate = agent === 'hermes' ? splitHermesSqliteCandidate(filePath) : null
+    const info = await wslGatedStat(sqliteCandidate?.dbPath ?? filePath, 'scan')
     return {
       path: filePath,
       mtimeMs: info.mtimeMs,

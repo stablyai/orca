@@ -1,12 +1,16 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { splitOpenCodeSqliteCandidate } from '../../shared/opencode-sqlite-session-path'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
+import { splitHermesSqliteCandidate } from '../ai-vault/scanners/hermes/session-scanner-hermes-sqlite-paths'
 
 /** A session inside a shared container rather than a standalone transcript file. */
 export type SessionSearchSyntheticSource = { container: string; id: string }
 
 export function splitSyntheticSessionSource(path: string): SessionSearchSyntheticSource | null {
-  const sqlite = splitOpenCodeSqliteCandidate(path) ?? splitOpenCodeSqliteCandidate(path, 'zcode')
+  const sqlite =
+    splitOpenCodeSqliteCandidate(path) ??
+    splitOpenCodeSqliteCandidate(path, 'zcode') ??
+    splitHermesSqliteCandidate(path)
   return sqlite ? { container: sqlite.dbPath, id: sqlite.sessionId } : null
 }
 

@@ -28,7 +28,7 @@ export async function discoverAiVaultSessionSources(args: {
     ...opencodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...zcodeDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
     ...antigravityDiscoveries(options, wslHomeDirs, limitPerAgent, issues),
-    // Why: Hermes 0.19+ migrated sessions to a SQLite DB. hermesDiscoveries runs both the
+    // Why: Hermes migrated sessions to a SQLite DB. hermesDiscoveries runs both the
     // file scanner (legacy) and the SQLite scanner; dedup by sessionId happens inside.
     // Its table entry stays for the delete validator, so skip it in the generic loop.
     ...hermesDiscoveries(options, wslHomeDirs, limitPerAgent, issues),

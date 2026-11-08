@@ -1,8 +1,8 @@
-import { homedir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { basename, delimiter, dirname, join } from 'node:path'
 import type { AiVaultScanIssue } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { wslGatedAccess } from '../../../native-chat/wsl-transcript-fs-access'
 import { discoverFiles } from '../../session-scanner-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../../session-scanner-agent-sources'
 import {
   listHermesSqliteSessionIds,
   listHermesSqliteSessions
@@ -12,10 +12,8 @@ import type {
   FileWithMtime,
   SessionFileDiscovery
 } from '../../session-scanner-types'
-import { sessionRootDirs } from '../../session-scanner-roots'
 import { scopeWalksAgentFiles } from '../../session-scope-cwd'
-
-const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
+import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
 
 /**
  * Resolves existing Hermes state.db file paths across host and WSL environments.
@@ -23,23 +21,20 @@ const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
  */
 async function hermesStateDbPaths(
   options: AiVaultScanOptions,
-  wslHomeDirs: readonly string[]
+  rootDirs: readonly string[]
 ): Promise<string[]> {
   if (options.hermesStateDbPaths) {
     return [...options.hermesStateDbPaths]
   }
-  const mainDir = options.hermesSessionsDir
-    ? dirname(options.hermesSessionsDir)
-    : join(homedir(), '.hermes')
-  const candidateDbPaths = [
-    join(mainDir, 'state.db'),
-    ...wslHomeDirs.map((homeDir) => join(homeDir, '.hermes', 'state.db'))
-  ]
+  const candidateDbPaths = rootDirs.map((rootDir) => join(dirname(rootDir), 'state.db'))
   const probedDbPaths = await Promise.all(
     candidateDbPaths.map((dbPath) =>
-      wslGatedAccess(dbPath, 'scan').then(
-        () => dbPath,
-        () => null
+      wslGatedAccess(dbPath, 'scan', options.signal).then(
+        (exists) => (exists ? dbPath : null),
+        () => {
+          throwIfAiVaultScanCancelled(options.signal)
+          return null
+        }
       )
     )
   )
@@ -50,7 +45,7 @@ async function hermesStateDbPaths(
  * Discover Hermes sessions from both legacy JSON files (`session_*.json`) and
  * the SQLite database (`state.db`), deduplicating at the file level.
  * Legacy JSON files whose session ID matches a SQLite entry are dropped in favor
- * of the SQLite database as the source of truth on 0.19+.
+ * of the SQLite database as the source of truth.
  * @param options - AI Vault scan options.
  * @param wslHomeDirs - Normalized WSL home directory paths.
  * @param limit - Maximum number of sessions per source.
@@ -63,10 +58,9 @@ export function hermesDiscoveries(
   limit: number,
   issues: AiVaultScanIssue[]
 ): Promise<SessionFileDiscovery>[] {
-  const rootDirs = sessionRootDirs(options.hermesSessionsDir ?? HERMES_SESSIONS_DIR, wslHomeDirs, [
-    '.hermes',
-    'sessions'
-  ])
+  const source = AI_VAULT_AGENT_SOURCES.hermes
+  const rootDirs = source.rootDirs(options, wslHomeDirs)
+  const walksScope = scopeWalksAgentFiles('hermes', options.scopePaths)
 
   const fileDiscoveryPromises = rootDirs.map((rootDir) =>
     discoverFiles({
@@ -74,17 +68,22 @@ export function hermesDiscoveries(
       limit,
       agent: 'hermes',
       issues,
-      extensions: ['.json'],
-      filePredicate: (path) => basename(path).startsWith('session_'),
-      keepScopeFiles: scopeWalksAgentFiles('hermes', options.scopePaths),
+      extensions: [...source.extensions],
+      filePredicate: source.filePredicate,
+      keepScopeFiles: walksScope,
       signal: options.signal
     })
   )
 
-  const sqlitePromise = hermesStateDbPaths(options, wslHomeDirs).then(async (dbPaths) => ({
-    candidates: await listHermesSqliteSessions({ dbPaths, limit, issues }),
-    sessionIds: listHermesSqliteSessionIds(dbPaths)
-  }))
+  const sqlitePromise = hermesStateDbPaths(options, rootDirs).then(async (dbPaths) => {
+    const list = (scopePaths?: readonly string[]) =>
+      listHermesSqliteSessions({ dbPaths, limit, issues, scopePaths })
+    const [candidates, scopeCandidates] = await Promise.all([
+      list(),
+      walksScope ? list(options.scopePaths) : undefined
+    ])
+    return { candidates, scopeCandidates, sessionIds: listHermesSqliteSessionIds(dbPaths) }
+  })
 
   return [
     Promise.all([Promise.all(fileDiscoveryPromises), sqlitePromise]).then(
@@ -97,13 +96,16 @@ export function hermesDiscoveries(
           return !sqlite.sessionIds.has(sessionId)
         }
         const allFiles = fileResults.flatMap((res) => res.files.filter(isLegacyOnly))
-        const scopeFiles = fileResults.some((res) => res.scopeFiles)
-          ? fileResults.flatMap((res) => (res.scopeFiles ?? []).filter(isLegacyOnly))
+        const scopeFiles = walksScope
+          ? [
+              ...fileResults.flatMap((res) => (res.scopeFiles ?? []).filter(isLegacyOnly)),
+              ...(sqlite.scopeCandidates ?? []).map((candidate) => candidate.file)
+            ]
           : undefined
 
         return {
           agent: 'hermes' as const,
-          rootDir: fileResults[0]?.rootDir ?? HERMES_SESSIONS_DIR,
+          rootDir: rootDirs.join(delimiter),
           files: [...allFiles, ...sqliteFiles],
           ...(scopeFiles ? { scopeFiles } : {})
         }

@@ -12,22 +12,15 @@ import { buildHermesSqliteCandidatePath } from './session-scanner-hermes-sqlite-
 import type { SessionFileCandidate } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import { errorMessage, extractContentText } from '../../session-scanner-values'
-import SyncDatabase from '../../../sqlite/sync-database'
+import type SyncDatabase from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { columnExists, tableExists } from '../../../opencode-usage/schema-helpers'
+import { SessionNewestFiles } from '../../session-newest-files'
+import { createAiVaultScopeCwdMatcher } from '../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
+import { openOpenCodeDatabaseReadonly } from '../opencode/sqlite/session-scanner-opencode-sqlite-open'
 
-// Why: Hermes 0.19+ migrated session storage to a SQLite database at ~/.hermes/state.db.
+// Why: Hermes migrated session storage to a SQLite database (state.db).
 // This module lists and parses individual sessions from the DB into AiVaultSession objects.
-
-/**
- * Opens a SQLite database at the specified path in read-only mode with query_only pragma.
- */
-function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  // Why: query_only prevents accidental writes to the user's Hermes database.
-  db.pragma('query_only = ON')
-  return db
-}
 
 /**
  * Checks whether the database contains the Hermes sessions table and valid ID column.
@@ -42,21 +35,19 @@ function canReadHermesSessions(db: SyncDatabase): boolean {
 /**
  * Normalizes an unknown timestamp value (seconds string or number) to milliseconds.
  */
-function timestampMs(val: unknown): number {
+function timestampMs(val: unknown): number | null {
+  let parsed = Number.NaN
   if (typeof val === 'number') {
-    return val < 1e11 ? val * 1000 : val
-  }
-  if (typeof val === 'string') {
+    parsed = val < 1e11 ? val * 1000 : val
+  } else if (typeof val === 'string') {
     const numeric = Number(val)
     if (val.trim() !== '' && Number.isFinite(numeric)) {
-      return numeric < 1e11 ? numeric * 1000 : numeric
-    }
-    const parsed = Date.parse(val)
-    if (!Number.isNaN(parsed)) {
-      return parsed
+      parsed = numeric < 1e11 ? numeric * 1000 : numeric
+    } else {
+      parsed = Date.parse(val)
     }
   }
-  return Date.now()
+  return Number.isNaN(new Date(parsed).getTime()) ? null : parsed
 }
 
 type SessionRow = {
@@ -106,7 +97,7 @@ function resolveSessionColumns(db: SyncDatabase): SessionColumns {
       : columnExists(db, 'sessions', 'started_at')
         ? 'started_at'
         : 'NULL'
-  // Why: 0.18+ has no updated_at — last_activity_at is rarely written and ended_at
+  // Why: the shipped schema has no updated_at — last_activity_at is rarely written and ended_at
   // only on a clean exit, so take whichever of them the row actually carries.
   const activityCols = ['last_activity_at', 'ended_at'].filter((col) =>
     columnExists(db, 'sessions', col)
@@ -133,10 +124,39 @@ function messagesPredicateFor(db: SyncDatabase, idCol: string): string {
     : ''
 }
 
+function lastMessageTimes(db: SyncDatabase, sessionId?: string): Map<string, number> {
+  const times = new Map<string, number>()
+  if (!tableExists(db, 'messages') || !columnExists(db, 'messages', 'session_id')) {
+    return times
+  }
+  const column = ['created_at', 'timestamp'].find((name) => columnExists(db, 'messages', name))
+  if (!column) {
+    return times
+  }
+  const statement = db.prepare(`SELECT session_id, ${column} AS timestamp FROM messages
+    ${sessionId === undefined ? '' : 'WHERE session_id = ?'}`)
+  const rows = sessionId === undefined ? statement.iterate() : statement.iterate(sessionId)
+  // Validate and normalize before taking the maximum so bad cells cannot hide newer messages.
+  for (const row of rows) {
+    const time = timestampMs(row.timestamp)
+    if (typeof row.session_id === 'string' && time !== null) {
+      times.set(row.session_id, Math.max(times.get(row.session_id) ?? time, time))
+    }
+  }
+  return times
+}
+
+function sessionMtimeMs(row: SessionRow, lastMessageAt: number | undefined): number {
+  const sessionTime = timestampMs(row.updated_at) ?? timestampMs(row.created_at)
+  return sessionTime === null
+    ? (lastMessageAt ?? Date.now())
+    : Math.max(sessionTime, lastMessageAt ?? sessionTime)
+}
+
 /**
  * Builds the SQL SELECT query string used to discover Hermes sessions.
  */
-function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
+function buildSessionListQuery(db: SyncDatabase): string {
   const { idCol, titleCol, cwdCol, modelCol, createdCol, updatedCol } = resolveSessionColumns(db)
   const messagesPredicate = messagesPredicateFor(db, idCol)
 
@@ -147,9 +167,7 @@ function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
                  ${createdCol} AS created_at,
                  ${updatedCol} AS updated_at
           FROM sessions
-          WHERE 1=1 ${messagesPredicate}
-          ORDER BY ${updatedCol} DESC
-          ${limited ? 'LIMIT ?' : ''}`
+          WHERE 1=1 ${messagesPredicate}`
 }
 
 /**
@@ -162,7 +180,7 @@ export function listHermesSqliteSessionIds(dbPaths: readonly string[]): Set<stri
   for (const dbPath of dbPaths) {
     let db: SyncDatabase | null = null
     try {
-      db = openReadonlyDatabase(dbPath)
+      db = openOpenCodeDatabaseReadonly(dbPath)
       if (!canReadHermesSessions(db)) {
         continue
       }
@@ -198,40 +216,39 @@ export async function listHermesSqliteSessions(args: {
   dbPaths: readonly string[]
   limit: number
   issues: AiVaultScanIssue[]
+  scopePaths?: readonly string[]
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
   for (const dbPath of args.dbPaths) {
     let db: SyncDatabase | null = null
     try {
-      db = openReadonlyDatabase(dbPath)
+      db = openOpenCodeDatabaseReadonly(dbPath)
       if (!canReadHermesSessions(db)) {
         continue
       }
-      const limited = Number.isFinite(args.limit)
-      const statement = db.prepare(buildSessionListQuery(db, limited))
-      const rows = limited ? statement.all(args.limit) : statement.all()
-      for (const rawRow of rows) {
+      const newest = new SessionNewestFiles(args.limit)
+      const inScope = args.scopePaths?.length ? createAiVaultScopeCwdMatcher(args.scopePaths) : null
+      const messageTimes = lastMessageTimes(db)
+      // Normalize both timestamp formats before applying the recency cap.
+      for (const rawRow of db.prepare(buildSessionListQuery(db)).iterate()) {
         const row = readSessionRow(rawRow)
-        if (!row?.id) {
+        if (!row?.id || (inScope && !inScope(row.cwd, dbPath))) {
           continue
         }
-        const mtimeMs = timestampMs(row.updated_at ?? row.created_at)
-        candidates.push({
-          agent: 'hermes',
-          file: {
-            path: buildHermesSqliteCandidatePath(dbPath, row.id),
-            mtimeMs,
-            modifiedAt: new Date(mtimeMs).toISOString()
-          },
-          codexHome: null
+        const mtimeMs = sessionMtimeMs(row, messageTimes.get(row.id))
+        newest.add({
+          path: buildHermesSqliteCandidatePath(dbPath, row.id),
+          mtimeMs,
+          modifiedAt: new Date(mtimeMs).toISOString()
         })
       }
+      candidates.push(
+        ...newest.newest().map((file) => ({ agent: 'hermes' as const, file, codexHome: null }))
+      )
     } catch (err) {
-      args.issues.push({
-        agent: 'hermes',
-        path: dbPath,
-        message: errorMessage(err)
-      })
+      if (!args.issues.some((issue) => issue.agent === 'hermes' && issue.path === dbPath)) {
+        args.issues.push({ agent: 'hermes', path: dbPath, message: errorMessage(err) })
+      }
     } finally {
       db?.close()
     }
@@ -259,7 +276,7 @@ export async function parseHermesSqliteSession(args: {
   let db: SyncDatabase | null = null
   // Let read failures propagate so the transcript reader reports an incomplete read.
   try {
-    db = openReadonlyDatabase(args.dbPath)
+    db = openOpenCodeDatabaseReadonly(args.dbPath)
     if (!canReadHermesSessions(db)) {
       return null
     }
@@ -281,7 +298,7 @@ export async function parseHermesSqliteSession(args: {
       return null
     }
 
-    const mtimeMs = timestampMs(row.updated_at ?? row.created_at)
+    const mtimeMs = sessionMtimeMs(row, lastMessageTimes(db, row.id).get(row.id))
     const file = {
       path: buildHermesSqliteCandidatePath(args.dbPath, args.sessionId),
       mtimeMs,
@@ -306,19 +323,19 @@ export async function parseHermesSqliteSession(args: {
     }
 
     updateTimeline(accumulator, timestampMs(row.created_at))
-    updateTimeline(accumulator, timestampMs(row.updated_at))
+    updateTimeline(accumulator, mtimeMs)
 
     if (tableExists(db, 'messages')) {
       const msgSessionIdCol = columnExists(db, 'messages', 'session_id') ? 'session_id' : null
       if (msgSessionIdCol) {
         const roleCol = columnExists(db, 'messages', 'role') ? 'role' : 'NULL'
         const contentCol = columnExists(db, 'messages', 'content') ? 'content' : 'NULL'
-        const orderCol = columnExists(db, 'messages', 'created_at')
-          ? 'created_at'
-          : columnExists(db, 'messages', 'timestamp')
-            ? 'timestamp'
-            : columnExists(db, 'messages', 'id')
-              ? 'id'
+        const orderCol = columnExists(db, 'messages', 'id')
+          ? 'id'
+          : columnExists(db, 'messages', 'created_at')
+            ? 'created_at'
+            : columnExists(db, 'messages', 'timestamp')
+              ? 'timestamp'
               : 'rowid'
 
         const msgQuery = `SELECT ${roleCol} AS role, ${contentCol} AS content
