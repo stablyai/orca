@@ -84,6 +84,24 @@ export async function verifyPreloadSource(source) {
   return { imports }
 }
 
+// Listed apart from the build so a preload moved back into a main-build chunk still gets checked.
+const SANDBOXED_MAIN_PRELOADS = [
+  'browser-guest-preload.js',
+  'doc-preview-link-preload.js',
+  'plugin-frame-guest-preload.js',
+  'browser-extension-preload.js'
+]
+
+export async function verifySandboxedMainPreloadOutputs(root = process.cwd()) {
+  for (const fileName of SANDBOXED_MAIN_PRELOADS) {
+    const source = fs.readFileSync(path.join(root, 'out', 'main', fileName), 'utf8')
+    await verifySandboxPreloadImports(source).catch((error) => {
+      throw new Error(`out/main/${fileName}: ${error.message}`)
+    })
+  }
+  console.log(`Sandboxed main preloads verified: ${SANDBOXED_MAIN_PRELOADS.join(', ')}`)
+}
+
 export async function verifyPreloadOutput(root = process.cwd()) {
   const directory = path.join(root, 'out', 'preload')
   const scripts = fs
