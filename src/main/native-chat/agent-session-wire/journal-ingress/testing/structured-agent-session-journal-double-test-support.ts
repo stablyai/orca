@@ -86,11 +86,10 @@ export function withJournalQueueMembers<T extends AppendingDouble>(
               if (resolved.kind === 'dropped') {
                 result.outcomes.push(resolved)
               } else {
-                await journal.appendItem(
-                  resolved.item.identity,
-                  resolved.item.body,
-                  command.options
-                )
+                await journal.appendItem(resolved.item.identity, resolved.item.body, {
+                  ...command.options,
+                  turnScope: resolved.item.turnScope ?? command.options.turnScope
+                })
                 result.outcomes.push({ kind: 'committed', wrote: true })
               }
               continue

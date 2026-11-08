@@ -14,6 +14,7 @@ import {
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import {
   providerTimelinePlacement,
+  providerTimelineScopeItemIds,
   type ProviderTimelineContext
 } from './provider-timeline-context'
 import type {
@@ -33,6 +34,7 @@ export type ProviderTimelineStream = {
   row: ProviderTimelineRowId
   /** New rows use this scope; existing rows retain theirs. */
   scope: AgentJournalTurnScope
+  scopeItemIds?: readonly string[]
   named: boolean
   channel: ProviderTimelineTextChannel
   producer: AgentJournalProducerLinkage | undefined
@@ -114,6 +116,7 @@ export class ProviderTimelineTextStreams {
       key: this.key(input.item, input.join),
       row: rows.item('item', key, thread),
       scope: providerTimelinePlacement(this.deps.context, input.state, input.join),
+      scopeItemIds: providerTimelineScopeItemIds(this.deps.context, input.join),
       named,
       channel: input.channel,
       producer: input.producer,
@@ -231,7 +234,12 @@ export class ProviderTimelineTextStreams {
     plan.item(
       {
         reservedBytes: estimateStructuredAgentSessionItemBytes(stream.row.identity, body),
-        resolution: { kind: 'text-snapshot', identity: stream.row.identity, body },
+        resolution: {
+          kind: 'text-snapshot',
+          identity: stream.row.identity,
+          body,
+          scopeItemIds: stream.scopeItemIds
+        },
         options: { ...stream.producer, turnScope: stream.scope }
       },
       false,

@@ -29,6 +29,15 @@ export function providerTimelineRequest(
   return { agent: context.agent, sessionId: context.sessionId, generation: context.generation, key }
 }
 
+export function providerTimelineScopeItemIds(
+  context: ProviderTimelineContext,
+  join: ProviderTimelineJoin | undefined
+): readonly string[] | undefined {
+  return join?.scopeItems?.map(
+    (key) => context.rows.item('item', providerKey(key), join.thread ?? null).itemId
+  )
+}
+
 /** Prefer the named turn, then open turn; independent subagent threads always join the open turn. */
 export function providerTimelinePlacement(
   context: ProviderTimelineContext,

@@ -505,7 +505,7 @@ it('drops a revoked history invocation after worker dispatch and preserves dedup
   expect((await journal.reads.item('orca:history'))?.revision).toBe(1)
 })
 
-it('resolves a text snapshot against its persisted turn after an earlier step settles it', async () => {
+it('resolves related-item placement after an earlier step settles its saved turn', async () => {
   const { journal } = await fixture()
   await journal.appendItem(
     { provider: 'orca', clientMessageId: 'turn' },
@@ -535,7 +535,8 @@ it('resolves a text snapshot against its persisted turn after an earlier step se
         kind: 'resolved-item',
         resolution: {
           kind: 'text-snapshot',
-          identity: { provider: 'orca', clientMessageId: 'answer' },
+          identity: { provider: 'orca', clientMessageId: 'late-answer' },
+          scopeItemIds: ['orca:missing-channel', 'orca:answer'],
           body: {
             kind: 'message',
             role: 'assistant',
@@ -544,17 +545,33 @@ it('resolves a text snapshot against its persisted turn after an earlier step se
         },
         options: { fence: 1, turnScope: { kind: 'thread' } },
         reservedBytes: 4096
+      },
+      {
+        kind: 'resolved-item',
+        resolution: {
+          kind: 'literal',
+          identity: { provider: 'orca', clientMessageId: 'late-notice' },
+          body: { kind: 'status', text: 'Earlier tool update' },
+          scopeItemIds: ['orca:answer']
+        },
+        options: { fence: 1, turnScope: { kind: 'thread' } },
+        reservedBytes: 4096
       }
     ])
   ).toEqual({
     outcomes: [
       { kind: 'committed', wrote: true },
-      { kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' }
+      { kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' },
+      { kind: 'committed', wrote: true }
     ]
   })
   expect(await journal.reads.item('orca:answer')).toMatchObject({
     revision: 1,
     body: { kind: 'message', blocks: [{ type: 'text', text: 'Before Stop' }] },
+    turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
+  })
+  expect(await journal.reads.item('orca:late-answer')).toBeNull()
+  expect(await journal.reads.item('orca:late-notice')).toMatchObject({
     turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
   })
 })

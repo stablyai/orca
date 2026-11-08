@@ -42,7 +42,13 @@ export function planJournalWriterStep(
     }
     return planJournalWriterStep(
       state,
-      { kind: 'item', ...resolved.item, options: step.options, reservedBytes: step.reservedBytes },
+      {
+        kind: 'item',
+        identity: resolved.item.identity,
+        body: resolved.item.body,
+        options: { ...step.options, turnScope: resolved.item.turnScope ?? step.options.turnScope },
+        reservedBytes: step.reservedBytes
+      },
       onResolved
     )
   }

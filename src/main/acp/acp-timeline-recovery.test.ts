@@ -176,10 +176,12 @@ describe('ACP reviewed traffic and recovery', () => {
         )
       }
       f.apply(lane.promptResult('send-1', { stopReason: 'end_turn' }, 2_000))
-      f.apply(lane.openPrompt('send-2', 3_000).events)
+      await f.restart()
+      const resumed = f.lane()
+      f.apply(resumed.openPrompt('send-2', 3_000).events)
       const before = await f.rig.rows()
       f.apply(
-        lane.request(
+        resumed.request(
           'session/request_permission',
           {
             sessionId: 'session-1',
@@ -200,6 +202,45 @@ describe('ACP reviewed traffic and recovery', () => {
       ])
     }
   )
+
+  it('refuses a named answer from a saved reasoning turn after the translator restarts', async () => {
+    const f = await openAcpFixtureRig(GENERIC_ACP_DIALECT)
+    f.apply(f.lane().openPrompt('send-1', 1_000).events)
+    f.apply(
+      f.lane().notification(
+        'session/update',
+        {
+          sessionId: 'session-1',
+          update: {
+            sessionUpdate: 'agent_thought_chunk',
+            messageId: 'first-message',
+            content: { type: 'text', text: 'Earlier thought' }
+          }
+        },
+        1_001
+      )
+    )
+    f.apply(f.lane().promptResult('send-1', { stopReason: 'end_turn' }, 2_000))
+    await f.restart()
+    f.apply(f.lane().openPrompt('send-2', 3_000).events)
+    const before = await f.rig.rows()
+    f.apply(
+      f.lane().notification(
+        'session/update',
+        {
+          sessionId: 'session-1',
+          update: {
+            sessionUpdate: 'agent_message_chunk',
+            messageId: 'first-message',
+            content: { type: 'text', text: 'Must not move to the new turn' }
+          }
+        },
+        3_001
+      )
+    )
+    f.rig.assembler.flush()
+    expect(await f.rig.rows()).toEqual(before)
+  })
 
   it('ignores stray replay and both extension method aliases by default', async () => {
     const f = await openAcpFixtureRig()

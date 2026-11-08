@@ -34,7 +34,7 @@ import {
   type CodexGoalRowChoice
 } from '../../../codex/structured/journal/codex-goal-journal-identity'
 
-export type JournalTimelineItemResolution =
+type TimelineItemResolution =
   | { kind: 'text-snapshot'; identity: AgentJournalItemIdentity; body: AgentJournalMessageItem }
   | {
       kind: 'guarded-item'
@@ -84,6 +84,11 @@ export type JournalTimelineItemResolution =
       stopped: JournalTimelineItemResolution | null
     }
 
+export type JournalTimelineItemResolution = TimelineItemResolution & {
+  /** Related rows own placement even after the producer forgets their turn. */
+  scopeItemIds?: readonly string[]
+}
+
 export type JournalTimelineItemResult = (
   | { kind: 'resolved'; item: JournalResolvedItem }
   | { kind: 'dropped'; reason: 'turn-settled'; turnItemId: string }
@@ -104,11 +109,34 @@ export function resolveJournalTimelineItem(
   placement: AgentJournalTurnScope,
   reservedBytes: number
 ): JournalTimelineItemResult {
+  let scope = placement
+  for (const key of resolution.scopeItemIds ?? []) {
+    const item = view.item(key)
+    if (item) {
+      scope = item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+      break
+    }
+  }
+  const result = resolveTimelineItem(view, resolution, scope, reservedBytes)
+  return result.kind === 'resolved' && scope !== placement
+    ? { ...result, item: { ...result.item, turnScope: scope } }
+    : result
+}
+
+function resolveTimelineItem(
+  view: JournalTimelineView,
+  resolution: JournalTimelineItemResolution,
+  placement: AgentJournalTurnScope,
+  reservedBytes: number
+): JournalTimelineItemResult {
   switch (resolution.kind) {
     case 'literal':
       return resolved({ identity: resolution.identity, body: resolution.body })
     case 'request-open':
-      return resolveProviderTimelineRequestOpen(view, resolution)
+      return resolveProviderTimelineRequestOpen(view, {
+        ...resolution,
+        turnItemId: placement.kind === 'turn' ? placement.turnItemId : null
+      })
     case 'turn-open':
       return resolveProviderTimelineTurnOpen(view, {
         identity: resolution.identity,

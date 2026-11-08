@@ -68,7 +68,11 @@ export class AcpHistoryJournalOverlay {
               continue
             }
             this.write(
-              journalLifecycleItemMutation(step.options, result.item.identity, result.item.body)
+              journalLifecycleItemMutation(
+                { ...step.options, turnScope: result.item.turnScope ?? step.options.turnScope },
+                result.item.identity,
+                result.item.body
+              )
             )
             outcomes.push({ kind: 'committed', wrote: true })
           }

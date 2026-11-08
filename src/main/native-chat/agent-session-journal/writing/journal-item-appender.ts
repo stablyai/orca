@@ -4,6 +4,7 @@ import type {
   AgentJournalMessageItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { journalItemRowBuilder } from './journal-row-builders'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type {
@@ -27,7 +28,11 @@ import type {
 // Module-level Error stacks retain startup code and buffers; construct them only when needed.
 class NothingResolvedError extends Error {}
 
-export type JournalResolvedItem = { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+export type JournalResolvedItem = {
+  identity: AgentJournalItemIdentity
+  body: AgentJournalItemBody
+  turnScope?: AgentJournalTurnScope
+}
 
 export class JournalItemAppender {
   constructor(

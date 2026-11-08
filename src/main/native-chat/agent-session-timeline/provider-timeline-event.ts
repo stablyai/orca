@@ -30,6 +30,8 @@ export type ProviderTimelineJoin = {
   turn?: string
   /** Placement recovered from an existing journal row without reversing provider keys. */
   scope?: AgentJournalTurnScope
+  /** Related provider items supply saved placement at the write position. */
+  scopeItems?: readonly string[]
 }
 
 /** Named items share full-snapshot rows; anonymous streams create a message each time they start. */

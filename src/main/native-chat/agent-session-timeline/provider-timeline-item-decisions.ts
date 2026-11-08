@@ -1,7 +1,11 @@
 import { requiresTerminalSettlement } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import { unhandledProviderFrameJournalItem } from '../agent-session-wire/providers/unhandled-provider-frame'
-import { providerTimelinePlacement, providerTimelineRequest } from './provider-timeline-context'
+import {
+  providerTimelinePlacement,
+  providerTimelineRequest,
+  providerTimelineScopeItemIds
+} from './provider-timeline-context'
 import type {
   ProviderTimelineDecidedEvent,
   ProviderTimelineDecision,
@@ -36,7 +40,13 @@ export function decideItem(
         reservedBytes: estimateStructuredAgentSessionItemBytes(row.identity, event.body),
         lifecycle: change !== 'update',
         options: { ...event.producer, turnScope: scope },
-        resolution: { kind: 'guarded-item', identity: row.identity, body: event.body, change },
+        resolution: {
+          kind: 'guarded-item',
+          identity: row.identity,
+          body: event.body,
+          change,
+          scopeItemIds: providerTimelineScopeItemIds(context, event.join)
+        },
         onResolved: (outcome) => {
           if (outcome.kind === 'dropped' && state.items.get(key) === opened) {
             state.close(key, placed)
@@ -91,6 +101,7 @@ export function decideRequest(
           request: providerTimelineRequest(context, event.request),
           body: event.body,
           turnItemId: turn,
+          scopeItemIds: providerTimelineScopeItemIds(context, event.join),
           ...(event.outlivesTurn ? { outlivesTurn: true as const } : {})
         },
         onResolved: (outcome) => {
@@ -146,7 +157,12 @@ export function decideFrame(
         reservedBytes: estimateStructuredAgentSessionItemBytes(row.identity, frame.body),
         lifecycle: false,
         options: { turnScope: providerTimelinePlacement(context, state, event.join) },
-        resolution: { kind: 'literal', identity: row.identity, body: frame.body }
+        resolution: {
+          kind: 'literal',
+          identity: row.identity,
+          body: frame.body,
+          scopeItemIds: providerTimelineScopeItemIds(context, event.join)
+        }
       }
     ]
   }
