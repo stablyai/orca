@@ -25,6 +25,8 @@ export type RuntimeClientEvent =
   | { type: 'workspaceViewChanged' }
   // Index, HEAD or refs moved in a watched local repo; without `worktreeIds` any of its checkouts may have changed.
   | { type: 'gitStatusChanged'; repoId: string; worktreeIds?: string[] }
+  /** Top-level settings whose values changed; a phone re-reads only the settings it shows. */
+  | { type: 'settingsChanged'; keys: string[] }
   | {
       type: 'worktreesChanged'
       repoId: string

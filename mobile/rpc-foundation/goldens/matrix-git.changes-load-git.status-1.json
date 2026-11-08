@@ -379,6 +379,38 @@
         }
       }
     },
+    "3088889ce80e": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
     "393d2f9f3485": {
       "name": "git.status#1",
       "ordinal": 3,
@@ -483,38 +515,6 @@
       "name": "git.branchCompare#1",
       "ordinal": 11,
       "json": "{\"id\":\"frame-6\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
-    },
-    "63bc0796d81c": {
-      "name": "settings.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
     },
     "6d2d788a9e84": {
       "name": "git.status#1",
@@ -628,32 +628,6 @@
           "payload": "runtime.clientEvents.subscribe#1"
         }
       ]
-    },
-    "891438a18444": {
-      "name": "settings.get#1",
-      "ordinal": 1,
-      "args": [
-        {
-          "name": "method",
-          "value": "settings.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "undefined"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "failWhenDisconnected": true
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
     },
     "8fda864c66d6": {
       "branchCompareState": {
@@ -866,6 +840,32 @@
         }
       ]
     },
+    "b823fdc0d205": {
+      "name": "settings.get#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
     "cb462f8b50a3": {
       "name": "worktree.show#1",
       "ordinal": 8,
@@ -882,11 +882,6 @@
         }
       ]
     },
-    "e539e80d06e9": {
-      "name": "runtime.clientEvents.subscribe#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -894,6 +889,11 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "eef1ee3c2773": {
+      "name": "runtime.clientEvents.subscribe#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"runtime.clientEvents.subscribe\",\"params\":null}"
     },
     "f0896523e780": {
       "name": "git.status#2",
@@ -959,8 +959,8 @@
       {
         "id": "sc-changes-loaded.prelude:status-pending",
         "observation": {
-          "sender": ["891438a18444", "2ab4c978da8d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "2ab4c978da8d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -971,8 +971,8 @@
       {
         "id": "sc-changes-loaded.prelude:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "1dbb1f085bde"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "1dbb1f085bde"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -983,9 +983,9 @@
       {
         "id": "sc-changes-loaded.normal:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "962f91336a50", "6f4a5d6a5a86", "1934c215114a"],
+          "sender": ["b823fdc0d205", "962f91336a50", "6f4a5d6a5a86", "1934c215114a"],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1002,14 +1002,14 @@
         "id": "sc-changes-loaded.normal:settled",
         "observation": {
           "sender": [
-            "891438a18444",
+            "b823fdc0d205",
             "962f91336a50",
             "74d102469d68",
             "2ca33da4d135",
             "5d30d477f0d5"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1027,14 +1027,14 @@
         "id": "sc-changes-loaded.normal:cleanup",
         "observation": {
           "sender": [
-            "63bc0796d81c",
+            "3088889ce80e",
             "962f91336a50",
             "74d102469d68",
             "2ca33da4d135",
             "5d30d477f0d5"
           ],
           "payloads": [
-            "e539e80d06e9",
+            "eef1ee3c2773",
             "1c2564f1daca",
             "92a577a15fcc",
             "cb462f8b50a3",
@@ -1051,8 +1051,8 @@
       {
         "id": "sc-changes-loaded.result-absent:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "f186683ccf2d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "f186683ccf2d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1063,8 +1063,8 @@
       {
         "id": "sc-changes-loaded.result-absent:settled",
         "observation": {
-          "sender": ["891438a18444", "f186683ccf2d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "f186683ccf2d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1075,8 +1075,8 @@
       {
         "id": "sc-changes-loaded.result-absent:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "f186683ccf2d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "f186683ccf2d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1087,8 +1087,8 @@
       {
         "id": "sc-changes-loaded.result-null:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "9ae4367a6ff8"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "9ae4367a6ff8"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1099,8 +1099,8 @@
       {
         "id": "sc-changes-loaded.result-null:settled",
         "observation": {
-          "sender": ["891438a18444", "9ae4367a6ff8"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "9ae4367a6ff8"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1111,8 +1111,8 @@
       {
         "id": "sc-changes-loaded.result-null:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "9ae4367a6ff8"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "9ae4367a6ff8"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1123,8 +1123,8 @@
       {
         "id": "sc-changes-loaded.inner-ok-missing:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "19fff093880d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "19fff093880d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1135,8 +1135,8 @@
       {
         "id": "sc-changes-loaded.inner-ok-missing:settled",
         "observation": {
-          "sender": ["891438a18444", "19fff093880d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "19fff093880d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1147,8 +1147,8 @@
       {
         "id": "sc-changes-loaded.inner-ok-missing:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "19fff093880d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "19fff093880d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1159,8 +1159,8 @@
       {
         "id": "sc-changes-loaded.inner-false-string-error:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "393d2f9f3485"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "393d2f9f3485"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1171,8 +1171,8 @@
       {
         "id": "sc-changes-loaded.inner-false-string-error:settled",
         "observation": {
-          "sender": ["891438a18444", "393d2f9f3485"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "393d2f9f3485"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1183,8 +1183,8 @@
       {
         "id": "sc-changes-loaded.inner-false-string-error:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "393d2f9f3485"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "393d2f9f3485"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1195,8 +1195,8 @@
       {
         "id": "sc-changes-loaded.inner-false-object-error:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "1940948b426c"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "1940948b426c"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1207,8 +1207,8 @@
       {
         "id": "sc-changes-loaded.inner-false-object-error:settled",
         "observation": {
-          "sender": ["891438a18444", "1940948b426c"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "1940948b426c"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1219,8 +1219,8 @@
       {
         "id": "sc-changes-loaded.inner-false-object-error:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "1940948b426c"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "1940948b426c"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1231,8 +1231,8 @@
       {
         "id": "sc-changes-loaded.outer-refused:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "085b756c7623"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "085b756c7623"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1243,8 +1243,8 @@
       {
         "id": "sc-changes-loaded.outer-refused:settled",
         "observation": {
-          "sender": ["891438a18444", "085b756c7623"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "085b756c7623"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1255,8 +1255,8 @@
       {
         "id": "sc-changes-loaded.outer-refused:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "085b756c7623"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "085b756c7623"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1267,8 +1267,8 @@
       {
         "id": "sc-changes-loaded.outer-refused-no-message:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "207e0351be0d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "207e0351be0d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1279,8 +1279,8 @@
       {
         "id": "sc-changes-loaded.outer-refused-no-message:settled",
         "observation": {
-          "sender": ["891438a18444", "207e0351be0d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "207e0351be0d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1291,8 +1291,8 @@
       {
         "id": "sc-changes-loaded.outer-refused-no-message:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "207e0351be0d"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "207e0351be0d"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1303,8 +1303,8 @@
       {
         "id": "sc-changes-loaded.method-not-found:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "6d2d788a9e84"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "6d2d788a9e84"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1315,8 +1315,8 @@
       {
         "id": "sc-changes-loaded.method-not-found:settled",
         "observation": {
-          "sender": ["891438a18444", "6d2d788a9e84"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["b823fdc0d205", "6d2d788a9e84"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1327,8 +1327,8 @@
       {
         "id": "sc-changes-loaded.method-not-found:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "6d2d788a9e84"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc"],
+          "sender": ["3088889ce80e", "6d2d788a9e84"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1339,8 +1339,8 @@
       {
         "id": "sc-changes-loaded.transport-rejection:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "9778e6b1ca17", "f0896523e780"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
+          "sender": ["b823fdc0d205", "9778e6b1ca17", "f0896523e780"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1351,8 +1351,8 @@
       {
         "id": "sc-changes-loaded.transport-rejection:settled",
         "observation": {
-          "sender": ["891438a18444", "9778e6b1ca17", "f0896523e780"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
+          "sender": ["b823fdc0d205", "9778e6b1ca17", "f0896523e780"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1363,8 +1363,8 @@
       {
         "id": "sc-changes-loaded.transport-rejection:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "9778e6b1ca17", "270fa28bd742"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
+          "sender": ["3088889ce80e", "9778e6b1ca17", "270fa28bd742"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1375,8 +1375,8 @@
       {
         "id": "sc-changes-loaded.transport-rejection-no-message:compare-pending",
         "observation": {
-          "sender": ["891438a18444", "953d7e425499", "f0896523e780"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
+          "sender": ["b823fdc0d205", "953d7e425499", "f0896523e780"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1387,8 +1387,8 @@
       {
         "id": "sc-changes-loaded.transport-rejection-no-message:settled",
         "observation": {
-          "sender": ["891438a18444", "953d7e425499", "f0896523e780"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
+          "sender": ["b823fdc0d205", "953d7e425499", "f0896523e780"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1399,8 +1399,8 @@
       {
         "id": "sc-changes-loaded.transport-rejection-no-message:cleanup",
         "observation": {
-          "sender": ["63bc0796d81c", "953d7e425499", "270fa28bd742"],
-          "payloads": ["e539e80d06e9", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
+          "sender": ["3088889ce80e", "953d7e425499", "270fa28bd742"],
+          "payloads": ["eef1ee3c2773", "1c2564f1daca", "92a577a15fcc", "5ab051d969ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
