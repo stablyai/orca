@@ -8,7 +8,6 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
-import type { PtyTransport } from '../pty-transport-types'
 
 let panes: LegacyRelayBridgedPane[] = []
 const listeners = new Set<() => void>()
@@ -174,7 +173,11 @@ export function onLegacyRelayBridgedPanesChanged(listener: () => void): () => vo
 }
 
 // The notice a bridged pane shows while its older relay can't be reached.
-type UnreachableNoticeCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
+// Main's typecheck also includes this file, so it names only the two callbacks it uses.
+type UnreachableNoticeCallbacks = {
+  onError?: (message: string) => void
+  onErrorCleared?: (message: string) => void
+}
 
 const UNREACHABLE_MESSAGE =
   'This terminal is still running on the host under an older version of Orca. Reconnecting to it…'
