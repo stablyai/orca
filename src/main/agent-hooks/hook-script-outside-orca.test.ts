@@ -94,7 +94,8 @@ describe.skipIf(process.platform === 'win32')('managed hook outside an Orca term
       CLAUDE_JOB_DIR: join(dir, 'job')
     })
     expect(res.status).toBe(0)
-    expect(res.stdout).toBe('')
+    // Codex still parses this hook's stdout under a Claude job, so '{}' is expected here too (#16356).
+    expect(res.stdout).toBe('{}\n')
     // A failed post would spool beside the endpoint file.
     expect(readdirSync(dir).sort()).toEqual(['codex-hook.sh', 'endpoint.env'])
   })

@@ -10,7 +10,7 @@ vi.mock('electron', async () => {
   }
 })
 
-import { getCodexManagedHookInstallMaterial } from './hook-service'
+import { getCodexManagedHookInstallMaterial } from './codex-hook-definition'
 
 const realPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
 
