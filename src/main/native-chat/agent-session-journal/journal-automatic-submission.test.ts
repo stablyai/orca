@@ -15,14 +15,12 @@ it('claims owed mail with the selected stored body and sparse options, without s
     body: { ...automaticBody('notice'), from: automaticMail },
     options: {}
   })
-  const preparation = f.prepare()
-  expect(preparation.preparation).toEqual({
-    sessionId: 'chat-test',
-    epoch: 'epoch',
-    handle: 'owner',
-    queueRevision: 1,
-    mail: { messageId: 'mail', revision: 1, source: automaticMail }
+  expect((await f.claim('needs', f.prepare())).value).toEqual({
+    kind: 'needs-custody',
+    source: automaticMail
   })
+  expect(f.card('mail')?.state).toBe('waiting')
+  const preparation = f.prepare(100, 'owed')
   expect((await f.claim('send', preparation)).value).toEqual({
     kind: 'claimed',
     messageId: 'mail',
@@ -58,7 +56,7 @@ it('evaluates the first nonmail fallback itself and waits on it instead of bypas
   })
   await f.enqueue('person', { options: { model: 'different' } })
   await f.enqueue('later-person', { options: { model: 'active' } })
-  expect((await f.claim('waiting', { ...f.prepare(), owed: 'unavailable' })).value).toEqual({
+  expect((await f.claim('waiting', f.prepare(100, 'unavailable'))).value).toEqual({
     kind: 'waiting'
   })
   expect(f.attempt('waiting')).toBeNull()
@@ -67,7 +65,7 @@ it('evaluates the first nonmail fallback itself and waits on it instead of bypas
     kind: 'codex',
     compiler: { active: { model: 'different' }, defaults: {}, models: [], listedServiceTiers: [] }
   }
-  expect((await f.claim('send', { ...f.prepare(), owed: 'unavailable' })).value).toEqual({
+  expect((await f.claim('send', f.prepare(100, 'unavailable'))).value).toEqual({
     kind: 'claimed',
     messageId: 'person',
     clientMessageId: 'send'
@@ -81,10 +79,10 @@ it('evaluates the first nonmail fallback itself and waits on it instead of bypas
   })
 })
 
-it('withdraws stale mail without a submission and retains changed custody subjects for fresh preparation', async () => {
+it('asks only for the sender reached at its writer position and withdraws stale mail without a submission', async () => {
   const f = automaticSubmissionFixture(cleanups)
   await f.enqueue('mail', { body: { ...automaticBody('notice'), from: automaticMail } })
-  const before = f.prepare()
+  const before = f.prepare(100, 'owed')
   await f.enqueue('earlier', {
     body: {
       ...automaticBody('earlier'),
@@ -95,10 +93,19 @@ it('withdraws stale mail without a submission and retains changed custody subjec
     }
   })
   await f.run({ kind: 'queue-move', input: { messageId: 'earlier', beforeMessageId: 'mail' } })
-  expect((await f.claim('changed', before)).value).toEqual({ kind: 'changed', retry: true })
+  const earlier = {
+    ...automaticMail,
+    orchestration: { ...automaticMail.orchestration, mailbox: 'earlier' }
+  }
+  expect((await f.claim('changed', before)).value).toEqual({
+    kind: 'needs-custody',
+    source: earlier
+  })
   expect(f.card('mail')?.state).toBe('waiting')
   expect(f.attempt('changed')).toBeNull()
-  expect((await f.claim('stale', { ...f.prepare(), owed: 'stale' })).value).toEqual({
+  expect(
+    (await f.claim('stale', { ...f.prepare(), mail: [[JSON.stringify(earlier), 'stale']] })).value
+  ).toEqual({
     kind: 'withdrawn',
     messageId: 'earlier'
   })
@@ -126,14 +133,13 @@ it('keeps overlapping edit barriers at the fixed preparation instant and returns
     kind: 'edit-lease',
     operation: { kind: 'release', callerKey: 'desktop', editId: 'desktop', messageId: 'person' }
   })
-  const prepared = { ...f.prepare(), owed: 'unavailable' as const }
+  const prepared = f.prepare(100, 'unavailable')
   const blocked = await f.claim('blocked', prepared, undefined, 130_000)
   expect(blocked.value).toEqual({ kind: 'waiting' })
   expect(blocked.publication?.editDeadline).toBe(120_100)
   expect(f.card('person')?.state).toBe('waiting')
   expect(
-    (await f.claim('send', { ...f.prepare(130_000), owed: 'unavailable' }, undefined, 130_000))
-      .value
+    (await f.claim('send', f.prepare(130_000, 'unavailable'), undefined, 130_000)).value
   ).toEqual({ kind: 'claimed', messageId: 'person', clientMessageId: 'send' })
 })
 

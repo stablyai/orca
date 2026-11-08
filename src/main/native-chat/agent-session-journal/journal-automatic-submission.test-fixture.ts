@@ -8,8 +8,6 @@ import {
   lifecycleOptions,
   lifecycleIdentity
 } from './journal-domain-lifecycle.test-fixture'
-import { prepareJournalAutomaticSubmission } from './journal-domain-automatic-selection'
-import { JournalSqlScope } from './journal-sql-scope'
 import type {
   JournalAutomaticSelection,
   JournalAutomaticSubmissionFacts
@@ -18,6 +16,8 @@ import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { readJournalDomainSubmissionAttempt } from './journal-domain-submission-records'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { JournalSqlCommand } from './journal-sql-command'
+import { journalMailSenderKey, type JournalMailCustody } from './journal-writer-host-facts'
+import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { JournalWriterCommand } from './journal-writer-command'
 
 export const automaticBody = (text: string): AgentJournalMessageItem => ({
@@ -100,29 +100,26 @@ export function automaticSubmissionFixture(cleanups: (() => void)[]) {
         body: { kind: 'turn', turnId, state: 'running' },
         options: lifecycleOptions
       }),
-    prepare(now = 100): JournalAutomaticSubmissionFacts {
+    prepare(
+      now = 100,
+      owed?: QueuedMessageOwed
+    ): JournalAutomaticSubmissionFacts & { mail?: JournalMailCustody } {
       return {
         selection,
         selectionNow: now,
-        owed: 'owed',
-        preparation: prepareJournalAutomaticSubmission(
-          new JournalSqlScope(f.db, 'chat-test', 'epoch'),
-          selection,
-          now,
-          { reopenFloor: null }
-        )
+        mail: owed ? [[journalMailSenderKey(automaticMail), owed]] : []
       }
     },
     async claim(
       id: string,
-      automatic: JournalAutomaticSubmissionFacts,
+      automatic: JournalAutomaticSubmissionFacts & { mail?: JournalMailCustody },
       effects?: JournalWriterCommand['effects'],
       savedAt = 100
     ) {
       const command: JournalWriterCommand = {
         target,
         operation: { kind: 'automatic-submission', clientMessageId: id, fence: 1 },
-        facts: { ...facts, automatic },
+        facts: { ...facts, automatic, mail: automatic.mail },
         savedAt,
         effects
       }

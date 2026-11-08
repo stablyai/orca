@@ -17,7 +17,8 @@ export async function selectStructuredAgentSessionInput(
   journal: AgentSessionJournal,
   currentInput?: string,
   _unanswerable = false,
-  steer = false
+  steer = false,
+  cards?: readonly QueuedMessageRow[]
 ): Promise<StructuredInputSelection> {
   const current = currentInput ? await journal.reads.submission(currentInput) : undefined
   const pending =
@@ -26,7 +27,7 @@ export async function selectStructuredAgentSessionInput(
   if (pending) {
     return { kind: 'submission', submission: pending }
   }
-  const card = await journal.queuedMessages.nextInputCard(true, steer)
+  const card = await journal.queuedMessages.nextInputCard(true, steer, cards)
   return card ? { kind: 'card', card } : { kind: 'none' }
 }
 

@@ -187,7 +187,8 @@ export async function readQueuePublication(
         ? { reason: pause.reason }
         : null
     const nextQueuedMessageId =
-      (await nextStructuredQueuedMessage({ journal, ...input, working }))?.messageId ?? null
+      (await nextStructuredQueuedMessage({ journal, ...input, working, cards: cardRows }))
+        ?.messageId ?? null
     const previous = publications.get(journal)
     if (
       previous &&

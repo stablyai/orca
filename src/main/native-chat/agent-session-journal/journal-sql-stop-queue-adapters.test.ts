@@ -74,18 +74,6 @@ it('holds automatic SQL delivery for an editor and invalidates the hold when its
   expect(await queue.editLeases.acquire(editor, card)).toMatchObject({ status: 'held' })
   expect(await queue.nextInputCard()).toBeNull()
   expect((await queue.nextInputCard(false))?.messageId).toBe('A')
-  await expect(
-    journal.appendSubmission(
-      {
-        clientMessageId: 'send-A',
-        payloadFingerprint: card.fingerprint,
-        body: card.body,
-        fence: 1
-      },
-      { messageId: 'A', expect: 'waiting', yieldsToPause: true }
-    )
-  ).rejects.toMatchObject({ name: 'QueuedMessageNotConsumableError' })
-
   // A write can race a previously captured lease; the worker compares the current card identity.
   const facts = queue.facts()
   await queue.update({ messageId: 'A', expectedBodyFingerprint: card.fingerprint, text: 'edited' })
@@ -93,6 +81,7 @@ it('holds automatic SQL delivery for an editor and invalidates the hold when its
     kind: 'next-input-card',
     automatic: true,
     steer: false,
+    now: 100,
     facts
   })
   expect(read).toMatchObject({ kind: 'next-input-card', card: { messageId: 'A' } })

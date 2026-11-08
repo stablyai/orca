@@ -2,7 +2,6 @@ import type { AgentMessageSource } from '../../../shared/agent-session/agent-ses
 import type { StructuredMessageSteeringInputs } from '../../../shared/agent-session/options/codex-message-compiler'
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import type { JournalSqlFailure } from './journal-sql-failure'
-import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 
 /** Only external owner observations cross the port; SQL derives work and card eligibility. */
 export type JournalAutomaticSelection = {
@@ -17,24 +16,14 @@ export type JournalAutomaticSelection = {
   steering: StructuredMessageSteeringInputs
 }
 
-export type JournalAutomaticPreparation = {
-  sessionId: string
-  epoch: string
-  handle: string
-  queueRevision: number
-  mail: { messageId: string; revision: number; source: AgentMessageSource } | null
-}
-
 export type JournalAutomaticSubmissionFacts = {
   selectionNow: number
   selection: JournalAutomaticSelection
-  preparation: JournalAutomaticPreparation
-  owed: QueuedMessageOwed
 }
 
 export type JournalAutomaticSubmissionResult =
   | { kind: 'waiting' }
-  | { kind: 'changed'; retry: boolean }
+  | { kind: 'needs-custody'; source: AgentMessageSource }
   | { kind: 'withdrawn'; messageId: string }
   | { kind: 'claimed'; messageId: string; clientMessageId: string }
   | { kind: 'failed'; messageId: string; failure: JournalSqlFailure }

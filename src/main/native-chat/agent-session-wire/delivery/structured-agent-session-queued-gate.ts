@@ -45,6 +45,7 @@ export function structuredQueueHold(
 export async function nextStructuredQueuedMessage(
   input: StructuredQueueGateInput & {
     journal: AgentSessionJournal
+    cards?: readonly QueuedMessageRow[]
     working?: boolean
     steer?: boolean
     canSteer?: (card: QueuedMessageRow) => boolean | Promise<boolean>
@@ -64,7 +65,13 @@ export async function nextStructuredQueuedMessage(
   ) {
     return null
   }
-  const selected = await selectStructuredAgentSessionInput(input.journal, undefined, false, steer)
+  const selected = await selectStructuredAgentSessionInput(
+    input.journal,
+    undefined,
+    false,
+    steer,
+    input.cards
+  )
   return selected.kind === 'card' && (!steer || (await input.canSteer?.(selected.card)) === true)
     ? selected.card
     : null

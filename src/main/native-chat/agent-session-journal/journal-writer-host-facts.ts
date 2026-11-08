@@ -10,6 +10,8 @@ import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalStopSettle } from './queued-messages/queued-message-pause-marks'
 import type { JournalAutomaticSubmissionFacts } from './journal-automatic-submission'
 
+export type JournalMailCustody = readonly (readonly [string, QueuedMessageOwed])[]
+
 export type JournalWriterStoreEffect = Extract<JournalWriterEffect, { kind: 'store' }>
 
 /** Host-memory facts a command needs; the writer never calls back into the host mid-transaction. */
@@ -20,8 +22,8 @@ export type JournalWriterHostFacts = {
   openedThrough?: AgentJournalCursor
   /** This handle's unmarked reopen boundary. */
   reopenFloor?: AgentJournalCursor | null
-  /** Orchestration senders (by `journalMailSenderKey`) and whether their mail is unavailable now. */
-  mail?: readonly (readonly [string, boolean])[]
+  /** Orchestration senders (by `journalMailSenderKey`) and whether their mail is still owed. */
+  mail?: JournalMailCustody
   /** The handover answer, asked only after the writer validated the consumed card. */
   owed?: QueuedMessageOwed
   goals?: JournalGoalAttachmentSnapshot

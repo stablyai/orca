@@ -7,6 +7,8 @@ import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycl
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { JournalAutomaticSelection } from './journal-automatic-submission'
 import { automaticBody, automaticMail } from './journal-automatic-submission.test-fixture'
+import { openJournalDatabase } from './database/journal-database'
+import { journalDatabasePath } from './database/journal-host-database'
 import { JournalSqlDatabase } from './database/journal-sql-database'
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import {
@@ -24,6 +26,12 @@ afterEach(async () => {
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'journal-automatic-port-'))
   cleanups.push(() => rm(root, { recursive: true, force: true }))
+  const { db } = openJournalDatabase(journalDatabasePath(root))
+  db.prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)').run(
+    'chat-test',
+    JSON.stringify(encodeAgentSessionRecord(agentSessionRecordFixture({ sessionId: 'chat-test' })))
+  )
+  db.close()
   const database = await JournalSqlDatabase.open(root, {
     writerPath: journalSqlWorkerPath(),
     readerPath: journalSqlReaderPath(),
@@ -44,24 +52,8 @@ async function fixture() {
   return { database, journal }
 }
 
-it('keeps automatic preparation through committed receipt adoption on the journal lane', async () => {
+it('keeps live capture and custody through committed receipt adoption on the journal lane', async () => {
   const { database, journal } = await fixture()
-  const record = agentSessionRecordFixture({ sessionId: 'chat-test' })
-  await database.effects([
-    {
-      kind: 'store',
-      insertOperationsIfAbsent: false,
-      writes: {
-        records: {
-          upsert: [['chat-test', JSON.stringify(encodeAgentSessionRecord(record))]],
-          remove: []
-        },
-        operations: { upsert: [], remove: [] },
-        retiredClaimKeys: null,
-        sessionTabs: null
-      }
-    }
-  ])
   await journal.queuedMessages.insert({
     messageId: 'mail',
     body: { ...automaticBody('notice'), from: automaticMail },

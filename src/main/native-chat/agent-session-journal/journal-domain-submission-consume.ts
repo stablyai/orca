@@ -1,4 +1,7 @@
 import type Database from '../../sqlite/sync-database'
+import { journalMailSenderKey, type JournalMailCustody } from './journal-writer-host-facts'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalWriterOperation } from './journal-writer-command'
@@ -26,16 +29,19 @@ export type JournalDomainQueueSelection = {
   steer: boolean
   /** Manual sends pass edit holds; automatic delivery waits behind them. */
   automatic: boolean
-  /** Asked only for the first eligible mail card; past unavailable mail, later mail is skipped. */
-  mailUnavailable: (card: QueuedMessageRow) => boolean
+  mail?: JournalMailCustody
 }
+
+export type JournalDomainQueuePick =
+  | { kind: 'selected'; card: QueuedMessageRow | null; owed?: QueuedMessageOwed }
+  | { kind: 'needs-custody'; source: AgentMessageSource }
 
 /** Current ordered cards and exact edit holds are selected on one snapshot, a bounded page at a time. */
 export function nextJournalDomainQueueCard(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,
   selection: JournalDomainQueueSelection
-): QueuedMessageRow | null {
+): JournalDomainQueuePick {
   const { steer, automatic } = selection
   let after: { position: number; messageId: string } | undefined
   let pastUnavailableMail = false
@@ -57,7 +63,7 @@ export function nextJournalDomainQueueCard(
         ...(after ? [after.position, after.messageId] : [])
       )
     if (rows.length === 0) {
-      return null
+      return { kind: 'selected', card: null }
     }
     const context = readJournalDomainQueuePauseContext(
       db,
@@ -67,7 +73,7 @@ export function nextJournalDomainQueueCard(
     )
     for (const row of rows) {
       if (automatic && row.edit_held) {
-        return null
+        return { kind: 'selected', card: null }
       }
       const { card } = readJournalDomainQueueRow(target.sessionId, row)
       after = { position: card.position, messageId: card.messageId }
@@ -85,14 +91,23 @@ export function nextJournalDomainQueueCard(
       if (pastUnavailableMail && mail) {
         continue
       }
-      if (mail && card.body.from && selection.mailUnavailable(card)) {
-        pastUnavailableMail = true
-        continue
+      let owed: QueuedMessageOwed | undefined
+      if (mail && card.body.from) {
+        owed = selection.mail?.find(
+          ([sender]) => sender === journalMailSenderKey(card.body.from!)
+        )?.[1]
+        if (owed === undefined) {
+          return { kind: 'needs-custody', source: card.body.from }
+        }
+        if (owed === 'unavailable') {
+          pastUnavailableMail = true
+          continue
+        }
       }
-      return card
+      return { kind: 'selected', card, owed }
     }
     if (rows.length < 64) {
-      return null
+      return { kind: 'selected', card: null }
     }
   }
 }

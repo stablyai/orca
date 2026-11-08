@@ -5,7 +5,6 @@ import type { JournalAutomaticSubmissionResult } from './journal-automatic-submi
 import { selectJournalAutomaticSubmission } from './journal-domain-automatic-selection'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
-import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import { journalDomainEditLeaseDeadline } from './journal-domain-edit-leases'
 import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlFailure } from './journal-sql-failure'
@@ -24,14 +23,12 @@ export function applyJournalSqlAutomaticSubmissionCommand(
   const { target, operation, facts } = command
   const automatic = facts?.automatic
   if (!automatic) {
-    throw new Error('automatic submission requires captured preparation facts')
+    throw new Error('automatic submission requires captured live facts')
   }
   const scope = new JournalSqlScope(db, target.sessionId, target.epoch)
-  const { preparation, selection, selectionNow } = automatic
+  const { selection, selectionNow } = automatic
   const head = db
-    .prepare(
-      'SELECT last_sequence,queue_revision FROM journal_chat_state WHERE session_id=? AND epoch=?'
-    )
+    .prepare('SELECT last_sequence FROM journal_chat_state WHERE session_id=? AND epoch=?')
     .get(...scope.prefix)!
   const empty = (value: JournalAutomaticSubmissionResult) =>
     finishJournalSqlCommand(
@@ -49,50 +46,20 @@ export function applyJournalSqlAutomaticSubmissionCommand(
       value,
       []
     )
-  let changed =
-    preparation.sessionId !== target.sessionId ||
-    preparation.epoch !== target.epoch ||
-    preparation.handle !== target.ownerToken ||
-    selection.authority.handle !== target.ownerToken
-  let stale: string | undefined
-  let reachedMail = false
-  const selected = selectJournalAutomaticSubmission(
-    scope,
-    selection,
-    selectionNow,
-    {
-      reopenFloor: facts.reopenFloor ?? null
-    },
-    (card) => {
-      reachedMail = true
-      const row = journalDomainQueueRow(db, target, card.messageId)!
-      const mail = preparation.mail
-      if (
-        !mail ||
-        mail.messageId !== card.messageId ||
-        mail.revision !== row.revision ||
-        JSON.stringify(mail.source) !== JSON.stringify(card.body.from)
-      ) {
-        changed = true
-        return false
-      }
-      if (automatic.owed === 'stale') {
-        stale = card.messageId
-      }
-      return automatic.owed === 'unavailable'
-    }
-  )
-  changed ||= preparation.mail !== null && !reachedMail
-  if (changed) {
-    return empty({
-      kind: 'changed',
-      retry: preparation.queueRevision !== Number(head.queue_revision)
-    })
+  if (selection.authority.handle !== target.ownerToken) {
+    return empty({ kind: 'waiting' })
   }
-  if (stale) {
+  const selected = selectJournalAutomaticSubmission(scope, selection, selectionNow, {
+    reopenFloor: facts.reopenFloor ?? null,
+    mail: facts.mail
+  })
+  if (selected.kind === 'needs-custody') {
+    return empty({ kind: 'needs-custody', source: selected.source })
+  }
+  if (selected.card && selected.owed === 'stale') {
     return queueChange(
-      { kind: 'queue-withdraw', messageIds: [stale] },
-      { kind: 'withdrawn', messageId: stale }
+      { kind: 'queue-withdraw', messageIds: [selected.card.messageId] },
+      { kind: 'withdrawn', messageId: selected.card.messageId }
     )
   }
   const { card, steer } = selected

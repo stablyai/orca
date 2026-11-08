@@ -1,3 +1,9 @@
+import {
+  orchestrationMailNotice,
+  type AgentMessageSource
+} from '../../../shared/agent-session/agent-session-message-source'
+import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
+import type { JournalMailCustody } from './journal-writer-host-facts'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -31,20 +37,13 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import { journalMailSenderKey } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { SqlQueuedMessageEditLeases } from './journal-sql-edit-leases'
-import { prepareJournalAutomaticSubmission } from './journal-domain-automatic-selection'
-import type {
-  JournalAutomaticPreparation,
-  JournalAutomaticSelection
-} from './journal-automatic-submission'
-
 /** Host-memory facts a queue read needs, sent as data like the writer's facts. */
 export type JournalSqlQueueFacts = {
   reopenFloor: AgentJournalCursor | null
-  mail?: readonly (readonly [string, boolean])[]
+  mail?: JournalMailCustody
 }
 
 export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
-  | { kind: 'automatic-preparation'; selection: JournalAutomaticSelection; now: number }
   | { kind: 'list' }
   | { kind: 'get'; messageId: string }
   | { kind: 'revision' }
@@ -57,25 +56,16 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
 )
 
 export type JournalSqlQueueReadResult =
-  | { kind: 'automatic-preparation'; preparation: JournalAutomaticPreparation }
   | { kind: 'list'; cards: QueuedMessageRow[] }
   | { kind: 'get'; card: QueuedMessageRow | null }
   | { kind: 'revision'; revision: string }
   | { kind: 'cleared-through'; sequence: number }
   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
-  /** The next card is mail from a sender whose availability the host has not answered. */
-  | { kind: 'mail-needed'; card: QueuedMessageRow }
   | { kind: 'failure-holds'; held: boolean }
   | { kind: 'pauses'; pauses: DerivedQueuePause[] }
   | { kind: 'user-stop-in-force'; stop: JournalLatestStop | null }
   /** Whether this handle owes a reopen mark, and where one written now would begin. */
   | { kind: 'reopen-mark'; awaits: boolean; since: number }
-
-class MailNeeded extends Error {
-  constructor(readonly card: QueuedMessageRow) {
-    super('queue read needs mail availability')
-  }
-}
 
 /** Named queue reads on the current cards, typed head facts and persisted edit holds of one snapshot. */
 export function readJournalSqlQueue(
@@ -86,16 +76,6 @@ export function readJournalSqlQueue(
   const target = { sessionId: read.sessionId, epoch: read.epoch }
   const { facts } = operation
   switch (operation.kind) {
-    case 'automatic-preparation':
-      return {
-        kind: 'automatic-preparation',
-        preparation: prepareJournalAutomaticSubmission(
-          read,
-          operation.selection,
-          operation.now,
-          facts
-        )
-      }
     case 'list':
       return { kind: 'list', cards: readJournalDomainQueueList(db, target) }
     case 'get':
@@ -112,32 +92,16 @@ export function readJournalSqlQueue(
         kind: 'cleared-through',
         sequence: readJournalDomainQueueHead(db, target).clearedThrough
       }
-    case 'next-input-card':
-      try {
-        return {
-          kind: 'next-input-card',
-          card: nextJournalDomainQueueCard(db, target, {
-            reopenFloor: facts.reopenFloor,
-            now: operation.now,
-            steer: operation.steer,
-            automatic: operation.automatic,
-            mailUnavailable: (card) => {
-              const known = facts.mail?.find(
-                ([sender]) => sender === journalMailSenderKey(card.body.from!)
-              )
-              if (!known) {
-                throw new MailNeeded(card)
-              }
-              return known[1]
-            }
-          })
-        }
-      } catch (error) {
-        if (error instanceof MailNeeded) {
-          return { kind: 'mail-needed', card: error.card }
-        }
-        throw error
-      }
+    case 'next-input-card': {
+      const selected = nextJournalDomainQueueCard(db, target, {
+        reopenFloor: facts.reopenFloor,
+        now: operation.now,
+        steer: operation.steer,
+        automatic: operation.automatic,
+        mail: facts.mail
+      })
+      return { kind: 'next-input-card', card: selected.kind === 'selected' ? selected.card : null }
+    }
     case 'failure-holds':
       return {
         kind: 'failure-holds',
@@ -192,8 +156,8 @@ export type JournalSqlQueueWrite =
  * every change is the writer's queue command. Nothing about the cards is retained here.
  */
 export class SqlJournalQueuedMessages {
-  /** Mail the orchestration owner cannot confirm now; the host installs it once. */
-  mailUnavailable: ((card: QueuedMessageRow) => boolean) | undefined
+  /** Read-only custody for each sender; the host installs its orchestration owner once. */
+  mailOwed: ((source: AgentMessageSource) => QueuedMessageOwed) | undefined
   readonly editLeases: SqlQueuedMessageEditLeases
   private revisionKey: string
 
@@ -208,19 +172,26 @@ export class SqlJournalQueuedMessages {
   }
 
   /** The host facts every queue read and write carries. */
-  facts(mail?: readonly (readonly [string, boolean])[]): JournalSqlQueueFacts {
+  facts(mail?: JournalMailCustody): JournalSqlQueueFacts {
     return {
       reopenFloor: this.reopenFloor(),
       ...(mail?.length ? { mail } : {})
     }
   }
 
-  /** Answer the writer's or a reader's mail question from the host's installed owner. */
-  answerMail(cards: readonly QueuedMessageRow[]): (readonly [string, boolean])[] {
-    return cards.map((card) => [
-      journalMailSenderKey(card.body.from!),
-      this.mailUnavailable?.(card) ?? false
-    ])
+  answerMail(cards: readonly QueuedMessageRow[]): JournalMailCustody {
+    const mail = new Map<string, QueuedMessageOwed>()
+    for (const card of cards) {
+      const source = card.body.from
+      if (card.state !== 'waiting' || !source || !orchestrationMailNotice(source)) {
+        continue
+      }
+      const sender = journalMailSenderKey(source)
+      if (!mail.has(sender)) {
+        mail.set(sender, this.mailOwed?.(source) ?? 'owed')
+      }
+    }
+    return [...mail]
   }
 
   async failureHolds(): Promise<boolean> {
@@ -244,25 +215,23 @@ export class SqlJournalQueuedMessages {
     return (await this.read({ kind: 'cleared-through' }, 'cleared-through')).sequence
   }
 
-  async nextInputCard(automatic = true, steer = false): Promise<QueuedMessageRow | null> {
-    const mail: (readonly [string, boolean])[] = []
-    const now = this.now()
-    for (;;) {
-      const result = await this.port.read({
-        kind: 'next-input-card',
-        automatic,
-        steer,
-        now,
-        facts: this.facts(mail)
-      })
-      if (result.kind === 'next-input-card') {
-        return result.card
-      }
-      if (result.kind !== 'mail-needed') {
-        throw new Error(`journal queue reader answered ${result.kind} for next-input-card`)
-      }
-      mail.push(...this.answerMail([result.card]))
+  async nextInputCard(
+    automatic = true,
+    steer = false,
+    cards?: readonly QueuedMessageRow[]
+  ): Promise<QueuedMessageRow | null> {
+    const mail = this.answerMail(cards ?? (await this.list()))
+    const result = await this.port.read({
+      kind: 'next-input-card',
+      automatic,
+      steer,
+      now: this.now(),
+      facts: this.facts(mail)
+    })
+    if (result.kind !== 'next-input-card') {
+      throw new Error(`journal queue reader answered ${result.kind} for next-input-card`)
     }
+    return result.card
   }
 
   async pauses(): Promise<DerivedQueuePause[]> {

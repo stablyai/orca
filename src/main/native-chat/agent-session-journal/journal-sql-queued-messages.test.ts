@@ -162,13 +162,12 @@ it('lists current and still-owed handoff cards, and selects past persisted holds
 
   const next = (automatic: boolean, unavailable?: boolean) =>
     f.read(
-      { kind: 'next-input-card', automatic, steer: false },
-      unavailable === undefined ? {} : { mail: [[journalMailSenderKey(from), unavailable]] }
+      { kind: 'next-input-card', automatic, steer: false, now: Date.now() },
+      unavailable === undefined
+        ? {}
+        : { mail: [[journalMailSenderKey(from), unavailable ? 'unavailable' : 'owed']] }
     )
-  expect(next(true)).toMatchObject({
-    kind: 'mail-needed',
-    card: { messageId: 'mail', body: { from } }
-  })
+  expect(next(true)).toEqual({ kind: 'next-input-card', card: null })
   expect(next(true, false)).toMatchObject({ card: { messageId: 'mail' } })
   expect(next(true, true)).toMatchObject({ card: { messageId: 'next' } })
   const queue = new SqlJournalQueuedMessages(
@@ -176,12 +175,16 @@ it('lists current and still-owed handoff cards, and selects past persisted holds
       read: async ({ facts, ...operation }) => f.read(operation, facts),
       write: async () => {
         throw new Error('this reader fixture does not write')
+      },
+      edit: async () => {
+        throw new Error('this reader fixture does not edit')
       }
     },
-    () => null
+    () => null,
+    Date.now,
+    'epoch:11'
   )
-  queue.mailUnavailable = (card) => card.messageId === 'mail' && card.body.from?.kind === 'agent'
-  expect(await queue.automaticMailFacts()).toEqual([[journalMailSenderKey(from), true]])
+  queue.mailOwed = () => 'unavailable'
   expect(await queue.nextInputCard()).toMatchObject({ messageId: 'next' })
 
   f.hold('mail')

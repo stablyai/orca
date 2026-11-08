@@ -3,25 +3,22 @@ import { isReadableAgentSessionStoreRecord } from '../../runtime/agent-session/r
 import { JournalSqlStatusContext } from './journal-sql-status-context'
 import { readJournalSqlCurrentWork } from './journal-sql-work-read'
 import { readJournalSqlInput } from './journal-sql-input-reads'
-import { nextJournalDomainQueueCard } from './journal-domain-submission-consume'
-import { journalDomainQueueRow } from './journal-domain-queue-rows'
+import {
+  nextJournalDomainQueueCard,
+  type JournalDomainQueuePick
+} from './journal-domain-submission-consume'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type {
-  JournalAutomaticPreparation,
-  JournalAutomaticSelection
-} from './journal-automatic-submission'
+import type { JournalAutomaticSelection } from './journal-automatic-submission'
 import type { JournalSqlQueueFacts } from './journal-sql-queued-messages'
-import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 
-/** Preparation and claim use the same persisted gates and the same fixed edit-hold instant. */
+/** Current work and ordered cards are decided at the same fixed edit-hold instant. */
 export function selectJournalAutomaticSubmission(
   scope: JournalSqlScope,
   selection: JournalAutomaticSelection,
   now: number,
-  facts: JournalSqlQueueFacts,
-  mailUnavailable: (card: QueuedMessageRow) => boolean
-): { card: QueuedMessageRow | null; steer: boolean; command: boolean } {
-  const none = { card: null, steer: false, command: false }
+  facts: JournalSqlQueueFacts
+): JournalDomainQueuePick & { steer: boolean; command: boolean } {
+  const none = { kind: 'selected' as const, card: null, steer: false, command: false }
   const row = scope.db
     .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
     .get(scope.sessionId)
@@ -55,38 +52,14 @@ export function selectJournalAutomaticSubmission(
   }
   const steer = activeTurnId !== undefined
   return {
-    card: nextJournalDomainQueueCard(scope.db, scope, {
+    ...nextJournalDomainQueueCard(scope.db, scope, {
       reopenFloor: facts.reopenFloor,
       now,
       steer,
       automatic: true,
-      mailUnavailable
+      mail: facts.mail
     }),
     steer,
     command: activeTurnId?.startsWith('compact:') === true
-  }
-}
-
-export function prepareJournalAutomaticSubmission(
-  scope: JournalSqlScope,
-  selection: JournalAutomaticSelection,
-  now: number,
-  facts: JournalSqlQueueFacts
-): JournalAutomaticPreparation {
-  let mail: JournalAutomaticPreparation['mail'] = null
-  selectJournalAutomaticSubmission(scope, selection, now, facts, (card) => {
-    const current = journalDomainQueueRow(scope.db, scope, card.messageId)!
-    mail = { messageId: card.messageId, revision: current.revision, source: card.body.from! }
-    return false
-  })
-  const head = scope.db
-    .prepare('SELECT queue_revision FROM journal_chat_state WHERE session_id=? AND epoch=?')
-    .get(...scope.prefix)!
-  return {
-    sessionId: scope.sessionId,
-    epoch: scope.epoch,
-    handle: selection.authority.handle,
-    queueRevision: Number(head.queue_revision),
-    mail
   }
 }

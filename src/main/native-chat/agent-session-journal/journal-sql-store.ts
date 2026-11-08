@@ -1,3 +1,6 @@
+import { writeJournalAutomaticSubmission } from './journal-sql-automatic-submission'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import { JournalGoalAttachmentInverse } from './writing/journal-goal-attachment-inverse'
 import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -33,6 +36,7 @@ export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: '
 export type JournalSqlStorePreparation = {
   facts?: Omit<JournalWriterHostFacts, 'identity'>
   receipt?: JournalOperationReceipt
+  custody?: (source: AgentMessageSource) => QueuedMessageOwed
   /** Adopt host facts staged by prepare only after the writer acknowledges their commit. */
   settle?: (commit: JournalWriterCommit | undefined) => void
 }
@@ -151,13 +155,17 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
           }
           staged = await preparation.receipt.stage(context)
         }
-        commit = await writer.write({
+        const command = {
           target: this.target,
           operation,
           facts,
           savedAt,
           ...(staged ? { effects: staged.effects } : {})
-        })
+        }
+        commit =
+          operation.kind === 'automatic-submission'
+            ? await writeJournalAutomaticSubmission(writer, command, preparation.custody)
+            : await writer.write(command)
       } catch (error) {
         preparation.settle?.(undefined)
         staged?.settle(undefined)

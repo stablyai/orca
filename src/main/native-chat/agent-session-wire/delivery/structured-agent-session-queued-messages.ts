@@ -191,8 +191,6 @@ export class StructuredAgentSessionQueuedMessageDrain {
     )
     if (result.kind === 'claimed') {
       this.deps.wakeDelivery(sessionId)
-    } else if (result.kind === 'changed' && result.retry) {
-      this.schedule(sessionId)
     } else if (result.kind === 'failed') {
       throw restoreJournalSqlFailure(result.failure)
     }
