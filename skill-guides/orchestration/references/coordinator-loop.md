@@ -19,3 +19,22 @@ On every wake, start the Tasks `task-list --ready` shows.
 A later `run-create` keeps your earlier Runs: their mail still wakes you, but
 commands without `--run` use the newest Run, so pass `--run <id>` for an earlier
 one. `run-use` keeps only the Run it names.
+
+## A coordinator outside Orca
+
+A daemon, MCP server, or other process with no Orca terminal coordinates as a
+saved runtime environment (`orca environment add`) instead of a pane:
+
+```text
+ORCA orchestration run-create --objective "<goal>" --external --environment <name>
+ORCA orchestration worker-start --spec "<task>" --worktree id:<worktree_id> --agent codex --environment <name>
+ORCA orchestration check --wait --types worker_done,escalation,question --environment <name>
+```
+
+On the Orca host itself it pairs from a profile of its own
+(`ORCA_USER_DATA_PATH`), since Orca does not save a pairing into its own
+runtime's profile; keep that variable set for every later `--environment`
+command. No pane wakes it, so `check --wait` is its loop. It has no workspace, so name
+one with `--worktree`. A terminal that runs `run-use` on its Run takes it over.
+Inside an Orca terminal these commands act as that terminal, not as the
+environment.

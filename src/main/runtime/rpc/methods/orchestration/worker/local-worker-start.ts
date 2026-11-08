@@ -64,36 +64,29 @@ export async function startLocalWorker(args: {
   const chat = terminal ? chatAssigneeOf(terminal) : null
   const requestedWorktree = params.worktree ?? 'current'
   const createsWorktree = requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
-  const creationTargetFor = (callerWorktreeId: string) =>
+  // Only these placements read the caller's own workspace; an external coordinator has none.
+  const callerWorktreeId = () =>
+    resolveDispatchCallerWorktreeId(runtime, params.from, callerSession)
+  const creationTargetFor = async () =>
     resolveWorkerWorktreeCreationTarget({
       runtime,
       requestedWorktree,
       repo: params.repo,
-      callerWorktreeId
+      callerWorktreeId: await callerWorktreeId()
     })
-  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () => {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
-    return createsWorktree
-      ? { repo: (await creationTargetFor(callerWorkspaceId)).repoSelector }
-      : {
-          worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree
-        }
-  })
+  const existingTarget = async () =>
+    requestedWorktree === 'current' ? `id:${await callerWorktreeId()}` : requestedWorktree
+  const launchParams = await resolveWorkerConfiguredAgentParams(runtime, params, async () =>
+    createsWorktree
+      ? { repo: (await creationTargetFor()).repoSelector }
+      : { worktree: await existingTarget() }
+  )
   let openCodeModelLaunchSupported = false
   if (!createsWorktree && launchParams.agent === 'opencode' && launchParams.model) {
-    const callerWorkspaceId = await resolveDispatchCallerWorktreeId(
-      runtime,
-      params.from,
-      callerSession
-    )
     openCodeModelLaunchSupported = await probeWorkerOpenCodeModelLaunchSupport(
       runtime,
       launchParams,
-      { worktree: requestedWorktree === 'current' ? `id:${callerWorkspaceId}` : requestedWorktree }
+      { worktree: await existingTarget() }
     )
   }
 
@@ -104,14 +97,7 @@ export async function startLocalWorker(args: {
     openCodeModelLaunchSupported
   })
 
-  const coordinatorWorktreeId = await resolveDispatchCallerWorktreeId(
-    runtime,
-    params.from,
-    callerSession
-  )
-  const creationTarget = createsWorktree
-    ? await creationTargetFor(coordinatorWorktreeId)
-    : undefined
+  const creationTarget = createsWorktree ? await creationTargetFor() : undefined
   if (creationTarget) {
     await assertOrchestrationWorktreeCreationSupported({
       runtime,
@@ -120,11 +106,7 @@ export async function startLocalWorker(args: {
     })
   }
   let resolvedWorktree: Awaited<ReturnType<typeof placeWorkerAgent>>['worktree'] | undefined =
-    creationTarget
-      ? undefined
-      : requestedWorktree === 'current'
-        ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
-        : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+    creationTarget ? undefined : await runtime.showManagedTerminalWorkspace(await existingTarget())
   if (terminal) {
     await assertExplicitWorkerUsable({
       runtime,
@@ -262,7 +244,8 @@ export async function startLocalWorker(args: {
       dispatchDepth: started.dispatch.depth,
       structuredSession,
       terminalHandle,
-      coordinatorHandle: params.from,
+      // The placeholder dispatch uses without --from; reports route to the Run either way.
+      coordinatorHandle: params.from || 'coordinator',
       devMode: params.devMode,
       requestId: orchestrationMutation?.requestId ?? started.dispatch.id,
       agent: agent ?? null,

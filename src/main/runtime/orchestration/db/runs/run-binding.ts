@@ -171,6 +171,7 @@ export function bindRun(
           `UPDATE runs
            SET coordinator_handle = ?, coordinator_pane_key = ?, coordinator_orca_session_id = ?,
                coordinator_orca_session_id_generation = consumer_generation + 1,
+               coordinator_client_fingerprint = NULL,
                consumer_generation = consumer_generation + 1,
                updated_at = datetime('now')
            WHERE id = ?`

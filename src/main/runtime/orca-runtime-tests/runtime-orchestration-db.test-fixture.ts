@@ -94,6 +94,7 @@ export function runRow(fields: Partial<RunRow>): RunRow {
     coordinator_pane_key: null,
     coordinator_orca_session_id: null,
     coordinator_orca_session_id_generation: null,
+    coordinator_client_fingerprint: null,
     consumer_generation: 0,
     legacy: 0,
     created_at: createdAt,

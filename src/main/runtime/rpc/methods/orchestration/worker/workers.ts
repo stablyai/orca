@@ -1,7 +1,7 @@
 import { stopHelperAfterStart } from './worker-stop'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { z } from 'zod'
-import { defineMethod, type RpcContext } from '../../../core'
+import { defineMethod, InvalidArgumentError, type RpcContext } from '../../../core'
 import { startFederatedWorker } from '../federation/federated-worker-start'
 import { startLocalWorker } from './local-worker-start'
 import type { WorkerFollowUp } from './worker-follow-up-placement'
@@ -27,10 +27,16 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from './worker-start-prom
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../../shared/orca-session-address-prefix'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as SESSION_CODES } from '../../../../../../shared/orchestration/orchestration-session-caller-codes'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
+import { externalCoordinatorRun } from '../../../external-coordinator-invocation'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 
 type WorkerStartContext = Pick<
   RpcContext,
-  'runtime' | 'orchestrationMutation' | 'orchestrationCompatibilityEvidence' | 'orchestrationCaller'
+  | 'runtime'
+  | 'orchestrationMutation'
+  | 'orchestrationCompatibilityEvidence'
+  | 'orchestrationCaller'
+  | 'externalCoordinatorAuthority'
 >
 
 export const ORCHESTRATION_WORKER_START_METHODS = [
@@ -43,6 +49,22 @@ export const ORCHESTRATION_WORKER_START_METHODS = [
   })
 ]
 
+// Each reads the caller's own workspace, which an external coordinator does not have.
+const EXTERNAL_UNPLACEABLE_WORKTREES: ReadonlySet<string> = new Set([
+  'current',
+  'new-child',
+  'new-top-level'
+])
+
+/** An external coordinator creates its Run with run-create --external; worker-start never makes one for it. */
+function externalWorkerStartRun(
+  authority: NonNullable<RpcContext['externalCoordinatorAuthority']>,
+  explicit: RunRow | undefined
+): { bindRun: () => { run: RunRow; created: false }; helperCreator?: undefined } {
+  const run = externalCoordinatorRun(authority, explicit)
+  return { bindRun: () => ({ run: externalCoordinatorRun(authority, run), created: false }) }
+}
+
 /** worker-start, and a follow-up sent to a finished worker, which is worker-start run for the sender. */
 export async function startWorker(
   params: z.infer<typeof WorkerStartParams>,
@@ -50,7 +72,8 @@ export async function startWorker(
     runtime,
     orchestrationMutation,
     orchestrationCompatibilityEvidence,
-    orchestrationCaller
+    orchestrationCaller,
+    externalCoordinatorAuthority
   }: WorkerStartContext,
   followUp?: WorkerFollowUp
 ): Promise<unknown> {
@@ -70,11 +93,24 @@ export async function startWorker(
   }
   const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
   const db = runtime.getOrchestrationDb()
-  const coordinator = resolveOrchestrationCaller(runtime, {
-    callerTerminalHandle: params.from,
-    callerEvidence: orchestrationCompatibilityEvidence,
-    callerSession: orchestrationCaller
-  })
+  const external = followUp ? undefined : externalCoordinatorAuthority
+  if (!params.from && !external) {
+    throw new InvalidArgumentError('Missing --from')
+  }
+  if (external && (!params.worktree || EXTERNAL_UNPLACEABLE_WORKTREES.has(params.worktree))) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      'An external coordinator has no workspace of its own. Pass --worktree id:<id> or the path of an existing workspace. No effects were applied.',
+      { effectsApplied: false }
+    )
+  }
+  const coordinator = external
+    ? null
+    : resolveOrchestrationCaller(runtime, {
+        callerTerminalHandle: params.from,
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerSession: orchestrationCaller
+      })
   if (params.spec) {
     // Before the Run resolves, so a refused spec cannot leave a new Run bound.
     await assertWorkerStartTaskSpecWithinPromptBudget(params.spec)
@@ -92,20 +128,22 @@ export async function startWorker(
     : undefined
   const { bindRun, helperCreator } = qualified
     ? { bindRun: () => ({ run: qualified.run, created: false }), helperCreator: qualified.creator }
-    : resolveWorkerStartRun(runtime, {
-        coordinator,
-        from: params.from,
-        callerSession: orchestrationCaller,
-        runId: params.run,
-        // The Run takes the title its first Task gets.
-        objective: params.spec
-          ? buildOrchestrationTaskDisplayMetadata({
-              spec: params.spec,
-              taskTitle: params.taskTitle
-            }).taskTitle
-          : undefined,
-        taskReferences: [...(params.parent ? [params.parent] : []), ...(taskDeps ?? [])]
-      })
+    : external
+      ? externalWorkerStartRun(external, params.run ? db.getRun(params.run) : undefined)
+      : resolveWorkerStartRun(runtime, {
+          coordinator,
+          from: params.from,
+          callerSession: orchestrationCaller,
+          runId: params.run,
+          // The Run takes the title its first Task gets.
+          objective: params.spec
+            ? buildOrchestrationTaskDisplayMetadata({
+                spec: params.spec,
+                taskTitle: params.taskTitle
+              }).taskTitle
+            : undefined,
+          taskReferences: [...(params.parent ? [params.parent] : []), ...(taskDeps ?? [])]
+        })
   // Name the Run in every receipt so a reused, stale binding is visible.
   const withRun = (receipt: unknown): unknown => {
     if (!receipt || typeof receipt !== 'object') {

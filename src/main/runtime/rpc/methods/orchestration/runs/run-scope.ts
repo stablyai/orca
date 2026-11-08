@@ -18,6 +18,10 @@ import {
   workerRunBindingRefusal
 } from '../../../../orchestration/db/runs/worker-run-binding'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import {
+  externalCoordinatorRun,
+  type ExternalCoordinatorAuthority
+} from '../../../external-coordinator-invocation'
 
 export type RunScopeParams = {
   runId?: string
@@ -29,6 +33,8 @@ export type RunScopeParams = {
   legacyCoordinatorRunId?: string
   // Attest user-supplied handles against this trusted handle.
   callerEvidence?: OrchestrationCompatibilityEvidence
+  /** Dispatcher-resolved; when set the caller is this paired client, never a declared handle. */
+  externalCoordinator?: ExternalCoordinatorAuthority
 }
 
 // Mutable Run bindings require attested callers to name only themselves.
@@ -152,6 +158,9 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
 
   if (!params.requireCurrentConsumer && explicit) {
     return explicit
+  }
+  if (params.externalCoordinator) {
+    return externalCoordinatorRun(params.externalCoordinator, explicit)
   }
   if (!params.callerTerminalHandle) {
     throw new OrchestrationError(

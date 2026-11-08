@@ -14,6 +14,7 @@ import type { z } from 'zod'
 import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { checkRunPendingMail } from './check-run-pending-mail'
 import { FEDERATION_RELAY_WAIT_REARM_MS } from '../../../../orchestration/federation/relay/federation-relay-scheduler'
+import type { ExternalCoordinatorAuthority } from '../../../external-coordinator-invocation'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
 
@@ -30,6 +31,7 @@ export async function checkRunMailbox(args: {
   revalidateLegacyCoordinator: (() => string) | undefined
   orchestrationCompatibilityEvidence: RpcContext['orchestrationCompatibilityEvidence']
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
+  externalCoordinator: ExternalCoordinatorAuthority | undefined
 }): Promise<unknown> {
   const {
     params,
@@ -42,7 +44,8 @@ export async function checkRunMailbox(args: {
     signal,
     legacyCoordinatorRunId,
     revalidateLegacyCoordinator,
-    orchestrationCompatibilityEvidence
+    orchestrationCompatibilityEvidence,
+    externalCoordinator
   } = args
   const routeDirectSnapshot = async (
     runId: string,
@@ -61,14 +64,18 @@ export async function checkRunMailbox(args: {
     callerSession,
     requireCurrentConsumer: true,
     legacyCoordinatorRunId,
-    callerEvidence: orchestrationCompatibilityEvidence
+    callerEvidence: orchestrationCompatibilityEvidence,
+    externalCoordinator
   })
   const generation = run.consumer_generation
   const address = `run:${run.id}`
   runtime.ensureOrchestrationFederationRelay(run.id)
-  await routeDirectSnapshot(run.id, handle, (throughSequence) =>
-    db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
-  )
+  // An external coordinator has no handle of its own that direct mail could name.
+  if (!externalCoordinator) {
+    await routeDirectSnapshot(run.id, handle, (throughSequence) =>
+      db.routeUnreadDirectMessagesToRunMailbox(run.id, handle, throughSequence)
+    )
+  }
   const coordinatorHandle = run.coordinator_handle
   if (coordinatorHandle && coordinatorHandle !== handle) {
     await routeDirectSnapshot(run.id, coordinatorHandle, (throughSequence) =>
@@ -84,7 +91,8 @@ export async function checkRunMailbox(args: {
       callerSession,
       requireCurrentConsumer: true,
       legacyCoordinatorRunId,
-      callerEvidence: orchestrationCompatibilityEvidence
+      callerEvidence: orchestrationCompatibilityEvidence,
+      externalCoordinator
     })
     if (currentRun.consumer_generation !== generation) {
       throw new OrchestrationError(

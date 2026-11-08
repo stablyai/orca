@@ -2,9 +2,11 @@ import { z } from 'zod'
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../orchestration/orchestration-run-pagination'
 
+// An external coordinator names no terminal; the dispatcher binds it to its paired client instead.
 export const RunCreateParams = z.object({
   objective: requiredString('Missing --objective'),
-  from: requiredString('Missing coordinator terminal')
+  from: OptionalString,
+  external: OptionalBoolean
 })
 
 export const RunUseParams = z.object({
@@ -13,7 +15,7 @@ export const RunUseParams = z.object({
   takeoverLegacy: OptionalBoolean
 })
 
-export const RunCurrentParams = z.object({ from: requiredString('Missing coordinator terminal') })
+export const RunCurrentParams = z.object({ from: OptionalString })
 
 export const RunListParams = z.object({
   limit: z.number().int().min(1).max(ORCHESTRATION_RUN_PAGE_LIMIT).optional(),

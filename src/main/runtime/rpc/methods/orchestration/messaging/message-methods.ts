@@ -41,7 +41,13 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     params: TaskCreateParams,
     handler: (
       params,
-      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+      {
+        externalCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime,
+        legacyCoordinatorRunId
+      }
     ) => {
       const db = runtime.getOrchestrationDb()
       const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
@@ -51,7 +57,8 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
+        callerSession: orchestrationCaller,
+        externalCoordinator: externalCoordinatorAuthority
       })
       // A handle-less session creates root Tasks: Task lineage is recorded by terminal only.
       const creatorHandle = params.callerTerminalHandle
@@ -90,7 +97,13 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     params: TaskListParams,
     handler: (
       params,
-      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+      {
+        externalCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime,
+        legacyCoordinatorRunId
+      }
     ) => {
       const db = runtime.getOrchestrationDb()
       const explicitRun = params.run ? db.getRun(params.run) : undefined
@@ -103,7 +116,8 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
               requireCurrentConsumer: params.run === undefined,
               legacyCoordinatorRunId,
               callerEvidence: orchestrationCompatibilityEvidence,
-              callerSession: orchestrationCaller
+              callerSession: orchestrationCaller,
+              externalCoordinator: externalCoordinatorAuthority
             })
       // Add nullable assignee_handle/dispatch_id without changing legacy non-dispatched rows.
       const joined = db.listTasksWithDispatch({
@@ -133,7 +147,13 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     params: TaskUpdateParams,
     handler: (
       params,
-      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+      {
+        externalCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime,
+        legacyCoordinatorRunId
+      }
     ) => {
       const db = runtime.getOrchestrationDb()
       const run = resolveRunScope(runtime, {
@@ -142,7 +162,8 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
+        callerSession: orchestrationCaller,
+        externalCoordinator: externalCoordinatorAuthority
       })
       const existing = db.getTask(params.id)
       if (!existing || existing.run_id !== run.id) {

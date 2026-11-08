@@ -16,6 +16,7 @@ export const RUN_COLUMNS = [
   'coordinator_pane_key',
   'coordinator_orca_session_id',
   'coordinator_orca_session_id_generation',
+  'coordinator_client_fingerprint',
   'consumer_generation',
   'legacy',
   'created_at',

@@ -24,6 +24,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
   handler: async (
     params,
     {
+      externalCoordinatorAuthority,
       orchestrationCompatibilityEvidence,
       orchestrationCaller,
       runtime,
@@ -105,7 +106,8 @@ export const ORCHESTRATION_REPLY_METHOD = defineMethod({
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
+        callerSession: orchestrationCaller,
+        externalCoordinator: externalCoordinatorAuthority
       })
       const answered = db.answerQuestion({
         messageId: question.message_id,

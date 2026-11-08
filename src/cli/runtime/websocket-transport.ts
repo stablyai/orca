@@ -6,6 +6,7 @@ import type {
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { ORCHESTRATION_EXTERNAL_COORDINATOR_RUNTIME_CAPABILITY } from '../../shared/orchestration/orchestration-runtime-capabilities'
 import {
   sendRemoteRuntimeRequest,
   sendRemoteRuntimeRequestWithStatusPreflight
@@ -14,9 +15,11 @@ import type { RuntimeStatus } from '../../shared/runtime-types'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 
 // Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.
+// Only the CLI may coordinate as its paired device; desktop and phone sockets never negotiate it.
 const CLI_CLIENT_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
-  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY
+  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
+  ORCHESTRATION_EXTERNAL_COORDINATOR_RUNTIME_CAPABILITY
 ] as const
 
 export async function sendWebSocketRequest<TResult>(
