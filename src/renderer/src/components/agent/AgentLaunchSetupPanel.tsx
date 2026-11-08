@@ -4,7 +4,8 @@ import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
 import {
   agentLaunchSetupOptionRows,
   agentLaunchSetupRowGroups,
-  agentLaunchSetupCatalogState as catalogOf
+  agentLaunchSetupCatalogState as catalogOf,
+  agentLaunchSetupModelRows
 } from './agent-launch-setup-option-rows'
 import { useRef, useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
@@ -89,6 +90,13 @@ export function AgentLaunchSetupPanel({
   const { hasModels, catalogPending, catalogMessage } = catalogOf(entry, models, currentModel, mode)
   const modelInArguments = textActionArgumentsOwnModel(entry, draft)
   const modelDisabled = disabled || defaultsPending || catalogPending
+  const modelRows = agentLaunchSetupModelRows(
+    models,
+    currentModel,
+    modelQuery,
+    legacy,
+    modelInArguments
+  )
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
     options,
@@ -177,9 +185,11 @@ export function AgentLaunchSetupPanel({
       }}
     >
       <Command
+        // Why: remount once defaults settle so the list starts on the resolved model.
+        key={String(defaultsPending)}
         surface="inline"
         density="model"
-        defaultValue={currentModel}
+        defaultValue={modelRows.start}
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
@@ -239,20 +249,8 @@ export function AgentLaunchSetupPanel({
                 {t('agentPicker.legacyModels', 'Legacy models')}
               </CommandItem>
             ) : null}
-            {[
-              ...models.filter(
-                (model) =>
-                  !model.hidden &&
-                  (model.id === currentModel || modelQuery || Boolean(model.isLegacy) === legacy)
-              ),
-              // Why one keyed list: when the catalog lists an unlisted current model, its row keeps
-              // its identity, so the highlight stays on it instead of jumping to the first model.
-              ...(currentModel && !models.some((model) => model.id === currentModel)
-                ? [{ id: currentModel, label: currentModel, unlisted: true }]
-                : [])
-            ].map((model) => {
-              const current =
-                'unlisted' in model || (currentModel === model.id && !modelInArguments)
+            {modelRows.rows.map((model) => {
+              const current = model.unlisted || (currentModel === model.id && !modelInArguments)
               return (
                 <CommandItem
                   key={model.id}
@@ -260,9 +258,11 @@ export function AgentLaunchSetupPanel({
                   keywords={[model.label]}
                   disabled={modelDisabled}
                   data-current={current}
-                  onSelect={() =>
-                    'unlisted' in model || editDraft({ kind: 'choice', patch: { model: model.id } })
-                  }
+                  onSelect={() => {
+                    if (!model.unlisted) {
+                      editDraft({ kind: 'choice', patch: { model: model.id } })
+                    }
+                  }}
                 >
                   {model.label}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">

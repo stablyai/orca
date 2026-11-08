@@ -31,12 +31,13 @@ const listed: AgentPickerEntry = {
   }
 }
 const draft = agentPickerDraft(opencode)
-const render = (own: AgentPickerEntry) =>
+const render = (own: AgentPickerEntry, mode?: 'select') =>
   act(() =>
     root.render(
       <TooltipProvider>
         <AgentLaunchSetupPanel
           entry={own}
+          mode={mode}
           draft={draft}
           getDraft={() => draft}
           onDraftChange={() => {}}
@@ -58,4 +59,31 @@ it('keeps the current model highlighted when the catalog arrives and lists it', 
   expect(highlighted()).toBe('opencode/gpt-5.3-codex')
   render(listed)
   expect(highlighted()).toBe('opencode/gpt-5.3-codex')
+})
+
+it('starts on the resolved model when defaults settle after the panel opens', () => {
+  render({ ...listed, arguments: undefined, defaultsPending: true })
+  render(listed)
+  expect(highlighted()).toBe('opencode/gpt-5.3-codex')
+})
+
+it('keeps an Arguments-owned text action on its default instead of the inherited model', () => {
+  render(
+    {
+      ...listed,
+      arguments: '',
+      terminal: { model: 'opencode/gpt-5.3-codex' },
+      textGeneration: {
+        defaultLabel: 'Default',
+        modelInArguments: true,
+        effortInArguments: false,
+        modelArgumentsUnrecognized: false,
+        effortArgumentsUnrecognized: false,
+        effortInModel: false,
+        effortByModel: {}
+      }
+    },
+    'select'
+  )
+  expect(highlighted()).toBe('__text_action_default__')
 })
