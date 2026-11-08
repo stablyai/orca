@@ -2,12 +2,14 @@ import { StyleSheet } from 'react-native'
 import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 
-const KEY_HEIGHT = 32
-const KEY_ROW_HEIGHT = 46
+const KEY_HEIGHT = 40
+const KEY_ROW_HEIGHT = 52
+const KEY_MIN_WIDTH = 44
+const KEY_LABEL_SIZE = 16
 const KEY_GAP = spacing.sm
 const KEY_RADIUS = radii.control
 
-/** Grows each 32 pt key to the row's height and halfway into its neighbours' gaps. */
+/** Grows each 40 pt key to the row's height and halfway into its neighbours' gaps. */
 export const TERMINAL_KEY_HIT_SLOP = {
   top: (KEY_ROW_HEIGHT - KEY_HEIGHT) / 2,
   bottom: (KEY_ROW_HEIGHT - KEY_HEIGHT) / 2,
@@ -15,10 +17,16 @@ export const TERMINAL_KEY_HIT_SLOP = {
   right: KEY_GAP / 2
 } as const
 
+export const TERMINAL_KEY_METRICS = {
+  height: KEY_HEIGHT,
+  minWidth: KEY_MIN_WIDTH,
+  labelSize: KEY_LABEL_SIZE
+} as const
+
 const key = {
   height: KEY_HEIGHT,
-  minWidth: 34,
-  paddingHorizontal: 9,
+  minWidth: KEY_MIN_WIDTH,
+  paddingHorizontal: 12,
   borderRadius: KEY_RADIUS,
   flexDirection: 'row',
   alignItems: 'center',
@@ -72,7 +80,7 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   },
   keyText: {
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: KEY_LABEL_SIZE,
     fontWeight: '500',
     fontFamily: typography.monoFamily
   },
