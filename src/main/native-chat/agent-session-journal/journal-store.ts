@@ -16,11 +16,7 @@ import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { journalWroteBeforeOpen } from './replay/journal-cursor'
 import type { JournalHostDatabase } from './database/journal-host-database'
-import {
-  markJournalPendingSubmissionsUnknown,
-  rejectJournalPendingSubmissions,
-  rejectJournalQueuedSubmissions
-} from './submissions/journal-pending-submission-recovery'
+import * as recovery from './submissions/journal-pending-submission-recovery'
 import { createJournalReducerState, type JournalReducerState } from './projection/journal-reducer'
 
 import { resolveJournalItemId } from './projection/journal-item-echo'
@@ -40,6 +36,7 @@ import * as provenance from './projection/journal-item-provenance'
 import { createJournalStoreCollaborators } from './store-lifecycle/journal-store-collaborators'
 import { journalThreadGoalSource } from './projection/journal-thread-goal-source'
 import * as settlement from './writing/journal-generation-settlement'
+import { settleJournalStartFailure } from './writing/journal-start-failure-settlement'
 import { mutateJournalPrompt } from './writing/journal-prompt-mutation'
 // Each session owns its fold and queue; all statements use the host's shared database connection.
 
@@ -357,6 +354,9 @@ export class AgentSessionJournal {
   settleUnheldTurns = (input: contracts.JournalUnheldTurnsSettlementInput) =>
     settlement.settleJournalUnheldTurns(() => this.state, this.lifecycleBatchAppender, input)
 
+  settleStartFailure = (input: contracts.JournalStartFailureSettlementInput) =>
+    settleJournalStartFailure(() => this.state, this.lifecycleBatchAppender, input)
+
   mutatePrompt = (input: contracts.JournalPromptMutationInput, receipt?: JournalOperationReceipt) =>
     mutateJournalPrompt({ state: () => this.state, writer: this.rowWriter }, input, receipt)
 
@@ -378,17 +378,17 @@ export class AgentSessionJournal {
 
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
   markPendingSubmissionsUnknown = (fence: number, reason?: string): Promise<string[]> =>
-    markJournalPendingSubmissionsUnknown(this, fence, reason)
+    recovery.markJournalPendingSubmissionsUnknown(this, fence, reason)
 
   /** Failed initialization proves handed-over but unanswered sends never ran. */
   rejectPendingSubmissions = (fence: number, rejection: AgentJournalDispatchRejection) =>
-    rejectJournalPendingSubmissions(this, fence, rejection)
+    recovery.rejectJournalPendingSubmissions(this, fence, rejection)
 
   rejectQueuedSubmissions = (
     fence: number,
     rejection: AgentJournalDispatchRejection,
     which?: (submission: journal.AgentJournalSubmission) => boolean
-  ): Promise<string[]> => rejectJournalQueuedSubmissions(this, fence, rejection, which)
+  ): Promise<string[]> => recovery.rejectJournalQueuedSubmissions(this, fence, rejection, which)
 
   /** Reset provider presentation and invalidate public cursors, retaining canonical input. */
   async rollEpoch(reason: rows.AgentJournalEpochReason, fence: number) {

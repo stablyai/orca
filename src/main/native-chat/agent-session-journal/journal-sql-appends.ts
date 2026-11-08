@@ -14,6 +14,7 @@ import type {
   JournalDeadGenerationSettlementInput,
   JournalPromptMutationInput,
   JournalUnheldTurnsSettlementInput,
+  JournalStartFailureSettlementInput,
   JournalSubmissionConsume,
   JournalSubmissionInput,
   JournalTombstoneInput,
@@ -102,6 +103,10 @@ export abstract class SqlJournalAppends {
 
   settleUnheldTurns(input: JournalUnheldTurnsSettlementInput): Promise<void> {
     return this.answerOf(this.write({ kind: 'unheld-turns-settle', input }))
+  }
+
+  settleStartFailure(input: JournalStartFailureSettlementInput): Promise<void> {
+    return this.answerOf(this.write({ kind: 'start-failure-settle', input }))
   }
 
   mutatePrompt(

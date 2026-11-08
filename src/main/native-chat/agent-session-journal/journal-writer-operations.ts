@@ -10,10 +10,7 @@ import {
   composeJournalOperationReceipts,
   type JournalOperationReceipt
 } from './writing/journal-row-writer'
-import type {
-  AgentJournalCursor,
-  AgentJournalItemIdentity
-} from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type * as ids from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   JournalItemAppendOptions,
   JournalLateDispatchInput,
@@ -105,10 +102,10 @@ export type JournalWriterInputOperation =
       /** The host's current-work answer, read on its lane just before this command. */
       liveTurnId: string | null
     }
-  | { kind: 'goal-withdraw'; identity: AgentJournalItemIdentity; fence: number }
+  | { kind: 'goal-withdraw'; identity: ids.AgentJournalItemIdentity; fence: number }
   | {
       kind: 'item-claiming'
-      identity: AgentJournalItemIdentity
+      identity: ids.AgentJournalItemIdentity
       body: AgentJournalMessageItem
       options: JournalItemAppendOptions
     }
@@ -154,6 +151,7 @@ export async function runJournalWriterOperation(
     case 'stale-settle':
     case 'dead-generation-settle':
     case 'unheld-turns-settle':
+    case 'start-failure-settle':
     case 'prompt-mutate':
       return runJournalWriterSettlementOperation(session, operation, receipt)
     case 'command-settle':
@@ -306,7 +304,7 @@ function settled<T>(run: Promise<T>): Promise<JournalWriterSettled<T>> {
   )
 }
 
-function cursorOf(rows: readonly JournalRow[]): AgentJournalCursor | null {
+function cursorOf(rows: readonly JournalRow[]): ids.AgentJournalCursor | null {
   const row = rows.at(-1)
   return row ? { epoch: row.epoch, sequence: row.seq } : null
 }
