@@ -136,8 +136,8 @@ export function useMobileTasksItemDetailLoading<Model extends ItemDetailLoadingI
             iid: actionItem.source.number,
             type: actionItem.source.type,
             projectRef: actionItem.source.projectRef,
-            // A refresh is how a lost comment settles, so only it asks the host to mark the viewer's notes.
-            ...(canonical ? { markViewerComments: true } : {})
+            // A lost comment settles on any later read (refresh, Retry, reopen); desktop reads never ask.
+            markViewerComments: true
           },
           { timeoutMs: 30_000 }
         )
