@@ -92,7 +92,7 @@ export type TerminalMultiplexStream = {
   // Paces backlog-replacing snapshots, which bypass the ACK window, to a share of the measured link rate.
   ackSupersedeSnapshotNotBefore: number
   // End of the last sent output frame, so a screen switch split across the send boundary is still seen.
-  ackSentOutputTail: Uint8Array<ArrayBufferLike>
+  ackSentOutputTail: string | null
   // Pending headroom granted while paced; kept until the queue drains so leaving alt cannot force an overflow.
   ackPendingHoldbackBytes: number
   yieldedQueries: YieldedTerminalQuery[]

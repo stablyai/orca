@@ -23,6 +23,9 @@ import {
 } from './terminal-multiplex-yielded-queries'
 
 const SUPERSEDE_UNAVAILABLE_BACKOFF_MS = 10_000
+// Rejected backlogs are rescanned at most this often instead of on every ACK.
+const SUPERSEDE_REJECTED_BACKOFF_MS = 1_000
+
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
   const { runtime, streams, linkEstimate } = state
   const linkHasRoomForHistory = (stream: TerminalMultiplexStream): boolean =>
@@ -30,12 +33,18 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
   // Draining alt-screen frames a newer screen supersedes only delays echo; a viewport snapshot is cheaper.
   const snapshotSupersedesBacklog = (stream: TerminalMultiplexStream): boolean => {
     const paced = pacedAckWindowBytes(state, stream)
-    return (
-      paced !== null &&
-      stream.ackPendingOutputBytes > paced &&
-      linkEstimate.now() >= stream.ackSupersedeSnapshotNotBefore &&
-      framesAreSupersedable(stream.ackSentOutputTail, stream.ackPendingOutput)
-    )
+    if (
+      paced === null ||
+      stream.ackPendingOutputBytes <= paced ||
+      linkEstimate.now() < stream.ackSupersedeSnapshotNotBefore
+    ) {
+      return false
+    }
+    if (!framesAreSupersedable(stream.ackSentOutputTail, stream.ackPendingOutput)) {
+      stream.ackSupersedeSnapshotNotBefore = linkEstimate.now() + SUPERSEDE_REJECTED_BACKOFF_MS
+      return false
+    }
+    return true
   }
   state.sendAckRecoverySnapshot = async (
     stream: TerminalMultiplexStream,
@@ -80,10 +89,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         supersedesCleanly &&
         (serialized.alternateScreen !== true ||
           typeof serialized.seq !== 'number' ||
-          !framesAreSupersedable(
-            stream.ackSentOutputTail,
-            stream.ackPendingOutput.filter(isCovered)
-          ))
+          // The whole queue, so a marker split between covered and retained frames is still seen.
+          !framesAreSupersedable(stream.ackSentOutputTail, stream.ackPendingOutput))
       ) {
         // The screen changed while serializing; drain rather than risk client history, and back off from re-serializing.
         stream.ackSupersedeSnapshotNotBefore = linkEstimate.now() + SUPERSEDE_UNAVAILABLE_BACKOFF_MS

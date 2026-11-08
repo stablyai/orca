@@ -19,7 +19,7 @@ import {
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
 import type { TerminalStreamInputOutcome } from './terminal-input-delivery'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
-import { supersedableScanTail } from './terminal-multiplex-supersedable-frames'
+import { supersedableSentTail } from './terminal-multiplex-supersedable-frames'
 import {
   ackPendingOutputBudgetBytes,
   ackWindowAdmits,
@@ -137,7 +137,7 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
         linkIdle: state.ackTotalInFlightBytes === 0
       })
       chargeAckWindow(state, stream, chunk.bytes.byteLength)
-      stream.ackSentOutputTail = supersedableScanTail(stream.ackSentOutputTail, chunk.bytes)
+      stream.ackSentOutputTail = supersedableSentTail(stream.ackSentOutputTail, chunk)
     }
     return true
   }

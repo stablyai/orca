@@ -49,7 +49,7 @@ describe('terminal stream extraction characterization', () => {
       ackPendingOutputOverflowed: false,
       ackRecoverySnapshotInFlight: false,
       ackSupersedeSnapshotNotBefore: 0,
-      ackSentOutputTail: new Uint8Array(),
+      ackSentOutputTail: '',
       ackPendingHoldbackBytes: 0,
       yieldedQueries: [],
       yieldedQueryScan: EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE,
