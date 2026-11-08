@@ -68,7 +68,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getWebContentsIdByTabId: () => {
       mocks.counts.registries += 1

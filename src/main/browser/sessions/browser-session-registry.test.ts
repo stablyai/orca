@@ -44,7 +44,7 @@ vi.mock('../identity/browser-process-user-agent', () => ({
   })
 }))
 
-vi.mock('../browser-manager', () => ({
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     notifyPermissionDenied: vi.fn(),
     handleGuestWillDownload: vi.fn(),

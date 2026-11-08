@@ -58,7 +58,7 @@ vi.mock('./browser-cookie-import', () => ({
   detectInstalledBrowsers: mocks.detect,
   selectBrowserProfile: vi.fn()
 }))
-vi.mock('../browser-manager', () => ({ browserManager: {} }))
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
 vi.mock('./client-route/client-route-cookie-import-source-store', () => ({
   recordClientRouteCookieImportSource: vi.fn()
 }))

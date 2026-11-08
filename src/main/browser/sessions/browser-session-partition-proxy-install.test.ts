@@ -33,7 +33,7 @@ vi.mock('electron', () => ({
     fromPartition: fromPartitionMock
   }
 }))
-vi.mock('../browser-manager', () => ({
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     installCertificateRequestGuard: vi.fn(),
     removeCertificateRequestGuard: vi.fn(),

@@ -9,7 +9,7 @@ import {
 } from '../partitions/browser-route-partition-binding-runtime'
 import { releaseEvictedBrowserRoutePartitionStorage } from '../partitions/browser-route-partition-storage-dependencies'
 import { isBrowserRouteGuestPopup } from '../guest-authority/browser-route-guest-popup-ownership'
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
   isBrowserRoutePartitionRetainedByAnyOwner,
   registerBrowserRoutePartitionRetentionProbe

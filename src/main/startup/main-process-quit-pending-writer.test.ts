@@ -43,7 +43,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   },
   '../ipc/browser/desktop-browser-bridge-wiring': { disposeDesktopBrowserBridge: idle() },
   '../orca-profiles/profile-cloud-session-owner': { flushUnsavedCloudSessions: idle() },
-  '../browser/browser-manager': {
+  '../browser/guest-lifecycle/manager/browser-manager': {
     browserManager: { setBrowserGuestStateChangedListener: idle(), setOffscreenTabOpener: idle() }
   },
   '../browser/sessions/browser-session-registry': { browserSessionRegistry: {} },
