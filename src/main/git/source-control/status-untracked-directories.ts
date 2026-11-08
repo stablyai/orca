@@ -5,7 +5,7 @@ import { bulkPathspecCommands } from './git-pathspec'
 
 /**
  * How to get every untracked file: `expand` lists configured-mode `? dir/` rows, `configured-all` needs nothing,
- * `uall` passes `-uall` (mode `no`, cache disabled, network checkout, unreadable config).
+ * `uall` passes `-uall` (mode `no`, cache not opted in, network checkout, unreadable config).
  */
 export type UntrackedScan = 'expand' | 'configured-all' | 'uall'
 
@@ -25,12 +25,23 @@ export async function readUntrackedScan(
   if (mode === 'all') {
     return 'configured-all'
   }
-  const cache = config.values.get('core.untrackedcache')?.trim().toLowerCase()
   // Without a cache the configured scan costs as much as -uall, so the extra listing would be pure overhead.
-  if (isGitFalse(mode) || (cache !== undefined && isGitFalse(cache))) {
-    return 'uall'
+  return !isGitFalse(mode) && isUntrackedCacheEnabled(config.values) ? 'expand' : 'uall'
+}
+
+/** Git's default `keep` only reuses a cache someone already built, so count only an explicit opt-in. */
+function isUntrackedCacheEnabled(values: ReadonlyMap<string, string>): boolean {
+  const cache = values.get('core.untrackedcache')?.trim().toLowerCase()
+  if (cache !== undefined && cache !== 'keep') {
+    return isGitTrue(cache)
   }
-  return 'expand'
+  // feature.manyFiles turns the cache on unless core.untrackedCache says otherwise.
+  const manyFiles = values.get('feature.manyfiles')?.trim().toLowerCase()
+  return manyFiles !== undefined && isGitTrue(manyFiles)
+}
+
+function isGitTrue(value: string): boolean {
+  return ['yes', 'true', 'on'].includes(value) || (/^[+-]?\d+$/.test(value) && Number(value) !== 0)
 }
 
 function isUncPath(worktreePath: string): boolean {
