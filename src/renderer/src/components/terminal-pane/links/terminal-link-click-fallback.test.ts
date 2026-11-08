@@ -181,6 +181,10 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
   })
 
+  const columns = 80
+  const urlFillingFirstRow = `${'http://localhost:6017/?args='.padEnd(columns - '&path='.length, 'x')}&path=`
+  const wrappedUrlTail = '/story/foo--bar'.padEnd(columns)
+
   it.each([
     {
       name: 'a path after the port',
@@ -190,20 +194,20 @@ describe('createFilePathLinkProvider range bounds', () => {
     {
       name: 'a soft-wrapped row',
       rows: [
-        makeBufferLine('http://localhost:6017/?path='),
-        makeBufferLine('/story/foo--bar', { isWrapped: true })
+        makeBufferLine(urlFillingFirstRow),
+        makeBufferLine(wrappedUrlTail, { isWrapped: true })
       ],
       position: { x: 4, y: 2 }
     },
     {
       name: 'a hard-wrapped row',
-      rows: [makeBufferLine('http://localhost:6017/?path='), makeBufferLine('/story/foo--bar')],
+      rows: [makeBufferLine(urlFillingFirstRow), makeBufferLine(wrappedUrlTail)],
       position: { x: 4, y: 2 }
     }
   ])('leaves a URL cell to the URL: $name', ({ rows, position }) => {
     setPlatform('Macintosh')
 
-    const opened = openFilePathLinkAtBufferPosition(makeBuffer(rows), position, 80, {
+    const opened = openFilePathLinkAtBufferPosition(makeBuffer(rows), position, columns, {
       startupCwd: '/tmp',
       worktreeId: 'wt-1',
       worktreePath: '/tmp',
