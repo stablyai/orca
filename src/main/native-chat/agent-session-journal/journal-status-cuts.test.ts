@@ -4,7 +4,11 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import Database from '../../sqlite/sync-database'
-import { createJournalReducerState } from './projection/journal-reducer'
+import {
+  createJournalReducerState,
+  renderJournalItems,
+  type JournalReducerState
+} from './projection/journal-reducer'
 import { JournalSqlReducer } from './journal-sql-reducer'
 import { JournalSqlScope } from './journal-sql-scope'
 import { journalSqlProjectionSchema } from './journal-sql-projection-schema'
@@ -19,17 +23,14 @@ import {
   newestStructuredAgentSessionTurnBySequence
 } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { renderJournalItems } from './projection/journal-reducer'
 import { memoryJournalMap } from './journal-memory-collections'
 import { journalRewoundReceipt } from './journal-writer-rewind-receipt'
 import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 
-import type { JournalReducerState } from './projection/journal-reducer'
 import { JournalSqlStatusContext } from './journal-sql-status-context'
-import { readJournalSqlUsageLimitCut } from './journal-sql-status-cuts'
-import { readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
+import { readJournalSqlUsageLimitCut, readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
 
 const sqlOwners = new WeakMap<JournalReducerState, JournalSqlReducer>()
 function readJournalUsageLimitCut(

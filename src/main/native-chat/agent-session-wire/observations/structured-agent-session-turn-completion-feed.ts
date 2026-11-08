@@ -20,8 +20,10 @@ import {
 } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 import type { StructuredAgentSessionLatestRequest } from '../../../../shared/agent-session/requests/structured-agent-session-latest-request'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
-import type { StructuredAgentSessionJournalProjection } from './structured-agent-session-status-journal-projection'
+import type {
+  StructuredAgentSessionStatusState,
+  StructuredAgentSessionJournalProjection
+} from './structured-agent-session-status-journal-projection'
 
 export type StructuredAgentSessionTurnCompletionSubscriber = {
   id: string
