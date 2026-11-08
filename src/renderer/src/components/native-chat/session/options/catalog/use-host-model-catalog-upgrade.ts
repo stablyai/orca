@@ -11,12 +11,12 @@ import {
   type StructuredAgentSessionOptionState
 } from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
   structuredAgentSessionHostKey,
   useStructuredAgentSessionHostCapabilityState
-} from '@/runtime/structured-agent-session-host-capability'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { StructuredAgentSessionOptionRecord } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-state'
 import {
   isHostModelListingWaitInFlight,
@@ -109,11 +109,11 @@ export function useHostModelCatalogUpgrade(args: {
       return
     }
     let stale = false
-    // A read sent before the chat's first turn or send answers for the account a new chat pins,
-    // and so does the listing it waits on, whichever later run picks that up.
-    const records =
-      recordsNewChat.current ||
-      (recordingWait.current === waitKey && isHostModelListingWaitInFlight(waitKey))
+    // A read sent before the chat's first turn or send answers for the account a new chat pins;
+    // so does the listing such a read waits on, whichever later run picks that up. Each new read decides alone.
+    const readRecords = recordsNewChat.current
+    const waitRecords =
+      readRecords || (recordingWait.current === waitKey && isHostModelListingWaitInFlight(waitKey))
     const params = {
       agent,
       sessionId,
@@ -129,7 +129,8 @@ export function useHostModelCatalogUpgrade(args: {
     const apply = (
       catalog: AgentSessionModelCatalogResult | null,
       settled = false,
-      event: 'demand' | 'progress' = 'demand'
+      event: 'demand' | 'progress' = 'demand',
+      records = readRecords
     ): void => {
       if (stale) {
         return
@@ -151,7 +152,7 @@ export function useHostModelCatalogUpgrade(args: {
     }
     let leave: (() => void) | null = null
     const waitForListing = (): void => {
-      recordingWait.current = records ? waitKey : null
+      recordingWait.current = waitRecords ? waitKey : null
       leave = joinHostModelListingWait(
         waitKey,
         () => read(true),
@@ -159,7 +160,8 @@ export function useHostModelCatalogUpgrade(args: {
           apply(
             catalog,
             catalog !== null && !catalog.listingInProgress && catalog.origin !== 'unknown',
-            'progress'
+            'progress',
+            waitRecords
           )
           if (catalog && catalog.origin !== 'unknown' && !catalog.listingInProgress) {
             onListingLanded?.()

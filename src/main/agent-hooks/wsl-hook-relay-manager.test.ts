@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RelayDispatcher } from '../../wsl-guest/dispatcher'
 import { registerWslHookFsHandlers } from '../../wsl-guest/wsl-hook-fs-bridge'
-import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
+import { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
+import type { MultiplexerTransport } from '../ssh/protocol/ssh-multiplexer-transport-writer'
 import { createWslHookSftpAdapter, installWslGuestHooks } from './wsl-hook-fs-adapter'
 import {
   installRemoteManagedAgentHooks,

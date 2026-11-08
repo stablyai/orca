@@ -6,7 +6,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -48,6 +48,7 @@ export function DiffCommentDraftCard({
   initialBody = '',
   onBodyChange
 }: DiffCommentDraftCardProps): React.JSX.Element {
+  const t = useTranslate()
   const [body, setBody] = useState(initialBody)
   const bodyRef = useRef(body)
   const [submitting, setSubmitting] = useState(false)
@@ -81,16 +82,14 @@ export function DiffCommentDraftCard({
   const labelId = useId()
   const headerLabel =
     startLine && startLine !== lineNumber
-      ? translate(
+      ? t(
           'auto.components.diff.comments.DiffCommentPopover.c845170b3b',
           'Lines {{value0}}-{{value1}}',
           { value0: startLine, value1: lineNumber }
         )
-      : translate(
-          'auto.components.diff.comments.DiffCommentPopover.e05063cfc1',
-          'Line {{value0}}',
-          { value0: lineNumber }
-        )
+      : t('auto.components.diff.comments.DiffCommentPopover.e05063cfc1', 'Line {{value0}}', {
+          value0: lineNumber
+        })
 
   const { attachDrop } = images
   const hasImageUpload = !!imageUploadAddress
@@ -171,7 +170,7 @@ export function DiffCommentDraftCard({
     }
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
-        translate(
+        t(
           'auto.components.diff.comments.DiffCommentPopover.commentTooLarge',
           'Comment is too large to submit safely.'
         )
@@ -189,9 +188,7 @@ export function DiffCommentDraftCard({
     } catch (err) {
       console.error('Failed to submit diff comment draft:', err)
       // A rejected save never reaches the caller's own failure toast, so report it here.
-      toast.error(
-        translate('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment')
-      )
+      toast.error(t('auto.components.editor.diffCommentSaveFailed', 'Failed to save comment'))
       if (mountedRef.current) {
         setSubmitting(false)
       }
@@ -244,10 +241,7 @@ export function DiffCommentDraftCard({
           className="orca-diff-comment-popover-textarea"
           placeholder={
             placeholder ??
-            translate(
-              'auto.components.diff.comments.DiffCommentPopover.f6c449191e',
-              'Add note for the AI'
-            )
+            t('auto.components.diff.comments.DiffCommentPopover.f6c449191e', 'Add note for the AI')
           }
           value={images.value}
           onPaste={images.onPaste}
@@ -265,29 +259,23 @@ export function DiffCommentDraftCard({
         {/* Footer */}
         <div className="orca-diff-comment-popover-footer">
           <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
-            {translate('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
+            {t('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
           </Button>
           <Button
             type="button"
             size="sm"
             aria-label={
               submitLabel ??
-              translate('auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa', 'Add note')
+              t('auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa', 'Add note')
             }
             onClick={() => void handleSubmit()}
             disabled={!canSubmit}
           >
             {submitting
               ? (submittingLabel ??
-                translate(
-                  'auto.components.diff.comments.DiffCommentPopover.5e9b3d0c2e',
-                  'Adding...'
-                ))
+                t('auto.components.diff.comments.DiffCommentPopover.5e9b3d0c2e', 'Adding...'))
               : (submitLabel ??
-                translate(
-                  'auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa',
-                  'Add note'
-                ))}
+                t('auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa', 'Add note'))}
             {!submitting && <CornerDownLeft className="ml-1 size-3 opacity-70" />}
           </Button>
         </div>

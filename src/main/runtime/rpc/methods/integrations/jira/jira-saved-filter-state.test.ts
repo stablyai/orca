@@ -1,5 +1,4 @@
 import { MOBILE_RPC_METHOD_ROUTES } from '../../../server/runtime-rpc-mobile-method-routing'
-import '../../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../../../../shared/constants'
 import type { PersistedUIState } from '../../../../../../shared/persisted-ui-state-types'

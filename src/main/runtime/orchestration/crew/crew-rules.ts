@@ -1,4 +1,4 @@
-import { buildOrchestrationTaskDisplayMetadata } from '../../../../shared/orchestration-task-display'
+import { buildOrchestrationTaskDisplayMetadata } from '../../../../shared/orchestration/orchestration-task-display'
 import type { TaskRow } from '../db/orchestration-records'
 
 export function crewTaskDisplay(

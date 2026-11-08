@@ -2,11 +2,11 @@ import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import { relayBundleCandidates } from '../ssh/relay-bundle-paths'
+import { relayBundleCandidates } from '../wsl/execution/relay-bundle-paths'
 import { withWslGuestLauncherRevision } from '../wsl/execution/wsl-guest-launcher-revision'
 import { orcadPosixNodeRuntimeGlobs } from '../managed-server/install/orcad-node-runtime-globs'
 
-import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
+import type { MultiplexerTransport } from '../ssh/protocol/ssh-multiplexer-transport-writer'
 import {
   MAX_STARTUP_BUFFER_BYTES,
   type waitForWslRelaySentinel,

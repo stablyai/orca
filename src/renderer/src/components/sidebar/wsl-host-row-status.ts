@@ -1,4 +1,4 @@
-import type { ExecutionHostHealth } from '../../../../shared/execution-host-health'
+import type { ExecutionHostHealth } from '../../../../shared/execution-host/execution-host-health'
 import type { WslHostStatus } from '../../../../shared/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -61,15 +61,15 @@ export function getWslHostRowDetail(
   return label ? `${kind} · ${label}` : kind
 }
 
-export function getWslHostsTurnedOffLabel(): string {
-  return translate(
+export function getWslHostsTurnedOffLabel(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.wslHostRowStatus.turnedOff',
     'WSL hosts are turned off in Settings → Experimental'
   )
 }
 
-export function getWslHostsTurnOnLabel(): string {
-  return translate('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
+export function getWslHostsTurnOnLabel(t: Translate = translate): string {
+  return t('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
 }
 
 export function getWslHostRowTurnedOffDetail(t: Translate = translate): string {
@@ -79,23 +79,23 @@ export function getWslHostRowTurnedOffDetail(t: Translate = translate): string {
   )
 }
 
-export function getWslHostsPausedLabel(): string {
-  return translate(
+export function getWslHostsPausedLabel(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.wslHostRowStatus.paused',
     'WSL hosts are paused in this build. Your saved hosts and their projects keep working; adding hosts and moving projects onto them is paused.'
   )
 }
 
-export function getWslHostsPausedShortLabel(): string {
-  return translate(
+export function getWslHostsPausedShortLabel(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.wslHostRowStatus.pausedShort',
     'Adding WSL distros is paused in this build.'
   )
 }
 
 /** Explain missing orcad templates in dialogs; without them WSL hosts cannot run. */
-export function getWslHostServerFilesMissingLabel(): string {
-  return translate(
+export function getWslHostServerFilesMissingLabel(t: Translate = translate): string {
+  return t(
     'auto.components.sidebar.wslHostRowStatus.serverFilesMissing',
     'This build of Orca can’t run WSL hosts (server files missing).'
   )

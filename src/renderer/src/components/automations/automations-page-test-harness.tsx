@@ -3,7 +3,7 @@ import type {
   EditorDialogProps,
   DeleteDialogProps
 } from './automations-page-child-props.test-fixture'
-import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resetHostStructuredAgentsForTests } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 /** Record child props to test page orchestration rather than presentation. Import this harness first so shared vi.mock registrations precede AutomationsPage loading. */
 
@@ -11,13 +11,14 @@ import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
 
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 
 import {
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY as LIST_HOST_SCOPE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY as OWNER_FENCING,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY as CREATE_IDEMPOTENCY
-} from '../../../../shared/protocol-version'
+} from '../../../../shared/automations/automation-runtime-capabilities'
 import type { AppState } from '@/store/types'
 
 import { AutomationDestinationField } from './AutomationDestinationField'

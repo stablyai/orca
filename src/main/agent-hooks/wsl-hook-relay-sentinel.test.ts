@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/remote-exec/remote-frame-protocol'
+import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../ssh/protocol/relay-handshake'
 import {
   MAX_STARTUP_BUFFER_BYTES,
   waitForWslRelaySentinel,

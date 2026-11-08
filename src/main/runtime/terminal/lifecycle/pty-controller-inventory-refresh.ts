@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithPtyControllerInventoryListing } from './pty-controller-inventory-listing'
 
-import type * as PtyControllerContract from '../../runtime-pty-controller-contract'
+import type * as PtyControllerContract from './runtime-pty-controller-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   type ExecutionHostId,
@@ -21,10 +21,10 @@ import {
   type PersistedPtyBindingIndexes
 } from '../identity/runtime-worktree-binding-index'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bindings'
+import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import { buildControllerTerminalIdentities } from '../../orca-runtime-build-controller-terminal-identities'
-import { retireOrchestrationAuthorityAbsentFromInventory } from '../../runtime-restored-orchestration-authority-sweep'
+import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'
+import { retireOrchestrationAuthorityAbsentFromInventory } from '../../orchestration/terminal-authority/runtime-restored-orchestration-authority-sweep'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitingPtyIdsOf } from '../adoption/unshown-live-terminal-placement'

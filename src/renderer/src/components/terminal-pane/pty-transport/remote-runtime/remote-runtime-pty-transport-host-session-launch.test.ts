@@ -16,7 +16,7 @@ const appStore = vi.hoisted(() => {
   }
   return { getState: vi.fn(() => state) }
 })
-vi.mock('@/runtime/web-runtime-session-snapshot', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => undefined)
 }))
 

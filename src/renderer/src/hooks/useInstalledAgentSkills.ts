@@ -26,6 +26,7 @@ import {
 } from './installed-agent-skills-change-event'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Placeholder key while the owning runtime is unknown; nothing is cached under it. */
 const UNRESOLVED_RUNTIME_DISCOVERY_KEY = 'runtime:unresolved'
@@ -124,6 +125,7 @@ export function useInstalledAgentSkillNames(
   skillNames: readonly string[],
   options: InstalledAgentSkillOptions = {}
 ): InstalledAgentSkillState {
+  const t = useTranslate()
   const { enabled = true, discoveryTarget, sourceKinds, agent } = options
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
@@ -325,7 +327,7 @@ export function useInstalledAgentSkillNames(
     installed,
     loading: loadingForRender,
     settled,
-    ...getInstalledAgentSkillVerdict(scan),
+    ...getInstalledAgentSkillVerdict(scan, t),
     skills,
     sources,
     refresh: forceRefresh

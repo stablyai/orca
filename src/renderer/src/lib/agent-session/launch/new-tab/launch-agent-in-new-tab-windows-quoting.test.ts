@@ -114,7 +114,7 @@ vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () 
 vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 vi.mock('../../../../../../shared/workspace-layout/terminal-surface-id', () => ({

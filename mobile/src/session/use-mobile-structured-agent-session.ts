@@ -39,6 +39,7 @@ import { useMobileStructuredSendWithOutcome } from './use-mobile-structured-send
 import { useMobileStructuredQueuedMessageControls } from './use-mobile-structured-queued-message-controls'
 import { useMobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 import { useMobileStructuredSends } from './use-mobile-structured-sends'
+import { useMobileStructuredSendRecorded } from './mobile-structured-send-recorded-read'
 import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from './use-mobile-native-chat-queue-follow-ups'
 import { useMobileStructuredStopOffer } from './use-mobile-structured-stop-offer'
 import { useMobileStructuredTurnIndicator } from './use-mobile-structured-turn-indicator'
@@ -124,7 +125,8 @@ export function useMobileStructuredAgentSession(
     cursor: state.cursor,
     submissions: state.submissions,
     queuedMessages,
-    onSendError
+    onSendError,
+    confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
   const { transcriptItems, messages, receipts } = useMobileStructuredTranscript(
     agent,

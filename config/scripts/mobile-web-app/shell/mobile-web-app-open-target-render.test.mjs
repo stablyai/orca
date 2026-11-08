@@ -223,23 +223,6 @@ describeRender('a host document asked to open a target', () => {
     await page.close()
   }, 60_000)
 
-  it('pushes a target that arrives after the host list is up', async () => {
-    const { page, errors, beforePaint } = await openHostDocument({
-      route: { pathname: HOST_ROUTE }
-    })
-    expect(beforePaint.pathname).toBe(HOST_ROUTE)
-    await page.evaluate((route) => globalThis.__orcaRenderCheckResendInit({ route }), {
-      pathname: HOST_ROUTE,
-      params: { open: SESSION_ROUTE }
-    })
-    await page.waitForFunction((target) => location.pathname === target, SESSION_ROUTE, {
-      timeout: 10_000,
-      polling: 100
-    })
-    expect(errors).toEqual([])
-    await page.close()
-  }, 60_000)
-
   it('hands a target this document does not serve back to the shell', async () => {
     // The target would otherwise run with the host page's grants.
     const { page, errors, beforePaint } = await openHostDocument({

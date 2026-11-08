@@ -1,16 +1,15 @@
 import { useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { Alert, BackHandler, View } from 'react-native'
+import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
-import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
-import { hostRouteWithNotice } from '../host-route-notice'
 import { triggerMediumImpact } from '../platform/haptics'
-import { useOpenMobileSession } from '../session/use-open-mobile-session'
+import { useAgentListRowActions } from '../agents/use-agent-list-row-actions'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -20,19 +19,18 @@ import {
   useDisconnectHostClient,
   useForceReconnect,
   useForgetHostClient
-} from '../transport/host-client-hooks'
-import { hostEndpointLabel } from '../transport/host-endpoint-label'
-import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
-import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
-import { loadHostCatalog } from '../transport/host-store'
-import type { HostCatalogEntry, HostProfile } from '../transport/types'
-import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
-import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
-import { homeAgentNeedsYou, type HomeJumpBackInRow } from '../worktree/home-jump-back-in'
-import { isResumeTargetConfirmedMissing } from '../worktree/home-resume-card'
+} from '../transport/connection/host-client-hooks'
+import { hostEndpointLabel } from '../transport/hosts/host-endpoint-label'
+import { resolveHomeHostConnectionState } from '../transport/hosts/home-host-auto-connect'
+import { removeHostAndCloseClient } from '../transport/hosts/host-removal-lifecycle'
+import { loadHostCatalog } from '../transport/hosts/host-store'
+import type { HostCatalogEntry, HostProfile } from '../transport/hosts/host-profile'
+import { useOpenMobileHostEdit } from '../host-screen/use-open-mobile-host-edit'
+import { mobileConnectionPathLabel } from '../transport/connection/mobile-connection-path-label'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
+import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
 import { MobileHomeFab } from './tabs/MobileHomeFab'
 import { MobileHomeFeedTab } from './tabs/MobileHomeFeedTab'
@@ -51,7 +49,6 @@ export function MobileHomeScreen() {
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
   const openMobileAutomations = useOpenMobileAutomations()
-  const openMobileSession = useOpenMobileSession()
   const openMobileAccounts = useOpenMobileAccounts()
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
@@ -63,6 +60,11 @@ export function MobileHomeScreen() {
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(() => new Set(['feed']))
   const [automationsHostId, setAutomationsHostId] = useState<string | null>(null)
   const [tabBarHeight, setTabBarHeight] = useState(0)
+  const agentActions = useAgentListRowActions(
+    tabBarHeight,
+    data.sortedHosts,
+    data.applyAgentActivity
+  )
 
   const selectTab = useCallback((next: HomeTabId) => {
     setTab(next)
@@ -85,21 +87,7 @@ export function MobileHomeScreen() {
 
   // Stable handlers keep the memoized Feed sections and desktop rows from redrawing on every Home update.
   const { router, setHostCatalog } = data
-  const openWorktree = useCallback(
-    (row: HomeJumpBackInRow) => {
-      if (isResumeTargetConfirmedMissing(row, getProvenCachedWorktrees(row.hostId))) {
-        router.push(hostRouteWithNotice(row.hostId, 'worktree-missing'))
-        return
-      }
-      openMobileSession({
-        hostId: row.hostId,
-        worktreeId: row.worktree.worktreeId,
-        name: row.worktree.displayName || row.worktree.repo,
-        paneKey: row.worktree.paneKey
-      })
-    },
-    [router, openMobileSession]
-  )
+  const seeAllAgents = useCallback(() => selectTab('agents'), [selectTab])
 
   const openHost = useCallback(
     (host: HostCatalogEntry) => {
@@ -156,9 +144,6 @@ export function MobileHomeScreen() {
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
   const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
-  const feedBadge = data.jumpBackInRows.filter(
-    (row) => !row.lastOpened && homeAgentNeedsYou(row.worktree.dotStatus)
-  ).length
   const automationsHostConnected =
     automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
   const fab =
@@ -185,113 +170,124 @@ export function MobileHomeScreen() {
   const contentBottom = spacing.xl + (fab ? FAB_CLEARANCE : 0)
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.fill}>
-        {HOME_TABS.map((id) =>
-          visitedTabs.has(id) ? (
-            <View key={id} style={id === tab ? styles.fill : styles.hidden}>
-              {id === 'feed' ? (
-                <MobileHomeFeedTab
-                  data={data}
-                  bottomInset={contentBottom}
-                  onOpenWorktree={openWorktree}
-                  onOpenHost={openHost}
-                  onOpenHostActions={openHostActions}
-                  onPairDesktop={pairDesktop}
-                  onOpenTasks={openTasks}
-                />
-              ) : id === 'usage' ? (
-                <MobileHomeUsageTab
-                  hosts={data.sortedHosts}
-                  connectedHosts={data.connectedHosts}
-                  hostStates={data.hostStates}
-                  accountsByHost={data.accountsByHost}
-                  stats={data.stats}
-                  bottomInset={contentBottom}
-                  onOpenAccounts={openMobileAccounts}
-                />
-              ) : id === 'automations' ? (
-                <MobileHomeAutomationsTab
-                  hosts={data.sortedHosts}
-                  connectedHosts={data.connectedHosts}
-                  hostStates={data.hostStates}
-                  bottomInset={contentBottom}
-                  onOpenAutomations={(hostId) => openMobileAutomations(hostId)}
-                  onHostChange={setAutomationsHostId}
-                />
-              ) : (
-                <MobileHomeSettingsTab bottomInset={contentBottom} />
-              )}
-            </View>
-          ) : null
-        )}
-      </View>
-      <MobileHomeFab
-        visible={fab != null}
-        disabled={fab?.disabled ?? false}
-        accessibilityLabel={fab?.label ?? ''}
-        disabledHint={fab?.hint}
-        bottom={tabBarHeight + spacing.lg}
-        onPress={() => fab?.onPress()}
-      />
-      <View onLayout={(event) => setTabBarHeight(event.nativeEvent.layout.height)}>
-        <MobileHomeTabBar
-          tabs={HOME_TABS}
-          active={tab}
-          bottomInset={insets.bottom}
-          feedBadge={feedBadge}
-          onSelect={selectTab}
+    // Agent rows swipe; no gesture root sits above Home.
+    <GestureHandlerRootView style={styles.fill}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.fill}>
+          {HOME_TABS.map((id) =>
+            visitedTabs.has(id) ? (
+              <View key={id} style={id === tab ? styles.fill : styles.hidden}>
+                {id === 'feed' ? (
+                  <MobileHomeFeedTab
+                    data={data}
+                    bottomInset={contentBottom}
+                    agentHandlers={agentActions.handlers}
+                    onSeeAllAgents={seeAllAgents}
+                    onOpenHost={openHost}
+                    onOpenHostActions={openHostActions}
+                    onPairDesktop={pairDesktop}
+                    onOpenTasks={openTasks}
+                  />
+                ) : id === 'agents' ? (
+                  <MobileHomeAgentsTab
+                    data={data}
+                    bottomInset={contentBottom}
+                    handlers={agentActions.handlers}
+                  />
+                ) : id === 'usage' ? (
+                  <MobileHomeUsageTab
+                    hosts={data.sortedHosts}
+                    connectedHosts={data.connectedHosts}
+                    hostStates={data.hostStates}
+                    accountsByHost={data.accountsByHost}
+                    stats={data.stats}
+                    bottomInset={contentBottom}
+                    onOpenAccounts={openMobileAccounts}
+                  />
+                ) : id === 'automations' ? (
+                  <MobileHomeAutomationsTab
+                    hosts={data.sortedHosts}
+                    connectedHosts={data.connectedHosts}
+                    hostStates={data.hostStates}
+                    bottomInset={contentBottom}
+                    onOpenAutomations={(hostId) => openMobileAutomations(hostId)}
+                    onHostChange={setAutomationsHostId}
+                  />
+                ) : (
+                  <MobileHomeSettingsTab bottomInset={contentBottom} />
+                )}
+              </View>
+            ) : null
+          )}
+        </View>
+        <MobileHomeFab
+          visible={fab != null}
+          disabled={fab?.disabled ?? false}
+          accessibilityLabel={fab?.label ?? ''}
+          disabledHint={fab?.hint}
+          bottom={tabBarHeight + spacing.lg}
+          onPress={() => fab?.onPress()}
         />
-      </View>
-      <ActionSheetModal
-        visible={actionTarget != null}
-        title={actionTarget?.name}
-        message={
-          actionTarget
-            ? [
-                actionTargetConnected && actionTargetPath
-                  ? mobileConnectionPathLabel(actionTargetPath)
-                  : null,
-                hostEndpointLabel(actionTarget.endpoint)
-              ]
-                .filter(Boolean)
-                .join(' · ')
-            : undefined
-        }
-        actions={getHostListActionSheetActions({
-          host: actionTarget,
-          state: actionTarget
-            ? resolveHomeHostConnectionState(
-                actionTarget.id,
-                data.hostStates[actionTarget.id],
-                data.autoConnectHostIds
-              )
-            : 'disconnected',
-          hasEverConnected: actionTarget
-            ? (data.hostLastConnected[actionTarget.id] ?? null) != null
-            : false,
-          onDismiss: () => setActionTarget(null),
-          onReconnect: (hostId) => void forceReconnectHost?.(hostId),
-          onDisconnect: disconnectHostClient,
-          onDiagnostics: (hostId) =>
-            data.router.push({ pathname: '/connection-log', params: { hostId } }),
-          onEdit: openMobileHostEdit,
-          onRemove: (host) => setConfirmRemove(host)
-        })}
-        onClose={() => setActionTarget(null)}
-      />
-      <ConfirmModal
-        visible={confirmRemove != null}
-        title={t('home.screen.removeHostTitle', 'Remove Host')}
-        message={t('home.screen.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
-          name: confirmRemove?.name
-        })}
-        confirmLabel={t('common.remove', 'Remove')}
-        destructive
-        onConfirm={() => void handleRemove()}
-        onCancel={() => setConfirmRemove(null)}
-      />
-    </SafeAreaView>
+        <View onLayout={(event) => setTabBarHeight(event.nativeEvent.layout.height)}>
+          <MobileHomeTabBar
+            tabs={HOME_TABS}
+            active={tab}
+            bottomInset={insets.bottom}
+            agentsBadge={data.agentsNeedingYou.length}
+            onSelect={selectTab}
+          />
+        </View>
+        {agentActions.sheet}
+        <ActionSheetModal
+          visible={actionTarget != null}
+          title={actionTarget?.name}
+          message={
+            actionTarget
+              ? [
+                  actionTargetConnected && actionTargetPath
+                    ? mobileConnectionPathLabel(actionTargetPath)
+                    : null,
+                  hostEndpointLabel(actionTarget.endpoint)
+                ]
+                  .filter(Boolean)
+                  .join(' · ')
+              : undefined
+          }
+          actions={getHostListActionSheetActions({
+            host: actionTarget,
+            state: actionTarget
+              ? resolveHomeHostConnectionState(
+                  actionTarget.id,
+                  data.hostStates[actionTarget.id],
+                  data.autoConnectHostIds
+                )
+              : 'disconnected',
+            hasEverConnected: actionTarget
+              ? (data.hostLastConnected[actionTarget.id] ?? null) != null
+              : false,
+            onDismiss: () => setActionTarget(null),
+            onReconnect: (hostId) => void forceReconnectHost?.(hostId),
+            onDisconnect: disconnectHostClient,
+            onDiagnostics: (hostId) =>
+              data.router.push({ pathname: '/connection-log', params: { hostId } }),
+            onEdit: openMobileHostEdit,
+            onRemove: (host) => setConfirmRemove(host)
+          })}
+          onClose={() => setActionTarget(null)}
+        />
+        <ConfirmModal
+          visible={confirmRemove != null}
+          title={t('home.screen.removeHostTitle', 'Remove Host')}
+          message={t('home.screen.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
+            name: confirmRemove?.name
+          })}
+          confirmLabel={t('common.remove', 'Remove')}
+          destructive
+          onConfirm={() => void handleRemove()}
+          onCancel={() => setConfirmRemove(null)}
+        />
+      </SafeAreaView>
+    </GestureHandlerRootView>
   )
 }
 

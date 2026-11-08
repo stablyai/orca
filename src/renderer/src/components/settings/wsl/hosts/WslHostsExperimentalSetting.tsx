@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../../../ui/label'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsSwitch } from '../../form-controls/SettingsFormControls'
@@ -14,6 +14,7 @@ export function WslHostsExperimentalSetting({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const entry = getWslHostsExperimentalSearchEntry()
   const enabled = settings.experimentalWslHosts === true
   const serverFilesMissing = useWslHostServerFilesMissing()
@@ -29,12 +30,12 @@ export function WslHostsExperimentalSetting({
         <Label>{entry.title}</Label>
         <p className="text-xs text-muted-foreground">{entry.description}</p>
         {serverFilesMissing ? (
-          <p className="text-xs text-destructive">{getWslHostServerFilesMissingLabel()}</p>
+          <p className="text-xs text-destructive">{getWslHostServerFilesMissingLabel(t)}</p>
         ) : null}
       </div>
       <SettingsSwitch
         checked={enabled}
-        ariaLabel={translate(
+        ariaLabel={t(
           'auto.components.settings.wslHostsExperimental.toggleLabel',
           'Toggle WSL distros as hosts'
         )}

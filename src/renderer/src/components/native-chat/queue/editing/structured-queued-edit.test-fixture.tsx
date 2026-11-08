@@ -1,3 +1,4 @@
+import type * as StructuredAgentSessionCall from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { QueuedMessageUpdateParams } from '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 import { queuedMessageWithEdit } from '../../../../../../shared/queued-message-edit'
 // @vitest-environment happy-dom
@@ -8,7 +9,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { toast } from 'sonner'
 import type * as SonnerModule from 'sonner'
-import type * as StructuredSessionClient from '@/runtime/structured-agent-session-client'
+
 import type * as RendererI18n from '@/i18n/i18n'
 import type { AgentJournalSubmission } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
@@ -48,10 +49,13 @@ const hoistedRpc = vi.hoisted(() =>
 )
 export const rpc = hoistedRpc
 const toastError = vi.hoisted(() => vi.fn<typeof SonnerModule.toast.error>())
-vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof StructuredSessionClient>()),
-  callStructuredAgentSession: hoistedRpc
-}))
+vi.mock(
+  '../../../../runtime/native-chat/requests/structured-agent-session-call',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof StructuredAgentSessionCall>()),
+    callStructuredAgentSession: hoistedRpc
+  })
+)
 vi.mock('sonner', async (importOriginal) => {
   const original = await importOriginal<typeof SonnerModule>()
   return {

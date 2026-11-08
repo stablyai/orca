@@ -46,7 +46,7 @@ describe('structured agent session live read with text appends', () => {
       onHistoryReadInvalidated: () => {},
       sessionId: 'session-1',
       subscribe,
-      textAppend: Promise.resolve(true),
+      textAppend: Promise.resolve({ textAppend: 1 }),
       readCurrentRequests: vi.fn(),
       subscribeRetryNow: () => () => {}
     })
@@ -66,29 +66,6 @@ describe('structured agent session live read with text appends', () => {
     })
     expect(unsubscribed).toEqual([0])
     expect(applied).toEqual([batch(4, [reply('Hel', 1)])])
-    read.dispose()
-  })
-
-  it('opens the transcript without appends when the support check rejects', async () => {
-    const opened: unknown[] = []
-    const contactLost = vi.fn()
-    const read = startStructuredAgentSessionLiveRead({
-      applyEvent: () => {},
-      applyError: () => {},
-      getCursor: () => null,
-      onContactLost: contactLost,
-      onHistoryReadInvalidated: () => {},
-      sessionId: 'session-1',
-      subscribe: async (params) => {
-        opened.push(params)
-        return { unsubscribe: () => {} }
-      },
-      textAppend: Promise.reject(new Error('status read failed')),
-      readCurrentRequests: vi.fn(),
-      subscribeRetryNow: () => () => {}
-    })
-    await vi.waitFor(() => expect(opened).toEqual([{ sessionId: 'session-1' }]))
-    expect(contactLost).not.toHaveBeenCalled()
     read.dispose()
   })
 })

@@ -1,14 +1,17 @@
 import type { TaskPageRepoSelectionModel } from './use-task-page-repo-selection'
-import { normalizeGitHubTaskPreset } from '../../../../shared/task-github-search'
-import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
+import { normalizeGitHubTaskPreset } from '../../../../shared/work-items/task-github-search'
+import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { type TaskProvider, resolveVisibleTaskProvider } from '../../../../shared/task-providers'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import {
+  type TaskProvider,
+  resolveVisibleTaskProvider
+} from '../../../../shared/work-items/task-providers'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { RuntimeProviderPreflightStatus } from '@/components/task-source-provider-availability'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/task-source-runtime-capabilities'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { PreflightStatus } from '../../../../preload/api/preflight-api'
 import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'

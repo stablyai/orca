@@ -1,3 +1,4 @@
+import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
@@ -19,7 +20,7 @@ import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
 import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
@@ -105,7 +106,7 @@ import type { RemoteRuntimeSnapshotOutcome } from '../../../../runtime/hosted-te
 import {
   toRuntimeTerminalWorktreeSelector,
   toRuntimeWorktreeSelector
-} from '../../../../runtime/runtime-worktree-selector'
+} from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
@@ -126,13 +127,13 @@ import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
-import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
+import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/web-session-tabs-sync/inventory/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
-import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/web-session-tabs-sync/hydration/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/hosted-terminals/creation/agent-launch/remote-agent-session-launch'
 import { useAppStore } from '@/store/index'
-import { recordWebAgentSessionHandoff } from '@/runtime/web-agent-session-handoff'
-import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
+import { recordWebAgentSessionHandoff } from '@/runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff'
+import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import {
   bufferPtyShutdownData,
   bufferPtyShutdownReplayData,
@@ -300,6 +301,7 @@ export function createRemoteRuntimePtyTransport(
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let multiplexedStreamHandle: string | null = null
   let desiredOutputPaused = false
+  let desiredOutputCadence: TerminalOutputCadence = 'focused'
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   const surfacedErrorMessages = new Set<string>()
@@ -2276,11 +2278,22 @@ export function createRemoteRuntimePtyTransport(
     return true
   }
 
-  const inputBatcher = createRemoteRuntimePtyTextBatcher(REMOTE_TERMINAL_INPUT_FLUSH_MS, (text) => {
-    if (!sendUnacknowledgedInput(text)) {
-      holdUnsentInput(text)
+  const inputBatcher = createRemoteRuntimePtyTextBatcher(
+    REMOTE_TERMINAL_INPUT_FLUSH_MS,
+    (text) => {
+      if (!sendUnacknowledgedInput(text)) {
+        holdUnsentInput(text)
+      }
+    },
+    {
+      // Why: without the ack journal an accepted write's separate RPC could overtake an immediate key.
+      sendLeadingEdge: () =>
+        // A hold replaying through sendInputNow must not re-enter its own queue.
+        !recoveryInputHold.isHolding() &&
+        handle !== null &&
+        getCurrentMultiplexedStream(handle)?.acknowledgesInput() === true
     }
-  })
+  )
 
   function deferViewportForRecovery(claim: boolean): void {
     // Why: the replay sends the latest viewport; an older queued batch flushing after it would win.
@@ -3057,6 +3070,7 @@ export function createRemoteRuntimePtyTransport(
       viewport: subscribedViewport ?? undefined,
       inputSessionId: inputJournal.sessionId,
       reportsPaneVisibility: true,
+      outputCadence: desiredOutputCadence,
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
@@ -3330,6 +3344,8 @@ export function createRemoteRuntimePtyTransport(
     multiplexedStream = nextStream
     multiplexedStreamHandle = subscribedHandle
     installedStream = nextStream
+    // Why: focus may have moved during the subscribe round-trip.
+    nextStream.setOutputCadence(desiredOutputCadence)
     setAttachmentReady(subscriptionAttached)
     if (subscriptionAttached) {
       resetRecoveryReplacementPolicy()
@@ -4107,7 +4123,7 @@ export function createRemoteRuntimePtyTransport(
       return sendInputNow(data)
     },
 
-    // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms debounce would miss it and echo the reply onto the prompt (#7329).
+    // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms coalescing window would miss it and echo the reply onto the prompt (#7329).
     sendInputImmediate: (data: string): boolean => sendInputImmediateNow(data),
 
     sendInputAccepted(data, inputKind, options) {
@@ -4163,6 +4179,13 @@ export function createRemoteRuntimePtyTransport(
         stream?.reportsPausedOutputDrops?.() === true
       )
       return supported
+    },
+
+    setOutputCadence(cadence: TerminalOutputCadence): void {
+      desiredOutputCadence = cadence
+      if (connected && handle) {
+        getCurrentMultiplexedStream(handle)?.setOutputCadence(cadence)
+      }
     },
 
     resize(cols: number, rows: number, meta): boolean {

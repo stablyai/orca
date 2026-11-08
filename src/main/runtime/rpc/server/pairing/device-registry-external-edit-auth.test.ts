@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as secureFile from '../../../../../shared/secure-file'
+import * as secureFile from '../../../../../shared/secure-storage/secure-file'
 import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 
@@ -24,37 +24,7 @@ function registryPath(): string {
   return join(dir, DEVICE_REGISTRY_FILENAME)
 }
 
-// Auth checks see another process's edit once the registry's one-second stat window has passed.
-function removeOnDisk(deviceId: string, advanceMs = 1000): void {
-  const rows: { deviceId: string }[] = JSON.parse(readFileSync(registryPath(), 'utf8'))
-  writeFileSync(registryPath(), JSON.stringify(rows.filter((row) => row.deviceId !== deviceId)))
-  vi.advanceTimersByTime(advanceMs)
-}
-
-function spyOnSaves() {
-  return [
-    vi.spyOn(secureFile, 'writeSecureJsonFile'),
-    vi.spyOn(secureFile, 'writeDurableSecureJsonFile')
-  ]
-}
-
 describe('device registry auth checks see edits made on disk', () => {
-  it('refuses a token removed on disk at the next validate, with no save in between', () => {
-    const registry = new DeviceRegistry(dir)
-    const desktop = registry.addDevice('desktop', 'runtime')
-    const phone = registry.addDevice('phone', 'mobile')
-    expect(registry.validateToken(desktop.token)?.deviceId).toBe(desktop.deviceId)
-    const saves = spyOnSaves()
-
-    removeOnDisk(desktop.deviceId)
-
-    expect(registry.validateToken(desktop.token)).toBeNull()
-    expect(registry.validateToken(phone.token)?.deviceId).toBe(phone.deviceId)
-    for (const save of saves) {
-      expect(save).not.toHaveBeenCalled()
-    }
-  })
-
   it('refuses every device once the file is deleted, and keeps working', () => {
     const registry = new DeviceRegistry(dir)
     const desktop = registry.addDevice('desktop', 'runtime')

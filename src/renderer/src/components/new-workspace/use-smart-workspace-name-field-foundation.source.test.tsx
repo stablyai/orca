@@ -7,7 +7,7 @@ import type { Repo } from '../../../../shared/repo-types'
 
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { NormalizedWorkItemSourceSearchProps } from './smart-workspace-name-field-model'
 import { useWorkItemSourceSearch } from './use-work-item-source-search'
 import { referenceLinearIssue } from '../sidebar/workspace-card/review/workspace-reference-fixtures.test-support'

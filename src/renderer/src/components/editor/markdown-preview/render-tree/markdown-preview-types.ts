@@ -1,4 +1,4 @@
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
 
 export type MarkdownPreviewProps = {

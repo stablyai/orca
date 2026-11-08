@@ -3,7 +3,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
-import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
+import type { OrchestrationCrewRow } from '../../../shared/orchestration/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   openDesktopStructuredSession,
@@ -31,7 +31,7 @@ import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()

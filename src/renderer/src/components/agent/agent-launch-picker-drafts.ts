@@ -18,7 +18,8 @@ import {
 
 import {
   type AgentPickerRetainedSetup as RetainedSetup,
-  currentAgentPickerDraft
+  currentAgentPickerDraft,
+  launchAgentPickerDraft
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { retireAgentPickerSetups } from './agent-launch-picker-retirement'
 import {
@@ -228,7 +229,10 @@ export function useAgentPickerSetup({
   }, [open, read, acquire, retained, mode])
   let record = retained && matches(retained) ? retained : undefined
   const currentDraft = (draft: AgentPickerDraft) => {
-    const current = currentAgentPickerDraft(entry, draft)
+    const current =
+      mode === 'launch'
+        ? launchAgentPickerDraft(entry, draft)
+        : currentAgentPickerDraft(entry, draft)
     return currentSurface && currentSurface !== current.surface
       ? { ...current, surface: currentSurface }
       : current

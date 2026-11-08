@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/protocol-version'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'

@@ -19,7 +19,7 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/runtime/structured-agent-session-owner', () => ({
+vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
 vi.mock('./agent-session/launch/structured-agent-session-launch-message', () => ({

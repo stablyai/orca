@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import type { spawnProcess } from '@orca/process-host'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import {
   buildProcessTableIndex,
   collectDescendantsFromIndex

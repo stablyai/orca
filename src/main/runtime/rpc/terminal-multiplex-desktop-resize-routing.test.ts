@@ -1,8 +1,7 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,

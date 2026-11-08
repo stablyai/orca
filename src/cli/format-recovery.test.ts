@@ -30,15 +30,29 @@ describe('ambiguous selector recovery', () => {
         }
       }
     })
-    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
-      error: {
-        data: {
-          nextSteps: expect.arrayContaining([
-            'List the exact values with `orca worktree list --json`.'
-          ])
-        }
-      }
-    })
+    log.mockRestore()
+  })
+
+  it('gives only the repair step when two folder workspaces share an id', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const repair = 'Remove one of these folder workspaces in the Orca app and add its folder again.'
+
+    reportCliError(
+      new RuntimeRpcFailureError({
+        id: 'req_selector',
+        ok: false,
+        error: {
+          code: 'selector_ambiguous',
+          message: 'selector_ambiguous',
+          data: { selector: 'folder:hub-a', duplicateFolderId: 'hub-a', nextSteps: [repair] }
+        },
+        _meta: { runtimeId: 'runtime_local' }
+      }),
+      true,
+      { commandPath: ['worktree', 'rm'], worktreeSelector: 'folder:hub-a' }
+    )
+
+    expect(JSON.parse(String(log.mock.calls[0]?.[0])).error.data.nextSteps).toEqual([repair])
     log.mockRestore()
   })
 })

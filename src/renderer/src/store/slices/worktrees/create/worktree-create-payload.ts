@@ -14,7 +14,7 @@ import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
 } from '../../../../../../shared/worktree/lineage-types'
-import type { TaskSourceContext } from '../../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */

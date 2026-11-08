@@ -1,5 +1,5 @@
 import { senderDispatchLaunch } from './sender-dispatch-launch'
-import { readWorkerTerminalHostScope } from '../../../../../shared/worker-terminal-host-scope'
+import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { crewDisplayName } from '../../crew/crew-rules'
 import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'

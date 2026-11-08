@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { closeWebRuntimeSessionTab } from '@/runtime/web-runtime-session-tab-lifecycle'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import { closeWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
+import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { toHostSessionTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { getLatestWebSessionTabsPublicationEpoch } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
 import { resolveHostSessionTabIdForWebSessionTab } from '@/runtime/web-session-tabs-sync/tracking-mappings'
@@ -21,6 +21,7 @@ import {
 } from './running-terminal-close-guard'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
 import { runAsAutomaticDeselection } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 import {
   terminalTabCloseStoreReason,
@@ -239,7 +240,7 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
     if (current.activeWorktreeId === owningWorktreeId) {
       // Only unified renderable count includes agent-session/simulator tabs when proving the worktree empty.
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
-      if (renderableTabCount === 0) {
+      if (renderableTabCount === 0 && !hasSplitLandingGroup(current, owningWorktreeId)) {
         const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)
         if (worktreeFile) {
           current.setActiveFile(worktreeFile.id)

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useId, useRef } from 'react'
 import type { ComponentProps } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SparseCheckoutPresetDraftForm } from './SparseCheckoutPresetDraftForm'
 
 export function SparsePresetInlineEditor(
   props: ComponentProps<typeof SparseCheckoutPresetDraftForm>
 ): React.JSX.Element {
+  const t = useTranslate()
   const titleId = useId()
   const editorRef = useRef<HTMLElement | null>(null)
   useEffect(() => {
@@ -37,8 +38,8 @@ export function SparsePresetInlineEditor(
     >
       <h4 id={titleId} className="text-sm font-medium">
         {props.draft.mode === 'new'
-          ? translate('sparsePreset.new', 'New sparse preset')
-          : translate('sparsePreset.edit', 'Edit sparse preset')}
+          ? t('sparsePreset.new', 'New sparse preset')
+          : t('sparsePreset.edit', 'Edit sparse preset')}
       </h4>
       <SparseCheckoutPresetDraftForm
         {...props}

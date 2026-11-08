@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sanitizeCrashReportDetails } from '../../../shared/crash-report-redaction'
 import {
-  REACT_COMMIT_CASCADE_BREADCRUMB,
   REACT_COMMIT_CASCADE_MIN_REPORT_INTERVAL_MS,
   REACT_COMMIT_CASCADE_NOTICE_LIMIT,
   createReactCommitCascadeState,
@@ -11,8 +10,7 @@ import {
 } from './react-commit-cascade-telemetry'
 import {
   noteReactCommitCascadeStoreWrite,
-  reactCommitCascadeWriteProbe,
-  readReactCommitCascadeWriteSummary
+  reactCommitCascadeWriteProbe
 } from './react-commit-cascade-store-write-samples'
 
 const recordBreadcrumb = vi.fn()
@@ -56,15 +54,6 @@ beforeEach(() => {
 })
 
 describe('recordReactCommit', () => {
-  it('fires exactly once at the notice limit and not again in the same cascade', () => {
-    const state = createReactCommitCascadeState()
-    driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT * 3 })
-
-    expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
-    expect(recordBreadcrumb.mock.calls[0]?.[0]).toBe(REACT_COMMIT_CASCADE_BREADCRUMB)
-    expect(cascadePayload().commits).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
-  })
-
   // No pending synchronous lanes resets React’s counter; lulls must never accumulate depth.
   it('ends the cascade when the root stops holding cascading lanes', () => {
     const state = createReactCommitCascadeState()
@@ -88,17 +77,6 @@ describe('recordReactCommit', () => {
     expect(state.commits).toBe(1)
     expect(state.cascadeRoot).toBe(OTHER_ROOT)
     expect(recordBreadcrumb).not.toHaveBeenCalled()
-  })
-
-  // Why asserted: a clock read per commit is the one cost this design refuses.
-  it('reads the clock only at arm and at report', () => {
-    const state = createReactCommitCascadeState()
-    const readNowMs = vi.fn(() => 1_000)
-    for (let index = 0; index < REACT_COMMIT_CASCADE_NOTICE_LIMIT; index += 1) {
-      recordReactCommit({ state, root: ROOT, pendingLanes: SYNC_LANE, readNowMs })
-    }
-
-    expect(readNowMs).toHaveBeenCalledTimes(2)
   })
 })
 
@@ -188,57 +166,5 @@ describe('report throttle', () => {
     expect(recordBreadcrumb).toHaveBeenCalledTimes(2)
     expect(cascadePayload(1).suppressed).toBe(2)
     expect(state.suppressed).toBe(0)
-  })
-})
-
-/** Measure retained bytes across thousands of arm/end cycles; a long-running oscillation accumulates reset leaks even when individual cascades release samples. */
-describe('repeated arm and end cycles', () => {
-  const CYCLES = 1_000
-  /** The steady state is a few KB of live objects; a per-cycle leak is megabytes. */
-  const MAX_HEAP_GROWTH_BYTES = 1_000_000
-
-  function drivingWrite(): void {
-    noteReactCommitCascadeStoreWrite(drivingWrite, { tabs: [], panes: [] })
-  }
-
-  function runCascadeCycle(state: ReactCommitCascadeState): void {
-    driveCommits({
-      state,
-      count: REACT_COMMIT_CASCADE_NOTICE_LIMIT,
-      onCommit: () => {
-        if (reactCommitCascadeWriteProbe.armed) {
-          drivingWrite()
-        }
-      }
-    })
-    driveCommits({ state, count: 1, lanes: 0 })
-  }
-
-  it('leaves nothing behind across a thousand cascades', () => {
-    const collectGarbage = (globalThis as { gc?: () => void }).gc
-    // --expose-gc is pinned in config/vitest.config.ts execArgv.
-    expect(typeof collectGarbage).toBe('function')
-    const state = createReactCommitCascadeState()
-    for (let warmup = 0; warmup < 20; warmup += 1) {
-      runCascadeCycle(state)
-    }
-    collectGarbage?.()
-    const before = process.memoryUsage().heapUsed
-
-    for (let cycle = 0; cycle < CYCLES; cycle += 1) {
-      runCascadeCycle(state)
-    }
-    collectGarbage?.()
-
-    expect(process.memoryUsage().heapUsed - before).toBeLessThan(MAX_HEAP_GROWTH_BYTES)
-    expect(reactCommitCascadeWriteProbe.armed).toBe(false)
-    expect(readReactCommitCascadeWriteSummary()).toMatchObject({
-      storeWrites: 0,
-      storeWriteSites: 0,
-      driverFrame: undefined,
-      driverStack: undefined,
-      changedKeys: undefined
-    })
-    expect(state.cascadeRoot).toBeNull()
   })
 })

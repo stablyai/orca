@@ -1,4 +1,4 @@
-import type { OrchestrationAgentReference } from '../../../../../../shared/orchestration-agent-reference'
+import type { OrchestrationAgentReference } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import type { HTMLAttributes, RefObject } from 'react'
 
 /** Text coordinates keep transport, attachments, and picker logic independent of the editor. */

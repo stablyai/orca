@@ -14,7 +14,7 @@ import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import { spawn } from 'node:child_process'
 import {
   forceTerminateProcessTree,

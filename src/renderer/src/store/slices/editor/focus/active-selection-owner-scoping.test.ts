@@ -12,16 +12,16 @@ import type { AppState } from '../../../types'
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-vi.mock('@/runtime/web-runtime-browser-creation', () => ({
+vi.mock('@/runtime/browser/creation/web-runtime-browser-creation', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn()
 }))
 

@@ -16,7 +16,7 @@ import type {
   GitHubPRFile,
   GitHubPRFileContents
 } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { evictPRFileContentRequest, loadPRFileContents } from '../cache/file-content'
 
 // Bound timeout-free local loads above the remote 30s deadline so wedged sections offer Retry while remote errors keep their own messages.

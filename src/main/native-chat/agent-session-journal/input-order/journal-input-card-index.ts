@@ -4,14 +4,13 @@ import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
 import { isLiveJournalQueueCard } from '../queued-messages/journal-queue-retention'
 import {
   createQueuePauseContext,
-  journalManualStop,
   queuePauseHoldingInContext,
   type QueuePauseContext
 } from '../queued-messages/queued-message-pause'
+import { journalManualStop } from '../queued-messages/queued-message-pause-marks'
 import { journalInputOrder } from './journal-input-order'
 
 import { JournalQueuedRowIndex } from './journal-queued-row-index'
-export { compareQueuedRows } from './journal-queued-row-index'
 
 /** Current rows are the entire runtime order; dispatched slots stay reserved until withdrawal. */
 export class JournalInputCardIndex {

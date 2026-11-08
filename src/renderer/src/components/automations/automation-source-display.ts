@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export type AutomationSourceDisplay = {
   label: string
@@ -9,7 +10,8 @@ export type AutomationSourceDisplay = {
 
 export function getAutomationSourceDisplay(
   sourceContext: TaskSourceContext | null | undefined,
-  hostLabelById?: ReadonlyMap<string, string>
+  hostLabelById?: ReadonlyMap<string, string>,
+  t: Translate = translate
 ): AutomationSourceDisplay | null {
   if (!sourceContext) {
     return null
@@ -22,23 +24,19 @@ export function getAutomationSourceDisplay(
     .filter((part): part is string => Boolean(part))
     .join(' · ')
   const title = [
-    translate(
-      'auto.components.taskSourceContextSummary.providerSourceTitle',
-      '{{provider}} source',
-      { provider: providerLabel }
-    ),
-    translate('auto.components.taskSourceContextSummary.hostTitle', 'Host: {{hosts}}', {
+    t('auto.components.taskSourceContextSummary.providerSourceTitle', '{{provider}} source', {
+      provider: providerLabel
+    }),
+    t('auto.components.taskSourceContextSummary.hostTitle', 'Host: {{hosts}}', {
       hosts: hostLabel
     }),
     sourceContext.accountLabel
-      ? translate(
-          'auto.components.taskSourceContextSummary.accountTitle',
-          'Account: {{accounts}}',
-          { accounts: sourceContext.accountLabel }
-        )
+      ? t('auto.components.taskSourceContextSummary.accountTitle', 'Account: {{accounts}}', {
+          accounts: sourceContext.accountLabel
+        })
       : null,
     identityLabel
-      ? translate('auto.components.taskSourceContextSummary.sourceTitle', 'Source: {{source}}', {
+      ? t('auto.components.taskSourceContextSummary.sourceTitle', 'Source: {{source}}', {
           source: identityLabel
         })
       : null

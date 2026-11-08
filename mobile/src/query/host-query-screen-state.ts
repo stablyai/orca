@@ -1,4 +1,4 @@
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { isHostNotConnectedError } from './host-query-errors'
 
 export type HostScreenState =

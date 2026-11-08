@@ -14,7 +14,7 @@ import type { GitFileStatus } from '../../../../../../shared/git/status/git-stat
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import type { TreeNode } from '../tree/file-explorer-types'
 import { useFileExplorerRowDrag } from '../mutations/useFileExplorerRowDrag'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { createMultiSelectDragGhost } from '../mutations/file-explorer-multi-drag-image'
@@ -114,6 +114,7 @@ export function FileExplorerRow({
   onNativeDragTargetChange,
   onNativeDragExpandDir
 }: FileExplorerRowProps): React.JSX.Element {
+  const t = useTranslate()
   const showLoadError = node.isDirectory && isExpanded && !isLoading && loadError !== null
   const rowDropDir = node.isDirectory ? node.path : targetDir
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
@@ -257,7 +258,7 @@ export function FileExplorerRow({
             </span>
           ) : isIgnored ? (
             <CircleSlash
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.right.sidebar.FileExplorerRow.e26010014a',
                 'Ignored by .gitignore'
               )}

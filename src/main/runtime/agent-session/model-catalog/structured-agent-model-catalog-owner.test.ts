@@ -1,5 +1,4 @@
 import type * as ProfilePaths from '../../../orca-profiles/profile-storage-paths'
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 import { mkdtemp, rm } from 'node:fs/promises'

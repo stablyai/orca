@@ -91,6 +91,7 @@ export function NativeChatContextUsageRing({
           setOpenAfterHover(false)
         }
       }}
+      onContextMenu={() => setOpen(false)}
     >
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>

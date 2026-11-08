@@ -5,7 +5,7 @@ import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeOpenFile } from '../editor/types/open-file.test-fixture'
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -20,12 +20,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

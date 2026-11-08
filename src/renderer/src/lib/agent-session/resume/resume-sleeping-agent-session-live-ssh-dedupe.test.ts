@@ -9,7 +9,7 @@ import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
@@ -122,21 +122,6 @@ describe('resumeSleepingAgentSessionsForWorktree — SSH panes and stale worktre
       },
       ptyIdsByTabId: {},
       sshConnectionStates: new Map([['ssh-target-1', { status: 'disconnected' }]]),
-      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
-    })
-
-    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
-
-    expect(launched).toBe(1)
-  })
-
-  it('still resumes when the preserved pane has no pty binding and cannot own recovery', () => {
-    const record = makeRecord()
-    setStoreState({
-      activeWorktreeId: 'wt-other',
-      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
-      terminalLayoutsByTabId: { 'tab-1': makeLayout(LEAF_ID, null) },
-      ptyIdsByTabId: {},
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     })
 

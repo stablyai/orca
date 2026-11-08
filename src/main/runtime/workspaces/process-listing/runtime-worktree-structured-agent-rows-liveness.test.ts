@@ -1,5 +1,4 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-status/contracts/agent-status-subject'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -22,15 +21,6 @@ vi.mock('../../../telemetry/cohort-classifier', () => ({
 /** Exercise journal to worktree-status liveness: feed summaries never retract, but the store drops closed chats, including unanswered approvals whose retained status stays attention. */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
-makeStructuredAgentStatusSubject(
-  {
-    executionHostId: 'local',
-    wslDistro: null,
-    workspaceId: WORKTREE_ID,
-    workspaceKind: 'git-worktree'
-  },
-  SESSION
-)
 const IDENTITY = {
   provider: 'codex',
   threadId: 'thread-1',
@@ -126,7 +116,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
   const summaries = new Map([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries,
-    terminalTitleEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByRow: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {

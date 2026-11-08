@@ -27,7 +27,7 @@ import type { RecentlyClosedTabPosition } from '../tabs/recently-closed-tab-posi
 import type {
   ClientHostedBrowserCloseIntentsByEnvironment,
   PendingClientHostedBrowserClose
-} from '@/runtime/client-hosted-browser-close-intents'
+} from '@/runtime/browser/closing/client-hosted-browser-close-intents'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'

@@ -1,4 +1,4 @@
-import type { RuntimePtyController } from '../../../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../../../terminal/lifecycle/runtime-pty-controller-contract'
 import {
   writeRefused,
   writeUnverifiable,

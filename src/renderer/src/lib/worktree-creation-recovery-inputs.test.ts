@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { buildWorktreeCreationStartupOpt } from '@/lib/workspace/creation/worktree-creation-flow-startup'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
 
 const mocks = vi.hoisted(
@@ -24,7 +24,7 @@ vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-web-host-tab', () => ({
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => 'host'
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: () => true
 }))
 vi.mock('../../../shared/native-chat/input/native-chat-session-option-cache', () => ({
