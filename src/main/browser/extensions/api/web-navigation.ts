@@ -1,9 +1,9 @@
+/// <reference types="chrome" />
 import {
   chromeFrameId,
   chromeFrameDocument
 } from '../tabs-and-windows/browser-extension-frame-projection'
 
-/// <reference types="chrome" />
 import { webFrameMain } from 'electron'
 import { z } from 'zod'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'

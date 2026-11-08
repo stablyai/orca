@@ -1,6 +1,6 @@
+/// <reference types="chrome" />
 import { requireOpenableUrl } from '../tabs-and-windows/browser-extension-requested-navigation'
 
-/// <reference types="chrome" />
 import { z } from 'zod'
 import {
   BrowserExtensionApiError,
