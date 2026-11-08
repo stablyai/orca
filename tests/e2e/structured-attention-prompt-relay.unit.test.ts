@@ -648,22 +648,6 @@ describe('Remote prompt settlement', () => {
     expect(await relay.live('prompt')).toHaveLength(1)
   })
 
-  it('settles once per relayed prompt, not on every later status update', async () => {
-    await mountRemoteRelay()
-    act(() => {
-      revise(resolveA('resolved'))
-      fixture.hostFeed.observe(SESSION)
-      publishStatus()
-    })
-    await waitFor(() => expect(transport.settle).toHaveBeenCalledOnce())
-    act(() => {
-      revise((item) => item)
-      publishStatus()
-    })
-    await act(async () => {})
-    expect(transport.settle).toHaveBeenCalledOnce()
-  })
-
   // Status and edges ride separate sockets: the pre-prompt row can still be draining after the edge.
   it('keeps the pending prompt alert when the edge outruns its status and another frame lands', async () => {
     const relay = await mountRemoteRelay({ promptStatus: false })

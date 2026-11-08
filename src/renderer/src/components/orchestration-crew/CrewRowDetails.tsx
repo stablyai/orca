@@ -4,7 +4,7 @@ import { formatTimeAgo } from '@/components/right-sidebar/ai-vault/session-list/
 import { cn } from '@/lib/utils'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 
 export function CrewRowTime({ at, className }: { at?: string; className?: string }) {
   // Re-render on the sidebar's shared coarse tick so "2m ago" keeps advancing while the panel is open.

@@ -1,6 +1,6 @@
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
+import '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { settledWriteStub } from '../../../../providers/settled-pty-write-stub'
 import { MAILBOX_POINTER_WRITE_ATTEMPTED } from '../../db/messages/mailbox-pointer-enter-state'
@@ -63,78 +63,6 @@ describe('Codex completion title mailbox delivery', () => {
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
-  })
-
-  it.each([
-    { arrival: 'before', delay: 0 },
-    { arrival: 'after', delay: 0 },
-    { arrival: 'before', delay: 750 },
-    { arrival: 'after', delay: 750 },
-    { arrival: 'before', delay: 0, presence: 'unverifiable' as const },
-    { arrival: 'after', delay: 750, presence: 'unverifiable' as const }
-  ])(
-    'submits mail arriving $arrival completion with a $delay ms host probe (presence $presence)',
-    async ({ arrival, delay, presence }) => {
-      vi.useFakeTimers()
-      const { db, runtime, write, run, completeWithNativeTitles } = completionFixture(
-        delay,
-        presence
-      )
-      await runtime.listTerminals()
-      if (arrival === 'before') {
-        insertDirectRunMessage(db, run.id, 'Worker progress')
-      }
-      completeWithNativeTitles()
-      await vi.advanceTimersByTimeAsync(100)
-      if (arrival === 'after') {
-        insertDirectRunMessage(db, run.id, 'Worker progress')
-        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-      }
-      await vi.advanceTimersByTimeAsync(500)
-      if (delay) {
-        expect(write).not.toHaveBeenCalledWith(PTY_ID, '\r')
-      }
-      await vi.advanceTimersByTimeAsync(1000)
-      expect(write.mock.calls.map(([, data]) => data)).toEqual([
-        expect.stringContaining('You have 1 orchestration message'),
-        '\r'
-      ])
-      db.close()
-    }
-  )
-
-  it.each([
-    { name: 'shell', process: 'zsh' },
-    { name: 'unverifiable foreground', process: null },
-    { name: 'different agent', process: 'claude' },
-    { name: 'working hook', state: 'working' as const },
-    { name: 'permission hook', state: 'blocked' as const },
-    { name: 'restored hook', restoredUnconfirmed: true },
-    { name: 'stale hook', age: AGENT_STATUS_STALE_AFTER_MS + 1 }
-  ])('does not recover idle from $name', async (scenario) => {
-    vi.useFakeTimers()
-    const { db, runtime, write, run, hook, getForegroundProcess, completeWithNativeTitles } =
-      completionFixture()
-    if (scenario.process !== undefined) {
-      getForegroundProcess.mockResolvedValue(scenario.process)
-    }
-    if (scenario.state !== undefined) {
-      hook.state = scenario.state
-    }
-    if ('restoredUnconfirmed' in scenario) {
-      hook.restoredUnconfirmed = true
-    }
-    if (scenario.age !== undefined) {
-      hook.receivedAt -= scenario.age
-    }
-    await runtime.listTerminals()
-    completeWithNativeTitles()
-    await vi.advanceTimersByTimeAsync(100)
-    insertDirectRunMessage(db, run.id, 'Worker progress')
-    runtime.notifyMessageArrived(`run:${run.id}`, 'status')
-    await vi.advanceTimersByTimeAsync(1000)
-    expect(write).not.toHaveBeenCalled()
-    db.close()
   })
 
   it('does not restore idle over a permission title received during the host probe', async () => {

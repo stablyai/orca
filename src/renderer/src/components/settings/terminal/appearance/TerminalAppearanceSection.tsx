@@ -86,7 +86,6 @@ export function TerminalAppearanceSection({
   const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
-  const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
   const showDesktopThemeImports = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
@@ -282,8 +281,6 @@ export function TerminalAppearanceSection({
           key={`theme-catalog-${preferredThemeTarget ?? 'manual'}`}
           settings={settings}
           systemPrefersDark={systemPrefersDark}
-          themeSearch={themeSearch}
-          setThemeSearch={setThemeSearch}
           updateSettings={updateSettings}
           previewFontFamily={previewFontFamily}
           importedHighlightSignal={warpThemes.importSignal}

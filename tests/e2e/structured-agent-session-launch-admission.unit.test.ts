@@ -62,7 +62,7 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (import
 import { useAppStore } from '@/store'
 import { adoptAgentSessionLaunchVerdict } from '../../src/renderer/src/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from '../../src/renderer/src/lib/agent-session/structured-agent-session-provisional-tab'
-import { beginDirectWorkItemStructuredLaunch } from '../../src/renderer/src/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
+import '../../src/renderer/src/lib/workspace/creation/work-item/launch-work-item-direct-agent-routing'
 import { getStructuredAgentLaunchStatus } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-status'
 import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
 import { peekWebSessionFocusIntent } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
@@ -155,32 +155,6 @@ afterEach(() => {
 describe('a structured chat launch on a paired server', () => {
   beforeEach(seedPairedServerWorkspace)
 
-  it("opens a direct caller's terminal with the caller's own CLI arguments on a decline", async () => {
-    mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
-    mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'host-published' } })
-
-    const result = beginDirectWorkItemStructuredLaunch({
-      plan: pairedPlan(),
-      primaryTabId: null,
-      beforeOpen: vi.fn(),
-      declinedTerminal: { agentArgs: '--model opus', launchSource: 'task_page' }
-    })
-
-    expect(result).toEqual({ completed: true, structuredLaunch: true, primaryTabId: null })
-    await vi.waitFor(() => expect(mocks.launchAgentInNewTab).toHaveBeenCalledOnce())
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        agent: 'claude',
-        worktreeId: WORKTREE,
-        prompt: 'fix the flaky test',
-        agentArgs: '--model opus',
-        launchSource: 'task_page',
-        agentSessionLaunchPlan: expect.objectContaining({ route: 'terminal-tui' })
-      })
-    )
-    expectNoChatCommitted()
-  })
-
   it('opens nothing and says so once when the server cannot be reached', async () => {
     mocks.createSupport.mockRejectedValue(new Error('connection lost'))
     const onHostDeclined = vi.fn()
@@ -239,25 +213,6 @@ describe('a structured chat launch on a paired server', () => {
     launch?.cancel()
   })
 
-  it('opens the chat on the server that admitted it', async () => {
-    mocks.createSupport.mockResolvedValue({ supported: true })
-
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan: pairedPlan(),
-      hooks: {},
-      onHostDeclined: vi.fn()
-    })
-    await vi.waitFor(() =>
-      expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toEqual([
-        expect.objectContaining({
-          contentType: 'agent-session',
-          executionHostId: 'runtime:server-1'
-        })
-      ])
-    )
-    launch?.cancel()
-  })
-
   // An unread capability is neither an older server nor an unreachable one: the resume asks the
   // plain question and create decides, as before the early writer question existed.
   it('opens a resumed chat when the server could not say what it supports', async () => {
@@ -288,59 +243,6 @@ describe('a structured chat launch on a paired server', () => {
 
 // The same ask, of this machine's own runtime: a Claude account bound to WSL is one "no" it gives.
 describe('a structured chat launch on this machine', () => {
-  it('opens only the terminal when this machine declines, without a notice', async () => {
-    mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
-    const onHostDeclined = vi.fn(() => ({
-      opened: true,
-      promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false })
-    }))
-    const reveal = vi.fn()
-
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan: localPlan(),
-      hooks: {},
-      beforeOpen: reveal,
-      onHostDeclined
-    })
-
-    expect(launch?.tab).toBeNull()
-    expect(reveal).toHaveBeenCalledOnce()
-    await expect(launch?.settlement).resolves.toEqual({ kind: 'terminal' })
-    await expect(launch?.promptDeliveryResult).resolves.toEqual({
-      delivered: true,
-      failureNotified: false
-    })
-    expect(onHostDeclined).toHaveBeenCalledExactlyOnceWith({ kind: 'local' }, undefined)
-    expect(mocks.toastInfo).not.toHaveBeenCalled()
-    expect(mocks.toastError).not.toHaveBeenCalled()
-    expectNoChatCommitted()
-  })
-
-  it("opens a new agent tab's terminal with the typed prompt when the caller names none", async () => {
-    mocks.createSupport.mockResolvedValue({ supported: false })
-    mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 't' } })
-
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan: localPlan(),
-      hooks: {},
-      targetGroupId: 'group-1',
-      declinedTerminal: { agentArgs: '--model opus' }
-    })
-
-    await expect(launch?.settlement).resolves.toEqual({ kind: 'terminal' })
-    expect(mocks.launchAgentInNewTab).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        agent: 'claude',
-        worktreeId: WORKTREE,
-        groupId: 'group-1',
-        prompt: 'fix the flaky test',
-        agentArgs: '--model opus',
-        agentSessionLaunchPlan: expect.objectContaining({ route: 'terminal-tui' })
-      })
-    )
-    expectNoChatCommitted()
-  })
-
   it('opens nothing when the launch is abandoned before this machine answers', async () => {
     let answer!: (support: { supported: boolean }) => void
     mocks.createSupport.mockReturnValue(new Promise((resolve) => (answer = resolve)))
@@ -381,25 +283,6 @@ describe('a structured chat launch on this machine', () => {
     expect(mocks.toastError).not.toHaveBeenCalled()
     launch?.cancel()
   })
-
-  // Not resolvable yet is not a "no": the chat opens and its own create asks again, as before.
-  it('opens the chat, not a terminal, when this machine cannot resolve a new workspace yet', async () => {
-    mocks.createSupport.mockRejectedValue(new Error('selector_not_found'))
-    const onHostDeclined = vi.fn()
-
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan: localPlan(),
-      hooks: {},
-      onHostDeclined
-    })
-
-    await vi.waitFor(
-      () => expect(useAppStore.getState().unifiedTabsByWorktree[WORKTREE]).toHaveLength(1),
-      { timeout: 3_000 }
-    )
-    expect(onHostDeclined).not.toHaveBeenCalled()
-    launch?.cancel()
-  })
 })
 
 // Another terminal running the conversation: create would refuse it, so nothing opens first.
@@ -434,24 +317,6 @@ it('opens nothing for a resume the host refuses, leaving the one notice to its c
   expect(onHostDeclined).not.toHaveBeenCalled()
   expect(mocks.toastError).not.toHaveBeenCalled()
   expectNoChatCommitted()
-})
-
-describe('a paired server that cannot resolve a new workspace yet', () => {
-  beforeEach(seedPairedServerWorkspace)
-
-  it('keeps its terminal fallback, as before', async () => {
-    mocks.createSupport.mockRejectedValue(new Error('selector_not_found'))
-    const onHostDeclined = vi.fn(() => ({ opened: true }))
-
-    const launch = beginStructuredAgentSessionProvisionalLaunch({
-      plan: pairedPlan(),
-      hooks: {},
-      onHostDeclined
-    })
-
-    await expect(launch?.settlement).resolves.toEqual({ kind: 'terminal' })
-    expect(onHostDeclined).toHaveBeenCalledOnce()
-  })
 })
 
 it('keeps an explicit chat and its prompt when its host declines startup', async () => {

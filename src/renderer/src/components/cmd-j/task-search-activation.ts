@@ -16,7 +16,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import {
   haveConflictingTaskSourceAccounts,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type { CmdJTaskSearchResult } from './task-search-results'
 import { getJiraIssueWorkspaceSeed } from '../task-page/task-page-source-context'
 

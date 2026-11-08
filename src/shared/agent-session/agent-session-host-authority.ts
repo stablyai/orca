@@ -9,7 +9,7 @@ import type { RuntimeTerminalPresentation } from '../runtime-terminal-contracts'
 import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
 import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import type { SpawnIntent } from '../host-spawn-admission'
+import type { SpawnIntent } from '../terminal/pty/admission/spawn-admission-contract'
 
 export const AGENT_SESSION_RPC_ERROR_CODES = [
   'agent_session_identity_required',

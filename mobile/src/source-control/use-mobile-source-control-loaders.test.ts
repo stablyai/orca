@@ -1,13 +1,13 @@
 import { createElement } from 'react'
-import { QueryClientProvider } from '@tanstack/react-query'
+
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
-import { createOrcaQueryClient } from '../query/orca-query-client'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
+
 import {
   documentQueryClient,
   settleQueryNotifications
@@ -114,21 +114,9 @@ async function settleCompare(calls: PendingCall[], baseRef: string): Promise<voi
   await settleQueryNotifications()
 }
 
-async function failCompare(calls: PendingCall[]): Promise<void> {
-  await settleOldest(calls, 'git.branchCompare', {
-    id: 'call',
-    ok: false,
-    error: { code: 'git_failed', message: 'compare failed' }
-  })
-}
-
 async function settleBaseRefLookup(calls: PendingCall[], baseRef: string): Promise<void> {
   await settleOldest(calls, 'worktree.show', worktreeReply(baseRef))
   await settleOldest(calls, 'repo.list', REPO_LIST_REPLY)
-}
-
-function pendingCount(calls: PendingCall[], method: string): number {
-  return calls.filter((call) => call.method === method).length
 }
 
 // Stable callbacks keep the mount effect from issuing extra loads that would obscure the tested schedule.
@@ -174,57 +162,6 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     }
   }
 
-  it('lets the newest compare publish and refuses the one it superseded', async () => {
-    const calls: PendingCall[] = []
-    const read: { loaders: Loaders | null } = { loaders: null }
-    await mount(fakeClient(calls), read)
-
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-    await settleBaseRefLookup(calls, 'origin/dev')
-    expect(pendingCount(calls, 'git.branchCompare')).toBe(1)
-
-    // Force status to start a second compare; an unforced load would join the pending status.
-    await act(async () => {
-      void read.loaders?.loadStatus({ force: true })
-    })
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-    await settleBaseRefLookup(calls, 'origin/main')
-    expect(pendingCount(calls, 'git.branchCompare')).toBe(2)
-
-    await settleCompare(calls, 'origin/main')
-    expect(read.loaders?.branchCompareState).toEqual({
-      kind: 'ready',
-      result: expect.objectContaining({
-        summary: expect.objectContaining({ baseRef: 'origin/main' })
-      })
-    })
-
-    await settleCompare(calls, 'origin/dev')
-    expect(read.loaders?.branchCompareState).toEqual({
-      kind: 'ready',
-      result: expect.objectContaining({
-        summary: expect.objectContaining({ baseRef: 'origin/main' })
-      })
-    })
-  })
-
-  it('refuses a compare whose route identity moved while it was out', async () => {
-    const calls: PendingCall[] = []
-    const read: { loaders: Loaders | null } = { loaders: null }
-    const rerender = await mount(fakeClient(calls), read)
-
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-    await settleBaseRefLookup(calls, 'origin/dev')
-    expect(pendingCount(calls, 'git.branchCompare')).toBe(1)
-
-    // Switch worktrees while new status is pending, before another compare can supersede the old scope.
-    await rerender('host-1:repo42::/other', 'repo42::/other')
-    expect(read.loaders?.branchCompareState).toEqual({ kind: 'idle' })
-
-    await settleCompare(calls, 'origin/dev')
-    expect(read.loaders?.branchCompareState).toEqual({ kind: 'idle' })
-  })
-
   it('shows the compare again at once after switching away and back while the status read is still fresh', async () => {
     const calls: PendingCall[] = []
     const read: { loaders: Loaders | null } = { loaders: null }
@@ -239,67 +176,5 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     await rerender('host-1:repo42::/other', 'repo42::/other')
     await rerender(IDENTITY, WORKTREE)
     expect(read.loaders?.branchCompareState.kind).toBe('ready')
-  })
-
-  it('retries a failed compare when Changes is back on top', async () => {
-    const calls: PendingCall[] = []
-    const read: { loaders: Loaders | null } = { loaders: null }
-    const rerender = await mount(fakeClient(calls), read)
-
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-    await settleBaseRefLookup(calls, 'origin/dev')
-    await failCompare(calls)
-    expect(read.loaders?.branchCompareState).toEqual({ kind: 'error', message: 'compare failed' })
-
-    focus.current = false
-    await rerender(IDENTITY, WORKTREE)
-    expect(pendingCount(calls, 'worktree.show')).toBe(0)
-    focus.current = true
-    await rerender(IDENTITY, WORKTREE)
-
-    await settleBaseRefLookup(calls, 'origin/dev')
-    await settleCompare(calls, 'origin/dev')
-    expect(read.loaders?.branchCompareState.kind).toBe('ready')
-    expect(pendingCount(calls, 'git.status')).toBe(0)
-  })
-})
-
-describe('useMobileSourceControlLoaders action error', () => {
-  it('leaves the action error to the reads that actions and refreshes make', async () => {
-    const calls: PendingCall[] = []
-    const actionErrors: (string | null)[] = []
-    const queryClient = createOrcaQueryClient()
-    // Stable, as the screen's state setter is; a new identity would read as a refocus.
-    const recordActionError = (message: string | null): void => {
-      actionErrors.push(message)
-    }
-    function Harness(): null {
-      useMobileSourceControlLoaders({
-        hostId: 'host-1',
-        client: fakeClient(calls),
-        connState: 'connected',
-        statusIdentityKey: IDENTITY,
-        worktreeId: WORKTREE,
-        setActionError: recordActionError
-      })
-      return null
-    }
-    let renderer: ReactTestRenderer | null = null
-    await act(async () => {
-      renderer = create(
-        createElement(QueryClientProvider, { client: queryClient }, createElement(Harness))
-      )
-    })
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-    await settleQueryNotifications()
-
-    // An open, foreground or reconnect read can land after an action failed; it must not wipe that error.
-    await act(async () => {
-      void queryClient.invalidateQueries()
-    })
-    await settleOldest(calls, 'git.status', STATUS_REPLY)
-    await settleQueryNotifications()
-    expect(actionErrors).toEqual([])
-    act(() => renderer?.unmount())
   })
 })

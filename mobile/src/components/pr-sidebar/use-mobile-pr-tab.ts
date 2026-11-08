@@ -1,23 +1,33 @@
 import { useCallback, useRef, useState } from 'react'
-import type { ConnectionState } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { HostConnectionInputs } from '../../transport/client-context-connection-metrics'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { HostConnectionInputs } from '../../transport/connection/client-context-connection-metrics'
 import {
   isPrSidebarDetailsPlaceholder,
   prSidebarResourceKey,
   type PrSidebarData,
   type PrSidebarState
-} from '../../session/mobile-pr-sidebar-state'
+} from '../../source-control/review/mobile-pr-sidebar-state'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
-import type { PrSidebarLoadOptions } from '../../session/use-mobile-pr-sidebar-controller'
-import { prActionSlices, type PrQueryScope, type PrSlice } from '../../session/mobile-pr-queries'
-import type { PrActionBusyKey } from '../../session/pr-actions-engine'
+import type { PrSidebarLoadOptions } from '../../source-control/review/use-mobile-pr-sidebar-controller'
+import {
+  prActionSlices,
+  type PrQueryScope,
+  type PrSlice
+} from '../../source-control/review/mobile-pr-queries'
+import type { PrActionBusyKey } from '../../source-control/review/pr-actions-engine'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
-import { useMobilePrActions, type MobilePrActions } from '../../session/use-mobile-pr-actions'
-import { useMobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
-import { useMobilePrTextAction } from '../../session/use-mobile-pr-text-action'
-import { useMobilePrAiTriage, type MobilePrAiTriage } from '../../session/use-mobile-pr-ai-triage'
-import { usePRBotAuthorOverrides } from '../../session/use-pr-bot-author-overrides'
+import {
+  useMobilePrActions,
+  type MobilePrActions
+} from '../../source-control/review/use-mobile-pr-actions'
+import { useMobilePrCommentActions } from '../../source-control/review/use-mobile-pr-comment-actions'
+import { useMobilePrTextAction } from '../../source-control/review/use-mobile-pr-text-action'
+import {
+  useMobilePrAiTriage,
+  type MobilePrAiTriage
+} from '../../source-control/review/use-mobile-pr-ai-triage'
+import { usePRBotAuthorOverrides } from '../../source-control/review/use-pr-bot-author-overrides'
 import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { useMobilePrPolling, type PrTabLive } from './use-mobile-pr-polling'
 import { unlinkMobilePr } from '../../source-control/mobile-pr-link'

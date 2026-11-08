@@ -3,11 +3,11 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Text, View } from 'react-native'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import { getAutomationRunContent } from '../../../src/shared/automation-run-content'
+import { getAutomationRunContent } from '../../../src/shared/automations/history/automation-run-content'
 import { mobileSessionRouteTarget } from '../session/mobile-session-route'
 import { hostStackRouteHref } from '../navigation/host-stack-navigation'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { AutomationButton, AutomationMetadata } from './AutomationControls'
 import {
   automationDate,

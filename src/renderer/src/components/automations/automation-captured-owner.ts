@@ -1,13 +1,13 @@
 /** Carry the listed owner into actions so a host move fences against the incarnation the user saw. Owned rows act normally, orphans allow pause/delete/history but cannot execute, and unfenced legacy rows stay view-only. */
 
-import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../../shared/automation-owner-conflict'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
+import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../../shared/automations/ownership/automation-owner-conflict'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automations/ownership/automation-list-scope'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
-} from '../../../../shared/automation-owner-ref'
-import { ownerKey } from '../../../../shared/automation-owner-key'
-import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
+import type { AutomationOwnerPrecondition } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { AutomationHostRow, AutomationHostRowSelector } from './automation-host-cache-types'

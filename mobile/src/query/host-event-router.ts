@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import { focusManager, useQueryClient, type Query, type QueryClient } from '@tanstack/react-query'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   subscribeSharedClientEvents,
   type SharedClientEvent
-} from '../transport/shared-client-events'
+} from '../transport/connection/shared-client-events'
 import type { HostQuerySignal } from './host-query'
 import { hostScopeKey } from './host-query-key'
 

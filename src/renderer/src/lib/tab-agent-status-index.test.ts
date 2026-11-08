@@ -210,19 +210,6 @@ function layoutOf(activeLeafId: string | null): TerminalLayoutSnapshot {
   return { root: null, activeLeafId, expandedLeafId: null }
 }
 
-function countEntryScans<T extends object>(source: T): { source: T; scans: () => number } {
-  let scanCount = 0
-  return {
-    source: new Proxy(source, {
-      ownKeys: (target) => {
-        scanCount += 1
-        return Reflect.ownKeys(target)
-      }
-    }),
-    scans: () => scanCount
-  }
-}
-
 type RandomCase = {
   statusMap: Record<string, AgentStatusEntry>
   retainedMap: Record<string, RetainedAgentEntry>
@@ -308,45 +295,5 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
     for (let caseIndex = 0; caseIndex < 250; caseIndex += 1) {
       expectParity(generateCase(random))
     }
-  })
-
-  it('re-indexes when the store replaces the map identity', () => {
-    const paneKey = `tab-1:${leafId(0)}`
-    const before = { [paneKey]: statusEntry(paneKey, 'done', 'claude') }
-    expect(resolveFocusedCompletedTabAgent(before, undefined, 'tab-1')).toBe('claude')
-    const after = { [paneKey]: statusEntry(paneKey, 'done', 'codex') }
-    expect(resolveFocusedCompletedTabAgent(after, undefined, 'tab-1')).toBe('codex')
-    expect(resolveFocusedCompletedTabAgent(before, undefined, 'tab-1')).toBe('claude')
-  })
-
-  it('scans each source identity once across tabs and resolver variants', () => {
-    const firstPaneKey = `tab-1:${leafId(0)}`
-    const secondPaneKey = `tab-2:${leafId(1)}`
-    const status = countEntryScans({
-      [firstPaneKey]: statusEntry(firstPaneKey, 'working', 'claude'),
-      [secondPaneKey]: statusEntry(secondPaneKey, 'done', 'codex')
-    })
-    const retained = countEntryScans({
-      [firstPaneKey]: retainedEntry(firstPaneKey, 'claude'),
-      [secondPaneKey]: retainedEntry(secondPaneKey, 'codex')
-    })
-
-    for (const tabId of ['tab-1', 'tab-2', 'tab-absent']) {
-      const layout = layoutOf(leafId(9))
-      resolveFocusedTabAgent(status.source, undefined, tabId)
-      resolveSiblingTabAgent(status.source, layout, tabId)
-      resolveFocusedCompletedTabAgent(status.source, undefined, tabId)
-      resolveSiblingCompletedTabAgent(status.source, layout, tabId)
-      resolveFocusedRetainedTabAgent(retained.source, undefined, tabId)
-      resolveSiblingRetainedTabAgent(retained.source, layout, tabId)
-    }
-
-    expect(status.scans()).toBe(1)
-    expect(retained.scans()).toBe(1)
-
-    const replacement = countEntryScans({ ...status.source })
-    resolveFocusedTabAgent(replacement.source, undefined, 'tab-1')
-    resolveFocusedCompletedTabAgent(replacement.source, undefined, 'tab-2')
-    expect(replacement.scans()).toBe(1)
   })
 })

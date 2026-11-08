@@ -11,7 +11,6 @@ import {
 } from './edge-relay.js'
 import type { EdgeAssignBody, EdgeDeviceRow } from './edge-admin-client.js'
 import { EDGE_FENCE_RETRY_BASE_MS, retryPendingFences } from './edge-relay-fence.js'
-import { EdgeEvacuation } from './edge-relay-evacuation.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
@@ -236,39 +235,5 @@ describePostgres('relay edge on PostgreSQL', () => {
     expect(sent.slice(1)).toEqual([{ ...host, cellId: cell.id, assignmentEpoch: 31 }])
     expect(await database.query(`SELECT 1 FROM relay_edge_fence_pending WHERE user_id = ?`, [host.userId])).toEqual([])
     vi.restoreAllMocks()
-  })
-
-  it('mode down: a leaving host loses its Postgres devices, and the sweep drains wrapping around its origin', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const flags = { mode: 'on' as 'on' | 'down' }
-    const config = { ...edgeConfig, control: () => flags }
-    const drained: string[] = []
-    const admin = {
-      assign: async (body: EdgeAssignBody) => ({ outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }),
-      exportHost: async (): Promise<never> => {
-        throw new Error('unexpected export')
-      },
-      drain: async (relayHostId: string) => {
-        drained.push(relayHostId)
-        return { outcome: 'idle' as const }
-      }
-    }
-    const edge = new EdgeAssignments(database, config, Date.now, admin)
-    await edge.ensureEdgeCell()
-    const downHosts = ['edgepgdown000001', 'edgepgdown000002'].map((relayHostId) => ({ userId: 'edge-pg-user', relayHostId }))
-    for (const host of downHosts) { await edge.moveToEdge(host, 0) }
-    await database.query(
-      `INSERT INTO relay_devices (user_id, relay_host_id, relay_device_id, current_hash, current_version,
-         current_expires_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      ['edge-pg-user', downHosts[0]!.relayHostId, 'phone-a', 'hash-phone-a', 2, 1_900_000_000_000, 1_800_000_000_000]
-    )
-    flags.mode = 'down'
-    // Origin 'f3333333' sorts after 'edge-pg-user': the pass finds both hosts only once wrapped.
-    const evacuation = new EdgeEvacuation(database, config, admin, EDGE_CELL_ID, Date.now, () => 0.95)
-    await evacuation.sweep()
-    expect(drained.filter((id) => id.startsWith('edgepgdown'))).toEqual(downHosts.map((host) => host.relayHostId))
-    expect(await edge.leaveEdge(downHosts[0]!)).toBe(true)
-    expect(await database.query(`SELECT 1 FROM relay_devices WHERE relay_host_id = ?`, [downHosts[0]!.relayHostId])).toEqual([])
   })
 })

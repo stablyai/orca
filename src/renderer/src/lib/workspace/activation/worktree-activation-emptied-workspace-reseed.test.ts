@@ -37,6 +37,16 @@ function seedClosedLastTerminal(worktreeId: string): void {
   expect(renderableTabCount).toBe(0)
 }
 
+function seedSplitLanding(worktreeId: string): void {
+  useAppStore.setState({
+    groupsByWorktree: {
+      [worktreeId]: [{ id: 'landing', worktreeId, activeTabId: null, tabOrder: [] }]
+    },
+    activeGroupIdByWorktree: { [worktreeId]: 'landing' },
+    splitLandingGroupIds: { landing: worktreeId }
+  })
+}
+
 describe('activating a workspace whose last terminal was closed', () => {
   it('lets the latest caller surface supersede an older callback on the shared gate', async () => {
     const worktree = makeWorktree()
@@ -113,6 +123,62 @@ describe('activating a workspace whose last terminal was closed', () => {
     })
 
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toHaveLength(1)
+  })
+
+  it('keeps a waiting split landing instead of re-seeding when the workspace is reopened', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    seedSplitLanding(worktree.id)
+
+    activateAndRevealWorktree(worktree.id, {
+      executionHostId: 'local',
+      notifyHostRuntime: false
+    })
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+    expect(useAppStore.getState().groupsByWorktree[worktree.id]).toEqual([
+      expect.objectContaining({ id: 'landing', tabOrder: [] })
+    ])
+  })
+
+  it('still inventories saved sessions beside a waiting split landing, then keeps the landing', async () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    seedSplitLanding(worktree.id)
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: { 'pane-1': { worktreeId: worktree.id } } as never
+    })
+    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockResolvedValue('empty')
+
+    activateAndRevealWorktree(worktree.id, { executionHostId: 'local', notifyHostRuntime: false })
+    await gate.mock.results[0]?.value
+
+    expect(gate).toHaveBeenCalledOnce()
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+  })
+
+  it('does not seed into a split landing created while the inventory gate was pending', async () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: { 'pane-1': { worktreeId: worktree.id } } as never
+    })
+    let resolveGate!: (outcome: activationGate.WorktreeAgentActivationOutcome) => void
+    const pendingGate = new Promise<activationGate.WorktreeAgentActivationOutcome>((resolve) => {
+      resolveGate = resolve
+    })
+    vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockReturnValue(pendingGate)
+
+    activateAndRevealWorktree(worktree.id, { executionHostId: 'local', notifyHostRuntime: false })
+    seedSplitLanding(worktree.id)
+    resolveGate('empty')
+    await pendingGate
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
   })
 
   it('leaves the row empty for startup hydration, which never opts into re-seeding', () => {
@@ -250,6 +316,21 @@ describe('activating a folder workspace whose last terminal was closed', () => {
       expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY] ?? []).toHaveLength(expectedTabs)
     }
   )
+
+  it('still inventories a folder beside a waiting split landing, then keeps the landing', async () => {
+    seedEmptiedFolderWorkspaceOnTwoHosts()
+    seedSplitLanding(FOLDER_KEY)
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: { 'pane-1': { worktreeId: FOLDER_KEY } } as never
+    })
+    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockResolvedValue('empty')
+
+    activateAndRevealFolderWorkspace(FOLDER_ID, { executionHostId: 'local' })
+    await gate.mock.results[0]?.value
+
+    expect(gate).toHaveBeenCalledOnce()
+    expect(useAppStore.getState().tabsByWorktree[FOLDER_KEY] ?? []).toEqual([])
+  })
 
   // Own-surface opt-out must also cover folders or file-link routing there reseeds shells.
   it('leaves the row empty when the caller opens its own surface', async () => {

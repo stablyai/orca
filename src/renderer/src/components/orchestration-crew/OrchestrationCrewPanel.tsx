@@ -9,7 +9,7 @@ import type { WorktreeStatus } from '@/lib/worktree-status'
 import type {
   OrchestrationCrewRow,
   OrchestrationCrewSnapshot
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useOrchestrationCrew } from '../native-chat/worker-lifetime/use-orchestration-crew'
 import { translate } from '@/i18n/i18n'

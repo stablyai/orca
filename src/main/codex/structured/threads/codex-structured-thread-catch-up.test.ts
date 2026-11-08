@@ -536,7 +536,10 @@ describe('Codex chat catch-up', () => {
     store = await openTestAgentSessionRecordStore(c.root)
     await recoverStructuredRewind(deps(), SESSION, c.journal, 1)
     expect(store.getRecord(SESSION)?.rewind?.phase).toBe('completed')
-    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())?.importedAt).toBe(200_000)
+    expect(usableJournalHistoryOrigin(c.journal.historyOrigin())).toMatchObject({
+      kind: 'legacy_import',
+      importedAt: 200_000
+    })
     await c.open([dated(100), dated(150), dated(200), dated(250), dated(600)])
     expect(c.texts().filter((text) => text.startsWith('assistant:'))).toEqual([
       'assistant:old A answer',

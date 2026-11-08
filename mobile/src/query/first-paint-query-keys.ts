@@ -8,7 +8,7 @@ import {
 } from '../host-screen/host-list-queries'
 import { hostViewFamily, hostViewKey } from '../host-screen/host-view-memory'
 import { hostProjectSectionsQuery } from '../host-screen/use-host-project-sections'
-import { sessionTabsFamily, sessionTabsKey } from '../session/mobile-session-last-tabs'
+import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-session-last-tabs'
 import { gitStatusQuery } from '../source-control/mobile-git-status-query'
 import { hostQueryKey } from './host-query-key'
 import { persistedHostQueryKey, type PersistedHostQueryKey } from './host-query-persistence'

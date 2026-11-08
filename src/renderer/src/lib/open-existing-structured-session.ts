@@ -8,7 +8,7 @@ import {
   type StructuredSessionOpenTab,
   type StructuredSessionOpenFailure
 } from '../../../shared/open-structured-agent-session'
-import type { OrchestrationPartyLocationResult } from '../../../shared/orchestration-caller-status'
+import type { OrchestrationPartyLocationResult } from '../../../shared/orchestration/orchestration-caller-status'
 import {
   findStructuredAgentSessionTab,
   activateStructuredAgentSessionById

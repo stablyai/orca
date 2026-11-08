@@ -1,6 +1,6 @@
 import { expect } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import {

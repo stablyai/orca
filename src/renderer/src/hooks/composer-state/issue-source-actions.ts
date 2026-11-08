@@ -57,7 +57,7 @@ import {
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
   const {

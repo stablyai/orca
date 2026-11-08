@@ -4,13 +4,13 @@ import type { PRFilterChange } from '@/components/github/PRFilterSections'
 import {
   scopeGitHubTaskSearch,
   getDefaultPresetForGitHubTaskKind
-} from '../../../../shared/task-github-search'
+} from '../../../../shared/work-items/task-github-search'
 import { matchGitHubPRPreset, patchGitHubTaskQuery } from './github/task-page-pr-chips'
 import type { TaskViewPresetId } from '../../../../shared/ui-chrome-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page/task-page-localized-options'
-import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
+import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {

@@ -1,5 +1,5 @@
 import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import {
   structuredAgentSessionLaunchFeasible,
   type AgentSessionStructuredFeasibilityRequest
