@@ -1,5 +1,5 @@
 import { WorktreeLinkedItemRow } from './WorktreeLinkedItemRow'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import React, { useState } from 'react'
 import { Link2 } from 'lucide-react'
 import { Label } from '@/components/ui/label'
@@ -42,6 +42,7 @@ export function WorktreeLinkedItemsField({
   initialInput = '',
   disabled
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const [error, setError] = useState<string | null>(null)
   const getScopeError = (item: WorkspaceAttachment): string | null => {
     if (
@@ -50,7 +51,7 @@ export function WorktreeLinkedItemsField({
       !item.url &&
       !canUseWorkspaceReviewForChecks(item, repo)
     ) {
-      return translate(
+      return t(
         'workspace.links.reviewUrlRequired',
         'Paste the review URL to verify its repository and provider.'
       )
@@ -64,17 +65,17 @@ export function WorktreeLinkedItemsField({
       return null
     }
     if (!repo?.gitRemoteIdentity) {
-      return translate(
+      return t(
         'workspace.links.repositoryLoading',
         'Repository identity is still loading. Try again once it is available.'
       )
     }
     return item.type === 'issue'
-      ? translate(
+      ? t(
           'workspace.links.foreignIssue',
           'This issue belongs to another repository. Add issues from this workspace’s repository.'
         )
-      : translate(
+      : t(
           'workspace.links.foreignReview',
           'This review belongs to another repository. Add reviews from this workspace’s repository.'
         )
@@ -89,7 +90,7 @@ export function WorktreeLinkedItemsField({
       return false
     }
     if (isWorkspaceAttachmentLinked(items, item)) {
-      setError(translate('workspace.links.duplicate', 'This link is already attached.'))
+      setError(t('workspace.links.duplicate', 'This link is already attached.'))
       return false
     }
     onItemsChange(appendWorkspaceAttachment(items, item))
@@ -102,11 +103,11 @@ export function WorktreeLinkedItemsField({
   }
   const groups = [
     {
-      label: translate('workspace.links.reviews', 'Reviews'),
+      label: t('workspace.links.reviews', 'Reviews'),
       items: items.filter((item) => item.type !== 'issue')
     },
     {
-      label: translate('workspace.links.tasks', 'Issues & tasks'),
+      label: t('workspace.links.tasks', 'Issues & tasks'),
       items: items.filter((item) => item.type === 'issue')
     }
   ].filter((group) => group.items.length > 0)
@@ -114,9 +115,9 @@ export function WorktreeLinkedItemsField({
   return (
     <div className="space-y-3" data-workspace-linked-items="">
       <div className="flex items-center justify-between gap-2">
-        <Label>{translate('workspace.links.title', 'Linked work')}</Label>
+        <Label>{t('workspace.links.title', 'Linked work')}</Label>
         <span className="text-xs text-muted-foreground">
-          {translate('workspace.links.linkedCount', '{{count}} linked', {
+          {t('workspace.links.linkedCount', '{{count}} linked', {
             count: items.length,
             defaultValue_one: '{{count}} linked'
           })}
@@ -140,10 +141,7 @@ export function WorktreeLinkedItemsField({
         <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
           <Link2 className="size-4 shrink-0" />
           <span>
-            {translate(
-              'workspace.links.empty',
-              'Keep every review and task for this workspace together.'
-            )}
+            {t('workspace.links.empty', 'Keep every review and task for this workspace together.')}
           </span>
         </div>
       ) : (
