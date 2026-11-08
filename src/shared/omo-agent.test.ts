@@ -65,5 +65,12 @@ describe('OmO agent identity', () => {
     expect(recognizeAgentProcessFromCommandLine('bun run dev')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('bun ./scripts/build.js')).toBeNull()
     expect(recognizeAgentProcessFromCommandLine('bun /tmp/app/dist/bundle/cli.js')).toBeNull()
+    const senpiBundle = '/tmp/node_modules/@code-yeongyu/senpi/dist/bundle/cli.js'
+    expect(recognizeAgentProcessFromCommandLine(`bun build ${senpiBundle}`)).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine(`bun run dev ${senpiBundle}`)).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine(`bun run ${senpiBundle}`)).toEqual({
+      agent: 'omo',
+      processName: 'omo'
+    })
   })
 })
