@@ -5,6 +5,8 @@ import { BoundedMap } from '../../../shared/bounded-map'
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
 import { InFlightPromiseDedupe } from '../../../shared/in-flight-promise-dedupe'
 import { iterateNulDelimitedFields } from '../../../shared/nul-delimited-fields'
+import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { runCoalescedProbe, type CoalescedProbes } from '../remotes/coalesced-probe'
 import { wslDistroForCommand } from '../command-runner/git-command-resolution'
 import { gitReadOptionsForWorktree, type GitRuntimeOptions } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
@@ -37,6 +39,27 @@ const STAMPED_GIT_CONFIG_MAX_AGE_MS = 5 * 60_000
 const cachedConfigs = new BoundedMap<string, CachedConfig>({ maxEntries: 256 })
 const configReads = new InFlightPromiseDedupe<StampedGitConfig | null>()
 
+// A dead home or network mount can stall stat; skip reuse after this instead of stalling status (as local-git-config-signature).
+const CONFIG_STAMP_DEADLINE_MS = 2_000
+const configStampProbes: CoalescedProbes<WorktreeDiffStamp | null> = new Map()
+
+/** Stamp config files within the deadline; a stat still hung from an earlier poll fails fast instead of piling up. */
+async function readConfigFilesStamp(
+  worktreePath: string,
+  files: readonly string[]
+): Promise<WorktreeDiffStamp | null> {
+  const key = JSON.stringify([worktreePath, files])
+  const pending = configStampProbes.get(key)
+  if (pending && Date.now() - pending.startedAt >= CONFIG_STAMP_DEADLINE_MS) {
+    return null
+  }
+  return withTimeout(
+    runCoalescedProbe(configStampProbes, key, () => readHostFilesStamp(files)),
+    CONFIG_STAMP_DEADLINE_MS,
+    null
+  )
+}
+
 /** True where Node cannot stamp what Git reads: WSL Git uses the distro's files, not the host's. */
 function runsGitInWsl(worktreePath: string, options: GitRuntimeOptions): boolean {
   return Boolean(options.wslDistro || wslDistroForCommand(worktreePath))
@@ -53,8 +76,11 @@ export async function readStampedGitConfig(
   const key = worktreePath
   const cached = cachedConfigs.get(key)
   if (cached?.stamp && performance.now() - cached.atMs < STAMPED_GIT_CONFIG_MAX_AGE_MS) {
-    const stamp = await readHostFilesStamp(cached.config.files)
-    if (stamp && stamp.value === cached.stamp.value) {
+    const stamp = await readConfigFilesStamp(key, cached.config.files)
+    if (!stamp) {
+      return null
+    }
+    if (stamp.value === cached.stamp.value) {
       return cached.config
     }
   }
@@ -74,7 +100,10 @@ async function readConfig(
   }
   // Stamp before reading, including inputs the last read named, so an edit during the read invalidates.
   const stampedFiles = [...new Set([...locations.candidates, ...(cached?.config.files ?? [])])]
-  const stampBefore = await readHostFilesStamp(stampedFiles)
+  const stampBefore = await readConfigFilesStamp(worktreePath, stampedFiles)
+  if (!stampBefore) {
+    return null
+  }
   let stdout: string
   try {
     stdout = (
