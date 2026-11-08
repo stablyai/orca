@@ -8,6 +8,7 @@ import {
   HOST_TERMINAL_SURFACE_SEPARATOR,
   toHostSessionTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
+import type { PtyTransport } from '../pty-transport-types'
 
 let panes: LegacyRelayBridgedPane[] = []
 const listeners = new Set<() => void>()
@@ -170,4 +171,33 @@ export function legacyRelayBridgedTabIds(targetId: string): string[] {
 export function onLegacyRelayBridgedPanesChanged(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
+}
+
+// The notice a bridged pane shows while its older relay can't be reached.
+type UnreachableNoticeCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
+
+const UNREACHABLE_MESSAGE =
+  'This terminal is still running on the host under an older version of Orca. Reconnecting to it…'
+
+export function createLegacyRelayUnreachableNotice(
+  callbacks: () => UnreachableNoticeCallbacks | null
+): {
+  show: () => void
+  clear: () => void
+} {
+  let showing = false
+  return {
+    show: () => {
+      if (!showing) {
+        showing = true
+        callbacks()?.onError?.(UNREACHABLE_MESSAGE)
+      }
+    },
+    clear: () => {
+      if (showing) {
+        showing = false
+        callbacks()?.onErrorCleared?.(UNREACHABLE_MESSAGE)
+      }
+    }
+  }
 }

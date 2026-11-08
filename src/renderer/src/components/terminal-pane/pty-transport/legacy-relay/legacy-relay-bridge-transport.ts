@@ -14,9 +14,9 @@ import type { RemoteRuntimeSnapshotRequestOptions } from '../../../../runtime/ho
 import { SSH_SESSION_EXPIRED_ERROR } from '../host-ownership/ssh-session-gone-verdict'
 import {
   legacyRelayBridgedPane,
-  onLegacyRelayBridgedPanesChanged
+  onLegacyRelayBridgedPanesChanged,
+  createLegacyRelayUnreachableNotice
 } from './legacy-relay-bridge-panes'
-import { createLegacyRelayUnreachableNotice } from './legacy-relay-bridge-unreachable'
 
 type Callbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 
