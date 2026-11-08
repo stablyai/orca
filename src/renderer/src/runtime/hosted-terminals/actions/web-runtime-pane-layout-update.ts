@@ -3,7 +3,7 @@ import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-lay
 import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/resolve-owner'
 import { useAppStore } from '../../../store/index'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId
@@ -11,7 +11,7 @@ import {
 import {
   captureRuntimeEnvironmentCall,
   isWebRuntimeSessionActive
-} from '../../web-runtime-session-environment'
+} from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { isServerFrameDrawnWorkspace } from '../../web-session-tabs-sync/frame-drawn-server-workspace-set'
 
 // Push remote geometry to its host or the next authoritative snapshot reverts it.

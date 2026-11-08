@@ -6,11 +6,11 @@ import {
 import type { Store } from '../persistence/loading-store/store'
 import {
   isFinalAutomationRunStatus,
-  type Automation,
   type AutomationDispatchResult,
   type AutomationPrecheckResult,
   type AutomationRun
-} from '../../shared/automations-types'
+} from '../../shared/automations/history/automation-run'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import {

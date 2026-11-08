@@ -28,10 +28,8 @@ import {
   readAgentSessionErrorRefusal,
   type AgentSessionWriteFailure
 } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
-import {
-  callStructuredAgentSession,
-  structuredAgentSessionHostSupports
-} from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 // Only agentSession.send mutates; stops during earlier local/read-only work prove the request never went out.
 

@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useQueryClient } from '@tanstack/react-query'
 import { mobileStructuredSessionStatusFeed } from '../session/mobile-structured-session-status-feed'
 import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import type { RpcClient } from '../transport/rpc-client'
-import { connectionRetryAction } from '../transport/connection-retry-action'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import type {
   AiVaultScanIssue,
   AiVaultScope,
@@ -23,7 +23,7 @@ import {
   agentHistoryCapabilityRead,
   agentHistorySessionScan
 } from './mobile-agent-history-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

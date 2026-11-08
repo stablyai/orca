@@ -10,8 +10,11 @@ const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
 )
 
-vi.mock('@/runtime/structured-agent-session-client', () =>
-  moduleFactories.structuredAgentSessionClient()
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () =>
+  moduleFactories.structuredAgentSessionCall()
+)
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () =>
+  moduleFactories.structuredAgentSessionSubscriptions()
 )
 vi.mock('../../session/structured/use-structured-agent-session', () =>
   moduleFactories.useStructuredAgentSession()

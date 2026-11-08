@@ -3,14 +3,17 @@ import {
   relayArtifactFilenames,
   RELAY_INSTALL_COMPLETE_FILENAME,
   RELAY_VERSION_FILENAME
-} from '../../ssh/relay-install-artifacts'
+} from '../../ssh/legacy-relay/endpoints/relay-install-artifacts'
 import {
   orcadArtifactFilenames,
   ORCAD_INSTALL_COMPLETE_FILENAME,
   ORCAD_RUNTIMES_DIRNAME,
   ORCAD_VERSION_FILENAME
 } from '../../../shared/orcad-artifacts'
-import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import {
+  isWindowsRemoteHost,
+  type RemoteHostPlatform
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 type RemoteInstallModelId = 'relay' | 'orcad'
 

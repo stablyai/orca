@@ -4,13 +4,13 @@ import {
   isUnconfirmedSshCommandTermination
 } from '../../ssh/remote-exec/remote-exec-command'
 import { remoteInstallGcTombstoneRegex, type RemoteInstallModel } from './remote-install-model'
-import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
+import { removeRemoteTreeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
 import {
   getRemoteHostPlatform,
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 

@@ -2,7 +2,7 @@ import React, { useCallback } from 'react'
 import { ChevronRight, ArrowUp, Home } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { driveBreadcrumbPath, splitBrowsePath } from './remote-file-browser-drive-paths'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 type RemoteFileBrowserBreadcrumbsProps = {
   resolvedPath: string

@@ -527,8 +527,8 @@
 1 src/renderer/src/components/sidebar/workspace-visibility/dialog/HiddenWorktreeRecoveryList.tsx
 3 src/renderer/src/components/sidebar/workspace-visibility/dialog/WorktreeVisibilityDialog.tsx
 4 src/renderer/src/components/sidebar/worktree-list/drag/host-header-drag.ts
-7 src/renderer/src/components/sidebar/worktree-list/drag/project-group-header-drag.ts
-10 src/renderer/src/components/sidebar/worktree-list/drag/project-header-drag.ts
+5 src/renderer/src/components/sidebar/worktree-list/drag/project-group-header-drag.ts
+8 src/renderer/src/components/sidebar/worktree-list/drag/project-header-drag.ts
 2 src/renderer/src/components/sidebar/worktree-list/drag/use-native-autoscroll.ts
 2 src/renderer/src/components/sidebar/worktree-list/drag/use-native-drag.ts
 2 src/renderer/src/components/sidebar/worktree-list/drag/use-pointer-autoscroll.ts
@@ -708,7 +708,7 @@
 1 src/renderer/src/lib/host-chat-program-acquisition.ts
 1 src/renderer/src/lib/quick-open-file-history.ts
 2 src/renderer/src/lib/worker-auto-close.ts
-1 src/renderer/src/runtime/structured-chat-name-observation.ts
+1 src/renderer/src/runtime/native-chat/naming/structured-chat-name-observation.ts
 1 src/renderer/src/store/plugins/appearance/plugin-icon-themes.ts
 5 src/renderer/src/store/retained-views/app-state-view.ts
 2 src/renderer/src/web/WebConnect.tsx

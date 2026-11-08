@@ -1,5 +1,5 @@
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
@@ -30,6 +30,7 @@ export function AntigravityProviderSignInArea(props: {
   label: string
   install: ActiveInstall
 }): React.JSX.Element {
+  const t = useTranslate()
   const signIn = useAntigravityChatSignInControls({
     owner: props.owner,
     label: props.label,
@@ -46,13 +47,10 @@ export function AntigravityProviderSignInArea(props: {
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-medium leading-none">
-                {translate('settings.chat.providers.antigravityAccount', 'Account')}
+                {t('settings.chat.providers.antigravityAccount', 'Account')}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
-                {translate(
-                  'accounts.antigravity.chatSeparate',
-                  'Separate from your agy terminal account.'
-                )}
+                {t('accounts.antigravity.chatSeparate', 'Separate from your agy terminal account.')}
               </p>
             </div>
             <AntigravityChatSignInBadge signIn={signIn} />

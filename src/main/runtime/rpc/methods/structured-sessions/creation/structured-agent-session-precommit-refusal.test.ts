@@ -7,7 +7,7 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import { recordingStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { agentSessionRefusalError } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcResponse } from '../../../core'
@@ -130,6 +130,25 @@ afterEach(() => {
 })
 
 describe('a create refused before it commits', () => {
+  it('keeps a transcript read exception out of a coded create refusal', async () => {
+    const response = await create({
+      resolveStructuredAgentSessionCreateIntent: vi.fn(async () => {
+        throw agentSessionRefusalError(
+          'agent_session_identity_required',
+          { reason: 'transcriptUnreadable' },
+          "ENOENT: no such file or directory, open '/Users/private/rollout-missing.jsonl'"
+        )
+      })
+    })
+    expect(refusalOf(response)).toMatchObject({
+      code: 'agent_session_identity_required',
+      details: { reason: 'transcriptUnreadable' },
+      message: 'Orca cannot open a structured agent chat for this workspace.',
+      createAttemptRefusedBeforeCommit: true
+    })
+    expect(attach).not.toHaveBeenCalled()
+  })
+
   it('keeps private precommit faults out of a definitive public refusal', async () => {
     // The class no per-site conversion catches: an unresolvable worktree throws prose, not a code.
     const response = await create({

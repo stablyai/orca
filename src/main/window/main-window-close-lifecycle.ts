@@ -54,7 +54,7 @@ export function installMainWindowCloseLifecycle(args: {
     quitRendererAckTimer.unref?.()
   }
   let lastAcknowledgedRequestId = 0
-  const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: number): void => {
+  const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: unknown): void => {
     if (event.sender.id !== rendererWebContentsId) {
       return
     }
@@ -143,8 +143,7 @@ export function installMainWindowCloseLifecycle(args: {
     abortQuit()
     mainWindow.webContents.send('window:unload-prevented')
   })
-  // A cancelled prompt keeps the window; a held quit latch would treat later closes and crashes as quit teardown.
-  // Same-renderer IPC is ordered, so a cancel that arrives before the newest request's ack predates that request.
+  // Renderer prompts never reach will-prevent-unload. IPC is ordered, so a cancel before the newest ack is stale.
   const onCloseCancelled = (event: Electron.IpcMainEvent): void => {
     if (
       event.sender.id === rendererWebContentsId &&

@@ -3,11 +3,13 @@ import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-t
 import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import type {
   RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionTerminalTab
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
 import { mergeMobileSessionTabGroups } from './mobile-session-tab-merge'
 import { buildHeadlessMobileSessionTabGroups } from '../../terminal/surface/mobile-session-layout-projection'
 import { projectRuntimeMobileSessionTabs } from './runtime-mobile-session-projection'
@@ -27,7 +29,7 @@ import { structuredWorkerHandleAgentStatus } from '../../orchestration/addressin
 import {
   retitleStructuredConversationTab,
   titleStructuredConversationTabs
-} from '../../structured-conversation-tab-title'
+} from '../../session-tabs/structured-conversation-tab-title'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
 
 export abstract class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntimeWithScheduleMobileSessionTabsChanged {

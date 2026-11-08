@@ -204,42 +204,61 @@ describe('getWorkItemDetails', () => {
     expect(details?.pipelineJobs?.some((job) => job.name === 'child')).toBe(true)
   })
 
-  it('marks only the notes the reading glab account wrote', async () => {
-    const note = (id: number, username: string) => ({
-      id,
-      body: 'LGTM',
-      author: { username },
-      created_at: `2026-06-01T00:0${id}:00Z`
-    })
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      const endpoint = args.at(-1) as string
-      if (endpoint === 'user') {
-        return { stdout: JSON.stringify({ id: 7, username: 'Me' }) }
-      }
-      if (endpoint.includes('/discussions')) {
-        return {
-          stdout: JSON.stringify([
-            { id: 'd1', individual_note: true, notes: [note(1, 'alice')] },
-            { id: 'd2', individual_note: true, notes: [note(2, 'me')] }
-          ])
+  it.each([
+    { markViewerComments: true, mine: true },
+    { markViewerComments: undefined, mine: true },
+    // Desktop detail reads opt out of the viewer lookup.
+    { markViewerComments: false, mine: undefined }
+  ])(
+    'marks only the reading glab account notes unless the read opts out: %o',
+    async ({ markViewerComments, mine }) => {
+      const note = (id: number, username: string) => ({
+        id,
+        body: 'LGTM',
+        author: { username },
+        created_at: `2026-06-01T00:0${id}:00Z`
+      })
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        const endpoint = args.at(-1) as string
+        if (endpoint === 'user') {
+          return { stdout: JSON.stringify({ id: 7, username: 'Me' }) }
         }
-      }
-      return {
-        stdout: JSON.stringify({
-          iid: 5,
-          title: 'Issue',
-          state: 'opened',
-          web_url: 'https://gitlab.com/g/p/-/issues/5',
-          updated_at: '2026-06-01T00:00:00Z'
-        })
-      }
-    })
+        if (endpoint.includes('/discussions')) {
+          return {
+            stdout: JSON.stringify([
+              { id: 'd1', individual_note: true, notes: [note(1, 'alice')] },
+              { id: 'd2', individual_note: true, notes: [note(2, 'me')] }
+            ])
+          }
+        }
+        return {
+          stdout: JSON.stringify({
+            iid: 5,
+            title: 'Issue',
+            state: 'opened',
+            web_url: 'https://gitlab.com/g/p/-/issues/5',
+            updated_at: '2026-06-01T00:00:00Z'
+          })
+        }
+      })
 
-    const details = await getWorkItemDetails('/repo', 5, 'issue')
+      const details = await getWorkItemDetails(
+        '/repo',
+        5,
+        'issue',
+        undefined,
+        null,
+        null,
+        {},
+        {
+          markViewerComments
+        }
+      )
 
-    expect(details?.comments.map((c) => [c.author, c.viewerDidAuthor])).toEqual([
-      ['alice', undefined],
-      ['me', true]
-    ])
-  })
+      expect(details?.comments.map((c) => [c.author, c.viewerDidAuthor])).toEqual([
+        ['alice', undefined],
+        ['me', mine]
+      ])
+    }
+  )
 })

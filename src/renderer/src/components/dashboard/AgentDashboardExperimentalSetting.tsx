@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Label } from '../ui/label'
 import { SearchableSetting } from '../settings/section-layout/SearchableSetting'
 import {
@@ -38,6 +38,7 @@ export function PopoutExperimentalSetting({
   onModeChange,
   text
 }: PopoutExperimentalSettingProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SearchableSetting
       title={text.title}
@@ -62,10 +63,7 @@ export function PopoutExperimentalSetting({
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">
               <Label>
-                {translate(
-                  'auto.components.settings.ExperimentalPane.agentDashboard.modeLabel',
-                  'Open as'
-                )}
+                {t('auto.components.settings.ExperimentalPane.agentDashboard.modeLabel', 'Open as')}
               </Label>
               <p className="text-xs text-muted-foreground">{text.modeCopy}</p>
             </div>
@@ -77,14 +75,14 @@ export function PopoutExperimentalSetting({
               options={[
                 {
                   value: 'in-window',
-                  label: translate(
+                  label: t(
                     'auto.components.settings.ExperimentalPane.agentDashboard.modeInWindow',
                     'In-window'
                   )
                 },
                 {
                   value: 'popout',
-                  label: translate(
+                  label: t(
                     'auto.components.settings.ExperimentalPane.agentDashboard.modePopout',
                     'Pop-out'
                   )
@@ -107,37 +105,38 @@ export function AgentDashboardExperimentalSetting({
   settings,
   updateSettings
 }: AgentDashboardExperimentalSettingProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <PopoutExperimentalSetting
       id="experimental-agent-dashboard"
-      keywords={getExperimentalSearchEntry().agentDashboard.keywords}
+      keywords={getExperimentalSearchEntry(t).agentDashboard.keywords}
       enabled={settings.experimentalAgentDashboardPopout === true}
       mode={settings.experimentalAgentDashboardMode ?? 'in-window'}
       canPopout={canOpenAgentDashboardPopout()}
       onEnabledChange={(enabled) => updateSettings({ experimentalAgentDashboardPopout: enabled })}
       onModeChange={(mode) => updateSettings({ experimentalAgentDashboardMode: mode })}
       text={{
-        title: translate(
+        title: t(
           'auto.components.settings.ExperimentalPane.agentDashboard.title',
           'Agent Dashboard'
         ),
-        description: translate(
+        description: t(
           'auto.components.settings.ExperimentalPane.agentDashboard.description',
           'Kanban board for monitoring agents across worktrees, in-window or as a pop-out.'
         ),
-        copy: translate(
+        copy: t(
           'auto.components.settings.ExperimentalPane.agentDashboard.copy',
           'Adds an Agent Dashboard entry to the left sidebar. Monitor agents that need you, are working, or are done, with optional idle agents.'
         ),
-        toggleLabel: translate(
+        toggleLabel: t(
           'auto.components.settings.ExperimentalPane.agentDashboard.toggleLabel',
           'Toggle Agent Dashboard'
         ),
-        modeCopy: translate(
+        modeCopy: t(
           'auto.components.settings.ExperimentalPane.agentDashboard.modeCopy',
           'Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.'
         ),
-        modeAriaLabel: translate(
+        modeAriaLabel: t(
           'auto.components.settings.ExperimentalPane.agentDashboard.modeAriaLabel',
           'Agent Dashboard open mode'
         )

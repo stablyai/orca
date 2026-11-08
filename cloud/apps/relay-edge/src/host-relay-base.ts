@@ -35,6 +35,8 @@ export type ControlAttachment = {
   lastPongAt?: number
   lastPingAt?: number
   leaseExpiresAt?: number
+  // Last auth-refresh that extended the token (absent on attachments from before this field).
+  lastRefreshAt?: number
   // Client ingress '<continent>/<colo>', for metrics.
   place?: string
 }

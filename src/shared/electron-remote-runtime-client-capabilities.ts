@@ -1,7 +1,9 @@
+import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from './git/commands/git-commit-action'
 import { GIT_GRAPH_TAB_CAPABILITY } from './source-control/runtime/git-graph-capabilities'
 import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from './agent-session/structured-agent-session-renderer-client-capabilities'
 import { TERMINAL_IMAGE_VIEWER_CAPABILITY } from './terminal/images/terminal-image-viewer-capability'
 import { BROWSER_CLIENT_HOST_REQUEST_CAPABILITY } from './browser/client-hosting/browser-client-host-request-protocol'
+import { STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY } from './structured-chat-dispatch-telemetry'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
@@ -16,6 +18,8 @@ import {
 // host still requires the separate authenticated browser-client lease.
 export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   GIT_GRAPH_TAB_CAPABILITY,
+  GIT_REVERT_CONFLICT_CLIENT_CAPABILITY,
+  STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY,
   ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   TERMINAL_IMAGE_VIEWER_CAPABILITY,
   // The renderer that reads a paired host's structured chats is the one that reads its own.

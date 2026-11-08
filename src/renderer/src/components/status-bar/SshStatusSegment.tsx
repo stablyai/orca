@@ -18,8 +18,8 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
-import { pickerExecutionHosts } from '../../../../shared/managed-orcad-execution-host'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
+import { pickerExecutionHosts } from '../../../../shared/execution-host/managed-orcad-execution-host'
 import {
   isListedRemoteServer,
   runtimePairingRepairRoute
@@ -114,7 +114,7 @@ export function SshStatusSegment({
         blockedReason,
         blocked: blockedReason
           ? {
-              ...runtimeHostBlockedCopy(blockedReason, registryHost?.compatibility, repairRoute),
+              ...runtimeHostBlockedCopy(blockedReason, registryHost?.compatibility, repairRoute, t),
               recovery: runtimeHostBlockedRecovery(blockedReason, repairRoute)
             }
           : null,
@@ -223,13 +223,13 @@ export function SshStatusSegment({
                 <span className="inline-grid text-2xs tabular-nums">
                   {/* Reserve both localized forms so count changes don't resize the bar. */}
                   <span aria-hidden className="invisible col-start-1 row-start-1">
-                    {connectedHostCountLabel(1)}
+                    {connectedHostCountLabel(1, t)}
                   </span>
                   <span aria-hidden className="invisible col-start-1 row-start-1">
-                    {connectedHostCountLabel(Math.max(99, statuses.length))}
+                    {connectedHostCountLabel(Math.max(99, statuses.length), t)}
                   </span>
                   <span className="col-start-1 row-start-1">
-                    {connectedHostCountLabel(connectedHostCount)}
+                    {connectedHostCountLabel(connectedHostCount, t)}
                   </span>
                 </span>
               )}
@@ -257,7 +257,7 @@ export function SshStatusSegment({
             key={host.id}
             label={host.label}
             state={host.state}
-            detail={runtimeHostConnectionDetail(host.remoteControl)}
+            detail={runtimeHostConnectionDetail(host.remoteControl, t)}
             diagnostics={host.remoteControl}
             blocked={host.blocked}
             onConnect={() => connectRuntimeHost(host.id)}
@@ -278,7 +278,7 @@ export function SshStatusSegment({
             key={host.id}
             label={host.label}
             state={host.state}
-            detail={runtimeHostConnectionDetail(host.remoteControl)}
+            detail={runtimeHostConnectionDetail(host.remoteControl, t)}
             diagnostics={host.remoteControl}
             blocked={host.blocked}
             onConnect={() => connectRuntimeHost(host.id)}
@@ -297,7 +297,7 @@ export function SshStatusSegment({
         {hiddenIdleCount > 0 ? (
           // Why a search and not a Settings link: web clients connect hosts here but have no SSH pane.
           <DropdownMenuItem onSelect={() => setFindOpen(true)}>
-            {moreSshHostsLabel(hiddenIdleCount)}
+            {moreSshHostsLabel(hiddenIdleCount, t)}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />

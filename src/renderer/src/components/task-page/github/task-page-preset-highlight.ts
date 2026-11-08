@@ -1,5 +1,5 @@
-import type { ParsedTaskQuery } from '../../../../../shared/task-query'
-import type { GitHubTaskKind } from '../../../../../shared/task-github-search'
+import type { ParsedTaskQuery } from '../../../../../shared/work-items/task-query'
+import type { GitHubTaskKind } from '../../../../../shared/work-items/task-github-search'
 import type { TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
 export function deriveGitHubTaskPreset(
   kind: GitHubTaskKind,

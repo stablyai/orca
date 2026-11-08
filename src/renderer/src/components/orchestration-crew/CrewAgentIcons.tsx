@@ -15,7 +15,7 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type CrewRowLook = { partyKey: string; status: WorktreeStatus; agentType: string }

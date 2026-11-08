@@ -14,7 +14,7 @@ import {
 } from './tail/terminal-tail-restore-seed'
 
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
-import { agentHookServer } from '../../../agent-hooks/server'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 
 export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged {
   protected abstract serializePreferredRestoredTerminalBuffer(
@@ -140,6 +140,8 @@ export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRun
     // Clear is a UI action, not shell input; clear renderer/provider and headless history before mobile snapshots.
     await this.ptyController?.clearBuffer?.(leaf.ptyId)
     await this.clearHeadlessTerminalBuffer(leaf.ptyId)
+    // A phone must not resume onto the scrollback it showed before the clear.
+    this.resetPublishedTerminalOutputCoverage(leaf.ptyId)
     return { handle, cleared: true }
   }
 

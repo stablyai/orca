@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppMenuPaste } from '@/hooks/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentTerminalPreview } from '../dashboard-popout/AgentTerminalPreview'
 import { useFloatingWorkspaceWindowSnapshot } from './use-floating-workspace-window-snapshot'
 
 export function FloatingWorkspaceWindowRoot(): React.JSX.Element {
+  const t = useTranslate()
   // The window has no App shell to translate Edit-menu IPC into terminal ownership events.
   useAppMenuPaste()
   useAppMenuSelectionActions()
@@ -33,10 +34,10 @@ export function FloatingWorkspaceWindowRoot(): React.JSX.Element {
 
   const livePtyId = activeTab?.kind === 'terminal' ? activeTab.ptyId : null
   const placeholder = !activeTab
-    ? translate('floatingWorkspaceWindow.empty', 'No terminal is open.')
+    ? t('floatingWorkspaceWindow.empty', 'No terminal is open.')
     : activeTab.kind === 'other'
-      ? translate('floatingWorkspaceWindow.otherTab', 'This tab opens in the main window.')
-      : translate('floatingWorkspaceWindow.starting', 'Starting terminal...')
+      ? t('floatingWorkspaceWindow.otherTab', 'This tab opens in the main window.')
+      : t('floatingWorkspaceWindow.starting', 'Starting terminal...')
 
   return (
     <div className="flex h-screen w-screen flex-col bg-background text-foreground">
@@ -56,7 +57,7 @@ export function FloatingWorkspaceWindowRoot(): React.JSX.Element {
           size="xs"
           onClick={() => window.api.floatingWorkspaceWindow.requestDock()}
         >
-          {translate('floatingWorkspaceWindow.dock', 'Dock')}
+          {t('floatingWorkspaceWindow.dock', 'Dock')}
         </Button>
       </div>
       {livePtyId ? (

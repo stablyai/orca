@@ -27,8 +27,8 @@ import {
 import { RUNTIME_STORE_LOCK_NAME } from './remote-node-runtime-store-lock'
 import { RUNTIME_REF_NODE_PREFIX } from './remote-node-runtime-store-inventory'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import { unusedSshConnection } from '../testing/managed-host-transport.test-fixture'
 
 const conn = unusedSshConnection()
 const host = getRemoteHostPlatform('linux-x64')

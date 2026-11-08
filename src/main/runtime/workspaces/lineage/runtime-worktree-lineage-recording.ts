@@ -10,7 +10,7 @@ import type {
   WorkspaceLineage
 } from '../../../../shared/worktree/lineage-types'
 import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 
 type LineageParent =

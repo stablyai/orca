@@ -1,7 +1,7 @@
 import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
-} from '../../../../../../shared/orchestration-worker-output'
+} from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { PtyLivenessVerdict } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'

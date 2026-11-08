@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { PopoutExperimentalSetting } from '../dashboard/AgentDashboardExperimentalSetting'
 import { getExperimentalSearchEntry } from '../settings/advanced/experimental-search'
 import { canOpenFloatingWorkspacePopout } from './floating-workspace-open-mode'
@@ -13,10 +13,11 @@ export function FloatingWorkspacePopoutExperimentalSetting({
   settings,
   updateSettings
 }: FloatingWorkspacePopoutExperimentalSettingProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (!canOpenFloatingWorkspacePopout()) {
     return null
   }
-  const description = translate(
+  const description = t(
     'auto.components.settings.ExperimentalPane.floatingWorkspacePopout.description',
     'Open the Floating Workspace terminal in its own window.'
   )
@@ -32,21 +33,21 @@ export function FloatingWorkspacePopoutExperimentalSetting({
       }
       onModeChange={(mode) => updateSettings({ experimentalFloatingWorkspaceMode: mode })}
       text={{
-        title: translate(
+        title: t(
           'auto.components.settings.ExperimentalPane.floatingWorkspacePopout.title',
           'Floating Workspace pop-out'
         ),
         description,
         copy: description,
-        toggleLabel: translate(
+        toggleLabel: t(
           'auto.components.settings.ExperimentalPane.floatingWorkspacePopout.toggleLabel',
           'Toggle Floating Workspace pop-out'
         ),
-        modeCopy: translate(
+        modeCopy: t(
           'auto.components.settings.ExperimentalPane.floatingWorkspacePopout.modeCopy',
           'Show the Floating Workspace as an in-window panel or a separate pop-out window.'
         ),
-        modeAriaLabel: translate(
+        modeAriaLabel: t(
           'auto.components.settings.ExperimentalPane.floatingWorkspacePopout.modeAriaLabel',
           'Floating Workspace open mode'
         )

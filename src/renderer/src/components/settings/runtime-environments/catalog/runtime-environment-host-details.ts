@@ -13,7 +13,7 @@ import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/worktree-runtime-capabilities'
-import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/task-source-runtime-capabilities'
+import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/work-items/task-source-runtime-capabilities'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {

@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { CloudOff } from 'lucide-react-native'
-import { getUiIntlLocale } from '../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, pressedStyle, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useCalmConnectionState } from '../transport/calm-connection-state'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
+import { formatOfflineAsOfTime } from './offline-as-of-time'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 /** The banner's state for a screen that shows data, or null while it should stay hidden. */
 export function useHostOfflineBanner({
@@ -17,7 +17,8 @@ export function useHostOfflineBanner({
   lastConnectedAt,
   outage,
   forceReconnect,
-  hasData
+  hasData,
+  asOf
 }: {
   client: RpcClient | null
   connState: ConnectionState
@@ -27,26 +28,42 @@ export function useHostOfflineBanner({
   /** Rebuilds the connection where this document owns it; a page in the app shell can only nudge it. */
   forceReconnect: (() => void) | null
   hasData: boolean
+  /** When the shown data was read from the host, which may be an earlier launch's. */
+  asOf: number | null
 }): { offline: boolean; asOf: number | null; retry: (() => void) | null } | null {
   const state = useCalmConnectionState(connState, lastConnectedAt)
-  const show = hasData && state !== 'connected' && state !== 'auth-failed'
-  // Live data stopped when the connection dropped; a screen that mounts offline shows the last connect.
-  const [droppedAt, setDroppedAt] = useState<number | null>(() =>
-    connState === 'connected' ? null : lastConnectedAt
-  )
-  useEffect(
-    () =>
-      client?.onStateChange((next) =>
-        setDroppedAt((held) => (next === 'connected' ? null : (held ?? Date.now())))
-      ),
-    [client]
-  )
+  // Data this document read stayed live until the connection dropped; stored data only until it was read.
+  const [mountedAt] = useState(Date.now)
+  const [droppedAt, setDroppedAt] = useState<number | null>(null)
+  useEffect(() => {
+    let previous = client?.getState()
+    return client?.onStateChange((next) => {
+      if (next === 'connected') {
+        setDroppedAt(null)
+      } else if (previous === 'connected') {
+        setDroppedAt(Date.now())
+      }
+      previous = next
+    })
+  }, [client])
+  // Before a first connect, such as a relaunch over stored rows, the header's refresh line covers
+  // connecting and the banner waits until the host is judged unreachable.
+  const show =
+    hasData &&
+    state !== 'connected' &&
+    state !== 'auth-failed' &&
+    (lastConnectedAt !== null || outage)
   if (!show) {
     return null
   }
   // A nudge redials now instead of waiting out the reconnect backoff.
   const retry = forceReconnect ?? (client ? () => client.notifyForeground('focus') : null)
-  return { offline: outage || state === 'disconnected', asOf: droppedAt, retry }
+  const readThisDocument = asOf !== null && asOf >= mountedAt
+  return {
+    offline: outage || state === 'disconnected',
+    asOf: readThisDocument ? (droppedAt ?? asOf) : asOf,
+    retry
+  }
 }
 
 /**
@@ -61,7 +78,7 @@ export function HostOfflineBanner({
 }: {
   hostName: string
   offline: boolean
-  /** When the shown data was last live. */
+  /** When the shown data was read from the host. */
   asOf: number | null
   onRetry: (() => void) | null
 }) {
@@ -85,10 +102,7 @@ export function HostOfflineBanner({
         {asOf !== null ? (
           <Text style={styles.detail} numberOfLines={1}>
             {t('components.hostOfflineBanner.asOf', 'Showing what was here as of {{time}}', {
-              time: new Intl.DateTimeFormat(getUiIntlLocale(), {
-                hour: 'numeric',
-                minute: '2-digit'
-              }).format(asOf)
+              time: formatOfflineAsOfTime(asOf)
             })}
           </Text>
         ) : null}

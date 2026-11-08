@@ -1,5 +1,5 @@
-import { isLocalSessionTabCloseOwned } from '@/runtime/local-session-tab-close-owner'
-import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
+import { isLocalSessionTabCloseOwned } from '@/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
+import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 import {
   SESSION_TAB_CLOSE_CANCELED_ERROR,
   SESSION_TAB_CLOSE_FAILED_ERROR,

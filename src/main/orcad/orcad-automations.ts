@@ -1,7 +1,7 @@
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { createRuntimeAutomationService } from '../automations/runtime-automation-service'
-import { isFinalAutomationRunStatus } from '../../shared/automations-types'
+import { isFinalAutomationRunStatus } from '../../shared/automations/history/automation-run'
 
 type AutomationStore = Pick<Store, 'listAutomations' | 'listAutomationRuns'>
 

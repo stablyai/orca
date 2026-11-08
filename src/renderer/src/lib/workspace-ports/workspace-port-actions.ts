@@ -5,7 +5,7 @@ import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,

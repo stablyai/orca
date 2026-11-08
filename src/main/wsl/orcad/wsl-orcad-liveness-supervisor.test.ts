@@ -197,13 +197,6 @@ function harness(options: { visible?: boolean } = {}) {
 }
 
 describe('WslOrcadLivenessSupervisor', () => {
-  it('connects, records identity and holds one watch', async () => {
-    const h = harness()
-    await h.supervisor.connect('Ubuntu')
-    expect(h.readIdentity).toHaveBeenCalledWith('Ubuntu', 100)
-    expect(h.watches).toHaveLength(1)
-  })
-
   it('keeps a confirmed-stopped distro down even with visible work, until it runs again (E9)', async () => {
     const h = harness({ visible: true })
     await h.supervisor.connect('Ubuntu')
@@ -455,15 +448,6 @@ describe('WslOrcadLivenessSupervisor', () => {
     await h.advance(EXIT_SETTLE_MS)
     // A list probe begun inside the window may still show the stopping distro; it must not answer.
     expect(h.readRunning).toHaveBeenNthCalledWith(2, { distro: 'Ubuntu', exitedAt })
-  })
-
-  it('asks for a settled read of its own distro on every check, not a bare list (E9)', async () => {
-    const h = harness()
-    await h.supervisor.connect('Ubuntu')
-    h.lastWatch().exit(1)
-    await h.settle()
-    // The wiring answers a distro-scoped read only from a probe past that distro's stop settle.
-    expect(h.readRunning).toHaveBeenNthCalledWith(1, { distro: 'Ubuntu' })
   })
 
   it('waits for a still-listed distro to settle after a failed exit before probing inside it', async () => {

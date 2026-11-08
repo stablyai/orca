@@ -157,3 +157,24 @@ export const getTerminalWarpImportSearchEntries = createLocalizedCatalog(() => [
     ]
   }
 ])
+
+export const getClaudeCodeThemeSyncSearchEntry = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'components.settings.terminal.claudeCodeThemeSync.title',
+      'Match Claude Code to Terminal Theme'
+    ),
+    description: translate(
+      'components.settings.terminal.claudeCodeThemeSync.description',
+      'Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.0ce176909a', 'theme'),
+      ...translateSearchKeyword(
+        'components.settings.terminal.claudeCodeThemeSync.claude',
+        'claude'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.674b7c8436', 'color')
+    ]
+  }
+])

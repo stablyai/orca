@@ -212,7 +212,7 @@ function promptObservationWarning(
   if (prompt.provider !== 'unsupported' && prompt.provider !== 'old-host') {
     return prompt.stages.includes('turn_started')
       ? null
-      : `input was accepted but no turn start was observed, so the Enter may have been swallowed. Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID replays the receipt instead of sending the prompt again.`
+      : `input was accepted, but no turn start was observed yet (a send without --wait-submit does not wait for one). Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID observes this prompt instead of sending it again.`
   }
   if (prompt.observation === 'unsupported') {
     return prompt.provider === 'old-host'

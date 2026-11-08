@@ -19,7 +19,7 @@ import {
   findIndexedDetectedWorktrees,
   findIndexedWorktrees as findIndexedWorktreeOwners
 } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
-import { layoutFrameWorkspace } from '@/runtime/layout-frame-workspaces'
+import { layoutFrameWorkspace } from '@/runtime/workspace-layout/frames/layout-frame-workspaces'
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost,

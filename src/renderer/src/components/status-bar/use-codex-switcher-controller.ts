@@ -3,7 +3,7 @@ import type { CodexRateLimitAccountsState } from '../../../../shared/managed-acc
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { useAppStore } from '../../store'
 import { defaultScopeHost } from '@/lib/default-creation-host'
-import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
+import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   fetchProviderAccountsSnapshot,

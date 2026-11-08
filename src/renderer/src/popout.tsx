@@ -17,7 +17,7 @@ import { resolvePaintedTheme } from './lib/terminal-app-theme'
 import { buildAppFontFamily } from './lib/app-font-family'
 import { applyCodeFontSmoothing } from './lib/code-font-smoothing'
 import { I18nProvider } from './i18n/I18nProvider'
-import { translate } from './i18n/i18n'
+import { useTranslate } from './i18n/use-translate'
 import { useAppStore } from './store'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
@@ -110,6 +110,7 @@ function PopoutSettingsSync(): null {
 }
 
 function PopoutRoot(): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   return (
     <RecoverableRenderErrorBoundary
@@ -117,19 +118,19 @@ function PopoutRoot(): React.JSX.Element {
       surface={rendererSurface}
       title={
         isFloatingWorkspaceWindow
-          ? translate(
+          ? t(
               'floatingWorkspaceWindow.recoverableError.title',
               'Orca floating workspace hit an error.'
             )
-          : translate('dashboardPopout.recoverableError.title', 'Orca dashboard hit an error.')
+          : t('dashboardPopout.recoverableError.title', 'Orca dashboard hit an error.')
       }
       description={
         isFloatingWorkspaceWindow
-          ? translate(
+          ? t(
               'floatingWorkspaceWindow.recoverableError.description',
               'The floating workspace could not finish rendering. Retry to remount it, or reopen it.'
             )
-          : translate(
+          : t(
               'dashboardPopout.recoverableError.description',
               'The dashboard could not finish rendering. Retry to remount it, or reopen it.'
             )

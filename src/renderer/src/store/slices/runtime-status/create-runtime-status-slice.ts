@@ -21,15 +21,15 @@ import { reconcileCatalogRows } from '../../../../../shared/catalog-row-reconcil
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
 import * as runtimeStatusConnectionGeneration from './runtime-status-connection-generation'
-import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
+import { replayClientHostedBrowserCloseIntents } from '@/runtime/browser/closing/client-hosted-browser-close-intent-replay'
 import {
   pairedTerminalTabCloseIntentStoreOf,
   reconcileWebSessionCloseReplaysWithCatalog
-} from '@/runtime/web-session-close-replay'
+} from '@/runtime/web-session-tabs-sync/closing/web-session-close-replay'
 import {
   ensureBrowserClientHostOnRuntimeContact,
   ensureBrowserClientHostsForRestoredPages
-} from '@/runtime/restored-client-hosted-browser-host-attach'
+} from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
 import { applyRuntimeHostStatusSnapshot, snapshotOutrunsCatalog } from './runtime-status-snapshot'
 import { refreshRuntimeEnvironmentCatalog } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import {

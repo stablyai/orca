@@ -307,6 +307,11 @@
       "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
       "forkedFrom": "分岐元"
     },
+    "ciResultLine": {
+      "failingLead": "CI 失敗:",
+      "greenLead": "CI 成功:",
+      "at": "コミット"
+    },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
       "crash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
@@ -1392,15 +1397,16 @@
       "openFailed": "この PDF を開けませんでした",
       "opening": "PDF を開いています…",
       "updateRequired": "PDF を開くには Orca Mobile を更新してください。"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} の編集以降、デスクトップで変更されました",
+      "copyMyEdits": "自分の編集をコピー",
+      "discard": "破棄",
+      "restore": "復元",
+      "unsavedFrom": "{{time}} の未保存の編集"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 件がアクティブ",
-      "heading": "Agent",
-      "showAll": "{{count}} 件をすべて表示",
-      "showFewer": "折りたたむ"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",

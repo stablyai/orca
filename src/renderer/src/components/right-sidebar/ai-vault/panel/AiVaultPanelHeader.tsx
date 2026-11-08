@@ -1,5 +1,5 @@
 import { ImeInput } from '@/lib/ime-text-field'
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode, Ref } from 'react'
 import { LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
@@ -28,8 +28,7 @@ type AiVaultPanelHeaderProps = {
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
   adjustmentCount: number
-  /** Bumped by a caller that sent the user here, e.g. Settings; focuses the search box once. */
-  focusSearchRequestId?: number
+  searchInputRef?: Ref<HTMLInputElement>
   headerAction?: ReactNode
   /** Sees search keys first; a handled key is default-prevented. */
   onSearchKeyDown?: (event: KeyboardEvent<HTMLInputElement>) => void
@@ -60,7 +59,7 @@ export function AiVaultPanelHeader({
   hideEmptySessions,
   sessionLimit,
   adjustmentCount,
-  focusSearchRequestId = 0,
+  searchInputRef,
   headerAction,
   onSearchKeyDown,
   onQueryChange,
@@ -75,13 +74,6 @@ export function AiVaultPanelHeader({
   onRefresh
 }: AiVaultPanelHeaderProps): React.JSX.Element {
   const t = useTranslate()
-  const searchInputRef = useRef<HTMLInputElement>(null)
-  useEffect(() => {
-    if (focusSearchRequestId > 0) {
-      searchInputRef.current?.focus()
-      searchInputRef.current?.select()
-    }
-  }, [focusSearchRequestId])
   return (
     <div className="shrink-0 border-b border-sidebar-border px-2.5 py-2">
       <div className="flex items-center gap-1.5">

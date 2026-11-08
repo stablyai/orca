@@ -4,7 +4,7 @@ import { markStructuredAgentSessionLaunchCancelled } from '../agent-session/laun
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { suppressCancelledStructuredSessionTabs } from '@/runtime/structured-agent-session-tab-retirement'
+import { suppressCancelledStructuredSessionTabs } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import type { StructuredLaunchState } from '../agent-session/launch/structured-agent-session-launch-registry'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
@@ -19,7 +19,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
@@ -28,12 +28,12 @@ import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

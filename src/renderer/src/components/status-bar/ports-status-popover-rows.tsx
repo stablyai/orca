@@ -15,7 +15,7 @@ import {
 } from '@/lib/workspace-ports/workspace-port-actions'
 import type { WorkspacePortGroup } from '@/lib/workspace-ports/workspace-port-groups'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import { useAppStore } from '@/store'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   NewTabAgentMenuRow,
   buildNewTabAgentMenuRows
@@ -110,16 +111,17 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
 }
 
 /** Why a terminal choice waits: its host has not finished connecting. */
-export function terminalPendingLabel(): string {
-  return translate('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')
+export function terminalPendingLabel(t: Translate = translate): string {
+  return t('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')
 }
 
 /** A chat uses host admission; only a terminal needs the host's shell before it can start. */
 export function terminalPendingReason(
   terminalPending: boolean | undefined,
-  row: NewTabAgentMenuRow | undefined
+  row: NewTabAgentMenuRow | undefined,
+  t?: Translate
 ): string | undefined {
   return terminalPending && (row?.kind === 'cli' || row?.kind === 'terminal')
-    ? terminalPendingLabel()
+    ? terminalPendingLabel(t)
     : undefined
 }

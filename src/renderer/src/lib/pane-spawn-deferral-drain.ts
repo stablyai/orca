@@ -1,5 +1,5 @@
 // Retry host-deferred sleeping restores without waiting for reveal. Serialize asks per host under its admission gate; continued deferral backs off to minutes.
-import type { AutomaticWorkStatus } from '../../../shared/host-spawn-admission'
+import type { AutomaticWorkStatus } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 

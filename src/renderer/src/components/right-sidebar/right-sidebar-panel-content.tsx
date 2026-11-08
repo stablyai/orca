@@ -19,11 +19,15 @@ const PluginPanel = lazy(() => import('./plugin-panels/PluginPanel'))
 type RightSidebarPanelContentProps = {
   effectiveTab: ActiveRightSidebarTab
   rightSidebarOpen: boolean
+  focusVaultSearch: boolean
+  onVaultSearchFocusHandled: () => void
 }
 
 export function RightSidebarPanelContent({
   effectiveTab,
-  rightSidebarOpen
+  rightSidebarOpen,
+  focusVaultSearch,
+  onVaultSearchFocusHandled
 }: RightSidebarPanelContentProps): React.JSX.Element {
   const isFolderWorkspace = useAppStore(
     (state) => state.activeWorkspaceKey?.startsWith('folder:') ?? false
@@ -47,7 +51,12 @@ export function RightSidebarPanelContent({
         {effectiveTab === 'ports' && (
           <PortsPanel isVisible={rightSidebarOpen && effectiveTab === 'ports'} />
         )}
-        {effectiveTab === 'vault' && <AiVaultSidebarPanel />}
+        {effectiveTab === 'vault' && (
+          <AiVaultSidebarPanel
+            focusSearch={focusVaultSearch}
+            onFocusSearchHandled={onVaultSearchFocusHandled}
+          />
+        )}
         {effectiveTab === 'workspaces' && <FolderWorkspaceWorktreesPanel />}
         {effectiveTab === 'pr-checks' && (
           <FolderWorkspacePrChecksPanel

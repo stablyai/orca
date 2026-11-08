@@ -38,6 +38,46 @@ export async function readWorktreeDiffStamp(
   includeWorkingTree: boolean,
   options: Pick<GitRuntimeOptions, 'wslDistro'> = {}
 ): Promise<WorktreeDiffStamp | null> {
+  return readStamp(worktreePath, filePath, includeWorkingTree ? [filePath] : [], options)
+}
+
+/** Stamp one read spanning several working files, such as a whole-worktree numstat; host paths stamp settings files. */
+export async function readWorktreePathsDiffStamp(
+  worktreePath: string,
+  filePaths: readonly string[],
+  options: Pick<GitRuntimeOptions, 'wslDistro'> = {},
+  hostFilePaths: readonly string[] = []
+): Promise<WorktreeDiffStamp | null> {
+  return readStamp(worktreePath, [filePaths, hostFilePaths], filePaths, options, hostFilePaths)
+}
+
+/** Stamp files by absolute host path (for example Git config); null when any cannot be stamped. */
+export async function readHostFilesStamp(
+  filePaths: readonly string[]
+): Promise<WorktreeDiffStamp | null> {
+  const capturedAtMs = Date.now()
+  try {
+    const components = await Promise.all(filePaths.map(readWorkingTreeComponent))
+    return {
+      value: JSON.stringify([filePaths, ...components.map((component) => component.text)]),
+      newestMtimeMs: Math.max(
+        Number.NEGATIVE_INFINITY,
+        ...components.map((component) => component.mtimeMs)
+      ),
+      capturedAtMs
+    }
+  } catch {
+    return null
+  }
+}
+
+async function readStamp(
+  worktreePath: string,
+  readIdentity: unknown,
+  workingTreePaths: readonly string[],
+  options: Pick<GitRuntimeOptions, 'wslDistro'>,
+  hostFilePaths: readonly string[] = []
+): Promise<WorktreeDiffStamp | null> {
   const capturedAtMs = Date.now()
   try {
     // Git can run in the distro against a raw Linux worktree path while Node stats it through Win32.
@@ -47,24 +87,27 @@ export async function readWorktreeDiffStamp(
     }
     // Retain distro options for non-drvfs gitdir pointers even after the worktree becomes a drive path.
     const gitDir = await resolveGitDir(hostWorktreePath, options)
-    const [head, index, gitmodules, workingTree] = await Promise.all([
+    const [head, index, gitmodules, ...workingTree] = await Promise.all([
       readHeadComponent(gitDir),
       // Keep index stamps even when only stat metadata changed: dropping them would make staging invisible.
       readFileStampComponent(path.join(gitDir, 'index')),
       readFileStampComponent(path.join(hostWorktreePath, '.gitmodules')),
-      includeWorkingTree
-        ? readWorkingTreeComponent(path.join(hostWorktreePath, filePath))
-        : Promise.resolve(ABSENT)
+      ...(workingTreePaths.length > 0
+        ? workingTreePaths.map((filePath) =>
+            readWorkingTreeComponent(path.join(hostWorktreePath, filePath))
+          )
+        : [Promise.resolve(ABSENT)]),
+      ...hostFilePaths.map(readWorkingTreeComponent)
     ])
     if (!head) {
       return null
     }
-    const components = [head, index, gitmodules, workingTree]
+    const components = [head, index, gitmodules, ...workingTree]
     return {
       // Structural encoding avoids collisions when paths or refs contain separators.
       value: JSON.stringify([
         worktreePath,
-        filePath,
+        readIdentity,
         ...components.map((component) => component.text)
       ]),
       newestMtimeMs: Math.max(...components.map((component) => component.mtimeMs)),

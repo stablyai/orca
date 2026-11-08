@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import type { RpcContext } from '../../../core'
+
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
 import '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+
 import '../../../../orchestration/db/root-dispatch-test-fixture'
-import { MessageWake } from '../../../../runtime-message-waiters'
+import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()

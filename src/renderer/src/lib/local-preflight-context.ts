@@ -1,12 +1,12 @@
 import type { AppState } from '@/store/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../shared/execution-host/project-runtime-legacy-migration'
+import { getWorkspaceRuntimePreference } from '../../../shared/execution-host/project-runtime-preference'
 import {
-  deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
-  getWorkspaceRuntimePreference,
   resolveProjectExecutionRuntime,
   type ProjectExecutionRuntimeResolution
-} from '../../../shared/project-execution-runtime'
+} from '../../../shared/execution-host/project-execution-runtime'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
