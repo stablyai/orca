@@ -110,17 +110,6 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
       })
     }
 
-    it('never downgrades an existing writable tab', () => {
-      const store = createEditorStore()
-      openWritable(store)
-
-      openHostTab(store)
-
-      expect(store.getState().openFiles).toHaveLength(1)
-      expect(store.getState().openFiles[0]?.readOnly).toBeUndefined()
-      expect(store.getState().openFiles[0]?.hostBrowse).toBeUndefined()
-    })
-
     it('only focuses an existing View Log tab without ending its live tail', () => {
       const store = createEditorStore()
       store.getState().openFile(

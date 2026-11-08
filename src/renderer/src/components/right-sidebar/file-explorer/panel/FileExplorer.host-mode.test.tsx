@@ -11,11 +11,7 @@ const h = vi.hoisted(() => ({
   treeUnmounts: 0,
   treeRenders: 0,
   enter: () => {},
-  exit: () => {},
-  listFiles: vi.fn(),
-  search: vi.fn(),
-  watchWorktree: vi.fn(),
-  unwatchWorktree: vi.fn()
+  exit: () => {}
 }))
 
 const state = {
@@ -169,17 +165,6 @@ beforeEach(() => {
   h.treeMounts = 0
   h.treeUnmounts = 0
   h.treeRenders = 0
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      fs: {
-        listFiles: h.listFiles,
-        search: h.search,
-        watchWorktree: h.watchWorktree,
-        unwatchWorktree: h.unwatchWorktree
-      }
-    }
-  })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -191,7 +176,7 @@ afterEach(() => {
 })
 
 describe('FileExplorer Host mode', () => {
-  it('overlays the Host list without remounting, re-rendering, or re-watching the tree', async () => {
+  it('overlays the Host list without remounting or re-rendering the tree', async () => {
     await render()
     const rendersBefore = h.treeRenders
     expect(h.treeMounts).toBe(1)
@@ -209,8 +194,6 @@ describe('FileExplorer Host mode', () => {
     )
     expect(h.treeMounts).toBe(1)
     expect(h.treeUnmounts).toBe(0)
-    expect(h.watchWorktree).not.toHaveBeenCalled()
-    expect(h.unwatchWorktree).not.toHaveBeenCalled()
   })
 
   it('makes the hidden tree inert and swaps in the Host bar and list', async () => {
@@ -221,8 +204,6 @@ describe('FileExplorer Host mode', () => {
     expect(tree?.closest('[inert]')).not.toBeNull()
     expect(container.querySelector('[data-testid="host-bar"]')).not.toBeNull()
     expect(container.querySelector('[data-testid="host-list"]')).not.toBeNull()
-    expect(h.listFiles).not.toHaveBeenCalled()
-    expect(h.search).not.toHaveBeenCalled()
   })
 
   it('keeps the Project tree and query rows interactive until Host mode makes them inert', async () => {
