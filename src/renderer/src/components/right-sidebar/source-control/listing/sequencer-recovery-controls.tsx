@@ -13,6 +13,7 @@ import {
   sequencerContinueRuntimeGit
 } from '@/runtime/source-control/git/runtime-git-commit-actions-client'
 import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { useSourceControlWorktreeContext } from './use-worktree-context'
 import type { GitCommitAction } from '../../../../../../shared/git/commands/git-commit-action'
 import { useAppStore } from '@/store'
@@ -116,12 +117,13 @@ export function SequencerRecoveryControls({
           }
         } catch (error) {
           toast.error(
-            error instanceof Error
-              ? error.message
-              : t(
-                  'gitGraph.recoveryFailed',
-                  'Could not finish the operation. Refresh Source Control and try again.'
-                )
+            extractIpcErrorMessage(
+              error,
+              t(
+                'gitGraph.recoveryFailed',
+                'Could not finish the operation. Refresh Source Control and try again.'
+              )
+            )
           )
         }
       },
