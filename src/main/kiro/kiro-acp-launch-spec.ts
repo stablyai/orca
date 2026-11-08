@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
 import { directoryAccountBinding } from '../acp/acp-account-binding'
 import { KIRO_ACP_DIALECT } from '../acp/acp-dialects/kiro-dialect'
+import { KIRO_MODEL_LISTING_ARGS, parseKiroModelListing } from './kiro-model-listing'
 import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
 import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
 
@@ -31,10 +32,12 @@ export const KIRO_LAUNCH_SPEC: AcpLaunchSpec = {
   ],
   // First release verified to serve the V3 engine over ACP.
   minimumVersions: ['2.29.1'],
-  // Kiro reports its `model` option only after `session/new` returns, so live chats list models.
+  // The listing's default is the CLI's own; whether a new V3 session runs it is unverified.
   modelDiscovery: {
-    kind: 'unavailable',
-    reason: 'Kiro lists its models only after a chat session starts'
+    kind: 'command',
+    args: KIRO_MODEL_LISTING_ARGS,
+    parse: parseKiroModelListing,
+    listingNamesConfiguredModel: false
   },
   transcriptImport: null,
   sessionHistory: KIRO_SESSION_HISTORY
