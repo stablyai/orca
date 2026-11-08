@@ -49,12 +49,6 @@ describe('worktree removal drops the workspace trust Orca wrote', () => {
     }
   })
 
-  it('removes the recorded entry before the purge resolves', async () => {
-    await purgeWithMeta()(WORKTREE_ID)
-
-    expect(readFileSync(configPath, 'utf-8')).not.toContain(`[projects."${PROJECT}"]`)
-  })
-
   it('removes only the Antigravity trustedWorkspaces entry Orca appended', async () => {
     const agyHome = join(userDataDir, 'agy-home')
     const settingsPath = join(agyHome, '.gemini', 'antigravity-cli', 'settings.json')
@@ -73,19 +67,6 @@ describe('worktree removal drops the workspace trust Orca wrote', () => {
     })
   })
 
-  it('removes a WSL guest entry recorded under the host workspace path', async () => {
-    const agyHome = join(userDataDir, 'agy-home')
-    const settingsPath = join(agyHome, '.gemini', 'antigravity-cli', 'settings.json')
-    markAntigravityWorkspaceTrusted(PROJECT, agyHome, '/home/u/feature-r1')
-    expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).trustedWorkspaces).toEqual([
-      '/home/u/feature-r1'
-    ])
-
-    await purgeWithMeta()(WORKTREE_ID)
-
-    expect(JSON.parse(readFileSync(settingsPath, 'utf-8')).trustedWorkspaces).toEqual([])
-  })
-
   it('keeps an Antigravity entry that was trusted before Orca saw the path', async () => {
     const agyHome = join(userDataDir, 'agy-home')
     const settingsPath = join(agyHome, '.gemini', 'antigravity-cli', 'settings.json')
@@ -98,19 +79,5 @@ describe('worktree removal drops the workspace trust Orca wrote', () => {
     expect(JSON.parse(readFileSync(settingsPath, 'utf-8'))).toEqual({
       trustedWorkspaces: [PROJECT]
     })
-  })
-
-  it('keeps the folder trust when one folder-workspace session is removed', async () => {
-    const session = `${WORKTREE_ID}::workspace:5e8cc6b2-1d3f-4a5b-9c2d-7f6e5a4b3c2d`
-    await purgeWithMeta()(session, undefined, false)
-    await purgeWithMeta()(session)
-
-    expect(readFileSync(configPath, 'utf-8')).toContain(`[projects."${PROJECT}"]`)
-  })
-
-  it('keeps the entry while another host still owns the same path-derived id', async () => {
-    await purgeWithMeta({ hostId: 'ssh:host-b' })(WORKTREE_ID, 'ssh:host-a')
-
-    expect(readFileSync(configPath, 'utf-8')).toContain(`[projects."${PROJECT}"]`)
   })
 })

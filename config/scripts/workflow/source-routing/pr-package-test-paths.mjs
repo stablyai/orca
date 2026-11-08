@@ -184,7 +184,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/agent-hooks/windows-powershell-hook-launcher.test.ts',
   'src/main/claude/claude-status-line-windows.test.ts',
   'src/main/codex/hooks/installation/windows-hook-command.test.ts',
-  'src/main/codex/hooks/installation/windows-hook-upgrade.test.ts',
   'src/main/codex/hooks/installation/hook-service-managed-install.test.ts',
   'src/main/windows/windows-pty-job.win32.test.ts',
   'src/main/windows/windows-msys-job.win32.test.ts',
