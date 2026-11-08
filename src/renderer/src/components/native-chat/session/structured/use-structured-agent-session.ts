@@ -248,6 +248,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
       rewindInFlight: rewind.blockedRef,
       sends: pending,
       items: () => stateRef.current.items,
+      onClearSent: contextClear.onClearSent,
       send: commandWrite
     }),
     journalItems: transcriptItems,
