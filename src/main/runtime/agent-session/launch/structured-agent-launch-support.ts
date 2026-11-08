@@ -26,7 +26,8 @@ import { structuredAgentRuntimeMetadata } from '../installation/structured-agent
 import {
   refreshHostAgentBaseEnvironmentAfterMiss,
   resolveHostAgentBaseEnvironment,
-  createStructuredAgentEnvironmentResolvers
+  createStructuredAgentEnvironmentResolvers,
+  overlayEnvironmentVariables
 } from '../environment/structured-agent-shell-environment'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
@@ -99,12 +100,14 @@ export async function structuredAgentSupportsLaunch(
 /** The environment a new local chat launch starts from, before its account binding. */
 export async function resolveHostStructuredAgentLaunchEnvironment(
   agent: string,
-  settings: LaunchEnvironmentSettings
+  settings: LaunchEnvironmentSettings,
+  platform: NodeJS.Platform = process.platform
 ): Promise<Record<string, string>> {
-  return {
-    ...(await resolveHostAgentBaseEnvironment(settings)),
-    ...(isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {})
-  }
+  return overlayEnvironmentVariables(
+    await resolveHostAgentBaseEnvironment(settings),
+    isTuiAgent(agent) ? resolveTuiAgentLaunchEnv(agent, settings) : {},
+    platform
+  )
 }
 
 /** What a chat start of `agent` on this host launches from, for a child that serves no chat. */

@@ -30,21 +30,21 @@ function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
 }
 
 /** Overlays variables on a base env; win32 names are case-insensitive, so drop the base spelling. */
-function overlayShellVariables(
+export function overlayEnvironmentVariables(
   base: Record<string, string>,
-  shellVariables: Record<string, string>,
+  overlay: Record<string, string>,
   platform: NodeJS.Platform
 ): Record<string, string> {
   const merged = { ...base }
   if (platform === 'win32') {
-    const overlaid = new Set(Object.keys(shellVariables).map((key) => key.toUpperCase()))
+    const overlaid = new Set(Object.keys(overlay).map((key) => key.toUpperCase()))
     for (const key of Object.keys(merged)) {
       if (overlaid.has(key.toUpperCase())) {
         delete merged[key]
       }
     }
   }
-  return { ...merged, ...shellVariables }
+  return { ...merged, ...overlay }
 }
 
 function pickShellVariables(
@@ -78,7 +78,7 @@ export function structuredAgentBaseEnvironment(input: {
     return definedEnv(input.shellEnv)
   }
   const platform = input.platform ?? process.platform
-  return overlayShellVariables(
+  return overlayEnvironmentVariables(
     definedEnv(input.processEnv ?? process.env),
     pickShellVariables(input.shellEnv, input.policy.names, platform),
     platform
@@ -249,7 +249,11 @@ export function createStructuredAgentEnvironmentResolvers(
           const base = structuredAgentBaseEnvironment({ shellEnv, policy, processEnv, platform })
           return new Map(
             agents.map((agent) => {
-              const effective = overlayShellVariables(base, overlays.get(agent) ?? {}, platform)
+              const effective = overlayEnvironmentVariables(
+                base,
+                overlays.get(agent) ?? {},
+                platform
+              )
               return [agent, structuredAgentEnvironmentIdentity(effective, platform)]
             })
           )
@@ -262,7 +266,7 @@ export function createStructuredAgentEnvironmentResolvers(
     },
     resolveBaseEnvironment: resolveBase,
     resolveAgentEnvironment: async (agent) =>
-      overlayShellVariables(
+      overlayEnvironmentVariables(
         await resolveBase(),
         sources.resolveAgentLaunchEnv?.(agent) ?? {},
         platform
