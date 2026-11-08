@@ -458,6 +458,39 @@ describe('worktree rm needs an explicit workspace', () => {
     }
   )
 
+  it.each(['current', 'active'])(
+    'refuses --worktree %s inside a folder workspace before the folder removal path',
+    async (value) => {
+      callMock.mockReset()
+      callMock.mockImplementation(async (method: string) => {
+        if (method === 'worktree.list') {
+          return worktreeListFixture([])
+        }
+        if (method === 'folderWorkspace.list') {
+          return okFixture('folders', {
+            folderWorkspaces: [{ id: 'hub-a', folderPath: '/tmp/hub', projectGroupId: 'group' }]
+          })
+        }
+        if (method === 'projectGroup.list') {
+          return okFixture('groups', { groups: [{ id: 'group' }] })
+        }
+        return okFixture('repos', { repos: [] })
+      })
+      const { exitCode, output } = await run(
+        ['worktree', 'rm', '--worktree', value, '--json'],
+        '/tmp/hub/notes'
+      )
+      expect(exitCode).toBe(1)
+      const { error } = JSON.parse(output)
+      expect(error.code).toBe('invalid_argument')
+      expect(error.data.current).toEqual({ resolution: 'resolved', selectors: ['folder:hub-a'] })
+      expect(error.data.nextSteps[0]).toBe('orca worktree rm --worktree folder:hub-a')
+      const methods = callMock.mock.calls.map(([method]) => method)
+      expect(methods).not.toContain('folderWorkspace.delete')
+      expect(methods).not.toContain('worktree.show')
+    }
+  )
+
   it('keeps the environment-specific guidance when the target is another environment', async () => {
     listEnvironmentsMock.mockReturnValue(SAVED)
     const { exitCode, output } = await run([

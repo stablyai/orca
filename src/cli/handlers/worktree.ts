@@ -50,7 +50,10 @@ import {
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
 import { getWorktreeReadFlags } from './worktree-unread-flag'
 import { getReviewTargetLinkFlags } from './worktree-review-link-flags'
-import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
+import {
+  getOptionalSetupDecision,
+  withSetupDecisionRecovery
+} from './worktree-setup-decision-recovery'
 import { assertGitLabLinkFlagProjectsMatch } from './worktree-gitlab-link-context'
 import {
   assertReferenceWritesSupported,
@@ -70,22 +73,6 @@ function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent
     return undefined
   }
   return parseCliAgent(agent)
-}
-
-function getOptionalSetupDecision(
-  flags: Map<string, string | boolean>
-): 'run' | 'skip' | 'inherit' | undefined {
-  const setup = getPresentStringFlag(flags, 'setup')
-  if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
-    throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
-  }
-  if (flags.get('run-hooks') === true && setup !== undefined && setup !== 'run') {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Choose either --run-hooks or --setup run, not contradictory setup flags.'
-    )
-  }
-  return setup
 }
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
