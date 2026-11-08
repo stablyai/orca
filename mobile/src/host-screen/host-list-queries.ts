@@ -30,8 +30,10 @@ import {
 export const HOST_LIST_TARGET: HostQueryTarget = { exec: 'local' }
 export const NO_HOST_LIST_INPUT = {}
 
-// Agent rows change with no event of their own, so a visible list also polls (host-worktree-catalog).
+// A visible list polls rows the host sends no notice for: all of them on older hosts (host-worktree-catalog).
 export const HOST_LIST_POLL_MS = 3000
+// With worktreeRowsChanged, the poll only catches what agent row notices miss (terminal counts, unread, PR badge).
+export const HOST_LIST_BACKSTOP_POLL_MS = 10_000
 
 // The fields every row the list draws carries; the rest are checked where they are read.
 const storedWorktreeRowSchema = z.looseObject({
@@ -84,7 +86,10 @@ export const hostWorktreeCatalogQuery = defineHostQuery<
   // A hidden page reads nothing on change events; coming back reads what it missed.
   refetchOnWindowFocus: true,
   // Folder workspace changes publish reposChanged, and worktree.ps carries their rows.
-  signal: { events: ['worktreesChanged', 'reposChanged'], floorMs: HOST_LIST_POLL_MS },
+  signal: {
+    events: ['worktreesChanged', 'reposChanged', 'worktreeRowsChanged'],
+    floorMs: HOST_LIST_POLL_MS
+  },
   persist: {
     version: 1,
     dataSchema: z.object({ snapshotId: z.null(), worktrees: z.array(storedWorktreeRow) }),
