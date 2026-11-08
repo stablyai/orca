@@ -1,4 +1,8 @@
-import { openingMessageReceipt } from '../operations/structured-agent-session-command-receipt'
+import {
+  openingMessageReceipt,
+  openingMessageReceiptRefusal
+} from '../operations/structured-agent-session-command-receipt'
+import { CommandReceiptExistsError } from '../../agent-session-journal/writing/command-receipt-transaction'
 import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
@@ -229,7 +233,15 @@ async function foundConversation(
               ? openingMessageOptions(candidate.record.options)
               : {})
           }
-        )
+        ).catch((error: unknown) => {
+          if (!(error instanceof CommandReceiptExistsError)) {
+            throw error
+          }
+          return {
+            ok: false as const,
+            refusal: openingMessageReceiptRefusal(error, first.clientMessageId, params.envelope)
+          }
+        })
         if (!sent.ok) {
           return sent
         }

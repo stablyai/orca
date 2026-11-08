@@ -1,6 +1,9 @@
 import type { AgentSessionReserveRequest } from '../../../runtime/agent-session/ownership/agent-session-reservation-admission'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
-import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import {
+  isAgentSessionRefusalError,
+  refuse
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   commandReceiptScope,
@@ -220,4 +223,18 @@ export function openingMessageReceipt(
       }
     })
   )
+}
+
+export function openingMessageReceiptRefusal(
+  error: CommandReceiptExistsError,
+  clientMessageId: string,
+  envelope: AgentSessionMutationEnvelope
+) {
+  return error.result.reason === 'conflict'
+    ? refuse(
+        'agent_session_operation_invalid',
+        { reason: 'messageIdReused' },
+        `Message id ${clientMessageId} was already used for another send.`
+      )
+    : agentSessionOperationOutcomeUnknown(envelope.clientOperationId)
 }
