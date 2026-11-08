@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { AgentStatusObservedPaneIdentities } from '../runtime/agent-status-observed-pane-identity'
+import type { AgentStatusObservedPaneIdentities } from '../runtime/terminal/identity/agent-status-observed-pane-identity'
 import type { AgentHookServer } from './server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 

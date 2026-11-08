@@ -6,7 +6,7 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../shared/workt
 import type { Repo } from '../../../shared/repo-types'
 import { stopMissingWorktreeTerminals } from './removal/missing-worktree-terminal-reconciliation'
 import type { WorktreeVisibilitySourceMatcher } from '../../../shared/worktree/visibility-sources'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'

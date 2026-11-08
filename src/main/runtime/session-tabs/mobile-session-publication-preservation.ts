@@ -2,13 +2,15 @@ import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as ScheduleMobileS
 import { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs } from './mobile-session-preservation'
 import type {
   RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionSnapshotTab,
+  RuntimeMobileSessionSnapshotTab
+} from '../../../shared/runtime-mobile-session-tab-contracts'
+import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-types'
+} from '../../../shared/runtime-session-contracts'
 import { getMobileSessionSnapshotTabIdentityKeys } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-browser-page-registry'
-import { isHeadlessBuiltPublication } from '../mobile-session-snapshot-equality'
+import { isHeadlessBuiltPublication } from './mobile-session-snapshot-equality'
 import { sameRuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
 

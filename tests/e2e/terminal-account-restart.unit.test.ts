@@ -8,7 +8,7 @@ import { TerminalKilledError } from '../../src/main/daemon/providers/adapter/dae
 import { makePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'
 import { setLocalPtyProvider } from '../../src/main/ipc/pty/provider/registry'
-import { TerminalIntentionalStops } from '../../src/main/runtime/terminal-intentional-stops'
+import { TerminalIntentionalStops } from '../../src/main/runtime/terminal/stop/terminal-intentional-stops'
 import { getDefaultSettings } from '../../src/shared/constants'
 
 vi.mock('electron', () =>

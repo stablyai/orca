@@ -10,13 +10,7 @@ import { crossStoreCreateLineage } from './runtime-worktree-lineage-recording'
 import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
-import {
-  LINEAGE_PARENT_AMBIGUOUS,
-  RuntimeLineageError,
-  explicitParentError
-} from './runtime-lineage-error'
-
-export { LINEAGE_PARENT_AMBIGUOUS, RuntimeLineageError, explicitParentError }
+import { RuntimeLineageError, explicitParentError } from './runtime-lineage-error'
 
 export type WorktreeLineageInput = NonNullable<RuntimeManagedWorktreeCreateArgs['lineage']>
 

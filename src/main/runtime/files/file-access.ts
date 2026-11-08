@@ -1,4 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../../shared/runtime-file-contracts'
+import type {
+  RuntimeFileOpenPosition,
+  RuntimeFileOpenResult
+} from '../../../shared/runtime-file-contracts'
 import { listFilesystemMarkdownDocuments } from '../../providers/filesystem-markdown-listing'
 import type { MarkdownDocument } from '../../../shared/filesystem-entry-types'
 import {
@@ -13,7 +16,6 @@ import {
   isMobilePreviewableImagePath
 } from './mobile-file-kind'
 import type { RuntimeFileCommandHost } from './file-command-host'
-import type { RuntimeFileOpenResult } from '../../../shared/runtime-types'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'
 import { joinWorktreeRelativePath } from './paths/runtime-relative-paths'
 import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'

@@ -6,8 +6,6 @@ import { RuntimeWorkspaceSessionFlush } from '../../workspaces/session-hosts/run
 export abstract class LegacyWorkerRuntimeRecovery extends RuntimeWorkspaceSessionFlush {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
 
-  protected abstract getLeafKey(tabId: string, leafId: string): string
-
   async reconcileLegacyWorkerTerminals(
     options: { connectionId?: string; materializeRenderer?: boolean } = {}
   ): Promise<LegacyWorkerTerminalRecoveryResult> {

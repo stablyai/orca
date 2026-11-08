@@ -19,7 +19,7 @@ import { BINARY_PROBE_BYTES, isBinaryBuffer } from '../../../../shared/binary-bu
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-file-contracts'
 import { FONT_FILE_MIME_TYPES } from '../../../../shared/font-file-extensions'
 import {
   assertFileReadRange,
