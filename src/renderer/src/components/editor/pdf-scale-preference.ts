@@ -30,6 +30,22 @@ export function stepPdfScalePreference(
   return { scale: next, preference: next }
 }
 
+// Half a percent; a scale this close to fit-width already is fit-width.
+const FIT_STOP_MARGIN = 0.005
+
+/** A zoom that would pass over fit-width stops on it; the next one leaves it. */
+function stopAtPdfFitScale(previous: number, next: number, fitScale: number | null): number {
+  if (fitScale === null) {
+    return next
+  }
+  const before = previous / fitScale - 1
+  const after = next / fitScale - 1
+  const crosses =
+    (before < -FIT_STOP_MARGIN && after > -FIT_STOP_MARGIN) ||
+    (before > FIT_STOP_MARGIN && after < FIT_STOP_MARGIN)
+  return crosses ? fitScale : next
+}
+
 type PdfWheelZoomEvent = Pick<
   WheelEvent,
   'ctrlKey' | 'deltaY' | 'deltaMode' | 'clientX' | 'clientY' | 'preventDefault'
@@ -47,17 +63,22 @@ export function zoomPdfViewerWithWheel(
     update: () => void
   },
   event: PdfWheelZoomEvent,
-  bounds: { min: number; max: number }
+  bounds: { min: number; max: number },
+  fitScale: number | null = null
 ): number | null {
   if (!shouldHandleImageZoomWheel(event)) {
     return null
   }
   event.preventDefault()
   const previous = viewer.currentScale
-  const next = clampPdfScale(
-    previous * getPinchZoomFactor(event.deltaY, event.deltaMode),
-    bounds.min,
-    bounds.max
+  const next = stopAtPdfFitScale(
+    previous,
+    clampPdfScale(
+      previous * getPinchZoomFactor(event.deltaY, event.deltaMode),
+      bounds.min,
+      bounds.max
+    ),
+    fitScale
   )
   if (next === previous) {
     return null

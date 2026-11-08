@@ -63,3 +63,31 @@ export function nextBrowserPageZoomLevel(
   const next = direction === 'in' ? index + 1 : index - 1
   return BROWSER_PAGE_ZOOM_LEVELS[Math.max(0, Math.min(BROWSER_PAGE_ZOOM_LEVELS.length - 1, next))]
 }
+
+// One percent in zoom-level units; closer than this, fit-width and a preset look the same.
+const FIT_STOP_MARGIN = Math.log(1.01) / Math.log(1.2)
+
+/** Zoom steps stop at fit-width when they would pass over it, and leave it for the next preset. */
+export function nextBrowserPageZoomWithFitStop(
+  current: { zoomLevel: number; fitWidth: boolean },
+  direction: Exclude<BrowserPageZoomDirection, 'reset'>,
+  fitLevel: number | null
+): { zoomLevel: number; fitWidth: boolean } {
+  const sign = direction === 'in' ? 1 : -1
+  if (fitLevel === null) {
+    return { zoomLevel: nextBrowserPageZoomLevel(current.zoomLevel, direction), fitWidth: false }
+  }
+  if (current.fitWidth) {
+    const past = BROWSER_PAGE_ZOOM_LEVELS.filter(
+      (level) => (level - fitLevel) * sign > FIT_STOP_MARGIN
+    )
+    const zoomLevel = direction === 'in' ? past[0] : past.at(-1)
+    return zoomLevel === undefined ? current : { zoomLevel, fitWidth: false }
+  }
+  const from = normalizeBrowserPageZoomLevel(current.zoomLevel)
+  const next = nextBrowserPageZoomLevel(from, direction)
+  if ((fitLevel - from) * sign > FIT_STOP_MARGIN && (next - fitLevel) * sign > FIT_STOP_MARGIN) {
+    return { zoomLevel: current.zoomLevel, fitWidth: true }
+  }
+  return { zoomLevel: next, fitWidth: false }
+}

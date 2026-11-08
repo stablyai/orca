@@ -7,6 +7,8 @@ export type BrowserSiteColorScheme = 'light' | 'dark'
 export type BrowserSiteDisplay = {
   zoomLevel?: number
   colorScheme?: BrowserSiteColorScheme
+  /** Scale the page so its content spans the pane width. */
+  fitWidth?: true
 }
 
 /** How the page in a tab is shown right now, for the browser menu. */
@@ -17,6 +19,7 @@ export type BrowserPageSiteDisplay = {
   /** False while the site uses Default Zoom. */
   siteHasZoom: boolean
   colorScheme: BrowserSiteColorScheme | null
+  fitWidth: boolean
 }
 
 export function isBrowserSiteColorScheme(value: unknown): value is BrowserSiteColorScheme {

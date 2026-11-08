@@ -3,6 +3,7 @@ import {
   type ElectronDebuggerLease
 } from '../cdp/debugger/electron-debugger-lease'
 import { getBrowserSiteDisplay, updateBrowserSiteDisplay } from './browser-site-display-store'
+import { browserPageFitWidthScript } from './browser-page-fit-width-script'
 import {
   browserSiteDisplayKey,
   type BrowserPageSiteDisplay,
@@ -10,7 +11,7 @@ import {
 } from '../../../shared/browser-site-display'
 import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
-  nextBrowserPageZoomLevel,
+  nextBrowserPageZoomWithFitStop,
   normalizeBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from '../../../shared/browser-page-zoom'
@@ -60,7 +61,12 @@ export class BrowserSiteDisplayController {
     const previous = this.guests.get(guest.id)
     previous?.stopWatchingDomReady()
     // dom-ready follows Electron's post-commit copy of the embedder zoom.
-    const onDomReady = (): void => this.applyZoom(guest.id)
+    const onDomReady = (): void => {
+      this.applyZoom(guest.id)
+      if (this.getPageDisplay(guest.id)?.fitWidth) {
+        this.applyFitWidth(guest.id, true)
+      }
+    }
     guest.on('dom-ready', onDomReady)
     this.guests.set(guest.id, {
       guest,
@@ -145,24 +151,33 @@ export class BrowserSiteDisplayController {
       site,
       zoomLevel: saved.zoomLevel ?? this.defaultZoomLevel,
       siteHasZoom: saved.zoomLevel !== undefined,
-      colorScheme: saved.colorScheme ?? null
+      colorScheme: saved.colorScheme ?? null,
+      fitWidth: saved.fitWidth === true
     }
   }
 
-  zoomPage(guestId: number, direction: BrowserPageZoomDirection): BrowserPageSiteDisplay | null {
+  /** fitLevel: zoom level at which the page fits its width, a stop between presets. */
+  zoomPage(
+    guestId: number,
+    direction: BrowserPageZoomDirection,
+    fitLevel: number | null = null
+  ): BrowserPageSiteDisplay | null {
     const display = this.getPageDisplay(guestId)
     const profileId = this.guests.get(guestId)?.profileId
     if (!display?.site || !profileId) {
       return display
     }
     // Step from saved zoom; Electron may have overwritten the live level with Orca UI zoom.
-    const next = nextBrowserPageZoomLevel(display.zoomLevel, direction, this.defaultZoomLevel)
-    const zoomLevel = next === this.defaultZoomLevel ? undefined : next
+    const step =
+      direction === 'reset'
+        ? { zoomLevel: this.defaultZoomLevel, fitWidth: false }
+        : nextBrowserPageZoomWithFitStop(display, direction, fitLevel)
+    const zoomLevel = step.zoomLevel === this.defaultZoomLevel ? undefined : step.zoomLevel
     if (zoomLevel !== (display.siteHasZoom ? display.zoomLevel : undefined)) {
       updateBrowserSiteDisplay(profileId, display.site, { zoomLevel })
       this.forEachSiteGuest(profileId, display.site, (siteGuestId) => this.applyZoom(siteGuestId))
     }
-    return this.getPageDisplay(guestId)
+    return this.setFitWidth(guestId, step.fitWidth)
   }
 
   setColorScheme(
@@ -179,6 +194,35 @@ export class BrowserSiteDisplayController {
       this.applyColorScheme(siteGuestId)
     )
     return this.getPageDisplay(guestId)
+  }
+
+  setFitWidth(guestId: number, fitWidth: boolean): BrowserPageSiteDisplay | null {
+    const display = this.getPageDisplay(guestId)
+    const profileId = this.guests.get(guestId)?.profileId
+    if (!display?.site || !profileId || display.fitWidth === fitWidth) {
+      return display
+    }
+    updateBrowserSiteDisplay(profileId, display.site, { fitWidth: fitWidth || undefined })
+    this.forEachSiteGuest(profileId, display.site, (siteGuestId) =>
+      this.applyFitWidth(siteGuestId, fitWidth)
+    )
+    return this.getPageDisplay(guestId)
+  }
+
+  private applyFitWidth(guestId: number, fitWidth: boolean): void {
+    const guest = this.guests.get(guestId)?.guest
+    if (!guest || guest.isDestroyed()) {
+      return
+    }
+    // Why: WebContents.executeJavaScript waits for loading to stop, so a page with a stuck request never refits.
+    guest.mainFrame
+      .executeJavaScript(browserPageFitWidthScript(fitWidth))
+      .catch((error: unknown) => {
+        console.warn('[browser-site-display] failed to fit the page width', {
+          guestWebContentsId: guestId,
+          error: errorMessage(error)
+        })
+      })
   }
 
   private forEachSiteGuest(

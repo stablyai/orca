@@ -7,6 +7,7 @@ import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-t
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { addBrowserPageZoomEventListener, type BrowserPageZoomCommand } from './browser-page-zoom'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { zoomBrowserPage } from '../assemble-chrome/browser-fit-width-button'
 
 /** Handle chrome chords in the renderer and guest chords through main’s IPC; focused guests own a separate WebContents. */
 export function useBrowserPageWebviewShortcuts({
@@ -138,7 +139,7 @@ export function useBrowserPageWebviewShortcuts({
       if (browserPageId !== browserTabId || !isActiveRef.current) {
         return
       }
-      void window.api.browser.zoomPage({ browserPageId, direction }).then((display) => {
+      void zoomBrowserPage(browserPageId, direction).then((display) => {
         if (display?.site) {
           showBrowserZoomFeedback(display.zoomLevel)
         }

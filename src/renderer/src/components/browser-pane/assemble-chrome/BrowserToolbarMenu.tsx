@@ -16,6 +16,7 @@ import {
   getBrowserViewportPreset
 } from '../../../../../shared/browser-viewport-presets'
 import { BrowserToolbarMenuDropdown } from './browser-toolbar-menu-dropdown'
+import { setBrowserPageFitWidth, zoomBrowserPage } from './browser-fit-width-button'
 import { BrowserToolbarProfileDialogs } from './browser-toolbar-profile-dialogs'
 import { translate } from '@/i18n/i18n'
 import type { BrowserChromeOverflowMenuProps } from './browser-chrome-folded-tools'
@@ -98,9 +99,11 @@ export function BrowserToolbarMenu({
     })
   }
   const zoomPage = (direction: BrowserPageZoomDirection): void =>
-    showSiteDisplay(window.api.browser.zoomPage({ browserPageId, direction }))
+    showSiteDisplay(zoomBrowserPage(browserPageId, direction))
   const setSiteColorScheme = (colorScheme: BrowserSiteColorScheme | null): void =>
     showSiteDisplay(window.api.browser.setPageSiteColorScheme({ browserPageId, colorScheme }))
+  const setSiteFitWidth = (fitWidth: boolean): void =>
+    showSiteDisplay(setBrowserPageFitWidth(browserPageId, fitWidth))
 
   useEffect(() => {
     if (!menuOpen) {
@@ -288,6 +291,7 @@ export function BrowserToolbarMenu({
         siteDisplay={siteDisplay}
         onZoomPage={zoomPage}
         onSetSiteColorScheme={setSiteColorScheme}
+        onSetSiteFitWidth={setSiteFitWidth}
         onOpenSourceFile={onOpenSourceFile}
         overflow={overflow}
       />

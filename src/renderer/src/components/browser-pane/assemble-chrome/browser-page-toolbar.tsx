@@ -10,6 +10,7 @@ import { BrowserImportHintButton } from './BrowserImportHintButton'
 import { BrowserPasswordSaveButton } from '../passwords/BrowserPasswordSaveButton'
 import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
+import { BrowserFitWidthButton } from './browser-fit-width-button'
 import { BrowserExtensionToolbar } from './browser-extension-toolbar'
 import { useBrowserExtensionToolbar } from './use-browser-extension-toolbar'
 import { SshEgressIndicator } from './browser-egress-indicator'
@@ -204,6 +205,12 @@ export function BrowserPageToolbar({
       }
       passwordControl={
         <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
+      }
+      fitWidthControl={
+        <BrowserFitWidthButton
+          browserPageId={browserPageId}
+          pageKey={`${currentBrowserUrl}\n${loading}`}
+        />
       }
       importControl={(compact) => (
         <BrowserImportHintButton profileId={sessionProfileId} compact={compact} />

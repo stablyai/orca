@@ -1,7 +1,6 @@
 import { ipcMain, webContents, type IpcMainInvokeEvent } from 'electron'
 import { browserManager } from '../../browser/browser-manager'
-import { browserSiteDisplayController } from '../../browser/site-settings/browser-site-display-controller'
-import { isBrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
+import { registerBrowserSiteDisplayHandlers } from './browser-site-display-ipc'
 import { publishBrowserClientPageMetadata } from '../../browser/client-pages/renderer/browser-client-page-metadata-transport'
 import {
   BrowserClientPageMetadataParams,
@@ -11,10 +10,6 @@ import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'
 import { isValidBrowserGrabRect } from '../../../shared/browser-annotation-viewport-report'
-import {
-  isBrowserSiteColorScheme,
-  type BrowserPageSiteDisplay
-} from '../../../shared/browser-site-display'
 import {
   isValidBrowserAnnotationViewportBridgeMarkers,
   isValidBrowserAnnotationViewportBridgeToken,
@@ -44,9 +39,6 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:acceptDownload')
   ipcMain.removeHandler('browser:cancelDownload')
   ipcMain.removeHandler('browser:publishClientPageMetadata')
-  ipcMain.removeHandler('browser:getPageSiteDisplay')
-  ipcMain.removeHandler('browser:zoomPage')
-  ipcMain.removeHandler('browser:setPageSiteColorScheme')
   ipcMain.removeHandler('browser:setPageAudioMuted')
 
   // Page/session operations exclude document previews.
@@ -64,40 +56,7 @@ export function registerBrowserGuestViewHandlers(): void {
     return guest && !guest.isDestroyed() ? guest : null
   }
 
-  ipcMain.handle(
-    'browser:getPageSiteDisplay',
-    (event, args: { browserPageId: string }): BrowserPageSiteDisplay | null => {
-      const guestId = pageGuestId(event, args?.browserPageId)
-      return guestId === null ? null : browserSiteDisplayController.getPageDisplay(guestId)
-    }
-  )
-
-  ipcMain.handle(
-    'browser:zoomPage',
-    (event, args: { browserPageId: string; direction: unknown }): BrowserPageSiteDisplay | null => {
-      const guestId = pageGuestId(event, args?.browserPageId)
-      const { direction } = args
-      if (guestId === null || !isBrowserPageZoomDirection(direction)) {
-        return null
-      }
-      return browserSiteDisplayController.zoomPage(guestId, direction)
-    }
-  )
-
-  ipcMain.handle(
-    'browser:setPageSiteColorScheme',
-    (
-      event,
-      args: { browserPageId: string; colorScheme: unknown }
-    ): BrowserPageSiteDisplay | null => {
-      const guestId = pageGuestId(event, args?.browserPageId)
-      const { colorScheme } = args
-      if (guestId === null || (colorScheme !== null && !isBrowserSiteColorScheme(colorScheme))) {
-        return null
-      }
-      return browserSiteDisplayController.setColorScheme(guestId, colorScheme)
-    }
-  )
+  registerBrowserSiteDisplayHandlers(pageGuestId)
 
   ipcMain.handle(
     'browser:setPageAudioMuted',
