@@ -4,6 +4,7 @@ import {
   assertProfileStateDocumentRevision,
   readProfileStateRevision
 } from './profile-state-revision'
+import { readProfileStateSplitDocumentForRow } from './profile-state-document-parts-reader'
 import {
   ProfileStateDocumentCorruptionError,
   validateProfileStateDocumentRow,
@@ -55,9 +56,11 @@ export function readProfileStateDocuments(
     | ProfileStateValidatedDocument
   )[] = []
   for (const row of rows) {
-    const document = validateProfileStateDocumentRow(row, {
-      retainParsedValue: options.representation === 'parsed'
-    })
+    const document =
+      readProfileStateSplitDocumentForRow(db, row, options.representation === 'parsed') ??
+      validateProfileStateDocumentRow(row, {
+        retainParsedValue: options.representation === 'parsed'
+      })
     assertProfileStateDocumentRevision(document.revision, profileRevision, document.domain)
     if (
       normalized !== undefined &&

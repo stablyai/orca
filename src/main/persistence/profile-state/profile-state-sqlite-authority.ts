@@ -35,6 +35,7 @@ import { buildCompleteDocumentReplacements } from './profile-state-complete-repl
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
 import { ensureProfileStateAuthorityMarker } from './profile-state-authority-marker'
 import type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
+import { ProfileStateLegacyDocumentRefresh } from './profile-state-legacy-document-refresh'
 
 /** Reuse one writable handle; fenced domain commits preserve unchanged normalized rows. */
 export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
@@ -42,6 +43,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
   private observedRevision: number | undefined
   private writableDatabase: ReturnType<typeof openWritableProfileStateDatabase> | undefined
   private backupRotation: ProfileStateBackupRotation | undefined
+  private readonly legacyDocuments = new ProfileStateLegacyDocumentRefresh()
 
   constructor(
     private readonly databasePath: string,
@@ -153,6 +155,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       replacements,
       automationRunsAfter
     }).revision
+    this.legacyDocuments.refreshIfDue(this.writableDatabase?.db)
   }
 
   assertCurrentRevision(): void {
@@ -219,6 +222,7 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
       expectedRevision: this.observedRevision ?? currentRevision,
       replacements: complete
     }).revision
+    this.legacyDocuments.refreshIfDue(this.writableDatabase?.db)
   }
 
   scheduleBackup(): void {
@@ -247,9 +251,13 @@ export class ProfileStateSqliteAuthority implements ProfileStateAuthority {
     return quarantineProfileStateDatabase(this.databasePath, this.profileId, quarantineRoot, reason)
   }
 
-  close(): void {
+  /** Only a graceful shutdown refreshes legacy rows; quarantine and maintenance closes must not write. */
+  close(options: { refreshLegacyDocuments?: boolean } = {}): void {
     this.assertActive()
     this.backupRotation?.stop()
+    if (options.refreshLegacyDocuments) {
+      this.legacyDocuments.refresh(this.writableDatabase?.db)
+    }
     this.writableDatabase?.db.close()
     this.writableDatabase = undefined
   }

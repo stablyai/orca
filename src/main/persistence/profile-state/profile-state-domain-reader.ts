@@ -5,6 +5,7 @@ import {
 } from './profile-state-revision'
 import { readProfileStateAutomationRunsDocument } from './profile-state-automation-runs'
 import { openProfileStateDatabaseReadOnly } from './profile-state-database'
+import { readProfileStateSplitDocumentForRow } from './profile-state-document-parts-reader'
 import {
   validateProfileStateDocumentRow,
   type ProfileStateParsedDocument
@@ -103,9 +104,11 @@ function readSelectedDocuments(
     )
     .iterate(...domains)
   return Array.from(rows, (row) => {
-    const { payload: _payload, ...document } = validateProfileStateDocumentRow(row, {
-      retainParsedValue: true
-    })
+    const { payload: _payload, ...document } =
+      readProfileStateSplitDocumentForRow(db, row, true) ??
+      validateProfileStateDocumentRow(row, {
+        retainParsedValue: true
+      })
     return { ...document, value: document.value }
   })
 }
