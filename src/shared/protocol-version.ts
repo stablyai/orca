@@ -1,4 +1,7 @@
-import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from './project-group-order-capability'
+import {
+  PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,
+  PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY
+} from './project-group-order-capability'
 import { EMULATOR_RUNTIME_CAPABILITIES } from './emulator-runtime-capabilities'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
@@ -105,6 +108,7 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...AUTOMATION_RUNTIME_CAPABILITIES,
     ...WORKTREE_RUNTIME_CAPABILITIES,
     PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY,
+    PROJECT_GROUP_UPDATE_MANY_RUNTIME_CAPABILITY,
     ...PREFLIGHT_RUNTIME_CAPABILITIES,
     ...WORKSPACE_PORTS_RUNTIME_CAPABILITIES,
     ...SESSION_TABS_RUNTIME_CAPABILITIES,

@@ -24,6 +24,7 @@ import {
   ProjectGroupScanNested,
   ProjectGroupSelector,
   ProjectGroupUpdate,
+  ProjectGroupUpdateMany,
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
@@ -81,6 +82,14 @@ export const REPO_METHODS = [
     permission: 'workspace',
     params: ProjectGroupSelector,
     handler: async (params, { runtime }) => runtime.deleteProjectGroup(params.groupId)
+  }),
+  defineMethod({
+    name: 'projectGroup.updateMany',
+    permission: 'workspace',
+    params: ProjectGroupUpdateMany,
+    handler: async (params, { runtime }) => ({
+      groups: await runtime.updateProjectGroups(params.mutations)
+    })
   }),
   defineMethod({
     name: 'projectGroup.moveProject',
