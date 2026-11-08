@@ -3,7 +3,7 @@ import {
   QuickOpenPathRanker,
   isQuickOpenQueryTooLarge
 } from '../../../../shared/quick-open-path-search'
-import type { RuntimeFileListResult } from '../../../../shared/runtime-types'
+import type { RuntimeFileListResult } from '../../../../shared/runtime-file-contracts'
 import type { SearchOptions, SearchResult } from '../../../../shared/code-search-types'
 import {
   throwIfSignalAborted,

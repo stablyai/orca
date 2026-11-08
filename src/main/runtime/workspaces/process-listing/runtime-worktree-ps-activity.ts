@@ -5,7 +5,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getWorkspaceSessionTabActivityIds } from '../../../../shared/workspace-session/workspace-session-tab-activity'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord

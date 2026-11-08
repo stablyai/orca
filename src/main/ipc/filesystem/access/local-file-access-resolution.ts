@@ -1,6 +1,6 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { stat } from 'node:fs/promises'
-import type { RuntimeStore } from '../../../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import type { LocalFileAccess } from '../../../../shared/local-file-access'
 import {
   PATH_ACCESS_DENIED_MESSAGE,

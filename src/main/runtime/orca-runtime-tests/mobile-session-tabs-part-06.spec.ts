@@ -6,7 +6,7 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import {
   appendBrowserTabOrder,
   collectBrowserGroupAssignment
-} from '../mobile-session-browser-group-projection'
+} from '../session-lifecycle/projection/mobile-session-browser-group-projection'
 import type { Tab } from '../../../shared/tab-types'
 import {
   HEADLESS_LEAF_ID,

@@ -22,7 +22,7 @@ import {
   store,
   makeRuntimeStoreWithWorkspaceSession
 } from './orca-runtime-test-fixtures.spec'
-import { spawnedPtyEnv } from '../spawned-pty-env-fixtures'
+import { spawnedPtyEnv } from '../terminal/launch/spawned-pty-env-fixtures'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 

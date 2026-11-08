@@ -14,7 +14,7 @@ import {
   getFolderWorkspacePathStatusForPath
 } from '../../project-groups/folder-workspace-path-status'
 import { FolderWorkspaceCreateRefusedError } from '../../project-groups/folder-workspace-create-refusal'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorktreeLifecycleEvent } from '../workspaces/lifecycle/worktree-lifecycle-event'
 import {
   runtimeVisibleFolderWorkspaces,

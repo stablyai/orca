@@ -12,7 +12,7 @@ import {
   type FetchedRepoIcon,
   type RepoIconFetch
 } from './repo-icon-remote-fetch'
-import type { RuntimeDesktopSurface } from '../runtime-desktop-surface'
+import type { RuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 
 export type RepoIconPngEncoder = NonNullable<RuntimeDesktopSurface['encodeRepoIconPng']>
 

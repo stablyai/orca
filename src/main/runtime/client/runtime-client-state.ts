@@ -17,7 +17,7 @@ import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-tear
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
 import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
 import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'

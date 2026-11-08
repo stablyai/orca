@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../runtime-graph-reload-lifecycle'
+import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../session-graph/runtime-graph-reload-lifecycle'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import {

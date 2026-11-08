@@ -15,7 +15,7 @@ import {
 import { classifyFilesystemDirectoryEntries } from '../ipc/filesystem/filesystem-symlink-directory-entries'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { listMarkdownDocuments } from '../ipc/markdown-documents'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { runBundledRipgrepTextSearch } from '../ripgrep/bundled-ripgrep-text-search'
 import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-routing'
 import type { IFilesystemProvider } from './filesystem-provider-contract'

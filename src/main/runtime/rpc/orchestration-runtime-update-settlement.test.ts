@@ -1,23 +1,39 @@
 import { createHash } from 'node:crypto'
+
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
+
 import { join } from 'node:path'
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
+
 import Database from '../../sqlite/sync-database'
+
 import { OrcaRuntimeService } from '../orca-runtime'
+
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+
 import '../orchestration/db/contract-constants'
 import '../orchestration/db/messages/mailbox-routing-page'
 import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest, RpcResponse } from './core'
+
 import { RpcDispatcher } from './dispatcher'
+
 import { ORCHESTRATION_METHODS } from './methods/orchestration/orchestration'
+
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
-import type { RuntimeStore } from '../runtime-store-contract'
+
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+
 import { bindPaneFirst } from '../orca-runtime-tests/bind-first-pane.test-fixture'
 
 const WORKER_HANDLE = 'term_pre_update_worker'

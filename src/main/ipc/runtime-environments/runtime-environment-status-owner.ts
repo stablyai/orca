@@ -1,4 +1,4 @@
-import { getRuntimeDesktopSurface } from '../../runtime/runtime-desktop-surface'
+import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
