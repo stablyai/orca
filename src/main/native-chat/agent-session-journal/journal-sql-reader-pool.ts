@@ -8,13 +8,12 @@ import type { AgentSessionHistoryResult } from '../../../shared/agent-session/ag
 import type { JournalSqlHistoryRequest } from './journal-sql-history-page'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
 import type {
-  JournalSqlConversionHeader,
   JournalSqlReaderOperation,
   JournalSqlReaderReply,
   JournalSqlReaderRequest,
   JournalSqlReaderResult
 } from './journal-sql-reader-protocol'
-import type { JournalSqlConversionTable } from './journal-sql-conversion'
+import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import type {
   JournalSqlDatabaseRead,
   JournalSqlDatabaseReadResult
@@ -106,13 +105,13 @@ export class JournalSqlConversionReader {
   private closing?: Promise<void>
 
   constructor(
-    readonly header: JournalSqlConversionHeader,
+    readonly header: JournalDomainImportHeader,
     private readonly slot: ReaderSlot,
     private readonly conversionId: number,
     private readonly release: () => void
   ) {}
 
-  async next(): Promise<JournalSqlConversionTable | null> {
+  async next(): Promise<JournalDomainImportPage | null> {
     const response = await this.slot.request({
       kind: 'conversion-page',
       conversionId: this.conversionId

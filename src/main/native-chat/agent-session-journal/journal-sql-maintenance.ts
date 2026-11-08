@@ -1,42 +1,32 @@
 import type Database from '../../sqlite/sync-database'
+import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import {
-  beginJournalSqlConversion,
-  currentJournalSqlEpoch,
-  journalLogNeedsFounding,
-  type JournalLogWatermark
-} from './journal-sql-meta'
-import {
-  finishJournalSqlConversion,
-  insertJournalSqlConversionRows,
-  type JournalSqlConversionTable
-} from './journal-sql-conversion'
-import {
-  deleteJournalSqlProjectionPage,
-  sweepJournalSqlProjectionPage
-} from './journal-sql-projection-sweep'
+  finishJournalDomainImport,
+  insertJournalDomainImportPage,
+  journalDomainImportState,
+  type JournalDomainImportState
+} from './journal-domain-import-rows'
+import { sweepJournalSqlProjectionPage } from './journal-sql-projection-sweep'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
 
 export type JournalSqlMaintenance =
   | { kind: 'projection-state'; sessionId: string }
-  | { kind: 'conversion-begin'; sessionId: string }
-  | { kind: 'conversion-clear'; sessionId: string }
   | {
-      kind: 'conversion-insert'
-      table: Pick<JournalSqlConversionTable, 'name' | 'columns'>
-      rows: unknown[][]
+      kind: 'import-page'
+      target: Pick<JournalDomainImportHeader, 'sessionId' | 'epoch'>
+      page: JournalDomainImportPage
     }
-  | { kind: 'conversion-finish'; sessionId: string; watermark: JournalLogWatermark }
+  | { kind: 'import-finish'; header: JournalDomainImportHeader }
   | { kind: 'projection-sweep' }
   | { kind: 'event-tail-prune'; now: number }
 
-export type JournalSqlProjectionState =
-  | { state: 'founding' | 'converting'; epoch: null }
-  | { state: 'ready'; epoch: string }
+export type JournalSqlProjectionState = JournalDomainImportState
 
 export type JournalSqlMaintenanceResult =
   | JournalSqlProjectionState
   | JournalSqlEventTailResult
   | boolean
+  | string
   | null
 
 export function applyJournalSqlMaintenance(
@@ -44,23 +34,12 @@ export function applyJournalSqlMaintenance(
   operation: JournalSqlMaintenance
 ): JournalSqlMaintenanceResult {
   switch (operation.kind) {
-    case 'projection-state': {
-      if (journalLogNeedsFounding(db, operation.sessionId)) {
-        return { state: 'founding', epoch: null }
-      }
-      const epoch = currentJournalSqlEpoch(db, operation.sessionId)
-      return epoch === null ? { state: 'converting', epoch } : { state: 'ready', epoch }
-    }
-    case 'conversion-begin':
-      beginJournalSqlConversion(db, operation.sessionId)
-      return null
-    case 'conversion-clear':
-      return deleteJournalSqlProjectionPage(db, operation.sessionId, null, 512)
-    case 'conversion-insert':
-      insertJournalSqlConversionRows(db, operation.table, operation.rows)
-      return null
-    case 'conversion-finish':
-      return finishJournalSqlConversion(db, operation)
+    case 'projection-state':
+      return journalDomainImportState(db, operation.sessionId)
+    case 'import-page':
+      return insertJournalDomainImportPage(db, operation.target, operation.page)
+    case 'import-finish':
+      return finishJournalDomainImport(db, operation.header)
     case 'projection-sweep':
       return sweepJournalSqlProjectionPage(db)
     case 'event-tail-prune':
