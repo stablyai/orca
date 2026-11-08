@@ -2,10 +2,17 @@ import { claudeProfileHistoryDirs } from '../../../claude-accounts/claude-profil
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isWslUncPath, parseWslUncPath } from '../../../../shared/wsl-paths'
+import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import {
-  encodeClaudeProjectPaths,
-  isClaudeProjectDirInScope
+  CLAUDE_BUCKET_NAME_MAX_LENGTH,
+  claudeProjectBucketNameBelowScope,
+  isClaudeProjectBucketInScope
 } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
+import { CLAUDE_CWD_BUCKET_LAYOUT } from '../../../ai-vault/session-cwd-bucket-layouts'
+import {
+  cachedProjectDirCwd,
+  cwdBucketScopePrefixes
+} from '../../../ai-vault/session-scanner-scope-discovery'
 import { wslGatedReaddir, wslGatedStat } from '../../../native-chat/wsl-transcript-fs-access'
 import type { RetirementScanResult } from './worktree-retirement-backfill-scan'
 import { normalizeRetirableGeneratedName } from './worktree-name-retirement'
@@ -29,21 +36,32 @@ export function collectRetiredNamesFromLeafNames(leafNames: Iterable<string>): S
 /** Strip the encoded parent before extracting leaves; trailing-dash parsing can retire a numeric workspace's parent. */
 export function extractBucketLeafCandidates(
   bucketName: string,
-  encodedParents: readonly string[]
+  encodedParents: Iterable<string>
 ): string[] {
   const bucket = bucketName.toLowerCase()
-  for (const parent of encodedParents) {
-    if (!parent || bucket === parent || !isClaudeProjectDirInScope(bucket, [parent])) {
-      continue
-    }
-    const remainder = bucket.slice(parent.length + 1)
+  // Every matching parent counts: a root parent (`-`) also prefixes the bucket of a longer one.
+  return [...encodedParents].flatMap((parent) => {
+    const remainder = claudeProjectBucketNameBelowScope(bucket, parent)
     if (!remainder) {
-      continue
+      return []
     }
     const firstSegment = remainder.split('-')[0]
     return remainder === firstSegment ? [remainder] : [remainder, firstSegment]
+  })
+}
+
+/** A `<first 200>-<hash>` bucket name has lost the workspace name; its transcript cwd still has it. */
+async function hashedBucketLeafNames(
+  projectDir: string,
+  roots: readonly string[],
+  onRefusal: () => void
+): Promise<string[]> {
+  const cwd = await cachedProjectDirCwd(projectDir, onRefusal, 'claude')
+  if (!cwd) {
+    return []
   }
-  return []
+  // Compare real paths: /repo/my-app and /repo/my/app share a bucket name but not a cwd.
+  return roots.flatMap((root) => relativePathInsideRoot(root, cwd)?.split('/')[0] || [])
 }
 
 /** Share WSL scan admission/deadlines; report refusals without discarding names readable from other sources. */
@@ -95,14 +113,19 @@ function getClaudeProjectsDir(home: string, env: NodeJS.ProcessEnv): string {
 
 type ClaudeProjectsSource = {
   projectsDir: string
-  encodedParents: string[]
+  /** Workspace roots as this source's Claude records its cwd. */
+  roots: string[]
+  encodedParents: ReadonlySet<string>
 }
 
-// Fold both sides for case-insensitive filesystems; missed buckets risk reissuing used paths.
-function encodeParents(paths: readonly string[]): string[] {
-  return paths
-    .filter((path) => path.length > 0)
-    .flatMap((path) => encodeClaudeProjectPaths(path).map((encoded) => encoded.toLowerCase()))
+// Session History's bucket rules (long-path cut, roots, case, both WSL spellings); missed buckets risk reissuing used paths.
+function claudeProjectsSource(projectsDir: string, paths: readonly string[]): ClaudeProjectsSource {
+  const roots = paths.filter((path) => path.length > 0)
+  return {
+    projectsDir,
+    roots,
+    encodedParents: cwdBucketScopePrefixes(CLAUDE_CWD_BUCKET_LAYOUT, roots)
+  }
 }
 
 /** WSL agents leave buckets in the distro home; only its default location is visible, not distro CLAUDE_CONFIG_DIR. */
@@ -114,13 +137,12 @@ async function claudeProjectsSources(args: {
 }): Promise<{ sources: ClaudeProjectsSource[]; complete: boolean }> {
   const sources: ClaudeProjectsSource[] = []
   let complete = true
-  const hostParents = encodeParents(args.workspaceRoots)
-  if (hostParents.length > 0) {
+  if (args.workspaceRoots.some((root) => root.length > 0)) {
     for (const projectsDir of new Set([
       getClaudeProjectsDir(args.home ?? homedir(), args.env ?? process.env),
       ...claudeProfileHistoryDirs('projects')
     ])) {
-      sources.push({ projectsDir, encodedParents: hostParents })
+      sources.push(claudeProjectsSource(projectsDir, args.workspaceRoots))
     }
   }
   const linuxRootsByDistro = new Map<string, string[]>()
@@ -137,10 +159,7 @@ async function claudeProjectsSources(args: {
   for (const [distro, linuxRoots] of linuxRootsByDistro) {
     const distroHome = await resolveWslHome(distro)
     if (distroHome) {
-      sources.push({
-        projectsDir: join(distroHome, '.claude', 'projects'),
-        encodedParents: encodeParents(linuxRoots)
-      })
+      sources.push(claudeProjectsSource(join(distroHome, '.claude', 'projects'), linuxRoots))
       continue
     }
     // Unresolved distro homes leave agent history unread, so discovery must remain retryable.
@@ -172,6 +191,15 @@ export async function discoverRetiredWorktreeNames(args: {
     refused ||= listing.refused
     for (const bucket of listing.names) {
       leafNames.push(...extractBucketLeafCandidates(bucket, source.encodedParents))
+      if (
+        bucket.length > CLAUDE_BUCKET_NAME_MAX_LENGTH &&
+        isClaudeProjectBucketInScope(bucket.toLowerCase(), source.encodedParents)
+      ) {
+        const projectDir = join(source.projectsDir, bucket)
+        leafNames.push(
+          ...(await hashedBucketLeafNames(projectDir, source.roots, () => (refused = true)))
+        )
+      }
     }
   }
 

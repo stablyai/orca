@@ -138,6 +138,32 @@ describe('retirement discovery on WSL', () => {
     }
   })
 
+  // A distro-root workspace folder encodes to the root prefix `-` on the Linux side.
+  it.each([
+    ['a host bucket under the older \\\\wsl$\\ spelling', 'host', `--wsl--ubuntu-${FIRST}`],
+    ['a distro bucket', 'distro', `-${FIRST}`]
+  ])('keeps %s below a distro-root workspace folder spent', async (_case, side, bucket) => {
+    const homes = {
+      host: await mkdtemp(join(tmpdir(), 'orca-wsl-host-home-')),
+      distro: await mkdtemp(join(tmpdir(), 'orca-wsl-distro-home-'))
+    }
+    try {
+      await mkdir(join(homes[side], '.claude', 'projects', bucket), { recursive: true })
+
+      const retired = await discoverRetiredWorktreeNames({
+        workspaceRoots: ['\\\\wsl.localhost\\Ubuntu'],
+        home: homes.host,
+        env: {},
+        resolveWslHome: async () => homes.distro
+      })
+
+      expect(retired.names).toEqual(new Set([FIRST]))
+    } finally {
+      await rm(homes.host, { force: true, recursive: true })
+      await rm(homes.distro, { force: true, recursive: true })
+    }
+  })
+
   it('reaches distro discovery from the real backfill, not only when called directly', async () => {
     const distroHome = await mkdtemp(join(tmpdir(), 'orca-wsl-backfill-home-'))
     try {
