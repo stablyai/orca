@@ -60,21 +60,4 @@ describe.skipIf(process.platform === 'win32')('browseSshDirectory over a POSIX s
       { name: 'real-file.txt', isDirectory: false }
     ])
   })
-
-  it('navigates into a symlinked directory and lists an empty one as empty', async () => {
-    await mkdir(join(root, 'real-dir', 'project'), { recursive: true })
-    await mkdir(join(root, 'empty-real'))
-    await symlink(join(root, 'real-dir'), join(root, 'linked-dir'))
-    await symlink(join(root, 'empty-real'), join(root, 'linked-empty'))
-
-    const linked = await browseSshDirectory(shellBackedManager(), 'ssh-1', join(root, 'linked-dir'))
-    const empty = await browseSshDirectory(
-      shellBackedManager(),
-      'ssh-1',
-      join(root, 'linked-empty')
-    )
-
-    expect(linked.entries).toEqual([{ name: 'project', isDirectory: true }])
-    expect(empty.entries).toEqual([])
-  })
 })

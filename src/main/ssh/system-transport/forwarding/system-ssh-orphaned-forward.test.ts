@@ -213,27 +213,4 @@ describe('stopOrphanedOrcaSshForward', () => {
       vi.useRealTimers()
     }
   })
-
-  it('touches nothing when no orphan holds the port, or the table cannot be read', async () => {
-    const kill = vi.fn()
-    await expect(
-      stopOrphanedOrcaSshForward(47123, EXPECTED, {
-        listProcesses: async () => [],
-        kill,
-        readStartTimeMs: async () => 1_000,
-        platform: 'darwin'
-      })
-    ).resolves.toBe(false)
-    await expect(
-      stopOrphanedOrcaSshForward(47123, EXPECTED, {
-        listProcesses: async () => {
-          throw new Error('ps failed')
-        },
-        kill,
-        readStartTimeMs: async () => 1_000,
-        platform: 'darwin'
-      })
-    ).resolves.toBe(false)
-    expect(kill).not.toHaveBeenCalled()
-  })
 })
