@@ -3,7 +3,11 @@ import type { AgentProviderSessionMetadata } from '../../../shared/agent-session
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { stampRuntimeSourceEnv } from '../../../shared/runtime-source-env'
-import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
+import {
+  SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV
+} from '../../../shared/setup-agent-sequencing'
+import { pinCodexResumeProviderLaunch } from '../../pty/shell-startup/codex-resume-provider-launch'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { addWslEnvKeys } from '../../../shared/wsl-env'
@@ -134,8 +138,31 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
   // Time provenance/hook repair, auth selection and env assembly separately to attribute their different costs.
   args.mark?.('codex_resume')
   const codexResumeHome = codexResumeLaunch.codexResumeHome
-  const launchCommand = codexResumeLaunch.command
-  const baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
+  let launchCommand = codexResumeLaunch.command
+  let baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
+  const modelProvider = codexResumeHome?.modelProvider
+  const providerSession = codexResumeLaunch.providerSession
+  if (codexResumeHome && modelProvider && providerSession) {
+    const pin = (command: string | undefined): Promise<string> =>
+      pinCodexResumeProviderLaunch({
+        command,
+        sessionId: providerSession.id,
+        modelProvider,
+        codexHomePath: codexResumeHome.codexHomePath,
+        shellOverride: args.shellOverride,
+        env: baseEnv,
+        cwd: args.cwd
+      })
+    const sequencedCommand = baseEnv?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+    if (sequencedCommand) {
+      baseEnv = {
+        ...baseEnv,
+        [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: await pin(sequencedCommand)
+      }
+    } else {
+      launchCommand = await pin(launchCommand)
+    }
+  }
   const launchesCodex = args.launchAgent === 'codex'
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null

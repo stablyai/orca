@@ -26,7 +26,10 @@ describe('Codex session resume on native Windows', () => {
       'rollout-019f81b9-19a9-7651-a8d1-352d9420bd11.jsonl'
     )
     mkdirSync(dirname(rolloutPath), { recursive: true })
-    writeFileSync(rolloutPath, '{"type":"session_meta"}\n')
+    writeFileSync(
+      rolloutPath,
+      '{"type":"session_meta","payload":{"id":"019f81b9-19a9-7651-a8d1-352d9420bd11","model_provider":"openai"}}\n'
+    )
     const transcriptPath = toNamespacedPath(rolloutPath)
     const resolveVerifiedResumeHome = vi.fn(async () => homePath)
 
@@ -40,7 +43,7 @@ describe('Codex session resume on native Windows', () => {
         sharedRuntimeCodexHomePath: null,
         resolveVerifiedResumeHome
       })
-    ).resolves.toEqual({ outcome: 'resume', codexHomePath: homePath })
+    ).resolves.toEqual({ outcome: 'resume', codexHomePath: homePath, modelProvider: 'openai' })
     expect(resolveVerifiedResumeHome).toHaveBeenCalledWith({ homePath, transcriptPath })
   })
 })
