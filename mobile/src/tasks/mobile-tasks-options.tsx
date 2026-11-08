@@ -319,7 +319,8 @@ export type LinearListEntry =
 
 export const PROJECT_VIEW_DEFAULT_SORT = '__view_default__'
 
-export const GITHUB_REPO_CONCURRENCY = 3
+// Keeps the desktop's four gh slots busy across a phone round trip; the desktop Tasks page reads GitLab at six too.
+export const GITHUB_REPO_CONCURRENCY = 6
 
 export const MAX_RENDERED_PR_DIFF_LINES = 400
 
