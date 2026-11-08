@@ -1,5 +1,7 @@
-import type { BigIntStats, ReadStream } from 'node:fs'
-import { stat, type FileHandle } from 'node:fs/promises'
+import type { BigIntStats } from 'node:fs'
+import type { Readable } from 'node:stream'
+import { transcriptFileSnapshot } from '../native-chat/wsl-transcript-fs-access'
+import { WslJsonlFileHandle, type JsonlFileHandle } from './jsonl-file-access'
 
 const SNAPSHOT_FIELDS = ['dev', 'ino', 'size', 'mtimeMs', 'ctimeMs'] as const
 
@@ -11,7 +13,7 @@ export type JsonlFileSnapshot = {
   ctimeMs: number
 }
 
-export async function releaseJsonlReadStream(stream: ReadStream): Promise<void> {
+export async function releaseJsonlReadStream(stream: Readable): Promise<void> {
   if (!stream.closed) {
     await new Promise<void>((resolve) => {
       stream.once('close', resolve)
@@ -41,11 +43,13 @@ export function normalizeJsonlFileSnapshot(
 }
 
 export async function readJsonlFileSnapshot(filePath: string): Promise<JsonlFileSnapshot> {
-  return normalizeJsonlFileSnapshot(await stat(filePath, { bigint: true }))
+  return normalizeJsonlFileSnapshot(await transcriptFileSnapshot(filePath))
 }
 
-export async function readJsonlHandleSnapshot(handle: FileHandle): Promise<JsonlFileSnapshot> {
-  return normalizeJsonlFileSnapshot(await handle.stat({ bigint: true }))
+export async function readJsonlHandleSnapshot(handle: JsonlFileHandle): Promise<JsonlFileSnapshot> {
+  return normalizeJsonlFileSnapshot(
+    await (handle instanceof WslJsonlFileHandle ? handle.snapshot() : handle.stat({ bigint: true }))
+  )
 }
 
 export function sameJsonlFileSnapshot(left: JsonlFileSnapshot, right: JsonlFileSnapshot): boolean {
@@ -54,7 +58,7 @@ export function sameJsonlFileSnapshot(left: JsonlFileSnapshot, right: JsonlFileS
 
 export async function rejectUnchangedJsonlFileRead(
   filePath: string,
-  handle: FileHandle,
+  handle: JsonlFileHandle,
   initial: JsonlFileSnapshot
 ): Promise<void> {
   const [current, pathStats] = await Promise.all([
@@ -68,7 +72,7 @@ export async function rejectUnchangedJsonlFileRead(
 
 export async function readJsonlSnapshotRange(
   filePath: string,
-  handle: FileHandle,
+  handle: JsonlFileHandle,
   initial: JsonlFileSnapshot,
   start: number,
   endExclusive: number
@@ -93,7 +97,7 @@ export async function readJsonlSnapshotRange(
 
 export async function verifyJsonlSnapshotContents(
   filePath: string,
-  handle: FileHandle,
+  handle: JsonlFileHandle,
   initial: JsonlFileSnapshot,
   pieces: readonly Buffer[]
 ): Promise<boolean> {

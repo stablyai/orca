@@ -9,6 +9,7 @@ export type CodexLongContextTokens = {
 
 export type CodexUsageProcessedFile = {
   path: string
+  sourceDistro?: string
   mtimeMs: number
   size: number
   /** Absent in older caches; identifies the file that produced this projection. */

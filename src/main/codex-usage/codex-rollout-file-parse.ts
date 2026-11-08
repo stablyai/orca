@@ -26,6 +26,7 @@ const { finalizeSessions, mergeSessions, mergeDailyAggregates, sortDailyAggregat
   codexUsageAggregation
 
 export type CodexRolloutParseOptions = {
+  sourceDistro?: string
   /** Suffix-only parse for a diverged legacy copied-session bridge. */
   legacySourceSkipBytes?: number
   canClaimEventKey?: (eventKey: string) => boolean
@@ -144,7 +145,11 @@ export async function parseCodexUsageFile(
           continue
         }
         ownedEventKeys.add(parsed.eventKey)
-        const attributed = await attributeCodexUsageEvent(parsed, resolveWorktree)
+        const attributed = await attributeCodexUsageEvent(
+          parsed,
+          resolveWorktree,
+          parseOptions.sourceDistro
+        )
         if (attributed) {
           accumulator.add(attributed)
         }
@@ -188,6 +193,7 @@ export async function parseCodexUsageFile(
       }
       return {
         ...processedFile,
+        ...(parseOptions.sourceDistro ? { sourceDistro: parseOptions.sourceDistro } : {}),
         ...(previous ? mergeRolloutProjections(previous, appended) : appended),
         ownedEventKeys: [...committedKeys],
         hasDeferredClaims: previous?.hasDeferredClaims || hasDeferredClaims,

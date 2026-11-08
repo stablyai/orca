@@ -1,5 +1,14 @@
 import { createReadStream, type Dirent, type Stats } from 'node:fs'
-import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
+import {
+  access,
+  lstat,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  stat,
+  type FileHandle
+} from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { StringDecoder } from 'node:string_decoder'
 import { isWslUncPath } from '../../shared/wsl-paths'
@@ -12,7 +21,10 @@ import {
   runWslTranscriptFsProcess,
   type WslTranscriptFsProcessHandle
 } from './wsl-transcript-fs-process-dispatch'
-import type { WslTranscriptFsReusableProcessCall } from './wsl-transcript-fs-process-protocol'
+import type {
+  WslTranscriptFileSnapshot,
+  WslTranscriptFsReusableProcessCall
+} from './wsl-transcript-fs-process-protocol'
 import { wslTranscriptFsLaneKey } from './wsl-transcript-fs-route'
 import { admitWslTranscriptPath } from './wsl-transcript-running-admission'
 import {
@@ -76,6 +88,18 @@ export function wslGatedStat(
   signal?: AbortSignal
 ): Promise<Stats> {
   return runReusableFsOperation({ operation: 'stat', path }, priority, signal, () => stat(path))
+}
+
+export function wslGatedRealpath(path: string): Promise<string> {
+  return runReusableFsOperation({ operation: 'realpath', path }, 'scan', undefined, () =>
+    realpath(path)
+  )
+}
+
+export function transcriptFileSnapshot(path: string): Promise<WslTranscriptFileSnapshot> {
+  return runReusableFsOperation({ operation: 'snapshot', path }, 'scan', undefined, () =>
+    stat(path, { bigint: true })
+  )
 }
 
 export function transcriptFileStat(
