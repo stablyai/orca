@@ -22,8 +22,8 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefs
-} from '@/runtime/runtime-repo-client'
-import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
+} from '@/runtime/source-control/references/runtime-repo-client'
+import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/source-control/references/runtime-repo-search-bounds'
 import { translate } from '@/i18n/i18n'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 

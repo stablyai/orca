@@ -22,7 +22,7 @@ import {
   ensureRuntimeDropStagingIgnored,
   uploadRuntimeFileWithoutClobber
 } from './runtime-file-upload-client'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../../../shared/local-file-access'
 
 export async function importExternalPathsToRuntime(

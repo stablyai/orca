@@ -6,7 +6,7 @@ import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostCapabilityState,
   useStructuredAgentSessionHostQueuesMessages
-} from '@/runtime/structured-agent-session-host-capability'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useAppStore } from '../../../store/index'
 import { Card, CardContent } from '../../ui/card'
 import { ChatPermissionSetting } from './ChatPermissionSetting'

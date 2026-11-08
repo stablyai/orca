@@ -9,7 +9,7 @@ import {
 } from '../../../../../shared/file-write-disk-precondition'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { assertRemoteWriteFitsOneRequest } from '../mutations/runtime-file-mutation-client'
 import {
   isRecoverableRemoteRuntimeConnectionError,

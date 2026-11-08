@@ -53,7 +53,7 @@ vi.mock(
     disposeAllParkedTerminalWatchers: vi.fn()
   })
 )
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport'
       ? new Promise((resolve) => {
@@ -69,13 +69,13 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 // Main answers the window's chat-tab open (switch-on builds).
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -85,13 +85,13 @@ import {
   drawTabsFromMain,
   type TabsDrawnFromMain
 } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
-import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { isPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import '../../../../../shared/constants'
 import { buildMobileSessionTabSnapshots } from '../../../runtime/sync-runtime-graph/mobile-session-snapshots'
-import { closeMobileSessionTabInStore } from '../../../runtime/mobile-session-tab-close'
+import { closeMobileSessionTabInStore } from '../../../runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 import { createTabsSliceMockApi } from './tabs-slice-test-harness'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeLayout, makeTab } from '../../terminals/terminal-tab.test-fixture'
@@ -14,12 +14,12 @@ import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

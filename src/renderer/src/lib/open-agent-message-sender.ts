@@ -31,7 +31,7 @@ import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()

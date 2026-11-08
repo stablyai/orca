@@ -4,9 +4,9 @@ import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/t
 import {
   isWebSessionBrowserPlacementGroupReserved,
   peekWebSessionBrowserPlacementGroup
-} from '../web-session-browser-placement'
+} from '../browser/placement/web-session-browser-placement'
 import { peekWebSessionTerminalPlacementGroup } from '../hosted-terminals/placement/web-session-terminal-placement'
-import { reconcileClientOwnedTabPlacement } from '../web-session-client-owned-tab-placement'
+import { reconcileClientOwnedTabPlacement } from './placement/web-session-client-owned-tab-placement'
 import { buildMirroredHostGroups, retainClientPlacedMirroredTabs } from './layout-groups'
 import { sanitizeRecentTabIds, pushRecentTabId } from './state-equality-core'
 

@@ -5,7 +5,7 @@ import type { RuntimeFileReadArgs } from '../runtime-file-client-types'
 import { assertExternalSshReadOwnership, canReadRelativeRuntimeFile } from '../runtime-file-routing'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   remoteFileRequest,

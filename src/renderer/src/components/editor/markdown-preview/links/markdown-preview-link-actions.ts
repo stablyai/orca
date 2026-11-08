@@ -1,4 +1,4 @@
-import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
+import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { toast } from 'sonner'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'

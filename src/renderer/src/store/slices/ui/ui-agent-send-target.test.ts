@@ -44,7 +44,7 @@ vi.mock('@/store/index', () => ({
     })
   }
 }))
-vi.mock('@/runtime/structured-agent-session-owner', () => ({
+vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
 

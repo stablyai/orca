@@ -1,6 +1,6 @@
 import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
-import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
+import { restoreLocalStructuredChatsAtStartup } from '@/runtime/native-chat/local-sessions/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
