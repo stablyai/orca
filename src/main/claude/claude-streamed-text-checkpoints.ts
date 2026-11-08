@@ -3,11 +3,13 @@ import type { AgentJournalItemIdentity } from '../../shared/agent-session/journa
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
-  agentSessionTextCheckpointDueIn,
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
+
+/** Longest a growing block waits for its next save when the growth gate has not opened. */
+export const CLAUDE_STREAMED_TEXT_STALENESS_CAP_MS = 2_000
 
 export type ClaudeStreamedTextCheckpointDeps = {
   /** Rewrite accumulated text; ended marks the last write when no final frame will arrive. */
@@ -26,7 +28,7 @@ export type ClaudeStreamedTextCheckpointDeps = {
 export type ClaudeStreamedBlockEnd = { completedAt?: number }
 
 export type ClaudeStreamedTextCheckpoints = {
-  /** Coalesce deltas and space checkpoints in time to avoid per-token journal rewrites. */
+  /** Coalesce deltas and widen checkpoint intervals, capped in time, to avoid per-token rewrites. */
   append: (
     identity: AgentJournalItemIdentity,
     text: string,
@@ -67,7 +69,18 @@ export function createClaudeStreamedTextCheckpoints(
   /** Last written linkage, used only to skip revisions that change nothing. */
   const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
   const latestText = new Map<string, string>()
+  const checkpointLengths = new Map<string, number>()
   const savedAt = new Map<string, number>()
+
+  /** Growth keeps total writes linear; the cap bounds how stale a long reply can look. */
+  const dueIn = (key: string, textLength: number): number => {
+    const checkpointLength = checkpointLengths.get(key) ?? 0
+    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
+    const saved = savedAt.get(key)
+    return checkpointLength === 0 || textLength >= nextLength || saved === undefined
+      ? 0
+      : saved + CLAUDE_STREAMED_TEXT_STALENESS_CAP_MS - performance.now()
+  }
 
   /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
   const producerOptions = (key: string): StructuredAgentSessionAppendOptions => {
@@ -85,6 +98,7 @@ export function createClaudeStreamedTextCheckpoints(
       return
     }
     const options = producerOptions(key)
+    checkpointLengths.set(key, text.length)
     savedAt.set(key, performance.now())
     writtenLinkage.set(key, options)
     deps.persist(identity, text, options)
@@ -93,8 +107,7 @@ export function createClaudeStreamedTextCheckpoints(
   const coalescer = createAgentSessionDeltaCoalescer({
     ...(deps.coalesceMs === undefined ? {} : { windowMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
-    // A time gate, unlike a growth gate, keeps the wait between saves flat as the reply grows.
-    dueIn: (key) => agentSessionTextCheckpointDueIn(savedAt.get(key)),
+    dueIn,
     emit: (key, text) => persist(key, text)
   })
 
@@ -104,6 +117,7 @@ export function createClaudeStreamedTextCheckpoints(
     scopes.delete(key)
     writtenLinkage.delete(key)
     latestText.delete(key)
+    checkpointLengths.delete(key)
     savedAt.delete(key)
   }
 
@@ -161,6 +175,7 @@ export function createClaudeStreamedTextCheckpoints(
       scopes.clear()
       writtenLinkage.clear()
       latestText.clear()
+      checkpointLengths.clear()
       savedAt.clear()
     }
   }

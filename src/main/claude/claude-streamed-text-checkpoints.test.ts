@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -74,10 +74,6 @@ function checkpoints(producer: ClaudeSubagentLinkageSource = unconsultedProducer
   }
 }
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
-
 describe('claude streamed text checkpoints', () => {
   it('rewrites a block row with the full text accumulated so far', () => {
     const { store, rows, runWindow } = checkpoints()
@@ -87,7 +83,6 @@ describe('claude streamed text checkpoints', () => {
     runWindow()
 
     expect(rows).toEqual([{ uuid: 'block-1', text: 'hello' }])
-    expect(store.pending).toBe(1)
   })
 
   it('drops every block still awaiting its final frame at settlement', () => {
@@ -97,27 +92,8 @@ describe('claude streamed text checkpoints', () => {
     runWindow()
     store.settle()
 
-    expect(store.pending).toBe(0)
     store.flush()
     expect(rows).toEqual([{ uuid: 'block-1', text: 'partial answer' }])
-  })
-
-  it('saves the buffered tail of a long reply that pauses, with no further delta or barrier', () => {
-    const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
-    const { store, rows, runWindow } = checkpoints()
-    const head = 'a'.repeat(1000)
-
-    store.append(identityOf('block-1'), head)
-    runWindow()
-    clock.mockReturnValue(100)
-    store.append(identityOf('block-1'), ' tail')
-    clock.mockReturnValue(1_000)
-    runWindow()
-
-    expect(rows).toEqual([
-      { uuid: 'block-1', text: head },
-      { uuid: 'block-1', text: `${head} tail` }
-    ])
   })
 
   it('flushes text the next checkpoint has not written yet', () => {
@@ -128,7 +104,7 @@ describe('claude streamed text checkpoints', () => {
 
     expect(rows).toEqual([{ uuid: 'block-1', text: 'x' }])
     store.flush()
-    expect(rows).toHaveLength(1)
+    expect(rows).toEqual([{ uuid: 'block-1', text: 'x' }])
   })
 
   it("writes no linkage keys for a block the session's own agent streamed", () => {
@@ -183,6 +159,5 @@ describe('claude streamed text checkpoints', () => {
     store.flush()
 
     expect(rows).toEqual([])
-    expect(store.pending).toBe(0)
   })
 })

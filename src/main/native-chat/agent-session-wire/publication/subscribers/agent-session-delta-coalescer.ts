@@ -2,12 +2,6 @@
 // Flush text before lifecycle events so completion/approval rows cannot overtake preceding text.
 
 export const AGENT_SESSION_DELTA_COALESCE_MS = 60
-export const AGENT_SESSION_TEXT_CHECKPOINT_MS = 400
-
-/** Milliseconds until text last saved at `savedAt` may save again; never-saved text is due now. */
-export function agentSessionTextCheckpointDueIn(savedAt: number | undefined): number {
-  return savedAt === undefined ? 0 : savedAt + AGENT_SESSION_TEXT_CHECKPOINT_MS - performance.now()
-}
 
 /** Bound accumulated legal deltas independently of input record admission. */
 export const AGENT_SESSION_STREAMED_TEXT_MAX_BYTES = 16 * 1024 * 1024
@@ -27,7 +21,7 @@ export type AgentSessionDeltaCoalescerDeps = {
   /** False skips an accepted snapshot; emit reports actual sink refusal. */
   shouldEmit?: (key: string, textLength: number) => boolean
   /** Milliseconds until a window flush may emit this key; barriers and explicit flushes ignore it. */
-  dueIn?: (key: string) => number
+  dueIn?: (key: string, textLength: number) => number
   windowMs?: number
   maxRetainedBytes?: number
   maxTotalRetainedBytes?: number
@@ -126,7 +120,7 @@ export function createAgentSessionDeltaCoalescer(
     let emitted = true
     let deferredMs = Number.POSITIVE_INFINITY
     for (const [key, stream] of streams) {
-      const dueIn = windowed && stream.dirty ? (deps.dueIn?.(key) ?? 0) : 0
+      const dueIn = windowed && stream.dirty ? (deps.dueIn?.(key, stream.textLength) ?? 0) : 0
       if (dueIn > 0) {
         // Skip without joining text; a paused stream still saves once it is due.
         deferredMs = Math.min(deferredMs, dueIn)
@@ -206,7 +200,7 @@ export function createAgentSessionDeltaCoalescer(
         stream.dirty = true
       }
       streams.set(key, stream)
-      scheduleFlush(Math.max(windowMs, deps.dueIn?.(key) ?? 0))
+      scheduleFlush(Math.max(windowMs, deps.dueIn?.(key, stream.textLength) ?? 0))
       return true
     },
     flush: flushKey,
