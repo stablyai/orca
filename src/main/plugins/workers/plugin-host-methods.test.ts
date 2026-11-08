@@ -70,3 +70,35 @@ describe('workspace.readContext host reachability', () => {
     })
   })
 })
+
+describe('terminal.split workspace host action', () => {
+  it('dispatches terminal.split through runtimeRpc with the pre-effect revocation guard', async () => {
+    const runtimeRpc = vi.fn(
+      async (_method: string, _params: unknown, options?: { beforeEffect?: () => void }) => {
+        options?.beforeEffect?.()
+        return { split: { handle: 'term_split_2' } }
+      }
+    )
+    const services = { ...createServices(vi.fn()), runtimeRpc }
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'samples.demo',
+      method: 'terminal.split',
+      params: { terminalId: 'term_1', direction: 'vertical', command: 'pwd' },
+      surface: 'worker',
+      grantedCapabilities: ['terminal:send'],
+      services,
+      audit: { record: vi.fn() }
+    })
+
+    expect(outcome).toEqual({
+      ok: true,
+      value: { terminalId: 'term_split_2' }
+    })
+    expect(runtimeRpc).toHaveBeenCalledWith(
+      'terminal.split',
+      { terminal: 'term_1', direction: 'vertical', command: 'pwd' },
+      expect.objectContaining({ beforeEffect: expect.any(Function) })
+    )
+  })
+})
