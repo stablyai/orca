@@ -1,7 +1,7 @@
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-chat/native-chat-agent-support'
-import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration-worker-output'
+import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../../../native-chat/session-file-resolver'
 import { nativeChatLineDecoderForAgent } from '../../../../native-chat/transcript-tail-reader'
 import {

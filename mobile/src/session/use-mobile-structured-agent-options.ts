@@ -11,7 +11,7 @@ import {
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { legacyHostPermissionDescriptor } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import { useMobileStructuredHeldOptionPicks } from './use-mobile-structured-held-option-picks'

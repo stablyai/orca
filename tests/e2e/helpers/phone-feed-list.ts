@@ -11,7 +11,7 @@ import {
 } from '../../../mobile/src/host-screen/use-host-sidebar-feed'
 import { createHostSidebarFeedReader } from '../../../mobile/src/host-screen/host-sidebar-feed-connection'
 import { readHostMethodReply } from '../../../mobile/src/host-screen/host-sidebar-feed-operations'
-import type { SharedClientEventsClient } from '../../../mobile/src/transport/shared-client-events'
+import type { SharedClientEventsClient } from '../../../mobile/src/transport/connection/shared-client-events'
 import {
   hostPlatformRead,
   hostViewSettingsRead
@@ -22,8 +22,8 @@ import {
   applyDesktopViewSettings,
   type WorkspaceViewSettings
 } from '../../../mobile/src/worktree/workspace-view-settings'
-import type { RpcResponse } from '../../../mobile/src/transport/types'
-import { NODE_PLATFORM_NAMES } from '../../../mobile/src/transport/mobile-runtime-host-platform'
+import type { RpcResponse } from '../../../mobile/src/transport/rpc/rpc-wire-types'
+import { NODE_PLATFORM_NAMES } from '../../../mobile/src/transport/connection/mobile-runtime-host-platform'
 import type { LastVisitedWorktreeOnHost } from '../../../mobile/src/worktree/host-list-highlight'
 import type { Section } from '../../../mobile/src/worktree/workspace-list-types'
 import type { PairedMobileClient, PairedMobileSocket } from './paired-mobile-client'
@@ -75,6 +75,7 @@ function socketEventClient(socket: PairedMobileSocket): SharedClientEventsClient
     // One socket for the helper's life: always connected, no reconnects to tell apart.
     getState: () => 'connected',
     getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
     subscribe: (method: string, params: unknown, onData: (payload: unknown) => void) => {
       const id = 'phone-list-events'
       socket.send(id, method, params)

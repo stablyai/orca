@@ -5,7 +5,8 @@ import { Button } from '../ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { ShareUsageCard, type ShareUsageCardProps } from './ShareUsageCard'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { getIntlLocale } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ShareUsageButtonProps = ShareUsageCardProps
 
@@ -18,6 +19,7 @@ function XIcon(): React.JSX.Element {
 }
 
 export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Element {
+  const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
   const [copied, setCopied] = useState(false)
   const [capturing, setCapturing] = useState(false)
@@ -125,24 +127,21 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
                 ref={setShareButtonRef}
                 variant="ghost"
                 size="icon-xs"
-                aria-label={translate(
-                  'auto.components.stats.ShareUsageButton.bce08eccb9',
-                  'Share usage'
-                )}
+                aria-label={t('auto.components.stats.ShareUsageButton.bce08eccb9', 'Share usage')}
               >
                 <Share2 className="size-3.5" />
               </Button>
             </DialogTrigger>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.stats.ShareUsageButton.cecefa7c32', 'Share')}
+            {t('auto.components.stats.ShareUsageButton.cecefa7c32', 'Share')}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <DialogContent className="max-w-fit" showCloseButton>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.stats.ShareUsageButton.bce08eccb9', 'Share usage')}
+            {t('auto.components.stats.ShareUsageButton.bce08eccb9', 'Share usage')}
           </DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center gap-3 py-2">
@@ -152,12 +151,12 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
               {copied ? (
                 <>
                   <Check className="mr-2 size-4" />
-                  {translate('auto.components.stats.ShareUsageButton.bd82c76a70', 'Copied')}
+                  {t('auto.components.stats.ShareUsageButton.bd82c76a70', 'Copied')}
                 </>
               ) : (
                 <>
                   <Copy className="mr-2 size-4" />
-                  {translate('auto.components.stats.ShareUsageButton.b295c1c75d', 'Copy image')}
+                  {t('auto.components.stats.ShareUsageButton.b295c1c75d', 'Copy image')}
                 </>
               )}
             </Button>
@@ -170,7 +169,7 @@ export function ShareUsageButton(props: ShareUsageButtonProps): React.JSX.Elemen
               <span className="mr-2">
                 <XIcon />
               </span>
-              {translate('auto.components.stats.ShareUsageButton.7d6b25323d', 'Share on X')}
+              {t('auto.components.stats.ShareUsageButton.7d6b25323d', 'Share on X')}
             </Button>
           </div>
         </div>

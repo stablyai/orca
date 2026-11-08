@@ -1,4 +1,4 @@
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   parseRemoteRuntimePtyId,
@@ -16,7 +16,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type { AppState } from '@/store/types'
 import {
   selectFolderWorkspaces,

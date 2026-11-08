@@ -1,4 +1,4 @@
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status/contracts/agent-status-types'
 import { mainAgentDoneAt } from '../../shared/agent-status/lifecycle/main-agent-status'
 import {
@@ -8,7 +8,7 @@ import {
 import {
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 import {
   isTurnDoneSince,
   judgeIdleAgentTurn,

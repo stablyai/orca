@@ -17,7 +17,7 @@ import {
 } from './profile-sessions/browser-extension-session-loader'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
-import { observeBrowserExtensionTabLifecycle } from './api/tabs-lifecycle'
+import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
 import { observeBrowserExtensionDnrContents } from './declarative-net-request/session/browser-extension-dnr-contents'

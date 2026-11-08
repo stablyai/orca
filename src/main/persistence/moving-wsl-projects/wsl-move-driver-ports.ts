@@ -15,9 +15,9 @@ import type { WslMoveProgressEvent } from '../../../shared/wsl-move/wsl-move-dri
 import type {
   OrcadMigrationBlobDestination,
   OrcadMigrationBlobSource
-} from '../../ssh/orcad-migration-blob-coordinator'
-import type { OrcadMigrationDestinationCatalog } from '../../ssh/orcad-migration-cutover-coordinator'
-import type { OrcadMigrationSnapshotSource } from '../../ssh/orcad-migration-snapshot-coordinator'
+} from '../../managed-server/migration/transfers/orcad-migration-blob-coordinator'
+import type { OrcadMigrationDestinationCatalog } from '../../managed-server/migration/cutover/orcad-migration-cutover-coordinator'
+import type { OrcadMigrationSnapshotSource } from '../../managed-server/migration/transfers/orcad-migration-snapshot-coordinator'
 import type { WslMoveHostHolding } from './wsl-move-delta-plan'
 import type { WslMoveQuiesceDeps } from './wsl-move-quiesce'
 import type { WslMoveSleptScrollback } from './wsl-move-slept-scrollback'

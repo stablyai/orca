@@ -13,7 +13,7 @@ export {
   buildHostLabelById,
   getHostContextLabel
 } from '../../../src/shared/worktree/host-context-labels'
-import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
 import type { Worktree, WorktreeHostContextView } from './workspace-list-types'
 import { getHostHealthBadgeLabel } from './worktree-host-health'
 

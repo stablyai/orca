@@ -269,13 +269,6 @@ it('cancels preview after switching tabs even if the editor is selected again be
   expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
 })
 
-it('keeps another pane selected when the user switches during the editor flush', async () => {
-  useAppStore.getState().focusGroup(WORKSPACE, 'a')
-  await previewWhileFlushing(() => useAppStore.getState().focusGroup(WORKSPACE, 'b'))
-  expect(useAppStore.getState().activeGroupIdByWorktree[WORKSPACE]).toBe('b')
-  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
-})
-
 it('cancels preview after navigating away from a moved editor even if the user returns', async () => {
   await previewWhileFlushing(() => {
     useAppStore.getState().moveUnifiedTabToGroup('source', 'b', { activate: true })

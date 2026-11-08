@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { useHostQuery } from '../query/host-query'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { buildRepoHostIdByRepoId } from '../worktree/worktree-host-context-labels'
 import { buildSshHostHealthById } from '../worktree/worktree-host-health'
 import type { SectionRepo } from '../worktree/workspace-list-types'
@@ -55,13 +55,14 @@ export function useHostRepoMetadata(args: {
     ...options,
     enabled: options.enabled && needsLabels
   })
-  // Reapplied on every read: a host switch clears the shown repos while the cache keeps them.
+  // Applied when the catalog changes (structural sharing keeps an unchanged one), and again on a host switch,
+  // which clears the shown repos while the cache keeps them.
   useEffect(() => {
     if (repos.data) {
       setDesktopRepos(repos.data.catalog.map(desktopSectionRepo))
       setRepoHostIdByRepoId(buildRepoHostIdByRepoId(repos.data.catalog))
     }
-  }, [repos.data, repos.dataUpdatedAt])
+  }, [repos.data, hostId])
   useEffect(() => {
     if (needsLabels && labels.data) {
       setHostHealthById(buildSshHostHealthById(labels.data.sshTargetSummaries))
@@ -72,5 +73,5 @@ export function useHostRepoMetadata(args: {
       setHostHealthById(new Map())
       setHostLabelById(new Map())
     }
-  }, [needsLabels, labels.data, labels.dataUpdatedAt, repos.data])
+  }, [needsLabels, labels.data, repos.data, hostId])
 }

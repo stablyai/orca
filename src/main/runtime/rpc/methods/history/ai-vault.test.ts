@@ -1,15 +1,21 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { RpcDispatcher } from '../../dispatcher'
+
 import type { RpcRequest } from '../../core'
+
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+
 import '../../../orca-runtime'
-import { RuntimeAiVaultCommands } from '../../../runtime-ai-vault-commands'
+import { RuntimeAiVaultCommands } from '../../../integrations/ai-vault/runtime-ai-vault-commands'
+
 import type {
   AiVaultListResult,
   AiVaultSession
 } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
+
 import type { AiVaultServiceScanOptions } from '../../../../ai-vault/scan-service/session-scanner-service-protocol'
+
 import '../../../../../shared/protocol-version'
 import '../../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 
@@ -31,9 +37,12 @@ vi.mock(
 )
 
 import { AI_VAULT_METHODS } from './ai-vault'
+
 import '../../../../../shared/rpc-contract/ai-vault-params'
 import { agentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+
 import { recordStructuredAgentSessionHostInstallRefusal } from '../../../agent-session/structured-agent-session-host-refusal'
+
 import '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import '../../../../ai-vault/structured-session-ownership.test-support'
 import {

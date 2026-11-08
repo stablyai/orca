@@ -13,9 +13,9 @@ import {
 } from './agent-launch/agent-session-create-operation'
 import { runRemoteAgentSessionLaunch } from './agent-launch/remote-agent-session-launch'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
-import { resolveWebRuntimeSessionEnvironmentId } from '../../web-runtime-session-workspace-routing'
-import { recordWebSessionFocusIntent } from '../../web-session-focus-intent'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import { resolveWebRuntimeSessionEnvironmentId } from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-routing'
+import { recordWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   forgetWebSessionTerminalPlacement,
   recordWebSessionTerminalPlacement,
@@ -26,8 +26,8 @@ import {
   captureWebSessionIntentOwner,
   isWebRuntimeSessionActive,
   matchesWebSessionIntentOwner
-} from '../../web-runtime-session-environment'
-import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-runtime-session-snapshot'
+} from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
+import { refreshWebRuntimeSessionTabsSnapshot } from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import type {
   CreatedAgentTerminalIdentity,
   CreatedWebRuntimeSessionTerminal,
@@ -38,7 +38,7 @@ import {
   restoreActiveWorkspaceSelection,
   selectWebRuntimeSessionWorktree,
   type WebRuntimeSessionWorkspaceSelectionRollback
-} from '../../web-runtime-session-workspace-selection'
+} from '../../web-session-tabs-sync/workspace-selection/web-runtime-session-workspace-selection'
 import {
   createdTerminalLeafId,
   readCreatedAgentTerminalIdentity

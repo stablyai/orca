@@ -24,7 +24,7 @@ import {
 } from '../../folder-workspace-runtime-owner'
 import { namedHostForOwnerRef, resolveOwner, type WorkspaceOwnerRef } from '../../resolve-owner'
 import { SELF_LOCAL_AUTHORITY, type HostAuthority } from '../../../../../shared/host-authority'
-import type { ExecutionHostOwnerMatch } from '../../../../../shared/worktree-execution-host-resolution'
+import type { ExecutionHostOwnerMatch } from '../../../../../shared/execution-host/worktree-execution-host-resolution'
 import { getFloatingWorkspaceOperationRoute } from '../../worktree-operation-route'
 import { resolveExplicitWorktreeOperationRouteResult } from '../../worktree-operation-catalog-route'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'

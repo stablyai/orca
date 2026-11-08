@@ -1,7 +1,7 @@
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
-} from '../../../shared/protocol-version'
+} from '../../../shared/browser-runtime-capabilities'
 import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import {
   readTerminalStreamFrameId,

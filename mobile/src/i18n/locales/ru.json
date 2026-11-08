@@ -315,6 +315,11 @@
       "signInHint": "Открывает терминал на компьютере с этим чатом",
       "forkedFrom": "Ответвление от"
     },
+    "ciResultLine": {
+      "failingLead": "CI с ошибками в",
+      "greenLead": "CI зелёный в",
+      "at": "на"
+    },
     "orcaStop": {
       "canContinue": "Вы можете продолжить этот разговор.",
       "crash": "Во время ответа Orca на {{machine}} неожиданно завершилась.",
@@ -1474,15 +1479,16 @@
       "openFailed": "Не удалось открыть этот PDF",
       "opening": "Открытие PDF…",
       "updateRequired": "Обновите Orca Mobile, чтобы открывать PDF"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Изменён на компьютере после ваших правок от {{time}}",
+      "copyMyEdits": "Скопировать мои правки",
+      "discard": "Отменить изменения",
+      "restore": "Восстановить",
+      "unsavedFrom": "Несохранённые правки от {{time}}"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "Активных: {{count}}",
-      "heading": "Агенты",
-      "showAll": "Показать все ({{count}})",
-      "showFewer": "Свернуть"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Скрыть уведомление об обновлении Orca {{version}}",
       "title": "Доступна Orca {{version}}",

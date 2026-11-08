@@ -53,16 +53,19 @@ vi.mock(
 )
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/runtime/structured-agent-session-client', () =>
-  moduleFactories.structuredAgentSessionClient()
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () =>
+  moduleFactories.structuredAgentSessionCall()
+)
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () =>
+  moduleFactories.structuredAgentSessionSubscriptions()
 )
 vi.mock('@/components/machine-identity/use-published-machine-name', () => ({
   usePublishedMachineName: () => null

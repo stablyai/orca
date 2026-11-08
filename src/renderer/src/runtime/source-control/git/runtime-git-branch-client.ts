@@ -8,20 +8,23 @@ import type {
 import type { RuntimeGitContext } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 
 export async function switchRuntimeGitBranch(
   context: RuntimeGitContext,
   target: BranchSwitchTarget,
   hostLabel = context.target.kind === 'environment'
     ? context.target.environmentId
-    : translate('sourceControl.branchPicker.thisComputer', 'this computer')
+    : translate('sourceControl.branchPicker.thisComputer', 'this computer'),
+  beforeSend?: () => void
 ): Promise<RuntimeGitSwitchResult> {
   try {
-    return await callRuntimeRpc<RuntimeGitSwitchResult>(context.target, 'git.switchBranch', {
-      worktree: toRuntimeWorktreeSelector(context.worktreeId ?? ''),
-      target
-    })
+    const params = { worktree: toRuntimeWorktreeSelector(context.worktreeId ?? ''), target }
+    return await (beforeSend
+      ? callRuntimeRpc<RuntimeGitSwitchResult>(context.target, 'git.switchBranch', params, {
+          beforeSend
+        })
+      : callRuntimeRpc<RuntimeGitSwitchResult>(context.target, 'git.switchBranch', params))
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       throw new Error(

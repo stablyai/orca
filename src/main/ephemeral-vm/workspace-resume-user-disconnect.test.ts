@@ -51,8 +51,8 @@ import { acceptEphemeralVmWorkspaceWake, resumeEphemeralVmWorkspace } from './wo
 import {
   recordSshUserDisconnected,
   resetSshUserDisconnectsForTests
-} from '../ssh/ssh-user-disconnect'
-import { getRuntimeOwnedSshTargetId } from '../ssh/connection/ssh-connection-store'
+} from '../ssh/connection/ssh-user-disconnect'
+import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recipe context reader is mocked, so the resume never reads this store.
 const STORE = {} as Store

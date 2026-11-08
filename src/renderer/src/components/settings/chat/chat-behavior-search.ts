@@ -108,6 +108,6 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
   }
 }))
 
-export function getChatBehaviorSearchEntries(): SettingsSearchEntry[] {
-  return [{ title: getChatBehaviorTitle() }, ...Object.values(getChatBehaviorEntriesByKey())]
+export function getChatBehaviorSearchEntries(t?: Translate): SettingsSearchEntry[] {
+  return [{ title: getChatBehaviorTitle(t) }, ...Object.values(getChatBehaviorEntriesByKey())]
 }

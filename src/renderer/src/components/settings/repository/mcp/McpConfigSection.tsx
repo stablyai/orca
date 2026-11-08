@@ -40,7 +40,7 @@ import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutatio
 import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
-} from '../../../../../../shared/file-write-disk-precondition'
+} from '../../../../../../shared/file-write/file-write-disk-precondition'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'

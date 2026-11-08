@@ -2,7 +2,7 @@
 
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import type { AcpLaunchSpec } from '../acp/acp-launch-specs'
+import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
 import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
 import {

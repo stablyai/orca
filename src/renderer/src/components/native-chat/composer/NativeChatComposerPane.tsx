@@ -105,7 +105,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       disabled ||
       (structuredTransport?.runtime === 'remote' && structuredTransport.sessionPending === true)
 
-    const { picker, resume } = useNativeChatComposerCommandPicker({
+    const { picker, orcaCommands } = useNativeChatComposerCommandPicker({
       mode: editSession ? 'edit' : launchPrompt || pending ? 'launch' : undefined,
       agent,
       terminalTabId,
@@ -271,8 +271,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       sendPty,
       sendStructured,
       submitEmpty: launchPrompt?.onEmptySubmit,
-      consumeOrcaCommand: pending || launchPrompt ? undefined : resume.consume,
-      matchesOrcaCommand: pending || launchPrompt ? undefined : resume.matchesDraft,
+      consumeOrcaCommand: pending || launchPrompt ? undefined : orcaCommands.consume,
+      matchesOrcaCommand: pending || launchPrompt ? undefined : orcaCommands.matchesDraft,
       setDraft,
       setCaret
     })
@@ -289,7 +289,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       editSession,
       isWorking,
       canStop: hasPty && onStop !== undefined,
-      orcaCommand: !pending && !launchPrompt && resume.matchesDraft(draft),
+      orcaCommand: !pending && !launchPrompt && orcaCommands.matchesDraft(draft),
       goalMode: goalMode.active
     })
 
@@ -330,7 +330,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       completePickerItem: editSession ? chooseEditItem : goalMode.interceptPick(completeItem),
       dispatchPickerCommand: editSession
         ? chooseEditItem
-        : goalMode.interceptPick(resume.interceptPick(dispatchPickerCommand)),
+        : goalMode.interceptPick(orcaCommands.interceptPick(dispatchPickerCommand)),
       dismissPicker: dismiss,
       interrupt: editSession?.cancel ?? interrupt,
       send,
@@ -386,7 +386,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           onKeyDown={handleKeyDown}
           onPaste={handlePasteEvent}
           pickerListboxId={picker.listboxId}
-          onChoosePickerItem={goalMode.interceptPick(resume.interceptPick(completeItem))}
+          onChoosePickerItem={goalMode.interceptPick(orcaCommands.interceptPick(completeItem))}
           goalMode={goalMode}
           onRetrySkills={picker.retrySkills}
           onChooseMentionFile={completeMention}
@@ -410,6 +410,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
               <NativeChatComposerWorkspace
                 terminalTabId={terminalTabId}
                 structuredTransport={structuredTransport}
+                isWorking={isWorking}
               />
             ) : undefined
           }

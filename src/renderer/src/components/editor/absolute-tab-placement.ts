@@ -8,7 +8,7 @@ import {
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import { chatScratchFileAddress } from '@/runtime/files/addressing/runtime-chat-scratch-file-address'
 import {
   grantServesInPlace,
   hostOpensGrantedFilesInPlace,

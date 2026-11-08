@@ -3,7 +3,7 @@
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   isAutomationOwnerConflictCode
-} from '../shared/automation-owner-conflict'
+} from '../shared/automations/ownership/automation-owner-conflict'
 
 export type AutomationOwnerConflictRecovery = { nextSteps: readonly string[] }
 

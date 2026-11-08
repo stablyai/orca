@@ -167,4 +167,23 @@ describe('relay edge configuration', () => {
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://c1.relay.example.com' })).toThrow()
     expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_CELL_URL: 'https://relay.example.com' })).toThrow()
   })
+
+  it('parses the export skip threshold, leaving the default when unset or empty', () => {
+    const env = {
+      ...directorEnvironment(),
+      ORCA_RELAY_EDGE_CELL_URL: 'https://edge.relay.example.com',
+      ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY: 'edge-admin-key-with-at-least-32-bytes!!'
+    }
+    expect(loadRelayConfig(env).edge).not.toHaveProperty('exportSkipAfterMs')
+    expect(loadRelayConfig({ ...env, ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS: '' }).edge).not.toHaveProperty(
+      'exportSkipAfterMs'
+    )
+    expect(loadRelayConfig({ ...env, ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS: '0' }).edge?.exportSkipAfterMs).toBe(0)
+    expect(loadRelayConfig({ ...env, ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS: '300000' }).edge?.exportSkipAfterMs).toBe(
+      300_000
+    )
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS: '-1' })).toThrow()
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS: '1.5' })).toThrow()
+    expect(() => loadRelayConfig({ ...env, ORCA_RELAY_EDGE_EXPORT_SKIP_AFTER_MS: 'soon' })).toThrow()
+  })
 })

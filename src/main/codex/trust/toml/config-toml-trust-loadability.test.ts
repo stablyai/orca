@@ -4,7 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type * as SmolToml from 'smol-toml'
-import type * as InstallerUtilsRemote from '../../../agent-hooks/installer-utils-remote'
+import type * as RemoteHooksJson from '../../../agent-hooks/installation/configuration/hooks-json-remote'
+import type * as RemoteHookTextFiles from '../../../agent-hooks/installation/remote/hook-text-files-remote'
+import type * as ManagedScriptWriteRemote from '../../../agent-hooks/installation/scripts/managed-script-write-remote'
 
 const mocks = vi.hoisted(() => {
   const state: {
@@ -28,23 +30,46 @@ vi.mock('smol-toml', async (importOriginal) => {
   }
 })
 
-vi.mock('../../../agent-hooks/installer-utils-remote', async (importOriginal) => {
-  const actual = await importOriginal<typeof InstallerUtilsRemote>()
-  return {
-    ...actual,
-    readHooksJsonRemote: async (_sftp: SFTPWrapper, path: string) =>
-      JSON.parse(mocks.remoteFiles.get(path) ?? '{}'),
-    readTextFileRemote: async (_sftp: SFTPWrapper, path: string) =>
-      mocks.remoteFiles.get(path) ?? null,
-    writeHooksJsonRemote: async (_sftp: SFTPWrapper, path: string, config: unknown) => {
-      mocks.remoteFiles.set(path, JSON.stringify(config))
-    },
-    writeManagedScriptRemote: async () => {},
-    writeTextFileRemoteAtomic: async (_sftp: SFTPWrapper, path: string, content: string) => {
-      mocks.remoteFiles.set(path, content)
+vi.mock(
+  '../../../agent-hooks/installation/configuration/hooks-json-remote',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof RemoteHooksJson>()
+    return {
+      ...actual,
+      readHooksJsonRemote: async (_sftp: SFTPWrapper, path: string) =>
+        JSON.parse(mocks.remoteFiles.get(path) ?? '{}'),
+      writeHooksJsonRemote: async (_sftp: SFTPWrapper, path: string, config: unknown) => {
+        mocks.remoteFiles.set(path, JSON.stringify(config))
+      }
     }
   }
-})
+)
+
+vi.mock(
+  '../../../agent-hooks/installation/remote/hook-text-files-remote',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof RemoteHookTextFiles>()
+    return {
+      ...actual,
+      readTextFileRemote: async (_sftp: SFTPWrapper, path: string) =>
+        mocks.remoteFiles.get(path) ?? null,
+      writeTextFileRemoteAtomic: async (_sftp: SFTPWrapper, path: string, content: string) => {
+        mocks.remoteFiles.set(path, content)
+      }
+    }
+  }
+)
+
+vi.mock(
+  '../../../agent-hooks/installation/scripts/managed-script-write-remote',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof ManagedScriptWriteRemote>()
+    return {
+      ...actual,
+      writeManagedScriptRemote: async () => {}
+    }
+  }
+)
 
 import {
   isCodexConfigTomlRefusedError,

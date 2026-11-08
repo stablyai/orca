@@ -1,4 +1,4 @@
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store'
 import {
   consumeCommittedPtyShutdownExit,

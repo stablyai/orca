@@ -3,7 +3,7 @@ import { isStructuredAgentSessionMainAgentWorking } from '../../../../../shared/
 import { expect, it, vi } from 'vitest'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
+import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
 import {
   mocks,

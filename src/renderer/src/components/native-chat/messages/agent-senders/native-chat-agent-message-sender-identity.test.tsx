@@ -34,7 +34,7 @@ const feeds = vi.hoisted(
       }
     >()
 )
-vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: (target: { kind: string; environmentId?: string }) => {
     const feed = feeds.get(target.environmentId ?? 'local')!
     return {

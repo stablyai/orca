@@ -4,7 +4,7 @@ import {
   type ParsedExecutionHost,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostContactForEntry } from '../../../shared/remote-runtime/host-status/runtime-host-contact'
 import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'

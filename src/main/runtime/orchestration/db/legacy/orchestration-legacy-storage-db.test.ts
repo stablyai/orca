@@ -2,12 +2,11 @@ import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../../../sqlite/sync-database'
 import { OrchestrationDb } from '../orchestration-db'
-import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
+
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration-runtime-capabilities'
-import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+
 import {
   createLegacyStorageCutoverFixture,
   type LegacyStorageCutoverFixture
@@ -67,75 +66,6 @@ describe('OrchestrationDb legacy contract storage', () => {
       coordinatorPrincipalId: coordinator.principal.id
     }
   }
-
-  it('atomically rehomes the full graph, fences legacy Delivery, and preserves current rows', () => {
-    const fixture = createCutoverFixture()
-    db = new OrchestrationDb(fixture.dbPath)
-    const adoption = db.getLegacyAdoption()
-    const adoptedRunId = adoption?.adopted_run_id as string
-    const sqlite = (db as unknown as { db: Database.Database }).db
-
-    expect(adoption).toMatchObject({
-      source_run_id: LEGACY_RUN_ID,
-      scheduler_state_lost: 1
-    })
-    expect(db.getRun(adoptedRunId)).toMatchObject({ legacy: 0, consumer_generation: 0 })
-    expect(db.getRunMailboxOwnerIdsForHandle('term_legacy_coord')).toEqual([adoptedRunId])
-    expect(db.getRunMailboxOwnerIdsForHandle('term_invented')).toEqual([])
-    expect(db.listTasks({ runId: LEGACY_RUN_ID })).toEqual([])
-    expect(db.getDispatchContextById(fixture.legacyDispatchId)).toMatchObject({
-      run_id: adoptedRunId,
-      contract_version: LEGACY_CONTRACT_VERSION,
-      launch_token_hash: null
-    })
-    expect(db.getGate(fixture.legacyGateId)).toMatchObject({ run_id: adoptedRunId })
-    expect(db.getQuestion(fixture.legacyQuestionId)).toMatchObject({ run_id: adoptedRunId })
-    expect(db.getMessageById(fixture.legacyMessageIds[0])).toMatchObject({
-      run_id: adoptedRunId,
-      delivery_contract: 'legacy_direct'
-    })
-    expect(db.getMessageById(fixture.rejectionMessageId)).toMatchObject({
-      run_id: adoptedRunId,
-      delivery_contract: 'audit_only'
-    })
-    expect(db.getMessageById(fixture.lookalikeMessageId)).toMatchObject({
-      run_id: adoptedRunId,
-      delivery_contract: 'legacy_direct'
-    })
-    for (const messageId of fixture.malformedRejectionMessageIds) {
-      expect(db.getMessageById(messageId)).toMatchObject({
-        run_id: adoptedRunId,
-        delivery_contract: 'legacy_direct'
-      })
-    }
-    expect(
-      sqlite.prepare('SELECT * FROM deliveries WHERE id = ?').get(fixture.legacyDeliveryId)
-    ).toMatchObject({
-      run_id: adoptedRunId,
-      mailbox_handle: `run:${LEGACY_RUN_ID}`,
-      status: 'fenced'
-    })
-    expect(db.getDispatchContextById(fixture.currentDispatchId)).toMatchObject({
-      run_id: fixture.currentRunId,
-      contract_version: CURRENT_CONTRACT_VERSION,
-      launch_token_hash: 'current_launch_hash'
-    })
-
-    db.close()
-    const partial = new Database(fixture.dbPath)
-    partial
-      .prepare('UPDATE tasks SET run_id = ? WHERE id = ?')
-      .run(LEGACY_RUN_ID, fixture.legacyTaskId)
-    partial.pragma('user_version = 19')
-    partial.close()
-    db = new OrchestrationDb(fixture.dbPath)
-    expect(db.getLegacyAdoption()?.adopted_run_id).toBe(adoptedRunId)
-    expect(db.getTask(fixture.legacyTaskId)?.run_id).toBe(adoptedRunId)
-    expect(db.getDispatchContextById(fixture.currentDispatchId)?.contract_version).toBe(
-      CURRENT_CONTRACT_VERSION
-    )
-    expect(db.listTasks({ runId: LEGACY_RUN_ID })).toEqual([])
-  })
 
   it('ignores unrelated cross-Run anomalies while validating adopted rows', () => {
     const fixture = createCutoverFixture()

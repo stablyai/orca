@@ -5,10 +5,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
+import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import { isHostLocalProjectId } from '../../../shared/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { isMergedAwayExecutionHost } from '../../../shared/managed-orcad-execution-host'
+import { isMergedAwayExecutionHost } from '../../../shared/execution-host/managed-orcad-execution-host'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY

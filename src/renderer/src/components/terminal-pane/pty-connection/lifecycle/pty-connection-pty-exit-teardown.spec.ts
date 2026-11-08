@@ -33,6 +33,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -80,7 +81,6 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -408,6 +408,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks14 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
@@ -459,6 +460,7 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks15 =
         await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
@@ -595,7 +597,6 @@ export function registerPtyConnectionEstablishedPtyExitTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

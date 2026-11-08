@@ -99,7 +99,7 @@ vi.mock('./browser-extension-window-model', () => ({
   presentBrowserExtensionWindow: vi.fn()
 }))
 vi.mock('../api/tabs-capture', () => ({ captureVisibleTabMethod: {} }))
-vi.mock('../api/permissions', () => ({
+vi.mock('../permissions/browser-extension-session-permissions', () => ({
   browserExtensionHostPatternsInSession: (_extension: unknown, sess: unknown) =>
     sess === mocks.sessions.default ? mocks.grantedOrigins : []
 }))
@@ -109,7 +109,7 @@ const discardedTabs = await import('./browser-extension-discarded-tabs')
 const { recordActiveBrowserPage } = await import('./browser-extension-tab-model')
 const { registerTabsNamespace } = await import('../api/tabs')
 const { announceRegisteredBrowserExtensionTab, observeBrowserExtensionTabLifecycle } =
-  await import('../api/tabs-lifecycle')
+  await import('./browser-extension-tab-lifecycle')
 await import('../../../../preload/browser-extension-document-targets')
 
 function page(id: string, workspaceId: string, overrides: Partial<BrowserPage> = {}): BrowserPage {

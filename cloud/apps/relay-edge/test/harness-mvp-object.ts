@@ -126,18 +126,28 @@ export async function phoneOutcome(relayHostId: string, credential: string) {
 }
 
 // ---- director side: the signed admin calls (as the director will make them) ----
-export async function adminCall(op: string, body: unknown, opts: { key?: string; issuer?: string; tokenOp?: string; tokenBody?: string } = {}) {
+// Local only: the edge's second accepted director key (ADMIN_SIGNING_KEY_NEXT), for rotation.
+export const NEXT_SIGNING_KEY = randomBytes(36).toString('base64url')
+// `jti: null` signs without one (directors before single-use tokens); default: a fresh one.
+export type AdminOpts = { key?: string; issuer?: string; tokenOp?: string; tokenBody?: string; jti?: string | null }
+export async function adminToken(op: string, body: unknown, opts: AdminOpts = {}): Promise<string> {
+  const jti = opts.jti === undefined ? randomBytes(18).toString('base64url') : opts.jti
   const raw = JSON.stringify(body)
-  const token = await new SignJWT({ purpose: 'edge-admin', op: opts.tokenOp ?? op, bodySha256: sha(opts.tokenBody ?? raw) })
+  return new SignJWT({ purpose: 'edge-admin', op: opts.tokenOp ?? op, bodySha256: sha(opts.tokenBody ?? raw), ...(jti === null ? {} : { jti }) })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuer(opts.issuer ?? DIRECTOR)
     .setAudience('orca-relay-edge-admin')
     .setIssuedAt()
     .setExpirationTime('1m')
     .sign(new TextEncoder().encode(opts.key ?? SIGNING_KEY))
-  const r = await fetch(`${ORIGIN}/__admin/${op}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: raw })
+}
+export async function adminSend(op: string, body: unknown, token: string) {
+  const r = await fetch(`${ORIGIN}/__admin/${op}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: JSON.stringify(body) })
   const text = await r.text()
   return { status: r.status, json: text ? (JSON.parse(text) as Record<string, unknown>) : null }
+}
+export async function adminCall(op: string, body: unknown, opts: AdminOpts = {}) {
+  return adminSend(op, body, await adminToken(op, body, opts))
 }
 export const assign = (relayHostId: string, cellId: string, assignmentEpoch: number, devices?: unknown[]) =>
   adminCall('assign', { userId: USER, relayHostId, cellId, assignmentEpoch, ...(devices ? { devices } : {}) })

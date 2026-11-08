@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { describeLoadError } from '../components/load-error-description'
-import { mobileTasksListShowsError } from './mobile-tasks-list-state'
+import { MobileTasksOfflineBanner, mobileTasksListShowsError } from './mobile-tasks-list-state'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -202,6 +202,8 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           </Text>
         </View>
       ) : null}
+
+      <MobileTasksOfflineBanner model={model} />
 
       {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
 

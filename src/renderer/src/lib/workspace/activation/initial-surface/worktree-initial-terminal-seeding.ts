@@ -6,10 +6,11 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
+import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../../../shared/worktree-first-surface'
-import { createSequencedSetupAgentCommands } from '../../../../../../shared/setup-agent-sequencing'
-import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/setup-runner-command'
+import { createSequencedSetupAgentCommands } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
+import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../../../../shared/agent-kind'
 import { useAppStore } from '@/store/index'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
@@ -218,7 +219,9 @@ export function ensureWorktreeHasInitialTerminal(
   // An unanswered host is not empty; seeding there adds a tab per launch (STA-4658). Explicit launch requests below remain ungated.
   const shouldAutoCreate =
     hostAuthority === 'none' &&
-    shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone)
+    shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone) &&
+    // Requested default tabs are explicit content; only the bare default yields to a waiting split chooser.
+    (Boolean(defaultTabs?.tabs.length) || !hasSplitLandingGroup(useAppStore.getState(), worktreeId))
   const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
   const shouldCreateNewStartupTerminal =
     opts?.createNewTerminalForStartup === true && sequencedStartup !== undefined

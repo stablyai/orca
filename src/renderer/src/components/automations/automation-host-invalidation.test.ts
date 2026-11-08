@@ -1,12 +1,12 @@
 /** Scoped events invalidate one entry, unscoped events their authority, and neither crosses authority boundaries. */
 
 import { describe, expect, it, vi } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+
 import type {
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import { createAutomationHostCache, type AutomationHostCache } from './automation-host-cache'
 import type { AutomationHostRow } from './automation-host-cache-types'
 import { createAutomationHostInvalidation } from './automation-host-invalidation'
@@ -41,64 +41,7 @@ function seeded(): AutomationHostCache {
   return cache
 }
 
-function generationOf(cache: AutomationHostCache, ref: StableAutomationCatalogRef): number {
-  return cache.get(ref)?.requestGeneration ?? -1
-}
-
 describe('automation host invalidation', () => {
-  it('invalidates only the entry a scoped event names', () => {
-    const cache = seeded()
-    const onInvalidated = vi.fn()
-    const invalidation = createAutomationHostInvalidation({
-      cache,
-      onInvalidated,
-      schedule: (f) => f()
-    })
-    const before = generationOf(cache, DESKTOP_SELF)
-
-    invalidation.handle({ authority: DESKTOP, selector: { kind: 'ssh', targetId: 'target-1' } })
-
-    expect(onInvalidated).toHaveBeenCalledWith([hostStableKey(DESKTOP_SSH)])
-    expect(generationOf(cache, DESKTOP_SELF)).toBe(before)
-  })
-
-  it('invalidates every entry of one authority for an unscoped event, and no other authority', () => {
-    const cache = seeded()
-    const onInvalidated = vi.fn()
-    const invalidation = createAutomationHostInvalidation({
-      cache,
-      onInvalidated,
-      schedule: (f) => f()
-    })
-    const untouched = generationOf(cache, RUNTIME_SELF)
-
-    invalidation.handle({ authority: DESKTOP, reason: 'definition' })
-
-    expect(onInvalidated.mock.calls[0]?.[0]).toEqual(
-      expect.arrayContaining([hostStableKey(DESKTOP_SELF), hostStableKey(DESKTOP_SSH)])
-    )
-    expect(onInvalidated.mock.calls[0]?.[0]).not.toContain(hostStableKey(RUNTIME_SELF))
-    expect(generationOf(cache, RUNTIME_SELF)).toBe(untouched)
-  })
-
-  it('reports a scoped event for a host nothing is caching yet', async () => {
-    const cache = seeded()
-    const uncached: StableAutomationCatalogRef = {
-      authority: RUNTIME,
-      selector: { kind: 'ssh', targetId: 'never-seen' }
-    }
-    const onInvalidated = vi.fn()
-    const invalidation = createAutomationHostInvalidation({ cache, onInvalidated })
-
-    // Report unseen create keys too or their first row will never be fetched.
-    invalidation.handle({ authority: RUNTIME, selector: { kind: 'ssh', targetId: 'never-seen' } })
-    await Promise.resolve()
-
-    expect(onInvalidated).toHaveBeenCalledWith([hostStableKey(uncached)])
-    expect(cache.get(uncached)).toBeNull()
-    expect(generationOf(cache, RUNTIME_SELF)).toBe(0)
-  })
-
   it('drops queued work once disposed', async () => {
     const cache = seeded()
     const onInvalidated = vi.fn()

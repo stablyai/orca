@@ -4,7 +4,7 @@ import { useCallback, useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
 import { readViewBase } from '../query/host-read-client'
 import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { relayHostsListRead } from './server-workspace-operations'
 
 // Count polling cadence from the last completed read.

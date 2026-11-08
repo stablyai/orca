@@ -271,7 +271,7 @@ function AgentCapabilitySetupControls(props: {
                     "Replace with Orca's copy"
                   )
                 : props.installAction?.kind === 'run' && props.installAction.changes
-                  ? bundledSkillSetupActionLabel(props.installAction.changes)
+                  ? bundledSkillSetupActionLabel(props.installAction.changes, t)
                   : t(
                       'auto.components.feature.wall.AgentCapabilitiesSetupAction.installSkills',
                       'Install skills'
@@ -300,6 +300,7 @@ function AgentCapabilitySetupChecklist(props: {
   onChange: (value: OnboardingFeatureSetupSelection) => void
   installStatus: Record<OnboardingFeatureSetupId, AgentCapabilityInstallStatus>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section className="mt-6">
       <div className="grid gap-3 md:grid-cols-3">
@@ -312,7 +313,7 @@ function AgentCapabilitySetupChecklist(props: {
               type="button"
               role="checkbox"
               aria-checked={selected}
-              aria-label={capabilityToggleLabel(selected, row.title)}
+              aria-label={capabilityToggleLabel(selected, row.title, t)}
               className={cn(
                 'flex min-h-24 flex-col rounded-lg border px-4 py-3.5 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

@@ -23,9 +23,11 @@ const dependencies: Record<string, Record<string, unknown>> = {
   },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
   './main-process-connector-startup': { desktopConnectorCloud: () => null },
-  '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
-  '../agent-hooks/wsl-hook-relay-manager': { wslHookRelayManager: { disposeAll: idle() } },
-  '../agent-hooks/managed-agent-hook-controls': {
+  '../agent-hooks/server/agent-hook-server': { agentHookServer: { stop: stopAgentHookServer } },
+  '../agent-hooks/wsl-relay/wsl-hook-relay-manager': {
+    wslHookRelayManager: { disposeAll: idle() }
+  },
+  '../agent-hooks/installation/managed-agent-hook-controls': {
     removeManagedAgentHooksAsync: vi.fn(async () => [])
   },
   '../runtime/agent-session/structured-agent-session-runtime': {

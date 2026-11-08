@@ -851,8 +851,8 @@
           "removeWithChildrenMixed_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry."
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "changeCount_one": "{{count}} uncommitted or untracked change",
-          "changeCount_other": "{{count}} uncommitted or untracked changes",
+          "changesLost_one": "{{count}} uncommitted change will be lost",
+          "changesLost_other": "{{count}} uncommitted changes will be lost",
           "moreLoadedPaths_one": "and {{count}} more loaded path",
           "moreLoadedPaths_other": "and {{count}} more loaded paths"
         },

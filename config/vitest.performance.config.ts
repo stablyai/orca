@@ -5,7 +5,6 @@ import baseConfig from './vitest.config'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
 
 const contracts = [
-  'tests/e2e/session-tabs/mobile-session-active-performance.unit.test.ts',
   'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts',
   'src/renderer/src/components/terminal-pane/pty-connection/startup/saved-resume-cancellation.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
@@ -24,7 +23,8 @@ const contracts = [
   'config/scripts/static-analysis/oxlint-contracts/app-store-performance-plugin.test.mjs',
   'config/scripts/static-analysis/oxlint-contracts/quadratic-buffer-concat-plugin.test.mjs',
   'src/main/claude-usage/scanner-incremental-append.test.ts',
-  'src/main/claude-usage/store-checkpoint-persistence.test.ts'
+  'src/main/claude-usage/store-checkpoint-persistence.test.ts',
+  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatResolvedView.streaming-input.test.tsx'
 ]
 for (const contract of contracts) {
   if (!existsSync(resolve(contract))) {

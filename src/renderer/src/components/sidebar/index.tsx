@@ -25,7 +25,7 @@ import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
 
-// Keep the Agents activity pipeline out of the workspace view’s initial bundle.
+// Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
 
 const WorktreeMetaDialog = lazyWithRetry(
@@ -82,6 +82,7 @@ function Sidebar({
   const [projectsCollapseTarget, setProjectsCollapseTarget] = React.useState<HTMLDivElement | null>(
     null
   )
+  const [agentBadgeTarget, setAgentBadgeTarget] = React.useState<HTMLSpanElement | null>(null)
   const agentsScrollTopRef = React.useRef(0)
   // Retain collapse state and scroll geometry across Agents-list unmounts.
   const [agentsCollapsedGroupKeys, setAgentsCollapsedGroupKeys] = React.useState<
@@ -182,28 +183,32 @@ function Sidebar({
             <>
               <SidebarNav />
               <SidebarHeader
+                activityBadgeTarget={setAgentBadgeTarget}
                 onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
                 activityOptionsTarget={setAgentOptionsTarget}
                 projectsCollapseTarget={setProjectsCollapseTarget}
               />
               <SeveredTerminalDaemonBanner />
               <StalledTerminalDaemonBanner />
-              {sidebarBody === 'agents' ? (
-                <React.Suspense fallback={<div className="min-h-0 flex-1" />}>
-                  <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
-                    <SidebarAgentsList
-                      readFilter={agentReadFilter}
-                      setReadFilter={setAgentReadFilter}
-                      groupBy={agentGroupBy}
-                      setGroupBy={setAgentGroupBy}
-                      query={agentQuery}
-                      setQuery={setAgentQuery}
-                      optionsTarget={agentOptionsTarget}
-                      scrollTopRef={agentsScrollTopRef}
-                    />
-                  </ActivityThreadCollapseContext.Provider>
-                </React.Suspense>
-              ) : (
+              <React.Suspense
+                fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
+              >
+                <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
+                  <SidebarAgentsList
+                    active={sidebarBody === 'agents'}
+                    readFilter={agentReadFilter}
+                    setReadFilter={setAgentReadFilter}
+                    groupBy={agentGroupBy}
+                    setGroupBy={setAgentGroupBy}
+                    query={agentQuery}
+                    setQuery={setAgentQuery}
+                    optionsTarget={agentOptionsTarget}
+                    badgeTarget={agentBadgeTarget}
+                    scrollTopRef={agentsScrollTopRef}
+                  />
+                </ActivityThreadCollapseContext.Provider>
+              </React.Suspense>
+              {sidebarBody !== 'agents' && (
                 <>
                   <LocalGitToolchainScanBanner />
                   <StartupWorktreeRefreshStatus />

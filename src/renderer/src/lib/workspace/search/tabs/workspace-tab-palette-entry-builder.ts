@@ -36,7 +36,7 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { isWorkspaceTabContentType } from './workspace-tab-palette-content-type'
 import { getActiveUnifiedTabId, isCurrentWorkspaceTab } from './workspace-tab-palette-current-tab'
-import { projectedStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
+import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { agentTypeToIconAgent } from '../../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 
 export function buildSearchableWorkspaceTabEntries({

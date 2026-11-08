@@ -11,7 +11,8 @@ export type Env = {
   // The cell id directors write into relay_assignments for hosts placed on the edge.
   EDGE_CELL_ID?: string
   // Relay JWTs: verified against the auth service's JWKS (fetched, cached per isolate, served
-  // stale for up to 30 min if auth is unreachable). RELAY_JWKS (inline set) is for local tests and
+  // stale for up to 30 min if auth is unreachable; a cold isolate falls back to the colo's last
+  // good set in the Cache API for up to 24 h, jwks-persist.ts). RELAY_JWKS (inline set) is for local tests and
   // the spike only.
   RELAY_JWKS_URL?: string
   RELAY_JWKS?: string
@@ -42,8 +43,13 @@ export type Env = {
   // Phase 2 admin calls: the director's edge admin key (secret, not its lease key) and its public URL (iss).
   ADMIN_SIGNING_KEY?: string
   ADMIN_ISSUER?: string
+  // Key rotation (admin.ts): a second accepted key while the director moves to it. >= 32 chars.
+  ADMIN_SIGNING_KEY_NEXT?: string
+  // '1': admin tokens without a `jti` are refused (401). Default off while the director adopts jti.
+  ADMIN_REQUIRE_JTI?: string
   // Optional second signer for `erase` only (the account erasure job): it can never push.
   ERASE_SIGNING_KEY?: string
+  ERASE_SIGNING_KEY_NEXT?: string
   ERASE_ISSUER?: string
 }
 
@@ -84,6 +90,9 @@ export function edgeConfig(env: Env): EdgeConfig {
   if (backend === 'object' && (!env.ADMIN_SIGNING_KEY || env.ADMIN_SIGNING_KEY.length < 32 || !env.ADMIN_ISSUER)) {
     throw new Error('relay_edge_config_admin')
   }
+  // A rotation key, once set, must be as strong as the primary ('' counts as cleared).
+  if (env.ADMIN_SIGNING_KEY_NEXT && env.ADMIN_SIGNING_KEY_NEXT.length < 32) { throw new Error('relay_edge_config_admin_next') }
+  if (env.ERASE_SIGNING_KEY_NEXT && env.ERASE_SIGNING_KEY_NEXT.length < 32) { throw new Error('relay_edge_config_erase_next') }
   if (backend === 'postgres' && !env.HYPERDRIVE) { throw new Error('relay_edge_config_hyperdrive') }
   if (backend === 'spike' && env.SPIKE_DEBUG !== '1' && env.SPIKE_ADMIN !== '1') {
     throw new Error('relay_edge_config_spike_backend_outside_spike')

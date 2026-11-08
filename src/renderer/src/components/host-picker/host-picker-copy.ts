@@ -5,8 +5,8 @@ export function searchHostsLabel(t: Translate = translate): string {
   return t('auto.components.hostPicker.searchHosts', 'Search hosts…')
 }
 
-export function noHostsMatchLabel(): string {
-  return translate('auto.components.hostPicker.noHostsMatch', 'No hosts match.')
+export function noHostsMatchLabel(t: Translate = translate): string {
+  return t('auto.components.hostPicker.noHostsMatch', 'No hosts match.')
 }
 
 export function moreHostsLabel(count: number): string {

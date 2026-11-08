@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { AutomationRun } from '../../../../shared/automations-types'
-import { summarizeAutomationRunUsage } from './automation-usage-model'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import { summarizeAutomationRunUsage } from '../../../../shared/automations/history/automation-usage-summary'
 
 function makeRun(overrides: Partial<AutomationRun>): AutomationRun {
   return {

@@ -5,13 +5,13 @@ import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { selectVisibleAgentOrchestration } from '@/runtime/visible-agent-orchestration'
-import { useAppStore } from '@/store'
+import { selectVisibleAgentOrchestration } from '@/runtime/agent-orchestration/visible-agent-orchestration'
+import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../shared/orchestration-runtime-capabilities'
+import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import {
   formatWorkerAutoCloseCountdown,
   pollWorkerAutoClose,
@@ -20,7 +20,7 @@ import {
   readWorkerAutoCloseReply,
   subscribeWorkerAutoClose,
   type WorkerAutoCloseState
-} from '../../../shared/worker-auto-close'
+} from '../../../shared/orchestration/workers/worker-auto-close'
 
 /** A terminal pane, or a chat named by session: its owning host resolves the pane credential. */
 export type WorkerAutoCloseSubject = { paneKey: string } | { sessionId: string }

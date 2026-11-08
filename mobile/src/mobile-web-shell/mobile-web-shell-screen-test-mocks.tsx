@@ -167,7 +167,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
     },
     '../app-update/use-wall-app-update': () => ({ useWallAppUpdate: () => null }),
     // Keep the real bridge hook; stub only Expo-dependent client lookup.
-    '../transport/host-client-hooks': () => ({
+    '../transport/connection/host-client-hooks': () => ({
       useHostClient: () => ({ client: dependencies.client })
     }),
     // Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo

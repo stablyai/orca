@@ -4,7 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import { refreshWorkspacePortScanForTarget } from '@/lib/workspace-ports/workspace-port-scan-refresh'
-import { useWorktreeRuntimeTarget } from '@/runtime/use-worktree-runtime-target'
+import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
 import {
   getUnavailableWorkspacePortHosts,
   type WorkspacePortHostRef

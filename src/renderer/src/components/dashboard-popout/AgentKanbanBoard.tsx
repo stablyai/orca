@@ -20,6 +20,7 @@ import {
 } from './agent-board-filtering'
 import './agent-board-transitions.css'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 
 /** Relay acknowledgments to the main renderer; optional calls tolerate dev-HMR preload skew until restart. */
@@ -32,16 +33,16 @@ function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
 }
 
-function bucketLabel(bucket: DashboardBucket): string {
+function bucketLabel(bucket: DashboardBucket, t: Translate = translate): string {
   switch (bucket) {
     case 'attention':
-      return translate('dashboardPopout.bucket.attention', 'Needs You')
+      return t('dashboardPopout.bucket.attention', 'Needs You')
     case 'working':
-      return translate('dashboardPopout.bucket.working', 'Working')
+      return t('dashboardPopout.bucket.working', 'Working')
     case 'done':
-      return translate('dashboardPopout.bucket.done', 'Done')
+      return t('dashboardPopout.bucket.done', 'Done')
     case 'idle':
-      return translate('dashboardPopout.bucket.idle', 'Idle')
+      return t('dashboardPopout.bucket.idle', 'Idle')
   }
 }
 
@@ -75,7 +76,8 @@ function KanbanColumn({
   now: number
   onOpenTerminal: (card: DashboardCard) => void
 }): React.JSX.Element {
-  const label = bucketLabel(bucket)
+  const t = useTranslate()
+  const label = bucketLabel(bucket, t)
 
   return (
     // Cards carry attention color; keep the column neutral to avoid duplicate signaling.
@@ -94,7 +96,7 @@ function KanbanColumn({
       <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
         {cards.length === 0 ? (
           <p className="px-1 py-2 text-[11px] text-muted-foreground">
-            {translate('dashboardPopout.bucket.empty', 'None')}
+            {t('dashboardPopout.bucket.empty', 'None')}
           </p>
         ) : (
           cards.map((card) => (
@@ -137,6 +139,7 @@ export function AgentKanbanBoard({
   onBrowserForeground,
   headerActions
 }: AgentKanbanBoardProps): React.JSX.Element {
+  const t = useTranslate()
   const visibleBuckets = useMemo(
     () =>
       DASHBOARD_BUCKET_ORDER.filter((bucket) => bucket !== 'idle' || snapshot.showIdle === true),
@@ -242,11 +245,9 @@ export function AgentKanbanBoard({
         className={cn('relative flex flex-col bg-background text-foreground', containerClassName)}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
-          <h1 className="text-[13px] font-semibold">
-            {translate('dashboardPopout.title', 'Agents')}
-          </h1>
+          <h1 className="text-[13px] font-semibold">{t('dashboardPopout.title', 'Agents')}</h1>
           <span className="text-[11px] text-muted-foreground">
-            {translate('dashboardPopout.total', '{{count}} total', {
+            {t('dashboardPopout.total', '{{count}} total', {
               count: visibleCards.length
             })}
           </span>
@@ -257,7 +258,7 @@ export function AgentKanbanBoard({
                 <button
                   type="button"
                   onClick={onClose}
-                  aria-label={translate('dashboardPopout.close', 'Close dashboard')}
+                  aria-label={t('dashboardPopout.close', 'Close dashboard')}
                   className="rounded-sm p-1 text-muted-foreground opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
                 >
                   <XIcon className="size-4" />

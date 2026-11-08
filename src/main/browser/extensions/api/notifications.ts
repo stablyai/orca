@@ -14,7 +14,7 @@ import {
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
-import { noteBrowserExtensionUserGesture } from './permissions'
+import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 
 const optionsSchema = z
   .object({

@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { markWebSessionBrowserPlacementAdopted } from '../web-session-browser-placement'
+import { markWebSessionBrowserPlacementAdopted } from '../browser/placement/web-session-browser-placement'
 import { findBrowserWorkspaceForRemotePage } from './mirrored-browser-tabs'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { writableWebSessionTabsRecord } from './state-equality-core'

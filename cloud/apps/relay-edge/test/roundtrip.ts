@@ -80,7 +80,6 @@ async function main(): Promise<void> {
     const e2 = Number(toEdge.body.assignmentEpoch)
     record('2 director answers the edge with a newer epoch', toEdge.status === 200 && toEdge.body.cellUrl === EDGE_URL && e2 > e1, JSON.stringify({ status: toEdge.status, cellUrl: toEdge.body.cellUrl, epoch: e2, body: toEdge.status === 200 ? undefined : toEdge.body }))
     const onEdge = await online(EDGE_URL, e2)
-    record('2 desktop hello accepted on the edge at that epoch', true)
     record('2 phone A (paired on the cell) resumes on the edge', resumed(await phone(EDGE_URL, tokenA)))
     const oldCell = await phone(CELL, tokenA)
     await waitFor(() => oldCell.state.closed !== null, 4000)

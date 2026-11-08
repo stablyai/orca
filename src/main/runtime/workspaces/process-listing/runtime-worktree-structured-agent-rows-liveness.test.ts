@@ -8,7 +8,7 @@ import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-ses
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
-import { AgentHookServer, _internals } from '../../../agent-hooks/server'
+import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-hook-server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
@@ -116,7 +116,7 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
   const summaries = new Map([[WORKTREE_ID, row]])
   attachRuntimeWorktreeAgentRows({
     summaries,
-    terminalTitleEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByRow: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
       connectedPtyEvidence: {

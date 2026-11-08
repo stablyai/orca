@@ -20,7 +20,7 @@ import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
 import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
@@ -106,7 +106,7 @@ import type { RemoteRuntimeSnapshotOutcome } from '../../../../runtime/hosted-te
 import {
   toRuntimeTerminalWorktreeSelector,
   toRuntimeWorktreeSelector
-} from '../../../../runtime/runtime-worktree-selector'
+} from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
@@ -127,13 +127,13 @@ import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
-import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/remote-runtime-session-tabs-inflight'
+import { listRemoteRuntimeSessionTabsAfterCurrentInFlight } from '@/runtime/web-session-tabs-sync/inventory/remote-runtime-session-tabs-inflight'
 import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events'
-import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/web-session-tabs-sync/hydration/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/hosted-terminals/creation/agent-launch/remote-agent-session-launch'
 import { useAppStore } from '@/store/index'
-import { recordWebAgentSessionHandoff } from '@/runtime/web-agent-session-handoff'
-import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
+import { recordWebAgentSessionHandoff } from '@/runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff'
+import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import {
   bufferPtyShutdownData,
   bufferPtyShutdownReplayData,

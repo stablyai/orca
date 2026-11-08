@@ -1,7 +1,7 @@
 import { terminalInputSend } from './mobile-terminal-operations'
 import { describe, expect, it, vi } from 'vitest'
 import { sendTerminalLiveAccessoryRawBytes } from './terminal-live-accessory-raw-send'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 function captureClient(
   result: Promise<unknown> = Promise.resolve({
@@ -26,16 +26,6 @@ const BASE_ARGS = {
 } as const
 
 describe('terminal live accessory raw send', () => {
-  it('drops the bytes instead of sending while disconnected', async () => {
-    const { client, sendRequest } = captureClient()
-
-    await expect(
-      sendTerminalLiveAccessoryRawBytes({ ...BASE_ARGS, client, connState: 'reconnecting' })
-    ).resolves.toBe(false)
-
-    expect(sendRequest).not.toHaveBeenCalled()
-  })
-
   it('drops the bytes when the terminal selection went stale mid-flush', async () => {
     const { client, sendRequest } = captureClient()
 

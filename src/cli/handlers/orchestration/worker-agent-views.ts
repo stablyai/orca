@@ -1,6 +1,6 @@
 import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
 import type { WorkerListRunScope } from './worker-list-run-scope'
-import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration-fleet-attention'
+import { isActionableOrchestrationFleetAttention } from '../../../shared/orchestration/fleet/orchestration-fleet-attention'
 
 type WorkerProjection = {
   runId?: string
