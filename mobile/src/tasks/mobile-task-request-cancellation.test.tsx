@@ -281,6 +281,25 @@ describe('task repository request ownership', () => {
     expect(fixture.model().items.every((item) => item.title.includes('new-query'))).toBe(true)
   })
 
+  it("does not page from the previous query's rows while the next query reads", async () => {
+    const fixture = await mount('github')
+    const first = await fixture.load()
+    await fixture.drain()
+    await first.request
+    fixture.scope.query = 'new-query'
+    await fixture.render()
+    const live = await fixture.load()
+    const before = fixture.client.requests.length
+    await act(async () => {
+      await fixture.model().handleGitHubPageChange(1)
+    })
+    expect(fixture.client.requests).toHaveLength(before)
+    await fixture.drain()
+    await live.request
+    expect(fixture.model().githubPages).toHaveLength(1)
+    expect(fixture.model().items.every((item) => item.title.includes('new-query'))).toBe(true)
+  })
+
   for (const reason of ['unmount', 'disconnect', 'client-change'] as const) {
     it(`stops the queued list after ${reason}`, async () => {
       const fixture = await mount('github')
