@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeProjectGroupController } from './runtime-project-group-controller'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { FolderWorkspacePersistenceOperations } from '../../persistence/restoring-sessions/folder-workspace-operations'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
