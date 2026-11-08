@@ -7,7 +7,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
 import type {
   BrowserPageGrabAnnotations,
@@ -27,6 +27,7 @@ export function BrowserPageGrabToast({
   copyGrabScreenshot: BrowserPageGrabAnnotations['copyGrabScreenshot']
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="absolute z-30 flex items-center animate-in fade-in zoom-in-95 duration-150"
@@ -87,7 +88,7 @@ export function BrowserPageGrabToast({
                               ...prev,
                               type: copied ? 'success' : 'error',
                               message: copied
-                                ? translate(
+                                ? t(
                                     'auto.components.browser.pane.BrowserPane.f30d2d35a7',
                                     'Screenshotted'
                                   )
@@ -100,10 +101,7 @@ export function BrowserPageGrabToast({
                 }}
               >
                 <Image className="size-3.5" />
-                {translate(
-                  'auto.components.browser.pane.BrowserPane.1ded0d3168',
-                  'Copy Screenshot'
-                )}
+                {t('auto.components.browser.pane.BrowserPane.1ded0d3168', 'Copy Screenshot')}
                 <DropdownMenuShortcut>S</DropdownMenuShortcut>
               </DropdownMenuItem>
             </DropdownMenuContent>
