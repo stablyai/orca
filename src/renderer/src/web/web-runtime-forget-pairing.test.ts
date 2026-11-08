@@ -1,8 +1,8 @@
 import { webcrypto } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { MemoryStorage } from './web-preload-api-test-harness'
-import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
+import { MemoryStorage } from './testing/web-preload-api-test-harness'
+import type { StoredWebRuntimeEnvironment } from './pairing/web-runtime-environment'
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
@@ -50,10 +50,10 @@ function environment(pairingRevision: number, deviceToken: string): StoredWebRun
 
 async function loadSession() {
   vi.resetModules()
-  const support = await import('./web-device-key-support')
+  const support = await import('./runtime/security/web-device-key-support')
   support.setWebDeviceKeySupportForTests('persistent')
-  const stored = await import('./web-runtime-environment')
-  const session = await import('./preload-api/web-runtime-session')
+  const stored = await import('./pairing/web-runtime-environment')
+  const session = await import('./runtime/client/web-runtime-session')
   return { stored, session }
 }
 
@@ -120,6 +120,27 @@ describe('a stale tab whose migrated pairing lost its device key', () => {
     session.webRuntimeState.activeEnvironment = repaired
 
     session.getClientForEnvironment(repaired)
+
+    expect(session.webRuntimeState.activeClient).not.toBe(staleClient)
+    await vi.waitFor(() => expect(fakeSockets).toHaveLength(2))
+    session.closeActiveRuntimeClients()
+  })
+
+  it('does not answer status observes with a client cached for a replaced pairing', async () => {
+    const { stored, session } = await loadSession()
+    const stale = environment(1, 'migrated:keyed-1')
+    stored.saveStoredWebRuntimeEnvironment(stale)
+    session.webRuntimeState.activeEnvironment = stale
+
+    session.getClientForEnvironment(stale)
+    await vi.waitFor(() => expect(fakeSockets).toHaveLength(1))
+    const staleClient = session.webRuntimeState.activeClient
+
+    const repaired = environment(2, 'fresh-code')
+    stored.saveStoredWebRuntimeEnvironment(repaired)
+    session.webRuntimeState.activeEnvironment = repaired
+
+    await session.observeWebRuntimeStatus('active', 50)
 
     expect(session.webRuntimeState.activeClient).not.toBe(staleClient)
     await vi.waitFor(() => expect(fakeSockets).toHaveLength(2))
