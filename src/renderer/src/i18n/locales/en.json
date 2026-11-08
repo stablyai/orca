@@ -8868,7 +8868,6 @@
           "f828e1de19": "- shared with your team",
           "673a7fd10e": "Checking...",
           "5426ecbdcb": "Local scripts will not run",
-          "b2b06c7ce8": "Available environment variables (hover for details):",
           "95a0411b3e": "template",
           "175daba180": "Example",
           "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
@@ -21272,6 +21271,9 @@
           "never": "Never",
           "immediately": "Immediately"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Available environment variables"
       }
     },
     "agentChildRow": {
@@ -23254,7 +23256,8 @@
     "refresh": "Refresh",
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
-    "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+    "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
+    "metricDetails": "Metric details"
   },
   "browserExtensions": {
     "permission": {

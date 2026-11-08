@@ -61,6 +61,7 @@ function menuFixture(fixtureRepo: Repo, fixtureWorktree: Worktree = worktree) {
 }
 
 export const open = menuFixture(repo)
+export const primaryCheckout = menuFixture(repo, { ...worktree, isMainWorktree: true })
 export const folderProject = menuFixture({ ...repo, kind: 'folder' })
 export const folderWorkspace = menuFixture(repo, { ...worktree, id: 'folder:release' })
 export const recipeVm = menuFixture(

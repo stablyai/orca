@@ -8174,7 +8174,6 @@
           "f828e1de19": "- compartido con tu equipo",
           "673a7fd10e": "Comprobando...",
           "5426ecbdcb": "Los scripts locales no se ejecutarán",
-          "b2b06c7ce8": "Variables de entorno disponibles (pasa el cursor para ver más detalles):",
           "95a0411b3e": "plantilla",
           "175daba180": "Ejemplo",
           "b20c5df6ca": "Agrega un archivo `orca.yaml` para habilitar valores predeterminados compartidos de configuración, archivado o automatización de Issues para este repositorio. Plantilla de ejemplo:",

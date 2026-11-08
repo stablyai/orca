@@ -10,7 +10,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 
 // Sonner hides toasts through collapsed stacking or its visible-toast limit.
 function isHiddenInToastStack(toastElement: Element): boolean {
@@ -33,7 +32,6 @@ export function WorktreeForceDeleteButton({
   menuSide,
   moreActionsLabel,
   alwaysForceDeleteLabel,
-  alwaysForceDeleteTooltip,
   children
 }: {
   toastId?: string
@@ -47,7 +45,6 @@ export function WorktreeForceDeleteButton({
   menuSide?: 'top' | 'bottom'
   moreActionsLabel?: string
   alwaysForceDeleteLabel?: string
-  alwaysForceDeleteTooltip?: string
   children?: ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -165,26 +162,15 @@ export function WorktreeForceDeleteButton({
             }
           }}
         >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() => {
-                  void alwaysForceDelete()
-                }}
-              >
-                {alwaysForceDeleteLabel ??
-                  t('workspaceDeletion.alwaysForceDelete', 'Always force delete')}
-              </DropdownMenuItem>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8}>
-              {alwaysForceDeleteTooltip ??
-                t(
-                  'workspaceDeletion.alwaysForceDeleteTooltip',
-                  'Applies to all future workspace deletions.'
-                )}
-            </TooltipContent>
-          </Tooltip>
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => {
+              void alwaysForceDelete()
+            }}
+          >
+            {alwaysForceDeleteLabel ??
+              t('workspaceDeletion.alwaysForceDelete', 'Always force delete')}
+          </DropdownMenuItem>
         </DropdownMenuContent>
       ) : null}
     </DropdownMenu>

@@ -10,7 +10,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Copy,
   Bell,
@@ -323,25 +322,18 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           />
           {/* Git cannot remove primary checkouts; keep disabled Delete beside the enabled Remove Project action. */}
           {!isMultiContext && removesProject ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div>
-                  <DropdownMenuItem variant="destructive" disabled>
-                    <Trash2 className="size-3.5" />
-                    {t(
-                      'auto.components.sidebar.WorktreeContextMenu.deleteWorktree',
-                      'Delete Worktree'
-                    )}
-                  </DropdownMenuItem>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
+            <>
+              <DropdownMenuItem variant="destructive" disabled>
+                <Trash2 className="size-3.5" />
+                {t('auto.components.sidebar.WorktreeContextMenu.deleteWorktree', 'Delete Worktree')}
+              </DropdownMenuItem>
+              <p className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">
                 {t(
                   'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
                   "Primary worktree — can't be deleted. Remove the project instead."
                 )}
-              </TooltipContent>
-            </Tooltip>
+              </p>
+            </>
           ) : null}
           {/* Use Radix’s direct title prop for project-removal copy; wrapper elements break flat roving-keyboard navigation. */}
           <DropdownMenuItem

@@ -151,7 +151,7 @@ export function ResourceUsageStatusSegment({
           </div>
           <TabsContent
             value="resources"
-            className="flex min-h-0 flex-col data-[state=inactive]:hidden"
+            className="flex min-h-0 flex-col overflow-y-auto scrollbar-sleek data-[state=inactive]:hidden"
           >
             {controller.actionError && (
               <p role="alert" className="px-3 py-2 text-xs text-destructive">

@@ -135,7 +135,7 @@ export function NativeChatComposerWorkspace({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {identity.kind === 'detached' ? identity.tooltip : label}
+            {label}
           </TooltipContent>
         </Tooltip>
       )}
