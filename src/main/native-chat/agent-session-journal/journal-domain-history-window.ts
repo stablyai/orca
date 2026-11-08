@@ -1,5 +1,6 @@
 import type Database from '../../sqlite/sync-database'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS } from './durable-rows/journal-row-schema'
 
 export type JournalDomainHistoryHeader = {
   itemId: string
@@ -37,13 +38,16 @@ function selectJournalDomainHistoryHeaders(
   if (rows.length === cap) {
     const boundary = rows.at(-1)!.sequence
     const first = rows.findIndex((row) => row.sequence === boundary)
-    rows.splice(
-      first,
-      rows.length - first,
-      ...db
-        .prepare(`SELECT ${columns} FROM journal_items WHERE ${where} AND sequence=? ${order}`)
-        .all(...prefix, boundary)
-    )
+    // A source lifecycle row creates at most 200 positions; ordinary domain writes create one.
+    const group = db
+      .prepare(
+        `SELECT ${columns} FROM journal_items WHERE ${where} AND sequence=? ${order} LIMIT ?`
+      )
+      .all(...prefix, boundary, MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS + 1)
+    if (group.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
+      throw new Error('journal history exceeds the writer sequence group bound')
+    }
+    rows.splice(first, rows.length - first, ...group)
   }
   return rows.map((row: SqliteRow) => ({
     itemId: String(row.item_id),

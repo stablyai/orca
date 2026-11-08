@@ -25,6 +25,7 @@ import { offPageSubagentRoster } from '../agent-session-wire/publication/history
 import { CLIENT_HISTORY_READER } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import { readJournalDomainForwardHistory } from './journal-domain-history-after'
+import { projectJournalDomainStopNote } from './journal-domain-stop-notes'
 import {
   journalDomainSequenceGroups,
   selectJournalDomainHistoryWindow
@@ -152,7 +153,13 @@ function historyPage(
   let total = 0
   for (const group of journalDomainSequenceGroups(window)) {
     const formed = group.map((header) =>
-      reader.form(JSON.parse(String(body.get(...prefix, header.itemId)!.payload_json)))
+      reader.form(
+        projectJournalDomainStopNote(
+          db,
+          head,
+          JSON.parse(String(body.get(...prefix, header.itemId)!.payload_json))
+        )
+      )
     )
     const bytes = historyContentBytes(formed, [], sizes)
     if (kept.length > 0 && total + bytes > reader.budgetBytes) {
@@ -234,7 +241,7 @@ function currentRows(
         WHERE item.session_id=? AND item.epoch=? AND item.item_id=wanted.value AND item.hidden=0
         ORDER BY item.sequence, item.sequence_index, item.ordinal`)
       .all(JSON.stringify(wanted), head.sessionId, head.epoch)
-      .map((row) => JSON.parse(String(row.payload_json))),
+      .map((row) => projectJournalDomainStopNote(db, head, JSON.parse(String(row.payload_json)))),
     submissions: itemSubmissions(db, head, wanted)
   }
 }

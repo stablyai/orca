@@ -12,6 +12,7 @@ import type { JournalOutcomeReadRow } from './replay/journal-read-row'
 import { findSequenceGap, resolveJournalResume } from './replay/journal-cursor'
 import type { JournalDomainEventChanges } from './journal-domain-schema'
 import type { JournalDomainHistoryHead } from './journal-domain-history-page'
+import { journalDomainDependentStopNotes } from './journal-domain-stop-notes'
 
 /** Select one ordered event window, then current rows for only its identities, in the caller's snapshot. */
 export function readJournalDomainForwardHistory(
@@ -31,6 +32,7 @@ export function readJournalDomainForwardHistory(
       readSince: (after, count) => readJournalDomainEvents(db, head, after, count),
       canonicalItemId: (itemId) => itemId,
       hasSubmission: () => false,
+      stopNoteIds: (ids) => journalDomainDependentStopNotes(db, head, ids),
       reset
     },
     {

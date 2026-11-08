@@ -30,7 +30,17 @@ export const JOURNAL_DOMAIN_MIGRATIONS: readonly {
   },
   { version: 8, migrate: migrateJournalDomainQueueSchema },
   { version: 9, migrate: dropJournalProjectionTables },
-  { version: 10, migrate: (db) => db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA) }
+  { version: 10, migrate: (db) => db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA) },
+  {
+    version: 11,
+    migrate: (db) =>
+      db.exec(`CREATE INDEX journal_items_visible_position ON journal_items(
+        session_id, epoch, sequence, sequence_index, ordinal) WHERE hidden=0;
+      CREATE INDEX journal_items_stop_turn ON journal_items(
+      session_id, epoch, json_extract(payload_json, '$.turnScope.turnItemId'))
+      WHERE hidden=0 AND json_extract(payload_json, '$.body.kind')='status'
+        AND json_extract(payload_json, '$.body.failure.kind')='cancelUnconfirmed';`)
+  }
 ]
 
 export const JOURNAL_DOMAIN_SCHEMA_VERSION = JOURNAL_DOMAIN_MIGRATIONS.at(-1)!.version

@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
+import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionHistoryResult } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { measureHistoryItem } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
@@ -103,7 +105,7 @@ it('pages a chat of almost only subagent rows in bounded, gap-free pages', () =>
 
 it('never splits a same-sequence group, marking it oversized backward and paging it whole forward', () => {
   const { seedItem, head, event, read } = history()
-  const group = Array.from({ length: 100 }, (_, index) =>
+  const group = Array.from({ length: 200 }, (_, index) =>
     text(50, 'x'.repeat(1000), { sequenceIndex: index })
   )
   seedItem(text(49, 'before'))
@@ -340,4 +342,60 @@ it('backfills history metadata once from the preceding numbered schema and refus
   expect(() => migrateJournalDomainSchema(db)).toThrow(
     'journal domain schema is newer than this writer'
   )
+})
+
+it('refreshes a dependent Stop note when only its turn changes, without skipping a shrunk forward page', () => {
+  const { seedItem, head, event, read } = history()
+  seedItem({
+    itemId: 'orca:turn-1',
+    revision: 2,
+    sequence: 1,
+    observedAt: 1,
+    body: { kind: 'turn', turnId: 'turn-1', state: 'interrupted' },
+    turnScope: { kind: 'thread' }
+  })
+  seedItem({
+    itemId: 'orca:stop%3Aturn-1',
+    revision: 1,
+    sequence: 2,
+    observedAt: 2,
+    body: {
+      kind: 'status',
+      ...agentSessionFailureWords(agentSessionFailureFact('cancelUnconfirmed'), { surface: 'row' })
+    },
+    turnScope: { kind: 'turn', turnItemId: 'orca:turn-1' }
+  })
+  for (const sequence of [3, 4]) {
+    seedItem(text(sequence, 'x'.repeat(650)))
+    event(sequence, [`orca:${sequence}:0`])
+  }
+  event(5, ['orca:turn-1'])
+  head(5)
+  const reader = { form: measureHistoryItem, budgetBytes: 1024 }
+  const cursors: number[] = []
+  const items: AgentJournalRenderItem[] = []
+  let cursor = { epoch: 'epoch', sequence: 2 }
+  for (;;) {
+    const result = read({ direction: 'after', cursor, limit: 3 }, reader)
+    expect(result.ok).toBe(true)
+    cursors.push(result.page.window.nextCursor.sequence)
+    items.push(...result.page.items)
+    if (!result.page.hasNewer) {
+      break
+    }
+    cursor = result.page.window.nextCursor
+  }
+  expect(cursors).toEqual([3, 4, 5])
+  expect(items.map((item) => item.itemId)).toEqual([
+    'orca:3:0',
+    'orca:4:0',
+    'orca:turn-1',
+    'orca:stop%3Aturn-1'
+  ])
+  expect(items.at(-1)?.body).toMatchObject({ kind: 'status' })
+  expect(items.at(-1)?.body).not.toHaveProperty('failure')
+  const tail = read({ direction: 'tail' })
+  expect(
+    tail.page.items.find((item) => item.itemId === 'orca:stop%3Aturn-1')?.body
+  ).not.toHaveProperty('failure')
 })
