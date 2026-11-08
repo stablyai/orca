@@ -38,6 +38,7 @@ export class JournalSqlOwner {
   private didExit = false
   private closed: Promise<void> | undefined
   onFault: (error: Error) => void = () => {}
+  onDomainCommit: (savedAt: number) => void = () => {}
 
   constructor(
     filename: string,
@@ -84,6 +85,7 @@ export class JournalSqlOwner {
     if (response.type !== 'messages') {
       throw new Error('journal writer returned no message commit')
     }
+    this.onDomainCommit(command.savedAt)
     return response.commit
   }
 

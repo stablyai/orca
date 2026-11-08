@@ -14,6 +14,7 @@ import {
   deleteJournalSqlProjectionPage,
   sweepJournalSqlProjectionPage
 } from './journal-sql-projection-sweep'
+import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
 
 export type JournalSqlMaintenance =
   | { kind: 'projection-state'; sessionId: string }
@@ -26,12 +27,17 @@ export type JournalSqlMaintenance =
     }
   | { kind: 'conversion-finish'; sessionId: string; watermark: JournalLogWatermark }
   | { kind: 'projection-sweep' }
+  | { kind: 'event-tail-prune'; now: number }
 
 export type JournalSqlProjectionState =
   | { state: 'founding' | 'converting'; epoch: null }
   | { state: 'ready'; epoch: string }
 
-export type JournalSqlMaintenanceResult = JournalSqlProjectionState | boolean | null
+export type JournalSqlMaintenanceResult =
+  | JournalSqlProjectionState
+  | JournalSqlEventTailResult
+  | boolean
+  | null
 
 /** Each call is one writer batch; only the final publication needs FULL durability. */
 export function journalSqlMaintenanceIsNormal(operation: JournalSqlMaintenance): boolean {
@@ -62,5 +68,7 @@ export function applyJournalSqlMaintenance(
       return finishJournalSqlConversion(db, operation)
     case 'projection-sweep':
       return sweepJournalSqlProjectionPage(db)
+    case 'event-tail-prune':
+      return pruneJournalSqlEventTail(db, operation.now)
   }
 }

@@ -65,7 +65,7 @@ export class JournalSqlConversions {
     for (;;) {
       await this.boundary(promotion)
       const state = await this.writer.maintain({ kind: 'projection-state', sessionId })
-      if (!state || typeof state !== 'object') {
+      if (!state || typeof state !== 'object' || !('state' in state)) {
         throw new Error('journal writer returned no projection state')
       }
       if (state.state !== 'converting') {

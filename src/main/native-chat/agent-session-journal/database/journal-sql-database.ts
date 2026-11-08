@@ -7,6 +7,7 @@ import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
 import { JournalSqlConversions } from '../journal-sql-conversions'
 import { JournalSqlActivity } from '../journal-sql-activity'
 import { JournalSqlBackgroundMaintenance } from '../journal-sql-background-maintenance'
+import { JOURNAL_EVENT_HISTORY_MS } from '../journal-sql-event-tail'
 import type { JournalWriterCommand } from '../journal-writer-command'
 import type { JournalWriterCommit } from '../journal-writer-changes'
 import type { JournalWriterHostFacts } from '../journal-writer-host-facts'
@@ -43,6 +44,8 @@ export class JournalSqlDatabase {
       this.activity,
       options.onMaintenanceError
     )
+    writer.onDomainCommit = (savedAt) =>
+      this.maintenance.requestDueWork(savedAt + JOURNAL_EVENT_HISTORY_MS)
   }
 
   static async open(
