@@ -78,18 +78,38 @@ index eebfda3b3df9b4c8cefcc6a64692053ed5eaeefa..75e34767bd1e12802b72371fddb5fc90
          this._updateRectangle(vertices, offset, currentFg, currentBg, currentStartX, terminal.cols, y);
        }
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
-index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..b4fcff8c6be49b1868a17bcabfa3bb54689fb8b1 100644
+index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..e4c7b836848bc51d3816d722e97663d58e3db9b6 100644
 --- a/src/TextureAtlas.ts
 +++ b/src/TextureAtlas.ts
-@@ -3,6 +3,7 @@
+@@ -3,6 +3,8 @@
   * @license MIT
   */
  
 +import { FontWeight } from '@xterm/xterm';
++import { ColorContrastCache } from 'browser/ColorContrastCache';
  import { IColorContrastCache } from 'browser/Types';
  import { DIM_OPACITY, TEXT_BASELINE } from './Constants';
  import { tryDrawCustomGlyph } from './customGlyphs/CustomGlyphRasterizer';
-@@ -114,21 +115,26 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -92,6 +94,9 @@ export class TextureAtlas implements ITextureAtlas {
+     private readonly _unicodeService: IUnicodeService,
+     private readonly _logService: ILogService
+   ) {
++    // Contrast results belong to this atlas's palette and ratio, not a mutable terminal theme.
++    this._config.colors.contrastCache = new ColorContrastCache();
++    this._config.colors.halfContrastCache = new ColorContrastCache();
+     this._createNewPage();
+     this._tmpCanvas = createCanvas(
+       _document,
+@@ -106,6 +111,8 @@ export class TextureAtlas implements ITextureAtlas {
+ 
+   public dispose(): void {
+     this._warmUpQueue?.clear();
++    this._config.colors.contrastCache.clear();
++    this._config.colors.halfContrastCache.clear();
+     this._tmpCanvas.remove();
+     for (const page of this.pages) {
+       page.canvas.remove();
+@@ -114,21 +121,26 @@ export class TextureAtlas implements ITextureAtlas {
      this._onRemoveTextureAtlasCanvas.dispose();
    }
  
@@ -120,7 +140,7 @@ index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..b4fcff8c6be49b1868a17bcabfa3bb54
            this._cacheMap.set(i, DEFAULT_COLOR, DEFAULT_COLOR, DEFAULT_EXT, rasterizedGlyph);
          }
        });
-@@ -138,21 +144,23 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -138,21 +150,23 @@ export class TextureAtlas implements ITextureAtlas {
    private _pageLayoutVersion = 0;
    public get pageLayoutVersion(): number { return this._pageLayoutVersion; }
  
@@ -156,7 +176,7 @@ index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..b4fcff8c6be49b1868a17bcabfa3bb54
    }
  
    private _createNewPage(): AtlasPage {
-@@ -468,6 +476,36 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -468,6 +482,36 @@ export class TextureAtlas implements ITextureAtlas {
      return this._config.colors.contrastCache;
    }
  
@@ -193,7 +213,7 @@ index eff0d0e1c36906b1f14b85fb8db7907bf685c8a7..b4fcff8c6be49b1868a17bcabfa3bb54
    private _drawToCache(codeOrChars: number | string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
      const chars = typeof codeOrChars === 'number' ? String.fromCharCode(codeOrChars) : codeOrChars;
  
-@@ -539,6 +577,7 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -539,6 +583,7 @@ export class TextureAtlas implements ITextureAtlas {
      const fontStyle = italic ? 'italic' : '';
      this._tmpCtx.font =
        `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;
