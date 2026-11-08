@@ -154,6 +154,18 @@ describe('deferred PostHog client start', () => {
     ])
   })
 
+  it('does not send an invalid switch-note cohort from settings', () => {
+    Reflect.set(settings.telemetry!, 'chatUiSwitchNoteCohort', 'sensitive value')
+    expect(track('app_opened', {})).toBe(true)
+    scheduleClientStart.mock.calls[0][0]()
+    expect(sdk.capture).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'app_opened',
+        properties: expect.not.objectContaining({ chat_ui_switch_note_v1: 'sensitive value' })
+      })
+    )
+  })
+
   it('drops held events when consent is withdrawn before the client starts', () => {
     track('app_opened', {})
     settings.telemetry!.optedIn = false
