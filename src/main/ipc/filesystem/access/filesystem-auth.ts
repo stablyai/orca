@@ -1,5 +1,5 @@
 import { resolve, dirname, basename } from 'node:path'
-import type { RuntimeStore } from '../../../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import { lstat } from 'node:fs/promises'
 import {
   realpathAcrossWslDriveMount,

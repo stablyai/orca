@@ -13,11 +13,8 @@ import '../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
 import type { AgentTransitionStep } from '../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
 import { AgentTransitionDetector } from '../../agent-hooks/agent-transition-detector'
 import '../../../shared/sidebar-list/stamp-order'
-import {
-  SortStampsProducer,
-  type SortStampsStore,
-  type StoredTierEvidence
-} from './sort-stamps-producer'
+import { SortStampsProducer, type StoredTierEvidence } from './sort-stamps-producer'
+import type { SortStampsStore } from './sort-stamp-records'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))

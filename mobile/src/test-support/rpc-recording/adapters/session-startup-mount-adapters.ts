@@ -63,6 +63,8 @@ export function sessionStartupMountAdapters(
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
             readLastSessionTabs: lastTabs.readLastSessionTabs,
+            watchLastSessionTabs: lastTabs.watchLastSessionTabs,
+            sessionTabsRef: { current: sessionTabs },
             appliedSnapshotMarkerRef,
             closedTabTombstonesRef,
             setTerminalsLoaded: (value: boolean) => {

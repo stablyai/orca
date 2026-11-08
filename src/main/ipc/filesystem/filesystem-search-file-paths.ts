@@ -1,7 +1,7 @@
 import { getQuickOpenRgOutputMode } from '../../../shared/quick-open-ripgrep-output-mode'
 import { RipgrepFilenameDecoder } from '../../../shared/ripgrep-filename-decoder'
 import { sep } from 'node:path'
-import type { RuntimeStore } from '../../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { fileListingCancellationError } from '../../../shared/file-listing-cancellation'
 import {
   buildExcludePathPrefixes,

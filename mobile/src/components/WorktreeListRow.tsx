@@ -34,7 +34,8 @@ type Props = {
   /** What the desktop's shared Card layout and properties show, and where identity goes. */
   cardDetails: WorktreeCardDetails
   agentActivityDisplayMode: AgentActivityDisplayMode
-  status: WorktreeStatus
+  /** Null until a live read says (rows from the phone's store carry no agent state). */
+  status: WorktreeStatus | null
   onPress: (item: Worktree) => void
   onAgentPress?: (item: Worktree, paneKey: string) => void
   statusLive?: boolean

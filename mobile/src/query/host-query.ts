@@ -20,6 +20,7 @@ import {
   type HostQueryParams,
   type HostQueryTarget
 } from './host-query-key'
+import { holdsRestoredHostQueryData, type HostQueryPersist } from './host-query-persistence'
 import { hostReadClient } from './host-read-client'
 
 // Exported with the query hooks so the router lands in their page chunk, not a chunk of its own.
@@ -29,7 +30,6 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
   // Calls the domain's loader. `previous` is the cached data a revalidation may build on; live reads pass none.
   // Absent for a family only its screen can read (its inputs live in the screen); that screen passes `read`.
-  // `read.live` marks an action's read (readHostQueryLive), which must not be served from a host-side cache.
   fetch?: HostQueryFetch<TInput, TData>
   staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
@@ -41,6 +41,8 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   streamBacked?: boolean
   // Desktop change events that make this family stale (host-event-router), and the least time between reads they cause.
   signal?: HostQuerySignal
+  // Kept on the phone between launches (host-query-persistence); absent means memory only.
+  persist?: HostQueryPersist<TData>
 }
 
 export type HostQuerySignal = {
@@ -53,8 +55,12 @@ type HostQueryFetch<TInput extends HostQueryParams, TData> = (
   target: HostQueryTarget,
   input: TInput,
   previous: TData | undefined,
-  read: { live: boolean }
+  read: HostQueryRead
 ) => Promise<TData>
+
+// `live` marks an action's read (readHostQueryLive), which must not be served from a host-side cache.
+// `previousFromStore` says `previous` is an earlier launch's copy that no read in this document confirmed.
+export type HostQueryRead = { live: boolean; previousFromStore: boolean }
 
 export function defineHostQuery<TInput extends HostQueryParams, TData>(
   query: HostQuery<TInput, TData> & { fetch: HostQueryFetch<TInput, TData> }
@@ -75,7 +81,7 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
   target: HostQueryTarget,
   input: TInput
 ) {
-  const { family, fetch, streamBacked, signal, ...freshness } = query
+  const { family, fetch, streamBacked, signal, persist, ...freshness } = query
   const queryKey = hostQueryKey(hostId, family, target, input)
   return queryOptions({
     ...freshness,
@@ -84,10 +90,11 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
     queryFn: fetch
       ? ({ client: queryClient }) =>
           fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey), {
-            live: false
+            live: false,
+            previousFromStore: holdsRestoredHostQueryData(queryClient, hashKey(queryKey))
           })
       : skipToken,
-    meta: { streamBacked, signal }
+    meta: { streamBacked, signal, persist }
   })
 }
 
@@ -110,7 +117,12 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   const { fetch } = query
   const { read } = options
   const live =
-    fetch && (() => fetch(hostReadClient(client), target, input, undefined, { live: true }))
+    fetch &&
+    (() =>
+      fetch(hostReadClient(client), target, input, undefined, {
+        live: true,
+        previousFromStore: false
+      }))
   if (!read && !live) {
     throw new Error(`${query.family} is read by its screen`)
   }
@@ -148,7 +160,11 @@ function observerOptions<TInput extends HostQueryParams, TData>(
 ): UseQueryOptions<TData, Error, TData, HostQueryKey> {
   return client
     ? hostQueryOptions(query, client, hostId, target, input)
-    : { queryKey: hostQueryKey(hostId, query.family, target, input), queryFn: skipToken }
+    : {
+        queryKey: hostQueryKey(hostId, query.family, target, input),
+        queryFn: skipToken,
+        meta: { streamBacked: query.streamBacked, signal: query.signal, persist: query.persist }
+      }
 }
 
 export function useHostQuery<TInput extends HostQueryParams, TData>(

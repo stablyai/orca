@@ -42,7 +42,7 @@ import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-stat
 import { pruneDesktopOrcadArtifactCache } from '../orcad/orcad-artifact-cache-retention'
 import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-projects/wsl-move-desktop-rewrite'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
-import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
+import { repairDuplicatePtyPanesOnStart } from '../runtime/terminal/identity/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { startClaudeCodeThemeSync } from '../claude/theme-sync/claude-code-theme-sync-schedule'

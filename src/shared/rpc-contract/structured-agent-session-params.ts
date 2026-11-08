@@ -41,7 +41,6 @@ export {
 } from './structured-agent-session-identifiers'
 
 export { ResumeSource } from './structured-agent-session-resume-params'
-export { SubscribeParams } from './structured-agent-session-subscribe-params'
 
 // Four Claude questions with all four generated choices occupy 610 chars when fully percent-encoded.
 export const MAX_RESPONSE_OPTION_ID_LENGTH = AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH
@@ -356,7 +355,5 @@ export const RewindParams = z
     expectedEpoch: Identifier('Invalid journal epoch')
   })
   .strict()
-
-export { RespondToQuestionParams } from './structured-agent-session-question-params'
 
 export { MutationEnvelope } from './structured-agent-session-mutation-envelope'

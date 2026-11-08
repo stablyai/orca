@@ -1,4 +1,4 @@
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { ResolvedRuntimeFileTarget, ResolvedRuntimeFileWorktree } from './file-target'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { RuntimeNavigationTarget } from '../../../shared/runtime-navigation'

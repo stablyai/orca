@@ -7,6 +7,7 @@ import {
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault/search/ai-vault-search-contract'
+import { AntigravityChatAuthConfigSchema } from '../antigravity-chat-auth-config'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
@@ -89,7 +90,6 @@ import {
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
-  AntigravityChatAuthConfigSchema,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
 } from './antigravity-accounts-params'
@@ -641,7 +641,6 @@ import {
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,
-  RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
@@ -649,11 +648,11 @@ import {
   SendParams,
   SetOptionParams,
   SleepWorkspaceParams,
-  SubscribeParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
+import { RespondToQuestionParams } from './structured-agent-session-question-params'
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageMoveParams,
@@ -661,6 +660,7 @@ import {
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
 import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
+import { SubscribeParams } from './structured-agent-session-subscribe-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'

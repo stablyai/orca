@@ -1,5 +1,5 @@
 import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
-import { ZodError, type ZodType } from 'zod'
+import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
@@ -305,5 +305,3 @@ export function formatZodError(error: ZodError): string {
   const first = error.issues[0]
   return first?.message ?? 'invalid_argument'
 }
-
-export { ZodError }

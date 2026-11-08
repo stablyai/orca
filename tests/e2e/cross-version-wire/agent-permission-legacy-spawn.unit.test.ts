@@ -13,7 +13,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession
 } from '../../../src/main/runtime/orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { committingSpawn } from '../../../src/main/runtime/orca-runtime-tests/bind-first-pane.test-fixture'
-import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../../../src/main/runtime/terminal/lifecycle/runtime-pty-controller-contract'
 import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
 import { TERMINAL_LIFECYCLE_METHODS } from '../../../src/main/runtime/rpc/methods/terminal/terminal-lifecycle-methods'

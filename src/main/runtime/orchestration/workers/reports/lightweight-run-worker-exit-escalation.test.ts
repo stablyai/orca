@@ -1,17 +1,26 @@
 import { describe, expect, it, vi } from 'vitest'
+
 import { OrcaRuntimeService } from '../../../orca-runtime'
+
 import { OrchestrationDb } from '../../db/orchestration-db'
+
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+
 import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../../db/dispatch-context/dispatch-circuit-breaker'
+
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+
 import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
+
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
+
 import { createRootDispatch } from '../../db/root-dispatch-test-fixture'
-import { MessageWake } from '../../../runtime-message-waiters'
+
+import { MessageWake } from '../../mailbox/runtime-message-waiters'
 
 // Lightweight Runs lack coordinator_runs rows; worker exits must escalate through their own reachable Run mailbox (STA-4604).
 

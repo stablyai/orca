@@ -1,7 +1,7 @@
 import '../../../src/main/runtime/orca-runtime-tests/runtime-test-module-registration.spec'
-import { withOpenedServeBrowserTab } from '../../../src/main/runtime/serve-browser-tab-layout'
+import { withOpenedServeBrowserTab } from '../../../src/main/runtime/browser/headless/serve-browser-tab-layout'
 import { applyPtyBinding } from '../../../src/main/persistence/loading-store/pty-binding-session-update'
-import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../../../src/main/runtime/terminal/lifecycle/runtime-pty-controller-contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
 import {

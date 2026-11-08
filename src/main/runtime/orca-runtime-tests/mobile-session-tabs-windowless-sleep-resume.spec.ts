@@ -20,7 +20,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 // Pane-owned captures must not be resumed twice (#11598).

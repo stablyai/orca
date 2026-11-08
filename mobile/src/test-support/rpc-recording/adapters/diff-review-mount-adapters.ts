@@ -75,7 +75,7 @@ export function diffReviewMountAdapters(
                   { exec: 'local', worktree: WORKTREE },
                   {},
                   undefined,
-                  { live: false }
+                  { live: false, previousFromStore: false }
                 ),
                 compareAgainstUpstream: false
               })
