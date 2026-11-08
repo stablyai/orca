@@ -335,7 +335,18 @@ beforeEach(async () => {
       runtime: {
         call: ({ method, params }: { method: string; params: unknown }) =>
           mocks.transport(method, params),
-        subscribe: (_args: unknown, onResponse: (response: unknown) => void) => {
+        subscribe: async (
+          args: { method: string; params: unknown },
+          onResponse: (response: unknown) => void
+        ) => {
+          if (['status.get', 'terminal.list', 'terminal.viewClaudeAgent'].includes(args.method)) {
+            void mocks
+              .transport(args.method, args.params)
+              .then(onResponse, (error: Error) =>
+                onResponse({ ok: false, error: { code: 'INTERNAL', message: error.message } })
+              )
+            return { unsubscribe: () => {} }
+          }
           listeners++
           const stop = bridge.subscribe((snapshot) => onResponse({ ok: true, result: snapshot }))
           return {
