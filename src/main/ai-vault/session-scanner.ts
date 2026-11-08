@@ -26,6 +26,11 @@ import {
 } from './scanners/cursor/session-scanner-cursor-chat-meta'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { clampPositiveInteger } from './session-scanner-values'
+import { scopeOnlyScan } from './session-scope-cwd'
+import {
+  aiVaultSessionInScope,
+  createAiVaultScopeCwdMatcher
+} from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { withDevinSessionsDbScan } from './scanners/devin/session-scanner-devin-db'
@@ -33,7 +38,7 @@ import { withOpenCodeSqliteScanScope } from './scanners/opencode/sqlite/session-
 
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 
-/** Return recency-capped sessions plus recovered in-scope sessions, deduplicated and sorted. */
+/** Return recency-capped sessions plus recovered in-scope sessions (only those for scopeOnly), deduplicated and sorted. */
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
@@ -92,16 +97,21 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           settled: (candidate, parsed) => workload?.settle(candidate, 'global', parsed)
         })
 
-        const cappedSessions = dedupeScannedSessions(parsedSessions)
+        const recentSessions = dedupeScannedSessions(parsedSessions)
           .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
           .slice(0, limit)
+        // Scope-only keeps the recency pass for agents without cwd buckets, but returns only its in-scope rows.
+        const inScope = createAiVaultScopeCwdMatcher(options.scopePaths ?? [])
+        const cappedSessions = scopeOnlyScan(options)
+          ? recentSessions.filter((session) => aiVaultSessionInScope(inScope, session))
+          : recentSessions
 
         const scopeSessions = await scanInScopeSessions({
           inventory,
           discoveries,
           options,
           limit,
-          alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
+          alreadyParsedFilePaths: new Set(recentSessions.map((session) => session.filePath)),
           platform,
           executionHostId,
           issues,

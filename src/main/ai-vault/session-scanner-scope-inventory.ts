@@ -20,7 +20,10 @@ import {
 const TRANSCRIPT_EXTENSIONS = new Set(['.jsonl'])
 export type CwdBucketInventory = {
   layout: CwdBucketLayout
-  directories: string[][]
+  // With no recency pass behind it, a file whose first lines name no cwd is kept for the parse to place.
+  scopeOnly: boolean
+  // checkFiles: the bucket's newest transcripts named no in-scope cwd, so each file is checked on its own.
+  directories: { paths: string[]; checkFiles: boolean }[]
   issues: { before: number; issue: AiVaultScanIssue }[]
 }
 
@@ -37,6 +40,7 @@ type InScopeDiscoveryArgs = {
   limit: number
   excludedFilePaths: ReadonlySet<string>
   issues: AiVaultScanIssue[]
+  scopeOnly?: boolean
   signal?: AbortSignal
 }
 
@@ -54,7 +58,12 @@ export async function inventoryCwdBucketFiles(
   args: Omit<InScopeDiscoveryArgs, 'excludedFilePaths' | 'issues'>,
   issueLimit = SCAN_ISSUE_LIMIT
 ): Promise<CwdBucketInventory> {
-  const inventory: CwdBucketInventory = { layout, directories: [], issues: [] }
+  const inventory: CwdBucketInventory = {
+    layout,
+    scopeOnly: args.scopeOnly === true,
+    directories: [],
+    issues: []
+  }
   if (args.scopePaths.length === 0 || args.limit <= 0) {
     return inventory
   }
@@ -82,10 +91,16 @@ export async function inventoryCwdBucketFiles(
       )
       for (const directory of directories) {
         await yieldScanInventory(index++, args.signal)
+        let checkFiles = false
         if (layout.agent === 'claude') {
           const cwd = await cachedProjectDirCwd(directory, record, layout.agent, args.signal)
+          // Scope-only has no recency pass behind it, so a name-matched bucket whose newest transcripts
+          // name no cwd, or another folder sharing the lossy name, is checked file by file instead.
           if (!inScope(cwd, directory)) {
-            continue
+            if (!args.scopeOnly) {
+              continue
+            }
+            checkFiles = true
           }
         }
         const paths: string[] = []
@@ -101,7 +116,7 @@ export async function inventoryCwdBucketFiles(
           throwIfAiVaultScanCancelled(args.signal)
           recordRefusal(record, directory, err, layout.agent)
         }
-        inventory.directories.push(paths)
+        inventory.directories.push({ paths, checkFiles })
       }
     } finally {
       close()
@@ -128,14 +143,20 @@ export async function selectCwdBucketFiles(
     while (inventory.issues[issueIndex]?.before === index) {
       record(inventory.issues[issueIndex++].issue)
     }
-    const paths = inventory.directories[index]
-    if (!paths) {
+    const directory = inventory.directories[index]
+    if (!directory) {
       break
     }
     await collectBucketFiles({
-      paths,
+      paths: directory.paths,
       agent: layout.agent,
-      inScope: layout.agent !== 'claude' ? inScope : undefined,
+      // Parsers keep a transcript's first recorded cwd, which is what this reads.
+      inScope:
+        layout.agent === 'claude' && !directory.checkFiles
+          ? undefined
+          : inventory.scopeOnly
+            ? (cwd, path) => cwd === null || inScope(cwd, path)
+            : inScope,
       issues: record,
       collected,
       limit: args.limit,

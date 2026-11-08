@@ -33,7 +33,11 @@ import type {
   SessionFileCandidate,
   SessionFileDiscovery
 } from './session-scanner-types'
-import { AI_VAULT_SCOPE_CWD_SOURCES, scopeWalksAgentFiles } from './session-scope-cwd'
+import {
+  AI_VAULT_SCOPE_CWD_SOURCES,
+  scopeOnlyScan,
+  scopeWalksAgentFiles
+} from './session-scope-cwd'
 import { sidecarUnchanged } from './parse-cache/session-sidecar-stat'
 import { prioritizeAntigravityTranscriptCandidates } from './scanners/antigravity/antigravity-transcript-candidates'
 
@@ -61,7 +65,8 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
   for (const inventory of args.inventory) {
     const files = await selectCwdBucketFiles(inventory, {
       scopePaths,
-      limit: args.limit,
+      // Without the recency pass, cover what it and this pass show together: its kept rows plus `limit` more.
+      limit: scopeOnlyScan(args.options) ? args.limit * 2 : args.limit,
       excludedFilePaths: args.alreadyParsedFilePaths,
       issues: args.issues,
       signal: args.options.signal
@@ -213,6 +218,7 @@ export async function prepareScopeScan(
           .map((discovery) => discovery.rootDir),
         scopePaths,
         limit: args.limit,
+        scopeOnly: scopeOnlyScan(args.options),
         signal: args.options.signal
       },
       issueLimit
@@ -220,7 +226,7 @@ export async function prepareScopeScan(
     issueLimit -= inventory.issues.length
     inventories.push(inventory)
     if (workload) {
-      for (const paths of inventory.directories) {
+      for (const { paths } of inventory.directories) {
         for (const path of paths) {
           await yieldScanInventory(index++, args.options.signal)
           workload.registerPath(source.layout.agent, path, 'bucket')

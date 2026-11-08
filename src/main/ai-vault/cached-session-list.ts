@@ -180,6 +180,7 @@ export async function listAiVaultSessions(
           limit: args?.limit,
           unlimited: args?.unlimited,
           scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
+          scopeOnly: args?.scopeOnly,
           ...roots
         },
         scanSignal,

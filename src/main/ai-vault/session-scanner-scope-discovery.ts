@@ -15,6 +15,7 @@ import type { FileWithMtime } from './session-scanner-types'
 import { extractString, parseJsonObject } from './session-scanner-values'
 import { scanIssueTextFromError } from './session-scan-issues'
 import { isMissingTranscriptPathError } from './session-scanner-discovery'
+import { noteAiVaultScanFileFound } from './ai-vault-scan-progress'
 
 // Limit representative probing when a bucket contains transcripts without cwd records.
 const REPRESENTATIVE_CWD_LINE_LIMIT = 200
@@ -233,6 +234,12 @@ export async function collectBucketFiles(args: {
       }
       const fileStat = await wslGatedStat(path, 'scan', args.signal)
       throwIfAiVaultScanCancelled(args.signal)
+      // Scope-only scans don't list cwd-bucket agents recursively, so their file count comes from here.
+      noteAiVaultScanFileFound(args.signal, args.agent, {
+        path,
+        dev: fileStat.dev,
+        ino: fileStat.ino
+      })
       addBoundedFile(args.collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,
