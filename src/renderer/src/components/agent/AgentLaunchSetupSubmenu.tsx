@@ -168,8 +168,19 @@ export function AgentLaunchSetupSubmenu({
         variant="picker"
         className="flex w-104 min-w-0 max-w-[calc(100vw-1rem)] max-h-(--radix-dropdown-menu-content-available-height) flex-col"
         onFocusCapture={(event) => {
-          if (event.target === event.currentTarget) {
+          if (event.target !== event.currentTarget) {
+            return
+          }
+          // Why: after a keystroke Radix autofocuses even a hover-opened panel (rows can shift under a resting pointer).
+          if (!focusPanel && returnFocus) {
+            returnFocus()
+          } else {
             focusSearch()
+          }
+        }}
+        onPointerMove={() => {
+          if (!focusPanel) {
+            setFocusPanel(true)
           }
         }}
         onClick={(event) => event.stopPropagation()}

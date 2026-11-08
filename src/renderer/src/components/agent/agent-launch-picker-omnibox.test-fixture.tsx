@@ -94,6 +94,8 @@ export async function verifyOmniboxSetupKeepsSearchFocus(
     const input = document.querySelector('input')!
     fireEvent.change(input, { target: { value: 'Astra low' } })
     input.focus()
+    // A keystroke puts Radix in keyboard mode, as when typing shifts a row under a resting pointer.
+    fireEvent.keyDown(input, { key: 'w' })
     fireEvent.pointerOver(await waitForConfigure(), { pointerType: 'mouse' })
     await waitFor(() => expect(document.querySelector('textarea')).not.toBeNull())
     expect(document.activeElement).toBe(input)
