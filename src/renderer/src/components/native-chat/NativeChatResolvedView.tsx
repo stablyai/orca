@@ -228,6 +228,7 @@ export function NativeChatResolvedView({
     composerReady: composerReady && childNavigator.child === null
   })
 
+  const { pending } = delivery
   const pendingMessages = useMemo(
     () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
     [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch]
