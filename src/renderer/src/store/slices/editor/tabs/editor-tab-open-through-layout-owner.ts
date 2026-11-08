@@ -2,15 +2,21 @@
 
 import type { Tab } from '../../../../../../shared/tab-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-apply-send'
-import { beginPendingTab, isPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import { newGroupSplitOf } from '@/runtime/layout-owner-new-group-split'
+import {
+  sendLayoutApply,
+  type WindowLayoutCommand
+} from '@/runtime/workspace-layout/commands/layout-apply-send'
+import {
+  beginPendingTab,
+  isPendingTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
 import type { AppState } from '../../../types'
 import type { EditorTabSelection, OpenFile } from '../types/open-file'
 import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
 import { restorableEditorFile } from './editor-tab-layout-owner'
 import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
-import { layoutFrameWorkspace } from '@/runtime/layout-frame-workspaces'
+import { layoutFrameWorkspace } from '@/runtime/workspace-layout/frames/layout-frame-workspaces'
 import { editorTabFile } from '../../../../../../shared/workspace-layout/workspace-layout-editor-tab-file'
 import { stableJson } from '../../../../../../shared/workspace-layout/workspace-layout-load-report'
 import {

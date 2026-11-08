@@ -1,4 +1,3 @@
-import '../../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type { ChildProcess } from 'node:child_process'
 import { getEventListeners } from 'node:events'
 import type * as ProcessHostModule from '@orca/process-host'

@@ -13,7 +13,7 @@ import {
   getTaskSourceCacheScope,
   normalizeTaskSourceContext,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'

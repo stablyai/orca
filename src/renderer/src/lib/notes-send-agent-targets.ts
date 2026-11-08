@@ -1,7 +1,7 @@
 import {
   projectedStructuredChatTabName,
   type StructuredChatTabNames
-} from '@/runtime/structured-chat-tab-name'
+} from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { structuredChatTabById } from './structured-chat-tab-index'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '@/store/types'

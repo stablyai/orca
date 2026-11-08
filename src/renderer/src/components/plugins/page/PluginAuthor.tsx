@@ -1,5 +1,6 @@
 import { ArrowUpRight, ChevronRight } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
@@ -9,56 +10,53 @@ import { Button } from '../../ui/button'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function PluginAuthorByline({ author }: { author: PluginAuthor }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <span className="min-w-0">
       {author.catalog
-        ? translate(
+        ? t(
             'auto.components.settings.PluginAuthor.catalogByline',
             'Listed as {{publisher}} by {{catalog}}',
             { publisher: author.publisher, catalog: author.catalog }
           )
         : author.provenance === 'manifest'
-          ? translate(
+          ? t(
               'auto.components.settings.PluginAuthor.declaredByline',
               'Declared publisher: {{publisher}}',
               { publisher: author.publisher }
             )
-          : translate(
-              'auto.components.settings.PluginAuthor.publisherByline',
-              'Publisher: {{publisher}}',
-              {
-                publisher: author.publisher
-              }
-            )}
+          : t('auto.components.settings.PluginAuthor.publisherByline', 'Publisher: {{publisher}}', {
+              publisher: author.publisher
+            })}
     </span>
   )
 }
 
-function pluginAuthorClaim(author: PluginAuthor): string {
+function pluginAuthorClaim(author: PluginAuthor, t: Translate = translate): string {
   switch (author.provenance) {
     case 'catalog':
       return author.catalog
-        ? translate(
+        ? t(
             'auto.components.settings.PluginAuthor.catalogClaim',
             'Publisher listed by {{catalog}}. Authorship is not verified.',
             { catalog: author.catalog }
           )
-        : translate(
+        : t(
             'auto.components.settings.PluginAuthor.unnamedCatalogClaim',
             'Publisher listed by the catalog. Authorship is not verified.'
           )
     case 'git':
-      return translate(
+      return t(
         'auto.components.settings.PluginAuthor.gitClaim',
         'Publisher derived by Orca from the repository URL. Authorship is not verified.'
       )
     case 'manifest':
-      return translate(
+      return t(
         'auto.components.settings.PluginAuthor.manifestClaim',
         'Publisher declared by the plugin. Authorship is not verified.'
       )
     case 'unknown':
-      return translate(
+      return t(
         'auto.components.settings.PluginAuthor.unknownClaim',
         'Publisher source is unknown. Authorship is not verified.'
       )
@@ -75,13 +73,14 @@ export function PluginAuthorCard({
   pluginCount: number | null
   profileUrl: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <section
       data-plugin-author=""
       className="rounded-xl border border-border/50 bg-card/50 p-3.5 shadow-xs"
     >
       <h3 className="text-2xs font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-        {translate('auto.components.settings.PluginAuthor.publisher', 'Publisher')}
+        {t('auto.components.settings.PluginAuthor.publisher', 'Publisher')}
       </h3>
       <p className="mt-3 truncate text-sm font-semibold" title={author.publisher}>
         {profileUrl ? (
@@ -98,10 +97,10 @@ export function PluginAuthorCard({
           author.publisher
         )}
       </p>
-      <p className="mt-1 text-xs text-muted-foreground">{pluginAuthorClaim(author)}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{pluginAuthorClaim(author, t)}</p>
       {pluginCount !== null ? (
         <p className="mt-2 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.PluginAuthor.shownPluginCount',
             '{{count}} matching plugins shown, including this one',
             {
@@ -125,18 +124,15 @@ export function PluginMoreFromAuthor({
   plugins: readonly PluginListEntry[]
   onOpenPlugin: (pluginKey: string) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (plugins.length === 0) {
     return null
   }
   return (
     <DetailSection
-      title={translate(
-        'auto.components.settings.PluginAuthor.samePublisher',
-        'More listed as {{value0}}',
-        {
-          value0: author.publisher
-        }
-      )}
+      title={t('auto.components.settings.PluginAuthor.samePublisher', 'More listed as {{value0}}', {
+        value0: author.publisher
+      })}
       count={String(plugins.length)}
     >
       {plugins.map((plugin) => (
@@ -160,7 +156,7 @@ export function PluginMoreFromAuthor({
           </span>
           {plugin.installed ? (
             <span className="shrink-0 text-xs text-muted-foreground">
-              {translate('auto.components.settings.PluginManager.installed', 'Installed')}
+              {t('auto.components.settings.PluginManager.installed', 'Installed')}
             </span>
           ) : null}
           <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />

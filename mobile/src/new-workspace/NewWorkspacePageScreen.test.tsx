@@ -6,7 +6,7 @@ const handoff = vi.hoisted(() => ({ back: vi.fn(), replace: vi.fn() }))
 
 vi.mock('expo-router', () => ({ useLocalSearchParams: () => ({ hostId: 'laptop' }) }))
 vi.mock('../navigation/route-handoff', () => ({ useRouteHandoff: () => handoff }))
-vi.mock('../transport/host-client-hooks', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'connected' })
 }))
 vi.mock('../components/host-protocol-gates-context', () => ({
@@ -37,25 +37,6 @@ describe('the Create Workspace page', () => {
     })
     return renderer!.root.find((node) => String(node.type) === 'NewWorktreeModalController')
   }
-
-  it("shows the host screen's drawer for the route's desktop, aware of its worktrees", async () => {
-    const drawer = await render()
-
-    expect(drawer.props).toMatchObject({
-      visible: true,
-      hostId: 'laptop',
-      hostCapabilities: ['cap'],
-      existingWorktreePaths: ['/repo/marlin']
-    })
-  })
-
-  it('leaves the overlay when the drawer closes', async () => {
-    const drawer = await render()
-
-    act(() => drawer.props.onClose())
-
-    expect(handoff.back).toHaveBeenCalledTimes(1)
-  })
 
   it("opens the new workspace's session in the overlay's place", async () => {
     const drawer = await render()

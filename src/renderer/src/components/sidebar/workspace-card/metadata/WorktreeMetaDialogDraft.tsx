@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   getWorktreeExecutionHostId,
@@ -37,6 +37,7 @@ import {
 } from '@/lib/ime-composition-keyboard-event'
 
 const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
+  const t = useTranslate()
   useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -202,9 +203,9 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
         }}
       >
         <DialogHeader>
-          <DialogTitle>{translate('workspace.links.details', 'Workspace details')}</DialogTitle>
+          <DialogTitle>{t('workspace.links.details', 'Workspace details')}</DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'workspace.links.description',
               'Attach reviews and tasks, and keep notes for this workspace.'
             )}
@@ -252,9 +253,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               {notesOpen ? (
-                <Label htmlFor="workspace-comment">
-                  {translate('workspace.links.notes', 'Notes')}
-                </Label>
+                <Label htmlFor="workspace-comment">{t('workspace.links.notes', 'Notes')}</Label>
               ) : (
                 <Button
                   type="button"
@@ -267,11 +266,11 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
                   }}
                 >
                   <Plus />
-                  {translate('workspace.links.addNotes', 'Add notes')}
+                  {t('workspace.links.addNotes', 'Add notes')}
                 </Button>
               )}
               <span className="text-xs text-muted-foreground">
-                {translate('workspace.links.notesOptional', 'Optional · Markdown')}
+                {t('workspace.links.notesOptional', 'Optional · Markdown')}
               </span>
             </div>
             {notesOpen ? (
@@ -318,7 +317,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
                       void handleSave()
                     }
                   }}
-                  placeholder={translate(
+                  placeholder={t(
                     'auto.components.sidebar.WorktreeMetaDialog.030d484fc0',
                     'Notes about this worktree...'
                   )}
@@ -326,7 +325,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
                   className="max-h-60 resize-none"
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  {translate(
+                  {t(
                     'workspace.links.commentHelp',
                     'Markdown supported. Enter or {{shortcut}} to save · Shift+Enter for a new line.',
                     { shortcut: getScreenSubmitShortcutLabel() }
@@ -344,15 +343,15 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
           ) : null}
           <DialogFooter>
             <p className="mr-auto text-xs text-muted-foreground">
-              {translate('workspace.links.saveHint', 'Changes apply when you save')}
+              {t('workspace.links.saveHint', 'Changes apply when you save')}
             </p>
             <Button variant="ghost" size="sm" disabled={saving} onClick={closeModal}>
-              {translate('auto.components.sidebar.WorktreeMetaDialog.3db0a2a593', 'Cancel')}
+              {t('auto.components.sidebar.WorktreeMetaDialog.3db0a2a593', 'Cancel')}
             </Button>
             <Button size="sm" onClick={handleSave} disabled={!worktreeId || !worktree || saving}>
               {saving
-                ? translate('auto.components.sidebar.WorktreeMetaDialog.61d6f612cf', 'Saving...')
-                : translate('auto.components.sidebar.WorktreeMetaDialog.2174f17011', 'Save')}
+                ? t('auto.components.sidebar.WorktreeMetaDialog.61d6f612cf', 'Saving...')
+                : t('auto.components.sidebar.WorktreeMetaDialog.2174f17011', 'Save')}
             </Button>
           </DialogFooter>
         </div>

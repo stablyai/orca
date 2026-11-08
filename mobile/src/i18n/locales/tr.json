@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",
-      "reconnecting": "Yeniden bağlanılıyor…",
       "waitingForTerminal": "Terminal bekleniyor…"
     },
     "diffCard": {
@@ -353,6 +352,13 @@
       "resume": "Devam ettir",
       "resumeSending": "Kuyruktaki mesajları göndermeye devam et",
       "title": "Kuyruktaki mesajlar"
+    },
+    "offlineQueue": {
+      "failed": "Gönderilemedi — yeniden denemek için Gönder'e dokunun",
+      "waitingFor": "{{host}} geri geldiğinde gönderilecek",
+      "waiting": "Masaüstü geri geldiğinde gönderilecek",
+      "behind": "Bekliyor — öndeki bir mesajın ilgilenilmesi gerekiyor",
+      "closed": "Orca kapanmadan önce gönderilmedi"
     },
     "receipt": {
       "cancelled": "İptal edildi",
@@ -1307,10 +1313,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} mobilde kullanılamıyor",
       "loadFolderFailed": "Klasör yüklenemedi",
+      "loadedOfTotal": "{{loaded}} / {{total}}",
       "loading": "Yükleniyor…",
       "openFolder": "{{name}} klasörünü aç",
       "previewFile": "{{name}} dosyasını önizle",
       "retryLoading": "{{path}} klasörünü yüklemeyi yeniden dene",
+      "searchAll": "Tümünü ara",
+      "searchAllIn": "{{folder}} içinde tümünü ara",
+      "searched": "{{folder}} içinde {{total}} öğenin {{loaded}} tanesi arandı.",
+      "searching": "{{folder}} aranıyor… {{loaded}} / {{total}}",
+      "showMore": "{{rows}} tane daha göster",
       "unavailable": "Mobilde kullanılamıyor"
     },
     "fileExplorerRowActions": {
@@ -1384,6 +1396,13 @@
       "openFailed": "Bu PDF açılamadı",
       "opening": "PDF açılıyor…",
       "updateRequired": "PDF'leri açmak için Orca Mobile'ı güncelleyin"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} tarihli düzenlemelerinizden sonra masaüstünde değişti",
+      "copyMyEdits": "Düzenlemelerimi kopyala",
+      "discard": "Vazgeç",
+      "restore": "Geri yükle",
+      "unsavedFrom": "{{time}} tarihli kaydedilmemiş düzenlemeler"
     }
   },
   "home": {

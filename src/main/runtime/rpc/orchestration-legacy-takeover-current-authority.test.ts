@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hooks/server'

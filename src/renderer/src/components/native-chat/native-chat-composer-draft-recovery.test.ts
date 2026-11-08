@@ -1,22 +1,26 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as DraftStore from './native-chat-composer-draft-store'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createMemoryNativeChatComposerDraftStorage,
   type NativeChatComposerDraftStorage
-} from './native-chat-composer-draft-storage'
+} from './drafts/native-chat-composer-draft-storage'
 
 const SCOPE = 'agent-session:recovery'
 const TEXT = 'typed [Image](orca-image:literal) [Image #1] [Image #2]'
 let storage: ReturnType<typeof createMemoryNativeChatComposerDraftStorage>
-const loaded: (typeof DraftStore)[] = []
+const loaded: { clearNativeChatComposerDraftsForTests: () => void }[] = []
 
 async function reload(using: NativeChatComposerDraftStorage = storage, hydrate = true) {
   vi.resetModules()
-  const storageModule = await import('./native-chat-composer-draft-storage')
+  const storageModule = await import('./drafts/native-chat-composer-draft-storage')
   storageModule.setNativeChatComposerDraftStorageForTests(using)
-  const store = await import('./native-chat-composer-draft-store')
+  const store = {
+    ...(await import('./drafts/native-chat-composer-draft-store')),
+    ...(await import('./drafts/native-chat-composer-draft-load')),
+    ...(await import('./drafts/native-chat-composer-draft-persistence')),
+    ...(await import('./drafts/native-chat-draft-reset'))
+  }
   loaded.push(store)
   if (hydrate) {
     await store.hydrateNativeChatComposerDrafts()
@@ -62,7 +66,7 @@ describe('composer recovery across reloads', () => {
           const hydrating = store.hydrateNativeChatComposerDrafts()
           if (source === 'returned message') {
             const { returnMessageToComposer } =
-              await import('./structured-agent-session-message-hand-back')
+              await import('./session/structured/delivery/structured-agent-session-message-hand-back')
             expect(
               returnMessageToComposer(
                 SCOPE,
@@ -77,9 +81,9 @@ describe('composer recovery across reloads', () => {
             ).toBe(true)
           } else {
             const { createNativeChatQueuedEditDraft, handBackNativeChatQueuedEdit } =
-              await import('./native-chat-queued-edit-draft')
+              await import('./queue/editing/native-chat-queued-edit-draft')
             const { addNativeChatPendingAttachment } =
-              await import('./native-chat-pending-attachment-cache')
+              await import('./attachments/chips/native-chat-pending-attachment-cache')
             const body: AgentJournalMessageItem = {
               kind: 'message',
               role: 'user',
@@ -144,7 +148,7 @@ describe('composer recovery across reloads', () => {
 
   it('preserves documentless typing journaled at pagehide', async () => {
     const store = await reload({ ...storage, write: () => new Promise<void>(() => {}) })
-    const { writeNativeChatDraftCache } = await import('./native-chat-draft-cache')
+    const { writeNativeChatDraftCache } = await import('./drafts/native-chat-draft-views')
     writeNativeChatDraftCache(SCOPE, TEXT)
     window.dispatchEvent(new Event('pagehide'))
     expect(storage.drafts.size).toBe(0)

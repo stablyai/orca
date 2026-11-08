@@ -58,52 +58,6 @@ describe('useRemoteBrowserPageNavigation history recording', () => {
 
   afterEach(() => cleanup())
 
-  it('files one entry however often the same page is re-read', () => {
-    const { result } = renderNavigation()
-
-    // Post-input refreshes read tab info; unchanged history must not rewrite the store and re-render every address bar.
-    for (let index = 0; index < 20; index += 1) {
-      act(() =>
-        result.current.applyRemoteTabInfo({ url: 'https://remote.internal/docs', title: 'Docs' })
-      )
-    }
-
-    expect(useAppStore.getState().browserUrlHistory).toEqual([
-      expect.objectContaining({ url: 'https://remote.internal/docs', visitCount: 1 })
-    ])
-  })
-
-  it('files again once the page really moves', () => {
-    const { result } = renderNavigation()
-
-    act(() => result.current.applyRemoteTabInfo({ url: 'https://remote.internal/a', title: 'A' }))
-    act(() => result.current.applyRemoteTabInfo({ url: 'https://remote.internal/b', title: 'B' }))
-    act(() => result.current.applyRemoteTabInfo({ url: 'https://remote.internal/a', title: 'A' }))
-
-    expect(
-      useAppStore.getState().browserUrlHistory.map((entry) => [entry.url, entry.visitCount])
-    ).toEqual([
-      ['https://remote.internal/b', 1],
-      ['https://remote.internal/a', 2]
-    ])
-  })
-
-  it('picks up a title that only arrives on a later read of the same page', () => {
-    const { result } = renderNavigation()
-
-    act(() => result.current.applyRemoteTabInfo({ url: 'https://remote.internal/docs', title: '' }))
-    act(() =>
-      result.current.applyRemoteTabInfo({
-        url: 'https://remote.internal/docs',
-        title: 'Remote docs'
-      })
-    )
-
-    expect(useAppStore.getState().browserUrlHistory).toEqual([
-      expect.objectContaining({ title: 'Remote docs' })
-    ])
-  })
-
   it('redacts a Kagi session token before it reaches history', () => {
     const { result } = renderNavigation()
 

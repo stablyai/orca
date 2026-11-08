@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import {
   EDITOR_OWNER,
   EDITOR_PLACEMENT,
@@ -19,16 +19,16 @@ import {
 } from './editor/autosave/editor-autosave'
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
-import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 vi.mock('./use-bulk-tab-close-confirmation', () => ({

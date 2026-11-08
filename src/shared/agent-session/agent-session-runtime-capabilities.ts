@@ -82,6 +82,9 @@ export const AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY =
   'agent-session.continuation-context.v1' as const
 // Probe additive item reads before offering full output; older hosts retain only heads.
 export const AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY = 'agent-session.item-detail.v1' as const
+// Probe before asking whether a send is recorded; older hosts answer only through the history pages a client loaded.
+export const AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY =
+  'agent-session.send-recorded.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
 // Why: the rewind UI relies on the next send settling an in-doubt rewind, even with the agent up.
@@ -118,6 +121,12 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
 // Strict subscribe params refuse `capabilities` on older hosts; a client sends it only when advertised.
 export const AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY = 'agent-session.text-append.v1' as const
+// Hosts with only text-append.v1 drop `toolOutputAppend`; a reader tracking tool bases could evict a reply base they hold.
+export const AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY =
+  'agent-session.tool-output-append.v1' as const
+
+// The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
+export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
 
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
@@ -157,6 +166,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
     AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
+    AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
     AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
     AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -166,6 +176,8 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_TURN_ITEM_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
+    AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
     ...AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES
   ] as const)()

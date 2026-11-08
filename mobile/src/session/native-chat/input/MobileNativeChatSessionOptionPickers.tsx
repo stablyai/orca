@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
+  Clock,
   FilePenLine,
   Hand,
   LockKeyhole,
@@ -221,6 +222,7 @@ export function MobileNativeChatSessionOptionPickers({
         secondary={secondary}
         warning={permissionColor !== undefined}
         icon={permissionIcon}
+        leading={controller.heldPick ? Clock : undefined}
         accessibleName={
           model
             ? permissionColor
@@ -263,7 +265,9 @@ export function MobileNativeChatSessionOptionPickers({
                 subtitle={
                   pendingId !== null
                     ? t('chat.sessionOptionPickers.applying', 'Applying…')
-                    : undefined
+                    : controller.appliesOnAttach
+                      ? t('chat.sessionOptionPickers.onAttach', 'Applies when the chat attaches')
+                      : undefined
                 }
                 trailing={{ label: t('common.done', 'Done'), onPress: closePicker }}
               />

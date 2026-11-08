@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { Repo } from '../../../shared/repo-types'
 import type { TabGroup } from '../../../shared/tab-types'

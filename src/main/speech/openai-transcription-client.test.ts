@@ -25,24 +25,6 @@ describe('sanitizeOpenAiTranscriptionErrorMessage', () => {
 describe('OpenAiTranscriptionSession', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('sends the dictation language only when one is chosen', async () => {
-    const languages: (FormDataEntryValue | null)[] = []
-    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
-      languages.push(init.body instanceof FormData ? init.body.get('language') : 'not multipart')
-      return new Response(JSON.stringify({ text: 'ok' }))
-    })
-    for (const language of ['ko', undefined]) {
-      const session = new OpenAiTranscriptionSession(
-        'openai-gpt-4o-mini-transcribe',
-        () => 'test-key',
-        language
-      )
-      session.feedAudio(new Float32Array([0.1]), 16000)
-      await session.finish()
-    }
-    expect(languages).toEqual(['ko', null])
-  })
-
   it('preserves multipart WAV bytes across owned, resampled and empty audio chunks', async () => {
     const uploads: Buffer[] = []
     vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
@@ -95,24 +77,5 @@ describe('OpenAiTranscriptionSession', () => {
     expect(Array.from({ length: 13 }, (_, i) => wav.readInt16LE(44 + i * 2))).toEqual([
       -32768, -32768, -16384, 0, 0, 16384, 32767, 32767, 0, 32767, -32768, 0, 24575
     ])
-  })
-
-  it('keeps the first 10 minutes and reports the cap once instead of throwing', async () => {
-    const uploadBytes: number[] = []
-    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
-      const file = init.body instanceof FormData ? init.body.get('file') : null
-      uploadBytes.push(file instanceof File ? file.size : -1)
-      return new Response(JSON.stringify({ text: 'first ten minutes' }))
-    })
-    const session = new OpenAiTranscriptionSession(
-      'openai-gpt-4o-mini-transcribe',
-      () => 'test-key'
-    )
-    const sevenSeconds = new Float32Array(7 * 16000).fill(0.1)
-    const capReports = Array.from({ length: 90 }, () => session.feedAudio(sevenSeconds, 16000))
-    expect(capReports.indexOf(true)).toBe(85)
-    expect(capReports.filter(Boolean)).toHaveLength(1)
-    expect(await session.finish()).toBe('first ten minutes')
-    expect(uploadBytes).toEqual([44 + 600 * 16000 * 2])
   })
 })

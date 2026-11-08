@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { getSchema } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import { parseStoredNativeChatComposerDraft } from './native-chat-composer-draft-storage'
+import { parseStoredNativeChatComposerDraft } from './drafts/native-chat-composer-draft-storage'
 import {
   NativeChatFileReference,
   NativeChatSkill,
   promptSkillRefs,
-  promptText,
-  promptTextContent
-} from './native-chat-prompt-document'
+  promptText
+} from './composer/editor/native-chat-prompt-document'
+import { promptTextContent } from './composer/editor/native-chat-prompt-document-text'
 
 const TEXT = '[Image](orca-image:literal) keep this'
 const IMAGES = [{ id: 'remote', path: '/remote/shot.png', connectionId: 'ssh-box' }]

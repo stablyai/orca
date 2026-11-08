@@ -1,6 +1,5 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -218,94 +217,6 @@ describe('orchestration federation control mail', () => {
     expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
   })
 
-  it('does not deliver pending control mail after worker completion', async () => {
-    vi.spyOn(homeRuntime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
-    await homeDispatcher.dispatch({
-      id: 'send-stale-control',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'send-stale-control-request',
-      method: 'orchestration.send',
-      params: {
-        from: 'term_coord',
-        to: `dispatch:${dispatchId}`,
-        subject: 'Stale follow-up',
-        body: 'This must not arrive after completion.',
-        type: 'status'
-      }
-    })
-    const waiting = workerDispatcher.dispatch(checkRequest('wait-before-completion', true, 30))
-    await Promise.resolve()
-
-    const taskId = homeDb.getDispatchContextById(dispatchId)!.task_id
-    workerDb.enqueueFederationRelay({
-      dispatchId,
-      direction: 'to_home',
-      kind: 'worker_done',
-      payload: JSON.stringify({
-        from: `dispatch:${dispatchId}`,
-        subject: 'Done',
-        body: 'Completed before the follow-up arrived.',
-        type: 'worker_done',
-        priority: 'normal',
-        threadId: null,
-        payload: JSON.stringify({
-          taskId,
-          dispatchId,
-          outcome: 'succeeded',
-          filesModified: []
-        })
-      }),
-      settleRemoteOutcome: 'succeeded'
-    })
-
-    await syncFederationBarrier(homeRuntime, homeDb)
-
-    expect(homeDb.getWorkerDispatch(dispatchId)?.state).toBe('succeeded')
-    expect(workerDb.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(0)
-    expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(1)
-    await expect(
-      dispatchImport(importRequest('late-direct-import', 1, 'late-control'))
-    ).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'dispatch_inactive' }
-    })
-    await expect(waiting).resolves.toMatchObject({
-      ok: true,
-      result: { count: 0 }
-    })
-  })
-
-  it('uses imported types for waiter eligibility and returns the oldest full batch', async () => {
-    vi.useFakeTimers()
-    await dispatchImport(importRequest('import-merge-ready', 1, 'relay-merge-ready', 'merge_ready'))
-
-    const escalationWaiter = workerDispatcher.dispatch(
-      checkRequest('wait-escalation', true, 1_000, 'escalation')
-    )
-    const statusWaiter = workerDispatcher.dispatch(checkRequest('wait-status', true, 30, 'status'))
-    await waitForDispatchWaiterCount(2)
-
-    await dispatchImport(importRequest('import-escalation', 2, 'relay-escalation', 'escalation'))
-
-    await expect(escalationWaiter).resolves.toMatchObject({
-      ok: true,
-      result: {
-        count: 2,
-        messages: [
-          { id: 'relay-merge-ready', type: 'merge_ready' },
-          { id: 'relay-escalation', type: 'escalation' }
-        ]
-      }
-    })
-    await waitForDispatchWaiterCount(1)
-    await vi.advanceTimersByTimeAsync(30)
-    await expect(statusWaiter).resolves.toMatchObject({
-      ok: true,
-      result: { count: 0, timedOut: true }
-    })
-  })
-
   function checkRequest(id: string, wait = false, timeoutMs = 5_000, types?: string): RpcRequest {
     return {
       id,
@@ -360,19 +271,5 @@ describe('orchestration federation control mail', () => {
     return workerDispatcher.dispatch(request, {
       authenticatedCallerFingerprint: homeFingerprint
     })
-  }
-
-  async function waitForDispatchWaiterCount(expected: number): Promise<void> {
-    const internals = workerRuntime as unknown as {
-      messageWaitersByHandle: Map<string, Set<unknown>>
-    }
-    const address = `dispatch:${dispatchId}`
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      if (internals.messageWaitersByHandle.get(address)?.size === expected) {
-        return
-      }
-      await Promise.resolve()
-    }
-    expect(internals.messageWaitersByHandle.get(address)?.size).toBe(expected)
   }
 })

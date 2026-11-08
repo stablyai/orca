@@ -57,7 +57,7 @@ export async function listWorktreesUnshared(
     const visibleWorktrees = options.includeCreatePreparations
       ? worktrees
       : worktrees.filter((worktree) => !isWorktreeCreatePreparation(worktree))
-    return annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
+    return await annotateSparseCheckoutStatus(repoPath, visibleWorktrees, options)
   } catch (err) {
     if (await isTrueEmptyWorktreeListing(repoPath, err)) {
       return []

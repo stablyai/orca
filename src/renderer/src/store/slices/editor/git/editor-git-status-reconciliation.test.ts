@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { createEditorStore, createEditorTabsStore } from '../editor-slice-test-harness'
-import { makeFolderWorkspace } from '../../worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '../../../folder-workspaces/folder-workspace.test-fixture'
 
 const { toastErrorMock } = vi.hoisted(() => ({
   toastErrorMock: vi.fn()
@@ -14,7 +14,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
-vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))

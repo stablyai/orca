@@ -4,10 +4,10 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   AntigravityAccountMutationParams,
   AntigravityAccountTargetParams,
-  AntigravityChatAuthConfigSchema,
   AntigravityChatSignInCompleteParams,
   AntigravityChatSignInFlowParams
 } from '../../../../../shared/rpc-contract/antigravity-accounts-params'
+import { AntigravityChatAuthConfigSchema } from '../../../../../shared/antigravity-chat-auth-config'
 import { getAntigravityAccountService } from '../../../../antigravity/native-account-host'
 import {
   cancelAntigravityChatSignIn,

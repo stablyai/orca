@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
-import { useHostClient } from '../transport/host-client-hooks'
+import { useHostClient } from '../transport/connection/host-client-hooks'
 import {
   createDownloadProgressFeed,
   downloadFraction,
@@ -49,7 +49,7 @@ export type MobileWebShellSessionView = {
   // Explain fallback beside the running page without replacing it.
   readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly retry: () => void
-  readonly reportShellFailure: (reason: MobileWebShellReportedFailure) => void
+  readonly reportShellFailure: (reason: MobileWebShellReportedFailure, reclaimed?: boolean) => void
   readonly reportDocumentStarted: () => void
   readonly reportDocumentLoaded: () => void
   readonly reportPageReady: () => void
@@ -263,8 +263,8 @@ export function useMobileWebShellSession(args: {
   )
 
   const reportShellFailure = useCallback(
-    (reason: MobileWebShellReportedFailure) => {
-      const event = { type: 'shell-failed', reason } as const
+    (reason: MobileWebShellReportedFailure, reclaimed = false) => {
+      const event = { type: 'shell-failed', reason, reclaimed } as const
       // Profile reads come from the screen, not the view, so no retired document can send one.
       return reason === 'host-profile-unreadable'
         ? dispatch(epochRef.current, event)

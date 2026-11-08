@@ -9,7 +9,8 @@ import {
   useLayoutEffect,
   useEffect
 } from './mobile-tasks-dependencies'
-import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
 import {
   linearComposerTeamListRead,
   linearTeamStateListRead
@@ -42,6 +43,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     provider,
     query,
     refreshTasks,
+    repoListEnsureLoaded,
     selectGitHubProject,
     setAppliedQuery,
     setCreateRepoId,
@@ -136,6 +138,13 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       stale = true
     }
   }, [provider, refreshJiraConnection, taskStateHydrated])
+
+  // Repos load beside the hydration reads, so the first list read waits on one round trip, not two.
+  useEffect(() => {
+    if (tasksSupported) {
+      void repoListEnsureLoaded().catch(() => {})
+    }
+  }, [repoListEnsureLoaded, tasksSupported])
 
   useEffect(() => {
     if (connState !== 'connected' || !taskStateHydrated) {

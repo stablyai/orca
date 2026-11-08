@@ -20,6 +20,7 @@ import {
   scheduleRightPanelCommentFocusTimer
 } from './right-panel-comment-focus-timers'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export type RightPanelCommentSubmitResult = { ok: true } | { ok: false; error: string }
@@ -89,6 +90,7 @@ export function RightPanelCommentComposer({
   className,
   onCancel
 }: RightPanelCommentComposerProps): React.JSX.Element {
+  const t = useTranslate()
   const [body, setBody] = useState('')
   const imagePending = useGitHubImagePending()
   const [submitting, setSubmitting] = useState(false)
@@ -217,42 +219,27 @@ export function RightPanelCommentComposer({
   const toolbar = [
     {
       action: 'bold' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.256300f8ea',
-        'Bold'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.256300f8ea', 'Bold'),
       icon: Bold
     },
     {
       action: 'italic' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2',
-        'Italic'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.542bf6a7e2', 'Italic'),
       icon: Italic
     },
     {
       action: 'code' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.f49e0a21e0',
-        'Code'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.f49e0a21e0', 'Code'),
       icon: Code2
     },
     {
       action: 'quote' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.d6d9c3c947',
-        'Quote'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.d6d9c3c947', 'Quote'),
       icon: Quote
     },
     {
       action: 'list' as const,
-      label: translate(
-        'auto.components.right.sidebar.right.panel.comment.composer.cf5a7aba6f',
-        'List'
-      ),
+      label: t('auto.components.right.sidebar.right.panel.comment.composer.cf5a7aba6f', 'List'),
       icon: List
     }
   ]
@@ -310,10 +297,7 @@ export function RightPanelCommentComposer({
       <div className="flex min-w-0 items-center justify-end gap-1 border-t border-border px-2 py-1.5">
         {onCancel && (
           <Button type="button" variant="ghost" size="xs" disabled={submitting} onClick={onCancel}>
-            {translate(
-              'auto.components.right.sidebar.right.panel.comment.composer.9bca633dee',
-              'Cancel'
-            )}
+            {t('auto.components.right.sidebar.right.panel.comment.composer.9bca633dee', 'Cancel')}
           </Button>
         )}
         <Tooltip>
@@ -326,7 +310,7 @@ export function RightPanelCommentComposer({
               onClick={() => void submit()}
             >
               {submitting
-                ? translate(
+                ? t(
                     'auto.components.right.sidebar.right.panel.comment.composer.87aff03d63',
                     'Sending...'
                   )

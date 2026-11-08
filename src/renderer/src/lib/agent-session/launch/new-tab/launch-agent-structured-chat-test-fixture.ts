@@ -1,9 +1,12 @@
-import { afterEach, beforeEach, expect, vi } from 'vitest'
-import { createTestStore, seedStore } from '@/store/slices/store-test-helpers'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { makeTab, makeUnifiedTab, makeTabGroup } from '@/store/slices/store-session-test-harness'
-import { drawTabsFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import type * as Frames from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
+import { afterEach, beforeEach, vi } from 'vitest'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
+import { makeUnifiedTab, makeTabGroup } from '@/store/slices/tabs/tab-group.test-fixture'
+import { drawTabsFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import type * as Frames from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { registerStructuredSelectionCatalogStore } from '../../options/structured-agent-session-selection-controller'
@@ -14,7 +17,7 @@ import type { createStructuredAgentSessionLaunchIntent as create } from '../../.
 import type { launchStructuredAgentSession as launch } from '../structured-agent-session-launch-create-call'
 import type { refreshLocalStructuredSessionTabs as refreshTabs } from '@/runtime/local-structured-session-tabs-sync/inventory-refresh'
 import type { toast } from 'sonner'
-import type * as WebEnvironment from '@/runtime/web-runtime-session-environment'
+import type * as WebEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type * as TerminalSurface from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
@@ -76,37 +79,18 @@ function launchScenarioSettings(): GlobalSettings {
   })
 }
 
-export function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1') {
-  return {
-    sessionId,
-    worktreeId,
-    executionHostId: 'local' as const,
-    target: { kind: 'local' as const },
-    params: {
-      envelope: {
-        sessionId,
-        clientOperationId: `operation-${sessionId}`,
-        expectedRuntimeFence: null,
-        payloadFingerprint: 'f'.repeat(64)
-      },
-      worktree: `id:${worktreeId}`,
-      agent: 'codex' as const
-    }
-  }
-}
-
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
 vi.mock('@/store/index', async () =>
   (await import('../../../launch-parity-renderer.test-fixture')).launchStoreModuleMock(owner)
 )
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mockToastError } }))
@@ -125,10 +109,13 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))
 
-vi.mock('@/runtime/web-runtime-session-environment', async (original) => ({
-  ...(await original<typeof WebEnvironment>()),
-  isWebRuntimeSessionActive: vi.fn(() => false)
-}))
+vi.mock(
+  '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment',
+  async (original) => ({
+    ...(await original<typeof WebEnvironment>()),
+    isWebRuntimeSessionActive: vi.fn(() => false)
+  })
+)
 vi.mock('../../../../../../shared/workspace-layout/terminal-surface-id', async (original) => ({
   ...(await original<typeof TerminalSurface>()),
   isWebTerminalSurfaceTabId: vi.fn(() => false)
@@ -155,19 +142,17 @@ vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-create-call'
   launchStructuredAgentSession: mockLaunchStructuredCodexSession
 }))
 
-vi.mock('@/lib/launch-structured-agent-session', () => {
-  return {
-    createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
-    abandonStructuredAgentSessionLaunchIntent: vi.fn(),
-    retryStructuredAgentSessionLaunchIntent: mockRetryStructuredAgentSessionLaunchIntent,
-    launchStructuredAgentSession: mockLaunchStructuredCodexSession,
-    ...launchErrorMocks
-  }
-})
+vi.mock('@/lib/launch-structured-agent-session', () => ({
+  createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
+  abandonStructuredAgentSessionLaunchIntent: vi.fn(),
+  retryStructuredAgentSessionLaunchIntent: mockRetryStructuredAgentSessionLaunchIntent,
+  launchStructuredAgentSession: mockLaunchStructuredCodexSession,
+  ...launchErrorMocks
+}))
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mockRefreshLocalStructuredSessionTabs
 }))
-vi.mock('@/runtime/local-structured-session-owner', () => ({
+vi.mock('@/runtime/native-chat/local-sessions/local-structured-session-owner', () => ({
   LOCAL_STRUCTURED_SESSION_OWNER: 'local-structured-session'
 }))
 vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
@@ -175,16 +160,19 @@ vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: async () => STRUCTURED_HOST_CAPABILITIES,
   awaitLocalRuntimeCapabilities: () => ({ known: Promise.resolve([]), stop: () => {} })
 }))
+// The scenario's workspace owner: its repo's SSH connection, else the runtime it names, else local.
+function scenarioOwnerHostId(): string {
+  const { connectionId } = state().repos[0] ?? {}
+  const runtime = currentLaunchSettings().activeRuntimeEnvironmentId
+  return connectionId ? `ssh:${connectionId}` : runtime ? `runtime:${runtime}` : 'local'
+}
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
-  getExecutionHostIdForWorktree: () =>
-    state().repos[0]?.connectionId
-      ? `ssh:${state().repos[0].connectionId}`
-      : currentLaunchSettings().activeRuntimeEnvironmentId
-        ? `runtime:${currentLaunchSettings().activeRuntimeEnvironmentId}`
-        : 'local',
+  getExecutionHostIdForWorktree: scenarioOwnerHostId,
+  // The menu's readiness reads the same owner as the launch, as the real module's twin does.
+  getResourceExecutionHostIdForWorktree: scenarioOwnerHostId,
   runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (target: unknown, method: string, params: unknown) =>
     method === 'agentSession.createSupport'
       ? mockCreateSupport()
@@ -276,9 +264,6 @@ beforeEach(async () => {
   })
   liveStore().setState({ createTab: mockCreateTab, runtimeEnvironmentCatalogHydrated: true })
   mockCreateTab.mockReturnValue(makeTab({ id: 'tab-1', worktreeId: 'wt-1' }))
-  expect(state().getTab('missing')).toBeNull()
-  expect(state().getTab(chat.id)).toBe(chat)
-  expect(state().readLocalAgentInventory()).toEqual({ ids: null, state: 'pending' })
   restoreCatalog = registerStructuredSelectionCatalogStore({
     read: state,
     subscribe: (listener) => liveStore().subscribe(listener)

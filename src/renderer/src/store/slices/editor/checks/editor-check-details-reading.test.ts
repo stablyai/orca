@@ -6,7 +6,9 @@ import {
 } from '@/components/editor/check-details/reading/check-details-reading-fixture'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/close-mirrored-editor-tab', () => ({ notifyHostOfMirroredEditorClose: vi.fn() }))
+vi.mock('@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab', () => ({
+  notifyHostOfMirroredEditorClose: vi.fn()
+}))
 vi.mock('@/runtime/repository-gitlab/gitlab-job-trace-client', () => ({
   loadGitLabJobLogDetails: vi.fn()
 }))

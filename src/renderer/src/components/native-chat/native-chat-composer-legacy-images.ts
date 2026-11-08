@@ -1,6 +1,6 @@
 import type { JSONContent } from '@tiptap/react'
 import { splitImageReferences } from '../../../../shared/native-chat/native-chat-image-reference'
-import { IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
+import { IMAGE_REFERENCE_NODE } from './composer/editor/native-chat-prompt-document-text'
 
 function textWithoutImageTokens(text: string): string {
   let afterImage = false

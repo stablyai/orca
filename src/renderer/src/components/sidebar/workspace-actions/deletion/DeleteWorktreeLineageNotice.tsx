@@ -13,7 +13,7 @@ import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
 } from './delete-worktree-dirty-change-counts'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type DeleteWorktreeLineageNoticeProps = {
   descendants: readonly Worktree[]
@@ -32,6 +32,7 @@ export function DeleteWorktreeLineageNotice({
   dirtyChangePreviewsByWorktreeId,
   changeCheckStatesByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
+  const t = useTranslate()
   const projects = useAppStore((s) => s.projects)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const projectIndex = useMemo(
@@ -64,13 +65,13 @@ export function DeleteWorktreeLineageNotice({
         <Workflow className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="font-medium text-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.DeleteWorktreeLineageNotice.a940f3c96e',
               'Child workspaces will be deleted'
             )}
           </div>
           <div className="mt-1 text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.DeleteWorktreeLineageNotice.alsoDeletesChildren',
               'Deleting this workspace also deletes {{count}} child workspaces.',
               {
@@ -106,7 +107,7 @@ export function DeleteWorktreeLineageNotice({
             ))}
             {descendants.length > 4 ? (
               <div className="text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.sidebar.DeleteWorktreeLineageNotice.moreChildren',
                   '+{{count}} more',
                   { count: descendants.length - 4, defaultValue_one: '+{{count}} more' }

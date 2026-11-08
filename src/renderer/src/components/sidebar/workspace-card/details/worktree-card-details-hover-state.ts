@@ -4,6 +4,8 @@ type WorktreeCardDetailMenu = 'issue' | 'review' | 'link-actions'
 
 export function useWorktreeCardDetailsHoverControl() {
   const [open, setOpen] = useState(false)
+  const [contextMenuOpen, setContextMenuOpenState] = useState(false)
+  const contextMenuOpenRef = useRef(false)
   const [openMenu, setOpenMenuState] = useState<WorktreeCardDetailMenu | null>(null)
   const openMenuRef = useRef<WorktreeCardDetailMenu | null>(null)
   const pendingHoverCloseRef = useRef(false)
@@ -22,6 +24,9 @@ export function useWorktreeCardDetailsHoverControl() {
   }, [setOpenMenu])
 
   const handleHoverOpenChange = useCallback((next: boolean) => {
+    if (next && contextMenuOpenRef.current) {
+      return
+    }
     // Why: portaled detail menus sit outside HoverCardContent — keep the card
     // mounted until the menu closes so the menu items stay clickable.
     if (openMenuRef.current) {
@@ -39,6 +44,17 @@ export function useWorktreeCardDetailsHoverControl() {
     }
     setOpen(next)
   }, [])
+
+  const setContextMenuOpen = useCallback(
+    (next: boolean) => {
+      contextMenuOpenRef.current = next
+      setContextMenuOpenState(next)
+      if (next) {
+        closeHover()
+      }
+    },
+    [closeHover]
+  )
 
   const setDetailMenuOpen = useCallback(
     (menu: WorktreeCardDetailMenu, next: boolean) => {
@@ -79,6 +95,8 @@ export function useWorktreeCardDetailsHoverControl() {
 
   return {
     hoverOpen: open || Boolean(openMenu),
+    contextMenuOpen,
+    setContextMenuOpen,
     reviewMenuOpen: openMenu === 'review',
     handleHoverOpenChange,
     handleIssueMenuOpenChange: (next: boolean) => setDetailMenuOpen('issue', next),

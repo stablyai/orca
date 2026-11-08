@@ -4,7 +4,7 @@ import {
   MIXED_GROUP
 } from '../../src/shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
-import type { RuntimePtyController } from '../../src/main/runtime/runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../../src/main/runtime/terminal/lifecycle/runtime-pty-controller-contract'
 import { spawnMock } from '../../src/main/ipc/pty/pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from '../../src/main/ipc/pty/pty-ipc-test-harness'
 import { registerPtyHandlers } from '../../src/main/ipc/pty/register-handlers'

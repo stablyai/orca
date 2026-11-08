@@ -4,6 +4,8 @@ import type { Ref } from 'react'
 import type { AgentChatPermissionMode } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentPermissionChoice } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
@@ -14,22 +16,23 @@ import {
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { nativeChatPermissionModeLabel } from '../../native-chat/native-chat-permission-mode-labels'
+import { nativeChatPermissionModeLabel } from '../../native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { AgentPermissionChoiceItems, AgentPermissionChoiceName } from './AgentPermissionChoiceItems'
 
 /** Use chat-mode wording; own names the agent when available. */
 export function agentPermissionChoiceLabel(
   choice: AgentPermissionChoice,
-  agentLabel: string | null
+  agentLabel: string | null,
+  t: Translate = translate
 ): string {
   if (choice !== 'own') {
-    return nativeChatPermissionModeLabel(choice)
+    return nativeChatPermissionModeLabel(choice, t)
   }
   return agentLabel
-    ? translate('settings.agents.permissionOwnAgent', "Use {{agent}}'s own settings", {
+    ? t('settings.agents.permissionOwnAgent', "Use {{agent}}'s own settings", {
         agent: agentLabel
       })
-    : translate('settings.agents.permissionOwnAll', "Agents' own settings")
+    : t('settings.agents.permissionOwnAll', "Agents' own settings")
 }
 
 export function AllAgentsPermissionSetting({
@@ -46,9 +49,10 @@ export function AllAgentsPermissionSetting({
   onChange: (choice: AgentPermissionChoice) => void
   onChangeWithoutAuto: (choice: AgentPermissionChoice) => void
 }): React.JSX.Element {
-  const title = translate('settings.agents.permissionsTitle', 'Permissions')
-  const ownLabel = translate('settings.agents.permissionEachOwn', "Each agent's own settings")
-  const withoutAutoTitle = translate(
+  const t = useTranslate()
+  const title = t('settings.agents.permissionsTitle', 'Permissions')
+  const ownLabel = t('settings.agents.permissionEachOwn', "Each agent's own settings")
+  const withoutAutoTitle = t(
     'settings.agents.otherAgentsPermissionsLabel',
     'Permissions for other agents'
   )
@@ -86,7 +90,7 @@ export function AllAgentsPermissionSetting({
         </DropdownMenu>
       </div>
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'settings.agents.permissionsChoiceExplanation',
           'What every agent may do without asking. You can set one agent differently below.'
         )}
@@ -95,7 +99,7 @@ export function AllAgentsPermissionSetting({
         {choice === 'auto' ? (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">
-              {translate('settings.agents.permissionWithoutAuto', 'Agents without Approve for me')}
+              {t('settings.agents.permissionWithoutAuto', 'Agents without Approve for me')}
             </span>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -108,7 +112,7 @@ export function AllAgentsPermissionSetting({
                 >
                   {withoutAutoChoice === null ? (
                     <span className="truncate">
-                      {translate('settings.agents.permissionMixed', 'Mixed')}
+                      {t('settings.agents.permissionMixed', 'Mixed')}
                     </span>
                   ) : (
                     <AgentPermissionChoiceName
@@ -181,9 +185,9 @@ export function AgentPermissionMenu({
   showInherited?: boolean
   rawValue?: string
 }): React.JSX.Element {
-  const followAll =
-    inheritLabel ?? translate('settings.agents.permissionSameAsAll', 'Same as all agents')
-  const ownLabel = agentPermissionChoiceLabel('own', label)
+  const t = useTranslate()
+  const followAll = inheritLabel ?? t('settings.agents.permissionSameAsAll', 'Same as all agents')
+  const ownLabel = agentPermissionChoiceLabel('own', label, t)
   return (
     <div
       className={cn(
@@ -197,15 +201,13 @@ export function AgentPermissionMenu({
     >
       {layout === 'row' ? (
         <span className="text-xs text-muted-foreground">
-          {translate('settings.agents.rowPermissions', 'Permissions')}
+          {t('settings.agents.rowPermissions', 'Permissions')}
         </span>
       ) : layout === 'stacked' ? (
-        <Label variant="settings">
-          {translate('settings.agents.rowPermissions', 'Permissions')}
-        </Label>
+        <Label variant="settings">{t('settings.agents.rowPermissions', 'Permissions')}</Label>
       ) : (
         <span className="text-xs font-medium">
-          {translate('settings.agents.rowPermissions', 'Permissions')}
+          {t('settings.agents.rowPermissions', 'Permissions')}
         </span>
       )}
       <DropdownMenu onOpenChange={onOpenChange}>
@@ -214,7 +216,7 @@ export function AgentPermissionMenu({
             type="button"
             variant="outline"
             size={size}
-            aria-label={translate('settings.agents.rowPermissionsLabel', '{{agent}} permissions', {
+            aria-label={t('settings.agents.rowPermissionsLabel', '{{agent}} permissions', {
               agent: label
             })}
             className={cn('min-w-0 max-w-full', layout === 'stacked' && 'w-full justify-between')}
@@ -244,10 +246,10 @@ export function AgentPermissionMenu({
       </DropdownMenu>
       {permission.terminalChoice === 'own' && permission.chatChoice ? (
         <span className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'settings.agents.permissionSurfaceDifference',
             'Terminals use the agent’s own settings; new chats use {{mode}}.',
-            { mode: nativeChatPermissionModeLabel(permission.chatChoice) }
+            { mode: nativeChatPermissionModeLabel(permission.chatChoice, t) }
           )}
         </span>
       ) : null}
@@ -274,6 +276,7 @@ function AgentArgsChoiceChip({
   choiceKey: string
   source?: 'arguments'
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -303,8 +306,8 @@ function AgentArgsChoiceChip({
             }}
             aria-label={
               source === 'arguments' || choiceKey !== 'permissionMode'
-                ? translate('settings.agents.choiceChipRemove', 'Remove {{flag}}', { flag })
-                : translate(
+                ? t('settings.agents.choiceChipRemove', 'Remove {{flag}}', { flag })
+                : t(
                     'settings.agents.permissionChipRemove',
                     "Remove {{flag}} and use {{agent}}'s own settings",
                     { flag, agent: label }
@@ -318,19 +321,19 @@ function AgentArgsChoiceChip({
       </TooltipTrigger>
       <TooltipContent>
         {source === 'arguments'
-          ? translate('agentPicker.argumentsHint', 'Applies only to CLI launches.')
+          ? t('agentPicker.argumentsHint', 'Applies only to CLI launches.')
           : choiceKey !== 'permissionMode'
-            ? translate(
+            ? t(
                 'settings.agents.choiceChipTooltip',
                 'Added by {{choice}}. Remove it to use the default.',
                 {
                   choice:
                     choiceKey === 'model'
-                      ? translate('settings.sourceControl.actionModel.model', 'Model')
-                      : translate('settings.sourceControl.actionModel.effort', 'Effort')
+                      ? t('settings.sourceControl.actionModel.model', 'Model')
+                      : t('settings.sourceControl.actionModel.effort', 'Effort')
                 }
               )
-            : translate(
+            : t(
                 'settings.agents.permissionChipTooltip',
                 'Added by Permissions. Remove it to use {{agent}}’s own settings.',
                 { agent: label }

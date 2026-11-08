@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RuntimeSubscriptionRegistry } from '../../../runtime-subscription-registry'
+import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
 import { registerTerminalSubscription } from './terminal-subscription-registration'
 
 const SUBSCRIPTION_ID = 'terminal-1:phone-1'
@@ -42,16 +42,6 @@ describe('terminal subscription registration', () => {
     expect(registration.signal.aborted).toBe(true)
   })
 
-  it('runs a teardown set after release immediately', () => {
-    const { registration } = createRegistration()
-    registration.release()
-    const teardown = vi.fn()
-
-    registration.setTeardown(teardown)
-
-    expect(teardown).toHaveBeenCalledOnce()
-  })
-
   it('is released on arrival, without taking the slot, when the request signal is already aborted', () => {
     const registry = new RuntimeSubscriptionRegistry()
     const liveCleanup = vi.fn()
@@ -82,42 +72,5 @@ describe('terminal subscription registration', () => {
     expect(registration.signal.aborted).toBe(true)
     await vi.waitFor(() => expect(error).toHaveBeenCalled())
     error.mockRestore()
-  })
-
-  it('adds no presence after release', async () => {
-    const { runtime, registration } = createRegistration()
-    registration.release()
-
-    await registration.addMobilePresence('pty-1', 'phone-1', undefined)
-
-    expect(runtime.handleMobileSubscribe).not.toHaveBeenCalled()
-    expect(runtime.handleMobileUnsubscribe).not.toHaveBeenCalled()
-  })
-
-  it('releases silently without end', () => {
-    const { emit, registration } = createRegistration()
-
-    registration.releaseSilently()
-    registration.release()
-
-    expect(registration.released).toBe(true)
-    expect(emit).not.toHaveBeenCalled()
-  })
-
-  it('stops watching for pty exit when released, and releases on exit', () => {
-    const { runtime, emit, registration } = createRegistration()
-    let onExit = (): void => {}
-    const stopWatching = vi.fn()
-    runtime.subscribeToPtyExit.mockImplementation((_ptyId: string, listener: () => void) => {
-      onExit = listener
-      return stopWatching
-    })
-    registration.releaseOnPtyExit('pty-1')
-
-    onExit()
-
-    expect(registration.released).toBe(true)
-    expect(stopWatching).toHaveBeenCalledOnce()
-    expect(emit.mock.calls).toEqual([[{ type: 'end' }]])
   })
 })

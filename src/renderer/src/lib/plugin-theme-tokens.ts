@@ -11,35 +11,10 @@ import {
   type ContrastRule
 } from './plugin-theme-contrast-rules'
 
+import { contrastRatio, mix, over, type Rgba } from '../../../shared/color/rgba-contrast'
+
 /** sRGB channels 0-255 and alpha 0-1, or null when the value is not a CSS color. */
-export type ColorProbe = (value: string) => readonly [number, number, number, number] | null
-export type Rgba = readonly [number, number, number, number]
-
-function luminance([r, g, b]: Rgba): number {
-  const channel = (value: number): number => {
-    const c = value / 255
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  }
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
-}
-
-/** WCAG contrast ratio between two opaque colors. */
-export function contrastRatio(a: Rgba, b: Rgba): number {
-  const first = luminance(a)
-  const second = luminance(b)
-  return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05)
-}
-
-export function over([r, g, b, a]: Rgba, [br, bg, bb]: Rgba): Rgba {
-  return [r * a + br * (1 - a), g * a + bg * (1 - a), b * a + bb * (1 - a), 1]
-}
-
-/** `color-mix(in srgb, a percent%, b)`. */
-export function mix(a: Rgba, b: Rgba, percent: number): Rgba {
-  const p = percent / 100
-  const channel = (index: 0 | 1 | 2 | 3): number => a[index] * p + b[index] * (1 - p)
-  return [channel(0), channel(1), channel(2), channel(3)]
-}
+export type ColorProbe = (value: string) => Rgba | null
 
 /** The `over` layers painted bottom-up; opaque only when the bottom layer is. */
 function paintedLayers(

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { AppState } from 'react-native'
 import { useDictationCapture } from '../platform/dictation-capture'
 import { useOnDeviceSpeech } from '../platform/on-device-speech'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
@@ -21,7 +22,7 @@ import {
   startMobileDictation,
   type MobileDictationRun
 } from './mobile-dictation-engine-run'
-import { rpcPayloadMember } from '../transport/rpc-reader-payload'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
 import type {
   DictationStatus,
   UseMobileDictationOptions,
@@ -271,15 +272,33 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
 
   useEffect(() => {
     // Finish what was already streamed; only the user's own cancel may discard it.
-    const sub = capture.onInterruption(() => {
+    const interrupted = () => {
       if (statusRef.current === 'recording') {
         void finishDictation(dictationSessionErrorMessage('interrupted'))
+      } else if (audioPhaseRef.current === 'holding') {
+        // The mic is live while the host start is pending: close it now, and finish with what it heard once the start commits.
+        stopWhenStartedRef.current = true
+        applyStatus('processing')
+        void capture.end()
       } else if (statusRef.current === 'starting') {
         void abandonDictation(dictationSessionErrorMessage('interrupted'))
       }
+    }
+    const sub = capture.onInterruption(interrupted)
+    // A backgrounded app loses the microphone, so leaving finishes. Not before the mic opens: Android's permission prompt reports background.
+    const appState = AppState.addEventListener('change', (state) => {
+      if (
+        state === 'background' &&
+        (statusRef.current === 'recording' || audioPhaseRef.current === 'holding')
+      ) {
+        interrupted()
+      }
     })
-    return () => sub.remove()
-  }, [abandonDictation, capture, finishDictation])
+    return () => {
+      sub.remove()
+      appState.remove()
+    }
+  }, [abandonDictation, applyStatus, capture, finishDictation])
 
   useEffect(() => {
     if (!enabled) {
