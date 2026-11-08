@@ -544,4 +544,22 @@ describe('an update staged behind a live page', () => {
     expect((await relaunched.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
     expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${SECOND_BUILD}/index.html`)).toBe(true)
   })
+
+  it('lets a reader of a host’s build go before a commit or a removal deletes it', async () => {
+    const fs = createFakeFileSystem()
+    const onDisk: boolean[] = []
+    let reading = BUILD
+    const store = createGenerationStore({
+      fileSystem: fs,
+      beforeHostFilesDeleted: async (hostKey) => {
+        onDisk.push(await fs.fileExists(`${ROOT}/${hostKey}/generations/${reading}/manifest.json`))
+      }
+    })
+    await activate(store, HOST)
+    onDisk.length = 0
+    await activate(store, HOST, buildResult(SECOND))
+    reading = SECOND_BUILD
+    await store.deleteHostCache(HOST)
+    expect(onDisk).toEqual([true, true])
+  })
 })

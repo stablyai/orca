@@ -1,11 +1,52 @@
 import ExpoModulesCore
 import QuickLook
+import UIKit
 
 public class OrcaMobileWebShellModule: Module {
   private var pdfPreview: MobileWebShellPdfPreview?
+  private var memoryWarningObserver: NSObjectProtocol?
 
   public func definition() -> ModuleDefinition {
     Name("OrcaMobileWebShell")
+
+    // A spare is the first thing to give back: nothing is shown by it.
+    OnCreate {
+      memoryWarningObserver = NotificationCenter.default.addObserver(
+        forName: UIApplication.didReceiveMemoryWarningNotification,
+        object: nil,
+        queue: .main
+      ) { _ in
+        MobileWebShellSparePool.shared.discardAll()
+      }
+    }
+
+    OnDestroy {
+      if let memoryWarningObserver {
+        NotificationCenter.default.removeObserver(memoryWarningObserver)
+      }
+      DispatchQueue.main.async {
+        MobileWebShellSparePool.shared.discardAll()
+      }
+    }
+
+    // Home boots the next one after its next foreground idle.
+    OnAppEntersBackground {
+      DispatchQueue.main.async {
+        MobileWebShellSparePool.shared.discardAll()
+      }
+    }
+
+    AsyncFunction("prepareSpareDocument") { (directory: String, sessionId: String) -> Bool in
+      MobileWebShellSparePool.shared.prepare(directory: directory, sessionId: sessionId)
+    }.runOnQueue(.main)
+
+    AsyncFunction("claimSpareDocument") { (directory: String) -> String? in
+      MobileWebShellSparePool.shared.claim(directory: directory)
+    }.runOnQueue(.main)
+
+    AsyncFunction("discardSpareDocument") {
+      MobileWebShellSparePool.shared.discardAll()
+    }.runOnQueue(.main)
 
     // Home calls this once it has a paired host, so a user with nothing to open pays nothing.
     Function("warmUp") {

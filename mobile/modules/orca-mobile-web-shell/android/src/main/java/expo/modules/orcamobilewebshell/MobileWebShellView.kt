@@ -19,14 +19,8 @@ internal class OrcaMobileWebShellView(
   private var generationDirectory = ""
   private var sessionId = ""
   private var bridgeEnabled = false
-  private val document = MobileWebShellDocument(context)
-
-  init {
-    document.sink = this
-    addView(document.webView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-    // Why: Chromium reports an unpaused, never-attached WebView as visible, and a screen pushed under another never attaches.
-    document.pause()
-  }
+  /** Taken on the first prop commit, not in init: the session id says whether a spare was booted for it. */
+  private var document: MobileWebShellDocument? = null
 
   fun setGenerationDirectory(value: String) {
     generationDirectory = value
@@ -41,27 +35,37 @@ internal class OrcaMobileWebShellView(
   }
 
   fun propsDidUpdate() {
-    document.apply(generationDirectory, sessionId, bridgeEnabled)
+    val current = document ?: hostDocument().also { document = it }
+    current.apply(generationDirectory, sessionId, bridgeEnabled)
+  }
+
+  private fun hostDocument(): MobileWebShellDocument {
+    val document = MobileWebShellSparePool.document(context, sessionId, this)
+    addView(document.webView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    // Why: Chromium reports an unpaused, never-attached WebView as visible, and a screen pushed under another never attaches.
+    if (!isAttachedToWindow) document.pause()
+    return document
   }
 
   fun postBridgeMessage(json: String) {
-    document.postBridgeMessage(json)
+    val current = document ?: throw MobileWebShellBridgeUnavailableException()
+    current.postBridgeMessage(json)
   }
 
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
-    document.resume()
+    document?.resume()
   }
 
   // Stay paused whenever off-window so the page reads hidden, as a buried WKWebView does on iOS.
   override fun onDetachedFromWindow() {
-    document.pause()
+    document?.pause()
     super.onDetachedFromWindow()
   }
 
   /** Expo calls this once React Native is done with the view. */
   fun destroyWebView() {
-    document.destroyWebView()
+    document?.destroyWebView()
   }
 
   override fun documentLoadState(payload: Map<String, Any>) = onLoadState(payload)
