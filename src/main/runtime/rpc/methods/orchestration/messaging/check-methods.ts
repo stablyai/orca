@@ -24,6 +24,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
     handler: async (
       params,
       {
+        externalCoordinatorAuthority,
         orchestrationCompatibilityEvidence,
         orchestrationCaller,
         runtime,
@@ -53,7 +54,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
         }
         return result
       }
-      if (params.run || boundRun) {
+      if (params.run || boundRun || externalCoordinatorAuthority) {
         const result = await checkRunMailbox({
           params,
           runtime,
@@ -66,7 +67,8 @@ export const ORCHESTRATION_CHECK_METHODS = [
           legacyCoordinatorRunId,
           revalidateLegacyCoordinator,
           orchestrationCompatibilityEvidence,
-          recordMutationReceipt
+          recordMutationReceipt,
+          externalCoordinator: externalCoordinatorAuthority
         })
         return releasing(
           consumingCheck && !(params.ack && !params.wait)

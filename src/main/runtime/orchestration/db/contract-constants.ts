@@ -6,4 +6,4 @@ export function federatedStubHomeRunId(dispatchId: string): string {
 
 export const LEGACY_CONTRACT_VERSION = 0
 
-export const SCHEMA_VERSION = 46
+export const SCHEMA_VERSION = 47

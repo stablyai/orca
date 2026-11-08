@@ -105,10 +105,10 @@ assignment does not prove its agent stopped.
 
 `ORCA skills get orchestration --reference references/<file>.md`
 
-| Situation                                      | Reference                            |
-| ---------------------------------------------- | ------------------------------------ |
-| Task DAGs, several Runs                        | `references/coordinator-loop.md`     |
-| Child worktrees, SSH, WSL, a connected server  | `references/placement-and-remote.md` |
-| Group messages                                 | `references/messaging-and-gates.md`  |
-| A failed or unknown worker; retry, stop, reset | `references/recovery-and-cleanup.md` |
-| Custom argv or terminal layout                 | `references/low-level-topology.md`   |
+| Situation                                           | Reference                            |
+| --------------------------------------------------- | ------------------------------------ |
+| Task DAGs, several Runs, a coordinator outside Orca | `references/coordinator-loop.md`     |
+| Child worktrees, SSH, WSL, a connected server       | `references/placement-and-remote.md` |
+| Group messages                                      | `references/messaging-and-gates.md`  |
+| A failed or unknown worker; retry, stop, reset      | `references/recovery-and-cleanup.md` |
+| Custom argv or terminal layout                      | `references/low-level-topology.md`   |

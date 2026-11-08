@@ -51,6 +51,8 @@ export type RunRow = {
   coordinator_orca_session_id: OrcaSessionId | null
   /** The consumer_generation the id was written at; see currentRunCoordinatorOrcaSessionId. */
   coordinator_orca_session_id_generation: number | null
+  /** Paired-device caller fingerprint of an external coordinator; see currentRunExternalCoordinator. */
+  coordinator_client_fingerprint: string | null
   consumer_generation: number
   legacy: number
   created_at: string

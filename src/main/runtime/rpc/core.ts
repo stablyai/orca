@@ -22,6 +22,7 @@ import type {
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './rpc-caller-identity'
+import type { ExternalCoordinatorAuthority } from './external-coordinator-invocation'
 import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './rpc-binary-sender'
 import type { RpcMethodPermission } from './rpc-method-permission'
@@ -156,6 +157,8 @@ export type RpcContext = {
   orchestrationCompatibilityCallerAuthority?: OrchestrationCompatibilityCallerAuthority
   // Pin authenticated federation identity without exposing its token to handlers or storage.
   authenticatedCallerFingerprint?: string
+  // Set only by the dispatcher, from transport identity; a paired client coordinating with no terminal.
+  externalCoordinatorAuthority?: ExternalCoordinatorAuthority
   pairing?: PairingRpcContext
   pairingOffers?: PairingOffersRpcContext
   deviceSelf?: DeviceSelfRpcContext

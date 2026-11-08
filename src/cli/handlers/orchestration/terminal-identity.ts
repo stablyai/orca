@@ -7,11 +7,15 @@ import {
   readInjectedAgentSessionId
 } from '../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { sessionAddressForHost } from '../../session-caller-flags'
+import { readOrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
+import { ORCHESTRATION_EXTERNAL_COORDINATOR_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
+import { runtimeLacks } from './older-runtime-run-binding'
 
 // --worktree/--terminal name the command's target, possibly on another host; only the caller's cwd scopes inference.
 const callerScopeFlags = (): Map<string, string | boolean> => new Map()
 
-/** undefined delegates caller identity to the injected session; the host resolves /clear addresses. */
+/** undefined delegates caller identity to the injected session, or to the paired device of an external
+ * coordinator; the host resolves /clear addresses. */
 export async function resolveOrchestrationTerminalHandle(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -27,6 +31,13 @@ export async function resolveOrchestrationTerminalHandle(
   }
   if (explicit) {
     return explicit
+  }
+  // Outside any Orca terminal a saved environment coordinates as its paired device, never a guessed pane.
+  if (
+    !readOrchestrationCompatibilityEvidence(process.env) &&
+    (await supportsExternalCoordinator(client))
+  ) {
+    return undefined
   }
   const envHandle = process.env.ORCA_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
@@ -48,6 +59,14 @@ export async function resolveOrchestrationTerminalHandle(
     throw structuredSessionRefusal(flagName)
   }
   return await resolveImplicitOrchestrationCaller(cwd, client, flagName)
+}
+
+/** Only a saved environment carries the paired-device identity an external coordinator is bound to. */
+export async function supportsExternalCoordinator(client: RuntimeClient): Promise<boolean> {
+  return (
+    Boolean(client.environmentSelector && client.isRemote) &&
+    !(await runtimeLacks(client, ORCHESTRATION_EXTERNAL_COORDINATOR_RUNTIME_CAPABILITY))
+  )
 }
 
 // terminal.show requires a PTY; resolveIdentity also recognizes structured workers without panes.

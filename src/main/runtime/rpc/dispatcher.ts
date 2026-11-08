@@ -33,6 +33,7 @@ import type { RpcCallerScope } from './rpc-caller-scope'
 import { runWithActiveRpcCaller } from './rpc-active-caller'
 import { admitRpcRequest } from './rpc-request-admission-prologue'
 import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './orcad-feature-readiness'
+import { createExternalCoordinatorInvocation } from './external-coordinator-invocation'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -240,6 +241,12 @@ export class RpcDispatcher {
       request,
       compatibility.legacyCoordinatorAuthority
     )
+    const externalCoordinator = createExternalCoordinatorInvocation(
+      runtime,
+      request,
+      effectiveParams,
+      context
+    )
     // A legacy coordinator fingerprint outranks the transport identity; mint a fallback only when absent.
     const fallbackCallerFingerprint =
       context.authenticatedCallerFingerprint ??
@@ -249,7 +256,9 @@ export class RpcDispatcher {
         ? orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
         : undefined)
     const callerFingerprint =
-      legacyCoordinator?.mutationCallerFingerprint ?? fallbackCallerFingerprint
+      externalCoordinator?.mutationCallerFingerprint ??
+      legacyCoordinator?.mutationCallerFingerprint ??
+      fallbackCallerFingerprint
     const invoke = (mutation?: DurableMutationInvocation) => {
       const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
       return runWithActiveRpcCaller(context.caller, () =>
@@ -264,6 +273,7 @@ export class RpcDispatcher {
           legacyCoordinatorRunId,
           legacyCoordinatorAuthority: legacyCoordinator?.authority,
           revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
+          externalCoordinatorAuthority: externalCoordinator,
           orchestrationCompatibilityCallerAuthority:
             compatibility.orchestrationCompatibilityCallerAuthority,
           orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence

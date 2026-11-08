@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
+import { OptionalFiniteNumber, OptionalString } from './rpc-param-primitives'
 
 export const OptionalWorkerLaunchPreference = z
   .string()
@@ -17,7 +17,8 @@ export const WorkerStartParams = z
     parent: OptionalString,
     on: OptionalString,
     run: OptionalString,
-    from: requiredString('Missing --from'),
+    // Empty only for an external coordinator, which names no terminal; startWorker refuses it for anyone else.
+    from: OptionalString.transform((value) => value ?? ''),
     worktree: OptionalString,
     name: OptionalString,
     repo: OptionalString,

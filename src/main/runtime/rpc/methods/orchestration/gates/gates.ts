@@ -82,7 +82,13 @@ export const ORCHESTRATION_GATE_METHODS = [
     params: GateCreateParams,
     handler: (
       params,
-      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+      {
+        externalCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime,
+        legacyCoordinatorRunId
+      }
     ) => {
       const db = runtime.getOrchestrationDb()
       let options: string[] | undefined
@@ -107,7 +113,8 @@ export const ORCHESTRATION_GATE_METHODS = [
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
+        callerSession: orchestrationCaller,
+        externalCoordinator: externalCoordinatorAuthority
       })
       if (task.run_id !== run.id) {
         throw taskNotFoundError(`Task ${params.task} was not found in Run ${run.id}.`, {
@@ -130,7 +137,13 @@ export const ORCHESTRATION_GATE_METHODS = [
     params: GateResolveParams,
     handler: (
       params,
-      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+      {
+        externalCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime,
+        legacyCoordinatorRunId
+      }
     ) => {
       const db = runtime.getOrchestrationDb()
       const existing = db.getGate(params.id)
@@ -143,7 +156,8 @@ export const ORCHESTRATION_GATE_METHODS = [
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
+        callerSession: orchestrationCaller,
+        externalCoordinator: externalCoordinatorAuthority
       })
       // Hide foreign gates as missing so probes cannot map other Runs.
       if (existing.run_id !== run.id) {
@@ -163,7 +177,13 @@ export const ORCHESTRATION_GATE_METHODS = [
     params: GateListParams,
     handler: (
       params,
-      { orchestrationCompatibilityEvidence, orchestrationCaller, runtime, legacyCoordinatorRunId }
+      {
+        externalCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime,
+        legacyCoordinatorRunId
+      }
     ) => {
       const db = runtime.getOrchestrationDb()
       const explicitRun = params.run ? db.getRun(params.run) : undefined
@@ -177,7 +197,8 @@ export const ORCHESTRATION_GATE_METHODS = [
               requireCurrentConsumer: params.run === undefined,
               legacyCoordinatorRunId,
               callerEvidence: orchestrationCompatibilityEvidence,
-              callerSession: orchestrationCaller
+              callerSession: orchestrationCaller,
+              externalCoordinator: externalCoordinatorAuthority
             })
       const gates = db
         .listGates({

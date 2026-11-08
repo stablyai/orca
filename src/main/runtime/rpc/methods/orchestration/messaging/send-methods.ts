@@ -49,6 +49,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         runtime,
         legacyCoordinatorRunId,
         revalidateLegacyCoordinator,
+        externalCoordinatorAuthority,
         orchestrationCompatibilityCallerAuthority,
         recordMutationReceipt,
         markWorkerDoneMutationEffectFree,
@@ -81,7 +82,10 @@ export const ORCHESTRATION_SEND_METHODS = [
         followThroughWorkerReport(runtime, db, settled)
         return stripMutationReplayNudge(replayedMutationReceipt)
       }
-      const from = params.from ?? 'unknown'
+      // An external coordinator reads its Run's mailbox, so replies to its mail come back there.
+      const external =
+        externalCoordinatorAuthority?.kind === 'bound' && externalCoordinatorAuthority
+      const from = params.from ?? (external ? `run:${external.revalidate().id}` : 'unknown')
       const attestedCaller =
         orchestrationCompatibilityCallerAuthority?.terminalHandle === from
           ? orchestrationCompatibilityCallerAuthority

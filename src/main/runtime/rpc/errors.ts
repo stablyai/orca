@@ -126,6 +126,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'run_required',
   'stable_pane_required',
   'consumer_fenced',
+  'external_coordinator_unsupported',
   'task_not_found',
   'task_not_startable',
   'inject_rejected',

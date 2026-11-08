@@ -33,6 +33,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
     handler: async (
       params,
       {
+        externalCoordinatorAuthority,
         orchestrationCompatibilityEvidence,
         orchestrationCaller,
         runtime,
@@ -52,7 +53,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         requireCurrentConsumer: true,
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence,
-        callerSession: orchestrationCaller
+        callerSession: orchestrationCaller,
+        externalCoordinator: externalCoordinatorAuthority
       })
       if (task.run_id !== run.id) {
         throw taskNotFoundError(`Task ${task.id} was not found in Run ${run.id}.`, {

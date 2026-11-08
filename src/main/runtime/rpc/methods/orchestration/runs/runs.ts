@@ -1,4 +1,4 @@
-import { defineMethod } from '../../../core'
+import { defineMethod, InvalidArgumentError } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readRunRemovedWork } from '../../../../orchestration/db/reset/removed-orchestration-work-read'
 import { boundRunWorkerNext } from '../../../../orchestration/db/runs/worker-run-binding'
@@ -28,6 +28,14 @@ function cancelBoundDispatchWaiters(
   }
 }
 
+// The message zod gave while `from` was required; only an external coordinator may omit it.
+function requireCoordinatorTerminal(params: { from?: string }): string {
+  if (!params.from) {
+    throw new InvalidArgumentError('Missing coordinator terminal')
+  }
+  return params.from
+}
+
 /** Create a Run and bind it to the caller, as `run-create` does; one-step `worker-start` reuses it. */
 export function createBoundRun(
   runtime: OrcaRuntimeService,
@@ -52,14 +60,34 @@ export const ORCHESTRATION_RUN_METHODS = [
     name: 'orchestration.runCreate',
     permission: 'workspace',
     params: RunCreateParams,
-    handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
+    handler: (
+      params,
+      {
+        externalCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime
+      }
+    ) => {
+      if (params.external && params.from) {
+        throw new InvalidArgumentError('Choose either --from or --external, not both.')
+      }
+      if (externalCoordinatorAuthority?.kind === 'create') {
+        // Earlier Runs stay bound to this client, as they do for a terminal.
+        const run = runtime.getOrchestrationDb().createExternalRun({
+          objective: params.objective,
+          clientFingerprint: externalCoordinatorAuthority.clientFingerprint
+        })
+        return { run: exposeRun(run) }
+      }
+      const from = requireCoordinatorTerminal(params)
       const caller = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
+        callerTerminalHandle: from,
         callerEvidence: orchestrationCompatibilityEvidence,
         callerSession: orchestrationCaller,
         requireStablePane: true
       })
-      return { run: exposeRun(createBoundRun(runtime, caller, params.from, params.objective)) }
+      return { run: exposeRun(createBoundRun(runtime, caller, from, params.objective)) }
     }
   }),
   defineMethod({
@@ -132,9 +160,25 @@ export const ORCHESTRATION_RUN_METHODS = [
     name: 'orchestration.runCurrent',
     permission: 'workspace',
     params: RunCurrentParams,
-    handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
+    handler: (
+      params,
+      {
+        externalCoordinatorAuthority,
+        orchestrationCompatibilityEvidence,
+        orchestrationCaller,
+        runtime
+      }
+    ) => {
+      if (externalCoordinatorAuthority) {
+        return {
+          run:
+            externalCoordinatorAuthority.kind === 'bound'
+              ? exposeRun(externalCoordinatorAuthority.revalidate())
+              : null
+        }
+      }
       const caller = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
+        callerTerminalHandle: requireCoordinatorTerminal(params),
         callerEvidence: orchestrationCompatibilityEvidence,
         callerSession: orchestrationCaller,
         requireStablePane: true

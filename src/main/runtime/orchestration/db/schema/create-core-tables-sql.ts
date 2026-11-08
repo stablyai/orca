@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS runs (
   -- The consumer_generation coordinator_orca_session_id was written at; the id counts only while they
   -- are equal (run-coordinator-orca-session). So bump consumer_generation for a rebind or unbind only.
   coordinator_orca_session_id_generation INTEGER,
+  -- Authenticated caller fingerprint of a paired runtime client coordinating outside any terminal;
+  -- it counts only while no terminal or session binding is set (run-external-coordinator).
+  coordinator_client_fingerprint TEXT,
   consumer_generation   INTEGER NOT NULL DEFAULT 0,
   legacy                INTEGER NOT NULL DEFAULT 0,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
