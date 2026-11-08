@@ -10,16 +10,11 @@ const seed = (state: PersistedState, fileExistedOnLoad: boolean) =>
   ).settings
 
 describe('Claude Code theme sync cohort', () => {
-  it('turns the sync on for a new profile', () => {
-    expect(seed(getDefaultPersistedState('/home/user'), false)).toMatchObject({
-      claudeCodeThemeSync: true,
-      claudeCodeThemeSyncOffer: 'settled'
-    })
-  })
-
-  it('keeps an existing profile off and owes it the offer, even when a writer copied the default in', () => {
-    const existing = getDefaultPersistedState('/home/user')
-    expect(seed(existing, true)).toMatchObject({
+  it.each([
+    ['new', false],
+    ['existing', true]
+  ])('keeps a %s profile off and owes it the offer', (_cohort, fileExistedOnLoad) => {
+    expect(seed(getDefaultPersistedState('/home/user'), fileExistedOnLoad)).toMatchObject({
       claudeCodeThemeSync: false,
       claudeCodeThemeSyncOffer: 'pending'
     })
