@@ -5,7 +5,8 @@ import type {
   SshRemotePtyLease,
   SshTarget
 } from './ssh-types'
-import type { Automation, AutomationRun } from './automations-types'
+import type { Automation } from './automations/automation-definition'
+import type { AutomationRun } from './automations/history/automation-run'
 import type { MigrationUnsupportedPtyEntry } from './agent-status/contracts/agent-status-ipc-payload'
 import type { FeatureInteractionTelemetryBucketState } from './feature-interactions'
 import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt-ledger'

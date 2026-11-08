@@ -51,6 +51,7 @@ vi.mock('./runtime-environments/runtime-environments', () => ({
 
 import { registerEphemeralVmHandlers } from './ephemeral-vm'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
+import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
 
 const tempDirs: string[] = []
 
@@ -364,9 +365,11 @@ describe('registerEphemeralVmHandlers', () => {
       workspaceId: 'workspace-1'
     } as never)
 
-    const runningResume = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
-      workspaceId: 'workspace-1'
-    } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only getRepo and getRepos, which makeStore provides.
+    const runningResume = await resumeEphemeralVmWorkspace(store as never, 'workspace-1', {
+      sshHeld: false,
+      sshUserDisconnects: 0
+    })
     expect(runningResume).toEqual(expect.objectContaining({ status: 'running' }))
     expect(existsSync(join(repoPath, 'resume-mode.txt'))).toBe(false)
 
@@ -381,9 +384,11 @@ describe('registerEphemeralVmHandlers', () => {
       const environment = listEnvironments(userDataPath).find((entry) => entry.id === environmentId)
       expect(environment?.endpoints[0]?.endpoint).toBe('wss://resumed.example.com')
     })
-    const resumed = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
-      workspaceId: 'workspace-1'
-    } as never)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume reads only getRepo and getRepos, which makeStore provides.
+    const resumed = await resumeEphemeralVmWorkspace(store as never, 'workspace-1', {
+      sshHeld: false,
+      sshUserDisconnects: 0
+    })
     expect(resumed).toEqual(
       expect.objectContaining({
         status: 'running',

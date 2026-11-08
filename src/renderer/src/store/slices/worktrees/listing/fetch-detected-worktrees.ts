@@ -1,11 +1,11 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import {
   appliedWorktreeCatalogVersionPatch,
   isStaleWorktreeCatalogPublication
 } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { findRepoForHost } from '../../repo-host-identity'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'
 import { worktreeListingRefusal } from './detected-worktree-refresh-admission'

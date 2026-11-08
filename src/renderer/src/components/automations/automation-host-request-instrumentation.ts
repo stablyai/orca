@@ -1,7 +1,7 @@
 /** Translate scheduler work into counters: legacy requests/dedupe/discards belong to an authority, never one stable host key. */
 
-import { hostStableKey } from '../../../../shared/automation-owner-key'
-import type { StableAutomationCatalogRef } from '../../../../shared/automation-owner-ref'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
+import type { StableAutomationCatalogRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import {
   automationAuthorityCatalogKey,
   type AutomationHostQuerySupport

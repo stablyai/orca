@@ -6,10 +6,10 @@ import { translate } from '@/i18n/i18n'
 import { taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
-import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
+import { linearIssueComments } from '@/runtime/linear/runtime-linear-issue-client'
+import type { RowLessSource as RuntimeLinearSettings } from '@/lib/default-creation-host'
 import {
   initLinearIssueEditState,
   type LinearEditState,

@@ -1,6 +1,9 @@
 import type { Store } from '../persistence/loading-store/store'
 import type { PublishAutomationsChanged } from '../../shared/runtime-client-events'
-import type { AutomationDispatchResult, AutomationRun } from '../../shared/automations-types'
+import type {
+  AutomationDispatchResult,
+  AutomationRun
+} from '../../shared/automations/history/automation-run'
 
 type DurableWrite<T extends (...args: never[]) => unknown> = (
   ...args: Parameters<T>

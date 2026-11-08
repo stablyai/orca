@@ -1,5 +1,5 @@
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 
 export type ProfileStateMaintenance = {

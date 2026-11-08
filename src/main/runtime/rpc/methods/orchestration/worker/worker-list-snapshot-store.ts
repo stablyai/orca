@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { BoundedMap } from '../../../../../../shared/bounded-map'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
+import type { WorkerTerminalListState } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 
 export const ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS = 5_000
 const ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ENTRIES = 32

@@ -3,7 +3,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraConnectionStatus, JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { useJiraUrlSource } from './use-jira-url-source'
 
 const mocks = vi.hoisted(() => ({
@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   readJiraStatus: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   assertRuntimeEnvironmentCapability: mocks.assertRuntimeEnvironmentCapability
 }))
 

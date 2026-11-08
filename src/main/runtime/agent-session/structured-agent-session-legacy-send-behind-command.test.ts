@@ -1,7 +1,7 @@
 // Clients without accepted-send support wait for handover; sends queued behind compact must answer when queued to avoid the phone timeout.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../shared/agent-session/agent-session-wire'
 import { ensureStructuredAgentSessionHost } from './structured-agent-session-runtime'
 import {
   openStructuredCodexRpcHarness,
@@ -9,7 +9,7 @@ import {
   THREAD,
   type FakeCodexConnection,
   type StructuredCodexRpcHarness
-} from '../structured-codex-session-rpc-test-harness'
+} from '../rpc/methods/structured-sessions/structured-codex-session-rpc-test-harness'
 
 const COMPACTION_TURN = 'compaction-turn'
 // Far under the phone's 15 s send timeout, and far over a handover that is already due.
@@ -32,7 +32,7 @@ function calls(method: string): FakeCodexConnection[] {
   )
 }
 
-function send(text: string): Promise<{ submission: AgentJournalSubmission }> {
+function send(text: string): Promise<AgentSessionSendResult> {
   const body = { kind: 'message' as const, role: 'user' as const, blocks: [{ type: 'text', text }] }
   return harness.ok('agentSession.send', {
     envelope: harness.envelope('agentSession.send', { body }, null),
@@ -64,10 +64,11 @@ it('answers a send queued behind /compact at once, and delivers it once after th
   })
   await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(1))
 
-  const { submission } = await promptly(send('after the compaction'))
-
-  expect(submission).toMatchObject({ dispatchState: 'pending' })
-  expect(submission.handedOverAt).toBeUndefined()
+  const answer = await promptly(send('after the compaction'))
+  expect(answer).toMatchObject({ queued: { state: 'waiting' } })
+  if (!('queued' in answer)) {
+    throw new Error('expected a queued send')
+  }
   expect(calls('turn/start')).toHaveLength(0)
 
   harness.codex.notify('turn/started', { threadId: THREAD, turn: { id: COMPACTION_TURN } })
@@ -86,7 +87,7 @@ it('answers a send queued behind /compact at once, and delivers it once after th
     await ensureStructuredAgentSessionHost(harness.hostConfig())
   ).journalSnapshot(SESSION)
   expect(
-    journal.submissions.filter((entry) => entry.clientMessageId === submission.clientMessageId)
+    journal.submissions.filter((entry) => entry.queuedMessageId === answer.queued.messageId)
   ).toEqual([expect.objectContaining({ handedOverAt: expect.any(Number) })])
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(calls('turn/start')).toHaveLength(1)
@@ -95,8 +96,10 @@ it('answers a send queued behind /compact at once, and delivers it once after th
 it('still holds the reply of a send that no command is holding until it is handed over', async () => {
   await harness.ok('agentSession.create', harness.createIntentParams())
 
-  const { submission } = await promptly(send('first message'))
-
-  expect(submission.handedOverAt).toEqual(expect.any(Number))
+  const answer = await promptly(send('first message'))
+  if (!('submission' in answer)) {
+    throw new Error('expected a direct send')
+  }
+  expect(answer.submission.handedOverAt).toEqual(expect.any(Number))
   await vi.waitFor(() => expect(calls('turn/start')).toHaveLength(1))
 })

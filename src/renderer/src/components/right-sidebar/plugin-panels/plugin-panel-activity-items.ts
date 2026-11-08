@@ -1,5 +1,5 @@
 import { Plug } from 'lucide-react'
-import type { ActivePluginPanel } from '@/store/plugin-panels'
+import type { ActivePluginPanel } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { ActivityBarItem } from '../activity-bar-buttons'
 import { resolvePluginIconGlyph } from '../../plugins/plugin-icon-glyphs'
 

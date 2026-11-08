@@ -1,7 +1,7 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openWslHostsExperimentalSetting } from '../../../sidebar/use-wsl-hosts-enabled'
 import {
   getWslHostsTurnedOffLabel,
@@ -34,6 +34,7 @@ export function FileExplorerTreeStatus({
   stoppedWslHost = null,
   onWslHostStarted
 }: FileExplorerTreeStatusProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center text-[11px] text-muted-foreground">
@@ -48,9 +49,9 @@ export function FileExplorerTreeStatus({
         className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center text-[11px] text-muted-foreground"
         data-file-explorer-wsl-hosts-turned-off=""
       >
-        <span>{getWslHostsTurnedOffLabel()}</span>
+        <span>{getWslHostsTurnedOffLabel(t)}</span>
         <Button size="xs" onClick={openWslHostsExperimentalSetting}>
-          {getWslHostsTurnOnLabel()}
+          {getWslHostsTurnOnLabel(t)}
         </Button>
       </div>
     )
@@ -71,8 +72,8 @@ export function FileExplorerTreeStatus({
     return (
       <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
         {scopedToFolder
-          ? translate('fileExplorer.root.folderLoadError', 'Could not load this folder:')
-          : translate(
+          ? t('fileExplorer.root.folderLoadError', 'Could not load this folder:')
+          : t(
               'auto.components.right.sidebar.FileExplorerTreeStatus.c76693e456',
               'Could not load files for this workspace:'
             )}{' '}
@@ -86,8 +87,8 @@ export function FileExplorerTreeStatus({
       <div className="flex h-full items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
         {emptyMessage ??
           (scopedToFolder
-            ? translate('fileExplorer.root.emptyFolder', 'No files in this folder')
-            : translate(
+            ? t('fileExplorer.root.emptyFolder', 'No files in this folder')
+            : t(
                 'auto.components.right.sidebar.FileExplorerTreeStatus.ce03835e1f',
                 'No files in this workspace'
               ))}

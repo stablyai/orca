@@ -1,10 +1,10 @@
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { isArtifactSharingEnabled } from '../../../../shared/artifact-sharing-gate'
+import { isArtifactSharingEnabled } from '../../../../shared/artifacts/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../../../shared/agent-skill-sharing-gate'
 import { applyPRBotAuthorOverride } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
-import { TASK_PROVIDERS } from '../../../../shared/task-providers'
+import { TASK_PROVIDERS } from '../../../../shared/work-items/task-providers'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
@@ -23,7 +23,7 @@ import { recordManagedHookInstallFailure } from '../../../agent-hooks/install-te
 import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,
@@ -110,6 +110,11 @@ export class RuntimeClientSettingsController {
       nativeChatAutoContinueAfterUsageLimit:
         settings.nativeChatAutoContinueAfterUsageLimit === true,
       machineName: settings.machineName ?? '',
+      // A paired browser dictates through this host, which refuses unless these allow it.
+      voice: {
+        enabled: settings.voice?.enabled === true,
+        sttModel: settings.voice?.sttModel ?? ''
+      },
       nativeChatPermissionMode: publishedLegacyChatPermissionMode(settings),
       // Mirror the host preference; delivery still depends on queue capability.
       nativeChatQueueFollowUps: nativeChatQueueFollowUps(settings),
@@ -153,6 +158,8 @@ export class RuntimeClientSettingsController {
       this.notifyReposChanged?.()
     }
     if (
+      // An explicit enable while already enabled is a repair request (`orca agent hooks on`), so a wiped hook config reinstalls.
+      updates.agentStatusHooksEnabled === true ||
       (typeof updates.agentStatusHooksEnabled === 'boolean' &&
         before !== updates.agentStatusHooksEnabled) ||
       (updates.disabledTuiAgents !== undefined &&

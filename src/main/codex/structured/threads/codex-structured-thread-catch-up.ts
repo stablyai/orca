@@ -4,12 +4,12 @@ import { codexItemIdentity, readCodexThreadItem } from '../items/codex-thread-it
 import { CodexTurnOrdinals } from '../journal/codex-turn-ordinals'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import {
   continuedOutsideNotice,
   runHistoryCatchUp
-} from '../../../native-chat/agent-session-wire/structured-agent-session-history-catch-up'
+} from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { createCodexHistoryImportPlan } from '../../history/journal-views/codex-history-import-plan'
@@ -165,6 +165,9 @@ export async function catchUpCodexThread(input: {
         let next = 0
         let groupId: unknown
         const offer = (turn: Record<string, unknown>) => {
+          if (!selectCodexHistoryTurn(turn, view)) {
+            return
+          }
           if (groupId !== turn.id) {
             staging.completeTurn()
           }

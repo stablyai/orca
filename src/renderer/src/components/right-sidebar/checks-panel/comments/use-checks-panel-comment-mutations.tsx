@@ -1,9 +1,12 @@
 import { useCallback } from 'react'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
-import { mergePRCommentIntoList } from '@/store/github/pr-comment-cache'
+import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
 import { githubProjectHost } from '../../../../../../shared/github/project-identity'
-import { setReactionOnSubject, restoreReactionOnSubject } from '@/lib/pr-comment-reactions'
+import {
+  setReactionOnSubject,
+  restoreReactionOnSubject
+} from '@/lib/source-control/review/comments/pr-comment-reactions'
 import { buildPRCommentConversationReplyBody } from './pr-comment-fixing-reply-body'
 import {
   attachPRReviewReplyParent,
@@ -22,7 +25,7 @@ import type {
 } from '../../../../../../shared/github/comment-types'
 import { translate } from '@/i18n/i18n'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
-import { gitHubSlugApiForWorkspace } from '@/runtime/github-slug-owner-api'
+import { gitHubSlugApiForWorkspace } from '@/runtime/repository-github/github-slug-owner-api'
 import { errorMessage } from '../../../../../../shared/error-message'
 
 type ChecksPanelCommentMutationsInput = Pick<

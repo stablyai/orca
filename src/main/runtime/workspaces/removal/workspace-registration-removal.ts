@@ -1,5 +1,5 @@
 import type { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -85,7 +85,7 @@ export async function removeOrphanOrFolderWorktree({
         .catch(() => {})
     }
     runtime.clearOptimisticReconcileToken(removalTarget.id)
-    runtime.removeWorktreeMetadataAndHistory(
+    await runtime.removeWorktreeMetadataAndHistory(
       store,
       removalTarget.id,
       cleanupHostId ?? orphanHost?.id
@@ -120,7 +120,7 @@ export async function removeOrphanOrFolderWorktree({
       removalTarget.id,
       folderConnectionId
     )
-    runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
+    await runtime.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
     runtime.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
     runtime.invalidateResolvedWorktreeCache()
     runtime.notifyWorktreesChanged(repo.id)

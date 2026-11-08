@@ -13,6 +13,7 @@ import type { AutomationsPageDestinationFormState } from './use-automations-page
 import type { AutomationsPageListState } from './use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+import { useTranslate } from '../../i18n/use-translate'
 
 /** Display labels and action availability derived from the selected host row. */
 export function useAutomationsPagePresentationState({
@@ -28,6 +29,7 @@ export function useAutomationsPagePresentationState({
   destination: AutomationsPageDestinationState
   destinationForm: AutomationsPageDestinationFormState
 }) {
+  const t = useTranslate()
   const {
     projectHostSetups,
     sshConnectionStates,
@@ -48,17 +50,20 @@ export function useAutomationsPagePresentationState({
       ? (worktreeForRow(selectedRow, selectedRepo ?? undefined) ?? null)
       : null
   const selectedRunNowAvailability = selectedRow
-    ? getAutomationTargetAvailability({
-        automation: selectedRow.automation,
-        capturedOwner: capturedAutomationOwner(list.capturedAutomationOwners, selectedRow.key),
-        repo: selectedRepo,
-        workspace: selectedWorktree,
-        projectHostSetups,
-        sshConnectionStates,
-        sshStateByEnvironment,
-        runtimeStatusByEnvironmentId,
-        automationHostTarget: automationHostTargetFor(selectedRow)
-      })
+    ? getAutomationTargetAvailability(
+        {
+          automation: selectedRow.automation,
+          capturedOwner: capturedAutomationOwner(list.capturedAutomationOwners, selectedRow.key),
+          repo: selectedRepo,
+          workspace: selectedWorktree,
+          projectHostSetups,
+          sshConnectionStates,
+          sshStateByEnvironment,
+          runtimeStatusByEnvironmentId,
+          automationHostTarget: automationHostTargetFor(selectedRow)
+        },
+        t
+      )
     : null
   const canSaveDraft =
     editingAutomationId === null ||

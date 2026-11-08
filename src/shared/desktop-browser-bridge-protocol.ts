@@ -12,7 +12,8 @@ export const DESKTOP_BROWSER_BRIDGE_NOT_FORWARDED_CODE = 'desktop_browser_bridge
 export const DESKTOP_BROWSER_BRIDGE_SCOPE_CODE = 'desktop_browser_bridge_out_of_scope'
 export const DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE = 'desktop_browser_bridge_unrouted'
 
-export const DESKTOP_BROWSER_BRIDGE_SETTING_LABEL = "Allow this host's orca CLI to control Orca"
+export const DESKTOP_BROWSER_BRIDGE_SETTING_LABEL =
+  'Allow this host to control Orca browser tabs in its workspaces'
 
 /** The desktop also withholds the bridge while this host's pages browse from the desktop's own network. */
 export const DESKTOP_BROWSER_BRIDGE_ROUTING_SETTING_LABEL = 'Settings › Browser › SSH workspaces'

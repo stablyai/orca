@@ -6,7 +6,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import { agentSessionPromptAttentionKey } from '../../../shared/agent-session/agent-session-attention'
 import type { AgentSessionTurnCompletionEvent } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/agent-session/view/structured-agent-session-projection'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent

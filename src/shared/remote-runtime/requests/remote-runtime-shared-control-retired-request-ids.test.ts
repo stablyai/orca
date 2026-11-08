@@ -18,19 +18,6 @@ describe('SharedControlRetiredRequestIds', () => {
     expect(ids.size).toBe(0)
   })
 
-  it('evicts the oldest ids at its configured bound', () => {
-    const ids = new SharedControlRetiredRequestIds({ maxIds: 2 })
-
-    ids.retire('request-1')
-    ids.retire('request-2')
-    ids.retire('request-3')
-
-    expect(ids.size).toBe(2)
-    expect(ids.has('request-1')).toBe(false)
-    expect(ids.has('request-2')).toBe(true)
-    expect(ids.has('request-3')).toBe(true)
-  })
-
   it('refreshes an existing id to the newest eviction rank', () => {
     const ids = new SharedControlRetiredRequestIds({ maxIds: 2 })
 

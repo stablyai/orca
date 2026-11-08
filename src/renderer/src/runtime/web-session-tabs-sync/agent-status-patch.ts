@@ -74,7 +74,7 @@ export function buildMirroredAgentStatusPatch(
     const retainedSurface = retainedSurfaceByHostTabAndPrunedLeafId
       ?.get(surface.parentTabId)
       ?.get(surface.leafId)
-    const hostEntry = remapHostAgentStatus(surface, retainedSurface)
+    const hostEntry = remapHostAgentStatus(surface, worktreeId, retainedSurface)
     if (!hostEntry) {
       continue
     }

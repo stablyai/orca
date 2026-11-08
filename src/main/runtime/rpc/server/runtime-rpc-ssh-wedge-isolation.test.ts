@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import { STATUS_METHODS } from '../methods/status'
-import { SSH_METHODS } from '../methods/ssh'
+import { STATUS_METHODS } from '../methods/host-management/status'
+import { SSH_METHODS } from '../methods/ssh/ssh'
 import { sendRequest } from './runtime-rpc-test-harness'
 
 // Real socket probes must stay responsive while SSH is wedged on headless serve (#31179).

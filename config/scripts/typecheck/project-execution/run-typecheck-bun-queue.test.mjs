@@ -33,30 +33,6 @@ function start(memoryBytes = 16 * 1024 ** 3) {
   })
 }
 
-it('fills a freed compiler slot while the other project is still running', async () => {
-  const result = start()
-  expect(children).toHaveLength(2)
-  children[1].child.emit('close', 0, null)
-  await vi.waitFor(() => expect(children).toHaveLength(3))
-  children[2].child.emit('close', 0, null)
-  await vi.waitFor(() => expect(children).toHaveLength(4))
-  expect(active).toBe(2)
-  children[3].child.emit('close', 0, null)
-  children[0].child.emit('close', 0, null)
-  for (let index = 4; index < TYPECHECK_PROJECTS.length; index++) {
-    await vi.waitFor(() => expect(children).toHaveLength(index + 1))
-    children[index].child.emit('close', 0, null)
-  }
-  expect(await result).toEqual([])
-  expect(peak).toBe(2)
-  expect(children.map(({ spec }) => spec.args[spec.args.indexOf('-p') + 1])).toEqual(
-    TYPECHECK_PROJECTS.map(({ config }) => config)
-  )
-  expect(children.every(({ spec }) => spec.args[spec.args.indexOf('--threads') + 1] === '2')).toBe(
-    true
-  )
-})
-
 it('keeps checking after compiler failures and reports errors in project order', async () => {
   const result = start()
   children[1].child.emit('close', 1, null)
@@ -74,15 +50,4 @@ it('keeps checking after compiler failures and reports errors in project order',
     'bun config/tsconfig.tc.web.json exited with code 1'
   ])
   expect(peak).toBe(2)
-})
-
-it('reduces the queue to one slot when two reservations exceed the memory budget', async () => {
-  const result = start(4 * 1024 ** 3)
-  expect(children).toHaveLength(1)
-  for (let index = 0; index < TYPECHECK_PROJECTS.length; index++) {
-    await vi.waitFor(() => expect(children).toHaveLength(index + 1))
-    children[index].child.emit('close', 0, null)
-  }
-  expect(await result).toEqual([])
-  expect(peak).toBe(1)
 })

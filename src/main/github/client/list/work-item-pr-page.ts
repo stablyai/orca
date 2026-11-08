@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import { ghExecFileAsync, type OwnerRepo } from '../../gh-utils'
 import type { GitHubRepoExecOptions } from '../../github-api-repository'
 import { mapPullRequestWorkItem } from '../map/work-item'

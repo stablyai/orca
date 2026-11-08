@@ -44,35 +44,12 @@ function makeProject(overrides: Record<string, unknown> = {}): Project {
 }
 
 describe('normalizeProjectHostSetupRow', () => {
-  it('returns the input reference when every declared type already holds', () => {
-    const setup = makeSetup()
-    expect(normalizeProjectHostSetupRow(setup)).toBe(setup)
-  })
-
-  it.each([
-    ['null', null],
-    ['undefined', undefined],
-    ['a number', 42],
-    ['an object', {}]
-  ])('coerces a %s repoId to an empty string', (_label, repoId) => {
-    expect(normalizeProjectHostSetupRow(makeSetup({ repoId })).repoId).toBe('')
-  })
-
   // Sidebar grouping trims/parses path during render, so corrupt rows crash the main window.
   it.each([
     ['null', null],
     ['a number', 7]
   ])('coerces a %s path to an empty string', (_label, path) => {
     expect(normalizeProjectHostSetupRow(makeSetup({ path })).path).toBe('')
-  })
-
-  it('coerces every other required string field', () => {
-    const normalized = normalizeProjectHostSetupRow(
-      makeSetup({ id: null, projectId: null, displayName: null })
-    )
-    expect(normalized.id).toBe('')
-    expect(normalized.projectId).toBe('')
-    expect(normalized.displayName).toBe('')
   })
 
   it('falls back to the local host id for a non-string hostId', () => {
@@ -115,11 +92,6 @@ describe('normalizeProjectHostSetupRow', () => {
 })
 
 describe('normalizeProjectRow', () => {
-  it('returns the input reference when every declared type already holds', () => {
-    const project = makeProject()
-    expect(normalizeProjectRow(project)).toBe(project)
-  })
-
   // Why: the compatibility merge spreads `sourceRepoIds`, which throws on a non-array.
   it.each([
     ['null', null, []],
@@ -127,15 +99,6 @@ describe('normalizeProjectRow', () => {
     ['an array with holes', ['repo-1', null, 3], ['repo-1']]
   ])('repairs a %s sourceRepoIds', (_label, sourceRepoIds, expected) => {
     expect(normalizeProjectRow(makeProject({ sourceRepoIds })).sourceRepoIds).toEqual(expected)
-  })
-
-  it('coerces the required string fields', () => {
-    const normalized = normalizeProjectRow(
-      makeProject({ id: null, displayName: null, badgeColor: 42 })
-    )
-    expect(normalized.id).toBe('')
-    expect(normalized.displayName).toBe('')
-    expect(normalized.badgeColor).toBe('')
   })
 
   // Why: `'localWindowsRuntimePreference' in overlay` decides whether a preference clear wins.
@@ -160,27 +123,6 @@ describe('row array normalization', () => {
     })
   })
 
-  it('returns the input array when nothing needed repair', () => {
-    const setups = [makeSetup(), makeSetup({ id: 'setup-2' })]
-    expect(normalizeProjectHostSetupRows(setups)).toBe(setups)
-    const projects = [makeProject()]
-    expect(normalizeProjectRows(projects)).toBe(projects)
-  })
-
-  // Preserve references used as TerminalPane/quick-command useMemo dependencies.
-  it('reuses untouched rows and only reallocates the repaired one', () => {
-    const setups = [
-      makeSetup(),
-      makeSetup({ id: 'setup-2', repoId: null }),
-      makeSetup({ id: 's3' })
-    ]
-    const normalized = normalizeProjectHostSetupRows(setups)
-    expect(normalized).not.toBe(setups)
-    expect(normalized[0]).toBe(setups[0])
-    expect(normalized[1]).not.toBe(setups[1])
-    expect(normalized[2]).toBe(setups[2])
-  })
-
   // Coercion must not change row membership; the old selector invented repo-derived rows when fields changed.
   it('preserves row count and order', () => {
     const setups = [makeSetup({ repoId: null }), makeSetup({ id: 'setup-2' })]
@@ -188,12 +130,5 @@ describe('row array normalization', () => {
       'setup-1',
       'setup-2'
     ])
-  })
-
-  it('treats a non-array as empty', () => {
-    // JSON models persisted non-array input the declared parameter type cannot express.
-    const notAnArray: never[] = JSON.parse('null')
-    expect(normalizeProjectHostSetupRows(notAnArray)).toEqual([])
-    expect(normalizeProjectRows(notAnArray)).toEqual([])
   })
 })

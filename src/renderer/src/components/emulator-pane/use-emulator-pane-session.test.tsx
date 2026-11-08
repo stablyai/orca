@@ -1,3 +1,5 @@
+import * as emulatorPreferences from '@/lib/emulator-opening-preferences-capability'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -64,7 +66,7 @@ function createDeferred<T>(): Deferred<T> {
 function runtimeSuccess<T>(result: T) {
   return {
     id: 'test',
-    ok: true,
+    ok: true as const,
     result,
     _meta: { runtimeId: 'test-runtime' }
   }
@@ -109,6 +111,7 @@ async function flushEffects(): Promise<void> {
 
 describe('useEmulatorPaneSession', () => {
   beforeEach(() => {
+    setLocalRuntimeCapabilitiesForTests([])
     ;(
       globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }
     ).IS_REACT_ACT_ENVIRONMENT = true
@@ -161,28 +164,21 @@ describe('useEmulatorPaneSession', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows a connecting state instead of the old live preview while switching devices', async () => {
-    await act(async () => {
-      root.render(<Probe />)
-    })
-    await flushEffects()
-
-    expect(latest?.isLive).toBe(true)
-    expect(latest?.previewUrl).toBe('http://127.0.0.1:3100/stream.mjpeg')
-
-    await act(async () => {
-      container.querySelector('button')?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-      await Promise.resolve()
-    })
-
-    expect(latest?.loading).toBe(true)
-    expect(latest?.isLive).toBe(false)
-    expect(latest?.previewUrl).toBeUndefined()
-    expect(latest?.displayName).toBe('iPhone B')
-    expect(latest?.selectedUdid).toBe('device-b')
-
-    await act(async () => {
-      attachDeferred.resolve({
+  it('retains an explicit session when an older automatic capability lookup finishes', async () => {
+    consumePrelaunchedSimulatorSession(WORKTREE_ID)
+    const capability = createDeferred<boolean>()
+    vi.spyOn(emulatorPreferences, 'supportsEmulatorOpeningPreferences')
+      .mockImplementationOnce(() => capability.promise)
+      .mockResolvedValue(true)
+    let attachCalls = 0
+    vi.mocked(window.api.runtime.call).mockImplementation(async (request) => {
+      if (request.method === 'emulator.listDevices') {
+        return runtimeSuccess(deviceList)
+      }
+      if (++attachCalls > 1) {
+        return runtimeSuccess(await attachDeferred.promise)
+      }
+      return runtimeSuccess({
         attached: true,
         info: {
           deviceUdid: 'device-b',
@@ -191,13 +187,33 @@ describe('useEmulatorPaneSession', () => {
           wsUrl: 'ws://127.0.0.1:3200/ws'
         }
       })
-      await attachDeferred.promise
-      await Promise.resolve()
     })
-
-    expect(latest?.loading).toBe(false)
+    await act(async () => root.render(<AutoAttachProbe />))
+    await flushEffects()
+    expect(latest?.loading).toBe(true)
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent('orca:emulator-auto-attach', {
+          detail: {
+            worktreeId: WORKTREE_ID,
+            info: {
+              deviceUdid: 'device-a',
+              streamUrl: 'http://127.0.0.1:3100/stream.mjpeg'
+            }
+          }
+        })
+      )
+    })
+    await act(async () => {
+      await latest?.attach('device-b')
+    })
+    expect(latest?.isLive).toBe(true)
+    expect(latest?.selectedUdid).toBe('device-b')
+    await act(async () => capability.resolve(true))
+    await flushEffects()
     expect(latest?.isLive).toBe(true)
     expect(latest?.previewUrl).toBe('http://127.0.0.1:3200/stream.mjpeg')
+    expect(latest?.displayName).toBe('iPhone B')
   })
 
   it('ignores a rotate response from the previous session after switching devices', async () => {

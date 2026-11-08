@@ -16,6 +16,16 @@ export function buildPtyTerminalWaitExitError(pty: ReadonlyTerminalStateRecord):
   return Object.assign(new Error('terminal_exited'), { terminalExitCause: pty.lastExitCause })
 }
 
+/** The process exit a terminal wait error proves; operator closes and unreported causes prove nothing. */
+export function readProvenTerminalExit(error: unknown): TerminalExitCause | null {
+  const cause =
+    error instanceof Error && error.message === 'terminal_exited' && 'terminalExitCause' in error
+      ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: buildPtyTerminalWaitExitError attaches the PTY's recorded cause.
+        (error.terminalExitCause as TerminalExitCause | null | undefined)
+      : null
+  return cause?.kind === 'exited' || cause?.kind === 'signaled' ? cause : null
+}
+
 export function getTerminalState(leaf: ReadonlyTerminalStateRecord): RuntimeTerminalState {
   if (leaf.connected) {
     return 'running'

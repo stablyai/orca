@@ -1,4 +1,4 @@
-import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation-relay-prefix'
+import { federationRelayPrefix } from '../../../main/runtime/orchestration/federation/relay/federation-relay-prefix'
 import * as memoryLimits from '../remote-runtime-memory-limits'
 import { sendRemoteRuntimeRequest } from '../remote-runtime-client'
 import {
@@ -240,7 +240,12 @@ async function createServer(
       }
       const frame = data.toString()
       if (!sharedKey) {
-        const hello = JSON.parse(frame) as { type: string; publicKeyB64: string }
+        const hello: { type: string; publicKeyB64?: string } = JSON.parse(frame)
+        if (!hello.publicKeyB64) {
+          // Legacy-only host: refuses a v2 hello the way hosts before v2 do.
+          ws.close(4001, 'Invalid e2ee_hello')
+          return
+        }
         const clientPublicKey = publicKeyFromBase64(hello.publicKeyB64)
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))

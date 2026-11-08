@@ -102,6 +102,8 @@ function ensurePostHogClient(): PostHog | null {
   return posthog
 }
 
+export const isTelemetryInitialized = (): boolean => storeRef !== null
+
 /** Lets producers avoid preparing usage payloads when transmission is disabled. */
 export function isTelemetryEnabled(): boolean {
   return (

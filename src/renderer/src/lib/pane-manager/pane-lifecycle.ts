@@ -23,7 +23,7 @@ import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { attachInlineImages, detachInlineImages } from './pane-inline-images'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 import { cancelPendingTerminalViewportPresents } from './pane-viewport-present'
-import { releaseReplayGuardsForDisposedTerminal } from '@/components/terminal-pane/replay-guard'
+import { releaseReplayGuardsForDisposedTerminal } from '@/components/terminal-pane/snapshots/replay-guard'
 
 export { createPaneDOM } from './pane-dom-creation'
 

@@ -4,7 +4,7 @@ import {
   claudeStartupResultError,
   claudeStreamJsonExitError
 } from './claude-stream-json-exit-error'
-import { providerStartupFailureFact } from '../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { claudeStartFailure } from './claude-startup-failure'
 
 const retryableStructuredAgentSessionStart = (error: unknown): boolean =>

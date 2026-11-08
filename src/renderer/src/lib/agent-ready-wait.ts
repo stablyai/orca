@@ -2,7 +2,7 @@ import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
 import { isExpectedAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { useAppStore } from '@/store'
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 
 // Prefer idle titles, then matching foreground process, then a non-shell child after grace; bound waiting so missing binaries cannot hang Use.
 export type AgentReadyReason = 'title-idle' | 'foreground-match' | 'child-process' | 'timeout'

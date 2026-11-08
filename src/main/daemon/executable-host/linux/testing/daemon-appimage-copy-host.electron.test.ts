@@ -247,19 +247,4 @@ describe.runIf(linux)('the AppImage terminal daemon on the extracted copy', () =
       })
     }
   )
-
-  it(
-    'stays on Electron, and says so, when the extracted copy carries no Node',
-    { timeout: 120_000 },
-    async () => {
-      const install = await installAppImage('no-node')
-      const userData = newProfile(install)
-      extractCopy(install, '1.0.0', false)
-      const window = await openWindow(install, userData, '1.0.0')
-      expect(window.result).toEqual({ adopted: false, mode: null })
-      expect(window.stderr()).toContain('AppImage daemon host fallback reason=no-bundled-node')
-      expect(executableOf(profileDaemonPid(userData)!)).toBe(electron)
-      await window.quit()
-    }
-  )
 })

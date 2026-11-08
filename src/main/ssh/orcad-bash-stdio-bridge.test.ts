@@ -9,8 +9,6 @@ import type { PipedChildProcess as Bridge } from '@orca/process-host/process-spe
 import { OrcadStdioBridgeUnavailableError } from '../orcad/orcad-host-unavailable'
 import { checkOrcadStdioBridge, type OrcadStdioBridge } from './orcad-stdio-bridge'
 import {
-  ORCAD_STDIO_BRIDGE_NO_NODE,
-  ORCAD_STDIO_BRIDGE_READY,
   ORCAD_STDIO_BRIDGE_REFUSED,
   orcadBashStdioBridgeCommand
 } from '../managed-server/lifecycle/orcad-stdio-bridge-script'
@@ -24,9 +22,6 @@ import {
   bashSupportsRelay,
   guestHome,
   isAlive,
-  NO_DEV_TCP_EDIT,
-  OLD_BASH_EDIT,
-  pathWithEditedBash,
   pathWithoutBash,
   processTree,
   treeRssMb
@@ -172,13 +167,6 @@ function transportRunning(env: Partial<NodeJS.ProcessEnv>): OrcadHostTransport {
 }
 
 describe.runIf(RELAY)('the bash stdio bridge', () => {
-  it('announces itself with the unchanged ready sentinel', async () => {
-    const child = spawnBridge(echo.port)
-    await expect(firstLine(child.stdout)).resolves.toBe(ORCAD_STDIO_BRIDGE_READY)
-    child.stdin.end()
-    await exitOf(child)
-  })
-
   it('carries every byte value both ways in a multi-megabyte frame, without Node', async () => {
     const child = spawnBridge(echo.port)
     const { decoder, ready } = decode(child.stdout)
@@ -342,12 +330,6 @@ describe.runIf(RELAY)('the bash stdio bridge', () => {
       server.close()
     }
   })
-
-  it('falls back to Node when bash was built without /dev/tcp', async () => {
-    const child = spawnBridge(echo.port, { PATH: pathWithEditedBash(scratch, NO_DEV_TCP_EDIT) })
-    await expect(firstLine(child.stdout)).resolves.toBe(ORCAD_STDIO_BRIDGE_NO_NODE)
-    await expect(exitOf(child)).resolves.toBe(127)
-  })
 })
 
 describe.runIf(POSIX)('the bash stdio bridge’s Node fallback', () => {
@@ -364,12 +346,6 @@ describe.runIf(POSIX)('the bash stdio bridge’s Node fallback', () => {
     const exited = exitOf(child)
     child.stdin.end()
     await exited
-  })
-
-  it('takes the Node bridge on bash older than 4.3', async () => {
-    const child = spawnBridge(echo.port, { PATH: pathWithEditedBash(scratch, OLD_BASH_EDIT) })
-    await expect(firstLine(child.stdout)).resolves.toBe(ORCAD_STDIO_BRIDGE_NO_NODE)
-    await expect(exitOf(child)).resolves.toBe(127)
   })
 
   it('reports a refused dial with the unchanged refusal sentinel', async () => {

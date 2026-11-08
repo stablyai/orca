@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { SearchOptions, SearchResult } from '../../../shared/code-search-types'
+import type { SearchOptions, SearchResult } from '../../../shared/file-search/code-search-types'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'

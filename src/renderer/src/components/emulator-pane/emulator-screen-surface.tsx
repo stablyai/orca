@@ -13,6 +13,7 @@ import type {
   StreamSize,
   VisualStreamGeometry
 } from './emulator-device-frame-layout'
+import { useTranslate } from '@/i18n/use-translate'
 
 type EmulatorScreenSurfaceProps = {
   frameLayout: DeviceFrameLayout | null
@@ -59,6 +60,7 @@ export function EmulatorScreenSurface({
   streamKey,
   streamRotation
 }: EmulatorScreenSurfaceProps) {
+  const t = useTranslate()
   return (
     <div
       className={cn(
@@ -83,7 +85,7 @@ export function EmulatorScreenSurface({
       role={isLive ? 'application' : undefined}
       tabIndex={isLive ? 0 : undefined}
       aria-keyshortcuts={keyboardCaptureActive ? 'Escape' : undefined}
-      aria-label={getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive)}
+      aria-label={getEmulatorScreenAriaLabel(isLive, keyboardCaptureActive, t)}
     >
       {/* Use the real streamed screen; extra in-screen chrome would duplicate iOS status bars and distort bezels. */}
       <EmulatorScreenStreamContent

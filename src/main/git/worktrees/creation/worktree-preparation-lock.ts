@@ -1,3 +1,4 @@
+import type { WorktreePreparationOperation } from './worktree-preparation-operation'
 import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
@@ -74,13 +75,15 @@ async function readPreparationLockPath(
 export async function lockWorktreePreparation(
   worktreePath: string,
   lockReason: string,
-  options: GitWorktreeExecOptions
+  options: GitWorktreeExecOptions,
+  operation?: WorktreePreparationOperation
 ): Promise<string> {
   const lockPath = await readPreparationLockPath(worktreePath, options)
   options.signal?.throwIfAborted()
   // Git's own lock marker is a reason plus newline; exclusive creation preserves another owner.
   try {
-    await writeFile(lockPath, `${lockReason}\n`, { flag: 'wx' })
+    const writing = writeFile(lockPath, `${lockReason}\n`, { flag: 'wx' })
+    await (operation ? operation.trackWriter(writing) : writing)
   } catch (error) {
     if (getErrorCode(error) === 'EEXIST') {
       throw new WorktreePreparationLockOwnershipError()
