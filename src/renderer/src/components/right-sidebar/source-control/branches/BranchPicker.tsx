@@ -122,7 +122,11 @@ const BranchRow = memo(function BranchRow({
       value={`${row.target.kind}:${row.target.name}`}
       data-current={row.current ? 'true' : undefined}
       selection="palette"
-      disabled={row.current || (row.workspace ? pending : disabled || Boolean(row.occupiedPath))}
+      // A disabled item swallows pointer events, so a row carrying the copy button stays enabled; select ignores it.
+      disabled={
+        (row.current && !onCopy) ||
+        (!row.current && (row.workspace ? pending : disabled || Boolean(row.occupiedPath)))
+      }
       onSelect={() => void onSelect(row)}
     >
       <span className="min-w-0 flex-1 truncate">
@@ -140,12 +144,18 @@ const BranchRow = memo(function BranchRow({
               type="button"
               variant="ghost"
               size="icon-xs"
-              className="size-5 text-muted-foreground"
+              className="size-5"
               aria-label={t('sourceControl.branchPicker.copy', 'Copy branch name')}
               onClick={(event) => {
                 // The row owns selection; copying must not reach it.
                 event.stopPropagation()
                 onCopy()
+              }}
+              onKeyDown={(event) => {
+                // cmdk's root turns Enter into a select of the highlighted row.
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.stopPropagation()
+                }
               }}
             >
               <Copy className="size-3" />

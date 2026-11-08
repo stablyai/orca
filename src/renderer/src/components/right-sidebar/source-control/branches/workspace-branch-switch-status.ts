@@ -26,7 +26,7 @@ export function refreshWorktreeCopyStatus(
     connectionId: copy.connectionId,
     pushTarget: worktreeCopyPushTarget(state, worktreeId, copy.hostId),
     deps: state,
-    request: { admissionTier: 'interactive' }
+    request: { admissionTier: 'interactive', reuseLineStats: true }
   }).catch((error: unknown) => console.warn('[BranchPicker] git status refresh failed', error))
 }
 

@@ -68,6 +68,7 @@ export function NativeChatComposerBranchPicker({
           variant="ghost"
           size="xs"
           className="h-5.5 min-w-0 flex-1 justify-start"
+          title={branch}
           aria-label={t('sourceControl.branchPicker.switch', 'Switch branch: {{branch}}', {
             branch
           })}

@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { usePublishedMachineName } from '@/components/machine-identity/use-published-machine-name'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   createNativeChatComposerWorkspaceSelector,
   type NativeChatComposerWorkspaceTarget
@@ -124,7 +125,13 @@ export function NativeChatComposerWorkspace({
           </TooltipContent>
         </Tooltip>
       )}
-      {identity?.kind === 'branch' && rowWorktreeId && repoId && hostId && path ? (
+      {identity?.kind === 'branch' &&
+      rowWorktreeId &&
+      repoId &&
+      hostId &&
+      path &&
+      // Direct SSH ids aren't served by the git switch route; those keep click-to-copy.
+      parseExecutionHostId(hostId)?.kind !== 'ssh' ? (
         <NativeChatComposerBranchPicker
           worktreeId={rowWorktreeId}
           worktreePath={path}

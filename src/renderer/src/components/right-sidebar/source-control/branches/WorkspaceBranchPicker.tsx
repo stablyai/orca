@@ -1,14 +1,15 @@
 import { useCallback, useMemo, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { basename } from '@/lib/path'
-import { isWorkspaceSelected } from '@/lib/active-workspace-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import { getActiveWorkspaceExecutionHostId } from '@/lib/active-workspace-host'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   getExecutionHostLabel,
+  parseRoutableExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -50,25 +51,35 @@ export function WorkspaceBranchPicker({
   onLanded
 }: WorkspaceBranchPickerProps) {
   const t = useTranslate()
-  const statusKnown = useAppStore(
+  // Status slots are keyed by id alone, so while another host's copy of this id is selected they hold its status.
+  const otherCopySelected = useAppStore((state) => {
+    const selected = getActiveWorkspaceExecutionHostId(state, worktreeId)
+    return selected !== null && (parseRoutableExecutionHostId(selected)?.id ?? selected) !== hostId
+  })
+  const statusRead = useAppStore(
     (state) => state.gitStatusHeadByWorktree?.[worktreeId] !== undefined
   )
-  const statusReadError = useAppStore((state) => state.gitStatusReadErrorByWorktree?.[worktreeId])
+  const statusKnown = statusRead && !otherCopySelected
+  const readError = useAppStore((state) => state.gitStatusReadErrorByWorktree?.[worktreeId])
+  const statusReadError = otherCopySelected ? undefined : readError
   const conflictOperation = useAppStore(
     (state) => state.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
   )
   const entries = useAppStore((state) => state.gitStatusByWorktree[worktreeId] ?? NO_ENTRIES)
-  const environmentName = useAppStore((state) =>
-    target.kind === 'environment'
-      ? state.runtimeEnvironments.find((host) => host.id === target.environmentId)?.name
-      : undefined
+  const environmentId = target.kind === 'environment' ? target.environmentId : null
+  const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
+  const environmentName = useMemo(
+    () =>
+      environmentId
+        ? runtimeEnvironments.find((host) => host.id === environmentId)?.name
+        : undefined,
+    [environmentId, runtimeEnvironments]
   )
   // Workspace rows need every worktree, not a folder section's owner-only map.
   const worktreeMap = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
   const agentWorking = useAppStore(
     (state) => selectWorktreeAgentActivitySummary(state, worktreeId).hasLiveWorking
   )
-  const selectedHostId = useAppStore((state) => state.activeWorkspaceExecutionHostId ?? null)
   const showDirtyBlocker =
     statusKnown && !statusReadError && conflictOperation === 'unknown' && entries.length > 0
   const changedCount = useMemo(
@@ -88,8 +99,11 @@ export function WorkspaceBranchPicker({
     (message?: string) => {
       if (message) {
         // The switch can land after the user moved on; name the workspace it happened in.
-        const selection = { worktreeId, executionHostId: selectedHostId }
-        if (isWorkspaceSelected(useAppStore.getState(), selection)) {
+        const state = useAppStore.getState()
+        const selected =
+          state.activeWorktreeId === worktreeId &&
+          (state.activeWorkspaceExecutionHostId ?? 'local') === hostId
+        if (selected) {
           toast.warning(message, { duration: 15000 })
         } else {
           toast.warning(
@@ -102,7 +116,7 @@ export function WorkspaceBranchPicker({
       }
       onLanded()
     },
-    [worktreeId, selectedHostId, workspaceLabel, onLanded]
+    [worktreeId, hostId, workspaceLabel, onLanded]
   )
   // Checking out moves HEAD under the agent, so creating a branch waits too; the host re-checks on switch.
   const blocker = agentWorking
@@ -145,7 +159,7 @@ export function WorkspaceBranchPicker({
       blocker={blocker}
       dirtyOnlyBlocker={showDirtyBlocker && !agentWorking}
       trigger={trigger}
-      onOpen={onOpen}
+      onOpen={otherCopySelected ? undefined : onOpen}
       onCopyBranch={onCopyBranch}
       context={{ target, worktreeId, worktreePath }}
       repoId={repoId}
