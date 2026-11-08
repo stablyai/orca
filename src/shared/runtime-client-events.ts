@@ -22,6 +22,8 @@ export type RuntimeClientEvent =
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
   | { type: 'workspaceViewChanged' }
+  // Index, HEAD or refs moved in a watched local repo; without `worktreeIds` any of its checkouts may have changed.
+  | { type: 'gitStatusChanged'; repoId: string; worktreeIds?: string[] }
   | {
       type: 'worktreesChanged'
       repoId: string

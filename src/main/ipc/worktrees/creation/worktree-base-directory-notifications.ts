@@ -12,8 +12,12 @@ import {
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
 import { cachedWorktreePathsForScope } from './worktree-head-identity-cached-paths'
+import { clearGitStatusLineStatsCache } from '../../../../shared/git/status/git-status-line-stats-cache'
 import { notifyWorktreeGitStatusMetadataChanged } from '../../worktree-remote'
-import { notifyWatchedWorktreeCatalogChanged } from '../../watched-worktree-catalog-notification'
+import {
+  notifyGitStatusChangedForRemoteClients,
+  notifyWatchedWorktreeCatalogChanged
+} from '../../watched-worktree-catalog-notification'
 
 export type WorktreeBaseNotificationWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
@@ -79,11 +83,10 @@ export function scheduleWorktreeBaseNotification(
     }
     const pendingStructure = [...watch.pendingStructureRepoIds]
     const hasHeadIdentity = watch.pendingHeadIdentityRepoIds.size > 0
-    const sourceControlRepoIds = new Set(
-      [...watch.pendingGitStatusRepoIds, ...watch.pendingHeadIdentityRepoIds].filter(
-        (repoId) => !watch.pendingStructureRepoIds.has(repoId)
-      )
-    )
+    const sourceControlRepoIds = new Set([
+      ...watch.pendingGitStatusRepoIds,
+      ...watch.pendingHeadIdentityRepoIds
+    ])
     const emitHeadIdentities = pendingStructure.length === 0
     const headIdentityScope = watch.pendingHeadIdentityScope
     // Resolve attribution before head refresh rewrites the memo; base watches remain unattributed.
@@ -94,8 +97,16 @@ export function scheduleWorktreeBaseNotification(
     for (const repoId of pendingStructure) {
       notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)
     }
+    if (sourceControlRepoIds.size > 0) {
+      // Staging can keep a file's status letters, so counts reused by letters must not outlive an index change.
+      clearGitStatusLineStatsCache()
+    }
     for (const repoId of sourceControlRepoIds) {
-      notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId, gitStatusWorktreePaths)
+      // The renderer re-reads status on worktrees:changed; phones' Changes doesn't, so they hear every repo.
+      if (!pendingStructure.includes(repoId)) {
+        notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId, gitStatusWorktreePaths)
+      }
+      notifyGitStatusChangedForRemoteClients(repoId, gitStatusWorktreePaths)
     }
     if (
       supportsWorktreeHeadIdentityRefresh(watch) &&
