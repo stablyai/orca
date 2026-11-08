@@ -18,7 +18,6 @@
 1 test-no-in-test-import-actual:src/main/omp/omp-session-cwd-lookup.test.ts
 1 test-no-in-test-import-actual:src/main/orcad/electron-serve-provider-selection.test.ts
 1 test-no-in-test-import-actual:src/main/pty/scrollback/overlay-mirror.test.ts
-1 test-no-in-test-import-actual:src/main/runtime/files/orca-runtime-files-mobile-explorer-reads.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/terminal/artifacts/orca-runtime-files-terminal-artifact-swap-detection.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/rpc/server/pairing/mobile-pairing-userdata-path.test.ts
 1 test-no-in-test-import-actual:src/main/speech/openai-api-key-store.test.ts
@@ -251,7 +250,6 @@
 5 test-no-real-time-wait:src/main/pty/process-retirement/windows-live-tree-kill.win32.test.ts
 1 test-no-real-time-wait:src/main/runtime/agent-session/structured-agent-session-legacy-send-behind-command.test.ts
 1 test-no-real-time-wait:src/main/runtime/terminal/recovery/layout-command-pane-starts-layout-owner.test.ts
-1 test-no-real-time-wait:src/main/runtime/files/orca-runtime-files-mobile-explorer-reads.test.ts
 3 test-no-real-time-wait:src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-codex-real-pty.integration.test.ts
 1 test-no-real-time-wait:src/main/runtime/workspaces/removal/owned-session-teardown-policy.test.ts
 1 test-no-real-time-wait:src/main/runtime/rpc/server/remote-runtime-request-connection.integration.test.ts
@@ -613,7 +611,6 @@
 2 test-no-wall-clock:src/main/runtime/agent-session/structured-agent-session-held-signal.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-cloud-relay/mobile-relay-e2ee.integration.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-cloud-relay/relay-http-client.test.ts
-1 test-no-wall-clock:src/main/persistence/mobile-store-orphaned-temp-cleanup.test.ts
 1 test-no-wall-clock:src/main/runtime/terminal/layout/mobile-subscribe-idle-pane-hydrate.test.ts
 1 test-no-wall-clock:src/main/runtime/session-construction/agent-session/orca-runtime-agent-session-operation.test.ts
 3 test-no-wall-clock:src/main/runtime/terminal/query/orca-runtime-codex-idle-title-chat-address.test.ts

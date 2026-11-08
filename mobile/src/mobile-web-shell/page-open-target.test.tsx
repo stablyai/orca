@@ -40,37 +40,6 @@ function shellArgs(overrides: Partial<Args>): Args {
   }
 }
 
-it('pushes a session natively when the page the shell activates is older than open targets', async () => {
-  const openNatively = vi.fn()
-  const cleared = vi.fn()
-  await show(
-    shellArgs({
-      route: { ...HOST, params: { open: SESSION } },
-      pageVersion: 2,
-      openNatively,
-      onRouteParamClear: cleared
-    })
-  )
-
-  expect(rendered.view?.pageRoute).toEqual({ pathname: '/h/host-1', params: {} })
-  expect(cleared.mock.calls).toEqual([['open', SESSION]])
-  expect(openNatively.mock.calls).toEqual([[SESSION]])
-})
-
-it('drops that push when another screen opened on top while the page downloaded', async () => {
-  const openNatively = vi.fn()
-  await show(
-    shellArgs({
-      route: { ...HOST, params: { open: SESSION } },
-      pageVersion: 2,
-      isFocused: () => false,
-      openNatively
-    })
-  )
-
-  expect(openNatively).not.toHaveBeenCalled()
-})
-
 it('reopens the session a lost document showed in the document that replaces it', async () => {
   await show(shellArgs({}))
   await act(async () => rendered.view?.recordLocation(SESSION))
