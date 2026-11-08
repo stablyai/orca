@@ -4,10 +4,8 @@ import {
   type NativeChatAssignedRows
 } from '../../../../shared/native-chat-row-keys'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
-import {
-  nativeChatSlotKey,
-  type NativeChatTranscriptSlot
-} from './conversation/slots/native-chat-transcript-slots'
+import { nativeChatSlotKey } from './conversation/slots/native-chat-transcript-slot-selection'
+import type { NativeChatTranscriptSlot } from './conversation/slots/native-chat-transcript-slots'
 
 export function useNativeChatTranscriptRowKeys(
   slots: readonly NativeChatTranscriptSlot[],
