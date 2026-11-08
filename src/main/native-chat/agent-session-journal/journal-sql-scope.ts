@@ -14,7 +14,9 @@ export class JournalSqlScope {
     readonly sessionId: string,
     readonly epoch: string,
     readonly work: JournalSqlReadWork = { rows: 0, decodedBytes: 0 },
-    private readonly indexValues?: JournalSqlIndexValues
+    private readonly indexValues?: JournalSqlIndexValues,
+    /** Fixed-size facts a read is handed stay in that read; only the writer saves them. */
+    readonly snapshot = false
   ) {}
 
   get prefix(): [string, string] {
@@ -49,6 +51,24 @@ export class JournalSqlScope {
   }
 
   withIndexValues(values: JournalSqlIndexValues): JournalSqlScope {
-    return new JournalSqlScope(this.db, this.sessionId, this.epoch, this.work, values)
+    return new JournalSqlScope(
+      this.db,
+      this.sessionId,
+      this.epoch,
+      this.work,
+      values,
+      this.snapshot
+    )
+  }
+
+  asSnapshot(): JournalSqlScope {
+    return new JournalSqlScope(
+      this.db,
+      this.sessionId,
+      this.epoch,
+      this.work,
+      this.indexValues,
+      true
+    )
   }
 }

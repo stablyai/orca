@@ -32,6 +32,17 @@ import type {
 } from './journal-status-indicators'
 import { readJournalSqlStatusIndicators } from './journal-sql-status-indicators'
 import {
+  latestAcceptedSendUnopened,
+  type JournalLatestStop
+} from './context-epochs/journal-stop-turn-end'
+import { JournalSqlReducer } from './journal-sql-reducer'
+import {
+  detachJournalSqlStop,
+  readJournalSqlQueue,
+  type JournalSqlQueueRead,
+  type JournalSqlQueueReadResult
+} from './journal-sql-queued-messages'
+import {
   readJournalSqlItems,
   type JournalSqlItemRead,
   type JournalSqlItemReadResult
@@ -56,6 +67,10 @@ export type JournalSqlPointRead = {
     | { kind: 'presentation-removed'; itemId: string }
     | { kind: 'canonical-item-id'; itemId: string }
     | { kind: 'provider-activity'; fence: number }
+    | { kind: 'latest-stop' }
+    | { kind: 'accepted-send-unopened' }
+    | { kind: 'turn-removed'; turnId: string }
+    | { kind: 'queue'; operation: JournalSqlQueueRead }
     | JournalSqlItemRead
 }
 
@@ -87,6 +102,10 @@ export type JournalSqlPointReadResult =
   | { kind: 'presentation-removed'; removed: boolean }
   | { kind: 'canonical-item-id'; itemId: string }
   | { kind: 'provider-activity'; at: number | undefined }
+  | { kind: 'latest-stop'; stop: JournalLatestStop | null }
+  | { kind: 'accepted-send-unopened'; unopened: boolean }
+  | { kind: 'turn-removed'; removed: boolean }
+  | { kind: 'queue'; result: JournalSqlQueueReadResult }
   | JournalSqlItemReadResult
 
 /** Point procedures decode only the named entity and its captured incarnations. */
@@ -228,5 +247,26 @@ function read(
         kind: 'provider-activity',
         at: values.get<number>('providerActivityAt', operation.fence)
       }
+    case 'latest-stop': {
+      const marks = new JournalSqlScalars(scope, 'pause-marks')
+      const { latestStop } = marks.get<{ latestStop: JournalLatestStop | null }>('header', {
+        latestStop: null
+      })
+      return { kind: 'latest-stop', stop: detachJournalSqlStop(latestStop) }
+    }
+    case 'accepted-send-unopened':
+      return {
+        kind: 'accepted-send-unopened',
+        unopened: latestAcceptedSendUnopened(new JournalSqlReducer(scope, scope.epoch).state)
+      }
+    case 'turn-removed':
+      return {
+        kind: 'turn-removed',
+        removed: new JournalSqlReducer(scope, scope.epoch).state.removedTurnIds.has(
+          operation.turnId
+        )
+      }
+    case 'queue':
+      return { kind: 'queue', result: readJournalSqlQueue(scope, operation.operation) }
   }
 }

@@ -7,6 +7,7 @@ import type { QueuedMessageOwed } from './queued-messages/queued-message-consume
 import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attachment-inverse'
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalWriterEffect } from './journal-writer-effects'
+import type { JournalStopSettle } from './queued-messages/queued-message-pause-marks'
 
 export type JournalWriterStoreEffect = Extract<JournalWriterEffect, { kind: 'store' }>
 
@@ -27,7 +28,11 @@ export type JournalWriterHostFacts = {
   stoppedCut?: { cut: UsageLimitContinueIdentity; store: JournalWriterStoreEffect | null }
   /** What a rewind or replacement left, for the host's staged completion receipt. */
   rewound?: JournalRewoundFacts
+  /** The host's unsaved settlement of the latest Stop, named by that Stop's sequence. */
+  stopSettle?: JournalStopSettleFact
 }
+
+export type JournalStopSettleFact = { sequence: number; settle: JournalStopSettle }
 
 export type JournalRewoundFacts = {
   cursor: AgentJournalCursor
