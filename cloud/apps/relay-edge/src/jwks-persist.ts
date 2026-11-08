@@ -4,9 +4,10 @@
 // set always wins, and a token whose key the stored set lacks reads as "keys unavailable", not invalid.
 import { createLocalJWKSet, type FetchImplementation, type JSONWebKeySet, type JWTVerifyGetKey } from 'jose'
 
-// Longer than the in-isolate stale window (30 min): this covers only isolates that have no set at
-// all. It never extends a live socket past its token's own expiry (+60 s grace).
-export const PERSISTED_JWKS_MAX_STALE_MS = 24 * 60 * 60 * 1000
+// The same 30 min the cells trust a stale key set for: a rotated or leaked key is not trusted
+// longer here during an auth outage. Covers only isolates that have no set at all, and never
+// extends a live socket past its token's own expiry (+60 s grace).
+export const PERSISTED_JWKS_MAX_STALE_MS = 30 * 60 * 1000
 const STORED_AT_HEADER = 'x-orca-jwks-stored-at'
 
 function edgeCache(): Cache | null {
