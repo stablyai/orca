@@ -61,7 +61,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
       .filter((args) => args.method === 'terminal.send')
   }
 
-  it('sends a query reply immediately after typed input still in the coalescing window', async () => {
+  it('sends a query reply immediately, but debounces typed input by 8ms', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -78,9 +78,9 @@ describe('remote transport sendInputImmediate (#7329)', () => {
       })
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
 
-      // Typed input: the first key goes at once; the next waits in the coalescing window.
-      expect(transport.sendInput('y', 'driving')).toBe(true)
-      expect(transport.sendInput('es', 'driving')).toBe(true)
+      // Typed input: debounced — nothing sent before the 8ms flush.
+      expect(transport.sendInput('yes', 'driving')).toBe(true)
+      expect(terminalSendCalls()).toEqual([])
 
       // Query reply (OSC 11 background color): sent immediately, no timer.
       expect(transport.sendInputImmediate('\x1b]11;rgb:2828/2c2c/3434\x1b\\')).toBe(true)
@@ -89,8 +89,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
       // Immediate replies retain separate frames after earlier input so host reply classification preserves ordering.
       const sends = terminalSendCalls() as { params: { text: string } }[]
       expect(sends.map((send) => send.params.text)).toEqual([
-        'y',
-        'es',
+        'yes',
         '\x1b]11;rgb:2828/2c2c/3434\x1b\\'
       ])
     } finally {

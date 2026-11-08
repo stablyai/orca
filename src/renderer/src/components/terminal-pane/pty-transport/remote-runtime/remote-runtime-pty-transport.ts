@@ -2283,8 +2283,14 @@ export function createRemoteRuntimePtyTransport(
         holdUnsentInput(text)
       }
     },
-    // Why: a hold replaying through sendInputNow must not re-enter its own still-buffering queue.
-    { sendLeadingEdge: () => !recoveryInputHold.isHolding() }
+    {
+      // Why: without the ack journal an accepted write's separate RPC could overtake an immediate key.
+      sendLeadingEdge: () =>
+        // A hold replaying through sendInputNow must not re-enter its own queue.
+        !recoveryInputHold.isHolding() &&
+        handle !== null &&
+        getCurrentMultiplexedStream(handle)?.acknowledgesInput() === true
+    }
   )
 
   function deferViewportForRecovery(claim: boolean): void {

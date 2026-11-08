@@ -180,7 +180,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
   })
 
-  it('sends idle remote input at once and coalesces rapid input after it', async () => {
+  it('coalesces rapid remote terminal input before sending it to the runtime', async () => {
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
@@ -195,25 +195,18 @@ describe('createRemoteRuntimePtyTransport', () => {
       runtimeCall.mockClear()
       subscriptionSendBinary.mockClear()
 
-      const inputTexts = (): string[] =>
-        subscriptionSendBinary.mock.calls
-          .map((call) => decodeTerminalStreamFrame(call[0]))
-          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
-          .map((frame) => {
-            expect(frame?.streamId).toBe(streamId)
-            return frame ? decodeTerminalStreamText(frame.payload) : ''
-          })
-
       expect(transport.sendInput('a', 'driving')).toBe(true)
-      expect(inputTexts()).toEqual(['a'])
       expect(transport.sendInput('b', 'driving')).toBe(true)
-      expect(transport.sendInput('c', 'driving')).toBe(true)
-      expect(inputTexts()).toEqual(['a'])
+      expect(runtimeCall).not.toHaveBeenCalled()
 
-      await vi.advanceTimersByTimeAsync(8)
+      await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).not.toHaveBeenCalled()
-      expect(inputTexts()).toEqual(['a', 'bc'])
+      expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)
+      const frame = decodeTerminalStreamFrame(subscriptionSendBinary.mock.calls[0][0])
+      expect(frame?.opcode).toBe(TerminalStreamOpcode.Input)
+      expect(frame?.streamId).toBe(streamId)
+      expect(frame ? decodeTerminalStreamText(frame.payload) : '').toBe('ab')
     } finally {
       vi.useRealTimers()
     }
@@ -319,29 +312,22 @@ describe('createRemoteRuntimePtyTransport', () => {
       subscriptionSendBinary.mockClear()
 
       expect(transport.sendInput('a', 'driving')).toBe(true)
-      expect(transport.sendInput('b', 'driving')).toBe(true)
       await expect(transport.sendInputAccepted?.('\x03', 'driving')).resolves.toBe(true)
       await vi.runOnlyPendingTimersAsync()
 
-      // The idle key already left on the stream; only the key still in the window joins the accepted write.
-      expect(
-        subscriptionSendBinary.mock.calls.map(([bytes]) => {
-          const frame = decodeTerminalStreamFrame(bytes)
-          return frame ? decodeTerminalStreamText(frame.payload) : ''
-        })
-      ).toEqual(['a'])
       expect(runtimeCall).toHaveBeenCalledWith({
         selector: 'env-1',
         method: 'terminal.send',
         params: {
           terminal: 'terminal-1',
-          text: 'b\x03',
+          text: 'a\x03',
           client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
           viewport: { cols: 80, rows: 24 },
           claimViewport: true
         },
         timeoutMs: 15_000
       })
+      expect(subscriptionSendBinary).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }
@@ -540,6 +526,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       subscriptionSendBinary.mockClear()
 
       expect(transport.sendInput('echo one\necho two\r\n', 'driving')).toBe(true)
+      await vi.runOnlyPendingTimersAsync()
 
       expect(runtimeCall).not.toHaveBeenCalled()
       expect(subscriptionSendBinary).toHaveBeenCalledTimes(1)

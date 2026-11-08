@@ -224,7 +224,11 @@ it.each([
         ([request]) => request.method === 'terminal.resolvePane'
       ).length
       transport.sendInput('ordinary-input', 'driving')
-      await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('ordinary-input'))
+      if (kind === 'ackless') {
+        expect(inputFrameTexts().join('')).not.toContain('ordinary-input')
+      } else {
+        await vi.waitFor(() => expect(inputFrameTexts().join('')).toContain('ordinary-input'))
+      }
       if (kind === 'refused' || kind === 'bookkeeping-error' || kind === 'unavailable') {
         expect(session.pendingStartupCommand).toBeNull()
       }
