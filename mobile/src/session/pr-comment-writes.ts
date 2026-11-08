@@ -2,6 +2,8 @@ import { hashKey, type QueryClient, type QueryKey } from '@tanstack/react-query'
 import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import { defineHostMutation } from '../query/host-mutation'
+import { translate } from '../i18n/mobile-i18n'
+import { isLogicalClientCutoverError } from '../transport/logical-client-cutover-error'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   fetchAddIssueComment,
@@ -148,6 +150,15 @@ function revertWrite(
   }
 }
 
+function unconfirmed(): Error {
+  return new Error(
+    translate(
+      'session.failure.unconfirmed',
+      "Couldn't confirm whether this was sent. It hasn't been resent."
+    )
+  )
+}
+
 type CommentsRead = { comments: PRComment[] | null; order: number }
 
 // Re-reads issued per details entry, and the latest one accepted: two writes' re-reads can land out of order.
@@ -183,12 +194,16 @@ export const prCommentWrite = defineHostMutation({
   send: async (client: RpcClient, vars: PrCommentWriteVars): Promise<CommentsRead> => {
     const outcome = await sendWrite(client, vars)
     if (!outcome.ok) {
-      throw new Error(outcome.error)
+      // A path switch mid-send may or may not have delivered it: say so, and keep the typed text.
+      throw isLogicalClientCutoverError(new Error(outcome.error))
+        ? unconfirmed()
+        : new Error(outcome.error)
     }
     return readComments(client, vars).catch(() => ({ comments: null, order: 0 }))
   },
-  // A lost reply is settled by what the host's comments show, never by posting again.
-  confirm: readComments,
+  // The comments can't prove a lost write landed (a new comment has no id yet, and an empty list may be a
+  // failed read), so a lost reply is reported as unknown rather than success, and never posted again.
+  confirm: () => Promise.reject(unconfirmed()),
   optimistic: {
     keys: (_hostId, vars) => (vars.target ? [vars.target.key] : []),
     apply: (queryClient, _hostId, vars) => {
