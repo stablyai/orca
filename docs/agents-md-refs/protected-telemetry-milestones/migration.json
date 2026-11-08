@@ -194,7 +194,7 @@
       "dashboard_ids": [1562016],
       "gate_step": 5,
       "name": "Fresh installs: workspace available and first observed agent interaction within 24h, by platform",
-      "description": "Anchor = first onboarding_started fresh_install on a supporting build, opt-outs excluded, full 24h+15m follow-up. Interaction = first_agent_interaction install_cohort=fresh: observed prompt/message submission, not provider success or agent launch. unattributed_prompt (may be automation) shown separately. Workspace = create, default checkout opened, or folder repo_added.",
+      "description": "Anchor = first onboarding_started fresh_install on a supporting build, opt-outs excluded, full 24h+15m follow-up. Interaction = first_agent_interaction install_cohort=fresh: observed prompt/message submission, not provider success or agent launch. unattributed_prompt (may be automation) shown separately. Workspace = create, default checkout opened, or any repo_added with is_git_repo=false within the activation window; this is distinct from the onboarding repair's legacy/first-repo git/folder classification.",
       "query": {
         "kind": "DataTableNode",
         "source_file": "queries/activation-24h.sql"
