@@ -1,10 +1,7 @@
 // Atomically accept Stop/withdrawals/receipt before acting on the captured target.
 // Queue session-ending wind-down in the mutation’s tick; saved failures answer from the receipt.
 
-import {
-  cancelAgentSessionUsageLimitContinue,
-  type UsageLimitContinueIdentity
-} from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { usageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type {
   AgentSessionCancelResult,
@@ -264,8 +261,7 @@ export function mutateWithChatStop<TValue>(
     envelope,
     {
       ...plan,
-      acceptanceRecord: (record) =>
-        withdrawnCut ? cancelAgentSessionUsageLimitContinue(record, withdrawnCut) : record,
+      acceptanceRecord: { kind: 'stop-continue', enabled: turnId === undefined },
       run: (ctx) =>
         run(ctx, async () => ({ outcome: await stop(ctx), endsSession: windDown !== undefined }))
     },

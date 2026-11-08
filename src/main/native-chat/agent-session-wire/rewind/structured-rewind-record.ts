@@ -11,12 +11,7 @@ export function persistRewindRecord(
 ): Promise<unknown> {
   // Drop legacy copied history; the retained journal remains authoritative.
   const { retained: _retained, hydrationVerified: _hydrationVerified, ...current } = rewind
-  return store.transitionHandoff(sessionId, (record) => {
-    if (record.lease.runtimeFence !== fence) {
-      throw new Error('agent_session_checkpoint_stale')
-    }
-    return { ...record, rewind: current }
-  })
+  return store.updateRecord(sessionId, { kind: 'rewind', fence, rewind: current })
 }
 
 /** Pre-fork Claude rewinds never ran; refuse them without blocking the already-attached chat. */

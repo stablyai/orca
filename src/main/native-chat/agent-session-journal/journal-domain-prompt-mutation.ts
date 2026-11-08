@@ -13,6 +13,7 @@ import {
   type JournalDomainLifecycleCommit
 } from './journal-domain-lifecycle'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
+import { isPlanApprovalSubject } from '../../../shared/agent-session/agent-session-approval-subject'
 
 /** Revision and answer ownership are checked after every preceding writer command. */
 export function applyJournalDomainPromptMutation(
@@ -62,6 +63,18 @@ export function applyJournalDomainPromptMutation(
   )
   const item = written.items.find((item) => item.itemId === current!.itemId)!
   const cursor = { ...empty.cursor, sequence: written.cursor.sequence }
+  const choice =
+    pending.prompt.kind === 'approval' &&
+    isPlanApprovalSubject(pending.prompt.subject) &&
+    input.resolution.state === 'resolved'
+      ? input.resolution.selectedOptionId
+      : undefined
+  const planApprovalMode =
+    choice === 'allow' || choice === 'allowForSession'
+      ? ('default' as const)
+      : choice === 'deny'
+        ? ('plan' as const)
+        : undefined
   return {
     ...written,
     cursor,
@@ -71,7 +84,12 @@ export function applyJournalDomainPromptMutation(
         kind: 'item',
         epoch: target.epoch,
         seq: cursor.sequence,
-        promptAnswer: { itemId: item.itemId, revision: item.revision, resolution: input.resolution }
+        promptAnswer: {
+          itemId: item.itemId,
+          revision: item.revision,
+          resolution: input.resolution
+        },
+        ...(planApprovalMode ? { planApprovalMode } : {})
       }
     ],
     value: { itemId: item.itemId, revision: item.revision, cursor }

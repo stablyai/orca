@@ -97,6 +97,7 @@ export function sendQueuedStructuredAgentMessage(
     conversationWrite: true,
     commandReceipt: {
       result: (row) => journalRowReceiptResult(row, 'submission'),
+      binding: { at: 'last', kinds: ['submission'], answer: 'journal-row' },
       unwritten: (value, ctx) =>
         submissionRowReceipt(ctx, 'submission' in value ? value.submission : undefined)
     },
@@ -210,6 +211,7 @@ export function deleteQueuedStructuredAgentMessage(
     conversationWrite: true,
     commandReceipt: {
       result: () => ({ kind: 'queued-draft', messageId }),
+      binding: { at: 'last', answer: { kind: 'queued-draft', messageId } },
       unwritten: (value) =>
         value.deleted
           ? null
@@ -258,6 +260,7 @@ export function resumeStructuredAgentQueue(
     conversationWrite: true,
     commandReceipt: {
       result: (row) => journalRowReceiptResult(row, 'tombstone'),
+      binding: { at: 'last', kinds: ['tombstone'], answer: 'journal-row' },
       unwritten: () => ({ kind: 'no-op', outcome: { kind: 'queue-resume', resumed: false } })
     },
     run: async (ctx) => ({

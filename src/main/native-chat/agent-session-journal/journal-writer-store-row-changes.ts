@@ -1,28 +1,17 @@
 // Publish drafts only after row commit so readers never see changes that can roll back.
 
-import { encodeAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import type {
   AgentSessionStoreState,
   RetiredAgentSessionClaimKey
-} from './agent-session-store-state'
+} from '../../runtime/agent-session/records/agent-session-store-state'
 import {
   isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord,
   isReadableAgentSessionStoreTab,
   isReadableRetiredAgentSessionClaimKey
-} from './agent-session-store-row-rules'
-import type { PersistedAgentSessionTab } from '../agent-session-tab-table'
-
-/** Unreadable rows are derived at load and never written, so the draft shares them. */
-export function draftAgentSessionStoreState(state: AgentSessionStoreState): AgentSessionStoreState {
-  return {
-    ...state,
-    records: new Map(state.records),
-    operations: new Map(state.operations),
-    retiredClaimKeys: [...state.retiredClaimKeys],
-    sessionTabs: state.sessionTabs?.clone() ?? null
-  }
-}
+} from '../../runtime/agent-session/records/agent-session-store-row-rules'
+import type { PersistedAgentSessionTab } from '../../runtime/agent-session/agent-session-tab-table'
 
 type KeyedRowWrites = { upsert: [key: string, json: string][]; remove: string[] }
 
@@ -75,7 +64,7 @@ function retiredClaimKeysChanged(
 }
 
 /** Diff rows by identity; validate their serialized form with load rules before committing. */
-export function agentSessionStoreDraftRowWrites(
+export function agentSessionStoreRowChanges(
   published: AgentSessionStoreState,
   draft: AgentSessionStoreState
 ): AgentSessionStoreRowWrites | null {

@@ -1,5 +1,7 @@
-import type { AgentSessionStoreState } from './agent-session/records/agent-session-store-state'
+import type { AgentSessionStoreCommand } from './agent-session/records/agent-session-store-command'
 import type { AgentSessionStoreTransactions } from './agent-session/records/agent-session-store-transactions'
+import type { AgentSessionRecordCommand } from './agent-session/records/agent-session-record-command'
+import { isDeepStrictEqual } from 'node:util'
 
 export abstract class AgentSessionRecordPublication {
   constructor(protected readonly transactions: AgentSessionStoreTransactions) {}
@@ -20,29 +22,36 @@ export abstract class AgentSessionRecordPublication {
     return () => this.firstRecordListeners.delete(listener)
   }
 
-  /** Serialize draft mutations; publish to readers only after row commit. */
-  protected transact = async <T>(
-    apply: (draft: AgentSessionStoreState) => T,
-    options?: { inMemoryWhenReadOnly?: boolean }
-  ): Promise<T> => {
-    let proven: string[] = []
-    let heldBefore = true
-    const result = await this.transactions.transact((draft) => {
-      heldBefore = this.holdsRecords()
-      if (this.deathEvidenceListeners.size === 0) {
-        return apply(draft)
+  protected async commitRecordCommand<C extends AgentSessionRecordCommand>(
+    id: string,
+    command: C,
+    check?: () => void
+  ) {
+    const before = this.transactions.state.records.get(id)?.lease.deathEvidence
+    const result = await this.transactions.record(id, command, check)
+    const after = this.transactions.state.records.get(id)?.lease.deathEvidence
+    if (after && !isDeepStrictEqual(before, after)) {
+      this.deathEvidenceListeners.forEach((listener) => listener(id))
+    }
+    return result
+  }
+
+  protected async commitStoreCommand<C extends AgentSessionStoreCommand>(
+    command: C,
+    check?: () => void
+  ) {
+    const before = new Map(
+      [...this.transactions.state.records].map(([id, record]) => [id, record.lease.deathEvidence])
+    )
+    const heldBefore = this.holdsRecords()
+    const result = await this.transactions.command(command, check)
+    for (const [id, record] of this.transactions.state.records) {
+      if (
+        record.lease.deathEvidence &&
+        !isDeepStrictEqual(before.get(id), record.lease.deathEvidence)
+      ) {
+        this.deathEvidenceListeners.forEach((listener) => listener(id))
       }
-      const before = new Map(
-        [...draft.records].map(([id, record]) => [id, record.lease.deathEvidence])
-      )
-      const applied = apply(draft)
-      proven = [...draft.records]
-        .filter(([id, { lease }]) => lease.deathEvidence && lease.deathEvidence !== before.get(id))
-        .map(([id]) => id)
-      return applied
-    }, options)
-    for (const sessionId of proven) {
-      this.deathEvidenceListeners.forEach((listener) => listener(sessionId))
     }
     if (!heldBefore && this.holdsRecords()) {
       this.firstRecordListeners.forEach((listener) => listener())

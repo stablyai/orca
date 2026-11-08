@@ -4,7 +4,7 @@ import {
 } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { AgentSessionStoreState } from './agent-session/records/agent-session-store-state'
-import type { AgentSessionStoreRowWrites } from './agent-session/records/agent-session-store-draft'
+import type { AgentSessionStoreRowWrites } from '../native-chat/agent-session-journal/journal-writer-store-row-changes'
 
 /** The session a committed /clear continued this one in: the durable forward pointer. */
 export function clearSuccessor(

@@ -115,4 +115,21 @@ describe('AgentSessionRecordStore.setConversationName', () => {
       await store.compareAndSetConversationName(SESSION, 'Stale generation', placeholder)
     ).toBeNull()
   })
+
+  it('checks a stale generation against the saved user name before writing', async () => {
+    const store = await reservedStore()
+    await store.compareAndSetConversationName(SESSION, 'First prompt', null)
+    const stale = await openTestAgentSessionRecordStore(directory)
+    await store.setUserConversationName(SESSION, 'First prompt', 'rename')
+
+    expect(
+      await stale.compareAndSetConversationName(SESSION, 'Late generated name', 'First prompt')
+    ).toBeNull()
+    await stale.pinLaunchDirectory(SESSION, '/workspace/current')
+    expect((await openTestAgentSessionRecordStore(directory)).getRecord(SESSION)).toMatchObject({
+      conversationName: 'First prompt',
+      conversationNameSource: 'user',
+      launchDirectory: '/workspace/current'
+    })
+  })
 })

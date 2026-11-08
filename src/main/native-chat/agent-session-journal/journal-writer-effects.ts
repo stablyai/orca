@@ -1,6 +1,8 @@
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import type Database from '../../sqlite/sync-database'
-import type { AgentSessionStoreRowWrites } from '../../runtime/agent-session/records/agent-session-store-draft'
+import type { AgentSessionStoreRowWrites } from './journal-writer-store-row-changes'
+import type { AgentSessionStoreMutation } from '../../runtime/agent-session/records/agent-session-store-mutation'
+import type { AgentSessionRuntimeFacts } from '../../runtime/agent-session/agent-session-runtime-attribution'
 import { applyJournalWriterStoreEffect } from './journal-writer-store-effect'
 import {
   claimAgentSessionAttachmentsInTransaction,
@@ -25,10 +27,18 @@ export type JournalWriterCoordinate = {
   epoch: string
   seq: number
   promptAnswer?: AgentSessionPromptResult
+  planApprovalMode?: 'default' | 'plan'
 }
 
 export type JournalWriterEffect =
-  | { kind: 'store'; writes: AgentSessionStoreRowWrites; insertOperationsIfAbsent: boolean }
+  | {
+      kind: 'store'
+      mutation: {
+        input: AgentSessionStoreMutation
+        at?: number
+        runtime?: AgentSessionRuntimeFacts
+      }
+    }
   | {
       kind: 'receipt'
       scope: CommandReceiptScope
@@ -50,7 +60,7 @@ export type JournalReceiptRowBinding = {
   at: 'first' | 'last'
   /** Kinds the row may have; any other row, or none, fails the command unless `absent` answers. */
   kinds?: readonly JournalRow['kind'][]
-  answer: 'journal-row' | 'prompt-answer'
+  answer: 'journal-row' | 'prompt-answer' | CommandReceiptResult
   absent?: CommandReceiptResult
 }
 
@@ -66,6 +76,7 @@ export type JournalWriterStoreResult = {
   kind: 'store'
   disposition: 'applied' | 'noop'
   writes: AgentSessionStoreRowWrites
+  value?: unknown
 }
 
 /** Host-computed values still recheck uniqueness and sweep authority on the sole connection. */
@@ -77,7 +88,7 @@ export function applyJournalWriterEffect(
 ): JournalWriterEffectResult {
   switch (effect.kind) {
     case 'store':
-      return applyJournalWriterStoreEffect(db, effect)
+      return applyJournalWriterStoreEffect(db, effect, rows)
     case 'receipt': {
       const row = effect.row && (effect.row.at === 'first' ? rows[0] : rows.at(-1))
       const receipt = effect.row ? boundReceipt(effect.receipt, effect.row, row) : effect.receipt
@@ -122,6 +133,9 @@ function boundReceipt(
 ): CommandReceipt {
   if (receipt.status !== 'accepted') {
     throw new Error('only an accepted receipt binds its row')
+  }
+  if (typeof binding.answer === 'object') {
+    return { ...receipt, result: binding.answer }
   }
   if (!row || (binding.kinds && !binding.kinds.includes(row.kind))) {
     if (binding.absent) {

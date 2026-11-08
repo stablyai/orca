@@ -30,6 +30,12 @@ import type {
 
 /** Preserve the first committed result, including no-op; later failures answer from that receipt. */
 export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResult> = {
+  binding: {
+    at: 'last',
+    kinds: ['tombstone', 'item'],
+    answer: 'journal-row',
+    absent: { kind: 'stop' }
+  },
   result: (row) => (row ? journalRowReceiptResult(row, 'tombstone', 'item') : { kind: 'stop' }),
   unwritten: (value) => ({
     kind: 'no-op',

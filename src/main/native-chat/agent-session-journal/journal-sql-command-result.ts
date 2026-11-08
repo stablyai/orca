@@ -34,12 +34,16 @@ export function finishJournalSqlCommand(
     coordinates.length > 0
       ? claimJournalSqlItemInputs(db, stateDirectory, command, result)
       : { referencedUploads: result.referencedUploads ?? [] }
-  const effects =
-    coordinates.length > 0
-      ? (command.effects ?? []).map((effect) =>
-          applyJournalWriterEffect(db, stateDirectory, effect, publicCoordinates)
-        )
-      : []
+  const receiptWritten =
+    coordinates.length > 0 ||
+    command.effects?.some(
+      (effect) => effect.kind === 'store' && effect.mutation.input.kind === 'rewind-complete'
+    )
+  const effects = receiptWritten
+    ? (command.effects ?? []).map((effect) =>
+        applyJournalWriterEffect(db, stateDirectory, effect, publicCoordinates)
+      )
+    : []
   const publication = {
     ...result,
     cursor,
@@ -73,7 +77,7 @@ export function finishJournalSqlCommand(
     value: publicJournalSqlValue(command, value, cursor),
     ...('goals' in claims ? { goals: claims.goals } : {}),
     effects,
-    ...(coordinates.length > 0 && command.effects ? { receiptWritten: true as const } : {})
+    ...(receiptWritten && command.effects ? { receiptWritten: true as const } : {})
   }
 }
 

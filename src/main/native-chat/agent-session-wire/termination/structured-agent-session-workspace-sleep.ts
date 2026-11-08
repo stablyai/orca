@@ -165,11 +165,23 @@ async function settleWorkspaceSleepChat(
     }
     let marked = false
     const now = host.deps.now?.() ?? Date.now()
-    // Check inside the write so the mark and receipt cannot disagree.
-    await host.deps.store.transitionHandoff(sessionId, (record) => {
-      marked = quiet(record)
-      return marked ? { ...record, sleptAt: now, updatedAt: now } : record
-    })
+    const changed = new Error('workspace sleep was superseded')
+    try {
+      const result = await host.deps.store.updateRecord(
+        sessionId,
+        { kind: 'sleep', now, fence: current.lease.runtimeFence },
+        () => {
+          if (!quiet(host.deps.store.requireWritableRecord(sessionId))) {
+            throw changed
+          }
+        }
+      )
+      marked = result !== null
+    } catch (error) {
+      if (error !== changed) {
+        throw error
+      }
+    }
     if (marked) {
       host.publishRecordNotes(sessionId)
     }

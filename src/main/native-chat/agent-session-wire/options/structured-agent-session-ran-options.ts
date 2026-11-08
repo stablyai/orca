@@ -8,7 +8,6 @@ import type {
   StructuredAgentSessionProviderChild
 } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { recordAgentSessionRanOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 type RanOptionsContext = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'agents' | 'modelCatalog'>
@@ -176,13 +175,16 @@ export async function recordStructuredAgentSessionRanOptions(
     return
   }
   await store
-    .reviseSessionOptions(recordAgentSessionRanOptions, {
-      sessionId,
-      fence: child.fence,
-      model,
-      options: ran,
-      models: undefined,
-      now: context.now()
+    .updateRecord(sessionId, {
+      kind: 'ran-options',
+      args: {
+        sessionId,
+        fence: child.fence,
+        model,
+        options: ran,
+        models: undefined,
+        now: context.now()
+      }
     })
     .catch((error: unknown) =>
       logger.warn('recording the options a turn ran failed', {

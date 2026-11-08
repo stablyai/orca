@@ -131,6 +131,23 @@ afterEach(async () => {
 })
 
 describe('acquisition path', () => {
+  it('replays a successful reservation using its saved session when the retry proposes another id', async () => {
+    const store = await open()
+    const request = reserveRequest()
+    await store.reserveOwner(request)
+    await store.commitOperationReceipt(
+      store.operationOutcomeReceipt({
+        callerKey: request.operation.callerKey,
+        operationId: request.operation.operationId,
+        outcome: { status: 'succeeded', sessionId: 'session-alpha' }
+      })
+    )
+    const replay = await store.reserveOwner({ ...request, sessionId: 'session-beta' })
+    expect(replay.disposition).toBe('replayed')
+    expect(replay.record.sessionId).toBe('session-alpha')
+    expect(store.getRecord('session-beta')).toBeNull()
+  })
+
   it('refuses a child that cannot echo the reserved spawn token', async () => {
     const store = await open()
     await store.reserveOwner(reserveRequest())

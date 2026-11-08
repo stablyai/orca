@@ -177,14 +177,12 @@ export async function admitAgentLaunchOperation(
   const callerKey = agentLaunchOperationCallerKey(context)
   // The ledger alone: admitting a terminal launch has no use for the chat host.
   const store = await context.runtime.openAgentSessionRecordStore()
-  const { decision: admitted, claim } = await store.admitAndClaimOperation(
-    { callerKey, operationId, fingerprint, now },
-    // A fresh row, or a replayed one no one has answered yet, leaves the right to run open.
-    (decision) =>
-      decision.decision === 'admit' ||
-      (decision.decision === 'replay' &&
-        answerFromRecordedRow(operationId, decision.row.outcome) === null)
-  )
+  const { decision: admitted, claim } = await store.admitAndClaimOperation({
+    callerKey,
+    operationId,
+    fingerprint,
+    now
+  })
   if (admitted.decision === 'refused') {
     return refusal(operationId, admitted.code, `was refused: ${admitted.code}`)
   }

@@ -1,4 +1,5 @@
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionRecordAcceptance } from '../../../runtime/agent-session/records/agent-session-store-mutation'
+import type { JournalReceiptRowBinding } from '../../agent-session-journal/journal-writer-effects'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
 import { readNoChoiceOptionResult } from '../options/structured-agent-session-option-observation'
@@ -52,7 +53,7 @@ export type MutationPlan<TValue> = {
   method: string
   fields: Record<string, unknown>
   operationIdScope?: 'global'
-  acceptanceRecord?: (record: AgentSessionRecord) => AgentSessionRecord
+  acceptanceRecord?: AgentSessionRecordAcceptance
   /** Needs no writer lease. */
   conversationWrite?: true
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
@@ -87,6 +88,7 @@ export type MutationPlan<TValue> = {
 
 /** Insert acceptance with its effect, if absent. */
 export type MutationCommandReceipt<TValue> = {
+  binding: JournalReceiptRowBinding
   /** Resolve inside the effect transaction; draft writes have no journal row. */
   result: (row: JournalRow | undefined) => CommandReceiptResult
   /** Commit a standalone receipt before answering a row-free result; null records nothing. */
@@ -105,6 +107,12 @@ export function journalRowReceiptResult(
 
 function submissionOrDraftReceipt<TValue>(clientMessageId: string): MutationCommandReceipt<TValue> {
   return {
+    binding: {
+      at: 'last',
+      kinds: ['submission'],
+      answer: 'journal-row',
+      absent: { kind: 'queued-draft', messageId: clientMessageId }
+    },
     result: (row) =>
       row
         ? journalRowReceiptResult(row, 'submission')
