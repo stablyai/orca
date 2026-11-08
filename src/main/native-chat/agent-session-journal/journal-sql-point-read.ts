@@ -4,6 +4,10 @@ import {
   type JournalConsumerReadResult
 } from './journal-domain-consumer-reads'
 import {
+  readJournalDomainRewindTarget,
+  type JournalRewindTarget
+} from './journal-domain-rewind-target'
+import {
   readJournalGeneration,
   type JournalGenerationRead,
   type JournalGenerationResult
@@ -61,6 +65,7 @@ import {
 export type JournalSqlPointRead = {
   sessionId: string
   operation:
+    | { kind: 'rewind-target'; itemId: string }
     | { kind: 'history-source-items'; clientMessageIds: readonly string[] }
     | { kind: 'provider-turn-in-namespace'; namespace: string }
     | { kind: 'saved-item-ids'; itemIds: readonly string[] }
@@ -93,6 +98,7 @@ export type JournalSqlPointRead = {
 }
 
 export type JournalSqlPointReadResult =
+  | { kind: 'rewind-target'; target: JournalRewindTarget }
   | { kind: 'history-source-items'; items: AgentJournalRenderItem[] }
   | { kind: 'provider-turn-in-namespace'; present: boolean }
   | { kind: 'saved-item-ids'; itemIds: string[] }
@@ -148,6 +154,11 @@ function read(
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
+    case 'rewind-target':
+      return {
+        kind: operation.kind,
+        target: readJournalDomainRewindTarget(scope, operation.itemId)
+      }
     case 'naming-prompt':
     case 'automation-run':
       return readJournalDomainConsumer(scope, operation)

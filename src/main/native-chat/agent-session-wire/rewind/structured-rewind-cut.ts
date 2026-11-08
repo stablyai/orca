@@ -1,7 +1,4 @@
-import {
-  savedRewindKeys,
-  isAgentSessionRewindTarget
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import { savedRewindKeys } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { agentJournalLinkageFields } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -86,15 +83,11 @@ export function structuredRewindCut(
 }
 
 /** Admission only; already-saved rewinds complete even if their target is no longer eligible. */
-export function isStructuredRewindTarget(journal: AgentSessionJournal, itemId: string): boolean {
-  const item = journal.currentRead().items.find((row) => row.itemId === itemId)
-  return (
-    item !== undefined &&
-    isAgentSessionRewindTarget(
-      item,
-      (turnItemId) => readAgentJournalTurn(journal.itemBody(turnItemId) ?? undefined)?.userItemId
-    )
-  )
+export async function isStructuredRewindTarget(
+  journal: AgentSessionJournal,
+  itemId: string
+): Promise<boolean> {
+  return (await journal.reads.rewindTarget(itemId)).eligible
 }
 
 function scopedTurn(item: AgentJournalRenderItem): string | undefined {

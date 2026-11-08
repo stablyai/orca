@@ -1,4 +1,5 @@
 import type { JournalGenerationRead, JournalGenerationResult } from './journal-generation-read'
+import type { JournalRewindTarget } from './journal-domain-rewind-target'
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
 import type { JournalSqlWorkRead, JournalSqlWorkResult } from './journal-work-read'
 import type { AgentSessionJournalReads } from './journal-reads'
@@ -18,6 +19,7 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  rewindTarget(itemId: string): Promise<JournalRewindTarget>
   namingPrompt(hostStartedAt?: number): Promise<string>
   automationRun(messageId: string, inputIds: readonly string[]): Promise<AgentJournalSnapshot>
   historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
@@ -84,6 +86,7 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    rewindTarget: async (itemId) => (await read({ kind: 'rewind-target', itemId })).target,
     namingPrompt: async (hostStartedAt) =>
       (await read({ kind: 'naming-prompt', hostStartedAt })).prompt,
     automationRun: async (messageId, inputIds) =>

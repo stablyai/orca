@@ -64,7 +64,12 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
   plan: ReadyOperationPlan<T>,
   run: (selection: ReadyOperationSelection) => Promise<AgentSessionMutationResult<T>>,
   options: {
-    beforeAgent?: (row: AgentSessionRecord | null) => AgentSessionMutationSessionPreparation | null
+    beforeAgent?: (
+      row: AgentSessionRecord | null
+    ) =>
+      | AgentSessionMutationSessionPreparation
+      | null
+      | Promise<AgentSessionMutationSessionPreparation | null>
     goal?: boolean
     needsAgent?: (record: AgentSessionRecord | null) => boolean
   } = {}
@@ -186,7 +191,7 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
           return opened
         }
         const current = context.deps.store.requireWritableRecord(envelope.sessionId)
-        const checked = options.beforeAgent?.(current)
+        const checked = await options.beforeAgent?.(current)
         if (checked && !checked.ok) {
           return checked
         }
