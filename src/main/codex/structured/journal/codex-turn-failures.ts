@@ -19,6 +19,7 @@ import {
   type CodexJournalTranslationAdmission
 } from './codex-structured-journal-contracts'
 import { MAX_CODEX_GENERIC_TURN_BUCKETS } from './codex-structured-journal-limits'
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
 type ErrorInfo = { error: string; status?: number }
 type TerminalSignature = { code?: string; message?: string; status?: number }
@@ -70,7 +71,7 @@ export class CodexTurnFailures {
       append: (
         threadId: string,
         payload: unknown,
-        frame: UnhandledProviderFrameJournalItem
+        frame: Omit<UnhandledProviderFrameJournalItem, 'body'> & { body: AgentJournalStatusItem }
       ) => CodexJournalTranslationAdmission
     }
   ) {}
