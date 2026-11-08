@@ -20,7 +20,6 @@ import {
   resetMobileNativeChatDraftStoreForTests,
   setMobileNativeChatDraftText
 } from './native-chat/composer/mobile-native-chat-draft-store'
-import './native-chat/mobile-native-chat-scope-key'
 import { resolveActiveSessionTab } from './active-session-tab'
 
 const initial: Terminal[] = ['a', 'b', 'c'].map((handle) => ({
