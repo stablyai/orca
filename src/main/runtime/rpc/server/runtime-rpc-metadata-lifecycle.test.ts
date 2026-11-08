@@ -3,7 +3,7 @@ import type * as WorktreeListingModule from '../../../git/worktrees/catalog/work
 import '../unused-default-rpc-methods.test-fixture'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import * as runtimeMetadataModule from './runtime-metadata'
@@ -160,6 +160,7 @@ describe('OrcaRuntimeRpcServer', () => {
     async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const relocatedDir = shortDaemonSocketDir(userDataPath, process.getuid!())
+      mkdirSync(dirname(relocatedDir), { recursive: true, mode: 0o700 })
       mkdirSync(relocatedDir, { recursive: true, mode: 0o755 })
       const deadSocket = join(relocatedDir, 'o-99999999-dead.sock')
       writeFileSync(deadSocket, '')
