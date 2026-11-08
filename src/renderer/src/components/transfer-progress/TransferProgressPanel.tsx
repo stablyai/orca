@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getTransferSession,
   subscribeToTransferSessions,
@@ -33,6 +34,7 @@ export function TransferProgressPanel({
   onDismiss,
   onLayoutChange
 }: Props): React.JSX.Element | null {
+  const t = useTranslate()
   const session = useSyncExternalStore(subscribeToTransferSessions, () =>
     getTransferSession(sessionId)
   )
@@ -98,8 +100,8 @@ export function TransferProgressPanel({
           aria-expanded={!collapsed}
           aria-label={
             collapsed
-              ? translate('transferProgress.showItems', 'Show items')
-              : translate('transferProgress.hideItems', 'Hide items')
+              ? t('transferProgress.showItems', 'Show items')
+              : t('transferProgress.hideItems', 'Hide items')
           }
         >
           {/* Why: rotate one icon; swapping two replaces the node and cannot tween. */}
@@ -130,6 +132,7 @@ function TransferRowItem({
   row: TransferRow
   onCancel: (transferId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const percent = toRowPercent(row)
   const inactive = row.status !== 'active'
   const RowIcon = row.kind === 'directory' ? FolderIcon : FileIcon
@@ -159,7 +162,7 @@ function TransferRowItem({
         size="icon-xs"
         disabled={inactive}
         onClick={() => onCancel(row.transferId)}
-        aria-label={translate('transferProgress.cancelUpload', 'Cancel upload')}
+        aria-label={t('transferProgress.cancelUpload', 'Cancel upload')}
         className={inactive ? 'invisible' : undefined}
       >
         <XIcon className="size-4" />
