@@ -15,20 +15,14 @@ export type StatusPorcelainRead = {
 const STATUS_ARGS = ['-c', 'core.quotePath=false', 'status', '--porcelain=v2', '--branch']
 const ALL_UNTRACKED_FILES_ARG = '--untracked-files=all'
 
-/** Worktrees whose config or last expansion asked for -uall, so polls skip a configured scan they would discard. */
-const allUntrackedWorktrees = new BoundedMap<
-  string,
-  { reason: 'config' | 'expansion'; atMs: number }
->({ maxEntries: 256 })
+/** When each worktree's expansion last fell back to -uall, so polls skip a configured scan they would discard. */
+const expansionFallbackAtMs = new BoundedMap<string, number>({ maxEntries: 256 })
 // Expansion fallbacks (many or out-of-cwd directories) tend to persist; retry the cheap scan only occasionally.
 const EXPANSION_FALLBACK_RETRY_MS = 60_000
 
-function assumesAllUntracked(worktreeKey: string): boolean {
-  const memo = allUntrackedWorktrees.get(worktreeKey)
-  return (
-    memo !== undefined &&
-    (memo.reason === 'config' || performance.now() - memo.atMs < EXPANSION_FALLBACK_RETRY_MS)
-  )
+/** Rollback switch: `ORCA_GIT_STATUS_UNTRACKED_EXPANSION=0` restores the plain `-uall` scan. */
+function isUntrackedExpansionEnabled(): boolean {
+  return process.env.ORCA_GIT_STATUS_UNTRACKED_EXPANSION !== '0'
 }
 
 /** Stream porcelain v2 status listing every untracked file as `-uall` does; never rejects. */
@@ -37,40 +31,34 @@ export async function readStatusPorcelain(
   options: GetStatusOptions,
   limit: number
 ): Promise<StatusPorcelainRead> {
+  // Git never uses the untracked cache when it also collects ignored paths.
   if (options.includeIgnored) {
-    // Git never uses the untracked cache when it also collects ignored paths.
     return streamAllUntracked(worktreePath, options, limit, ['--ignored=matching'])
   }
-  // -uall bypasses the untracked cache unless configured, so scan in the configured mode and list only collapsed rows.
   const worktreeKey = JSON.stringify([worktreePath, options.wslDistro ?? ''])
-  const assumeAll = assumesAllUntracked(worktreeKey)
-  const [scan, read] = await Promise.all([
-    readUntrackedScan(worktreePath, options),
-    assumeAll
-      ? streamAllUntracked(worktreePath, options, limit)
-      : streamStatusPorcelain(STATUS_ARGS, worktreePath, options, limit)
-  ])
-  // An aborted config read says nothing about the config.
-  if (options.signal?.aborted) {
-    return read
+  const fallbackAtMs = expansionFallbackAtMs.get(worktreeKey)
+  if (
+    !isUntrackedExpansionEnabled() ||
+    (fallbackAtMs !== undefined && performance.now() - fallbackAtMs < EXPANSION_FALLBACK_RETRY_MS)
+  ) {
+    return streamAllUntracked(worktreePath, options, limit)
   }
+  // -uall bypasses the untracked cache unless configured, so scan in the configured mode and list only collapsed rows.
+  const scan = await readUntrackedScan(worktreePath, options)
   if (scan === 'uall') {
-    allUntrackedWorktrees.set(worktreeKey, { reason: 'config', atMs: performance.now() })
-  } else if (allUntrackedWorktrees.get(worktreeKey)?.reason === 'config' || !assumeAll) {
-    allUntrackedWorktrees.delete(worktreeKey)
+    return streamAllUntracked(worktreePath, options, limit)
   }
-  // A -uall read is complete whatever the config says now.
-  if (assumeAll || read.error !== undefined || scan === 'configured-all') {
+  const read = await streamStatusPorcelain(STATUS_ARGS, worktreePath, options, limit)
+  if (read.error !== undefined || scan === 'configured-all') {
     return read
   }
-  if (scan === 'expand') {
-    const expanded = await expandUntrackedDirectories(read, worktreePath, options, limit)
-    if (expanded) {
-      return expanded
-    }
-    if (!options.signal?.aborted) {
-      allUntrackedWorktrees.set(worktreeKey, { reason: 'expansion', atMs: performance.now() })
-    }
+  const expanded = await expandUntrackedDirectories(read, worktreePath, options, limit)
+  if (expanded) {
+    expansionFallbackAtMs.delete(worktreeKey)
+    return expanded
+  }
+  if (!options.signal?.aborted) {
+    expansionFallbackAtMs.set(worktreeKey, performance.now())
   }
   return streamAllUntracked(worktreePath, options, limit)
 }

@@ -1,16 +1,15 @@
-import { gitReadOptionsForWorktree } from '../git-runtime-options'
-import { gitExecFileAsync, gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
+import { wslDistroForCommand } from '../command-runner/git-command-resolution'
+import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
+import { readGitConfigSnapshot } from './git-config-snapshot'
 import type { GetStatusOptions } from './get-status-options'
 import { bulkPathspecCommands } from './git-pathspec'
 
 /**
  * How to get every untracked file: `expand` lists configured-mode `? dir/` rows, `configured-all` needs nothing,
- * `uall` passes `-uall` (mode `no`, untracked cache disabled, or unreadable config).
+ * `uall` passes `-uall` (mode `no`, cache disabled, network checkout, unreadable config).
  */
 export type UntrackedScan = 'expand' | 'configured-all' | 'uall'
 
-const UNTRACKED_SCAN_CONFIG_PATTERN =
-  '^(status\\.showuntrackedfiles|core\\.untrackedcache|feature\\.manyfiles)$'
 const LIST_OTHER_FILES_ARGS = ['ls-files', '--others', '--exclude-standard', '-z', '--']
 
 /** Git's untracked cache only serves scans in its stored mode, which follows `status.showUntrackedFiles`. */
@@ -18,47 +17,28 @@ export async function readUntrackedScan(
   worktreePath: string,
   options: GetStatusOptions
 ): Promise<UntrackedScan> {
-  let stdout = ''
-  try {
-    stdout = (
-      await gitExecFileAsync(
-        ['config', '--get-regexp', UNTRACKED_SCAN_CONFIG_PATTERN],
-        gitReadOptionsForWorktree(worktreePath, options)
-      )
-    ).stdout
-  } catch (error) {
-    // Exit 1 means none of the keys are set: default mode, cache kept as the index has it.
-    if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 1)) {
-      return 'uall'
-    }
+  // Network-share mtimes cannot vouch for the cache; WSL config is not stampable from the host, so reads would spawn.
+  if (isUncPath(worktreePath) || options.wslDistro || wslDistroForCommand(worktreePath)) {
+    return 'uall'
   }
-  const values = new Map<string, string>()
-  for (const line of stdout.split('\n')) {
-    const separator = line.indexOf(' ')
-    const key = separator === -1 ? line.trim() : line.slice(0, separator)
-    if (key) {
-      // Later lines win, as in Git; a bare key is boolean true.
-      values.set(
-        key,
-        separator === -1
-          ? 'true'
-          : line
-              .slice(separator + 1)
-              .trim()
-              .toLowerCase()
-      )
-    }
+  const config = await readGitConfigSnapshot(worktreePath, options)
+  if (!config) {
+    return 'uall'
   }
-  const mode = values.get('status.showuntrackedfiles') ?? 'normal'
+  const mode = config.values.get('status.showuntrackedfiles')?.trim().toLowerCase() ?? 'normal'
   if (mode === 'all') {
     return 'configured-all'
   }
-  const cache = values.get('core.untrackedcache')
+  const cache = config.values.get('core.untrackedcache')?.trim().toLowerCase()
   // Without a cache the configured scan costs as much as -uall, so the extra listing would be pure overhead.
   if (isGitFalse(mode) || (cache !== undefined && isGitFalse(cache))) {
     return 'uall'
   }
   return 'expand'
+}
+
+function isUncPath(worktreePath: string): boolean {
+  return worktreePath.startsWith('\\\\') || worktreePath.startsWith('//')
 }
 
 /** Git's boolean false spellings; newer Git also accepts them for `status.showUntrackedFiles` (= `no`). */
