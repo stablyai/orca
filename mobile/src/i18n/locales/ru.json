@@ -1474,6 +1474,13 @@
       "openFailed": "Не удалось открыть этот PDF",
       "opening": "Открытие PDF…",
       "updateRequired": "Обновите Orca Mobile, чтобы открывать PDF"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Изменён на компьютере после ваших правок от {{time}}",
+      "copyMyEdits": "Скопировать мои правки",
+      "discard": "Отменить изменения",
+      "restore": "Восстановить",
+      "unsavedFrom": "Несохранённые правки от {{time}}"
     }
   },
   "home": {

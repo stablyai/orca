@@ -23,7 +23,11 @@ export class LoadedCohortMigrationOperations {
       Object.keys(state.settings).length === 1 &&
       isRecord(state.settings.telemetry)
     const existingProfile = fileExistedOnLoad && !telemetryOnly
-    for (const key of ['tabSwitchKeybindingSeed', 'searchKeybindingSeed'] as const) {
+    for (const key of [
+      'tabSwitchKeybindingSeed',
+      'searchKeybindingSeed',
+      'nonMacSearchKeybindingSeed'
+    ] as const) {
       const existing = state.settings?.[key]
       if (existing === 'legacy' || existing === 'done') {
         continue

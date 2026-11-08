@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInit, TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { useMobileNativeChatTerminalStream } from './native-chat/use-mobile-native-chat-terminal-stream'
+import { TerminalResumeState } from './terminal-stream-resume'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 import { useMobileSessionTerminalSubscription } from './use-mobile-session-terminal-subscription'
@@ -103,6 +104,7 @@ function harness(phone: Terminal) {
     subscribingHandlesRef: { current: new Set<string>() },
     leaseOnlyHandlesRef: { current: new Set<string>() },
     initializedHandlesRef: { current: new Set<string>() },
+    terminalResume: new TerminalResumeState(),
     terminalDiagnosticsRef: { current: new MobileTerminalDiagnostics() },
     viewportResubscribeBudgetRef: { current: new TerminalViewportResubscribeBudget() },
     webReadyHandlesRef: { current: new Set<string>([HANDLE]) },

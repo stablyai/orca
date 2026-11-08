@@ -11,7 +11,7 @@ import {
 import {
   getPreparedQuickOpenFiles,
   rankQuickOpenFiles
-} from '../../../../../src/shared/quick-open-path-search'
+} from '../../../../../src/shared/quick-open/quick-open-path-search'
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16

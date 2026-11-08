@@ -10,7 +10,7 @@ import type {
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import type { Tab } from '../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { editorRowHost } from '../../../shared/session-tab-file-host'
+import { editorRowHost } from '../../../shared/workspace-session/session-tab-file-host'
 import {
   editorTabNamesFile,
   sameEditorFile

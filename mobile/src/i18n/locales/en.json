@@ -1936,6 +1936,13 @@
       "bytes": "{{size}} B",
       "kilobytes": "{{size}} KB",
       "megabytes": "{{size}} MB"
+    },
+    "unsavedEditsOffer": {
+      "unsavedFrom": "Unsaved edits from {{time}}",
+      "changedSince": "Changed on desktop since your edits from {{time}}",
+      "discard": "Discard",
+      "restore": "Restore",
+      "copyMyEdits": "Copy My Edits"
     }
   },
   "session": {

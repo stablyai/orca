@@ -73,8 +73,10 @@ function startHostEventRouter(
     if (!readsNow(query) || floorTimers.has(query.queryHash)) {
       return
     }
-    // Change events can come per agent step; keep reads `floorMs` apart, polls included.
-    const wait = query.state.dataUpdatedAt + (signalOf(query)?.floorMs ?? 0) - Date.now()
+    // Change events can come per agent step; keep reads `floorMs` apart, polls and reads in flight included.
+    const lastReadAt =
+      query.state.fetchStatus === 'fetching' ? Date.now() : query.state.dataUpdatedAt
+    const wait = lastReadAt + (signalOf(query)?.floorMs ?? 0) - Date.now()
     if (wait <= 0) {
       refetchHostQueryAfterInFlight(queryClient, query)
       return

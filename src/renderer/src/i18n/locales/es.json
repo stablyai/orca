@@ -23289,6 +23289,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "Los modelos de {{agent}} no están disponibles en este equipo. Puedes conservar tus opciones o usar Argumentos.",
+    "catalogUnsupportedLaunch": "Los modelos de {{agent}} no están disponibles en este equipo. Tus opciones actuales se siguen aplicando.",
     "catalogFailed": "No se pudieron cargar los modelos de {{agent}}. Cierra y vuelve a abrir el selector de agentes para intentarlo de nuevo.",
     "catalogSignIn": "Inicia sesión en {{agent}} para cargar sus modelos y vuelve a abrir el selector de agentes.",
     "catalogInstall": "Instala {{agent}} en este equipo para cargar sus modelos y vuelve a abrir el selector de agentes.",

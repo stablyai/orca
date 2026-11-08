@@ -1392,6 +1392,13 @@
       "openFailed": "이 PDF를 열 수 없습니다.",
       "opening": "PDF 여는 중…",
       "updateRequired": "PDF를 열려면 Orca 모바일을 업데이트하세요."
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} 편집 이후 데스크톱에서 변경됨",
+      "copyMyEdits": "내 편집 복사",
+      "discard": "버리기",
+      "restore": "복원",
+      "unsavedFrom": "{{time}}의 저장되지 않은 편집"
     }
   },
   "home": {

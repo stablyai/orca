@@ -1,5 +1,5 @@
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { useTranslate } from '@/i18n/use-translate'
 import { artifactName } from './artifact-display-labels'

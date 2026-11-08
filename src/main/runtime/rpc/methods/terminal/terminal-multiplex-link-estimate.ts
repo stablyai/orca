@@ -18,10 +18,12 @@ const PACED_DIVERGENCE_HOLD_MS = 2 * ESTIMATE_WINDOW_MS
 const PROBE_RTT_MAX_MS = 4_000
 const PROBE_RTT_RETRY_AFTER_FAILURE_MS = 60_000
 const MAX_SEND_RECORDS_PER_STREAM = 1024
+const MAX_UNCONFIRMED_IMAGES = 64
 const LEDGER_COMPACT_AFTER_RECORDS = 256
 
 type SendRecord = {
   endOffset: number
+  sendIndex: number
   sentAt: number
   delivered: number
   deliveredAt: number
@@ -91,6 +93,10 @@ export class TerminalMultiplexLinkEstimate {
   // Only a send that waited on the window measures the link; idle-trickle samples are lower bounds.
   private backloggedSamples = 0
   private lastBackloggedSampleAt = Number.NEGATIVE_INFINITY
+  private sendIndex = 0
+  // Recovery images bypass the window and are never acked, yet occupy the link ahead of later sends; an ack of a later send confirms them.
+  private readonly unconfirmedImages: { bytes: number; afterSendIndex: number }[] = []
+  private unconfirmedImageBytes = 0
 
   constructor(
     readonly now: () => number = () => performance.now(),
@@ -103,7 +109,9 @@ export class TerminalMultiplexLinkEstimate {
     options: { backlogged: boolean; paced: boolean; connectionInFlightBytes: number }
   ): void {
     const now = this.now()
-    if (options.connectionInFlightBytes === 0) {
+    const queuedAhead = options.connectionInFlightBytes + this.unconfirmedImageBytes
+    this.sendIndex += 1
+    if (queuedAhead === 0) {
       // Idle gaps are not delivery time; restart the rate interval at this send.
       this.deliveredAt = now
     }
@@ -113,25 +121,39 @@ export class TerminalMultiplexLinkEstimate {
       this.ledgers.set(stream, ledger)
     }
     ledger.sentOffset += bytes
-    const drained = options.connectionInFlightBytes <= DRAINED_QUEUE_BYTES
+    const drained = queuedAhead <= DRAINED_QUEUE_BYTES
+    const paced = options.paced && this.unconfirmedImageBytes === 0
     const last = ledger.records.at(-1)
     if (last && ledger.records.length - ledger.head >= MAX_SEND_RECORDS_PER_STREAM) {
       // Merging keeps the older send time, which only overstates RTT (a larger, safer window).
       last.endOffset = ledger.sentOffset
       last.backlogged &&= options.backlogged
-      last.paced &&= options.paced
+      last.paced &&= paced
       last.drained &&= drained
       return
     }
     ledger.records.push({
       endOffset: ledger.sentOffset,
+      sendIndex: this.sendIndex,
       sentAt: now,
       delivered: this.delivered,
       deliveredAt: this.deliveredAt,
       backlogged: options.backlogged,
-      paced: options.paced,
+      paced,
       drained
     })
+  }
+
+  noteImageSent(bytes: number): void {
+    const last = this.unconfirmedImages.at(-1)
+    if (last && this.unconfirmedImages.length >= MAX_UNCONFIRMED_IMAGES) {
+      // Merging under the newer index only delays confirmation, which keeps samples conservative.
+      last.bytes += bytes
+      last.afterSendIndex = this.sendIndex
+    } else {
+      this.unconfirmedImages.push({ bytes, afterSendIndex: this.sendIndex })
+    }
+    this.unconfirmedImageBytes += bytes
   }
 
   noteAcknowledged(stream: TerminalMultiplexStream, bytes: number): void {
@@ -158,6 +180,15 @@ export class TerminalMultiplexLinkEstimate {
     this.ackBurst.add(bytes, now)
     if (!acked) {
       return
+    }
+    while (
+      this.unconfirmedImages.length > 0 &&
+      this.unconfirmedImages[0]!.afterSendIndex < acked.sendIndex
+    ) {
+      const image = this.unconfirmedImages.shift()!
+      this.unconfirmedImageBytes -= image.bytes
+      // The link carried the image, so the rate sample counts it.
+      this.delivered += image.bytes
     }
     const rtt = Math.max(1, now - acked.sentAt)
     if (acked.drained) {

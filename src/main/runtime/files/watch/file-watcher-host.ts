@@ -1,4 +1,4 @@
-import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
+import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
 import {
   forgetRuntimeWatcherProcessRoot,
   resetRuntimeWatcherProcessForTest,
@@ -19,7 +19,7 @@ import { closeRuntimeRootWatch } from './runtime-root-watch-teardown'
 import {
   RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS,
   RUNTIME_FILE_WATCH_MAX_SETUP_ATTEMPTS
-} from '../../../../shared/runtime-file-watch-limits'
+} from '../../../../shared/file-watch/runtime-file-watch-limits'
 import { PromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 
 const RUNTIME_FILE_WATCH_IGNORE_OPTIONS = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)

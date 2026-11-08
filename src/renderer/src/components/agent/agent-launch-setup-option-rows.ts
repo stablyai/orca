@@ -163,10 +163,24 @@ export function agentLaunchSetupOptionRows(
   })
 }
 
+/** Speed rows sit apart from the rest; launch also lifts level rows onto speed's line. */
+export function agentLaunchSetupRowGroups(rows: SessionOptionDescriptor[], launch: boolean) {
+  const isSpeed = (row: SessionOptionDescriptor) =>
+    row.id === 'fastMode' || row.id === 'serviceTier'
+  const isLevel = (row: SessionOptionDescriptor) =>
+    launch && !isSpeed(row) && row.category === 'thought_level' && row.kind.type === 'select'
+  return {
+    level: rows.filter(isLevel),
+    speed: rows.filter(isSpeed),
+    rest: rows.filter((row) => !isSpeed(row) && !isLevel(row))
+  }
+}
+
 export function agentLaunchSetupCatalogState(
   entry: AgentPickerEntry,
   models: readonly { id: string; hidden?: true }[],
   currentModel: string | undefined,
+  mode: 'launch' | 'select',
   t: Translate = translate
 ) {
   const hasModels = models.some((model) => !model.hidden)
@@ -178,11 +192,17 @@ export function agentLaunchSetupCatalogState(
       ? null
       : entry.catalogRead === 'unsupported' ||
           (!hasModels && entry.catalog.origin === 'unknown' && entry.catalogRead === undefined)
-        ? t(
-            'agentPicker.catalogUnsupported',
-            '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',
-            { agent: entry.label }
-          )
+        ? mode === 'launch'
+          ? t(
+              'agentPicker.catalogUnsupportedLaunch',
+              '{{agent}} models are unavailable on this host. Your current choices still apply.',
+              { agent: entry.label }
+            )
+          : t(
+              'agentPicker.catalogUnsupported',
+              '{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.',
+              { agent: entry.label }
+            )
         : entry.catalogRead === 'failed'
           ? t(
               'agentPicker.catalogFailed',

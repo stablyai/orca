@@ -122,6 +122,11 @@ export abstract class OrcaRuntimeWithRecordAgentPromptLifecycleState extends Orc
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
     this.forgetProviderVisibleState(ptyId)
     // A phone that saw the previous process gets a fresh snapshot, never a resume across the respawn.
+    this.resetPublishedTerminalOutputCoverage(ptyId)
+  }
+
+  /** Ends resume onto output published so far: the phone's next subscribe gets a snapshot. */
+  protected resetPublishedTerminalOutputCoverage(ptyId: string): void {
     this.publishedOutputRings.get(ptyId)?.resetCoverage(this.getPtyOutputSequence(ptyId))
   }
 

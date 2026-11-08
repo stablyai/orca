@@ -37,7 +37,12 @@ function createFloodedLink() {
       send(link, paced)
     }
   }
-  return { estimate, flood }
+  // A recovery image takes link time but is never acked.
+  const sendImage = (link: LinkShape, bytes: number): void => {
+    estimate.noteImageSent(bytes)
+    linkFreeAt = Math.max(linkFreeAt, clock.now) + bytes / link.bytesPerMs
+  }
+  return { estimate, flood, sendImage }
 }
 
 const SLOW_LINK = { bytesPerMs: 125, returnMs: 100, frameBytes: 16 * 1024 }
@@ -69,5 +74,16 @@ describe('TerminalMultiplexLinkEstimate', () => {
     expect(estimate.pacedWindowBytes()).not.toBeNull()
     flood({ ...SLOW_LINK, returnMs: 3_000 }, 12, true)
     expect(estimate.pacedWindowBytes()).toBeNull()
+  })
+
+  it('keeps pacing while recovery images share the link', () => {
+    const { estimate, flood, sendImage } = createFloodedLink()
+    flood(SLOW_LINK, 20, true)
+    expect(estimate.pacedWindowBytes()).not.toBeNull()
+    for (let i = 0; i < 10; i += 1) {
+      sendImage(SLOW_LINK, 96 * 1024)
+      flood(SLOW_LINK, 4, true)
+    }
+    expect(estimate.pacedWindowBytes()).not.toBeNull()
   })
 })

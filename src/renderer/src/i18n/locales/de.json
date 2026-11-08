@@ -23427,6 +23427,7 @@
   },
   "agentPicker": {
     "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
+    "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
     "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
     "catalogInstall": "Installiere {{agent}} auf diesem Host, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",

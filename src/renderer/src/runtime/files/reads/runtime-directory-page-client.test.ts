@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY } from '../../../../../shared/files-runtime-capabilities'
+import { FILE_READ_DIR_PAGED_RUNTIME_CAPABILITY } from '../../../../../shared/file-access/files-runtime-capabilities'
 
 const callRuntimeRpc = vi.fn()
 const readRuntimeDirectory = vi.fn()

@@ -21,7 +21,7 @@ import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff/review/diff-navigation-context'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
-import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../shared/artifacts/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { editorArtifactSourceKey } from './editor-artifact-upload'
 

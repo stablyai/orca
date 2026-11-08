@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { PanelRight } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -41,6 +41,11 @@ function RightSidebarInner(): React.JSX.Element {
   })
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)
+  const routeRequestId = useAppStore((s) => s.rightSidebarRouteRequestId)
+  const settingsFocusRequested = useAppStore((s) => s.aiVaultSearchFocusRequested)
+  const lastRouteRequestId = useRef(routeRequestId)
+  const [focusVaultSearch, setFocusVaultSearch] = useState(false)
   const userRightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
   // `orca plugin shot --width` sizes the panel for one capture without touching the saved width.
   const captureWidth = usePluginViewCaptureStore((s) => s.panelWidth)
@@ -69,6 +74,43 @@ function RightSidebarInner(): React.JSX.Element {
     pluginFetchStatus,
     installedPluginTabKeys
   })
+
+  useEffect(() => {
+    if (lastRouteRequestId.current === routeRequestId) {
+      if (!rightSidebarOpen || creatingWorktree || effectiveTab !== 'vault') {
+        setFocusVaultSearch(false)
+      }
+      return
+    }
+    lastRouteRequestId.current = routeRequestId
+    setFocusVaultSearch(
+      rightSidebarOpen &&
+        !creatingWorktree &&
+        rightSidebarTab === 'vault' &&
+        effectiveTab === 'vault' &&
+        !settingsFocusRequested
+    )
+  }, [
+    routeRequestId,
+    rightSidebarOpen,
+    rightSidebarTab,
+    effectiveTab,
+    creatingWorktree,
+    settingsFocusRequested
+  ])
+
+  useEffect(() => {
+    if (!focusVaultSearch) {
+      return
+    }
+    const cancel = (): void => setFocusVaultSearch(false)
+    document.addEventListener('pointerdown', cancel, true)
+    document.addEventListener('keydown', cancel, true)
+    return () => {
+      document.removeEventListener('pointerdown', cancel, true)
+      document.removeEventListener('keydown', cancel, true)
+    }
+  }, [focusVaultSearch])
 
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
@@ -100,7 +142,12 @@ function RightSidebarInner(): React.JSX.Element {
         </div>
       ) : (
         // Keep panels mounted across worktree switches; remounts caused Windows IPC storms and multi-second freezes.
-        <RightSidebarPanelContent effectiveTab={effectiveTab} rightSidebarOpen={rightSidebarOpen} />
+        <RightSidebarPanelContent
+          effectiveTab={effectiveTab}
+          rightSidebarOpen={rightSidebarOpen}
+          focusVaultSearch={focusVaultSearch}
+          onVaultSearchFocusHandled={() => setFocusVaultSearch(false)}
+        />
       )}
     </div>
   ) : null

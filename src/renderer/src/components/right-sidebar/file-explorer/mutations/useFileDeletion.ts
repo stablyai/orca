@@ -32,7 +32,7 @@ import {
 import {
   assertFileWriteApplied,
   missingOrIdenticalPrecondition
-} from '../../../../../../shared/file-write-disk-precondition'
+} from '../../../../../../shared/file-write/file-write-disk-precondition'
 import { deleteWithPermanentFallback } from './file-explorer-trash-fallback'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { translate } from '@/i18n/i18n'
