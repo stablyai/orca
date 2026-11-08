@@ -9,10 +9,11 @@ import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
   applyNormalBufferScrollDelta,
+  cancelPendingNormalScroll,
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
 } from './normal-buffer-smooth-scroll'
-import { dispatcherShouldBlockSurface } from './tap-dispatch'
+import { clearLongPress, dispatcherShouldBlockSurface } from './tap-dispatch'
 import {
   applyTextScale,
   MAX_TEXT_SCALE,
@@ -27,6 +28,9 @@ const RELEASE_VELOCITY_MAX_AGE_MS = 100
 
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
+/** The travel before a pixel-scrolled drag moves the text, in pixels. */
+const PIXEL_SCROLL_DRAG_SLOP = 8
+
 export type TerminalTouchState = {
   active: boolean
   lastX: number
@@ -36,6 +40,7 @@ export type TerminalTouchState = {
   accumDelta: number
   momentumId: number | null
   isPinching: boolean
+  scrollDragActive: boolean
   pinchDist: number
   pinchScale: number
   pinchSurfX: number
@@ -109,6 +114,14 @@ export function attachSurfaceEventHandlers(
         // A touch that stopped momentum must not also fire a tap.
         scope.tapCandidate = null
       }
+      // Why: a new touch holds the text where it is drawn, so travel the last one queued is dropped.
+      cancelPendingNormalScroll(scope)
+      if (scope.term) {
+        scope.pixelScrollActive =
+          scope.term.setViewportPixelOffset?.(scope.smoothScrollOffsetY / getTotalScale(scope)) ===
+          true
+      }
+      scope.touchGesture.scrollDragActive = false
       const touches = touchesInRoot(scope.root, e.touches)
       if (touches.length === 2) {
         stopSurfaceTouchGestures(scope)
@@ -185,6 +198,22 @@ export function attachSurfaceEventHandlers(
           updateTransform(scope)
         }
 
+        // Why: pixel scrolling shows every pixel of travel, so a resting finger's jitter would
+        // shake the text; the drag moves it only once the finger has clearly left its start.
+        if (
+          scope.pixelScrollActive &&
+          !shouldRouteScrollToTerminalInput(scope) &&
+          !scope.touchGesture.scrollDragActive
+        ) {
+          if (Math.abs(scope.touchGesture.lastY - y) <= PIXEL_SCROLL_DRAG_SLOP) {
+            scope.touchGesture.lastX = x
+            return
+          }
+          scope.touchGesture.scrollDragActive = true
+          // Why: scrolling owns this touch before the queued paint; it cannot also select or tap.
+          clearLongPress(scope)
+          scope.tapCandidate = null
+        }
         const deltaY = scope.touchGesture.lastY - y
         scope.touchGesture.lastTime = now
         if (shouldRouteScrollToTerminalInput(scope)) {

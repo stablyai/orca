@@ -2,7 +2,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { WebglAddon } from '@xterm/addon-webgl'
 import { terminalDocumentDouble } from './document/document-terminal-double.test-support'
+import type { TerminalDocumentHost } from './document/document-host-seams'
 import type { TerminalDocumentTerminal } from './document/document-terminal-shape'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import type { TerminalWebViewHandle } from './terminal-webview-contract'
@@ -14,6 +16,8 @@ let startThrows: Error | null = null
 const startedScales: number[] = []
 const startedBuilds: boolean[] = []
 let gridTerminal: (() => TerminalDocumentTerminal) | null = null
+/** The seams each mount handed the factory, for the cases that read the engine the page builds. */
+const mountedSeams: TerminalDocumentHost[] = []
 
 vi.mock('./document/create-terminal-document', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./document/create-terminal-document')>()
@@ -22,6 +26,7 @@ vi.mock('./document/create-terminal-document', async (importOriginal) => {
     createTerminalDocument: (host: Parameters<typeof actual.createTerminalDocument>[0]) => {
       startedScales.push(host?.start?.().textScale ?? 1)
       startedBuilds.push(host?.start?.().shown ?? true)
+      mountedSeams.push(host ?? {})
       if (startThrows) {
         throw startThrows
       }
@@ -69,6 +74,7 @@ beforeEach(() => {
   startThrows = null
   startedScales.length = 0
   startedBuilds.length = 0
+  mountedSeams.length = 0
   gridTerminal = null
   document.body.innerHTML = ''
   document.head.innerHTML = ''
@@ -253,6 +259,24 @@ describe('the page keeps its own capture buffer', () => {
     expect(nextMessages[0]).toContain('captured: third failure')
     expect(nextMessages[0]).not.toContain('first failure')
     next.dispose()
+  })
+})
+
+describe('the engine the page builds', () => {
+  it('is the WebView engine with its sub-row scroll seam, not bare xterm', () => {
+    const mounted = mountTerminalWebDocument(plantHost(), () => {})
+    const seams = mountedSeams[0]!
+    const terminal = seams.createTerminal!({ cols: 40, rows: 24 })
+    const addon = seams.createWebglAddon!()
+
+    // Not opened yet, so there is no renderer to shift; bare xterm has no seam to answer at all.
+    expect(terminal.setViewportPixelOffset?.(-8)).toBe(false)
+    // The smooth addon is xterm's own, extended; happy-dom cannot activate either.
+    expect(addon).toBeInstanceOf(WebglAddon)
+    expect(addon!.constructor).not.toBe(WebglAddon)
+
+    terminal.dispose()
+    mounted.dispose()
   })
 })
 
