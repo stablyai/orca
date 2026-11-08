@@ -1926,6 +1926,67 @@ html.native-shell .app-layout {
   background: var(--worktree-sidebar);
 }
 
+/* PR icon style: the review state glyph centered in the tile's footprint. */
+.worktree-card-leading-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+}
+
+.worktree-card-leading-mark-button {
+  cursor: pointer;
+  outline: none;
+}
+
+.worktree-card-leading-mark-button:hover {
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
+}
+
+.worktree-card-leading-mark-button:focus-visible {
+  box-shadow: 0 0 0 1px var(--ring);
+}
+
+.worktree-card-leading-icon-offline .worktree-card-leading-mark {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+/* AI icon style: one generated mark for the workspace name in the tile's footprint. */
+.worktree-card-leading-image {
+  position: absolute;
+  inset: 0;
+  width: 18px;
+  height: 15px;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--worktree-sidebar-foreground) 24%, transparent),
+    0 1px 2px rgb(0 0 0 / 0.3);
+}
+
+.worktree-card-leading-icon-offline .worktree-card-leading-image {
+  filter: grayscale(1);
+  opacity: 0.5;
+}
+
+[data-worktree-card-icon='none'] {
+  --worktree-card-text-inset: 0px;
+}
+
+/* No-icon style: the badge hangs in the card's left padding, beside the name's bottom-left
+   corner, instead of taking a column. */
+.worktree-card-name-badge {
+  position: absolute;
+  z-index: 1;
+  left: -5px;
+  bottom: 1px;
+  display: grid;
+  place-items: center;
+  width: 10px;
+  height: 10px;
+}
+
 /* An agent line's unread/working badge, on the agent icon's corner like the card's leading icon. */
 .worktree-agent-line-badge {
   position: absolute;

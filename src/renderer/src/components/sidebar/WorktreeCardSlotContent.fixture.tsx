@@ -368,6 +368,32 @@ export const prRollup = defineFixture({
   )
 })
 
+// PR icon style: each card leads with its own review state; a parent's pill keeps only its children's.
+export const prIconStyle = defineFixture({
+  width: SIDEBAR_WIDTH,
+  setup: () => {
+    seedWorkspaces(PR_FAMILY, now)
+    const { settings } = useAppStore.getState()
+    if (settings) {
+      useAppStore.setState({ settings: { ...settings, worktreeCardIcon: 'pr' } })
+    }
+  },
+  render: () => (
+    <SidebarFrame>
+      <Card
+        worktree={prWorktrees.get('wt-pr-parent')!}
+        childCount={PR_CHILD_IDS.length}
+        collapsed
+        descendantIds={PR_CHILD_IDS}
+        worktreesById={prWorktrees}
+      />
+      {['wt-pr-api', 'wt-pr-sdk', 'wt-pr-old'].map((id) => (
+        <Card key={id} worktree={prWorktrees.get(id)!} />
+      ))}
+    </SidebarFrame>
+  )
+})
+
 export const agentsExpanded = defineFixture({
   width: SIDEBAR_WIDTH,
   setup: () => {

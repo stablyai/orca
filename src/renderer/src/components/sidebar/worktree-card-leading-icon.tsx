@@ -7,6 +7,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
+import type { WorktreeCardIconStyle } from '../../../../shared/worktree/card-display-settings-types'
 import { ShellIcon, shellIconKind } from '../tab-bar/shell-icons'
 import {
   decodeLeadingTabIcon,
@@ -17,6 +18,7 @@ import type { SlotException } from './worktree-card-slot-signal'
 import type { SlotTarget } from './worktree-card-slot-targets'
 import { SlotJumpTrigger, SlotKindGlyph } from './worktree-card-slot-jump'
 import { slotLabel } from './WorktreeCardSlot'
+import { useWorktreeAiIcon } from './use-worktree-ai-icon'
 
 const LAYERS = ['front', 'l1', 'l2', 'l3'] as const
 
@@ -57,38 +59,47 @@ function TabGlyph({ icon }: { icon: LeadingTabIcon }): React.JSX.Element {
 /** Badge kinds the icon carries; needs/failed get the louder label pill on the right instead. */
 export type LeadingIconBadge = Extract<SlotException, { kind: 'unread' } | { kind: 'working' }>
 
-/**
- * The card's leading icon: the most recently focused tab in front, up to three more layered
- * behind it, and the quiet statuses (unread, working) as a corner badge.
- */
-export function WorktreeCardLeadingIcon({
-  worktreeId,
+/** The quiet status as a corner badge; `className` places it on the icon or, without one, on the name. */
+export function WorktreeCardLeadingBadge({
   badge,
-  offline,
+  className,
   resolveTargets
 }: {
-  worktreeId: string
-  badge: LeadingIconBadge | null
-  offline: boolean
+  badge: LeadingIconBadge
+  className: string
   resolveTargets: (kind: SlotException['kind']) => SlotTarget[]
 }): React.JSX.Element {
+  return (
+    <SlotJumpTrigger
+      label={slotLabel(badge) ?? ''}
+      resolveTargets={() => resolveTargets(badge.kind)}
+      className={className}
+    >
+      <span data-worktree-card-slot={badge.kind} className="inline-flex">
+        <SlotKindGlyph
+          kind={badge.kind}
+          monitoring={badge.kind === 'working' && badge.monitoring === true}
+          spinnerClassName="size-2"
+        />
+      </span>
+    </SlotJumpTrigger>
+  )
+}
+
+function TabStack({ worktreeId }: { worktreeId: string }): React.JSX.Element {
   const encoded = useAppStore(
     useShallow(
       useCallback((state: AppState) => selectWorktreeLeadingTabs(state, worktreeId), [worktreeId])
     )
   )
   const icons = encoded.map(decodeLeadingTabIcon)
-  return (
-    <span
-      className={cn('worktree-card-leading-icon', offline && 'worktree-card-leading-icon-offline')}
-      data-layers={icons.length}
-      aria-hidden={badge === null}
-    >
-      {icons.length === 0 ? (
-        <span className="worktree-card-leading-tile" data-layer="front">
-          <FolderIcon open={false} className="size-[11px] text-muted-foreground" />
-        </span>
-      ) : (
+  return icons.length === 0 ? (
+    <span className="worktree-card-leading-tile" data-layer="front">
+      <FolderIcon open={false} className="size-[11px] text-muted-foreground" />
+    </span>
+  ) : (
+    <>
+      {
         // Back to front so later layers paint over earlier ones without z-index fights.
         icons
           .map((icon, index) => (
@@ -121,21 +132,54 @@ export function WorktreeCardLeadingIcon({
             </span>
           ))
           .toReversed()
+      }
+    </>
+  )
+}
+
+/**
+ * The card's leading icon and its quiet statuses (unread, working) as a corner badge. Tabs style
+ * stacks the most recently focused tab in front of up to three older ones; the AI style draws
+ * one generated mark for the workspace name and falls back to tabs until it arrives; other
+ * styles pass their own `mark`.
+ */
+export function WorktreeCardLeadingIcon({
+  worktreeId,
+  name,
+  iconStyle,
+  mark,
+  badge,
+  offline,
+  resolveTargets
+}: {
+  worktreeId: string
+  name: string
+  iconStyle: Exclude<WorktreeCardIconStyle, 'none'>
+  mark?: React.ReactNode
+  badge: LeadingIconBadge | null
+  offline: boolean
+  resolveTargets: (kind: SlotException['kind']) => SlotTarget[]
+}): React.JSX.Element {
+  const aiIcon = useWorktreeAiIcon(name, iconStyle === 'ai')
+  return (
+    <span
+      className={cn('worktree-card-leading-icon', offline && 'worktree-card-leading-icon-offline')}
+      data-icon-style={iconStyle}
+      aria-hidden={badge === null && !mark}
+    >
+      {mark ? (
+        mark
+      ) : aiIcon ? (
+        <img className="worktree-card-leading-image" src={aiIcon} alt="" draggable={false} />
+      ) : (
+        <TabStack worktreeId={worktreeId} />
       )}
       {badge ? (
-        <SlotJumpTrigger
-          label={slotLabel(badge) ?? ''}
-          resolveTargets={() => resolveTargets(badge.kind)}
+        <WorktreeCardLeadingBadge
+          badge={badge}
           className="worktree-card-leading-badge"
-        >
-          <span data-worktree-card-slot={badge.kind} className="inline-flex">
-            <SlotKindGlyph
-              kind={badge.kind}
-              monitoring={badge.kind === 'working' && badge.monitoring === true}
-              spinnerClassName="size-2"
-            />
-          </span>
-        </SlotJumpTrigger>
+          resolveTargets={resolveTargets}
+        />
       ) : null}
     </span>
   )

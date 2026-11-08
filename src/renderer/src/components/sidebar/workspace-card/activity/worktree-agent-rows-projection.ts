@@ -1,4 +1,4 @@
-import { structuredAgentSessionOwnerInputs } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'

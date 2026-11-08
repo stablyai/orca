@@ -31,8 +31,14 @@ import {
 import { getWorktreeCardHost, WorktreeCardHostName } from './worktree-card-host-name'
 import { WorktreeCardChildrenChip } from './worktree-card-children-chip'
 import { WorktreeCardSlot, WorktreeCardTitlePills, WorktreeCardTitleTime } from './WorktreeCardSlot'
-import { WorktreeCardLeadingIcon, type LeadingIconBadge } from './worktree-card-leading-icon'
+import {
+  WorktreeCardLeadingBadge,
+  WorktreeCardLeadingIcon,
+  type LeadingIconBadge
+} from './worktree-card-leading-icon'
+import { getWorktreeCardIconStyle } from '../../../../shared/worktree/card-display-settings-types'
 import { WorktreeCardPrRollup } from './worktree-card-pr-rollup'
+import { openWorktreeCardOwnReview, WorktreeCardPrMark } from './worktree-card-pr-mark'
 import {
   expandWorkspaceUnreadTargets,
   slotTargetsFromAgentLines,
@@ -203,6 +209,7 @@ export function WorktreeCardSlotContent({
     titleExceptions.some((exception) => exception.kind === 'unread')
   // Only a closed card needs the stub; an open one already shows its children chip.
   const subtreeHidden = !open && descendants.length > 0
+  const iconStyle = getWorktreeCardIconStyle(settings)
 
   const agentLines = showLines ? (
     <WorktreeCardSlotAgentLines
@@ -219,7 +226,7 @@ export function WorktreeCardSlotContent({
     <>
       {agentLines}
       {open && showLineageChildChip ? (
-        <div className="mt-[3px] flex min-w-0 pr-1.5 pl-6">
+        <div className="mt-[3px] flex min-w-0 pr-1.5 pl-[var(--worktree-card-text-inset,24px)]">
           <WorktreeCardChildrenChip
             childIdentities={lineageChildIdentities}
             lineageSource={descendants}
@@ -241,14 +248,18 @@ export function WorktreeCardSlotContent({
     }
     onToggleOpen()
   }
+  const openOwnReview = (event: React.MouseEvent): void => openWorktreeCardOwnReview(card, event)
   const openToggleLabel = open
     ? translate('sidebar.cardSlot.closeCard', 'Hide workspace activity')
     : translate('sidebar.cardSlot.openCard', 'Show workspace activity')
 
   return (
     <div
-      // Clip sideways only: the leading icon's older tabs peek above the title row.
-      className="flex w-full min-w-0 flex-col overflow-x-clip"
+      // Clip sideways only: the leading icon's older tabs peek above the title row. Without an
+      // icon, nothing needs clipping and the name's badge hangs into the card's left padding.
+      className={cn('flex w-full min-w-0 flex-col', iconStyle !== 'none' && 'overflow-x-clip')}
+      // Rows under the name start where its text does: past the icon, or flush without one.
+      data-worktree-card-icon={iconStyle}
       data-worktree-card-open={open || undefined}
       data-worktree-card-parent-content=""
       data-worktree-card-style="experimental-2"
@@ -273,16 +284,39 @@ export function WorktreeCardSlotContent({
         >
           <div
             className={cn(
-              'flex h-5 min-w-0 items-center gap-1.5 pr-1.5',
-              subtreeHidden && 'relative mb-3'
+              'relative flex h-5 min-w-0 items-center gap-1.5 pr-1.5',
+              subtreeHidden && 'mb-3'
             )}
           >
-            <WorktreeCardLeadingIcon
-              worktreeId={worktree.id}
-              badge={iconBadge}
-              offline={offline}
-              resolveTargets={resolveTitleTargets}
-            />
+            {iconStyle === 'none' ? (
+              // No icon to sit on, so the badge rides the name's corner without taking a column.
+              iconBadge ? (
+                <WorktreeCardLeadingBadge
+                  badge={iconBadge}
+                  className="worktree-card-name-badge"
+                  resolveTargets={resolveTitleTargets}
+                />
+              ) : null
+            ) : (
+              <WorktreeCardLeadingIcon
+                worktreeId={worktree.id}
+                name={visibleCardTitle}
+                iconStyle={iconStyle}
+                mark={
+                  iconStyle === 'pr' ? (
+                    <WorktreeCardPrMark
+                      review={card.statusLaneReview}
+                      hasBranch={Boolean(card.branchIdentityDisplay)}
+                      onOpen={openOwnReview}
+                      onPointerDown={card.stopQuickActionPointerPropagation}
+                    />
+                  ) : undefined
+                }
+                badge={iconBadge}
+                offline={offline}
+                resolveTargets={resolveTitleTargets}
+              />
+            )}
             {subtreeHidden ? (
               // The stub under a closed card says it holds child workspaces; clicking it opens them.
               <button
@@ -333,20 +367,10 @@ export function WorktreeCardSlotContent({
                 />
               )}
               <WorktreeCardPrRollup
-                own={card.statusLaneReview}
+                // The PR icon style already shows this workspace's own review up front.
+                own={iconStyle === 'pr' ? null : card.statusLaneReview}
                 ownRepresentsDescendant={card.statusPrDisplay != null}
-                onOpenOwn={(event) => {
-                  const review = card.statusLaneReview
-                  if (review?.provider === 'github' && card.repo && review.url) {
-                    card.handleOpenReviewInOrca(event, review)
-                  } else if (review?.url) {
-                    event.stopPropagation()
-                    card.handleOpenReviewInBrowser(review.url)
-                  } else {
-                    event.stopPropagation()
-                    card.detailsHoverControl.handleHoverOpenChange(true)
-                  }
-                }}
+                onOpenOwn={openOwnReview}
                 hiddenDescendants={lineageHidden ? descendants : NO_DESCENDANTS}
               />
               {sshDown && host ? (
@@ -377,7 +401,7 @@ export function WorktreeCardSlotContent({
           </div>
           {showDetailsRow ? (
             <div
-              className="mt-1 mb-1 flex h-4 min-w-0 items-center gap-1.5 pr-1.5 pl-6"
+              className="mt-1 mb-1 flex h-4 min-w-0 items-center gap-1.5 pr-1.5 pl-[var(--worktree-card-text-inset,24px)]"
               data-worktree-card-details-row=""
             >
               {presentation.hasMetaRow ? (

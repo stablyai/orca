@@ -135,7 +135,7 @@ export function WorktreeCardSlotAgentLines({
   }
   return (
     <div
-      className="mt-1 flex flex-col gap-1 pl-[24px]"
+      className="mt-1 flex flex-col gap-1 pl-[var(--worktree-card-text-inset,24px)]"
       role={hasLineage ? 'tree' : 'group'}
       aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
       onDoubleClick={stopPropagation}

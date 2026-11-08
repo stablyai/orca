@@ -103,6 +103,12 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     hostedReview: createRuntimeNamespaceApi('hostedReview'),
     linear: createRuntimeNamespaceApi('linear'),
     jira: createWebJiraApi(),
+    worktreeIcons: {
+      generate: async () => ({
+        success: false,
+        error: 'AI workspace icons are unavailable in the web client.'
+      })
+    },
     hooks: createHooksApi(),
     stats: {
       getSummary: async () =>
