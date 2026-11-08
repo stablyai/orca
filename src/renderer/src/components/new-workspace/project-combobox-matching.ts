@@ -56,7 +56,15 @@ function matchesNamedHost(option: NewWorkspaceProjectOption, query: string): boo
     detail: option.detail,
     hostLabels: option.hostLabels
   })
-  return match?.hostIndexes != null
+  if (!match) {
+    return false
+  }
+  // A checkout's detail already names its host, so "build orca" matches without host words left over.
+  const words = query.split(/\s+/)
+  return (
+    match.hostIndexes !== null ||
+    option.hostLabels.some((label) => words.some((word) => label.toLowerCase().includes(word)))
+  )
 }
 
 /** Rank matches with most-recent-first IDs breaking ties and ordering empty queries. */

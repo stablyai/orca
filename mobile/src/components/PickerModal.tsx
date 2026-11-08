@@ -89,12 +89,13 @@ function PickerModalContent<T extends string = string>({
   const t = useMobileTranslation()
   useMobileColorScheme()
   const [query, setQuery] = useState('')
+  const words = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean)
+  // Each word may match the label or the subtitle, like the home Desktops search.
   const visibleOptions = searchable
-    ? options.filter((option) =>
-        `${option.label} ${option.subtitle ?? ''}`
-          .toLocaleLowerCase()
-          .includes(query.trim().toLocaleLowerCase())
-      )
+    ? options.filter((option) => {
+        const text = `${option.label} ${option.subtitle ?? ''}`.toLocaleLowerCase()
+        return words.every((word) => text.includes(word))
+      })
     : options
   // Put option rows in shown child; closed BottomDrawer returns null, avoiding hidden-content rebuilds on parent renders.
   const hasIcons = visibleOptions.some((opt) => opt.renderIcon !== undefined)

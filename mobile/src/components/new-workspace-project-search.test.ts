@@ -46,6 +46,8 @@ describe('quickPickNewWorkspaceTargets', () => {
   it('offers one row per project and host so a pick sets both', () => {
     expect(pick('orca')).toEqual(['orca@This Mac', 'orca@build-box'])
     expect(pick('build orca')).toEqual(['orca@build-box'])
+    const [only] = quickPickNewWorkspaceTargets(options, repos, 'build orca', hostLabelFor, null, 5)
+    expect(getRepoExecutionHostId(only.repo)).toBe(getRepoExecutionHostId(repos[1]))
   })
 
   it('narrows to the host chosen as a quick filter', () => {
