@@ -25,6 +25,10 @@ export function useOnboardingAndFeatureTips() {
   const [onboardingLoaded, setOnboardingLoaded] = useState(false)
   const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
   const [chatUiHereCornerCardOpen, setChatUiHereCornerCardOpen] = useState(false)
+  const [switchNoteAssignment, setSwitchNoteAssignment] = useState<{
+    cohort: 'control' | 'treatment' | undefined
+  } | null>(null)
+  const switchNoteAssignmentPending = useRef(false)
   const promptedThisSessionRef = useRef(false)
   const suppressedByOnboardingThisSessionRef = useRef(false)
 
@@ -143,6 +147,22 @@ export function useOnboardingAndFeatureTips() {
       return
     }
 
+    if (
+      featureTipsDecision.tipId === 'chat-ui-here' &&
+      chatUiLaunchTipVariant === 'chat-ui-off' &&
+      !shouldSuppressAutomaticChatUiLaunchTip(settings ?? null) &&
+      !switchNoteAssignment
+    ) {
+      if (!switchNoteAssignmentPending.current) {
+        switchNoteAssignmentPending.current = true
+        void window.api.onboarding
+          .assignChatUiSwitchNoteCohort()
+          .catch(() => undefined)
+          .then((cohort) => setSwitchNoteAssignment({ cohort }))
+      }
+      return
+    }
+
     if (featureTipsDecision.tipId === 'chat-ui-here' && chatUiLaunchTipVariant) {
       trackChatUiFeatureTipExposure(chatUiLaunchTipVariant, settings ?? null)
       if (shouldSuppressAutomaticChatUiLaunchTip(settings ?? null)) {
@@ -180,7 +200,8 @@ export function useOnboardingAndFeatureTips() {
     featureTipsSeenIds,
     onboarding,
     persistedUIReady,
-    settings
+    settings,
+    switchNoteAssignment
   ])
 
   const shouldRender = onboarding !== null && shouldShowOnboarding(onboarding)
@@ -191,8 +212,15 @@ export function useOnboardingAndFeatureTips() {
       setOnboarding,
       shouldRender,
       chatUiHereCornerCardOpen,
+      chatUiSwitchNoteCohort: switchNoteAssignment?.cohort,
       setChatUiHereCornerCardOpen
     }),
-    [applyStartupOnboardingState, onboarding, shouldRender, chatUiHereCornerCardOpen]
+    [
+      applyStartupOnboardingState,
+      onboarding,
+      shouldRender,
+      chatUiHereCornerCardOpen,
+      switchNoteAssignment
+    ]
   )
 }

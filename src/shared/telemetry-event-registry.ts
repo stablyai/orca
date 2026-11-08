@@ -182,6 +182,7 @@ export const eventSchemas = {
   native_chat_message_sent: nativeChatMessageSentSchema,
   // Main-owned provider-accepted prompts; legacy message_sent includes commands and queued writes.
   native_chat_prompt_submitted: nativeChatMessageSentSchema,
+  native_chat_follow_up_sent: nativeChatMessageSentSchema,
   native_chat_picker_opened: nativeChatPickerOpenedSchema,
   native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
   native_chat_send_classified: nativeChatSendClassifiedSchema,

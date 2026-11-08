@@ -4,6 +4,9 @@ import { track } from '../../../diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../shared/agent-kind'
 import type { NativeChatRuntime } from '../../../../../shared/telemetry-native-feature-event-schemas'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
+import { isConfirmedNativeChatUserSubmission } from '../../../../../shared/native-chat/native-chat-submission-evidence'
 
 /** Accept broad chat identities and narrow unknowns to telemetry other; callers need no unsafe TuiAgent cast. */
 export type NativeChatTelemetryAgent = TuiAgent | (string & {}) | null | undefined
@@ -27,15 +30,54 @@ export function emitNativeChatToggled(args: {
   })
 }
 
+export type NativeChatFollowUpTelemetry = {
+  priorMessages: readonly NativeChatMessage[]
+  submission: Promise<boolean>
+  priorSubmission?: () => Promise<boolean>
+  messageId?: string
+  submissionHistory: Map<string, Promise<boolean>>
+}
+
 /** Emit composer sends with resolved PTY runtime, or unknown when ownership cannot be established. */
 export function emitNativeChatMessageSent(args: {
   agent: NativeChatTelemetryAgent
   runtime: NativeChatRuntime
+  followUp?: NativeChatFollowUpTelemetry
 }): void {
-  track('native_chat_message_sent', {
+  const props = {
     agent_kind: resolveAgentKind(args.agent),
     runtime: args.runtime,
-    client: 'desktop'
+    client: 'desktop' as const
+  }
+  track('native_chat_message_sent', props)
+  if (!args.followUp) {
+    return
+  }
+  const { priorMessages, submission, messageId, submissionHistory, priorSubmission } = args.followUp
+  const priorSubmissions = [...submissionHistory.values()]
+  const confirmedPredecessor = priorMessages.some(isConfirmedNativeChatUserSubmission)
+  const succeeded = submission.catch(() => false)
+  const id = messageId ?? createBrowserUuid()
+  submissionHistory.set(id, succeeded)
+  void succeeded.then((sent) => {
+    submissionHistory.delete(id)
+    if (sent) {
+      submissionHistory.set('confirmed-submission', Promise.resolve(true))
+    }
+  })
+  const priorSucceeded = confirmedPredecessor
+    ? Promise.resolve(true)
+    : Promise.any(
+        priorSubmissions.map((prior) => prior.then((sent) => (sent ? true : Promise.reject())))
+      ).catch(() => false)
+  void succeeded.then(async (sent) => {
+    if (!sent) {
+      return
+    }
+    const earlierSent = (await priorSucceeded) || (await priorSubmission?.().catch(() => false))
+    if (earlierSent) {
+      track('native_chat_follow_up_sent', props)
+    }
   })
 }
 

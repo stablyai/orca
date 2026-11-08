@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-// @vitest-environment happy-dom
 
 // @vitest-environment happy-dom
 // @vitest-environment happy-dom
@@ -20,10 +19,10 @@ import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../..
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
+import { track } from '@/lib/telemetry'
+import type { NativeChatRecallSource } from '../../drafts/native-chat-sent-prompt-history'
 
-vi.mock('@/components/native-chat/telemetry/native-chat-telemetry', () => ({
-  emitNativeChatMessageSent: vi.fn()
-}))
+vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: () => 'codex' }))
 
 import {
   createNativeChatQueuedEditDraft,
@@ -91,7 +90,7 @@ describe('complete handback acceptance', () => {
     return edit
   }
 
-  function acceptanceFixture() {
+  function acceptanceFixture(recallSource?: NativeChatRecallSource) {
     const goal = Promise.withResolvers<boolean>()
     let current = true
     const caret = vi.fn()
@@ -127,6 +126,7 @@ describe('complete handback acceptance', () => {
         draftScopeKey: key,
         imageAttachments: [],
         structuredTransport: transport,
+        recallSource,
         isComposing: () => composing,
         clearSkillOrigin: clearOrigin,
         setDraft: draft.setDraft,
@@ -150,6 +150,44 @@ describe('complete handback acceptance', () => {
       }
     }
   }
+
+  it('counts a structured follow-up only after delivery is recorded, excluding failures and commands', async () => {
+    const fixture = acceptanceFixture({
+      messages: [{ id: 'prior-user', role: 'user', blocks: [], timestamp: 1, source: 'transcript' }]
+    })
+    let settle: NonNullable<
+      Parameters<NativeChatStructuredComposerTransport['send']>[2]
+    >['onSettled']
+    fixture.transport.send = (_text, _attachments, request) => {
+      settle = request?.onSettled
+      return true
+    }
+    const hook = fixture.mount()
+    vi.mocked(track).mockClear()
+    const followUps = () =>
+      vi.mocked(track).mock.calls.filter(([name]) => name === 'native_chat_follow_up_sent')
+    await act(async () => {
+      expect(await hook.result.current.send('/src/app.ts needs a fix', [])).toBe(true)
+    })
+    expect(followUps()).toEqual([])
+    await act(async () => settle?.('returned'))
+    expect(followUps()).toEqual([])
+    await act(async () => hook.result.current.send('try again', []))
+    await act(async () => settle?.('unconfirmed'))
+    expect(followUps()).toEqual([])
+    await act(async () => hook.result.current.send('deliver this follow-up', []))
+    await act(async () => settle?.('recorded'))
+    expect(followUps()).toEqual([
+      ['native_chat_follow_up_sent', { agent_kind: 'codex', runtime: 'local', client: 'desktop' }]
+    ])
+    fixture.goal.resolve(true)
+    await act(async () => {
+      expect(await hook.result.current.send('/goal fix the app', [])).toBe(true)
+    })
+    expect(followUps()).toEqual([
+      ['native_chat_follow_up_sent', { agent_kind: 'codex', runtime: 'local', client: 'desktop' }]
+    ])
+  })
 
   it('subtracts only submitted nodes when an ordinary message yields to a handback before admission, and persists the latest remainder', async () => {
     const fixture = acceptanceFixture()

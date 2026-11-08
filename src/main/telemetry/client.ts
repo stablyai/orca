@@ -215,7 +215,11 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
         ? { sample_rate: sampleRate }
         : {}
 
-  enqueueCapture(name, { ...result.props, ...mainOwnedProps })
+  enqueueCapture(name, {
+    chat_ui_switch_note_v1: settings.telemetry?.chatUiSwitchNoteCohort,
+    ...result.props,
+    ...mainOwnedProps
+  })
   if (dashboardActiveSurface && settings.telemetry) {
     trackedDashboardActiveDays.set(dashboardActiveSurface, dashboardActiveDay)
     try {

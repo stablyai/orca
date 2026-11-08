@@ -1,18 +1,21 @@
 import type { CommonProps } from '../../shared/telemetry-events'
 import type { Store } from '../persistence/loading-store/store'
 import { ensureChatUiLaunchTipCohort } from './chat-ui-launch-tip-cohort'
+import { ensureChatUiSwitchNoteCohort } from './chat-ui-switch-note-cohort'
 
 export function experimentCohortProps(
   store: Store
 ): Pick<
   CommonProps,
   | 'onboarding_language_v1'
+  | 'chat_ui_switch_note_v1'
   | 'chat_ui_launch_tip_v1'
   | 'chat_ui_launch_tip_rollout_v1'
   | 'chat_ui_launch_tip_targeting_v1'
   | 'chat_ui_launch_tip_button_emphasis_v1'
 > {
   const cohort = ensureChatUiLaunchTipCohort(store)
+  const switchNoteCohort = ensureChatUiSwitchNoteCohort(store)
   const telemetry = store.getSettings().telemetry
   // Preserve the original cohort to distinguish old controls from new enrollees in expansion analysis.
   const historical = telemetry?.chatUiLaunchTipCohort
@@ -27,6 +30,7 @@ export function experimentCohortProps(
       ? telemetry?.chatUiLaunchTipTargeting?.mode
       : undefined
   return {
+    chat_ui_switch_note_v1: switchNoteCohort,
     onboarding_language_v1:
       language === 'control' || language === 'treatment' ? language : undefined,
     chat_ui_launch_tip_v1:

@@ -300,6 +300,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         activeView={activeView}
         shouldMountUpdateCard={shouldMountUpdateCard}
         chatUiHereCornerCardOpen={onboardingGate.chatUiHereCornerCardOpen}
+        chatUiSwitchNoteCohort={onboardingGate.chatUiSwitchNoteCohort}
         onChatUiHereCornerCardClose={() => onboardingGate.setChatUiHereCornerCardOpen(false)}
       />
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>

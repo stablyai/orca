@@ -1,4 +1,5 @@
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { NativeChatSubmissionSource } from '../../../native-chat-submission-source'
 import type {
   NativeChatMessage,
   NativeChatSession,
@@ -19,6 +20,7 @@ export function isNativeChatTranscriptUnsettled(phase: ReadState['phase']): bool
 }
 
 export type NativeChatLiveSession = NativeChatSession & {
+  submissionSource?: NativeChatSubmissionSource
   /** Latest provider turn boundary, used to settle orphaned running tool rows. */
   transcriptLifecycle?: NativeChatTurnLifecycle
   /** Hook-reported human wait not yet ended by the transcript; absent on hookless lanes. */

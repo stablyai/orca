@@ -116,6 +116,7 @@ export const chatUiFeatureTipActionSchema = z
       'open_settings',
       'open_live_switching',
       'live_switching_shown',
+      'switch_note_shown',
       'dismissed'
     ]),
     nth_repo_added: nthRepoAddedSchema

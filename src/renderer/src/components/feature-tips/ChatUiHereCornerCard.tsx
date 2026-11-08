@@ -22,10 +22,17 @@ type CornerCardState =
   | { stage: 'switched'; focusSettings: boolean }
 
 /** The nonblocking launch card for terminal-default profiles, sharing the tip's copy and a compact chat preview. */
-export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.Element | null {
+export function ChatUiHereCornerCard({
+  onClose,
+  cohort
+}: {
+  onClose: () => void
+  cohort?: 'control' | 'treatment'
+}): JSX.Element | null {
   const t = useTranslate()
   const mountedRef = useMountedRef()
   const settings = useAppStore((s) => s.settings)
+  const showSwitchedNote = cohort === 'treatment'
   const [state, setState] = useState<CornerCardState>({ stage: 'prompt' })
   const focusSwitchedNote = useRef(false)
 
@@ -61,8 +68,14 @@ export function ChatUiHereCornerCard({ onClose }: { onClose: () => void }): JSX.
     }
     focusSwitchedNote.current = event.detail === 0 && document.activeElement === event.currentTarget
     setState({ stage: 'saving' })
-    const saved = await setAgentDefaultSurfaceFromFeatureTip('chat', { confirmWithToast: false })
+    const saved = await setAgentDefaultSurfaceFromFeatureTip('chat', {
+      confirmWithToast: !showSwitchedNote
+    })
     if (mountedRef.current) {
+      if (saved && !showSwitchedNote) {
+        onClose()
+        return
+      }
       setState(
         saved
           ? { stage: 'switched', focusSettings: focusSwitchedNote.current }

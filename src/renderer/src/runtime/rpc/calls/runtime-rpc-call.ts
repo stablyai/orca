@@ -1,3 +1,4 @@
+import { callAbortableRuntime } from '../../abortable-runtime-call'
 import { waitForPromiseWithSignal } from '../../../../../shared/abort-signal-reason'
 import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
@@ -59,7 +60,15 @@ export async function callRuntimeRpc<TResult>(
   options.beforeSend?.()
   const response =
     target.kind === 'local'
-      ? await window.api.runtime.call({ method, params: nextParams })
+      ? options.signal
+        ? await callAbortableRuntime({
+            method,
+            timeoutMs: options.timeoutMs,
+            signal: options.signal,
+            subscribe: ({ onResponse }) =>
+              window.api.runtime.subscribe({ method, params: nextParams }, onResponse)
+          })
+        : await window.api.runtime.call({ method, params: nextParams })
       : await callRuntimeEnvironmentWithRevision({
           environmentId: target.environmentId,
           method,

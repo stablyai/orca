@@ -55,7 +55,8 @@ export function createWebOnboardingApi(): Partial<PreloadApi> {
         return next
       },
       // Why: the browser client has no profile from before Chat UI left Experimental.
-      getChatUiLaunchTipVariant: () => Promise.resolve('none')
+      getChatUiLaunchTipVariant: () => Promise.resolve('none'),
+      assignChatUiSwitchNoteCohort: () => Promise.resolve(undefined)
     }
   }
 }

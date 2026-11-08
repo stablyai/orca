@@ -1,11 +1,8 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
 
-export function createRuntimeRpcAbortError(): Error {
-  const error = new Error('Runtime request aborted')
-  error.name = 'AbortError'
-  return error
-}
+import { callAbortableRuntime, createRuntimeRpcAbortError } from '../../abortable-runtime-call'
+export { createRuntimeRpcAbortError } from '../../abortable-runtime-call'
 
 export async function callAbortableRuntimeEnvironment(
   environmentId: string,
@@ -19,39 +16,13 @@ export async function callAbortableRuntimeEnvironment(
   if (signal.aborted) {
     throw createRuntimeRpcAbortError()
   }
-  // Unsubscribe closes the host request context; one-shot calls cannot cancel host work.
-  return new Promise((resolve, reject) => {
-    const subscriptionId = createBrowserUuid()
-    let handle: { unsubscribe: () => void } | null = null
-    let settled = false
-    // Subscription timeout bounds start only; retain the response deadline or connected unresponsive hosts stall forever.
-    const deadline =
-      timeoutMs === undefined
-        ? null
-        : setTimeout(() => {
-            finish(() => reject(new Error(`Runtime request timed out before ${method} completed`)))
-          }, timeoutMs)
-    const finish = (complete: () => void): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (deadline !== null) {
-        clearTimeout(deadline)
-      }
-      signal.removeEventListener('abort', onAbort)
-      handle?.unsubscribe()
-      if (!handle) {
-        void window.api.runtimeEnvironments
-          .cancelSubscription({ subscriptionId })
-          .catch(() => undefined)
-      }
-      complete()
-    }
-    const onAbort = (): void => finish(() => reject(createRuntimeRpcAbortError()))
-    signal.addEventListener('abort', onAbort, { once: true })
-    void window.api.runtimeEnvironments
-      .subscribe(
+  const subscriptionId = createBrowserUuid()
+  return callAbortableRuntime({
+    method,
+    timeoutMs,
+    signal,
+    subscribe: (callbacks) =>
+      window.api.runtimeEnvironments.subscribe(
         {
           subscriptionId,
           selector: environmentId,
@@ -61,19 +32,12 @@ export async function callAbortableRuntimeEnvironment(
           expectedEnvironmentPairingRevision,
           expectedEnvironmentRuntimeId
         },
-        {
-          onResponse: (response) => finish(() => resolve(response)),
-          onError: (error) => finish(() => reject(new Error(error.message))),
-          onClose: () =>
-            finish(() => reject(new Error(`Runtime request closed before ${method} completed`)))
-        }
-      )
-      .then((subscription) => {
-        handle = subscription
-        if (settled) {
-          subscription.unsubscribe()
-        }
-      })
-      .catch((error) => finish(() => reject(error)))
+        callbacks
+      ),
+    cancelPending: () => {
+      void window.api.runtimeEnvironments
+        .cancelSubscription({ subscriptionId })
+        .catch(() => undefined)
+    }
   })
 }

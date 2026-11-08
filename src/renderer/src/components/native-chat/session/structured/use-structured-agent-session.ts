@@ -1,3 +1,4 @@
+import { structuredChatSubmissionSource } from '../../native-chat-submission-source'
 import { useQueuedMessageEditTransport } from '../../queue/editing/use-queued-message-edit-transport'
 import type { StructuredAgentSessionViewArgs } from './structured-agent-session-view-contract'
 import { useStructuredAgentSessionCommandMenu } from '../../composer/pickers/structured-agent-session-command-refresh'
@@ -229,6 +230,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   })
   return {
     epoch: state.epoch,
+    submissionSource: structuredChatSubmissionSource(args, state, transportEnabled),
     /** Whether a live `/clear` is fading the old transcript out, and how many this view drew. */
     contextClear,
     /** The transcript has caught up with the host since this pane last started reading. */

@@ -22480,7 +22480,7 @@
       "saveFailed": "Could not turn on Chat UI. Turn it on in Settings → Chat UI.",
       "terminalSaveFailed": "Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.",
       "switched": "Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.",
-      "switchedNoteTitle": "New agents will open in Chat UI",
+      "switchedNoteTitle": "Chat UI is now the default for new agents",
       "switchedNoteBody": "Prefer the terminal? Switch back anytime: search <term>Chat UI</term> in Settings.",
       "openSettings": "Open Settings",
       "dismiss": "Dismiss",

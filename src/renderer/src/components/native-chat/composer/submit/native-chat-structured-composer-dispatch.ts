@@ -17,10 +17,10 @@ export async function dispatchNativeChatStructuredComposerText(
   skills: readonly AgentJournalSkillRef[] = [],
   intent: Pick<
     StructuredAgentSessionSendRequest,
-    'alternate' | 'prepareAttachments' | 'onSettled'
+    'alternate' | 'prepareAttachments' | 'onCreated' | 'onSettled'
   > = {},
   onPending?: () => void
-): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
+): Promise<StructuredAgentSessionCommandOutcome & { revealsTranscript: boolean }> {
   // Number image chips by their attachment order in this message.
   const prompt = imageReferencesToPromptMarkers(
     draftText,
@@ -35,7 +35,7 @@ export async function dispatchNativeChatStructuredComposerText(
     : await transport.dispatchCommand(prompt, onPending)
   // Commands already reveal at keypress; messages reveal unless admitted as queued cards.
   if (handled) {
-    return { ...command, revealsTranscript: false }
+    return { ...command, handled, revealsTranscript: false }
   }
   // The composer still owns its draft until admission, so refusal must precede the handoff.
   const body = structuredAgentSessionSendBody(
@@ -44,6 +44,7 @@ export async function dispatchNativeChatStructuredComposerText(
   )
   if (structuredAgentSessionBlocksTooLarge(body.blocks)) {
     return {
+      handled: false,
       accepted: false,
       error: agentSessionWriteNoticeText([...AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS]),
       revealsTranscript: false
@@ -58,5 +59,10 @@ export async function dispatchNativeChatStructuredComposerText(
     onPending?.()
   }
   const accepted = await admission
-  return { accepted: accepted !== false, error: null, revealsTranscript: accepted === true }
+  return {
+    handled: false,
+    accepted: accepted !== false,
+    error: null,
+    revealsTranscript: accepted === true
+  }
 }

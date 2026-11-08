@@ -58,6 +58,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       structuredTransport,
       steerHead,
       recallSource,
+      submissionSource,
       inputOwnedByCard = false,
       notices: chatNotices,
       workspacePending: pending = false,
@@ -221,6 +222,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
+      recallSource,
+      submissionSource,
       draftScopeKey,
       imageAttachments,
       structuredTransport,
@@ -248,6 +251,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     }
     const sendPty = useNativeChatPtyComposerSend({
       draftScopeKey,
+      recallSource,
+      submissionSource,
       ...ptyCommandRouting,
       draft,
       imageAttachments,
