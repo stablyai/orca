@@ -5,20 +5,25 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
+import type { Translate } from '@/i18n/use-translate'
 
 function formatReviewState(state: string): string {
   return state.charAt(0).toUpperCase() + state.slice(1)
 }
 
-export function formatHostedReviewLabel(review: {
-  provider?: HostedReviewProvider
-  number: number
-  state: string
-  status: string
-  checksSummary?: ProviderCheckSummary
-}): string {
+export function formatHostedReviewLabel(
+  review: {
+    provider?: HostedReviewProvider
+    number: number
+    state: string
+    status: string
+    checksSummary?: ProviderCheckSummary
+  },
+  t?: Translate
+): string {
   const { shortLabel } = localizedHostedReviewCopy(
-    resolveSupportedHostedReviewCopyProvider(review.provider)
+    resolveSupportedHostedReviewCopyProvider(review.provider),
+    t
   )
   const symbol = review.provider === 'gitlab' ? '!' : '#'
   const status =

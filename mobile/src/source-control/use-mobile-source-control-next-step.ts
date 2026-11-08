@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { presentPrMerge } from '../components/pr-sidebar/pr-actions-state'
-import { useMobilePrActions } from '../session/use-mobile-pr-actions'
+import { useMobilePrActions, type PrActionBusyKey } from '../session/use-mobile-pr-actions'
+import { prActionSlices, type PrSlice } from '../session/mobile-pr-queries'
 import { useMobilePrAiTriage, type PrAiTriageKey } from '../session/use-mobile-pr-ai-triage'
 import {
   buildPrFixChecksPrompt,
@@ -38,8 +39,8 @@ type Params = {
   prState: PrSidebarState
   /** False on hosts without PR support; the bar then stops at Create PR. */
   reviewsSupported: boolean
-  /** A PR write's follow-up read: never skipped behind another read, and a failed one keeps the shown PR. */
-  rereadPr: () => Promise<void>
+  /** Re-reads the parts of the PR a write changed; a failed read keeps the shown PR. */
+  rereadPr: (slices: readonly PrSlice[]) => Promise<void>
   headSha: string | null
   /** The Changes body shows git workflow failures; elsewhere the bar has to. */
   showWorkflowErrors: boolean
@@ -72,6 +73,10 @@ export function useMobileSourceControlNextStep({
   const readyPr = prState.kind === 'ready' ? prState.data : null
   const prNumber = readyPr?.pr.number ?? 0
   const prRepo = readyPr?.pr.prRepo ?? null
+  const rereadAfterAction = useCallback(
+    (action: PrActionBusyKey) => rereadPr(prActionSlices(action)),
+    [rereadPr]
+  )
   const actions = useMobilePrActions({
     client,
     connState,
@@ -79,7 +84,7 @@ export function useMobileSourceControlNextStep({
     prNumber,
     headSha,
     prRepo,
-    refetch: rereadPr
+    refetch: rereadAfterAction
   })
   const { hostCapabilities, statusPending, statusReadable } = useHostProtocolGates()
   const triage = useMobilePrAiTriage({

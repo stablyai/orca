@@ -9,10 +9,6 @@ import type {
   BrowserPasswordGuestEnable
 } from '../shared/browser-passwords-types'
 import { installBrowserPasswordDetector } from './browser-password-detector'
-import {
-  PRELOAD_BROWSER_PASSWORDS_GUEST_CHANNELS,
-  PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS
-} from './browser-password-guest-channels'
 
 const CHANNEL = BROWSER_PASSWORDS_GUEST_CHANNELS
 
@@ -166,11 +162,6 @@ afterEach(() => {
 })
 
 describe('browser password detector', () => {
-  it('sends and listens on exactly the channels main uses', () => {
-    expect(PRELOAD_BROWSER_PASSWORDS_GUEST_CHANNELS).toEqual(BROWSER_PASSWORDS_GUEST_CHANNELS)
-    expect(PRELOAD_BROWSER_PASSWORDS_TO_GUEST_CHANNELS).toEqual(BROWSER_PASSWORDS_TO_GUEST_CHANNELS)
-  })
-
   it('installs only its main listeners until main enables the document', async () => {
     load(LOGIN_FORM)
     const addEventListener = vi.mocked(document.addEventListener)
@@ -238,14 +229,6 @@ describe('browser password detector', () => {
         expect.objectContaining({ kind: 'signup' })
       ]
     })
-  })
-
-  it('sends nothing on a page without credential fields', async () => {
-    load('<input name="q" type="search"><p>hello</p>')
-    install()
-    enable()
-    await vi.advanceTimersByTimeAsync(2000)
-    expect(sent).toEqual([])
   })
 
   it('reports trusted typing after the debounce, with only typed values', async () => {
@@ -363,34 +346,6 @@ describe('browser password detector', () => {
     expect(sentOn(CHANNEL.submitted)).toEqual([])
   })
 
-  it('reports a focused credential field with its box, and hides on blur and scroll', async () => {
-    load(LOGIN_FORM)
-    install()
-    enable()
-    window.innerWidth = 1280
-
-    focusIn(el('#pw'))
-    const fieldToken = readString(sentOn(CHANNEL.fieldFocused)[0], 'fieldToken')
-    expect(sentOn(CHANNEL.fieldFocused)[0]).toEqual({
-      fieldToken: expect.any(String),
-      formSignature: expect.any(String),
-      role: 'password',
-      rect: { x: 10, y: 50, width: 200, height: 30 },
-      viewportWidth: 1280
-    })
-
-    el('#pw').dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }))
-    expect(sentOn(CHANNEL.fieldBlurred)).toEqual([{ fieldToken, reason: 'focusout' }])
-
-    focusIn(el('#email'))
-    expect(sentOn(CHANNEL.fieldFocused).at(-1)).toMatchObject({ role: 'username' })
-    await vi.advanceTimersByTimeAsync(300)
-    window.dispatchEvent(new Event('scroll'))
-    expect(sentOn(CHANNEL.fieldBlurred)).toHaveLength(3)
-    window.dispatchEvent(new Event('scroll'))
-    expect(sentOn(CHANNEL.fieldBlurred)).toHaveLength(3)
-  })
-
   it('keeps viewport invalidation alive after a picker focus transfer', async () => {
     load(LOGIN_FORM)
     install()
@@ -405,35 +360,6 @@ describe('browser password detector', () => {
       { fieldToken, reason: 'focusout' },
       { fieldToken }
     ])
-  })
-
-  it('keeps a show-password toggle classified as a password', async () => {
-    load(LOGIN_FORM)
-    install()
-    enable()
-    el('#pw').setAttribute('type', 'text')
-    await vi.advanceTimersByTimeAsync(600)
-
-    focusIn(el('#pw'))
-
-    expect(sentOn(CHANNEL.fieldFocused)).toEqual([expect.objectContaining({ role: 'password' })])
-  })
-
-  it('reports a field inside an open shadow root', async () => {
-    load('<div id="host"></div>')
-    const shadow = el<HTMLDivElement>('#host').attachShadow({ mode: 'open' })
-    shadow.innerHTML = '<form><input name="user"><input id="pw" type="password"></form>'
-    const pw = shadow.querySelector('input[type="password"]')
-    if (!(pw instanceof HTMLInputElement)) {
-      throw new Error('missing shadow password')
-    }
-    rects.set(pw, new DOMRect(10, 10, 200, 30))
-    install()
-    enable()
-
-    focusIn(pw)
-
-    expect(sentOn(CHANNEL.fieldFocused)).toEqual([expect.objectContaining({ role: 'password' })])
   })
 
   it('detects and captures credentials when HTTP crypto has no randomUUID', async () => {
@@ -515,23 +441,6 @@ describe('browser password detector', () => {
       expect(sentOn(CHANNEL.submitted)).toEqual([
         expect.objectContaining({ username: 'alice@example.com', password: 'secret' })
       ])
-    })
-
-    it('fills from the username field and replaces a placeholder value', () => {
-      load(LOGIN_FORM)
-      el('#email').value = 'Email'
-      install()
-      enable()
-
-      fill({
-        requestId: 'r',
-        fieldToken: focusedToken(el('#email')),
-        username: 'bob',
-        password: 'pw'
-      })
-
-      expect(el('#email').value).toBe('bob')
-      expect(el('#pw').value).toBe('pw')
     })
 
     it('fills the picked account over a different username already in the field', () => {

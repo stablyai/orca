@@ -30,6 +30,7 @@ export type AutomationCatalogRuntimeSource = {
   /** Undefined until this client has probed the environment at all. */
   status: { status: RuntimeStatus | null } | undefined
   ssh: AutomationCatalogSshSource | undefined
+  managedSshTargetId?: string
 }
 
 export type AutomationHostCatalogSource = {
@@ -129,6 +130,7 @@ export function buildAutomationHostCatalogSource(
         authorityHealth: runtimeAuthorityHealth(runtime),
         querySupport: runtimeQuerySupport(runtime),
         ssh: toSshMirror(runtime.ssh ?? EMPTY_SSH),
+        ...(runtime.managedSshTargetId ? { managedSshTargetId: runtime.managedSshTargetId } : {}),
         ...withOrphanCount(orphanCountFor(source, authority))
       }
     }),

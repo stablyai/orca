@@ -1,10 +1,11 @@
 // Claim requests through journal commit before replying so competing clients cannot answer twice.
 
 import type { AgentSessionPromptResponse } from '../../shared/agent-session/agent-session-question-answer'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AcpRequestPresentation } from './acp-dialects/acp-dialect'
 import { AcpRpcError } from './acp-errors'
 import type { AcpRequestContext } from './acp-json-rpc-peer'

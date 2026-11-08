@@ -10,9 +10,9 @@ import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/pr
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { useEffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/use-effective-mac-option-as-alt'
-import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
+import { composeActiveTerminalTheme } from '@/components/terminal-pane/appearance/terminal-appearance'
 import { resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
-import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import { resolveTerminalMinimumContrastRatio } from '../../../../shared/terminal-themes/terminal-contrast-correction'
 import { syncPreviewTerminalLigatures } from '@/components/dashboard-popout/preview-terminal-ligatures'
 import {
@@ -21,6 +21,7 @@ import {
 } from '@/components/dashboard-popout/preview-terminal-options'
 import { openStandaloneTerminal } from '@/components/standalone-terminal/open-standalone-terminal'
 import { removePlainSshPanel } from '@/ssh/plain-ssh-terminal-panels'
+import { usePluginFontReady } from '@/store/plugins/appearance/plugin-fonts'
 
 export type PlainSshTerminalPhase =
   | { kind: 'opening' }
@@ -90,6 +91,7 @@ export function PlainSshTerminalView({
   const terminalRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const settings = useAppStore((s) => s.settings)
+  const terminalFontReady = usePluginFontReady(settings?.terminalFontFamily)
   const systemPrefersDark = useSystemPrefersDark()
   const macOptionAsAlt = useEffectiveMacOptionAsAlt(settings?.terminalMacOptionAsAlt)
   // Why refs: keys and appearance read live values; a remount would hang up the SSH session.
@@ -302,7 +304,7 @@ export function PlainSshTerminalView({
     if (!hidden && container && container.offsetWidth > 0 && container.offsetHeight > 0) {
       fitRef.current?.fit()
     }
-  }, [settings, systemPrefersDark, macOptionAsAlt, hidden])
+  }, [settings, terminalFontReady, systemPrefersDark, macOptionAsAlt, hidden])
 
   useEffect(() => {
     if (!hidden) {

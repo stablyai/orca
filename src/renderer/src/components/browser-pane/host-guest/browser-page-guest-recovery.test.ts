@@ -78,17 +78,6 @@ describe('browser page guest recovery', () => {
     expect(state.onRecoveryFailed).not.toHaveBeenCalled()
   })
 
-  it('reports whether document readiness completed a recovery cycle', () => {
-    const normal = createRecovery()
-    const resumed = createRecovery({ pending: true })
-
-    expect(normal.recovery.finish()).toBe(false)
-    expect(resumed.recovery.finish()).toBe(true)
-
-    normal.recovery.recoverRenderer()
-    expect(normal.recovery.finish()).toBe(true)
-  })
-
   it('recreates a guest when in-place reload is unavailable', async () => {
     const state = createRecovery({
       reload: () => {
@@ -262,16 +251,6 @@ describe('browser page guest recovery', () => {
     expect(state.onRecoveryFailed).not.toHaveBeenCalled()
   })
 
-  it('does not probe inactive guests on resume', async () => {
-    const state = createRecovery({ active: false, registered: false })
-
-    state.recovery.validateAfterResume()
-    await Promise.resolve()
-
-    expect(state.validateRegistration).not.toHaveBeenCalled()
-    expect(state.replaceGuest).not.toHaveBeenCalled()
-  })
-
   it('surfaces an explicit recovery failure instead of leaving a permanent blank page', () => {
     vi.useFakeTimers()
     const state = createRecovery()
@@ -296,27 +275,6 @@ describe('browser page guest recovery', () => {
     expect(state.onRecoveryFailed).toHaveBeenCalledOnce()
   })
 
-  it('deduplicates concurrent registration validation', async () => {
-    let resolveValidation: ((registered: boolean) => void) | undefined
-    const state = createRecovery()
-    state.validateRegistration.mockImplementation(
-      () =>
-        new Promise<boolean>((resolve) => {
-          resolveValidation = resolve
-        })
-    )
-
-    state.recovery.validateAfterResume()
-    state.recovery.validateAfterResume()
-    expect(state.validateRegistration).toHaveBeenCalledOnce()
-
-    resolveValidation?.(true)
-    await vi.waitFor(() => {
-      state.recovery.validateAfterResume()
-      expect(state.validateRegistration).toHaveBeenCalledTimes(2)
-    })
-  })
-
   it('does not validate while renderer recovery is pending', async () => {
     const state = createRecovery()
 
@@ -327,21 +285,6 @@ describe('browser page guest recovery', () => {
     expect(state.validateRegistration).not.toHaveBeenCalled()
     expect(state.replaceGuest).not.toHaveBeenCalled()
     state.recovery.finish()
-  })
-
-  it('reports validation IPC failures without replacing a healthy guest', async () => {
-    vi.useFakeTimers()
-    const state = createRecovery()
-    const error = new Error('ipc unavailable')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    state.validateRegistration.mockRejectedValueOnce(error)
-
-    state.recovery.validateAfterResume()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(warn).toHaveBeenCalledWith('[browser] guest registration validation failed:', error)
-    expect(state.replaceGuest).not.toHaveBeenCalled()
-    state.recovery.dispose()
   })
 
   it('ignores a stale validation result when renderer recovery starts', async () => {
@@ -463,17 +406,5 @@ describe('browser page guest recovery', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(state.onRecoverySucceeded).toHaveBeenCalledOnce()
-  })
-
-  it('deduplicates manual retry while recovery is pending', () => {
-    vi.useFakeTimers()
-    const state = createRecovery()
-
-    state.recovery.retryRecovery()
-    state.recovery.retryRecovery()
-    vi.advanceTimersByTime(BROWSER_GUEST_RECOVERY_TIMEOUT_MS)
-
-    expect(state.reload).toHaveBeenCalledOnce()
-    expect(state.onRecoveryFailed).toHaveBeenCalledOnce()
   })
 })

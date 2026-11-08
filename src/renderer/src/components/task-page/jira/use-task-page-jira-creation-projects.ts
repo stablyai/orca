@@ -10,8 +10,10 @@ import {
 } from '@/components/task-page/jira/task-page-jira-project-selection'
 
 import type { TaskPageJiraCreationStatePreludeModel } from './use-task-page-jira-creation-state'
+import { useIntlLocale } from '@/i18n/use-translate'
 
 export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationStatePreludeModel) {
+  const intlLocale = useIntlLocale()
   const {
     availableJiraIssueTypes,
     availableJiraProjects,
@@ -34,10 +36,10 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
   const sortedAvailableJiraProjects = useMemo(
     () =>
       [...availableJiraProjects].sort(
-        jiraProjectDisplayLabelComparator(includeJiraSiteNameInProjectLabel)
+        jiraProjectDisplayLabelComparator(includeJiraSiteNameInProjectLabel, intlLocale)
       ),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- the comparator collates in the UI language.
-    [availableJiraProjects, includeJiraSiteNameInProjectLabel, languageRevision]
+    [availableJiraProjects, includeJiraSiteNameInProjectLabel, languageRevision, intlLocale]
   )
   const filteredNewJiraIssueProjects = useMemo(() => {
     return filterJiraProjectPickerProjects({

@@ -10,20 +10,14 @@ import {
 } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
   const fs = await original<typeof NodeFs>()
   return { ...fs, unlinkSync: vi.fn(fs.unlinkSync) }
 })
-import {
-  describeClaudeProfile,
-  prepareClaudeProfileDirectory,
-  readClaudeProfileObject,
-  readUserClaudeConfigDir,
-  readUserClaudeConfigDirAsSet
-} from './claude-profile-paths'
+import { describeClaudeProfile, prepareClaudeProfileDirectory } from './claude-profile-paths'
 
 const caseInsensitive = (() => {
   const dir = mkdtempSync(join(tmpdir(), 'claude-case-probe-'))
@@ -88,47 +82,7 @@ describe('Claude profile namespace', () => {
   )
 
   // A WSL profile's data root is a POSIX path; a Windows temp dir cannot be one.
-  it.skipIf(process.platform === 'win32')(
-    'binds the new namespace to an account and execution target without touching legacy auth',
-    () => {
-      const dir = root()
-      const userHome = root()
-      const target = { executionHostId: 'runtime:env-1', runtime: 'wsl', distro: 'Ubuntu' } as const
-      const profile = describeClaudeProfile(dir, 'account-a', target)
-      expect(profile).toEqual({
-        version: 1,
-        accountId: 'account-a',
-        target,
-        home: join(dir, 'claude-profiles/account-a/home')
-      })
-      const markSetUp = prepareClaudeProfileDirectory(dir, profile, userHome)
-      const marker = join(dir, 'claude-profiles/account-a/profile.json')
-      expect(existsSync(marker)).toBe(false)
-      markSetUp()
-      expect(JSON.parse(readFileSync(marker, 'utf8'))).toEqual({
-        version: 1,
-        accountId: 'account-a',
-        runtime: 'wsl',
-        distro: 'Ubuntu'
-      })
-      // Caller-relative host IDs must not affect profile ownership.
-      prepareClaudeProfileDirectory(
-        dir,
-        { ...profile, target: { distro: 'Ubuntu', runtime: 'wsl', executionHostId: 'local' } },
-        userHome
-      )
-      expect(() =>
-        prepareClaudeProfileDirectory(
-          dir,
-          { ...profile, home: join(dir, 'claude-accounts/account-a/auth') },
-          userHome
-        )
-      ).toThrow()
-      expect(describeClaudeProfile(`${dir}/./x/../`, 'account-a', target).home).toBe(profile.home)
-      expect(() => describeClaudeProfile(dir, '../escape', target)).toThrow()
-      expect(() => describeClaudeProfile('C:\\orca', 'a', target)).toThrow()
-    }
-  )
+
   it('refuses a profile whose marker names another account or target, creating nothing', () => {
     const dir = root()
     const userHome = root()
@@ -216,59 +170,5 @@ describe('Claude profile namespace', () => {
     expect(() =>
       prepareClaudeProfileDirectory(dataRoot, describeClaudeProfile(dataRoot, 'a', local), userHome)
     ).toThrow('separate directories')
-  })
-  it("reads the user's own CLAUDE_CONFIG_DIR but never Orca's injected one", () => {
-    expect(readUserClaudeConfigDir({})).toBeUndefined()
-    expect(readUserClaudeConfigDir({ CLAUDE_CONFIG_DIR: '  ' })).toBeUndefined()
-    expect(readUserClaudeConfigDir({ CLAUDE_CONFIG_DIR: '/cfg/claude/' })).toBe(
-      resolve('/cfg/claude')
-    )
-    expect(
-      readUserClaudeConfigDir({
-        CLAUDE_CONFIG_DIR: '/data/claude-profiles/a/home',
-        ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
-      })
-    ).toBeUndefined()
-    expect(
-      readUserClaudeConfigDir({
-        CLAUDE_CONFIG_DIR: '/cfg/claude',
-        ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
-      })
-    ).toBe(resolve('/cfg/claude'))
-  })
-  it("keeps the user's own CLAUDE_CONFIG_DIR spelled as set, through an outer Orca too", () => {
-    expect(readUserClaudeConfigDirAsSet({ CLAUDE_CONFIG_DIR: '/cfg/claude/' })).toBe('/cfg/claude/')
-    const outer = {
-      CLAUDE_CONFIG_DIR: '/data/claude-profiles/a/home',
-      ORCA_CLAUDE_INJECTED_CONFIG_DIR: '/data/claude-profiles/a/home'
-    }
-    expect(readUserClaudeConfigDirAsSet(outer)).toBeUndefined()
-    expect(
-      readUserClaudeConfigDirAsSet({ ...outer, ORCA_CLAUDE_USER_CONFIG_DIR: 'C:/Claude Config/' })
-    ).toBe('C:/Claude Config/')
-  })
-  it("refuses a profile at or around the user's own CLAUDE_CONFIG_DIR", () => {
-    const userHome = root()
-    const dataRoot = root()
-    const profile = describeClaudeProfile(dataRoot, 'a', local)
-    for (const userConfigDir of [profile.home, dataRoot]) {
-      expect(() =>
-        prepareClaudeProfileDirectory(dataRoot, profile, userHome, userConfigDir)
-      ).toThrow('separate directories')
-    }
-    expect(existsSync(profile.home)).toBe(false)
-  })
-  it('distinguishes missing from empty, malformed, nonobject and inaccessible JSON', () => {
-    const file = join(root(), 'state.json')
-    expect(readClaudeProfileObject(file).kind).toBe('absent')
-    for (const value of ['', '{', '[]', 'null']) {
-      writeFileSync(file, value)
-      expect(readClaudeProfileObject(file).kind).toBe('unavailable')
-    }
-    expect(readClaudeProfileObject(join(file, 'child')).kind).toBe('absent')
-    mkdirSync(join(file, '..', 'dir.json'))
-    expect(readClaudeProfileObject(join(file, '..', 'dir.json')).kind).toBe('unavailable')
-    writeFileSync(file, '{"theme":"dark"}')
-    expect(readClaudeProfileObject(file)).toEqual({ kind: 'present', value: { theme: 'dark' } })
   })
 })

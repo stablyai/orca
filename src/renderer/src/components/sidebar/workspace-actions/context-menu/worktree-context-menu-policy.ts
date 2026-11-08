@@ -7,11 +7,13 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import { getProjectedWorktreeLineage } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/workspace-lineage-graph'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
@@ -31,6 +33,7 @@ export const EMPTY_STRUCTURED_CHAT_SLEPT_AT: AppState['structuredChatSleptAtByPa
 export const EMPTY_DELETE_STATE_BY_WORKTREE_ID: AppState['deleteStateByWorktreeId'] = {}
 export const EMPTY_WORKTREE_LINEAGE_BY_ID: AppState['worktreeLineageById'] = {}
 export const EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY: AppState['workspaceLineageByChildKey'] = {}
+export const EMPTY_CROSS_STORE_LINEAGE_BY_STORE_KEY: AppState['crossStoreLineageByStoreKey'] = {}
 export const EMPTY_CYCLIC_LINEAGE_IDS: ReadonlySet<string> = new Set()
 export const EMPTY_WORKTREES: readonly Worktree[] = []
 export const EMPTY_WORKTREE_MAP: ReadonlyMap<string, Worktree> = new Map()
@@ -52,11 +55,16 @@ export function shouldRevealWorktreeDeveloperMenu(args: {
 export function hasWorktreeParentLink(
   worktree: Worktree,
   lineageById: AppState['worktreeLineageById'],
-  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey']
+  workspaceLineageByChildKey: AppState['workspaceLineageByChildKey'],
+  crossStoreLineageByStoreKey?: AppState['crossStoreLineageByStoreKey']
 ): boolean {
+  const storeKey = lineageStoreKeyOfRow(worktree)
   return Boolean(
     getProjectedWorktreeLineage(worktree, lineageById) ||
-    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)]
+    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)] ||
+    // A saved parent on another machine is removable even while it can't be found.
+    (storeKey !== undefined &&
+      crossStoreLineageByStoreKey?.[storeKey]?.[worktreeWorkspaceKey(worktree.id)])
   )
 }
 
@@ -97,16 +105,16 @@ export function shouldSuppressContextMenuFollowUpClick(
   )
 }
 
-export function getWorktreeParentPickerLabel(validParentWorktreeId: string | null): string {
+export function getWorktreeParentPickerLabel(
+  validParentWorktreeId: string | null,
+  t: Translate = translate
+): string {
   return validParentWorktreeId
-    ? translate(
+    ? t(
         'auto.components.sidebar.WorktreeContextMenu.changeParentWorkspace',
         'Change Parent Worktree...'
       )
-    : translate(
-        'auto.components.sidebar.WorktreeContextMenu.setParentWorkspace',
-        'Set Parent Worktree...'
-      )
+    : t('auto.components.sidebar.WorktreeContextMenu.setParentWorkspace', 'Set Parent Worktree...')
 }
 
 export function isWorktreeParentPickerDisabled(args: {

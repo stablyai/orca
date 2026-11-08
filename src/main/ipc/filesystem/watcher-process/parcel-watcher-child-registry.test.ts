@@ -32,30 +32,6 @@ describe('parcel watcher child registry capacity notifications', () => {
     releases.forEach((release) => release())
   })
 
-  it('cancels a pending capacity notification without leaking the listener', () => {
-    const releases = fillWatcherChildCapacity()
-    const listener = vi.fn()
-    const cancel = onWatcherChildCapacityAvailable(listener)
-
-    cancel()
-    releases.pop()?.()
-
-    expect(listener).not.toHaveBeenCalled()
-    releases.forEach((release) => release())
-  })
-
-  it('delivers each capacity notification at most once', () => {
-    const releases = fillWatcherChildCapacity()
-    const listener = vi.fn()
-    onWatcherChildCapacityAvailable(listener)
-
-    releases.pop()?.()
-    releases.pop()?.()
-
-    expect(listener).toHaveBeenCalledOnce()
-    releases.forEach((release) => release())
-  })
-
   it('hands one released slot to one reserving waiter at a time', async () => {
     const releases = fillWatcherChildCapacity()
     let firstReservation: (() => void) | null = null

@@ -2,7 +2,7 @@ import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Textarea } from '../../ui/textarea'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   parseAgentDefaultEnvDraft,
   stringifyAgentDefaultEnvDraft,
@@ -20,6 +20,7 @@ export function AgentCommandOverrideInput({
   cmdOverride: string | undefined
   onSaveOverride: (value: string) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const draftSeed = cmdOverride ?? defaultCmd
   const [cmdDraft, setCmdDraft] = useState(draftSeed)
   const { pending, write } = useAgentLaunchFieldWrite()
@@ -39,7 +40,7 @@ export function AgentCommandOverrideInput({
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">
-        {translate('auto.components.settings.AgentsPane.2e45ca29b6', 'Command')}
+        {t('auto.components.settings.AgentsPane.2e45ca29b6', 'Command')}
       </span>
       <div className="flex items-center gap-2">
         <Input
@@ -59,7 +60,8 @@ export function AgentCommandOverrideInput({
           }}
           placeholder={defaultCmd}
           spellCheck={false}
-          className="h-7 flex-1 font-mono text-xs"
+          variant="code"
+          className="h-7 flex-1"
         />
         {cmdOverride && (
           <Button
@@ -75,7 +77,7 @@ export function AgentCommandOverrideInput({
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+            {t('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
           </Button>
         )}
       </div>
@@ -111,6 +113,7 @@ export function AgentDefaultArgsInput({
   /** The caller already labels the field, e.g. with a disclosure row. */
   hideLabel?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [draft, setDraft] = useState<string | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const chipRef = useRef<HTMLSpanElement>(null)
@@ -156,13 +159,13 @@ export function AgentDefaultArgsInput({
   return (
     <div className="flex min-w-0 flex-col gap-1">
       {hideLabel ? null : (
-        <span className="text-xs font-medium leading-none text-muted-foreground">
-          {translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+        <span className="text-xs text-muted-foreground">
+          {t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
         </span>
       )}
       <div className="flex min-w-0 items-center gap-2">
         <div
-          className="scrollbar-sleek relative max-h-[calc(var(--spacing)*41+2px)] min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
+          className="scrollbar-sleek relative max-h-42 min-h-7 min-w-0 flex-1 overflow-x-hidden overflow-y-auto rounded-md border border-input px-3 py-0.75 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30"
           onBlur={(event) => {
             if (
               !(containsFocus
@@ -203,7 +206,7 @@ export function AgentDefaultArgsInput({
             value={argsDraft}
             disabled={disabled}
             readOnly={pending}
-            aria-label={translate('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+            aria-label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
             onChange={(event) =>
               (onDraftChange ?? setDraft)(event.target.value.replace(/[\r\n]/g, ''))
             }
@@ -239,10 +242,7 @@ export function AgentDefaultArgsInput({
                 ? undefined
                 : placeholder ||
                   defaultArgs ||
-                  translate(
-                    'auto.components.settings.AgentsPane.6f99bf5dd0',
-                    'No default arguments'
-                  )
+                  t('auto.components.settings.AgentsPane.6f99bf5dd0', 'No default arguments')
             }
             spellCheck={false}
             className="block min-h-5 max-w-full [field-sizing:content] [overflow-wrap:anywhere]"
@@ -268,7 +268,7 @@ export function AgentDefaultArgsInput({
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+            {t('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
           </Button>
         )}
       </div>
@@ -286,6 +286,7 @@ export function AgentDefaultEnvInput({
   envOverride: Record<string, string>
   onSaveEnv: (value: Record<string, string>) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
   const [draft, setDraft] = useState<string | null>(null)
@@ -316,7 +317,7 @@ export function AgentDefaultEnvInput({
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">
-        {translate('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
+        {t('auto.components.settings.AgentsPane.8fbe1f37c1', 'Environment')}
       </span>
       <div className="flex items-center gap-2">
         <Input
@@ -341,12 +342,13 @@ export function AgentDefaultEnvInput({
           }}
           placeholder={
             defaultEnvText ||
-            translate('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
+            t('auto.components.settings.AgentsPane.2d133152fa', 'No default environment')
           }
           spellCheck={false}
           aria-invalid={envDraftError ? true : undefined}
           aria-describedby={envDraftError ? envDraftErrorId : undefined}
-          className="h-7 flex-1 font-mono text-xs"
+          variant="code"
+          className="h-7 flex-1"
         />
         {(draftSeed !== defaultEnvText || envDraft !== defaultEnvText) && (
           <Button
@@ -366,18 +368,18 @@ export function AgentDefaultEnvInput({
             }}
             className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
+            {t('auto.components.settings.AgentsPane.5200dac9da', 'Reset')}
           </Button>
         )}
       </div>
       {envDraftError && (
         <p id={envDraftErrorId} className="mt-1 text-[11px] text-destructive">
           {envDraftError === 'too-large'
-            ? translate(
+            ? t(
                 'auto.components.settings.AgentsPane.3f1bdf3cb4',
                 'Environment text is too large to parse safely.'
               )
-            : translate(
+            : t(
                 'settings.agents.environmentUnclosedQuote',
                 'Close the quote to save the environment.'
               )}

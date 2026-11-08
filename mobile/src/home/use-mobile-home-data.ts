@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter, useFocusEffect } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../cache/home-snapshot-cache'
 import type { AccountsSnapshot } from '../components/AccountUsage'
 import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
@@ -92,6 +93,13 @@ export function useMobileHomeData() {
       saveHomeSnapshot({ worktreeInfo, savedAt: Date.now() })
     }
   }, [worktreeInfo])
+
+  const hasPairedHost = hosts.length > 0
+  useEffect(() => {
+    if (hasPairedHost) {
+      warmUpWebShell()
+    }
+  }, [hasPairedHost])
 
   useEffect(() => {
     allClientsRef.current = connections.allClients

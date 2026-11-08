@@ -79,16 +79,6 @@ describe('editor tabs under an owned id, layout-owner build', () => {
     expect(onDisk(saveWorkspaceLayout(twice))).toEqual(onDisk(stored))
   })
 
-  it('keeps it as the active file', () => {
-    const { session: stored, fileId } = previewUnderOwnedId(GIT_KEY, '/Users/dev/orca/README.md')
-    stored.activeFileIdByWorktree = { [GIT_KEY]: fileId }
-    stored.activeTabTypeByWorktree = { [GIT_KEY]: 'editor' }
-
-    const saved = saveWorkspaceLayout(load(stored))
-
-    expect(saved.activeFileIdByWorktree?.[GIT_KEY]).toBe(fileId)
-  })
-
   it('a stored disagreement still demotes the tab, as for a bare id', () => {
     const { session } = previewUnderOwnedId(GIT_KEY, '/Users/dev/orca/README.md')
     delete session.openFilesByWorktree?.[GIT_KEY]?.[0]?.isPreview

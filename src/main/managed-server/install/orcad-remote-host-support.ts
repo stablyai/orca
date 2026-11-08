@@ -33,6 +33,9 @@ export const ORCAD_LAUNCH_MACHINE_COMMAND = 'cat /proc/sys/kernel/random/boot_id
 /** Windows pairs PID with creation time because PID reuse alone cannot identify the process. */
 export const ORCAD_WINDOWS_PROCESS_FILENAME = '.orcad-process.json'
 
+/** ESRCH text: bash, dash and BusyBox print "No such process"; zsh and ksh print it lowercase (#34149). */
+export const POSIX_NO_SUCH_PROCESS_CASE = '*[Nn]"o such process"*'
+
 /** kill -0 includes zombies; ps excludes them, while missing evidence conservatively retains the process. */
 export function posixProcessAliveShellFunction(
   options: { refuseUnverifiable?: boolean } = {}
@@ -40,7 +43,7 @@ export function posixProcessAliveShellFunction(
   // Destructive lifecycle steps need explicit absence; permission failures cannot prove exit.
   const probe = options.refuseUnverifiable
     ? 'probe_error=$(LC_ALL=C kill -0 "$1" 2>&1) || { ' +
-      'case "$probe_error" in *"No such process"*) return 1;; ' +
+      `case "$probe_error" in ${POSIX_NO_SUCH_PROCESS_CASE}) return 1;; ` +
       '*) echo UNKNOWN; exit 0;; esac; }; '
     : 'kill -0 "$1" 2>/dev/null || return 1; '
   return (

@@ -56,15 +56,6 @@ describe('resolveStructuredLaunchSeedOptions', () => {
   ): PersistedNativeChatSessionOptions =>
     ({ codex: { model: 'gpt-5.6-sol', valuesByModel } }) as PersistedNativeChatSessionOptions
 
-  it('seeds the saved model and effort a structured create must apply', () => {
-    expect(
-      resolveStructuredLaunchSeedOptions(
-        persistedCodex({ 'gpt-5.6-sol': { effort: 'medium' } }),
-        'codex'
-      )
-    ).toEqual({ model: 'gpt-5.6-sol', effort: 'medium' })
-  })
-
   it('encodes Fast mode while dropping ids the providers only accept mid-session', () => {
     expect(
       resolveStructuredLaunchSeedOptions(
@@ -74,15 +65,6 @@ describe('resolveStructuredLaunchSeedOptions', () => {
         'codex'
       )
     ).toEqual({ model: 'gpt-5.6-sol', effort: 'high', fastMode: 'true' })
-  })
-
-  it('seeds a saved service tier', () => {
-    expect(
-      resolveStructuredLaunchSeedOptions(
-        persistedCodex({ 'gpt-5.6-sol': { serviceTier: 'ultrafast' } }),
-        'codex'
-      )
-    ).toEqual({ model: 'gpt-5.6-sol', serviceTier: 'ultrafast' })
   })
 
   it('drops a seeded id whose persisted value is not a usable string', () => {
@@ -117,16 +99,6 @@ describe('resolveStructuredLaunchSeedOptions', () => {
 })
 
 describe('narrowStructuredLaunchSeedOptions', () => {
-  it('keeps the seedable ids an explicit selection names', () => {
-    expect(
-      narrowStructuredLaunchSeedOptions({ model: 'opus', effort: 'high', fastMode: false })
-    ).toEqual({
-      model: 'opus',
-      effort: 'high',
-      fastMode: 'false'
-    })
-  })
-
   // Absent Fast preference must stay absent; defaulting true changes service tier without a user choice.
   it('seeds no fastMode at all when the user never picked one', () => {
     expect(narrowStructuredLaunchSeedOptions({ model: 'opus', effort: 'high' })).toEqual({

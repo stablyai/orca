@@ -1,4 +1,4 @@
-import type { WorktreeCreationRequest } from './pending-worktree-creation'
+import type { WorktreeCreationRequest } from './workspace/creation/pending-worktree-creation'
 
 export type ProvisionedRootCreateOptions = {
   runtimeId: string

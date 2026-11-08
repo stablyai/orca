@@ -1,5 +1,5 @@
 import type { TerminalIdentityReadContext } from '../query/terminal-identity-read-context'
-import { OrcaRuntimeWithVisibleSnapshotPreview } from './terminal-visible-state'
+import { OrcaRuntimeWithRestoredAgentDialogScreen } from './restored-agent-dialog-screen'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import type {
@@ -8,14 +8,12 @@ import type {
 } from '../../orchestration/terminal-authority/orchestration-compatibility-authority'
 import { randomUUID } from 'node:crypto'
 
-export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithVisibleSnapshotPreview {
+export abstract class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeWithRestoredAgentDialogScreen {
   /** Keyed by the attachment that carries each one, so releasing it forgets the terminal. */
   protected readonly orchestrationCompatibilitySshTerminals = new Map<
     string,
     OrchestrationCompatibilitySshTerminal
   >()
-
-  protected abstract getLeafKey(tabId: string, leafId: string): string
 
   protected async serializeHeadlessTerminalBuffer(
     ptyId: string,

@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 
 type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'>
@@ -56,6 +57,7 @@ function PreservedBranchToastBody({
   onForceDelete,
   onAlwaysForceDelete
 }: PreservedBranchToastBodyProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex w-full flex-col gap-3">
       <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
@@ -68,15 +70,15 @@ function PreservedBranchToastBody({
             menuSide="top"
             onForceDelete={onForceDelete}
             onAlwaysForceDelete={onAlwaysForceDelete}
-            moreActionsLabel={translate(
+            moreActionsLabel={t(
               'workspaceDeletion.moreBranchActions',
               'More branch delete options'
             )}
-            alwaysForceDeleteLabel={translate(
+            alwaysForceDeleteLabel={t(
               'workspaceDeletion.alwaysForceDeleteBranches',
               'Always delete preserved branches'
             )}
-            alwaysForceDeleteTooltip={translate(
+            alwaysForceDeleteTooltip={t(
               'workspaceDeletion.alwaysForceDeleteBranchesTooltip',
               'Applies to branches kept after future workspace deletions.'
             )}

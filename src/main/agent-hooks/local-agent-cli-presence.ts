@@ -10,7 +10,10 @@ import {
 } from '../../shared/managed-agent-command-token'
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import type { GlobalSettings } from '../../shared/global-settings-types'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import { mergePersistedWindowsPathAsync } from '../pty/environment/windows-environment-path'
+import { resolvePathEnvKey } from '../pty/environment/windows-path-segment-merge'
 import {
   isUnderWindowsDriveMount,
   readGuestWindowsDriveMounts
@@ -48,6 +51,7 @@ type DetectOptions = {
 type CommandOverrideSettings = Partial<Pick<GlobalSettings, 'agentCmdOverrides'>> | null | undefined
 
 const DEFAULT_WINDOWS_EXTENSIONS = ['.COM', '.EXE', '.BAT', '.CMD']
+const CANDIDATE_PROBE_CONCURRENCY = 8
 
 function pathApiForPlatform(platform: NodeJS.Platform) {
   return platform === 'win32' ? path.win32 : path.posix
@@ -159,6 +163,29 @@ export async function hydrateAgentCliShellPath(
   }
 }
 
+async function resolveSearchPath(
+  options: DetectOptions,
+  platform: NodeJS.Platform
+): Promise<string> {
+  if (options.pathEnv !== undefined) {
+    return options.pathEnv
+  }
+  if (platform !== 'win32') {
+    return process.env.PATH ?? ''
+  }
+  // Why: terminals launch with the registry PATH, so a CLI installed after Orca started runs in a pane but stays invisible to the inherited PATH (#17672).
+  const env = { ...process.env }
+  try {
+    await mergePersistedWindowsPathAsync(env)
+  } catch (error) {
+    console.warn(
+      '[agent-hooks] Persisted Windows PATH refresh failed; using inherited PATH:',
+      error
+    )
+  }
+  return env[resolvePathEnvKey(env, platform)] ?? ''
+}
+
 export async function detectLocalManagedAgentCliPresence(
   targets: readonly ManagedAgentHookTarget[],
   settings: CommandOverrideSettings,
@@ -168,7 +195,7 @@ export async function detectLocalManagedAgentCliPresence(
   const platform = options.platform ?? process.platform
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
   const guestMounts = options.guestWindowsDriveMounts ?? readGuestWindowsDriveMounts()
-  const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter).filter(
+  const dirs = pathEntries(await resolveSearchPath(options, platform), delimiter).filter(
     (dir) => !isUnderWindowsDriveMount(dir, guestMounts)
   )
   const homeDir = options.homeDir ?? homedir()
@@ -187,17 +214,15 @@ export async function detectLocalManagedAgentCliPresence(
       candidates.add(override)
     }
   }
+  // Candidates probe independently; each keeps its own ordered PATH walk so first-match wins.
+  const uniqueCandidates = [...candidates]
+  const probed = await mapWithConcurrency(uniqueCandidates, CANDIDATE_PROBE_CONCURRENCY, (c) =>
+    probePathCandidate(c, dirs, platform, fileProbe, options.pathExt)
+  )
   const found = new Map<string, string>()
-  for (const candidate of candidates) {
-    const executablePath = await probePathCandidate(
-      candidate,
-      dirs,
-      platform,
-      fileProbe,
-      options.pathExt
-    )
+  for (const [index, executablePath] of probed.entries()) {
     if (executablePath) {
-      found.set(candidate, executablePath)
+      found.set(uniqueCandidates[index], executablePath)
     }
   }
   const result: LocalCliPresenceByAgent = {}

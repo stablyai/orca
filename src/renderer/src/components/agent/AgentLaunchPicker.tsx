@@ -22,7 +22,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { rowLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
@@ -92,6 +92,7 @@ export const AgentLaunchPicker = memo(
       surface?: AgentPickerDraft['surface']
     ) => void
   }) {
+    const t = useTranslate()
     useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
     const [settingsOpen, setSettingsOpen] = useState(false)
@@ -175,9 +176,9 @@ export const AgentLaunchPicker = memo(
     const summary = [modelLabel, choices?.options?.effort].filter(Boolean).join(' · ')
     const agentLabel = agent
       ? cli
-        ? rowLabel({ kind: 'cli', agent })
+        ? rowLabel({ kind: 'cli', agent }, t)
         : getAgentLabel(agent)
-      : (emptyLabel ?? translate('agentPicker.select', 'Select agent'))
+      : (emptyLabel ?? t('agentPicker.select', 'Select agent'))
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -185,7 +186,8 @@ export const AgentLaunchPicker = memo(
             <Button
               ref={trigger}
               type="button"
-              aria-label={translate('agentPicker.select', 'Select agent')}
+              data-agent-launch-picker-trigger="true"
+              aria-label={t('agentPicker.select', 'Select agent')}
               variant="outline"
               className="w-full min-w-0"
               disabled={disabled || model.state !== 'settled'}
@@ -259,7 +261,7 @@ export const AgentLaunchPicker = memo(
               />
             ) : (
               <DropdownMenuItem disabled>
-                {translate('agentPicker.select', 'Select agent')}
+                {t('agentPicker.select', 'Select agent')}
               </DropdownMenuItem>
             )}
             <AgentSettingsMenuItem onSelect={openAgentSettings} />

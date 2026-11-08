@@ -3,11 +3,12 @@ import { Loader2, RefreshCw } from 'lucide-react'
 import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 
 export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
+  const t = useTranslate()
   const entryMap = useAppStore((state) => state.remoteServerUpdates)
   const entries = [...entryMap.values()]
   const checking = useAppStore((state) => state.remoteServerUpdatesChecking)
@@ -34,38 +35,33 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   ).length
   const summary = [
     entries.length === 1
-      ? translate(
-          'auto.components.settings.GeneralRemoteServerUpdates.serverCountOne',
-          '1 paired server'
-        )
-      : translate(
+      ? t('auto.components.settings.GeneralRemoteServerUpdates.serverCountOne', '1 paired server')
+      : t(
           'auto.components.settings.GeneralRemoteServerUpdates.serverCount',
           '{{value0}} paired servers',
           { value0: entries.length }
         ),
     available > 0
-      ? translate(
+      ? t(
           'auto.components.settings.GeneralRemoteServerUpdates.availableCount',
           '{{value0}} ready to update',
           { value0: available }
         )
       : null,
     current > 0
-      ? translate(
+      ? t(
           'auto.components.settings.GeneralRemoteServerUpdates.currentCount',
           '{{value0}} up to date',
           { value0: current }
         )
       : null,
     manual > 0
-      ? translate(
-          'auto.components.settings.GeneralRemoteServerUpdates.manualCount',
-          '{{value0}} manual',
-          { value0: manual }
-        )
+      ? t('auto.components.settings.GeneralRemoteServerUpdates.manualCount', '{{value0}} manual', {
+          value0: manual
+        })
       : null,
     offline > 0
-      ? translate(
+      ? t(
           'auto.components.settings.GeneralRemoteServerUpdates.offlineCount',
           '{{value0}} offline',
           { value0: offline }
@@ -77,26 +73,20 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.GeneralRemoteServerUpdates.title',
-        'Remote Orca Servers'
-      )}
-      description={translate(
+      title={t('auto.components.settings.GeneralRemoteServerUpdates.title', 'Remote Orca Servers')}
+      description={t(
         'auto.components.settings.GeneralRemoteServerUpdates.description',
         'Check and update paired Orca servers from this client.'
       )}
       keywords={['remote server', 'update all', 'paired', 'version']}
-      className="space-y-3"
+      className="space-y-3 py-3"
     >
       <div className="space-y-0.5">
         <div className="text-sm font-medium">
-          {translate(
-            'auto.components.settings.GeneralRemoteServerUpdates.title',
-            'Remote Orca Servers'
-          )}
+          {t('auto.components.settings.GeneralRemoteServerUpdates.title', 'Remote Orca Servers')}
         </div>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.GeneralRemoteServerUpdates.description',
             'Check and update paired Orca servers from this client.'
           )}
@@ -121,11 +111,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
             <RefreshCw className="size-3.5" />
           )}
           {running
-            ? translate(
-                'auto.components.settings.GeneralRemoteServerUpdates.updating',
-                'Updating servers…'
-              )
-            : translate(
+            ? t('auto.components.settings.GeneralRemoteServerUpdates.updating', 'Updating servers…')
+            : t(
                 'auto.components.settings.GeneralRemoteServerUpdates.reviewServers',
                 'Check for Server Updates'
               )}

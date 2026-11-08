@@ -32,6 +32,7 @@ export function sourceControlScreenReadMountAdapters(
       const reportStatusLoadSuccess = (): void => effect('source-control.status-load-success', {})
       const hook = hookMount(() => {
         loaders = useLoaders({
+          hostId: HOST,
           client,
           connState: 'connected',
           statusIdentityKey: `${HOST}:${WORKTREE}`,
@@ -48,8 +49,16 @@ export function sourceControlScreenReadMountAdapters(
           if (name === 'unmount') {
             return hook.unmount()
           }
+          // Navigate away inside the same document; the query cache stays.
+          if (name === 'leave') {
+            return hook.leave()
+          }
           if (name === 'load') {
             return performHookAction(() => loaders.loadStatus())
+          }
+          // The read every Source Control write makes once it succeeds.
+          if (name === 'written') {
+            return performHookAction(() => loaders.loadStatus({ force: true }))
           }
           throw new Error(`Unknown changes load action: ${name}`)
         },

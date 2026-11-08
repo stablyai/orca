@@ -3,8 +3,8 @@ import type { RuntimeStatus } from '../../shared/runtime-types'
 import { getOptionalStringFlag, getPresentStringFlag } from '../flags'
 import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError } from '../runtime/types'
+import { assertLocalCwdWorktreeSelector } from '../local-environment-selector'
 import {
-  assertLocalCwdWorktreeSelector,
   getBrowserWorktreeSelector,
   normalizeWorktreeSelectorForCaller,
   resolveCurrentWorktreeSelector

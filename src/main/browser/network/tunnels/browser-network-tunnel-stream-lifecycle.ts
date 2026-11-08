@@ -8,11 +8,14 @@ import {
 export function createBrowserNetworkTunnelStream(options: {
   id: number
   socket: BrowserNetworkTunnelSocket
+  windowBytes: number
   onConnectTimeout: (stream: BrowserNetworkTunnelStream) => void
 }): BrowserNetworkTunnelStream {
   const stream: BrowserNetworkTunnelStream = {
     id: options.id,
     socket: options.socket,
+    windowBytes: options.windowBytes,
+    receiveWindowBytes: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
     connected: false,
     closed: false,
     receiveCredit: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,

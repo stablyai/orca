@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
-import { translate } from '@/i18n/i18n'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { useTranslate } from '@/i18n/use-translate'
 import { classifyTransitionRequirements } from '../../../../../shared/jira/jira-transition-fields'
 import type {
   JiraIssue,
@@ -46,6 +46,7 @@ export function TaskPageJiraBoardView({
   onStartWorkspace,
   onRefresh
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const patchJiraIssue = useAppStore((state) => state.patchJiraIssue)
   const [prompt, setPrompt] = useState<JiraBoardMovePrompt | null>(null)
   const [pending, setPending] = useState(false)
@@ -124,7 +125,7 @@ export function TaskPageJiraBoardView({
               error:
                 error instanceof Error
                   ? error.message
-                  : translate(
+                  : t(
                       'auto.components.taskPageJiraBoard.changeStatusFailed',
                       'Failed to change status.'
                     )
@@ -177,11 +178,10 @@ export function TaskPageJiraBoardView({
       }
       if (!transitions.length) {
         throw new Error(
-          translate(
-            'jira.board.noTransition',
-            'No status change to {{column}} is available for {{key}}.',
-            { column: destination.label, key: issue.key }
-          )
+          t('jira.board.noTransition', 'No status change to {{column}} is available for {{key}}.', {
+            column: destination.label,
+            key: issue.key
+          })
         )
       }
       setPrompt({
@@ -208,7 +208,7 @@ export function TaskPageJiraBoardView({
         error:
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.jiraIssue.loadStatusChangesFailed',
                 'Failed to load status changes.'
               )

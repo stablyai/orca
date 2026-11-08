@@ -1,20 +1,20 @@
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import type * as NodeFs from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const crossVolume = vi.hoisted(() => ({ on: false }))
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFs>()
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
-    linkSync: (...args: Parameters<typeof actual.linkSync>) => {
+    link: async (...args: Parameters<typeof actual.link>) => {
       if (crossVolume.on) {
         throw Object.assign(new Error('cross-device link not permitted'), { code: 'EXDEV' })
       }
-      return actual.linkSync(...args)
+      return actual.link(...args)
     }
   }
 })

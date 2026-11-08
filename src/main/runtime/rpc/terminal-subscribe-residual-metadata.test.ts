@@ -1,7 +1,6 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { stubRuntime, makeRequest } from './terminal-multiplex-test-harness'
 import type { TerminalOutputMeta } from './terminal-output-frame-chunks'
 import {

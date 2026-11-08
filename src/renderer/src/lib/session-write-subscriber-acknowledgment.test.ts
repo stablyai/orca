@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite
-} from './session-write-subscriber'
+} from './workspace/persistence/session-write-subscriber'
 
 function acknowledgment() {
   let resolve!: () => void

@@ -8,27 +8,16 @@ import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
 import type { RelayHostReachability } from './relay-host-reachability'
-import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { LogicalClientCutoverError } from './logical-client-cutover-error'
 import { LogicalClientSuspendedError } from './logical-client-suspended-error'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
-export class LogicalClientCutoverError extends Error {
-  constructor(cause?: unknown) {
-    super('RPC interrupted by connection migration', { cause })
-    if (isRpcDeliveryUnknown(cause)) {
-      markRpcDeliveryUnknown(this)
-    }
-  }
-}
-
-// Why: instanceof can miss across bundle copies, so also match by message.
-export function isLogicalClientCutoverError(error: unknown): boolean {
-  return (
-    error instanceof LogicalClientCutoverError ||
-    (error instanceof Error && error.message === 'RPC interrupted by connection migration')
-  )
-}
+export {
+  LogicalClientCutoverError,
+  isLogicalClientCutoverError
+} from './logical-client-cutover-error'
 
 type SubscriptionRecord = {
   method: string
@@ -252,7 +241,10 @@ export function createStableLogicalRpcClient(
       // Replay before closing the old session; fence callbacks until this generation becomes current.
       for (const record of subscriptions.values()) {
         const disposePrevious = record.disposePhysical
-        attachSubscription(record, nextSession, nextGeneration)
+        record.disposePhysical = null
+        if (!record.options?.holdReplay?.(() => resumeHeld(record))) {
+          attachSubscription(record, nextSession, nextGeneration)
+        }
         disposePrevious?.()
       }
       generation = nextGeneration
@@ -312,6 +304,12 @@ export function createStableLogicalRpcClient(
       },
       record.options
     )
+  }
+
+  function resumeHeld(record: SubscriptionRecord): void {
+    if (!closed && !suspended && !record.cancelled) {
+      attachSubscription(record, activeSession, generation)
+    }
   }
 
   function bindActiveState(session: RpcClient, sessionGeneration: number): void {

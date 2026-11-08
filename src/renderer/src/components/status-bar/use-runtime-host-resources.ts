@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { readRuntimeHostResources, type RuntimeHostResourceResult } from './runtime-host-resources'
 
 const RUNTIME_RESOURCE_TIMEOUT_MS = 5_000

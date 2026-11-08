@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
-import { renameRuntimePath } from '@/runtime/runtime-file-mutation-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { renameRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { requestEditorSaveQuiesce } from '@/components/editor/autosave/editor-autosave'
 import {
   beginEditorPathMove,
@@ -11,11 +11,11 @@ import {
   remapOpenEditorTabsForPathChange
 } from '@/lib/remap-open-editor-tabs-for-path-change'
 import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'
-import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { editorMoveOwnerFromContext, isOpenFileOnMoveOwner } from '@/lib/open-editor-move-owner'
 import { documentFolderAccess } from '@/lib/local-file-access'
-import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
+import { contentRekeyOutcome } from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
 let moveOperationCounter = 0

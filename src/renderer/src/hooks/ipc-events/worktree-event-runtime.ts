@@ -1,4 +1,4 @@
-import { transitionLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-transition'
+import { transitionLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-transition'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -6,7 +6,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
@@ -34,7 +34,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
 
