@@ -37,6 +37,7 @@ describe('terminal stream extraction characterization', () => {
       supportsEndpointLossNotice: false,
       inputSessionId: null,
       outputPaused: false,
+      supportsOutputCadence: false,
       supportsDesktopViewportClaims: false,
       desktopClaimTail: Promise.resolve(true),
       registeredRemoteDesktopDriver: false,
@@ -55,7 +56,12 @@ describe('terminal stream extraction characterization', () => {
       pendingOutputOverflowed: true,
       lastResizeCols: undefined,
       resizeGeneration: 0,
-      outputBatcher: { push: outputBatcherPush, flush: vi.fn(), dispose: vi.fn() },
+      outputBatcher: {
+        push: outputBatcherPush,
+        flush: vi.fn(),
+        setCadence: vi.fn(),
+        dispose: vi.fn()
+      },
       unsubscribeData: () => {},
       unsubscribeResize: () => {},
       unsubscribeFit: () => {},
