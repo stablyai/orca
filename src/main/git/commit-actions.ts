@@ -3,27 +3,48 @@ import type {
   GitCommitAction,
   GitCommitActionResult
 } from '../../shared/git/commands/git-commit-action'
-import { readGitCommandFailureStderr } from '../../shared/git/commands/git-command-failure-text'
-import { withCheckoutLock } from './branch-switch'
+import {
+  readGitCommandFailureStderr,
+  readGitCommandFailureText
+} from '../../shared/git/commands/git-command-failure-text'
+import { gitFailureLine, withCheckoutLock } from './branch-switch'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
 import { runWithGitReadCacheInvalidation } from './source-control/git-read-cache-invalidation'
 
-async function abortEmptyCherryPick(
+function throwSequencerFailure(error: unknown): never {
+  throw new Error(
+    gitFailureLine(readGitCommandFailureStderr(error) ?? '') ??
+      'Could not finish the operation. Refresh Source Control and try again.'
+  )
+}
+
+async function finishEmptyCommitAction(
   operation: GitCommitAction,
   error: unknown,
   execution: ReturnType<typeof gitOptionsForWorktree>
 ): Promise<GitCommitActionResult | undefined> {
-  if (
-    operation !== 'cherry-pick' ||
-    !/The previous cherry-pick is now empty/.test(readGitCommandFailureStderr(error) ?? '')
-  ) {
+  const text = readGitCommandFailureText(error)
+  const empty =
+    operation === 'cherry-pick'
+      ? /The previous cherry-pick is now empty/.test(text)
+      : /nothing to commit/.test(text)
+  if (!empty) {
     return undefined
   }
   await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync(['cherry-pick', '--abort'], execution)
+    gitExecFileAsync([operation, operation === 'revert' ? '--skip' : '--abort'], {
+      ...execution,
+      env: { ...process.env, GIT_EDITOR: 'true' }
+    })
   )
-  return { outcome: 'empty', message: 'Already applied, nothing to cherry-pick' }
+  return {
+    outcome: 'empty',
+    message:
+      operation === 'revert'
+        ? 'Nothing to revert; the changes are already undone.'
+        : 'Already applied, nothing to cherry-pick'
+  }
 }
 
 export async function applyCommit(
@@ -81,7 +102,9 @@ export async function applyCommit(
       }
     }
     const stderr = readGitCommandFailureStderr(failure) ?? ''
-    const empty = await abortEmptyCherryPick(operation, failure, execution)
+    const empty = await finishEmptyCommitAction(operation, failure, execution).catch(
+      throwSequencerFailure
+    )
     if (empty) {
       return empty
     }
@@ -113,25 +136,28 @@ export async function recoverSequencer(
     throw new Error('Expected cherry-pick or revert')
   }
   return withCheckoutLock(worktreePath, async () => {
-    if ((await detectConflictOperation(worktreePath, options)) !== operation) {
+    const inProgress = await detectConflictOperation(worktreePath, options).catch(
+      throwSequencerFailure
+    )
+    if (inProgress !== operation) {
       throw new Error(`There is no ${operation} in progress. Refresh Source Control and try again.`)
     }
     const execution = gitOptionsForWorktree(worktreePath, options)
-    try {
-      await runWithGitReadCacheInvalidation(() =>
-        gitExecFileAsync([operation, `--${action}`], {
-          ...execution,
-          ...(action === 'continue' ? { env: { ...process.env, GIT_EDITOR: 'true' } } : {})
-        })
-      )
-    } catch (error) {
-      const empty =
-        action === 'continue' && (await abortEmptyCherryPick(operation, error, execution))
-      if (empty) {
-        return empty
-      }
-      throw error
-    }
-    return undefined
+    return runWithGitReadCacheInvalidation(() =>
+      gitExecFileAsync([operation, `--${action}`], {
+        ...execution,
+        ...(action === 'continue' ? { env: { ...process.env, GIT_EDITOR: 'true' } } : {})
+      })
+    )
+      .then(() => undefined)
+      .catch(async (error: unknown) => {
+        const empty =
+          action === 'continue' && (await finishEmptyCommitAction(operation, error, execution))
+        if (empty) {
+          return empty
+        }
+        throw error
+      })
+      .catch(throwSequencerFailure)
   })
 }

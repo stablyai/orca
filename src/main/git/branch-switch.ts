@@ -51,7 +51,7 @@ const GIT_CHECKOUT_PROGRESS =
   /^(Switched to( a new)? branch|Already on|Your branch|Previous HEAD position|HEAD is now at)\b/
 
 /** Prefer git's own error line; else the last line that is not git progress (a hook's output). */
-function gitFailureLine(stderr: string): string | null {
+export function gitFailureLine(stderr: string): string | null {
   const lines = stderr
     .split('\n')
     .map((line) => line.trim())

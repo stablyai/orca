@@ -113,7 +113,14 @@ export function SequencerRecoveryControls({
             action === 'abort' ? sequencerAbortRuntimeGit : sequencerContinueRuntimeGit
           )(request, operation)
           if (result?.outcome === 'empty') {
-            toast.message(t('gitGraph.alreadyApplied', 'Already applied, nothing to cherry-pick'))
+            toast.message(
+              operation === 'revert'
+                ? t(
+                    'gitGraph.nothingToRevert',
+                    'Nothing to revert; the changes are already undone.'
+                  )
+                : t('gitGraph.alreadyApplied', 'Already applied, nothing to cherry-pick')
+            )
           }
         } catch (error) {
           toast.error(

@@ -23513,6 +23513,7 @@
     "actionWarning": "İşlem tamamlandı ancak Git bir sorun bildirdi.",
     "actionConflicted": "Kaynak denetimindeki çakışmaları çözün, ardından işleme devam edin veya işlemi iptal edin.",
     "alreadyApplied": "Zaten uygulanmış, cherry-pick yapılacak bir şey yok",
+    "nothingToRevert": "Geri alınacak bir şey yok; değişiklikler zaten geri alındı.",
     "actionRefused": "İşlem tamamlanmadı.",
     "actionUnavailable": "Bu çalışma alanı artık işlem için kullanılamıyor. Git grafiğini yeniden açıp tekrar deneyin.",
     "ownerChanged": "Çalışma alanının makinesi değişti. Git grafiğini yeniden açıp tekrar deneyin.",

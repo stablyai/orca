@@ -23913,6 +23913,7 @@
     "actionWarning": "A ação foi concluída, mas o Git relatou um problema.",
     "actionConflicted": "Resolva os conflitos no controle de código-fonte e continue ou aborte a operação.",
     "alreadyApplied": "Já aplicado, não há nada para fazer cherry-pick",
+    "nothingToRevert": "Nada a reverter; as alterações já foram desfeitas.",
     "actionRefused": "A ação não foi concluída.",
     "actionUnavailable": "Este espaço de trabalho não está mais disponível para a ação. Reabra o gráfico do Git e tente novamente.",
     "ownerChanged": "O host do espaço de trabalho mudou. Reabra o gráfico do Git e tente novamente.",

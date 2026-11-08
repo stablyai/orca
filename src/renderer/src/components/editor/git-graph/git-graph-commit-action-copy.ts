@@ -95,6 +95,12 @@ export function gitGraphActionOutcome(
         'Resolve the conflicts in Source Control, then continue or abort the operation.'
       )
     case 'empty':
+      if (action === 'revert') {
+        return translate(
+          'gitGraph.nothingToRevert',
+          'Nothing to revert; the changes are already undone.'
+        )
+      }
       return translate('gitGraph.alreadyApplied', 'Already applied, nothing to cherry-pick')
     case 'refused':
       return translate('gitGraph.actionRefused', 'The action did not complete.')

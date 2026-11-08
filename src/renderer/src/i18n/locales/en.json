@@ -24321,6 +24321,7 @@
     "actionWarning": "The action completed, but Git reported a problem.",
     "actionConflicted": "Resolve the conflicts in Source Control, then continue or abort the operation.",
     "alreadyApplied": "Already applied, nothing to cherry-pick",
+    "nothingToRevert": "Nothing to revert; the changes are already undone.",
     "actionRefused": "The action did not complete.",
     "actionUnavailable": "This workspace is no longer available for the action. Reopen the Git Graph and try again.",
     "ownerChanged": "The workspace host changed. Reopen the Git Graph and try again.",

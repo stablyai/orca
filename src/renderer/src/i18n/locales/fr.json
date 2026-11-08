@@ -23940,6 +23940,7 @@
     "actionWarning": "L’action est terminée, mais Git a signalé un problème.",
     "actionConflicted": "Résolvez les conflits dans le contrôle de code source, puis continuez ou abandonnez l’opération.",
     "alreadyApplied": "Déjà appliqué, aucun cherry-pick à effectuer",
+    "nothingToRevert": "Rien à annuler ; les modifications sont déjà annulées.",
     "actionRefused": "L’action n’a pas abouti.",
     "actionUnavailable": "Cet espace de travail n’est plus disponible pour cette action. Rouvrez le graphe Git et réessayez.",
     "ownerChanged": "L’hôte de l’espace de travail a changé. Rouvrez le graphe Git et réessayez.",

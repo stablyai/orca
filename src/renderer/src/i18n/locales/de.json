@@ -23532,6 +23532,7 @@
     "actionWarning": "Die Aktion wurde abgeschlossen, aber Git hat ein Problem gemeldet.",
     "actionConflicted": "Löse die Konflikte in der Quellcodeverwaltung und setze den Vorgang fort oder brich ihn ab.",
     "alreadyApplied": "Bereits angewendet, nichts für Cherry-pick",
+    "nothingToRevert": "Nichts rückgängig zu machen; die Änderungen sind bereits rückgängig gemacht.",
     "actionRefused": "Die Aktion wurde nicht abgeschlossen.",
     "actionUnavailable": "Dieser Arbeitsbereich ist für die Aktion nicht mehr verfügbar. Öffne den Git Graph erneut und versuche es noch einmal.",
     "ownerChanged": "Der Host des Arbeitsbereichs hat sich geändert. Öffne den Git Graph erneut und versuche es noch einmal.",

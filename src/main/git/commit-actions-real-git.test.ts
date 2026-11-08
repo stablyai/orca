@@ -92,19 +92,26 @@ describe('commit actions', () => {
     await expect(git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow()
     expect(await git('status', '--porcelain')).toBe('')
   })
-  it('aborts a cherry-pick that becomes empty when continuing a conflict resolution', async () => {
-    await commit('different\n', 'diverged')
-    await applyCommit(directory, 'cherry-pick', topic)
-    await writeFile(join(directory, 'file.txt'), 'different\n')
-    await git('add', 'file.txt')
-    expect(await recoverSequencer(directory, 'cherry-pick', 'continue')).toEqual({
-      outcome: 'empty',
-      message: 'Already applied, nothing to cherry-pick'
-    })
-    expect(await detectConflictOperation(directory)).toBe('unknown')
-    expect(await git('log', '-1', '--format=%s')).toBe('diverged')
-    expect(await git('status', '--porcelain')).toBe('')
-  })
+  it.each([
+    ['cherry-pick', 'Already applied, nothing to cherry-pick', 'CHERRY_PICK_HEAD'],
+    ['revert', 'Nothing to revert; the changes are already undone.', 'REVERT_HEAD']
+  ] as const)(
+    'finishes an empty %s conflict resolution',
+    async (operation, message, operationHead) => {
+      await commit('different\n', 'diverged')
+      expect(await applyCommit(directory, operation, topic)).toEqual({ outcome: 'conflicted' })
+      await writeFile(join(directory, 'file.txt'), 'different\n')
+      await git('add', 'file.txt')
+      expect(await recoverSequencer(directory, operation, 'continue')).toEqual({
+        outcome: 'empty',
+        message
+      })
+      expect(await detectConflictOperation(directory)).toBe('unknown')
+      await expect(git('rev-parse', '--verify', operationHead)).rejects.toThrow()
+      expect(await git('log', '-1', '--format=%s')).toBe('diverged')
+      expect(await git('status', '--porcelain')).toBe('')
+    }
+  )
   for (const inProgress of ['merge', 'rebase', 'cherry-pick', 'revert', 'stash'] as const) {
     it(`refuses both commit actions during an existing ${inProgress} conflict`, async () => {
       if (inProgress === 'stash') {
@@ -154,6 +161,7 @@ describe('commit actions', () => {
       await expect(
         recoverSequencer(directory, operation === 'revert' ? 'cherry-pick' : 'revert', 'abort')
       ).rejects.toThrow('in progress')
+      await expect(recoverSequencer(directory, operation, 'continue')).rejects.toThrow(/^error: /)
       await recoverSequencer(directory, operation, 'abort')
       expect(await detectConflictOperation(directory)).toBe('unknown')
       expect(await git('show', 'HEAD:file.txt')).toBe('different')

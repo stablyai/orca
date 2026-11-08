@@ -23249,6 +23249,7 @@
     "actionWarning": "操作已完成，但 Git 报告了问题。",
     "actionConflicted": "请在源代码管理中解决冲突，然后继续或中止操作。",
     "alreadyApplied": "已应用，没有可拣选的更改",
+    "nothingToRevert": "无需还原；更改已撤销。",
     "actionRefused": "操作未完成。",
     "actionUnavailable": "此工作区已无法执行该操作。请重新打开 Git 图后重试。",
     "ownerChanged": "工作区主机已更改。请重新打开 Git 图后重试。",
