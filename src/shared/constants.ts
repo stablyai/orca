@@ -2,7 +2,7 @@ import type { GlobalSettings } from './global-settings-types'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
-import type { AgentActivityDisplayMode } from './ui-chrome-types'
+import type { AgentActivityDisplayMode, AgentRowOrder } from './ui-chrome-types'
 import type { WorkspaceSessionState } from './workspace-session/workspace-session-state-types'
 import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
@@ -47,6 +47,12 @@ export const DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY = 0.9
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
+}
+
+export const DEFAULT_AGENT_ROW_ORDER: AgentRowOrder = 'started'
+
+export function normalizeAgentRowOrder(value: unknown): AgentRowOrder {
+  return value === 'tab-bar' || value === 'started' ? value : DEFAULT_AGENT_ROW_ORDER
 }
 
 export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
@@ -226,6 +232,7 @@ export function getDefaultUIState(): PersistedUIState {
     _worktreeCardModeDefaulted: true,
     showAgentModels: true,
     agentActivityDisplayMode: DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
+    agentRowOrder: DEFAULT_AGENT_ROW_ORDER,
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),
     workspaceBoardOpacity: 1,
     workspaceBoardColumnWidth: 308,

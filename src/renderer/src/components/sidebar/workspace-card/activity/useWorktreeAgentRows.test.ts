@@ -141,6 +141,33 @@ describe('buildWorktreeAgentRows', () => {
     expect(rows.map((row) => row.paneKey)).toEqual(['tab-1:2', PANE_KEY_1])
   })
 
+  it('orders agents by their tab bar position when tab bar order is chosen', () => {
+    const tabs = [
+      makeTab('tab-1', { sortOrder: 2 }),
+      makeTab('tab-2', { sortOrder: 0 }),
+      makeTab('tab-3', { sortOrder: 1 })
+    ]
+    const rows = buildWorktreeAgentRows({
+      tabs,
+      entries: [
+        makeEntry(PANE_KEY_1, 1000),
+        makeEntry(PANE_KEY_2, 2000),
+        makeEntry(PANE_KEY_3, 3000)
+      ],
+      retained: [makeRetained('tab-closed:1', 'wt-1', 500)],
+      order: 'tab-bar',
+      now: 4000
+    })
+
+    // A dragged tab moves its agent; a retained row whose tab closed trails the open tabs.
+    expect(rows.map((row) => row.paneKey)).toEqual([
+      PANE_KEY_2,
+      PANE_KEY_3,
+      PANE_KEY_1,
+      'tab-closed:1'
+    ])
+  })
+
   it('keeps simultaneous worktree-attributed agents in a deterministic order', () => {
     const first = makeEntry(PANE_KEY_1, 1000, {
       state: 'working',

@@ -16,7 +16,8 @@ import { normalizeContextualTourIds } from '../../../../../shared/contextual-tou
 import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
-  normalizeAgentActivityDisplayMode
+  normalizeAgentActivityDisplayMode,
+  normalizeAgentRowOrder
 } from '../../../../../shared/constants'
 import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/card-properties'
 import {
@@ -181,6 +182,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
           showAgentModels: ui.showAgentModels !== false,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
+          agentRowOrder: normalizeAgentRowOrder(ui.agentRowOrder),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
           workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),

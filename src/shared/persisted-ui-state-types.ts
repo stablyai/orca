@@ -14,6 +14,7 @@ import type { CustomPet } from './pet-types'
 import type {
   ActivityGroupBy,
   AgentActivityDisplayMode,
+  AgentRowOrder,
   ManualRepoOrderEntry,
   ProjectOrderBy,
   RightSidebarExplorerView,
@@ -114,6 +115,7 @@ export type PersistedUIState = {
   _worktreeCardModeDefaulted?: boolean
   showAgentModels?: boolean
   agentActivityDisplayMode?: AgentActivityDisplayMode
+  agentRowOrder?: AgentRowOrder
   workspaceStatuses?: WorkspaceStatusDefinition[]
   workspaceBoardOpacity?: number
   workspaceBoardColumnWidth?: number

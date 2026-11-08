@@ -1,6 +1,7 @@
 import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
 import {
   WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES,
+  WORKSPACE_AGENT_ROW_ORDER_CHOICES,
   WORKSPACE_CARD_LAYOUT_CHOICES,
   WORKSPACE_CARD_PROPERTY_CHOICES,
   WORKSPACE_GROUP_BY_CHOICES,
@@ -117,6 +118,31 @@ export const AGENT_ACTIVITY_DISPLAY_OPTIONS = localizeChoices<
   full: () =>
     translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.2a81e07366', 'Full list')
 })
+
+export const AGENT_ROW_ORDER_OPTIONS = localizeChoices<
+  ChoiceId<typeof WORKSPACE_AGENT_ROW_ORDER_CHOICES>
+>(
+  WORKSPACE_AGENT_ROW_ORDER_CHOICES,
+  {
+    started: () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowOrderStarted',
+        'First started'
+      ),
+    'tab-bar': () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowOrderTabBar',
+        'Tab order'
+      )
+  },
+  {
+    'tab-bar': () =>
+      translate(
+        'auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowOrderTabBarDescription',
+        'Drag tabs to arrange agents.'
+      )
+  }
+)
 
 export const PROPERTY_OPTIONS = localizeChoices<ChoiceId<typeof WORKSPACE_CARD_PROPERTY_CHOICES>>(
   WORKSPACE_CARD_PROPERTY_CHOICES,

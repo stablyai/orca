@@ -4,6 +4,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   getDefaultUIState,
   normalizeAgentActivityDisplayMode,
+  normalizeAgentRowOrder,
   normalizeWorktreeCardProperties
 } from '../../../shared/constants'
 import {
@@ -133,6 +134,10 @@ export function updatePersistedUI(
       sanitizedUpdates.agentActivityDisplayMode !== undefined
         ? normalizeAgentActivityDisplayMode(sanitizedUpdates.agentActivityDisplayMode)
         : normalizeAgentActivityDisplayMode(operations.state.ui?.agentActivityDisplayMode),
+    agentRowOrder:
+      sanitizedUpdates.agentRowOrder !== undefined
+        ? normalizeAgentRowOrder(sanitizedUpdates.agentRowOrder)
+        : normalizeAgentRowOrder(operations.state.ui?.agentRowOrder),
     workspaceStatuses:
       sanitizedUpdates.workspaceStatuses !== undefined
         ? normalizeWorkspaceStatuses(sanitizedUpdates.workspaceStatuses)

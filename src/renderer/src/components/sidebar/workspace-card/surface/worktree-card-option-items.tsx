@@ -14,6 +14,7 @@ import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-ty
 import { getWorkspaceCardPropertiesValue } from '../../../../../../shared/workspace-view/workspace-view-options'
 import {
   AGENT_ACTIVITY_DISPLAY_OPTIONS,
+  AGENT_ROW_ORDER_OPTIONS,
   CARD_LAYOUT_OPTIONS,
   PROPERTY_OPTIONS,
   getWorktreeCardDisplayOptions
@@ -148,6 +149,8 @@ export function WorktreeCardPropertiesMenuItem({
   const compact = useAppStore((s) => s.settings?.compactWorktreeCards === true)
   const agentActivityDisplayMode = useAppStore((s) => s.agentActivityDisplayMode)
   const setAgentActivityDisplayMode = useAppStore((s) => s.setAgentActivityDisplayMode)
+  const agentRowOrder = useAppStore((s) => s.agentRowOrder)
+  const setAgentRowOrder = useAppStore((s) => s.setAgentRowOrder)
   const toggleProperty = useToggleCardProperty()
   const value = getWorkspaceCardPropertiesValue(worktreeCardProperties, compact)
   return (
@@ -199,6 +202,30 @@ export function WorktreeCardPropertiesMenuItem({
         >
           {AGENT_ACTIVITY_DISPLAY_OPTIONS.map((opt) => (
             <DropdownMenuRadioItem key={opt.id} value={opt.id} onSelect={(e) => e.preventDefault()}>
+              {opt.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>
+          {t('auto.components.sidebar.SidebarWorkspaceOptionsMenu.agentRowOrder', 'Agent order')}
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={agentRowOrder}
+          onValueChange={(value) => {
+            const next = AGENT_ROW_ORDER_OPTIONS.find((opt) => opt.id === value)
+            if (next) {
+              setAgentRowOrder(next.id)
+            }
+          }}
+        >
+          {AGENT_ROW_ORDER_OPTIONS.map((opt) => (
+            <DropdownMenuRadioItem
+              key={opt.id}
+              value={opt.id}
+              title={opt.description ?? undefined}
+              onSelect={(e) => e.preventDefault()}
+            >
               {opt.label}
             </DropdownMenuRadioItem>
           ))}

@@ -6364,7 +6364,11 @@
           "optionsActiveFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
           "optionsActiveFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
           "optionsFilterCount_one": "Arbeitsbereichsoptionen ({{count}} Filter)",
-          "optionsFilterCount_other": "Arbeitsbereichsoptionen ({{count}} Filter)"
+          "optionsFilterCount_other": "Arbeitsbereichsoptionen ({{count}} Filter)",
+          "agentRowOrder": "Agenten-Reihenfolge",
+          "agentRowOrderStarted": "Zuerst gestartet",
+          "agentRowOrderTabBar": "Tab-Reihenfolge",
+          "agentRowOrderTabBarDescription": "Tabs ziehen, um die Agenten anzuordnen."
         },
         "SshTargetRow": {
           "4677394048": "Verbindung wird hergestellt…",
