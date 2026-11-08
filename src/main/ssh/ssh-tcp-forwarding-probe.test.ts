@@ -86,6 +86,7 @@ describe('forward channel check (system SSH)', () => {
     const server = servers.pop()
     await new Promise((resolve) => server?.close(resolve))
     const verdict = checkForwardChannel(forward, { channelTimeoutMs: 50, listenTimeoutMs: 5_000 })
+    // ast-grep-ignore: test-no-real-time-wait -- a real socket must fail to dial before the listener comes up.
     await new Promise((resolve) => setTimeout(resolve, 300))
     server?.listen(forward.entry.localPort, '127.0.0.1')
     if (server) {

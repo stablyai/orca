@@ -211,6 +211,7 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       await fixture.close()
     }, 30_000) // Why: sshd teardown plus the fixture's settle wait.
 
+    // Why: one fresh login through the slow proxy, plus teardown.
     it('keeps the TCP forward when its own login outlasts the channel check', async () => {
       const address = orcad.address()
       const stub = {
@@ -238,6 +239,6 @@ describe.skipIf(!REAL_OPENSSH_TEST_ENABLED)(
       } finally {
         await tunnel.close()
       }
-    }, 45_000) // Why: one fresh login through the slow proxy, plus teardown.
+    }, 45_000)
   }
 )
