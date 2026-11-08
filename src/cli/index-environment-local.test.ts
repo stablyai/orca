@@ -402,4 +402,22 @@ describe('worktree rm needs an explicit workspace', () => {
       }
     }
   )
+
+  it('keeps the environment-specific guidance when the target is another environment', async () => {
+    listEnvironmentsMock.mockReturnValue(SAVED)
+    const { exitCode, output } = await run([
+      'worktree',
+      'rm',
+      '--worktree',
+      'current',
+      '--environment',
+      'srv-b',
+      '--json'
+    ])
+    expect(exitCode).toBe(1)
+    expect(JSON.parse(output).error.data.nextSteps[0]).toContain(
+      '`orca worktree ps --environment srv-b --json`'
+    )
+    expect(callMock).not.toHaveBeenCalled()
+  })
 })

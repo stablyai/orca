@@ -1,4 +1,5 @@
 import { getOptionalStringFlag } from '../flags'
+import { assertLocalCwdWorktreeSelector } from '../local-environment-selector'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { resolveCurrentWorktreeSelector } from '../selectors'
 import { quoteCliCommandArgument } from '../shell-command-quote'
@@ -40,6 +41,8 @@ export async function refuseCurrentForRemoval(
   if (value !== 'current' && value !== 'active') {
     return
   }
+  // Remote cwd can't be resolved; that refusal already names the environment to list.
+  assertLocalCwdWorktreeSelector(value, client)
   const { selectors, resolution } = await describeCurrent(cwd, client)
   const flagsFor = selectors.map((selector) => `--worktree ${quoteCliCommandArgument(selector)}`)
   const named =
