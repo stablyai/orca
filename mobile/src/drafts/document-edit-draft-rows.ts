@@ -1,0 +1,87 @@
+import * as z from 'zod'
+import {
+  DEVICE_STORE_MAX_VALUE_LENGTH,
+  encodeDeviceStoreValue
+} from '../device-store/device-store-value-codec'
+import {
+  durableDraftRow,
+  durableDraftRowKey,
+  pageDraftRowBackend,
+  resetDurableDraftRowsForTests,
+  type DurableDraftRow
+} from './durable-draft-rows'
+
+/** Unsaved edits to a file or Markdown tab, with the hash of the host's version they were made against. */
+export type DocumentEditDraft = { content: string; baseHash: string; savedAt: number }
+
+const draftSchema = z.object({ content: z.string(), baseHash: z.string(), savedAt: z.number() })
+
+type Slot = {
+  draft: DocumentEditDraft | null
+  // Set by the first save; what the row held before then no longer applies.
+  saved: boolean
+  row: DurableDraftRow
+}
+const slots = new Map<string, Slot>()
+
+export function markdownTabDraftKey(worktreeId: string, tabId: string): string {
+  return durableDraftRowKey('markdownTab', worktreeId, tabId)
+}
+
+export function fileEditDraftKey(worktreeId: string, path: string): string {
+  return durableDraftRowKey('fileEdit', worktreeId, path)
+}
+
+// A value past the store's cap would be refused and leave older edits behind, so it is not kept at all.
+function fitsDeviceStore(draft: DocumentEditDraft): boolean {
+  return encodeDeviceStoreValue(draft).length <= DEVICE_STORE_MAX_VALUE_LENGTH
+}
+
+function slotFor(key: string): Slot {
+  let slot = slots.get(key)
+  if (!slot) {
+    const created: Slot = {
+      draft: null,
+      saved: false,
+      row: durableDraftRow(key, {
+        backend: () => pageDraftRowBackend(key),
+        snapshot: () => (created.draft && fitsDeviceStore(created.draft) ? created.draft : null),
+        restore: (value) => {
+          const parsed = draftSchema.safeParse(value)
+          if (!created.saved && parsed.success) {
+            created.draft = parsed.data
+          }
+        }
+      })
+    }
+    slot = created
+    slots.set(key, slot)
+  }
+  return slot
+}
+
+/** Undefined while the row could not be read; an unread row must not be overwritten by a clean document. */
+export async function loadDocumentEditDraft(
+  key: string
+): Promise<DocumentEditDraft | null | undefined> {
+  const slot = slotFor(key)
+  await slot.row.load()
+  return slot.row.state() === 'loaded' ? slot.draft : undefined
+}
+
+export function saveDocumentEditDraft(key: string, draft: DocumentEditDraft | null): void {
+  const slot = slotFor(key)
+  slot.draft = draft
+  slot.saved = true
+  slot.row.save(draft ? 'deferred' : 'immediate')
+}
+
+// The user threw these edits away, so they must not be offered again.
+export function dropDocumentEditDraft(key: string): void {
+  saveDocumentEditDraft(key, null)
+}
+
+export function resetDocumentEditDraftsForTests(): void {
+  slots.clear()
+  resetDurableDraftRowsForTests()
+}
