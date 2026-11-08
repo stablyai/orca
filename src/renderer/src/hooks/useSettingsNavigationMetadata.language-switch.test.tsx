@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { i18n } from '../i18n/i18n'
+import { TranslationScopeProvider } from '../i18n/translation-scope-provider'
 import { useSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 
@@ -24,7 +25,7 @@ async function renderProbe(): Promise<void> {
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(createElement(Probe))
+    root.render(createElement(TranslationScopeProvider, null, createElement(Probe)))
   })
 }
 
