@@ -20215,6 +20215,7 @@
         "copyIdentity": "Copier {{value0}}",
         "folder": "Dossier",
         "mainCheckout": "Copie principale",
+        "turnWorking": "L’agent de ce chat est en cours d’exécution. Changez de branche une fois son tour terminé.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Le chat de cet agent n’est pas encore disponible sous Windows. Ouvrez-le plutôt dans un terminal.",
@@ -21651,6 +21652,7 @@
       "switch": "Changer de branche : {{branch}}",
       "search": "Rechercher des branches",
       "recover": "Passer à {{branch}}",
+      "copy": "Copier le nom de la branche",
       "create": "Créer la branche {{name}} à partir de {{branch}}",
       "open": "Ouvrir l’espace de travail",
       "occupied": "Extraite dans {{path}}",

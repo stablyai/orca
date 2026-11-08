@@ -19882,6 +19882,7 @@
         "copyIdentity": "複製 {{value0}}",
         "folder": "資料夾",
         "mainCheckout": "主要工作副本",
+        "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
       },
       "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。",
@@ -20981,6 +20982,7 @@
       "switch": "切換分支：{{branch}}",
       "search": "搜尋分支",
       "recover": "切換到 {{branch}}",
+      "copy": "複製分支名稱",
       "create": "從 {{branch}} 建立分支 {{name}}",
       "open": "開啟工作區",
       "occupied": "已在 {{path}} 中簽出",
