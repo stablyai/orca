@@ -11,7 +11,8 @@ import type { StructuredAgentSessionSinkAdmission } from '../agent-session-wire/
 import type { ProviderTimelineContext } from './provider-timeline-context'
 import {
   decideProviderTimelineEvent,
-  type ProviderTimelineDecidedEvent
+  type ProviderTimelineDecidedEvent,
+  type ProviderTimelineDecision
 } from './provider-timeline-decision'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import { createLegacyProviderTimelineIdentityScheme } from './provider-timeline-identity'
@@ -105,9 +106,26 @@ export function createProviderTimelineAssembler(
     if (decision.dropped) {
       return { admission: ADMITTED, dropped: decision.dropped }
     }
+    // Observers see only events whose own writes the writer accepted.
+    let refused = false
+    const writes = decision.writes?.map(
+      (write): NonNullable<ProviderTimelineDecision['writes']>[number] => ({
+        ...write,
+        onResolved: (outcome) => {
+          refused ||= outcome.kind === 'dropped'
+          write.onResolved?.(outcome)
+        }
+      })
+    )
+    const observed = onPublished && (() => !refused && onPublished())
     const plan = new ProviderTimelinePlan()
     planProviderTimelineBarrier({ streams, state }, plan, event, decision)
-    planProviderTimelineWrites(context, plan, decision, serials.next)
+    planProviderTimelineWrites(
+      context,
+      plan,
+      { ...decision, ...(writes ? { writes } : {}) },
+      serials.next
+    )
     plan.onAdmitted(() => {
       decision.commit?.(state)
       serials.commit()
@@ -119,7 +137,7 @@ export function createProviderTimelineAssembler(
     ) {
       plan.onAdmitted(() => deps.sink.setActivity?.(null))
     }
-    return { admission: plan.submit(deps.sink, onPublished) }
+    return { admission: plan.submit(deps.sink, observed) }
   }
 
   /** Settle another writer’s ended turn first; refusal rejects the discovering event so retry repeats both. */
