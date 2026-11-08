@@ -105,7 +105,7 @@ describe('Activity search query in the real hook', () => {
       },
       acknowledgedAgentsByPaneKey: { [livePane]: 100_000, [unavailablePane]: 100_000 }
     })
-    const activity = renderHook(
+    const activity = renderHook<ReturnType<typeof useAgentPaneThreads>, string | null>(
       (selectedPaneKey: string | null) =>
         useAgentPaneThreads({ ...options(''), readFilter: 'unread', selectedPaneKey }),
       { initialProps: null }
@@ -120,8 +120,17 @@ describe('Activity search query in the real hook', () => {
       'tab-0:11111111-1111-4111-8111-111111111111',
       'tab-1:11111111-1111-4111-8111-111111111111'
     ])
+    act(() => useAppStore.setState({ activityClearedAtByPaneKey: { [unavailablePane]: 99_000 } }))
     activity.rerender(null)
-    act(() => useAppStore.setState({ acknowledgedAgentsByPaneKey: { [livePane]: 100_000 } }))
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111'
+    ])
+    act(() =>
+      useAppStore.setState({
+        activityClearedAtByPaneKey: {},
+        acknowledgedAgentsByPaneKey: { [livePane]: 100_000 }
+      })
+    )
     expect(
       activity.result.current.visibleThreads.map((thread) => thread.paneKey).toSorted()
     ).toEqual([
