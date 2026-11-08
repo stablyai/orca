@@ -137,7 +137,9 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
         linkIdle: state.ackTotalInFlightBytes === 0
       })
       chargeAckWindow(state, stream, chunk.bytes.byteLength)
-      stream.ackSentOutputTail = supersedableSentTail(stream.ackSentOutputTail, chunk)
+      if (state.linkEstimate.supersedesAltBacklog) {
+        stream.ackSentOutputTail = supersedableSentTail(stream.ackSentOutputTail, chunk)
+      }
     }
     return true
   }

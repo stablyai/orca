@@ -16,10 +16,7 @@ import {
   pacedAckWindowBytes
 } from './terminal-multiplex-ack-window'
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
-import {
-  framesAreSupersedable,
-  isAltBacklogSupersedeEnabled
-} from './terminal-multiplex-supersedable-frames'
+import { framesAreSupersedable } from './terminal-multiplex-supersedable-frames'
 import {
   markYieldedQueriesDiscardedInFrames,
   replaySnapshotCoveredStatelessQueries
@@ -35,9 +32,11 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     ackLinkHasRoomForHistory(state, stream)
   // Draining alt-screen frames a newer screen supersedes only delays echo; a viewport snapshot is cheaper.
   const snapshotSupersedesBacklog = (stream: TerminalMultiplexStream): boolean => {
+    if (!linkEstimate.supersedesAltBacklog || stream.ackPendingOutput.length === 0) {
+      return false
+    }
     const paced = pacedAckWindowBytes(state, stream)
     if (
-      !isAltBacklogSupersedeEnabled() ||
       paced === null ||
       stream.ackPendingOutputBytes <= paced ||
       linkEstimate.now() < stream.ackSupersedeSnapshotNotBefore

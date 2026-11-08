@@ -1,4 +1,5 @@
 import type { TerminalMultiplexStream } from './terminal-stream-types'
+import { isAltBacklogSupersedeEnabled } from './terminal-multiplex-supersedable-frames'
 
 const ESTIMATE_WINDOW_MS = 10_000
 // Rate is ACK-measured, so it covers client parse speed too; below ~32 Mbit/s a 2MB window queues >0.5s ahead of echo.
@@ -68,7 +69,9 @@ export class TerminalMultiplexLinkEstimate {
 
   constructor(
     readonly now: () => number = () => performance.now(),
-    private readonly enabled: boolean = isAdaptiveAckWindowEnabled()
+    private readonly enabled: boolean = isAdaptiveAckWindowEnabled(),
+    // Read once per connection so per-frame and per-ACK paths skip process.env.
+    readonly supersedesAltBacklog: boolean = enabled && isAltBacklogSupersedeEnabled()
   ) {}
 
   noteSent(

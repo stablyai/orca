@@ -132,7 +132,12 @@ type HostConnection = {
   streams: Map<number, HostStream>
   closed: boolean
   ackTotalInFlightBytes: number
-  linkEstimate: { now: () => number; deliveryBytesPerMs: () => null; pacedWindowBytes: () => null }
+  linkEstimate: {
+    now: () => number
+    deliveryBytesPerMs: () => null
+    pacedWindowBytes: () => null
+    supersedesAltBacklog: false
+  }
   sendFrame: (streamId: number, opcode: number, payload?: Uint8Array<ArrayBufferLike>) => boolean
   sendStreamError: (streamId: number, message: string) => void
   sendAckRecoverySnapshot?: (stream: HostStream) => Promise<void>
@@ -330,7 +335,12 @@ async function publishHostRecovery(
     streams: new Map([[streamId, stream]]),
     closed: false,
     ackTotalInFlightBytes: 0,
-    linkEstimate: { now: () => 0, deliveryBytesPerMs: () => null, pacedWindowBytes: () => null },
+    linkEstimate: {
+      now: () => 0,
+      deliveryBytesPerMs: () => null,
+      pacedWindowBytes: () => null,
+      supersedesAltBacklog: false
+    },
     sendFrame,
     sendStreamError: (_id, message) => {
       throw new Error(message)
