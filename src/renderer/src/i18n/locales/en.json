@@ -21513,7 +21513,6 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "subtitle": "Choose what to open in this pane.",
         "newAgent": "New Agent"
       }
     }

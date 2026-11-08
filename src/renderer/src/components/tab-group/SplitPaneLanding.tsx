@@ -123,12 +123,6 @@ export function SplitPaneLanding({
       <div className="w-full max-w-lg px-6">
         <div className="flex flex-col items-center gap-4 py-8">
           <LandingBrand />
-          <p className="text-sm text-muted-foreground text-center">
-            {t(
-              'components.tabGroup.splitPaneLanding.subtitle',
-              'Choose what to open in this pane.'
-            )}
-          </p>
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
             <button
               type="button"
