@@ -11,10 +11,10 @@ const runtime = vi.hoisted(() => {
 
 vi.mock('../../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../../ssh/targets/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
-vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
+vi.mock('../../ssh/protocol/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 vi.mock(
@@ -36,7 +36,7 @@ vi.mock('../runtime-environments/runtime-environments', () => ({
 }))
 import type { SshTarget } from '../../../shared/ssh-types'
 import { clearRuntimeEnvironmentManualDisconnect } from '../runtime-environments/runtime-environment-manual-disconnect'
-import { isSshUserDisconnected } from '../../ssh/ssh-user-disconnect'
+import { isSshUserDisconnected } from '../../ssh/connection/ssh-user-disconnect'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 

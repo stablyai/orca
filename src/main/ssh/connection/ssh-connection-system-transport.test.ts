@@ -2,14 +2,14 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { clientInstances, ssh2Mock } from '../__tests__/ssh-connection-test-client'
+import { clientInstances, ssh2Mock } from './testing/ssh-connection-test-client'
 import {
   findSystemSshMock,
   getOrcaControlSocketPathMock,
   removeControlSocketPathMock,
   resetSshConnectionMocks,
   spawnSystemSshCommandMock
-} from './ssh-connection-test-harness'
+} from './testing/ssh-connection-test-harness'
 import {
   createCallbacks,
   createFailingSystemCommandChannel,
@@ -17,49 +17,55 @@ import {
   createResolvedConfig,
   createSystemCommandChannel,
   createTarget
-} from './ssh-connection-test-fixtures'
+} from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
-import '../ssh-transport-selection'
+import '../system-transport/ssh-transport-selection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
-import { writeFileViaSystemSsh } from '../system-transport/system-ssh-file-transfer'
+import { writeFileViaSystemSsh } from '../system-transport/file-transfer/system-ssh-file-transfer'
 import { CONNECT_TIMEOUT_MS } from './ssh-connection-timing'
-import { initSshHostKeyStoreFile, trustHostKey } from '../ssh-host-key-store'
+import { initSshHostKeyStoreFile, trustHostKey } from '../host-keys/ssh-host-key-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 import {
   createOpenSshPrivateKeyFixture,
   createOpenSshPublicKeyFixture
-} from '../ssh-security-key-identity.test-fixture'
+} from '../authentication/testing/ssh-security-key-identity.test-fixture'
 
-vi.mock('../ssh2-module-load', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
+vi.mock('../authentication/ssh2-module-load', async () =>
+  (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
+  (await import('./testing/ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshArgsMocks(await importOriginal())
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshArgsMocks(
+    await importOriginal()
+  )
 )
 vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
-)
-vi.mock('../system-transport/system-ssh-file-binary-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
     await importOriginal()
   )
 )
-vi.mock('../system-transport/system-ssh-file-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileTransferMocks(
+vi.mock(
+  '../system-transport/file-transfer/system-ssh-file-binary-transfer',
+  async (importOriginal) =>
+    (await import('./testing/ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+      await importOriginal()
+    )
+)
+vi.mock('../system-transport/file-transfer/system-ssh-file-transfer', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshFileTransferMocks(
     await importOriginal()
   )
 )
-vi.mock('../ssh-control-socket', async () =>
-  (await import('./ssh-connection-test-harness')).createControlSocketModule()
+vi.mock('../system-transport/ssh-control-socket', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createControlSocketModule()
 )
 vi.mock('../config/ssh-config-parser', async () =>
-  (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
+  (await import('./testing/ssh-connection-test-harness')).createSshConfigParserModule()
 )
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSshGConfigResolutionMocks(
     await importOriginal()
   )
 )

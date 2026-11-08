@@ -1,4 +1,4 @@
-import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import type { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { isRecord } from '../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { selectOpenCodePluginSources } from './opencode-plugin-settings'

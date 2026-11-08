@@ -1,42 +1,48 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetSshConnectionMocks } from './ssh-connection-test-harness'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
+import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
-import type { SystemSshLoopbackRoute } from '../system-transport/system-ssh-loopback-route'
-import { uploadFileViaSystemSsh } from '../system-transport/system-ssh-file-binary-transfer'
+import type { SystemSshLoopbackRoute } from '../system-transport/forwarding/system-ssh-loopback-route'
+import { uploadFileViaSystemSsh } from '../system-transport/file-transfer/system-ssh-file-binary-transfer'
 
 const { startRouteMock } = vi.hoisted(() => ({ startRouteMock: vi.fn() }))
 
-vi.mock('../ssh2-module-load', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
+vi.mock('../authentication/ssh2-module-load', async () =>
+  (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
-  (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
+  (await import('./testing/ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshArgsMocks(await importOriginal())
-)
-vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshCommandMocks(await importOriginal())
-)
-vi.mock('../ssh-control-socket', async () =>
-  (await import('./ssh-connection-test-harness')).createControlSocketModule()
-)
-vi.mock('../system-transport/system-ssh-file-binary-transfer', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshArgsMocks(
     await importOriginal()
   )
 )
+vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
+    await importOriginal()
+  )
+)
+vi.mock('../system-transport/ssh-control-socket', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createControlSocketModule()
+)
+vi.mock(
+  '../system-transport/file-transfer/system-ssh-file-binary-transfer',
+  async (importOriginal) =>
+    (await import('./testing/ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+      await importOriginal()
+    )
+)
 vi.mock('../config/ssh-config-parser', async () =>
-  (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
+  (await import('./testing/ssh-connection-test-harness')).createSshConfigParserModule()
 )
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
-  (await import('./ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+  (await import('./testing/ssh-connection-test-harness')).withSshGConfigResolutionMocks(
     await importOriginal()
   )
 )
 // Force the Windows-gated route on here to exercise lifecycle; its own suite covers selection.
-vi.mock('../system-transport/system-ssh-loopback-route', () => ({
+vi.mock('../system-transport/forwarding/system-ssh-loopback-route', () => ({
   shouldUseSystemSshLoopbackRoute: () => true,
   startSystemSshLoopbackRoute: startRouteMock
 }))

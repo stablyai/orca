@@ -21,7 +21,7 @@ let eventHandlers: Map<string, Set<(...args: unknown[]) => void>>
 let presentedHostKey: Buffer
 let hostKeyAccepted: boolean | undefined
 
-vi.mock('../ssh2-module-load', async () => {
+vi.mock('../authentication/ssh2-module-load', async () => {
   const { utils } = await vi.importActual<typeof Ssh2>('ssh2')
   class MockSshClient {
     setNoDelay = vi.fn()
@@ -66,7 +66,11 @@ vi.mock('../config/ssh-g-config-resolution', async (importOriginal) => ({
 }))
 
 import { SshConnection } from './ssh-connection'
-import { initSshHostKeyStoreFile, isTrusted, loadTrustedHostKeys } from '../ssh-host-key-store'
+import {
+  initSshHostKeyStoreFile,
+  isTrusted,
+  loadTrustedHostKeys
+} from '../host-keys/ssh-host-key-store'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 const target = (overrides?: Partial<SshTarget>): SshTarget => ({

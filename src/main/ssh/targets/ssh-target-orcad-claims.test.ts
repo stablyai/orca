@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { SshRemotePtyLease, SshTarget } from '../../../shared/ssh-types'
 import { SshTargetOrcadClaims } from './ssh-target-orcad-claims'
-import { emptyDependentStateStore } from './ssh-target-orcad-dependents-fixture'
+import { emptyDependentStateStore } from './testing/ssh-target-orcad-dependents-fixture'
 
 type SetupOptions = {
   target?: Partial<SshTarget>
