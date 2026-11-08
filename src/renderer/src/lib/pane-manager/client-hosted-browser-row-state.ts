@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import type {
   ClientHostedBrowserRow,
   ClientHostedBrowserRowsEvent
@@ -86,8 +87,8 @@ export function getClientHostedBrowserRows(worktreeId: string): readonly ClientH
 }
 
 export function useClientHostedBrowserRows(worktreeId: string): readonly ClientHostedBrowserRow[] {
-  useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
-  return getClientHostedBrowserRows(worktreeId)
+  const storeVersion = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+  return recomputeOn([storeVersion], () => getClientHostedBrowserRows(worktreeId))
 }
 
 export function selectClientHostedBrowserRow(next: ClientHostedBrowserRowSelection): void {
