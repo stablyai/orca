@@ -29,6 +29,7 @@ import { journalItemRevisionValue } from './projection/journal-item-fold'
 import { assertJournalFence } from './writing/journal-write-guards'
 import { queueClearRestatement, writeJournalDomainQueueClear } from './journal-domain-queue-clear'
 import { restoreRetainedFailures, retainedFailures } from './journal-domain-retained-failures'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -104,6 +105,7 @@ export function replaceJournalDomainContext(
   const restatement = head.cleared ? queueClearRestatement(db, target) : null
   const retained = retainedFailures(db, target, itemIds, head.failureBoundary)
   const removalSequence = head.lastSequence + 1
+  invalidateJournalDomainQueue(db, target, removalSequence)
   const coordinate = (
     kind: JournalDomainContextCoordinate['kind'],
     at: number

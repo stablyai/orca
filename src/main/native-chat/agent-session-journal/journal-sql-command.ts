@@ -17,7 +17,6 @@ import { applyJournalDomainLifecycleOperation } from './journal-domain-taken-sto
 import { applyJournalDomainPromptMutation } from './journal-domain-prompt-mutation'
 import { applyJournalSqlStepCommand } from './journal-sql-step-command'
 import { applyJournalSqlEditLeaseCommand } from './journal-sql-edit-lease-command'
-import { trackJournalDomainQueueRevision } from './journal-domain-queue-revision'
 import { applyJournalSqlAutomaticSubmissionCommand } from './journal-sql-automatic-submission-command'
 
 /** Every command decides against current rows at its position on the sole writer. */
@@ -28,12 +27,6 @@ export class JournalSqlCommand {
   ) {}
 
   async apply(command: JournalWriterCommand, now: number): Promise<JournalWriterCommit> {
-    return trackJournalDomainQueueRevision(this.db, command.target.sessionId, () =>
-      this.execute(command, now)
-    )
-  }
-
-  private async execute(command: JournalWriterCommand, now: number): Promise<JournalWriterCommit> {
     const savedAt = command.savedAt ?? now
     command = { ...command, savedAt }
     const { operation, target } = command

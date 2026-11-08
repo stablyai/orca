@@ -7,6 +7,7 @@ import {
 } from './queued-messages/queued-message-pause'
 import { readJournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 import { readJournalDomainQueueFailure } from './journal-domain-queue-failures'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -85,4 +86,5 @@ export function writeJournalDomainQueueReopenMark(
   if (Number(changed.changes) !== 1) {
     throw new Error('journal queue reopen targets a retired chat epoch')
   }
+  invalidateJournalDomainQueue(db, target, sequence)
 }

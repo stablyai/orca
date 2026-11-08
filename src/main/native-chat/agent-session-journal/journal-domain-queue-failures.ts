@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -72,20 +73,18 @@ export function refreshJournalDomainQueueFailureReports(
     if (turnItemId === null) {
       continue
     }
-    db.prepare(`UPDATE journal_items SET queue_failure_witnessed_through=CASE
+    const changed = db
+      .prepare(`UPDATE journal_items SET queue_failure_witnessed_through=CASE
       WHEN queue_failed_at=0 THEN 0 ELSE queue_failure_witnessed_through END,
       queue_failed_at=CASE WHEN EXISTS(
       SELECT 1 FROM journal_items report WHERE report.session_id=? AND report.epoch=?
         AND report.hidden=0 AND report.queue_failure_report_turn_item_id=journal_items.item_id)
       THEN COALESCE(NULLIF(queue_failed_at,0),?) ELSE 0 END
-      WHERE session_id=? AND epoch=? AND item_id=? AND queue_command_turn=1 AND queue_failed_outcome=1`).run(
-      target.sessionId,
-      target.epoch,
-      sequence,
-      target.sessionId,
-      target.epoch,
-      turnItemId
-    )
+      WHERE session_id=? AND epoch=? AND item_id=? AND queue_command_turn=1 AND queue_failed_outcome=1`)
+      .run(target.sessionId, target.epoch, sequence, target.sessionId, target.epoch, turnItemId)
+    if (changed.changes > 0) {
+      invalidateJournalDomainQueue(db, target, sequence)
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
@@ -206,8 +207,12 @@ export function refreshJournalDomainAcceptedHandover(
     WHERE attempt.session_id=? AND attempt.epoch=? AND attempt.item_id=? AND attempt.current=1 AND attempt.dispatch_state='accepted'`)
     .get(target.sessionId, target.epoch, itemId)
   if (item) {
-    db.prepare(`UPDATE journal_chat_state SET accepted_handover_sequence=MAX(accepted_handover_sequence,?)
-    WHERE session_id=? AND epoch=?`).run(item.sequence, target.sessionId, target.epoch)
+    const changed = db
+      .prepare(`UPDATE journal_chat_state SET accepted_handover_sequence=?
+    WHERE session_id=? AND epoch=? AND accepted_handover_sequence<?`)
+      .run(item.sequence, target.sessionId, target.epoch, item.sequence)
+    if (changed.changes > 0) {
+      invalidateJournalDomainQueue(db, target)
+    }
   }
 }
-import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'

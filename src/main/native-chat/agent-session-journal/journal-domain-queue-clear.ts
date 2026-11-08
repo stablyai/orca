@@ -1,4 +1,5 @@
 import type Database from '../../sqlite/sync-database'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import { readJournalDomainQueueRow } from './journal-domain-queue-rows'
 import {
@@ -73,5 +74,6 @@ export function writeJournalDomainQueueClear(
   for (const messageId of clear.messageIds) {
     insert.run(...prefix, messageId)
   }
+  invalidateJournalDomainQueue(db, target, sequence)
   return { ...clear, messageIds: [...clear.messageIds], sequence }
 }

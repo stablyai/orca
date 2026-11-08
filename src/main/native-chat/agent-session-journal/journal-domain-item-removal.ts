@@ -12,10 +12,7 @@ import { refreshJournalDomainQueueFailureReports } from './journal-domain-queue-
 import { observeJournalDomainTurnScope } from './journal-domain-turn-scope'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { assertJournalFence } from './writing/journal-write-guards'
-import {
-  invalidateJournalDomainQueue,
-  journalDomainQueueItemDependency
-} from './journal-domain-queue-revision'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -47,7 +44,7 @@ export function removeJournalDomainItem(
     .get(...prefix, key)
   const itemId = alias ? String(alias.item_id) : key
   const row = db
-    .prepare(`SELECT payload_json, revision, sequence, sequence_index, turn_marker,
+    .prepare(`SELECT payload_json, revision, sequence, sequence_index, turn_marker,prompt,command_entry,
       queue_failure_report_turn_item_id FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?`)
     .get(...prefix, itemId)
   const tombstone = db
@@ -69,7 +66,12 @@ export function removeJournalDomainItem(
     return { itemId, revision, removed: null, items: [] }
   }
   const removed: AgentJournalRenderItem = JSON.parse(String(row.payload_json))
-  if (journalDomainQueueItemDependency(db, target, itemId) !== 'null') {
+  if (
+    row.turn_marker ||
+    row.prompt ||
+    row.command_entry ||
+    row.queue_failure_report_turn_item_id !== null
+  ) {
     invalidateJournalDomainQueue(db, target, sequence)
   }
   if (row.turn_marker) {

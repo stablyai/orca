@@ -5,6 +5,7 @@ import type Database from '../../sqlite/sync-database'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalWriterCommit, JournalWriterPublication } from './journal-writer-changes'
 import { applyJournalWriterEffect, type JournalWriterCoordinate } from './journal-writer-effects'
+import { readJournalDomainQueueRevision } from './journal-domain-queue-revision'
 
 export function finishJournalSqlCommand(
   db: Database.Database,
@@ -54,9 +55,15 @@ export function finishJournalSqlCommand(
     invalidatedItemIds,
     referencedUploads: claims.referencedUploads
   }
+  const queue = readJournalDomainQueueRevision(db, command.target.sessionId)
   return {
     cursor,
-    inputChanged: result.inputChanged,
+    inputChanged:
+      result.inputChanged ||
+      coordinates.some(
+        (position) => position.epoch === queue.epoch && position.seq === queue.revision
+      ),
+    queueRevision: `${queue.epoch}:${queue.revision}`,
     keys: [],
     inputKeys: [],
     items: [

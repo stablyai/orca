@@ -32,6 +32,7 @@ import { writeJournalDomainQueueReopenMark } from './journal-domain-queue-pauses
 import { journalDomainQueueAwaitsReopen } from './journal-domain-queue-reads'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
 type Target = { sessionId: string; epoch: string }
 
@@ -177,6 +178,7 @@ function writeMark(
 ): AgentJournalCursor {
   const sequence = result.cursor.sequence + 1
   write(sequence)
+  invalidateJournalDomainQueue(db, target, sequence)
   appendJournalSqlEvent(
     db,
     target,

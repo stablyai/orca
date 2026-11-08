@@ -12,7 +12,8 @@ import {
   journalDomainQueueFailure,
   refreshJournalDomainQueueFailureReports
 } from './journal-domain-queue-failures'
-import { reportedTurnItemId } from './queued-messages/journal-queue-failure-policy'
+import { isTurnOrClear, reportedTurnItemId } from './queued-messages/journal-queue-failure-policy'
+import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/structured-agent-session-command-entry'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import { normalizeJournalDomainItemBody } from './journal-domain-item-normalization'
 import { observeJournalDomainTurnScope } from './journal-domain-turn-scope'
@@ -21,10 +22,7 @@ import {
   refreshJournalDomainAcceptedHandover,
   type JournalDomainInputItemObservation
 } from './journal-domain-input-ends'
-import {
-  invalidateJournalDomainQueue,
-  journalDomainQueueItemDependency
-} from './journal-domain-queue-revision'
+import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
@@ -63,7 +61,6 @@ export function writeJournalDomainCurrentItem(
     throw new Error('journal item persistence requires its writer transaction')
   }
   const prefix = [target.sessionId, target.epoch] as const
-  const queueDependency = journalDomainQueueItemDependency(db, target, input.item.itemId)
   const ordinal =
     input.ordinal ?? input.previous?.ordinal ?? nextJournalDomainItemOrdinal(db, target)
   const body = normalizeJournalDomainItemBody(
@@ -154,7 +151,16 @@ export function writeJournalDomainCurrentItem(
       sequence
     )
   }
-  if (queueDependency !== journalDomainQueueItemDependency(db, target, next.itemId)) {
+  if (
+    isTurnOrClear(next) ||
+    isTurnOrClear(input.previous?.item) ||
+    (metadata.root && next.body.kind === 'message' && next.body.role === 'user') ||
+    (input.previous?.item.body.kind === 'message' && input.previous.item.body.role === 'user') ||
+    isStructuredAgentSessionCommandEntry(next.body) ||
+    isStructuredAgentSessionCommandEntry(input.previous?.item.body) ||
+    oldReport !== null ||
+    failure.reportTurnItemId !== null
+  ) {
     invalidateJournalDomainQueue(db, target, sequence)
   }
   return [
