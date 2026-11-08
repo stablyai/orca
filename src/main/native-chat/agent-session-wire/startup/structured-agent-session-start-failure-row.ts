@@ -1,4 +1,3 @@
-import { selectedStructuredSubmission } from '../delivery/structured-agent-session-input-selection'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import {
   structuredAgentSessionStartFailure,
@@ -22,18 +21,20 @@ import { failedProviderChildStart } from '../host/structured-agent-session-provi
 import { structuredAgentSessionEndedChildFailure } from '../termination/structured-agent-session-ended-child-failure'
 
 /** A failed start applies only to the queued message that requested it. */
-export function startThatFailedWhileQueued(
+export async function startThatFailedWhileQueued(
   session: StructuredAgentSessionHostSession,
   oldest: AgentJournalSubmission
-): { startKey: string | null; cause: StructuredAgentSessionStartFailureCause } | null {
+): Promise<{ startKey: string | null; cause: StructuredAgentSessionStartFailureCause } | null> {
   const ended = failedProviderChildStart(session)
   if (
     !ended ||
     ended.startedFor !== oldest.clientMessageId ||
     oldest.acceptedSequence === undefined ||
-    ended.endedAt.epoch !== session.journal.cursor().epoch ||
     ended.endedAt.sequence < oldest.acceptedSequence
   ) {
+    return null
+  }
+  if (ended.endedAt.epoch !== (await session.journal.reads.cursor()).epoch) {
     return null
   }
   const cause = structuredAgentSessionEndedChildFailure(ended)
@@ -131,25 +132,26 @@ export async function recordStructuredAgentSessionStartFailure(
   })
 }
 
-export function acceptedNoLaterThan(
-  journal: Pick<StructuredAgentSessionHostSession['journal'], 'cursor'>,
+export async function acceptedNoLaterThan(
+  journal: Pick<StructuredAgentSessionHostSession['journal'], 'reads'>,
   cursor: AgentJournalCursor
-): (submission: AgentJournalSubmission) => boolean {
+): Promise<(submission: AgentJournalSubmission) => boolean> {
+  const current = await journal.reads.cursor()
   return (submission) =>
-    journal.cursor().epoch === cursor.epoch &&
+    current.epoch === cursor.epoch &&
     submission.acceptedSequence !== undefined &&
     submission.acceptedSequence <= cursor.sequence
 }
 
-export function oldestQueuedSubmission(
+export async function oldestQueuedSubmission(
   session: Pick<StructuredAgentSessionHostSession, 'journal'>
-): ReturnType<StructuredAgentSessionHostSession['journal']['submissions']>[number] | undefined {
-  return selectedStructuredSubmission(session.journal)
+): Promise<AgentJournalSubmission | undefined> {
+  return (await session.journal.reads.input({ kind: 'first-queued' })).submission
 }
 
 export async function recordStructuredAgentSessionDeliveryFailure(
   session: Pick<StructuredAgentSessionHostSession, 'journal'> & { fence: number },
-  failure: NonNullable<ReturnType<typeof startThatFailedWhileQueued>>,
+  failure: NonNullable<Awaited<ReturnType<typeof startThatFailedWhileQueued>>>,
   context: AgentSessionFailureWordsContext,
   clientMessageId: string | null
 ): Promise<void> {
