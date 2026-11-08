@@ -15,6 +15,7 @@ import type {
   ClientCapabilities,
   InitializeResponse,
   ModelInfo,
+  SessionUpdate,
   ToolCallUpdate
 } from '../generated/acp-protocol.generated'
 
@@ -49,6 +50,13 @@ export type AcpSubagentUpdate = {
   result?: string
   /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
+}
+
+/** A subagent's frame relayed on its parent session. */
+export type AcpChildSession = {
+  id: string
+  parentId?: string
+  label?: string
 }
 
 export type AcpDialectNotification =
@@ -121,6 +129,8 @@ export type AcpDialect = {
     tool: AgentJournalToolCallItem
   ): AcpBackgroundTaskUpdate[]
   toolSubagents?(update: ToolCallUpdate, tool: AgentJournalToolCallItem): AcpSubagentUpdate[]
+  /** Names the subagent that produced a relayed frame. */
+  childSession?(update: SessionUpdate): AcpChildSession | undefined
   /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
