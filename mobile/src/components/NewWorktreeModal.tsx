@@ -292,6 +292,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         jiraSites={runtime.jiraConnection.sites}
         sshReady={!executionTarget.sshGate.requiresConnection}
         projectPickerItems={projectPickerItems}
+        projectSearchRepos={repos}
+        hostLabelFor={(repo) => getNewWorkspaceRunTarget(repo, hostPlatform, hostLabelById).label}
         selectedProjectId={selectedProjectId}
         runTargetPickerItems={runTargetPickerItems}
         pickerAgentOptions={agentSelection.pickerAgentOptions}

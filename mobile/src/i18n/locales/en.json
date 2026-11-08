@@ -1203,7 +1203,10 @@
     "newWorktreeModalDrawers": {
       "project": "Project",
       "runOn": "Run on",
-      "agent": "Agent"
+      "agent": "Agent",
+      "noMatches": "No matches",
+      "searchProjects": "Search projects or host project",
+      "searchHosts": "Search hosts"
     },
     "newWorktreeProjectTargetFields": {
       "project": "Project",

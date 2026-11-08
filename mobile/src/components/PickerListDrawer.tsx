@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { FlatList, StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
 
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -7,9 +7,19 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './bottom-drawer/BottomDrawer'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer/bottom-drawer-constants'
 import { LIST_LEADING_INSET, LIST_ROW_PADDING, ListRow } from './list/ListGroup'
+import { MobileSearchField } from './MobileSearchField'
 import { SheetHeader } from './nav-bar/SheetHeader'
 
 type PickerListItem = { id: string; label: string; detail?: string }
+
+/** Short lists are scannable; a search field there is only chrome. */
+const PICKER_SEARCH_MIN_ITEMS = 5
+
+type PickerListSearch<T> = {
+  placeholder: string
+  emptyLabel: string
+  filter: (items: T[], query: string) => T[]
+}
 
 type Props<T extends PickerListItem> = {
   visible: boolean
@@ -19,6 +29,7 @@ type Props<T extends PickerListItem> = {
   onSelect: (item: T) => void
   onClose: () => void
   renderIcon?: (item: T) => ReactNode
+  search?: PickerListSearch<T>
 }
 
 export function PickerListDrawer<T extends PickerListItem>({
@@ -28,16 +39,24 @@ export function PickerListDrawer<T extends PickerListItem>({
   selectedId,
   onSelect,
   onClose,
-  renderIcon
+  renderIcon,
+  search
 }: Props<T>) {
   const colorScheme = useMobileColorScheme()
   const [closing, setClosing] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [query, setQuery] = useState('')
   const drawerVisible = visible && !closing
+  const searchable = search !== undefined && items.length >= PICKER_SEARCH_MIN_ITEMS
+  const shownItems = useMemo(
+    () => (searchable && query.trim() !== '' ? search.filter(items, query) : items),
+    [items, query, search, searchable]
+  )
 
   useEffect(() => {
     if (visible) {
       setClosing(false)
+      setQuery('')
     }
     return () => {
       if (closeTimerRef.current) {
@@ -77,15 +96,28 @@ export function PickerListDrawer<T extends PickerListItem>({
       <View style={styles.header}>
         <SheetHeader title={title} />
       </View>
+      {searchable ? (
+        <MobileSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={search.placeholder}
+          style={styles.search}
+        />
+      ) : null}
       <FlatList
-        data={items}
+        data={shownItems}
         extraData={colorScheme}
         keyExtractor={(item) => item.id}
         style={styles.group}
-        contentContainerStyle={items.length === 0 ? styles.emptyContent : undefined}
+        contentContainerStyle={shownItems.length === 0 ? styles.emptyContent : undefined}
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
         ItemSeparatorComponent={renderIcon ? PickerIconSeparator : PickerSeparator}
+        ListEmptyComponent={
+          searchable && query.trim() !== '' ? (
+            <Text style={styles.emptyText}>{search.emptyLabel}</Text>
+          ) : null
+        }
         renderItem={({ item }) => (
           <ListRow
             title={item.label}
@@ -121,8 +153,16 @@ const styles = themedStyleSheet(() => ({
     maxHeight: 460,
     flexGrow: 0
   },
+  search: {
+    marginBottom: spacing.sm
+  },
   emptyContent: {
     minHeight: spacing.xl
+  },
+  emptyText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    padding: LIST_ROW_PADDING
   },
   separator: {
     height: StyleSheet.hairlineWidth,
