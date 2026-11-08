@@ -347,3 +347,59 @@ describe('--environment local and workspace addresses', () => {
     })
   })
 })
+
+describe('worktree rm needs an explicit workspace', () => {
+  useWorktreeAwarenessEnvironment({
+    callMock,
+    serveOrcaAppMock,
+    getDefaultUserDataPathMock,
+    addEnvironmentFromPairingCodeMock,
+    listEnvironmentsMock,
+    spawnMock
+  })
+
+  const root = buildWorktree('/tmp/rm-repo', 'main')
+  const sibling = { ...root, id: `${root.id}::workspace:sibling` }
+
+  it.each(['current', 'active'])(
+    'refuses --worktree %s, naming what it resolves to, and removes nothing',
+    async (value) => {
+      for (const [rows, resolution, selectors] of [
+        [[root], 'resolved', ['id:repo::/tmp/rm-repo']],
+        [
+          [root, sibling],
+          'ambiguous',
+          ['id:repo::/tmp/rm-repo', 'id:repo::/tmp/rm-repo::workspace:sibling']
+        ],
+        [[], 'unresolved', []]
+      ] as const) {
+        callMock.mockReset()
+        callMock.mockImplementation(async (method: string) =>
+          method === 'worktree.list'
+            ? worktreeListFixture([...rows])
+            : okFixture('folders', { folderWorkspaces: [] })
+        )
+        const { exitCode, output } = await run(
+          ['worktree', 'rm', '--worktree', value, '--force', '--json'],
+          '/tmp/rm-repo/src'
+        )
+        expect(exitCode).toBe(1)
+        const { error } = JSON.parse(output)
+        expect(error.code).toBe('invalid_argument')
+        expect(error.message).toContain(
+          `orca worktree rm needs an explicit workspace; --worktree ${value} is not accepted`
+        )
+        expect(error.data.current).toEqual({ resolution, selectors: [...selectors] })
+        expect(error.data.nextSteps.slice(0, selectors.length)).toEqual(
+          selectors.map((selector) => `orca worktree rm --worktree ${selector}`)
+        )
+        if (resolution === 'resolved') {
+          expect(error.message).toContain(`Here, ${value} is --worktree id:repo::/tmp/rm-repo`)
+        }
+        const methods = callMock.mock.calls.map(([method]) => method)
+        expect(methods).not.toContain('worktree.show')
+        expect(methods).not.toContain('worktree.rm')
+      }
+    }
+  )
+})

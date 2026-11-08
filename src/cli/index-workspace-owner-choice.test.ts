@@ -110,7 +110,6 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
         ['computer', 'get-app-state', '--app', 'fixture'],
         ['orchestration', 'check', '--peek'],
         ['orchestration', 'run-current'],
-        ['worktree', 'rm', '--worktree', 'current', '--force'],
         ['terminal', 'stop', '--worktree', 'current'],
         ['terminal', 'close', '--all', '--worktree', 'current'],
         [
