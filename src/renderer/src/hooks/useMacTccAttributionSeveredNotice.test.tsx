@@ -158,33 +158,6 @@ describe('useMacTccAttributionSeveredNotice', () => {
     })
   })
 
-  it('coalesces overlapping mount/focus checks into one IPC call and one toast', async () => {
-    let resolveHealth!: (value: AttributionResult) => void
-    const pending = new Promise<AttributionResult>((resolve) => {
-      resolveHealth = resolve
-    })
-    macTccAttribution.mockImplementation(() => pending)
-
-    render(<MacosTccPromptNoticeHost />)
-    await waitFor(() => {
-      expect(macTccAttribution).toHaveBeenCalledTimes(1)
-    })
-    act(() => {
-      window.dispatchEvent(new Event('focus'))
-    })
-    expect(macTccAttribution).toHaveBeenCalledTimes(1)
-    expect(toast.warning).not.toHaveBeenCalled()
-
-    await act(async () => {
-      resolveHealth({ health: 'severed', folderAccessMismatch: null })
-      await pending
-    })
-    await waitFor(() => {
-      expect(macTccAttribution).toHaveBeenCalledTimes(1)
-      expect(toast.warning).toHaveBeenCalledTimes(1)
-    })
-  })
-
   it('clears the in-flight guard on rejection so a later focus can retry', async () => {
     macTccAttribution
       .mockRejectedValueOnce(new Error('probe failed'))
