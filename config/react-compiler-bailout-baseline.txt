@@ -574,7 +574,6 @@
 1 src/renderer/src/components/tab-bar/tab-create-entry-network-selection.ts
 1 src/renderer/src/components/tab-bar/tab-strip-drag-scroll.ts
 1 src/renderer/src/components/tab-bar/tab-strip-pointer-activation.ts
-1 src/renderer/src/components/tab-bar/use-native-chat-naming-failure.ts
 1 src/renderer/src/components/tab-bar/use-new-tab-agent-menu-rows.ts
 1 src/renderer/src/components/tab-bar/use-omnibox-browser-history.ts
 2 src/renderer/src/components/tab-bar/use-open-tab-search.ts
