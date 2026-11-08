@@ -18,6 +18,14 @@ import type { GitCommitAction } from '../../../../../../shared/git/commands/git-
 import { useAppStore } from '@/store'
 import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 
+async function runSequencerRecovery(run: () => Promise<void>, refresh: () => void) {
+  try {
+    await run()
+  } finally {
+    refresh()
+  }
+}
+
 export function SequencerRecoveryControls({
   worktreeId,
   operation,
@@ -88,47 +96,52 @@ export function SequencerRecoveryControls({
       return
     }
     setBusy(true)
-    try {
-      if (!(await gitCommitActionsSupported(target)) || !shouldApply()) {
-        return
+    await runSequencerRecovery(
+      async () => {
+        try {
+          if (!(await gitCommitActionsSupported(target)) || !shouldApply()) {
+            return
+          }
+          const request = {
+            target,
+            worktreeId,
+            worktreePath: path,
+            connectionId: copy.connectionId
+          }
+          const result = await (
+            action === 'abort' ? sequencerAbortRuntimeGit : sequencerContinueRuntimeGit
+          )(request, operation)
+          if (result?.outcome === 'empty') {
+            toast.message(t('gitGraph.alreadyApplied', 'Already applied, nothing to cherry-pick'))
+          }
+        } catch (error) {
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : t(
+                  'gitGraph.recoveryFailed',
+                  'Could not finish the operation. Refresh Source Control and try again.'
+                )
+          )
+        }
+      },
+      () => {
+        setBusy(false)
+        const state = useAppStore.getState()
+        if (shouldApply()) {
+          void refreshGitStatusForWorktree({
+            worktreeId,
+            worktreePath: path,
+            target,
+            connectionId: copy.connectionId,
+            ownerHostId: copy.hostId,
+            deps: state,
+            request: { shouldApply }
+          }).catch(() => {})
+        }
+        window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: worktreeId }))
       }
-      const request = {
-        target,
-        worktreeId,
-        worktreePath: path,
-        connectionId: copy.connectionId
-      }
-      const result = await (
-        action === 'abort' ? sequencerAbortRuntimeGit : sequencerContinueRuntimeGit
-      )(request, operation)
-      if (result?.outcome === 'empty') {
-        toast.message(t('gitGraph.alreadyApplied', 'Already applied, nothing to cherry-pick'))
-      }
-    } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : t(
-              'gitGraph.recoveryFailed',
-              'Could not finish the operation. Refresh Source Control and try again.'
-            )
-      )
-    } finally {
-      setBusy(false)
-      const state = useAppStore.getState()
-      if (shouldApply()) {
-        void refreshGitStatusForWorktree({
-          worktreeId,
-          worktreePath: path,
-          target,
-          connectionId: copy.connectionId,
-          ownerHostId: copy.hostId,
-          deps: state,
-          request: { shouldApply }
-        }).catch(() => {})
-      }
-      window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: worktreeId }))
-    }
+    )
   }
   return (
     <div className="space-y-1.5">
