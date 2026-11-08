@@ -42,7 +42,7 @@ import {
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_QUERY_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-query-methods'
-import { MIRROR_LEAVES_STEP_1 } from '../../src/main/runtime/runtime-leaf-record-projection.test-fixture'
+import { MIRROR_LEAVES_STEP_1 } from '../../src/main/runtime/terminal/records/runtime-leaf-record-projection.test-fixture'
 import type { AgentSenderAssociation } from '../../src/shared/agent-sender-associations'
 import type { AgentMessageSender } from '../../src/shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'

@@ -257,8 +257,11 @@ export async function runSourceControlAgentActionStart({
       launchPlatform,
       launchSource
     })
-    launched = Boolean(result)
-    if (result?.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
+    if (!result || 'refused' in result) {
+      return false
+    }
+    launched = true
+    if (result.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
       focusTerminalTabSurface(result.surface.tabId)
     }
     // Park launch state before slow submit-after-ready completes; host writes still wait for delivery.

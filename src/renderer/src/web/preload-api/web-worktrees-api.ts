@@ -16,7 +16,7 @@ import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/workt
 import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/retired-name-cache'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
 import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archive-hook-removal-gate'
-import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import {
   getRemoteRuntimeStatus,
   callRuntimeResult,

@@ -37,14 +37,15 @@ import {
   agentChildRowNoUpdateLabel
 } from '@/components/agent-child-row-text'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
-function formatTimeAgo(ts: number, now: number): string {
+function formatTimeAgo(ts: number, now: number, t: Translate = translate): string {
   const delta = now - ts
   if (delta < 60_000) {
-    return translate('auto.components.dashboard.DashboardAgentRow.justNow', 'just now')
+    return t('auto.components.dashboard.DashboardAgentRow.justNow', 'just now')
   }
-  return translate('auto.components.dashboard.DashboardAgentRow.timeAgo', '{{duration}} ago', {
+  return t('auto.components.dashboard.DashboardAgentRow.timeAgo', '{{duration}} ago', {
     duration: formatCompactDuration(delta)
   })
 }
@@ -119,6 +120,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   sendTargetDisabledReason,
   onSendTargetClick
 }: Props) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
@@ -173,7 +175,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
   const isWorking = agent.state === 'working' && !isMonitoring
   // Show tool details only for working/approval waits; ended or monitoring turns have stale last-tool metadata.
-  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state)
+  const stoppingLabel = agentRowStoppingLabel(agent.entry, agent.state, t)
   const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring && stoppingLabel === null
   const { presentation, dotStateOverride } = resolveRowProgramStatus(agent)
   const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
@@ -183,7 +185,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
     : ''
   // Why: a child row's message line is the model's, so a child that ended without an outcome says so.
   const lastAssistantMessage = agent.childRow
-    ? agentChildRowMessageLine(agent.childRow)
+    ? agentChildRowMessageLine(agent.childRow, t)
     : (agent.entry.lastAssistantMessage?.trim() ?? '')
   const isInterrupted = agentVerdictDisplayMark(agent.entry) === 'interrupted'
   const lineage = agent.lineage
@@ -192,7 +194,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const participatesInLineage = isLineageChild || lineageChildCount > 0
   const identityTitle =
     lineageChildCount > 0
-      ? translate(
+      ? t(
           'auto.components.dashboard.DashboardAgentRow.dispatchedAgents',
           '{{agentType}} - dispatched {{count}} agents',
           {
@@ -212,20 +214,20 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   // Unverifiable rows expose elapsed silence in their timestamp slot; do not hide their only content in a tooltip.
   const noUpdateLabel = dotState === 'unverifiable' ? rowNoUpdateLabel(agent, now) : null
 
-  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now) : null
-  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now) : null
+  const startedTimeAgo = startedAt !== null ? formatTimeAgo(startedAt, now, t) : null
+  const doneTimeAgo = doneAt !== null ? formatTimeAgo(doneAt, now, t) : null
   const relativeTimestamp = noUpdateLabel ?? doneTimeAgo ?? startedTimeAgo
   const tsParts: string[] = noUpdateLabel ? [noUpdateLabel] : []
   if (startedTimeAgo !== null) {
     tsParts.push(
-      translate('auto.components.dashboard.DashboardAgentRow.startedAgo', 'started {{time}}', {
+      t('auto.components.dashboard.DashboardAgentRow.startedAgo', 'started {{time}}', {
         time: startedTimeAgo
       })
     )
   }
   if (doneTimeAgo !== null) {
     tsParts.push(
-      translate('auto.components.dashboard.DashboardAgentRow.doneAgo', 'done {{time}}', {
+      t('auto.components.dashboard.DashboardAgentRow.doneAgo', 'done {{time}}', {
         time: doneTimeAgo
       })
     )
@@ -254,10 +256,7 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       aria-current={view?.current ? 'true' : undefined}
       aria-description={
         opensClaudeParentConversation(agent)
-          ? translate(
-              'auto.lib.claudeAgentRowView.openParentConversation',
-              'Open parent conversation'
-            )
+          ? t('auto.lib.claudeAgentRowView.openParentConversation', 'Open parent conversation')
           : undefined
       }
       data-agent-send-target={sendTargetStatus}

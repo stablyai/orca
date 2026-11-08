@@ -81,6 +81,16 @@ export function promptSkillRefs(document: JSONContent | undefined): AgentJournal
   return [...own, ...(document.content ?? []).flatMap((child) => promptSkillRefs(child))]
 }
 
+/** Files or images attached inline as pills. */
+export function promptHasAttachmentReferences(document: JSONContent | undefined): boolean {
+  return (
+    document !== undefined &&
+    (document.type === NativeChatFileReference.name ||
+      document.type === NativeChatImageReference.name ||
+      (document.content ?? []).some(promptHasAttachmentReferences))
+  )
+}
+
 export function promptHasInteractionModeSkill(
   agent: string,
   text: string,

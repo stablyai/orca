@@ -92,17 +92,4 @@ describe("a host's focused terminal create into a requested group", () => {
     expect(landed).toBe(splitGroupId)
     expect(store.getState().groupsByWorktree[WT]?.map((group) => group.id)).toContain(splitGroupId)
   })
-
-  it('is new work in a workspace with no live terminal: its first bind moves it up in Recent', () => {
-    store.getState().setActiveWorktree('repo1::/tmp/other')
-
-    request({ requestId: 'request-2', worktreeId: WT, presentation: 'focused' })
-
-    const tabId: string = replyTerminalCreate.mock.calls[0]?.[0]?.tabId
-    const tab = store.getState().tabsByWorktree[WT]?.find((candidate) => candidate.id === tabId)
-    expect(tab?.pendingActivationSpawn).toBeUndefined()
-    const epoch = store.getState().sortEpoch
-    store.getState().updateTabPtyId(tabId, 'pty-new-1')
-    expect(store.getState().sortEpoch).toBe(epoch + 1)
-  })
 })

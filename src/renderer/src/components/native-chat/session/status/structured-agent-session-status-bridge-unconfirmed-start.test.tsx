@@ -56,8 +56,11 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local'
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.history,
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.history
+}))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSession: vi.fn(),
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
@@ -104,7 +107,7 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { recheckUnconfirmedStructuredAgentLaunches } from '@/lib/agent-session/launch/structured-agent-session-launch-unconfirmed-recheck'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
   resetTerminalTabActivityFlagsCacheForTest,
   resolveTerminalTabActivityStatus

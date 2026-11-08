@@ -26,6 +26,7 @@ import type {
 } from '../../../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -271,29 +272,27 @@ export function getCreationProgressLabel(
   entry: Pick<
     PendingWorktreeCreation,
     'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress'
-  >
+  >,
+  t: Translate = translate
 ): string {
   const checkout = getVisibleCheckoutProgress(entry)
   if (checkout) {
-    return translate(
+    return t(
       'auto.lib.pendingWorktreeCreation.checkingOutFiles',
       'Checking out files… {{percent}}%',
       { percent: checkout.percent }
     )
   }
   if (entry.phase === 'provisioning-vm') {
-    return translate('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
+    return t('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
   }
   if (entry.indeterminate) {
-    return translate(
-      'auto.lib.pendingWorktreeCreation.settingUpWorkspace',
-      'Setting up your workspace…'
-    )
+    return t('auto.lib.pendingWorktreeCreation.settingUpWorkspace', 'Setting up your workspace…')
   }
   if (entry.phase === 'preparing') {
-    return translate('auto.lib.pendingWorktreeCreation.preparingWorkspace', 'Preparing workspace…')
+    return t('auto.lib.pendingWorktreeCreation.preparingWorkspace', 'Preparing workspace…')
   }
   return entry.phase === 'creating'
-    ? translate('auto.lib.pendingWorktreeCreation.creatingWorktree', 'Creating worktree…')
-    : translate('auto.lib.pendingWorktreeCreation.fetchingBaseBranch', 'Fetching base branch…')
+    ? t('auto.lib.pendingWorktreeCreation.creatingWorktree', 'Creating worktree…')
+    : t('auto.lib.pendingWorktreeCreation.fetchingBaseBranch', 'Fetching base branch…')
 }

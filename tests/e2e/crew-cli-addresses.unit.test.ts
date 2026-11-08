@@ -1,6 +1,6 @@
-import type { RuntimeStore } from '../../src/main/runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../src/main/runtime/construction/runtime-store-contract'
 import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
+
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../src/shared/protocol-version'

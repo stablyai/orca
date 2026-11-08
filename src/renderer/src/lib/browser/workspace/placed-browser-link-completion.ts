@@ -1,4 +1,4 @@
-import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
+import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { focusHttpLinkPage } from '../navigation/http-link-browser-placement'
 import { revealFloatingWorkspacePanel } from '../../floating-workspace-panel-reveal'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'

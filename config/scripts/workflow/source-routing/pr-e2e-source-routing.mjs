@@ -432,15 +432,6 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
-    id: 'quick-open.paired-host-path-search',
-    specs: ['tests/e2e/paired-quick-open-large-tree.spec.ts'],
-    matches: (file) =>
-      isProductSource(file) &&
-      /^(?:src\/main\/ipc\/filesystem-(?:list-files|search-file-paths)\.ts|src\/main\/ripgrep\/bundled-ripgrep-path\.ts|src\/main\/providers\/(?:filesystem-provider-contract|ssh-filesystem-provider(?:-capabilities)?)\.ts|src\/main\/runtime\/(?:orca-runtime-files|rpc\/methods\/files)\.ts|src\/renderer\/src\/(?:components\/(?:QuickOpen|quick-open-file-list|quick-open-search)\.tsx?|runtime\/(?:files\/search\/runtime-file-search-client|runtime-legacy-quick-open-inventory)\.ts)|src\/shared\/(?:quick-open-(?:install-rg|path-search|transport-budget)|ripgrep-process-availability|bundled-ripgrep)\.ts)$/.test(
-        file
-      )
-  },
-  {
     id: 'terminal-session.host-cold-park-stream-continuity',
     specs: ['tests/e2e/host-parked-pane-remote-viewer.spec.ts'],
     matches: (file) =>

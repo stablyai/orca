@@ -9,7 +9,7 @@ import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/ag
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: async (_target: unknown, method: string) =>
     method === 'agentSession.modelCatalog' ? entry.catalog : { seedOptions: {} }
 }))
@@ -26,7 +26,15 @@ const entry: AgentPickerEntry = {
     origin: 'probe',
     fetchedAt: 1,
     models: [
-      { id: 'astra', label: 'Astra', isDefault: true, efforts: [{ value: 'low', label: 'Low' }] }
+      {
+        id: 'astra',
+        label: 'Astra',
+        isDefault: true,
+        efforts: [
+          { value: 'low', label: 'Low' },
+          { value: 'high', label: 'High' }
+        ]
+      }
     ]
   }
 }
@@ -48,6 +56,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('keeps + ordinary and actual omnibox original presets independent after editing their models', async () => {
+it('keeps + ordinary and actual omnibox original presets independent after editing the ordinary effort', async () => {
   await verifyOmniboxPresetIdentity(root, launch)
 })

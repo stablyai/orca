@@ -1,5 +1,5 @@
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { CreateWebRuntimeSessionTerminalArgs } from './terminal-create-contracts'
 
 export function buildLegacyAgentCreateTerminalParams(

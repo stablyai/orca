@@ -1,25 +1,25 @@
 import type * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
+import { flushAsyncTicks } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createManager,
   createMockTransport,
   createPane,
   type ConnectCallbacks,
   type MockTransport
-} from '../test-fixtures/pty-connection-test-pane-fixtures'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks,
   bindPaneAgentTitleMocks
-} from '../test-fixtures/pty-connection-test-deps'
-import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
-import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../test-fixtures/pty-connection-test-environment'
-import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
+import { mockPanePtyArgs } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-connect-mock-pane'
 
 // Without a recovered host image, idle differential TUIs need a real one-row resize then restoration; same-size SIGWINCH does not force Node repaint (#26887).
 
@@ -27,7 +27,7 @@ const scheduleRuntimeGraphSync = vi.fn()
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => mockStoreState, subscribe: () => () => {} }
 }))

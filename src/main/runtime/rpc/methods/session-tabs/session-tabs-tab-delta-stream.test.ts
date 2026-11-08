@@ -1,7 +1,6 @@
 import { RuntimeClientCapabilities } from '../../runtime-client-capabilities'
 import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../client-events/runtime-client-capabilities'
 import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import '../../../../../shared/protocol-version'

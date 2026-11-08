@@ -1,4 +1,4 @@
-import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/host-model-catalog-snapshots'
+import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import type { StructuredAgentSessionMutate } from '../../../components/native-chat/session/structured/writes/use-structured-agent-session-mutate'
 import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/agent-session-options-result'
 // @vitest-environment happy-dom
@@ -22,7 +22,7 @@ import {
 } from '../launch/structured-agent-session-launch-registry'
 import { useStructuredAgentSessionOptions } from '../../../components/native-chat/session/options/structured/use-structured-agent-session-options'
 import { listRuntimeSessionHostsForStartup } from '../../../app-shell/startup-runtime-session-hosts'
-import { structuredAgentSessionTargetForTab } from '../../../runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForTab } from '../../../runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   registerStructuredSelectionCatalogStore,
@@ -45,7 +45,7 @@ vi.mock('../../launch-structured-agent-session', () => ({
 vi.mock('../launch/structured-agent-session-launch-create-call', () => ({
   launchStructuredAgentSession: transport.create
 }))
-vi.mock('../../../runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: transport.call
 }))
 vi.mock(
@@ -54,12 +54,15 @@ vi.mock(
     useStructuredAgentSessionPermissionStatus: () => ({ permissionReport: false, observation: 0 })
   })
 )
-vi.mock('../../../runtime/structured-agent-session-host-capability', () => ({
-  useStructuredAgentSessionHostCapability: () => true,
-  useStructuredAgentSessionOwnPermissionState: () => 'supported',
-  useStructuredAgentSessionHostCapabilityState: () => 'unknown',
-  structuredAgentSessionHostKey: () => 'paired-host'
-}))
+vi.mock(
+  '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
+  () => ({
+    useStructuredAgentSessionHostCapability: () => true,
+    useStructuredAgentSessionOwnPermissionState: () => 'supported',
+    useStructuredAgentSessionHostCapabilityState: () => 'unknown',
+    structuredAgentSessionHostKey: () => 'paired-host'
+  })
+)
 vi.mock(
   '../../../components/native-chat/session/options/native-chat-session-option-settings-write',
   () => ({

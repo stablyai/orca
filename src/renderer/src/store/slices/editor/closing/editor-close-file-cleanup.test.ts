@@ -15,7 +15,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
-vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))

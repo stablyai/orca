@@ -1392,6 +1392,13 @@
       "openFailed": "無法開啟此 PDF",
       "opening": "正在開啟 PDF…",
       "updateRequired": "請更新 Orca Mobile 以開啟 PDF"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "自你 {{time}} 的編輯後，已在電腦上變更",
+      "copyMyEdits": "複製我的編輯",
+      "discard": "放棄",
+      "restore": "還原",
+      "unsavedFrom": "{{time}} 的未儲存編輯"
     }
   },
   "home": {

@@ -75,6 +75,7 @@ function socketEventClient(socket: PairedMobileSocket): SharedClientEventsClient
     // One socket for the helper's life: always connected, no reconnects to tell apart.
     getState: () => 'connected',
     getLastConnectedAt: () => null,
+    onStateChange: () => () => {},
     subscribe: (method: string, params: unknown, onData: (payload: unknown) => void) => {
       const id = 'phone-list-events'
       socket.send(id, method, params)

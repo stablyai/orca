@@ -1,5 +1,4 @@
 import { closeTestJournalHostDatabases } from '../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import '../../unused-default-rpc-methods.test-fixture'
 /** Caller-reserved chat ids identify the conversation before its reply; outcome.sessionId names the session actually created. */
 
 import { mkdtemp, rm } from 'node:fs/promises'

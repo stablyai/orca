@@ -30,7 +30,7 @@ const retirementSchema = z.object({
 async function captureHostRetirement(directory: string) {
   const modulePath = fileURLToPath(
     new URL(
-      '../../../src/main/runtime/structured-attention-original-delivery.test-fixture.ts',
+      '../../../src/main/runtime/push/notifications/structured-attention-original-delivery.test-fixture.ts',
       import.meta.url
     )
   ).replaceAll('\\', '/')

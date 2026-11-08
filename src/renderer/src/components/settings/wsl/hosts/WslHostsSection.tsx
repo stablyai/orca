@@ -12,6 +12,7 @@ import {
 } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { LoadingSpinner } from '../../../LoadingSpinner'
 import {
@@ -56,19 +57,17 @@ import { readIpcErrorDetail } from '@/lib/ipc-error'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,
-  unavailable: boolean
+  unavailable: boolean,
+  t: Translate = translate
 ): ServerRowStatus | null {
   if (unavailable) {
     return null
   }
-  const label = getWslHostStatusLabel(status)
+  const label = getWslHostStatusLabel(status, t)
   switch (status?.state) {
     case 'ready':
       return {
-        label: translate(
-          'auto.components.settings.RuntimeEnvironmentsPane.serverConnected',
-          'Connected'
-        ),
+        label: t('auto.components.settings.RuntimeEnvironmentsPane.serverConnected', 'Connected'),
         tone: 'success'
       }
     case 'connecting':
@@ -93,6 +92,7 @@ export function WslHostsSection({
 }: {
   onChanged: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   // Read WSL hosts directly because the remote-server catalog excludes them.
   const environments = useAppStore((s) => s.runtimeEnvironments)
   const enabled = useWslHostsEnabled()
@@ -101,10 +101,10 @@ export function WslHostsSection({
   const serverFilesMissing = useWslHostServerFilesMissing()
   // Share unavailable reasons across every listing of the host.
   const unavailableLabel = serverFilesMissing
-    ? getWslHostServerFilesMissingLabel()
+    ? getWslHostServerFilesMissingLabel(t)
     : enabled
       ? null
-      : getWslHostsTurnedOffLabel()
+      : getWslHostsTurnedOffLabel(t)
   const statuses = useAppStore((s) => s.wslHostStatuses)
   const moveRecords = useWslMoveOrchestratorStatus((s) => s.records)
   const [dialogMode, setDialogMode] = useState<AddRemoteHostMode | null>(null)
@@ -139,16 +139,16 @@ export function WslHostsSection({
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 space-y-0.5">
           <div className="flex items-center gap-2 text-sm font-medium">
-            {translate('auto.components.settings.wslHosts.title', 'WSL hosts')}
+            {t('auto.components.settings.wslHosts.title', 'WSL hosts')}
             <Badge variant="outline">
-              {translate('auto.components.settings.wslHosts.experimental', 'Experimental')}
+              {t('auto.components.settings.wslHosts.experimental', 'Experimental')}
             </Badge>
           </div>
           <p className="text-xs text-muted-foreground">
             {unavailableLabel ??
               (paused
-                ? getWslHostsPausedLabel()
-                : translate(
+                ? getWslHostsPausedLabel(t)
+                : t(
                     'auto.components.settings.wslHosts.description',
                     'Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.'
                   ))}
@@ -163,7 +163,7 @@ export function WslHostsSection({
             onClick={() => setDialogMode('wsl')}
           >
             <Plus />
-            {translate('auto.components.settings.wslHosts.add', 'Add WSL distro')}
+            {t('auto.components.settings.wslHosts.add', 'Add WSL distro')}
           </Button>
         ) : (
           <Button
@@ -172,7 +172,7 @@ export function WslHostsSection({
             size="sm"
             onClick={openWslHostsExperimentalSetting}
           >
-            {translate('auto.components.settings.wslHosts.turnOn', 'Turn on in Experimental')}
+            {t('auto.components.settings.wslHosts.turnOn', 'Turn on in Experimental')}
           </Button>
         )}
       </div>
@@ -187,7 +187,7 @@ export function WslHostsSection({
             const distro = environment.orcadDeployment.distro
             const moveLine = unavailableLabel
               ? null
-              : wslMoveOrchestratorLine(wslMoveOrchestratorRecordFor(moveRecords, distro))
+              : wslMoveOrchestratorLine(wslMoveOrchestratorRecordFor(moveRecords, distro), t)
             return (
               <ServerListRow
                 key={environment.id}
@@ -196,25 +196,25 @@ export function WslHostsSection({
                 icon={<TerminalSquare className="size-4" />}
                 chips={
                   <ServerRowChip>
-                    {translate('auto.components.settings.wslHosts.chip', 'WSL')}
+                    {t('auto.components.settings.wslHosts.chip', 'WSL')}
                   </ServerRowChip>
                 }
                 meta={
                   <span className="truncate">
                     {deferred
-                      ? `${translate(
+                      ? `${t(
                           'auto.components.settings.managedServers.row.deferredVersion',
                           'Update to {{version}} deferred.',
                           { version: deferred.candidateVersion }
-                        )} ${managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code })}`
-                      : `${unavailableLabel ?? getWslHostRowDetail(status)}${
+                        )} ${managedServerOutcomeLabel({ outcome: 'deferred', code: deferred.code }, t)}`
+                      : `${unavailableLabel ?? getWslHostRowDetail(status, t)}${
                           !unavailableLabel && status?.detail
                             ? ` — ${wslHostStatusDetailMessage(status)}`
                             : ''
                         }`}
                   </span>
                 }
-                status={getWslHostRowStatus(status, unavailableLabel !== null)}
+                status={getWslHostRowStatus(status, unavailableLabel !== null, t)}
                 footer={moveLine ? <WslMoveOrchestratorStatusLine distro={distro} /> : undefined}
                 primaryAction={
                   // A newer Orca's host refuses Update; Force stays in the menu.
@@ -226,7 +226,7 @@ export function WslHostsSection({
                       disabled={connectingId !== null}
                       onClick={() => void connect(environment.id, 'update')}
                     >
-                      {translate('auto.components.settings.managedServers.row.update', 'Update')}
+                      {t('auto.components.settings.managedServers.row.update', 'Update')}
                     </Button>
                   ) : ready && !unavailableLabel ? null : (
                     <Button
@@ -239,7 +239,7 @@ export function WslHostsSection({
                       {connectingId === environment.id ? (
                         <LoadingSpinner className="size-3" />
                       ) : null}
-                      {translate('auto.components.settings.wslHosts.connect', 'Connect')}
+                      {t('auto.components.settings.wslHosts.connect', 'Connect')}
                     </Button>
                   )
                 }
@@ -250,7 +250,7 @@ export function WslHostsSection({
                         disabled={connectingId !== null}
                         onSelect={() => void connect(environment.id, 'force')}
                       >
-                        {translate('auto.components.settings.wslHosts.forceUpdate', 'Force update')}
+                        {t('auto.components.settings.wslHosts.forceUpdate', 'Force update')}
                       </DropdownMenuItem>
                     ) : null}
                     {deferred &&
@@ -260,7 +260,7 @@ export function WslHostsSection({
                         disabled={connectDisabled}
                         onSelect={() => void connect(environment.id)}
                       >
-                        {translate('auto.components.settings.wslHosts.connect', 'Connect')}
+                        {t('auto.components.settings.wslHosts.connect', 'Connect')}
                       </DropdownMenuItem>
                     ) : null}
                     {unavailableLabel || !acceptsNewWork ? null : (
@@ -268,7 +268,7 @@ export function WslHostsSection({
                         onSelect={() => openWslMoveDialogFor(environment.orcadDeployment.distro)}
                       >
                         <FolderInput />
-                        {translate('wslMove.entry.hostRow', 'Move projects from this distro…')}
+                        {t('wslMove.entry.hostRow', 'Move projects from this distro…')}
                       </DropdownMenuItem>
                     )}
                     <DropdownMenuItem
@@ -277,7 +277,7 @@ export function WslHostsSection({
                       onSelect={() => setRemoving(environment)}
                     >
                       <Trash2 />
-                      {translate('auto.components.settings.serverList.remove', 'Remove…')}
+                      {t('auto.components.settings.serverList.remove', 'Remove…')}
                     </DropdownMenuItem>
                   </>
                 }

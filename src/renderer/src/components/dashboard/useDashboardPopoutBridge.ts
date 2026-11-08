@@ -5,7 +5,7 @@ import type { AppState } from '@/store/types'
 import {
   subscribeStructuredChatTabNames,
   getStructuredChatTabNames
-} from '@/runtime/structured-chat-name-observation'
+} from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { subscribeChatProgramFacts } from '@/lib/host-chat-program'
 import {
   type AgentLaunchRouteView,

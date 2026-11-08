@@ -14,7 +14,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 describe('useStructuredAgentSessionOptions', () => {
   beforeEach(() => {
     mocks.sendSelection = false

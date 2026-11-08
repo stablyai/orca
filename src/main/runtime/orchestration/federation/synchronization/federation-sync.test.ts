@@ -1,21 +1,28 @@
 import { serializeRemoteRuntimeRpcRequest } from '../../../../../shared/remote-runtime/remote-runtime-memory-limits'
+
 import { describe, expect, it, vi } from 'vitest'
+
 import '../../../../../shared/protocol-version'
 import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration-runtime-capabilities'
+
 import { OrcaRuntimeService } from '../../../orca-runtime'
+
 import { OrchestrationDb } from '../../db/orchestration-db'
+
 import '../../db/contract-constants'
 import '../../db/messages/mailbox-routing-page'
 import '../../db/dispatch-row-writer'
 import '../../db/attempt-outcome-projection'
 import { createIdleSyncHarness, createFederationSyncDatabase } from './federation-sync-test-harness'
+
 import { syncFederatedDispatch } from './federation-sync'
 
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
-import { MessageWake } from '../../../runtime-message-waiters'
+
+import { MessageWake } from '../../mailbox/runtime-message-waiters'
 
 describe('federation relay acknowledgments', () => {
   it('retains a pending protocol-3 worker_done across restart downgrade and settles after support returns', async () => {
@@ -531,6 +538,29 @@ describe('federation relay acknowledgments', () => {
       remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationAck')
     ).toHaveLength(2)
   })
+
+  it.each(['stopRelay', 'database swap'] as const)(
+    'keeps a sync interrupted by %s from acknowledging into current state',
+    async (interruption) => {
+      const { runtime, blockAck, replaceDb } = createIdleSyncHarness()
+      const gate = blockAck()
+
+      const oldSync = runtime.syncOrchestrationFederatedDispatch('dispatch_remote')
+      await gate.reached
+      if (interruption === 'stopRelay') {
+        runtime.stopOrchestrationFederationRelay()
+      } else {
+        replaceDb()
+      }
+      gate.release()
+      await oldSync
+
+      expect(
+        runtime.getOrchestrationDb().getFederatedDispatch('dispatch_remote')
+          ?.to_home_acknowledged_sequence
+      ).toBe(0)
+    }
+  )
 })
 
 describe('bounded outgoing answer relay', () => {

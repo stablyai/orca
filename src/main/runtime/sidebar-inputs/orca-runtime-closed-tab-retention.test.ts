@@ -1,7 +1,7 @@
 // Runs on plain Node, as orcad does: main's "Hide sleeping" retention reads the runtime's own facts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { ResolvedWorktreeSnapshot } from '../workspaces/catalog/runtime-resolved-worktree-cache'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'

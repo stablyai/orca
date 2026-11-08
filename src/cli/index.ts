@@ -16,6 +16,7 @@ import {
 } from './execution-host-flag'
 import { fetchSshTargetSummaries, listSshTargets } from './host-selector-alternatives'
 import { reportCliError } from './cli-error'
+import { RuntimeClientError } from './runtime/types'
 import { cliErrorExitCode } from './cli-exit-code'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
@@ -23,6 +24,10 @@ import { COMMAND_SPECS } from './specs'
 import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
 import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
 import { ignoresRemoteSelection } from './remote-selection-scope'
+import {
+  isLocalEnvironmentSelector,
+  refuseLocalManagementSelector
+} from './local-environment-selector'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
@@ -98,15 +103,24 @@ export async function main(
     validateCommandAndFlags(COMMAND_SPECS, parsed)
     const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
+    await refuseLocalManagementSelector(parsed.commandPath, parsed.flags)
     const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = ignoresRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+    // An explicit local route suppresses ambient ORCA_ENVIRONMENT and pairing codes.
+    const explicitLocal = isLocalEnvironmentSelector(environmentSelector)
+    if (explicitLocal && typeof pairingCode === 'string') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Use either --pairing-code or --environment, not both.'
+      )
+    }
     // Eagerly resolve explicit --environment; stale ambient config must not break local-only commands.
     const listSshTargetsForSuggestion = async (): Promise<{ id: string; label: string }[]> =>
       listSshTargets(new RuntimeClientClass(undefined, undefined, null, null))
     const storeEnvironmentSelector =
-      typeof environmentSelector === 'string'
+      typeof environmentSelector === 'string' && !explicitLocal
         ? await resolveEnvironmentSelectorForStore(environmentSelector, listSshTargetsForSuggestion)
         : null
     // Select the paired connection before constructing the client; reject conflicting environments.
@@ -134,7 +148,7 @@ export async function main(
       parsed.flags.set('host', `runtime:${hostEnvironmentId}`)
     }
     // null suppresses RuntimeClient's ORCA_PAIRING_CODE / ORCA_ENVIRONMENT default parameters.
-    const suppressed = ignoreRemoteSelection ? null : undefined
+    const suppressed = ignoreRemoteSelection || explicitLocal ? null : undefined
     // An explicit runtime host overrides an ambient pairing code.
     const remotePairingCode =
       hostEnvironmentId !== null ? null : typeof pairingCode === 'string' ? pairingCode : suppressed
@@ -167,10 +181,11 @@ export async function main(
       ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {}),
       ...(typeof repoSelector === 'string' ? { repoSelector } : {}),
       remoteServerSelected:
-        parsed.flags.has('environment') ||
-        parsed.flags.has('pairing-code') ||
-        (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
-        Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim()),
+        !isLocalEnvironmentSelector(parsed.flags.get('environment')) &&
+        (parsed.flags.has('environment') ||
+          parsed.flags.has('pairing-code') ||
+          (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
+          Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim())),
       conciseOrchestration: parsed.commandPath[0] === 'orchestration' && !parsed.flags.has('full')
     })
     process.exitCode = cliErrorExitCode(error, parsed.commandPath)

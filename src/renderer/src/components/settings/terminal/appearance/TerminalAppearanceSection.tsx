@@ -31,6 +31,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from '../themes/TerminalThemeSections'
+import { ClaudeCodeThemeSyncSetting } from '../themes/ClaudeCodeThemeSyncSetting'
 import { TerminalWindowSection } from '../TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
@@ -85,7 +86,6 @@ export function TerminalAppearanceSection({
   const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
-  const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
   const showDesktopThemeImports = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
@@ -281,8 +281,6 @@ export function TerminalAppearanceSection({
           key={`theme-catalog-${preferredThemeTarget ?? 'manual'}`}
           settings={settings}
           systemPrefersDark={systemPrefersDark}
-          themeSearch={themeSearch}
-          setThemeSearch={setThemeSearch}
           updateSettings={updateSettings}
           previewFontFamily={previewFontFamily}
           importedHighlightSignal={warpThemes.importSignal}
@@ -291,6 +289,10 @@ export function TerminalAppearanceSection({
           preferredTarget={preferredThemeTarget}
           renderAdvancedContent={renderPreviewAdvancedContent}
         />
+      ) : null}
+
+      {showDesktopThemeImports ? (
+        <ClaudeCodeThemeSyncSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showDesktopThemeImports ? (

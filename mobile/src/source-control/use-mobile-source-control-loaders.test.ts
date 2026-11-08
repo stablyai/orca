@@ -111,6 +111,7 @@ async function settleCompare(calls: PendingCall[], baseRef: string): Promise<voi
   }
   const [call] = calls.splice(index, 1)
   await act(async () => call.settle(compareReply(baseRef)))
+  await settleQueryNotifications()
 }
 
 async function failCompare(calls: PendingCall[]): Promise<void> {
@@ -224,7 +225,7 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     expect(read.loaders?.branchCompareState).toEqual({ kind: 'idle' })
   })
 
-  it('compares again after switching away and back while the status read is still fresh', async () => {
+  it('shows the compare again at once after switching away and back while the status read is still fresh', async () => {
     const calls: PendingCall[] = []
     const read: { loaders: Loaders | null } = { loaders: null }
     const rerender = await mount(fakeClient(calls), read)
@@ -237,10 +238,6 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     // The other worktree's status never lands, so nothing compares in between.
     await rerender('host-1:repo42::/other', 'repo42::/other')
     await rerender(IDENTITY, WORKTREE)
-    expect(pendingCount(calls, 'worktree.show')).toBe(1)
-
-    await settleBaseRefLookup(calls, 'origin/dev')
-    await settleCompare(calls, 'origin/dev')
     expect(read.loaders?.branchCompareState.kind).toBe('ready')
   })
 

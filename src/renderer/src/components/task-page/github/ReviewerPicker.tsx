@@ -1,7 +1,7 @@
 import type { Dispatch, RefCallback, SetStateAction } from 'react'
 import { Check } from 'lucide-react'
 
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { Input } from '@/components/ui/input'
 import { PopoverContent } from '@/components/ui/popover'
@@ -55,6 +55,7 @@ export function TaskPageGitHubReviewerPicker({
   submitting,
   suggestedReviewerRows
 }: ReviewerPickerProps): React.JSX.Element {
+  const t = useTranslate()
   const renderReviewerPickerRow = (
     reviewer: GitHubAssignableUser,
     options: {
@@ -97,10 +98,7 @@ export function TaskPageGitHubReviewerPicker({
           </span>
           {options.suggested ? (
             <span className="block truncate text-[12px] leading-4 text-muted-foreground">
-              {translate(
-                'auto.components.TaskPage.5d4fd69a6a',
-                'Recently active in this pull request'
-              )}
+              {t('auto.components.TaskPage.5d4fd69a6a', 'Recently active in this pull request')}
             </span>
           ) : null}
         </span>
@@ -125,7 +123,7 @@ export function TaskPageGitHubReviewerPicker({
     >
       <div className="border-b border-border/70 px-3 py-2">
         <div className="text-[13px] font-semibold text-foreground">
-          {translate('auto.components.TaskPage.62c7bd789f', 'Request up to 15 reviewers')}
+          {t('auto.components.TaskPage.62c7bd789f', 'Request up to 15 reviewers')}
         </div>
       </div>
       <div className="border-b border-border/70 p-3">
@@ -133,10 +131,10 @@ export function TaskPageGitHubReviewerPicker({
           ref={setReviewerInputNode}
           value={reviewerInput}
           onChange={(event) => setReviewerInput(event.target.value)}
-          placeholder={translate('auto.components.TaskPage.0b9b04f4b5', 'Type or choose a user')}
+          placeholder={t('auto.components.TaskPage.0b9b04f4b5', 'Type or choose a user')}
           disabled={!repo || submitting}
           className="h-8 rounded-md bg-background px-2 text-[13px]"
-          aria-label={translate('auto.components.TaskPage.0b9b04f4b5', 'Type or choose a user')}
+          aria-label={t('auto.components.TaskPage.0b9b04f4b5', 'Type or choose a user')}
           aria-autocomplete="list"
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown' && actionableReviewerRows.length > 0) {
@@ -172,14 +170,14 @@ export function TaskPageGitHubReviewerPicker({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         {reviewerMetadataLoading ? (
           <div className="px-3 py-2 text-[13px] text-muted-foreground">
-            {translate('auto.components.TaskPage.0eacf48491', 'Loading…')}
+            {t('auto.components.TaskPage.0eacf48491', 'Loading…')}
           </div>
         ) : filteredReviewerCandidates.length > 0 ? (
           <>
             {suggestedReviewerRows.length > 0 ? (
               <>
                 <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-                  {translate('auto.components.TaskPage.3ace2e6bcf', 'Suggestions')}
+                  {t('auto.components.TaskPage.3ace2e6bcf', 'Suggestions')}
                 </div>
                 {suggestedReviewerRows.map((reviewer, index) =>
                   renderReviewerPickerRow(reviewer, {
@@ -190,7 +188,7 @@ export function TaskPageGitHubReviewerPicker({
               </>
             ) : null}
             <div className="border-b border-border/70 bg-muted/50 px-3 py-1.5 text-[12px] font-semibold text-foreground">
-              {translate('auto.components.TaskPage.67755a83a1', 'Everyone else')}
+              {t('auto.components.TaskPage.67755a83a1', 'Everyone else')}
             </div>
             {everyoneElseReviewerRows.length > 0 ? (
               everyoneElseReviewerRows.map((reviewer, index) =>
@@ -201,7 +199,7 @@ export function TaskPageGitHubReviewerPicker({
               )
             ) : (
               <div className="px-3 py-2 text-[13px] text-muted-foreground">
-                {translate('auto.components.TaskPage.8a22eb3f7b', 'No matching reviewers.')}
+                {t('auto.components.TaskPage.8a22eb3f7b', 'No matching reviewers.')}
               </div>
             )}
           </>
@@ -209,8 +207,8 @@ export function TaskPageGitHubReviewerPicker({
           <div className="px-3 py-2 text-[13px] text-muted-foreground">
             {reviewerMetadataError ??
               (hasReviewerMetadata
-                ? translate('auto.components.TaskPage.8a22eb3f7b', 'No matching reviewers.')
-                : translate(
+                ? t('auto.components.TaskPage.8a22eb3f7b', 'No matching reviewers.')
+                : t(
                     'auto.components.TaskPage.9e03c17847',
                     'Open the PR details to view current reviewers.'
                   ))}

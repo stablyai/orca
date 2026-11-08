@@ -11,7 +11,11 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { nativeChatRowRendersContent } from '../../../shared/native-chat/transcript/native-chat-row-content'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import { projectStructuredAgentSessionMessages } from '../../../shared/agent-session/view/structured-agent-session-message-projection'
-import { usableJournalHistoryOrigin } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
+import {
+  nativeCopyCoverage,
+  journalImportTime,
+  usableJournalHistoryOrigin
+} from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput
@@ -57,7 +61,7 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
     timeoutMs: input.timeoutMs ?? 30_000,
     ...(input.logger ? { logger: input.logger } : {}),
     readView: (history) => journalView(input, history, candidates),
-    sameView: (a, b) => a.token === b.token,
+    sameView: (a, b) => a.token === b.token && a.origin === b.origin,
     prepare: async ({ journal, view, check, yieldTurn }) => {
       // Derive source keys once without saved facts, then capture before any saved read or yield.
       candidates = acpHistoryTurns(input.frames, input.identity, check)
@@ -73,7 +77,8 @@ export async function catchUpAcpHistory(input: AcpHistoryCatchUpInput): Promise<
         candidates,
         baseline.importedAt,
         baseline.requests,
-        check
+        check,
+        baseline.covered
       )
       const batch = createHistoryCatchUpBatch()
       // The rows written name the import, so a later open's additions settle under their own id.
@@ -284,14 +289,14 @@ function journalView(
   // Aliases are rejected; their target bodies cannot establish exact provider coverage.
   const requests = new Set(eligible.map((send) => `prompt:${send.clientMessageId}`))
   const origin = usableJournalHistoryOrigin(history.historyOrigin())
-  const handle = origin?.providerHandle
-  const importedAt =
-    origin &&
-    handle?.kind === 'opaque' &&
-    handle.agent === scope.agent &&
-    handle.value === scope.providerSessionId
-      ? origin.importedAt
-      : null
+  const handle = { kind: 'opaque' as const, agent: scope.agent, value: scope.providerSessionId }
+  const importedAt = journalImportTime(history.historyOrigin(), handle)
+  const covered = nativeCopyCoverage(
+    history.historyOrigin(),
+    scope.agent,
+    'acp-user-message',
+    handle
+  )
   const token = JSON.stringify([
     history.epoch,
     [...items.values()].map((item) => [item.itemId, item.revision]),
@@ -300,5 +305,5 @@ function journalView(
     importedAt,
     retained
   ])
-  return { items, canonical, requests, importedAt, retained, token }
+  return { items, canonical, requests, importedAt, covered, origin, retained, token }
 }

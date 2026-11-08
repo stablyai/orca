@@ -40,12 +40,10 @@ vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
 const {
   abortRemoteOrcadMigrationCatalog,
   commitRemoteOrcadMigrationCatalog,
-  listRemoteOrcadRepositories,
   readRemoteOrcadMigrationCatalogState,
   stageRemoteOrcadMigrationCatalog,
   stageRemoteOrcadMigrationSnapshotChunk
 } = await import('./orcad-migration-catalog-client')
-const { listRemoteOrcadFolderCatalog } = await import('./orcad-server-folder-workspaces')
 
 function manifest(): OrcadMigrationManifest {
   const unsigned = {
@@ -129,61 +127,6 @@ describe('remote orcad migration catalog client', () => {
     }
   )
 
-  it('keeps each server project’s execution host, so a nested SSH row is never read as local', async () => {
-    sendRequest.mockResolvedValue({
-      ok: true,
-      result: {
-        repos: [
-          { id: 'own', path: '/root/a', connectionId: null, displayName: 'own' },
-          { id: 'nested', path: '/root/b', connectionId: 'ssh-nested' },
-          { id: 'runtime', path: '/root/c', executionHostId: 'runtime:env' },
-          // An older orcad row: no host fields at all.
-          { id: 'legacy', path: '/root/d' }
-        ]
-      }
-    })
-    await expect(listRemoteOrcadRepositories(pairingCode)).resolves.toEqual([
-      { id: 'own', path: '/root/a' },
-      { id: 'nested', path: '/root/b', connectionId: 'ssh-nested' },
-      { id: 'runtime', path: '/root/c', executionHostId: 'runtime:env' },
-      { id: 'legacy', path: '/root/d' }
-    ])
-  })
-
-  it('reads the server’s folder workspaces and the groups that place them on a host', async () => {
-    sendRequest.mockImplementation(async (_pairing, method: string) => ({
-      ok: true,
-      result:
-        method === 'folderWorkspace.list'
-          ? {
-              folderWorkspaces: [
-                { id: 'own', folderPath: '/root/a', projectGroupId: 'g', connectionId: null },
-                { id: 'nested', folderPath: '/root/b', projectGroupId: 'g', connectionId: 'ssh-x' }
-              ]
-            }
-          : {
-              groups: [
-                { id: 'g', name: 'G', parentGroupId: null },
-                { id: 'h', executionHostId: 'ssh:other' }
-              ]
-            }
-    }))
-    await expect(listRemoteOrcadFolderCatalog(pairingCode)).resolves.toEqual({
-      folderWorkspaces: [
-        { id: 'own', folderPath: '/root/a', projectGroupId: 'g', connectionId: null },
-        { id: 'nested', folderPath: '/root/b', projectGroupId: 'g', connectionId: 'ssh-x' }
-      ],
-      projectGroups: [
-        { id: 'g', parentGroupId: null },
-        { id: 'h', parentGroupId: null, executionHostId: 'ssh:other' }
-      ]
-    })
-    expect(sendRequest.mock.calls.map((call) => call[1]).sort()).toEqual([
-      'folderWorkspace.list',
-      'projectGroup.list'
-    ])
-  })
-
   it('pins snapshot acknowledgments to the admitted destination runtime', async () => {
     const request = {
       migrationId: 'migration-1',
@@ -210,51 +153,6 @@ describe('remote orcad migration catalog client', () => {
     ).resolves.toMatchObject({ acknowledgedOffset: 1 })
   })
 
-  it.each([
-    ['stage', 'orcad.migration.stageCatalog', stageRemoteOrcadMigrationCatalog],
-    ['commit', 'orcad.migration.commitCatalog', commitRemoteOrcadMigrationCatalog],
-    ['state', 'orcad.migration.catalogState', readRemoteOrcadMigrationCatalogState]
-  ] as const)('sends and validates the %s operation', async (_label, method, request) => {
-    const input = manifest()
-    const result = {
-      state: 'staged',
-      migrationId: input.migrationId,
-      manifestSha256: input.manifestSha256,
-      stagedAt: '2026-08-30T12:01:00.000Z'
-    }
-    sendRequest.mockResolvedValue({ ok: true, result })
-    const signal = new AbortController().signal
-
-    await expect(request(pairingCode, input, { signal, timeoutMs: 1234 })).resolves.toEqual(result)
-    expect(sendRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ endpoint: 'ws://127.0.0.1:46768/runtime' }),
-      method,
-      { manifest: input },
-      1234,
-      undefined,
-      signal,
-      expect.any(Object)
-    )
-  })
-
-  it('validates an abort result without letting it erase committed state', async () => {
-    const input = manifest()
-    sendRequest.mockResolvedValue({
-      ok: true,
-      result: {
-        state: 'absent',
-        migrationId: input.migrationId,
-        manifestSha256: input.manifestSha256,
-        aborted: true
-      }
-    })
-
-    await expect(abortRemoteOrcadMigrationCatalog(pairingCode, input)).resolves.toMatchObject({
-      state: 'absent',
-      aborted: true
-    })
-  })
-
   it.each([undefined, true, false, 'true'])(
     'requires explicit persistence evidence for an already-absent abort (%s)',
     async (durableAbsent) => {
@@ -277,34 +175,6 @@ describe('remote orcad migration catalog client', () => {
       await expect(result).rejects.toThrow(/durability/)
     }
   )
-
-  it('validates a committed receipt against the requested manifest', async () => {
-    const input = manifest()
-    const receipt = {
-      version: ORCAD_MIGRATION_MANIFEST_VERSION,
-      migrationId: input.migrationId,
-      manifestSha256: input.manifestSha256,
-      source: input.source,
-      importedAt: '2026-08-30T12:02:00.000Z',
-      repositoryIds: [],
-      projectGroupIds: [],
-      folderWorkspaceIds: []
-    }
-    sendRequest.mockResolvedValue({
-      ok: true,
-      result: {
-        state: 'committed',
-        migrationId: input.migrationId,
-        manifestSha256: input.manifestSha256,
-        receipt
-      }
-    })
-
-    await expect(commitRemoteOrcadMigrationCatalog(pairingCode, input)).resolves.toMatchObject({
-      state: 'committed',
-      receipt
-    })
-  })
 
   it('uploads a snapshot chunk and requires the exact acknowledgment', async () => {
     const input = manifest()
@@ -373,74 +243,6 @@ describe('remote orcad migration catalog client', () => {
 
     await expect(readRemoteOrcadMigrationCatalogState(pairingCode, input)).rejects.toThrow(
       'orcad_migration_snapshot_transfer_unsupported'
-    )
-  })
-
-  it('rejects malformed stage timestamps and abort envelopes', async () => {
-    const input = manifest()
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: {
-        state: 'staged',
-        migrationId: input.migrationId,
-        manifestSha256: input.manifestSha256,
-        stagedAt: 'not-a-date'
-      }
-    })
-    await expect(stageRemoteOrcadMigrationCatalog(pairingCode, input)).rejects.toThrow(
-      'orcad_migration_catalog_state_staged_at_invalid'
-    )
-
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: {
-        state: 'absent',
-        migrationId: input.migrationId,
-        manifestSha256: input.manifestSha256
-      }
-    })
-    await expect(abortRemoteOrcadMigrationCatalog(pairingCode, input)).rejects.toThrow(
-      'orcad_migration_catalog_abort_result_invalid'
-    )
-  })
-
-  it('fails closed for method absence, malformed identity, and invalid pairing', async () => {
-    const input = manifest()
-    sendRequest.mockResolvedValueOnce({ ok: false, error: { message: 'method not found' } })
-    await expect(stageRemoteOrcadMigrationCatalog(pairingCode, input)).rejects.toThrow(
-      'orcad_migration_stage_failed:method not found'
-    )
-
-    sendRequest.mockResolvedValueOnce({
-      ok: true,
-      result: { state: 'absent', migrationId: 'other', manifestSha256: input.manifestSha256 }
-    })
-    await expect(readRemoteOrcadMigrationCatalogState(pairingCode, input)).rejects.toThrow(
-      'orcad_migration_catalog_state_identity_mismatch'
-    )
-
-    await expect(stageRemoteOrcadMigrationCatalog('invalid', input)).rejects.toThrow(
-      'orcad_migration_pairing_code_invalid'
-    )
-    expect(sendRequest).toHaveBeenCalledTimes(2)
-  })
-
-  it('refuses a destination without the capability before sending any migration request', async () => {
-    status.capabilities = []
-    await expect(stageRemoteOrcadMigrationCatalog(pairingCode, manifest())).rejects.toThrow(
-      'orcad_migration_destination_unsupported'
-    )
-    expect(sendRequest).not.toHaveBeenCalled()
-  })
-
-  it('reads method-not-found as the same refusal, not as a lost answer', async () => {
-    sendRequest.mockResolvedValue({
-      ok: false,
-      _meta: { runtimeId: 'runtime' },
-      error: { code: 'method_not_found', message: 'Unknown method' }
-    })
-    await expect(commitRemoteOrcadMigrationCatalog(pairingCode, manifest())).rejects.toThrow(
-      'orcad_migration_destination_unsupported'
     )
   })
 

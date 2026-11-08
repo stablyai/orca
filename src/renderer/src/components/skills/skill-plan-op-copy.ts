@@ -16,16 +16,20 @@ import {
 } from '../../../../shared/bundled-skill-summary'
 import { SKILL_INSTALL_PROVIDERS } from '../../../../shared/skill-install-providers'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
-export function updatedSkillsLabel(summary: BundledSkillResultSummary): string {
+export function updatedSkillsLabel(
+  summary: BundledSkillResultSummary,
+  t: Translate = translate
+): string {
   const { changedCount, leftAloneCount } = summary
-  const updated = translate(
+  const updated = t(
     'auto.components.skills.SkillFreshnessUpdateDialog.updated',
     'Updated {{count}} skills',
     { count: changedCount, defaultValue_one: 'Updated {{count}} skill' }
   )
   return leftAloneCount > 0
-    ? translate(
+    ? t(
         'auto.components.skills.SkillFreshnessUpdateDialog.updatedSkipped',
         '{{value0}} · {{value1}} skipped',
         { value0: updated, value1: leftAloneCount }
@@ -33,47 +37,41 @@ export function updatedSkillsLabel(summary: BundledSkillResultSummary): string {
     : updated
 }
 
-export function leaveReasonText(reason: string | null | undefined): string {
+export function leaveReasonText(
+  reason: string | null | undefined,
+  t: Translate = translate
+): string {
   if (!reason || !isBundledSkillLeaveReason(reason)) {
-    return translate(
-      'auto.components.skills.skillPlanOpCopy.leftAsIs',
-      'This copy was kept as it is'
-    )
+    return t('auto.components.skills.skillPlanOpCopy.leftAsIs', 'This copy was kept as it is')
   }
   switch (reason) {
     case 'edited':
-      return translate('auto.components.skills.skillPlanOpCopy.edited', 'Skill edited outside Orca')
+      return t('auto.components.skills.skillPlanOpCopy.edited', 'Skill edited outside Orca')
     case 'other':
-      return translate(
-        'auto.components.skills.skillPlanOpCopy.other',
-        'A different skill uses this name'
-      )
+      return t('auto.components.skills.skillPlanOpCopy.other', 'A different skill uses this name')
     case 'unwritable':
-      return translate(
+      return t(
         'auto.components.skills.skillPlanOpCopy.unwritable',
         "Orca can't write to this folder"
       )
     case 'unreadable':
-      return translate(
-        'auto.components.skills.skillPlanOpCopy.unreadable',
-        "Orca can't read every file"
-      )
+      return t('auto.components.skills.skillPlanOpCopy.unreadable', "Orca can't read every file")
     case 'busy':
-      return translate(
-        'auto.components.skills.skillPlanOpCopy.busy',
-        'Another install is still running'
-      )
+      return t('auto.components.skills.skillPlanOpCopy.busy', 'Another install is still running')
     case 'shared-not-current':
-      return translate(
+      return t(
         'auto.components.skills.skillPlanOpCopy.sharedNotCurrent',
         "The shared copy isn't Orca's"
       )
   }
 }
 
-export function locationPlaceLabel(location: BundledSkillLocation): string {
+export function locationPlaceLabel(
+  location: BundledSkillLocation,
+  t: Translate = translate
+): string {
   if (location.place.kind === 'shared') {
-    return translate('auto.components.skills.skillPlanOpCopy.sharedFolder', 'Shared folder')
+    return t('auto.components.skills.skillPlanOpCopy.sharedFolder', 'Shared folder')
   }
   return location.place.names.join(', ') || location.displayPath
 }
@@ -103,42 +101,42 @@ export function locationStateText(location: BundledSkillLocation): string {
 }
 
 /** The skill row's line before Update runs; null when only its locations need saying. */
-export function skillPlanHeadline(state: BundledSkillPlanState): string | null {
+export function skillPlanHeadline(
+  state: BundledSkillPlanState,
+  t: Translate = translate
+): string | null {
   switch (state) {
     case 'update':
-      return translate('auto.components.skills.skillPlanOpCopy.updateAvailable', 'Update available')
+      return t('auto.components.skills.skillPlanOpCopy.updateAvailable', 'Update available')
     case 'repair':
-      return translate('auto.components.skills.skillPlanOpCopy.repairAvailable', 'Repair available')
+      return t('auto.components.skills.skillPlanOpCopy.repairAvailable', 'Repair available')
     case 'install':
-      return translate(
-        'auto.components.skills.skillPlanOpCopy.installAvailable',
-        'Install available'
-      )
+      return t('auto.components.skills.skillPlanOpCopy.installAvailable', 'Install available')
     case 'attention':
     case 'current':
       return null
   }
 }
 
-export function skillOutcomeText(outcome: BundledSkillOutcome): string {
+export function skillOutcomeText(outcome: BundledSkillOutcome, t: Translate = translate): string {
   const text = bundledSkillOutcomeText(outcome)
   switch (text) {
     case 'Updated':
       if (outcome.ops.some((op) => op.kind === 'replace' && op.status === 'done')) {
-        return translate(
+        return t(
           'auto.components.skills.skillPlanOpCopy.replacedWithBackup',
           'Replaced · Your copy was saved as a backup'
         )
       }
-      return translate('auto.components.skills.skillPlanOpCopy.updated', 'Updated')
+      return t('auto.components.skills.skillPlanOpCopy.updated', 'Updated')
     case 'Installed':
-      return translate('auto.components.skills.skillPlanOpCopy.installed', 'Installed')
+      return t('auto.components.skills.skillPlanOpCopy.installed', 'Installed')
     case 'Linked':
-      return translate('auto.components.skills.skillPlanOpCopy.linked', 'Linked')
+      return t('auto.components.skills.skillPlanOpCopy.linked', 'Linked')
     case 'No change':
-      return translate('auto.components.skills.skillPlanOpCopy.keep', 'No change')
+      return t('auto.components.skills.skillPlanOpCopy.keep', 'No change')
     case 'Needs attention':
-      return translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
+      return t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
   }
 }
 
@@ -149,18 +147,18 @@ export function agentNames(agents: readonly string[]): string {
     .join(', ')
 }
 
-export function installForAgentsLabel(agents: readonly string[]): string {
+export function installForAgentsLabel(agents: readonly string[], t: Translate = translate): string {
   const names = agentNames(agents)
   if (!names) {
-    return translate('auto.components.skills.skillPlanOpCopy.install', 'Install')
+    return t('auto.components.skills.skillPlanOpCopy.install', 'Install')
   }
-  return translate('auto.components.skills.skillPlanOpCopy.installFor', 'Install for {{value0}}', {
+  return t('auto.components.skills.skillPlanOpCopy.installFor', 'Install for {{value0}}', {
     value0: names
   })
 }
 
 /** The Update button's label: an update when any skill needs one, else the agents it links. */
-export function updateActionLabel(plan: BundledSkillPlan): string {
+export function updateActionLabel(plan: BundledSkillPlan, t: Translate = translate): string {
   const summary = summarizeBundledSkillPlan(plan)
   const updates = summary.skills.filter(
     (skill) => skill.state === 'update' || skill.state === 'repair'
@@ -168,10 +166,10 @@ export function updateActionLabel(plan: BundledSkillPlan): string {
   if (updates === 0) {
     const agents = bundledSkillInstallAgents(plan.skills)
     return agents.length > 0
-      ? installForAgentsLabel(agents)
-      : translate('auto.components.skills.SkillFreshnessUpdateDialog.title', 'Update skills')
+      ? installForAgentsLabel(agents, t)
+      : t('auto.components.skills.SkillFreshnessUpdateDialog.title', 'Update skills')
   }
-  return translate(
+  return t(
     'auto.components.skills.SkillFreshnessUpdateDialog.updateAction',
     'Update {{count}} skills',
     { count: updates, defaultValue_one: 'Update {{count}} skill' }

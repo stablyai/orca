@@ -4,7 +4,8 @@ import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/del
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
-import { MobileDesktopRelay, type RelayedPhone } from './mobile-desktop-relay'
+import { MobileDesktopRelay } from './mobile-desktop-relay'
+import type { RelayedPhone } from './mobile-desktop-relay-link'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
 type FakeSocket = {
