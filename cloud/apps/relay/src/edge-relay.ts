@@ -4,6 +4,7 @@ import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contra
 import type { RelayAssignment } from './assignment/assignment-store.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell-admission-selector.js'
 import type { RelayDatabase, SqlRow } from './database.js'
+import { fenceEdge } from './edge-relay-fence.js'
 import { z } from 'zod'
 import {
   EDGE_ADMIN_LOCKED_TIMEOUT_MS,
@@ -411,27 +412,13 @@ export class EdgeAssignments {
   }
 
   // After the host left: tell the edge where it went, so its phones get WRONG_CELL (re-resolve)
-  // rather than HOST_OFFLINE. Best effort; until it lands the edge's freeze does the same, and after
-  // that its phones see HOST_OFFLINE until the next move. Anything but applied/unchanged fails:
-  // unavailable, `conflict`, or `stale` (the edge holds a newer epoch, so it still claims the host).
+  // rather than HOST_OFFLINE. Until it lands the edge's freeze does the same; one that does not land
+  // is recorded for the evacuation sweep to retry (edge-relay-fence.ts).
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
     if (!this.admin) return true
     // An edge whose exports are failing gets one try, so a skipped export is not slowed further.
     const attempts = this.exportFailingSince === undefined ? 3 : 1
-    let outcome = 'unavailable'
-    for (let attempt = 0; attempt < attempts; attempt += 1) {
-      try {
-        outcome = (await this.admin.assign({ ...identity, cellId, assignmentEpoch })).outcome
-      } catch (error) {
-        if (!(error instanceof EdgeAdminUnavailableError)) throw error
-        outcome = error.message
-      }
-      if (outcome === 'applied' || outcome === 'unchanged') return true
-      // The same epoch stays stale; only a later move (a newer epoch) can land.
-      if (outcome === 'stale') break
-    }
-    console.error(JSON.stringify({ event: 'orca_relay_edge_fence_failed', outcome, cellId, assignmentEpoch }))
-    return false
+    return await fenceEdge(this.database, this.admin, { ...identity, cellId, assignmentEpoch }, attempts, this.now())
   }
 
   private answer(identity: Identity, assignmentEpoch: number, leaseExpiresAt: number): RelayAssignment {

@@ -1,11 +1,13 @@
 // Evacuation sweep: a desktop connected to the relay edge only asks the director again when its
 // lease ends, so a host that left the edge cohort would stay there for hours. The sweep finds edge
 // rows whose host is no longer in the cohort and asks the edge to drain them; the desktop then
-// re-asks /v1/assign, and that ask exports its data and places it on a cell (app.ts).
+// re-asks /v1/assign, and that ask exports its data and places it on a cell (app.ts). Each pass also
+// retries fences that did not land after a host left (edge-relay-fence.ts).
 import { RELAY_DEFAULT_REGION, RelayRegionSchema } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayDatabase, SqlRow } from './database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
 import { inEdgeCohort, type EdgeRelayConfig } from './edge-relay.js'
+import { retryPendingFences } from './edge-relay-fence.js'
 
 type Identity = { userId: string; relayHostId: string }
 
@@ -81,6 +83,8 @@ export class EdgeEvacuation {
         console.warn(JSON.stringify({ event: 'orca_relay_edge_drain_failed', reason: error.message }))
       }
     }
+    // Pending fences keep the busy cadence, so their backoff (from 60 s) is honoured.
+    if (await retryPendingFences(this.database, this.admin, this.edgeCellId, this.now)) { this.busy = true }
     return answered
   }
 

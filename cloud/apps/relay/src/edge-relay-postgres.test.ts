@@ -10,6 +10,7 @@ import {
   EdgeMoveDeferredError
 } from './edge-relay.js'
 import type { EdgeAssignBody, EdgeDeviceRow } from './edge-admin-client.js'
+import { EDGE_FENCE_RETRY_BASE_MS, retryPendingFences } from './edge-relay-fence.js'
 
 const databaseUrl = process.env.ORCA_RELAY_TEST_POSTGRES_URL
 const describePostgres = databaseUrl ? describe : describe.skip
@@ -35,6 +36,7 @@ describePostgres('relay edge on PostgreSQL', () => {
     await database.query(`DELETE FROM relay_assignment_activity_leases WHERE user_id = ?`, ['edge-pg-user'])
     await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, ['edge-pg-user'])
     await database.query(`DELETE FROM relay_devices WHERE user_id = ?`, ['edge-pg-user'])
+    await database.query(`DELETE FROM relay_edge_fence_pending WHERE user_id = ?`, ['edge-pg-user'])
     // Leave the shared selector as other files expect it: without this file's cells.
     await database.transaction(async (transaction) => {
       const selector = (
@@ -197,5 +199,41 @@ describePostgres('relay edge on PostgreSQL', () => {
     release()
     await Promise.all(held)
     expect((await edge.moveToEdge(last, 0)).cellId).toBe(EDGE_CELL_ID)
+  })
+
+  it('records a failed fence and lets exactly one director retry it to the current row', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const host = { userId: 'edge-pg-user', relayHostId: 'edgepgfence00001' }
+    const sent: EdgeAssignBody[] = []
+    const admin = {
+      assign: async (body: EdgeAssignBody) => {
+        sent.push(body)
+        return { outcome: sent.length === 1 ? ('stale' as const) : ('applied' as const), assignmentEpoch: 30 }
+      },
+      exportHost: async () => ({ outcome: 'busy' as const }),
+      drain: async () => ({ outcome: 'idle' as const })
+    }
+    const clock = { now: 1_700_000_000_000 }
+    const edge = new EdgeAssignments(database, edgeConfig, () => clock.now, admin)
+    await database.query(
+      `INSERT INTO relay_assignments
+       (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at, last_activity_at,
+        reserved_controls, reserved_splices, reserved_invites, pending_installs,
+        pending_confirmations, migration_leases)
+       VALUES (?, ?, ?, 31, 0, 0, 0, 0, 0, 0, 0, 0)`,
+      [host.userId, host.relayHostId, cell.id]
+    )
+    expect(await edge.fenceAway(host, cell.id, 29)).toBe(false)
+    clock.now += EDGE_FENCE_RETRY_BASE_MS
+    const results = await Promise.all([
+      retryPendingFences(database, admin, EDGE_CELL_ID, () => clock.now),
+      retryPendingFences(second, admin, EDGE_CELL_ID, () => clock.now)
+    ])
+    // The winner saw nothing left; the loser may still have seen the claimed record.
+    expect(results).toContain(false)
+    expect(sent.slice(1)).toEqual([{ ...host, cellId: cell.id, assignmentEpoch: 31 }])
+    expect(await database.query(`SELECT 1 FROM relay_edge_fence_pending WHERE user_id = ?`, [host.userId])).toEqual([])
+    vi.restoreAllMocks()
   })
 })

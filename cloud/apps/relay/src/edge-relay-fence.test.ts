@@ -11,6 +11,8 @@ import {
   type EdgeAssignBody,
   type EdgeAssignResult
 } from './edge-admin-client.js'
+import { EDGE_EVACUATION_BUSY_INTERVAL_MS, EdgeEvacuation } from './edge-relay-evacuation.js'
+import { EDGE_FENCE_MAX_ATTEMPTS, EDGE_FENCE_RETRY_BASE_MS, edgeFenceRetryDelayMs, retryPendingFences } from './edge-relay-fence.js'
 import {
   EDGE_CELL_ID,
   EDGE_LOCKED_CALLS_MAX,
@@ -23,6 +25,7 @@ const EDGE_URL = 'https://edge.relay.example.test'
 const SIGNING_KEY = new TextEncoder().encode('edge-admin-key-with-at-least-32-bytes!!')
 const USER = 'user-1'
 const HOST = 'fencehost0000001'
+const T0 = 1_700_000_000_000
 
 const databases: RelayDatabase[] = []
 afterEach(async () => {
@@ -75,7 +78,7 @@ async function harness() {
   const database = await openInMemoryRelayDatabase()
   databases.push(database)
   const edge = new ScriptedEdge()
-  const clock = { now: 1_700_000_000_000 }
+  const clock = { now: T0 }
   const assignments = new EdgeAssignments(database, edgeConfig(), () => clock.now, edge)
   await assignments.ensureEdgeCell()
   const placeRow = async (cellId: string, epoch: number, relayHostId = HOST) =>
@@ -89,7 +92,16 @@ async function harness() {
          assignment_epoch = excluded.assignment_epoch`,
       [USER, relayHostId, cellId, epoch]
     )
-  return { database, edge, clock, assignments, placeRow }
+  const pending = async () =>
+    (await database.query(`SELECT * FROM relay_edge_fence_pending ORDER BY relay_host_id`)).map((row) => ({
+      relayHostId: String(row.relay_host_id),
+      cellId: String(row.cell_id),
+      assignmentEpoch: Number(row.assignment_epoch),
+      attempts: Number(row.attempts),
+      nextAttemptAt: Number(row.next_attempt_at)
+    }))
+  const retry = async () => await retryPendingFences(database, edge, EDGE_CELL_ID, () => clock.now)
+  return { database, edge, clock, assignments, placeRow, pending, retry }
 }
 
 function logged(spy: { mock: { calls: unknown[][] } }, event: string): Record<string, unknown>[] {
@@ -99,7 +111,7 @@ function logged(spy: { mock: { calls: unknown[][] } }, event: string): Record<st
 }
 
 describe('relay edge fence after a host leaves', () => {
-  it('treats a stale answer as a failed fence, logged with its outcome and not retried inline', async () => {
+  it('treats a stale answer as a failed fence: logged with its outcome, recorded, not retried inline', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const h = await harness()
     h.edge.answers = ['stale']
@@ -108,26 +120,158 @@ describe('relay edge fence after a host leaves', () => {
     expect(logged(error, 'orca_relay_edge_fence_failed')).toEqual([
       { event: 'orca_relay_edge_fence_failed', outcome: 'stale', cellId: 'us-c1', assignmentEpoch: 9 }
     ])
+    expect(await h.pending()).toEqual([
+      { relayHostId: HOST, cellId: 'us-c1', assignmentEpoch: 9, attempts: 0, nextAttemptAt: T0 + EDGE_FENCE_RETRY_BASE_MS }
+    ])
   })
 
-  it('retries conflict and unavailable inline, then logs the last outcome', async () => {
+  it('retries conflict and unavailable inline, then records the last outcome', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
     const h = await harness()
-    h.edge.answers = ['conflict', 'conflict', 'down']
+    h.edge.answers = ['conflict', 'down', 'conflict']
     expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)).toBe(false)
     expect(h.edge.calls).toHaveLength(3)
-    expect(logged(error, 'orca_relay_edge_fence_failed')[0]).toMatchObject({
-      outcome: 'relay_edge_admin_unavailable:network'
-    })
+    expect(logged(error, 'orca_relay_edge_fence_failed')[0]).toMatchObject({ outcome: 'conflict' })
+    expect(await h.pending()).toHaveLength(1)
   })
 
-  it('lands on applied or unchanged', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('records nothing when the fence lands, and a newer failure replaces an older record', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     const h = await harness()
     h.edge.answers = ['down', 'unchanged']
     expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)).toBe(true)
-    expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)).toBe(true)
-    expect(logged(error, 'orca_relay_edge_fence_failed')).toEqual([])
+    expect(await h.pending()).toEqual([])
+    h.edge.answers = ['down', 'down', 'down']
+    await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)
+    await h.database.query(`UPDATE relay_edge_fence_pending SET attempts = 3`)
+    h.clock.now += 5_000
+    h.edge.answers = ['stale']
+    await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c2', 12)
+    expect(await h.pending()).toEqual([
+      { relayHostId: HOST, cellId: 'us-c2', assignmentEpoch: 12, attempts: 0, nextAttemptAt: h.clock.now + EDGE_FENCE_RETRY_BASE_MS }
+    ])
+  })
+
+  it('still answers when the failure cannot be recorded', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const h = await harness()
+    await h.database.query(`DROP TABLE relay_edge_fence_pending`)
+    h.edge.answers = ['stale']
+    expect(await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)).toBe(false)
+    expect(logged(error, 'orca_relay_edge_fence_record_failed')).toHaveLength(1)
+  })
+})
+
+describe('relay edge pending fence retries', () => {
+  it('re-fences to the current row, not the recorded one, and clears the record once it lands', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const h = await harness()
+    h.edge.answers = ['stale']
+    await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)
+    // The host moved again before the retry.
+    await h.placeRow('us-c2', 11)
+    h.edge.calls = []
+    expect(await h.retry()).toBe(true)
+    expect(h.edge.calls).toEqual([])
+    h.clock.now += EDGE_FENCE_RETRY_BASE_MS
+    expect(await h.retry()).toBe(false)
+    expect(h.edge.calls).toEqual([{ body: { userId: USER, relayHostId: HOST, cellId: 'us-c2', assignmentEpoch: 11 } }])
+    expect(await h.pending()).toEqual([])
+    expect(logged(warn, 'orca_relay_edge_fence_retried')).toEqual([
+      { event: 'orca_relay_edge_fence_retried', outcome: 'applied', cellId: 'us-c2', assignmentEpoch: 11, attempts: 1 }
+    ])
+  })
+
+  it('drops the record without a call when the host is back on the edge or has no row', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const h = await harness()
+    h.edge.answers = ['stale', 'stale']
+    await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)
+    await h.assignments.fenceAway({ userId: USER, relayHostId: 'fencehost0000002' }, 'us-c1', 4)
+    await h.placeRow(EDGE_CELL_ID, 12)
+    h.edge.calls = []
+    h.clock.now += EDGE_FENCE_RETRY_BASE_MS
+    expect(await h.retry()).toBe(false)
+    expect(h.edge.calls).toEqual([])
+    expect(await h.pending()).toEqual([])
+  })
+
+  it('backs off on each failure, logging it, and gives up after the last attempt', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const h = await harness()
+    await h.placeRow('us-c1', 9)
+    h.edge.answers = ['stale']
+    await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)
+    h.clock.now += EDGE_FENCE_RETRY_BASE_MS
+    for (let attempt = 1; attempt < EDGE_FENCE_MAX_ATTEMPTS; attempt += 1) {
+      h.edge.answers = [attempt % 2 === 0 ? 'down' : 'conflict']
+      expect(await h.retry()).toBe(true)
+      expect(await h.pending()).toMatchObject([{ attempts: attempt, nextAttemptAt: h.clock.now + edgeFenceRetryDelayMs(attempt) }])
+      // Not due yet: nothing is sent.
+      h.clock.now += edgeFenceRetryDelayMs(attempt) - 1
+      const calls = h.edge.calls.length
+      await h.retry()
+      expect(h.edge.calls).toHaveLength(calls)
+      h.clock.now += 1
+    }
+    h.edge.answers = ['stale']
+    expect(await h.retry()).toBe(false)
+    expect(await h.pending()).toEqual([])
+    const failures = logged(error, 'orca_relay_edge_fence_failed').filter((entry) => entry.retry === true)
+    expect(failures).toHaveLength(EDGE_FENCE_MAX_ATTEMPTS)
+    expect(failures[1]).toEqual({
+      event: 'orca_relay_edge_fence_failed',
+      outcome: 'relay_edge_admin_unavailable:network',
+      cellId: 'us-c1',
+      assignmentEpoch: 9,
+      attempts: 2,
+      retry: true
+    })
+    expect(logged(error, 'orca_relay_edge_fence_abandoned')).toEqual([
+      { event: 'orca_relay_edge_fence_abandoned', attempts: EDGE_FENCE_MAX_ATTEMPTS }
+    ])
+    expect(edgeFenceRetryDelayMs(1)).toBe(60_000)
+    expect(edgeFenceRetryDelayMs(EDGE_FENCE_MAX_ATTEMPTS)).toBe(30 * 60_000)
+  })
+
+  it('lets only one director claim an attempt', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const h = await harness()
+    await h.placeRow('us-c1', 9)
+    h.edge.answers = ['stale']
+    await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)
+    h.clock.now += EDGE_FENCE_RETRY_BASE_MS
+    h.edge.calls = []
+    await Promise.all([h.retry(), h.retry()])
+    expect(h.edge.calls).toHaveLength(1)
+  })
+
+  it('runs from the evacuation sweep, which keeps its busy cadence while fences are pending', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const h = await harness()
+    await h.placeRow('us-c1', 9)
+    const config = { ...edgeConfig(), rolloutPercent: 0 }
+    const evacuation = new EdgeEvacuation(h.database, config, h.edge, EDGE_CELL_ID, () => h.clock.now, () => 0.5)
+    h.edge.answers = ['stale']
+    await h.assignments.fenceAway({ userId: USER, relayHostId: HOST }, 'us-c1', 9)
+    h.edge.calls = []
+    h.edge.answers = ['down']
+    const sweep = vi.spyOn(evacuation, 'sweep')
+    evacuation.start()
+    h.clock.now += EDGE_EVACUATION_BUSY_INTERVAL_MS
+    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_BUSY_INTERVAL_MS)
+    expect(h.edge.calls).toHaveLength(1)
+    // Still pending: the next pass comes after the busy interval, and lands.
+    h.clock.now += EDGE_EVACUATION_BUSY_INTERVAL_MS
+    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_BUSY_INTERVAL_MS)
+    expect(sweep).toHaveBeenCalledTimes(2)
+    expect(h.edge.calls).toHaveLength(2)
+    expect(await h.pending()).toEqual([])
+    evacuation.stop()
   })
 })
 
