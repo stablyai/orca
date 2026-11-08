@@ -52,6 +52,30 @@ function clientAnswering(answer: (method: string) => ReturnType<typeof okFixture
   return client
 }
 
+describe('a folder workspace whose host is unknown', () => {
+  const unresolvedHub = { id: 'folder:hub', path: '/tmp/hub', hostUnresolved: true as const }
+
+  it('refuses rather than skipping it when it is the innermost owner', () => {
+    for (const rows of [[unresolvedHub], [unresolvedHub, atHub]]) {
+      expect(() => select(rows, '/tmp/hub/notes')).toThrow(
+        expect.objectContaining({
+          code: 'selector_ambiguous',
+          message: expect.stringContaining("can't tell which host owns the folder workspace"),
+          data: expect.objectContaining({
+            nextSteps: expect.arrayContaining([
+              'Pass --worktree folder:hub to target the folder workspace itself.'
+            ])
+          })
+        })
+      )
+    }
+  })
+
+  it('does not block a deeper worktree inside it', () => {
+    expect(select([unresolvedHub, nested], '/tmp/hub/app/src')).toBe('id:repo::/tmp/hub/app')
+  })
+})
+
 describe('enclosing-workspace catalog', () => {
   it('derives folder hosts and keeps only folders that enclose cwd', async () => {
     const client = clientAnswering((method) =>
@@ -75,6 +99,23 @@ describe('enclosing-workspace catalog', () => {
       nested,
       { id: 'folder:hub', path: '/tmp/hub', hostId: 'local' },
       { id: 'folder:ssh-hub', path: '/tmp/hub', hostId: 'ssh:box' }
+    ])
+  })
+
+  it('keeps an enclosing folder whose host inputs are missing, marked unresolved', async () => {
+    const client = clientAnswering((method) => {
+      if (method === 'worktree.list') {
+        return okFixture('list', { worktrees: [] })
+      }
+      if (method === 'folderWorkspace.list') {
+        return okFixture('folders', {
+          folderWorkspaces: [{ id: 'hub', folderPath: '/tmp/hub', projectGroupId: 'group' }]
+        })
+      }
+      throw new RuntimeClientError('method_not_found', 'Unknown method')
+    })
+    expect(await readEnclosingWorkspaceCatalog(client, '/tmp/hub/notes')).toEqual([
+      { id: 'folder:hub', path: '/tmp/hub', hostUnresolved: true }
     ])
   })
 

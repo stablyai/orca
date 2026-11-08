@@ -388,6 +388,33 @@ describe('--environment local and workspace addresses', () => {
     expect(callMock).not.toHaveBeenCalledWith('browser.snapshot', expect.anything())
   })
 
+  it('refuses omitted and explicit current when the enclosing folder host is unknown', async () => {
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'worktree.list') {
+        return worktreeListFixture([])
+      }
+      if (method === 'folderWorkspace.list') {
+        return okFixture('folders', {
+          folderWorkspaces: [{ id: 'hub-a', folderPath: '/tmp/hub', projectGroupId: 'group' }]
+        })
+      }
+      if (method === 'projectGroup.list' || method === 'repo.list') {
+        throw new RuntimeClientError('method_not_found', 'Unknown method')
+      }
+      return okFixture('accepted', { marker: 'accepted' })
+    })
+    for (const args of [['snapshot'], ['worktree', 'current']]) {
+      const { exitCode, output } = await run([...args, '--json'], '/tmp/hub/notes')
+      expect(exitCode).toBe(1)
+      expect(JSON.parse(output).error.code).toBe('selector_ambiguous')
+      expect(output).toContain(
+        'Pass --worktree folder:hub-a to target the folder workspace itself.'
+      )
+    }
+    expect(callMock).not.toHaveBeenCalledWith('browser.snapshot', expect.anything())
+    expect(callMock).not.toHaveBeenCalledWith('worktree.show', expect.anything())
+  })
+
   it('quotes address values for the shell', async () => {
     const row = buildWorktree('/tmp/my repo', 'main')
     callMock.mockResolvedValue(okFixture('show', { worktree: { ...row, hostId: 'local' } }))

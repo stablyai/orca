@@ -17,10 +17,13 @@ import { readOrchestrationCompatibilityEvidence } from '../shared/orchestration-
 import type { RuntimeWorktreeListResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { refuseUnresolvedOwner } from './enclosing-workspace-catalog'
 
 export type CatalogRow = Pick<RuntimeWorktreeRecord, 'id' | 'path' | 'hostId'> & {
   identity?: { key: string }
   repoId?: string
+  /** A folder workspace whose owning host couldn't be derived; it may be the caller's, so it counts. */
+  hostUnresolved?: true
 }
 
 /** Group-level folder workspaces join the catalog keyed `folder:<id>`, beside repo-backed rows. */
@@ -65,7 +68,7 @@ function enclosingCandidatesOnHost<Row extends CatalogRow>(
   const currentPath = resolvePath(cwd)
   const candidates: { row: Row; comparisonPath: string }[] = []
   for (const row of catalog) {
-    if (!isOnCallerHost(row, hostId)) {
+    if (!row.hostUnresolved && !isOnCallerHost(row, hostId)) {
       continue
     }
     const rawPath = resolvePath(row.path)
@@ -120,6 +123,7 @@ function enclosingWorkspaceOwners(
   const candidates = enclosingCandidatesOnHost(catalog, cwd, hostId)
   const depth = Math.max(-1, ...candidates.map(({ comparisonPath }) => comparisonPath.length))
   const innermost = candidates.filter(({ comparisonPath }) => comparisonPath.length === depth)
+  refuseUnresolvedOwner(innermost.map(({ row }) => row))
   const callerIds = callerIdsOf(caller)
   const own = innermost.find(({ row }) => callerIds.includes(row.id))
   if (own) {
