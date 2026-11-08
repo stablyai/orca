@@ -10,13 +10,13 @@ import type { PtySpawnIpcArgs } from '../ipc/spawn-types'
 export function recordAgentStartTelemetry(
   telemetry: NonNullable<PtySpawnIpcArgs['telemetry']>,
   backend: 'pty' | 'structured' = 'pty'
-): void {
+): boolean {
   const agentKind = agentKindSchema.safeParse(telemetry.agent_kind)
   const launchSource = launchSourceSchema.safeParse(telemetry.launch_source)
   const requestKind = requestKindSchema.safeParse(telemetry.request_kind)
   if (agentKind.success && launchSource.success && requestKind.success) {
     try {
-      track('agent_started', {
+      return track('agent_started', {
         semantics_version: 2,
         backend,
         agent_kind: agentKind.data,
@@ -28,4 +28,5 @@ export function recordAgentStartTelemetry(
       // Telemetry must not turn a proved process start into a launch failure.
     }
   }
+  return false
 }

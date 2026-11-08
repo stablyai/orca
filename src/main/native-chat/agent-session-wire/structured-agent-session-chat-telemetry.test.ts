@@ -1,11 +1,11 @@
+import { eventually } from './host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { track } from '../../telemetry/client'
 import {
   createQueuedMessageTestRig,
-  eventually,
   type QueuedMessageTestRig
-} from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+} from './host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from './host/testing/structured-agent-session-host-test-data'
 import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))

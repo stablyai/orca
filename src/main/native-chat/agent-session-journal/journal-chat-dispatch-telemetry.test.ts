@@ -2,11 +2,11 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { track } from '../../telemetry/client'
-import { createFixture } from './journal-unsent-send-hold-contract-test-fixture'
+import { createFixture } from './queued-messages/journal-unsent-send-hold-contract-test-fixture'
 import type { AgentSessionJournal } from './journal-store'
 import type { AgentSessionChatAction } from '../../../shared/agent-session/journal/agent-session-chat-action'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { openTestJournalHostDatabase } from './journal-host-database-test-support'
+import { openTestJournalHostDatabase } from './store-lifecycle/journal-host-database-test-support'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 const fixture = createFixture()

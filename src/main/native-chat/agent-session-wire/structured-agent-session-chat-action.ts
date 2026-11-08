@@ -46,7 +46,7 @@ export function queuedStructuredChatAction(card: {
   body: AgentJournalMessageItem
   chatAction?: AgentSessionChatAction
 }): AgentSessionChatAction | undefined {
-  return card.chatAction === 'message'
+  return card.chatAction === 'message' || card.chatAction === 'command'
     ? structuredChatAction({ body: card.body, userSend: true })
     : card.chatAction
 }

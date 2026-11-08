@@ -1,12 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
-import { sendNativeChatMessage } from './native-chat-runtime-send'
-import { useNativeChatPtyComposerSend } from './use-native-chat-pty-composer-send'
-import { clearNativeChatComposerDraftsForTests } from './native-chat-composer-draft-store'
+import { emitNativeChatMessageSent } from './telemetry/native-chat-telemetry'
+import { sendNativeChatMessage } from './session/terminal/send/native-chat-runtime-send'
+import { useNativeChatPtyComposerSend } from './composer/submit/use-native-chat-pty-composer-send'
+import { clearNativeChatComposerDraftsForTests } from './drafts/native-chat-draft-reset'
 
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+vi.mock('./telemetry/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: vi.fn(),
   sendNativeChatTypedCommand: vi.fn(),

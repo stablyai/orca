@@ -1,7 +1,7 @@
 import {
   structuredChatAction,
   queuedStructuredChatAction
-} from './structured-agent-session-chat-action'
+} from '../structured-agent-session-chat-action'
 // Drafts owe no execution work; derive delivery gates under serialization before consuming one card per turn.
 
 import { randomUUID } from 'node:crypto'

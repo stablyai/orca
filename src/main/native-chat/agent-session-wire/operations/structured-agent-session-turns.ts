@@ -1,4 +1,4 @@
-import type { AgentSessionChatAction } from '../../../shared/agent-session/journal/agent-session-chat-action'
+import type { AgentSessionChatAction } from '../../../../shared/agent-session/journal/agent-session-chat-action'
 // Admission already passed; journal before adapter effects so a crash leaves recoverable unknown work.
 // Calling the adapter first could lose a turn it accepted.
 

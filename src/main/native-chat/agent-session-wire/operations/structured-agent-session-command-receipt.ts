@@ -1,3 +1,4 @@
+import type { AgentSessionReserveRequest } from '../../../runtime/agent-session/ownership/agent-session-reservation-admission'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
@@ -193,4 +194,30 @@ async function commitNoOpReceipt(
     )
     return false
   }
+}
+
+/** Founding and opening-message provenance must commit together. */
+export function openingMessageReceipt(
+  store: AgentSessionRecordStore,
+  request: AgentSessionReserveRequest,
+  clientMessageId: string
+): JournalOperationReceipt {
+  return composeJournalOperationReceipts(
+    store.founding.receipt(request),
+    buildCommandReceiptTransaction({ kind: 'global' }, (row) => {
+      if (row?.kind !== 'submission') {
+        throw new Error('opening message requires a submission receipt')
+      }
+      return {
+        operationId: clientMessageId,
+        sessionId: request.sessionId,
+        callerKey: request.operation.callerKey,
+        method: 'agentSession.create',
+        fingerprint: request.operation.fingerprint,
+        status: 'accepted',
+        acceptedAt: request.now,
+        result: { kind: 'journal-row', epoch: row.epoch, sequence: row.seq }
+      }
+    })
+  )
 }

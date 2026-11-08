@@ -2,10 +2,10 @@ import { renderHook } from '@testing-library/react'
 import { vi } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
-import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
-import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
-const ATTACHMENT = { id: 'a1', path: '/tmp/shot.png' } as NativeChatComposerImageAttachment
+import type { NativeChatStructuredComposerTransport } from './composer/submit/native-chat-structured-composer-transport'
+import type { NativeChatComposerImageAttachment } from './attachments/chips/native-chat-image-attachment'
+import { useNativeChatStructuredComposerSend } from './composer/submit/use-native-chat-structured-composer-send'
+const ATTACHMENT: NativeChatComposerImageAttachment = { id: 'a1', path: '/tmp/shot.png' }
 export function harness(
   agent: AgentType,
   threadGoal?: NativeChatStructuredComposerTransport['threadGoal'],

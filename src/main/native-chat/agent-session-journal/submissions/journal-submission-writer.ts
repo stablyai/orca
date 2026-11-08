@@ -1,4 +1,5 @@
-import { recordStructuredChatMessageDispatch } from '../../telemetry/structured-chat-dispatch'
+import { recordStructuredChatMessageDispatch } from '../../../telemetry/structured-chat-dispatch'
+import { journalInputCaller } from '../input-order/journal-input-provenance'
 import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
@@ -130,18 +131,22 @@ export class JournalSubmissionWriter {
 
   private dispatchTelemetryReceipt(input: ResolveDispatchInput): JournalOperationReceipt {
     let eligible = false
+    let readCaller: (() => string | undefined) | undefined
     return {
-      write: () => {
+      write: (db) => {
         const submission = this.deps.state().submissions.get(input.clientMessageId)
         eligible =
           !input.recovered &&
           submission?.chatAction === 'message' &&
           journalDispatchRowApplies(submission)
+        if (eligible && submission) {
+          readCaller = () => journalInputCaller(db, this.deps.identity.sessionId, submission)
+        }
       },
       committed: () => {
         const outcome = this.deps.state().submissions.get(input.clientMessageId)?.dispatchState
         if (eligible && (outcome === 'accepted' || outcome === 'rejected')) {
-          recordStructuredChatMessageDispatch(this.deps.identity, outcome)
+          recordStructuredChatMessageDispatch(this.deps.identity, outcome, readCaller)
         }
       }
     }

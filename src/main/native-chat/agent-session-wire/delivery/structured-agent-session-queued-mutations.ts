@@ -1,4 +1,4 @@
-import { queuedStructuredChatAction } from './structured-agent-session-chat-action'
+import { queuedStructuredChatAction } from '../structured-agent-session-chat-action'
 // Commit action receipts with effects so lost replies replay without ledger admission.
 // Published cards own rendered text; mutation answers carry none.
 

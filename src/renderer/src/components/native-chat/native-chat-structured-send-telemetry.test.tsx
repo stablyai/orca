@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
-import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
+import { emitNativeChatMessageSent } from './telemetry/native-chat-telemetry'
 import { harness } from './native-chat-structured-composer-send.test-fixture'
-import { clearNativeChatComposerDraftsForTests } from './native-chat-composer-draft-store'
-vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+import { clearNativeChatComposerDraftsForTests } from './drafts/native-chat-draft-reset'
+vi.mock('./telemetry/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
 afterEach(cleanup)
 it.each(['hello', '/compact', '/provider-command'])(
   'keeps %s admission distinct from provider delivery and emits once',

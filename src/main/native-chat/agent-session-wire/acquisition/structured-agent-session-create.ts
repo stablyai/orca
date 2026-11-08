@@ -1,3 +1,4 @@
+import { openingMessageReceipt } from '../operations/structured-agent-session-command-receipt'
 import { structuredChatAction } from '../structured-agent-session-chat-action'
 import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
@@ -214,7 +215,10 @@ async function foundConversation(
             persistedOptions: candidate.record.options,
             persistOptions: async () => {},
             publish: () => {},
-            operationReceipt: observedReceipt(store, store.founding.receipt(request)),
+            operationReceipt: observedReceipt(
+              store,
+              openingMessageReceipt(store, request, first.clientMessageId)
+            ),
             now: context.now
           },
           {
