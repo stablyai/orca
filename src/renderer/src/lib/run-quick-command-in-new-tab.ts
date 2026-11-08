@@ -1,13 +1,13 @@
 import { useAppStore } from '@/store'
-import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
-import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
+import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
-} from '../../../shared/terminal-quick-commands'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
+} from '../../../shared/terminal/quick-commands/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 
 export type RunQuickCommandInNewTabArgs = {
   command: TerminalQuickCommand
@@ -65,6 +65,9 @@ export function runQuickCommandInNewTab({
       launchSource: 'quick_command',
       quickCommandLabel: command.label
     })
+    if (!result || 'refused' in result) {
+      return null
+    }
     if (result?.surface.kind === 'local-terminal') {
       const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.surface.tabId, groupId)
       if (launchedGroupId) {

@@ -1,3 +1,6 @@
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { confirmLinearIssueWrite } from '@/store/slices/linear/linear-issue-publication'
+import { taskProviderErrorMessage, taskProviderErrorText } from '@/lib/task-provider-error-copy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, FolderKanban, LoaderCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -5,24 +8,24 @@ import { toast } from 'sonner'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getLinearProjectSearchRequestQuery } from '@/components/linear-project-search-query'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
-import { linearListProjects } from '@/runtime/runtime-linear-project-client'
+import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
+import { linearListProjects } from '@/runtime/linear/runtime-linear-project-client'
 import { useAppStore } from '@/store'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { defaultScopeSource } from '@/lib/default-creation-host'
 
 export function LinearIssueProjectSelector({
   issue,
-  onProjectChanged,
   sourceContext
 }: {
   issue: LinearIssue
-  onProjectChanged: (project: LinearProjectSummary) => void
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const patchLinearIssue = useAppStore((state) => state.patchLinearIssue)
@@ -56,7 +59,7 @@ export function LinearIssueProjectSelector({
           if (mountedRef.current && requestId === searchRequestIdRef.current) {
             toast.error(
               error instanceof Error
-                ? error.message
+                ? taskProviderErrorText(error.message)
                 : translate(
                     'auto.components.LinearIssueWorkspace.38b80780c2',
                     'Failed to load projects'
@@ -78,6 +81,7 @@ export function LinearIssueProjectSelector({
 
   const handleSelectProject = useCallback(
     async (project: LinearProjectSummary) => {
+      const scope = getLinearSourceScope(providerSettings)
       setSavingProjectId(project.id)
       try {
         const result = await linearUpdateIssue(
@@ -87,19 +91,23 @@ export function LinearIssueProjectSelector({
           issue.workspaceId
         )
         if (result.ok) {
-          onProjectChanged(project)
-          patchLinearIssue(issue.id, { project }, { sourceContext })
+          confirmLinearIssueWrite({
+            scope,
+            id: issue.id,
+            patch: { project },
+            publish: () => patchLinearIssue(issue.id, { project }, { scope })
+          })
           toast.success(
             translate('auto.components.LinearIssueWorkspace.f9d4ef9807', 'Project updated')
           )
           setOpen(false)
         } else {
-          toast.error(result.error)
+          toast.error(taskProviderErrorMessage(result))
         }
       } catch (error) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? taskProviderErrorText(error.message)
             : translate(
                 'auto.components.LinearIssueWorkspace.8b5b593053',
                 'Failed to update project'
@@ -109,20 +117,13 @@ export function LinearIssueProjectSelector({
         setSavingProjectId(null)
       }
     },
-    [
-      issue.id,
-      issue.workspaceId,
-      onProjectChanged,
-      patchLinearIssue,
-      providerSettings,
-      sourceContext
-    ]
+    [issue.id, issue.workspaceId, patchLinearIssue, providerSettings]
   )
 
   return (
     <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
       <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
-        <span>{translate('auto.components.LinearIssueWorkspace.b51276c8d6', 'Project')}</span>
+        <span>{t('auto.components.LinearIssueWorkspace.b51276c8d6', 'Project')}</span>
         <ChevronDown className="size-3.5" />
       </div>
       <Popover open={open} onOpenChange={setOpen}>
@@ -134,7 +135,7 @@ export function LinearIssueProjectSelector({
             <FolderKanban className="size-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">
               {issue.project?.name ??
-                translate('auto.components.LinearIssueWorkspace.519c3587f3', 'Add to project')}
+                t('auto.components.LinearIssueWorkspace.519c3587f3', 'Add to project')}
             </span>
             <ChevronDown className="size-3.5 shrink-0" />
           </button>
@@ -144,17 +145,14 @@ export function LinearIssueProjectSelector({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder={translate(
-                'auto.components.LinearIssueWorkspace.db3f269d98',
-                'Search projects'
-              )}
+              placeholder={t('auto.components.LinearIssueWorkspace.db3f269d98', 'Search projects')}
               className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <div className="max-h-64 overflow-y-auto scrollbar-sleek">
               {displayedLoading ? (
                 <div className="flex items-center gap-2 px-2 py-3 text-sm text-muted-foreground">
                   <LoaderCircle className="size-3.5 animate-spin" />
-                  {translate('auto.components.LinearIssueWorkspace.937ba6ad9a', 'Loading projects')}
+                  {t('auto.components.LinearIssueWorkspace.937ba6ad9a', 'Loading projects')}
                 </div>
               ) : displayedProjects.length > 0 ? (
                 displayedProjects.map((project) => (
@@ -180,11 +178,8 @@ export function LinearIssueProjectSelector({
               ) : (
                 <div className="px-2 py-3 text-sm text-muted-foreground">
                   {query.trim()
-                    ? translate(
-                        'auto.components.LinearIssueWorkspace.c11b4e3cc2',
-                        'No projects found.'
-                      )
-                    : translate(
+                    ? t('auto.components.LinearIssueWorkspace.c11b4e3cc2', 'No projects found.')
+                    : t(
                         'auto.components.LinearIssueWorkspace.76ffd3c937',
                         'Search for a project to add.'
                       )}

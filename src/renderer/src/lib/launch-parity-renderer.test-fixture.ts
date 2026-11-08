@@ -1,14 +1,15 @@
 // Load each renderer client OS against a real one-workspace store; suites own their vi.mock declarations.
 import { vi } from 'vitest'
-import type * as StoreHelpersNamespace from '@/store/slices/store-test-helpers'
-import type * as CapabilitiesNamespace from '@/runtime/local-runtime-capabilities'
+import { useStore } from 'zustand'
+import type * as StoreHelpersNamespace from '@/store/testing/app-store-test-fixture'
+import type * as CapabilitiesNamespace from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   LAUNCH_FOLDER_ID,
   LAUNCH_REPO_ID,
   launchWorkspaceId,
   type LaunchClient,
   type LaunchWorkspace
-} from '../../../shared/launch-parity-window-request.test-fixture'
+} from '../../../shared/agent-launch/fixtures/launch-parity-window-request.test-fixture'
 
 const USER_AGENT: Record<LaunchClient, string> = {
   darwin: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Orca',
@@ -30,11 +31,15 @@ export function launchStoreModuleMock(holder: LaunchStoreHolder): Record<string,
     return holder.store
   }
   return {
-    useAppStore: {
-      getState: () => live().getState(),
-      setState: (...args: Parameters<LaunchTestStore['setState']>) => live().setState(...args),
-      subscribe: (...args: Parameters<LaunchTestStore['subscribe']>) => live().subscribe(...args)
-    }
+    useAppStore: Object.assign(
+      <T>(selector: (state: ReturnType<LaunchTestStore['getState']>) => T): T =>
+        useStore(live(), selector),
+      {
+        getState: () => live().getState(),
+        setState: (...args: Parameters<LaunchTestStore['setState']>) => live().setState(...args),
+        subscribe: (...args: Parameters<LaunchTestStore['subscribe']>) => live().subscribe(...args)
+      }
+    )
   }
 }
 
@@ -50,9 +55,9 @@ export function perClientLoader<T>(
       return cached
     }
     vi.resetModules()
-    const helpers: StoreHelpers = await import('@/store/slices/store-test-helpers')
+    const helpers: StoreHelpers = await import('@/store/testing/app-store-test-fixture')
     const capabilities: typeof CapabilitiesNamespace =
-      await import('@/runtime/local-runtime-capabilities')
+      await import('@/runtime/hosts/capabilities/local-runtime-capabilities')
     capabilities.setLocalRuntimeCapabilitiesForTests([])
     const loaded = { ...(await load()), createStore: helpers.createTestStore }
     cache.set(client, loaded)
@@ -74,7 +79,9 @@ export function launchWorkspaceState(
         addedAt: 0,
         kind: 'git',
         connectionId: null,
-        executionHostId: 'local'
+        executionHostId: 'local',
+        // Parity rows model a repo whose first-launch trust answer is already stored.
+        agentWorkspaceTrust: 'pre-trust'
       }
     : null
   const worktree = {

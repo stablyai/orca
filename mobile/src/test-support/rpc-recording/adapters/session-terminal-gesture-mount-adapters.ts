@@ -1,3 +1,5 @@
+import type * as UseMobileSessionTerminalInputModule from '../../../terminal/session/use-mobile-session-terminal-input'
+import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -7,7 +9,7 @@ import type {
   Terminal,
   TerminalGestureInputBucket,
   TerminalGestureInputQueue
-} from '../../../session/mobile-session-route-types'
+} from '../../../terminal/session/mobile-terminal-model'
 
 const HANDLE = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
@@ -17,7 +19,10 @@ const PTY_MODES: TerminalModes = {
   altScreen: false,
   mouseTrackingMode: 'any',
   sgrMouseMode: true,
-  sgrMousePixelsMode: false
+  sgrMousePixelsMode: false,
+  applicationCursorKeysMode: false,
+  kittyKeyboardFlags: 0,
+  modifyOtherKeys: 0
 }
 
 // Record send/clear outcomes and queue accounting without a WebView; local clear rendering is outside this oracle.
@@ -26,14 +31,13 @@ export function sessionTerminalGestureMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.terminal-gesture-input': ({ client, effect }) => {
-      const useTerminalInput = modules.load<
-        typeof import('../../../session/use-mobile-session-terminal-input')
-      >('mobile/src/session/use-mobile-session-terminal-input.ts').useMobileSessionTerminalInput
-      const takeover = modules.load<
-        typeof import('../../../terminal/worker-terminal-takeover-report')
-      >('mobile/src/terminal/worker-terminal-takeover-report.ts')
-      // The per-client report window is module state; a fresh recording must not inherit one.
-      takeover.resetWorkerTerminalTakeoverReportsForTest()
+      const useTerminalInput = modules.load<typeof UseMobileSessionTerminalInputModule>(
+        'mobile/src/terminal/session/use-mobile-session-terminal-input.ts'
+      ).useMobileSessionTerminalInput
+
+      const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
+        'mobile/src/terminal/mobile-terminal-operations.ts'
+      )
 
       const buckets = { current: new Map<string, TerminalGestureInputBucket>() }
       const queues = { current: new Map<string, TerminalGestureInputQueue>() }
@@ -43,6 +47,7 @@ export function sessionTerminalGestureMountAdapters(
         input = useTerminalInput(
           mountFixture<Parameters<typeof useTerminalInput>[0]>({
             client,
+            sendTerminalOrderedInput: terminalInputSend.request,
             connState: 'connected',
             activeHandle: HANDLE,
             clientRef: { current: client },
@@ -56,11 +61,16 @@ export function sessionTerminalGestureMountAdapters(
             terminalGestureInputInFlightRef: inFlight,
             liveInputRef: { current: null },
             liveInputFocusTimerRef: { current: null },
-            terminalUnsubsRef: { current: new Map() },
+            terminalUnsubsRef: { current: new Map([[HANDLE, () => {}]]) },
             hostQueryReplyInputSupportedRef: { current: false },
+            hostProgramStatusSupportedRef: { current: false },
             clearPendingLiveInputCommit: () => {},
-            toggleTerminalLiveInput: () => false,
             getTerminalRef: () => undefined,
+            unsubscribeTerminal: (handle) => effect('terminal-unsubscribe', { handle }),
+            subscribeToTerminal: (handle) => {
+              effect('terminal-subscribe', { handle })
+              return true
+            },
             showToast: (message: string, durationMs?: number) =>
               effect('toast', { message, durationMs: durationMs ?? null })
           })
@@ -88,10 +98,7 @@ export function sessionTerminalGestureMountAdapters(
           bucketTokens: buckets.current.get(HANDLE)?.tokens ?? null,
           crash: screen.crash()
         }),
-        dispose: () => {
-          takeover.resetWorkerTerminalTakeoverReportsForTest()
-          screen.unmount()
-        }
+        dispose: () => screen.unmount()
       }
     }
   }

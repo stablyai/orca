@@ -3,7 +3,7 @@ import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browse
 // Limit idle retained guest processes across hidden worktrees; four covers common revisits while older pages rebuild from persisted state.
 export const BROWSER_GUEST_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
 
-/** Evict LRU-first beyond the hidden live-guest budget. Input is most-recent-first; active worktrees never count, and lazy vetoes may retain protected pages over budget. */
+/** Evict LRU-first beyond the hidden live-guest budget. Input is most-recent-first; active and vetoed worktrees keep their guests without using a slot. */
 export function selectBrowserGuestEvictionWorktreeIds(args: {
   orderedWorktreeIds: readonly string[]
   activeWorktreeId: string | null
@@ -21,7 +21,8 @@ export function selectBrowserGuestEvictionWorktreeIds(args: {
       seen.has(worktreeId) ||
       worktreeId === args.activeWorktreeId ||
       !args.isRetained(worktreeId) ||
-      !args.holdsLiveGuests(worktreeId)
+      !args.holdsLiveGuests(worktreeId) ||
+      !args.isEvictable(worktreeId)
     ) {
       seen.add(worktreeId)
       continue
@@ -31,9 +32,7 @@ export function selectBrowserGuestEvictionWorktreeIds(args: {
       retained += 1
       continue
     }
-    if (args.isEvictable(worktreeId)) {
-      evictedIds.push(worktreeId)
-    }
+    evictedIds.push(worktreeId)
   }
   return evictedIds
 }

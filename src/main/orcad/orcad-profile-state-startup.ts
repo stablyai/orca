@@ -1,9 +1,20 @@
 import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
 import type { ProfileStateStoreFactoryResult } from '../persistence/profile-state/profile-state-store-factory'
 import { ensureActiveOrcaProfile, initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
-import { initSshHostKeyStoreFile } from '../ssh/ssh-host-key-store'
-import { initOrcadHeldFenceTokenFile } from '../ssh/orcad-held-fence-tokens'
+import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
+import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { emitOrcadProfileStateAuthoritySelected } from './orcad-profile-state-telemetry'
+import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
+
+/** WSL hosts are held to a per-distro memory budget; the idle writer thread costs ~13-15 MB. */
+export const WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS = 60_000
+
+/** SSH hosts and the desktop keep their writer thread running. */
+export function orcadProfileWriterIdleStopMs(
+  isWslHost: () => boolean = isWslHostOrcadProcess
+): number | undefined {
+  return isWslHost() ? WSL_HOST_PROFILE_WRITER_IDLE_STOP_MS : undefined
+}
 
 type OrcadProfileStateStartup = {
   store: ProfileStateStoreFactoryResult['store']
@@ -28,7 +39,8 @@ export async function createOrcadProfileStateStartup(
     databaseFile: profile.stateDatabaseFile,
     profileId: profile.profile.id,
     runtime: 'orcad',
-    storageAuthority: 'runtime'
+    storageAuthority: 'runtime',
+    writerIdleStopMs: orcadProfileWriterIdleStopMs()
   })
   const authority = {
     backend: result.backend,

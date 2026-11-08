@@ -2,13 +2,13 @@ import {
   projectPendingWorktreeRemovals,
   snapshotPendingWorktreeRemovals,
   withUnregisteredRemovalCheckouts
-} from '../../../worktree-removal-listing'
+} from '../../../workspaces/removal/worktree-removal-listing'
 import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { projectWorktreeLineageWithHostPeers } from '../../../worktree-lineage-host-peers'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import type { DirectSshDetectedWorktreeRequest } from '../../../../shared/detected-worktree-provider-contract'
 import { isAdmissibleDirectSshAuthority } from '../../../../shared/ssh-retained-payload-admission'
 import {
@@ -29,7 +29,7 @@ import {
 import {
   getLocalWorktreeCatalogVersion,
   localWorktreeCatalogVersionAt
-} from '../../../local-worktree-scan-generation'
+} from '../../../workspaces/catalog/local-worktree-scan-generation'
 import {
   describeWorktreeScanFailure,
   loggedWorktreeListFailures,
@@ -38,7 +38,13 @@ import {
 import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-worktree-meta'
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
-import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
+import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
+import { releaseWslStoppedWorktreeRescan } from '../../../wsl/discovery/wsl-stopped-worktree-rescan-registry'
+import {
+  listWslStoppedWorktrees,
+  rescanWorktreesWhenWslDistroRuns,
+  wslDistroNotRunningForScanFailure
+} from './wsl-stopped-worktree-listing'
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -153,6 +159,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       }
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
+    releaseWslStoppedWorktreeRescan(repo.id)
     // Rows describe scan-start generation, which clients order against applied create/remove replies.
     return {
       repoId: repo.id,
@@ -174,15 +181,30 @@ export async function listDetectedWorktreesForCapturedRepo(
     if (!isCurrent()) {
       return null
     }
+    // Retained rows need their scan-failure cause to explain why they are unavailable.
+    const unavailableReason = describeWorktreeScanFailure(err)
+    const failureKind = classifyWorktreeScanFailure(unavailableReason)
+    // A distro the gate would not start (E9) is expected: keep stored rows and re-list once it runs.
+    const wslDistroStopped = wslDistroNotRunningForScanFailure(err)
+    if (wslDistroStopped) {
+      rescanWorktreesWhenWslDistroRuns(repo.id, wslDistroStopped.distro)
+      return {
+        repoId: repo.id,
+        authoritative: false,
+        source: 'metadata-fallback',
+        worktrees: listWslStoppedWorktrees(store, repo, allMeta),
+        unavailableReason,
+        failureKind,
+        wslDistroStopped,
+        catalogVersion: getLocalWorktreeCatalogVersion(repo.id)
+      }
+    }
     warnOnce(
       loggedWorktreeListFailures,
       `${repo.id}:${repo.path}`,
       `[worktrees] failed to list detected worktrees for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`,
       err
     )
-    // Retained rows need their scan-failure cause to explain why they are unavailable.
-    const unavailableReason = describeWorktreeScanFailure(err)
-    const failureKind = classifyWorktreeScanFailure(unavailableReason)
     return {
       repoId: repo.id,
       authoritative: false,

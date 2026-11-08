@@ -1,18 +1,24 @@
+import type { EditorFileDropDestination } from './editor-file-drop-destination'
 import { toast } from 'sonner'
 import { detectLanguage } from '@/lib/language-detect'
-import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
+import {
+  isPathInsideWorktree,
+  toWorktreeRelativePath
+} from '../../../../shared/terminal/links/terminal-links'
 import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { basename, joinPath } from '@/lib/path'
-import type { WorktreeRuntimeOwnerState } from '@/lib/worktree-runtime-owner-state'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
+import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { describeSharedDropFailureReason } from '@/lib/drop-skip-reason-copy'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { DROP_STAGING_RELATIVE_DIR } from '../../../../shared/drop-staging-ignore'
 import { openDocumentInFloatingWorkspace } from '@/lib/open-document-in-floating-workspace'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
@@ -23,7 +29,7 @@ import {
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner
-} from '../right-sidebar/file-explorer-operation-owner'
+} from '../right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 
 export function shouldUploadRemoteEditorFileDrop(
   target: RuntimeClientTarget,
@@ -45,12 +51,6 @@ export function getEditorFileDropOperationContext(
     worktreePath,
     connectionId
   }
-}
-
-export type EditorFileDropDestination = {
-  worktreeId: string
-  /** When omitted, the store chooses this workspace's default editor destination. */
-  groupId?: string
 }
 
 type EditorFileDropContext = {
@@ -209,16 +209,14 @@ async function openEditorFileDropPaths(
     }
     try {
       // OS drops supply client paths; upload before opening them in remote/SSH workspaces.
-      const destinationDir = joinPath(worktreePath, '.orca/drops')
+      const destinationDir = joinPath(worktreePath, DROP_STAGING_RELATIVE_DIR)
       const { results } = await importExternalPathsToRuntime(
         fileContext,
         [...paths],
         destinationDir,
         { ensureDestinationDir: true, nameExtensionlessImages: true }
       )
-      if (!canOpenEditorFileDrop(context, destination)) {
-        return
-      }
+      // Rechecked per result, so it also covers the wait for the upload itself.
       for (const result of results) {
         if (!canOpenEditorFileDrop(context, destination)) {
           return
@@ -240,12 +238,14 @@ async function openEditorFileDropPaths(
           { suppressActiveRuntimeFallback: runtimeEnvironmentId === null, ...groupOptions }
         )
       }
-      if (results.some((result) => result.status !== 'imported')) {
+      const rejected = results.filter((result) => result.status !== 'imported')
+      if (rejected.length > 0) {
         toast.error(
           translate(
             'auto.hooks.useGlobalFileDrop.d720e2f855',
             'Some dropped files could not be uploaded.'
-          )
+          ),
+          { description: describeSharedDropFailureReason(rejected) }
         )
       }
     } catch {

@@ -1,12 +1,11 @@
-import { randomUUID } from 'node:crypto'
+import { app, type BrowserWindow } from 'electron'
 
-import { app, ipcMain } from 'electron'
-import type { BrowserWindow } from 'electron'
 import type {
   TerminalPaneRevealReply,
   TerminalPaneRevealTarget
-} from '../../shared/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-pane-reveal'
 import { focusExistingMainWindow } from './focus-existing-window'
+import { requestRendererReply } from './renderer-reply-request'
 
 const TERMINAL_PANE_REVEAL_TIMEOUT_MS = 10_000
 
@@ -15,7 +14,14 @@ export async function revealTerminalPaneInWindow(
   mainWindow: BrowserWindow,
   target: TerminalPaneRevealTarget
 ): Promise<boolean> {
-  const revealed = await requestTerminalPaneRevealFromRenderer(mainWindow, target)
+  const reply = await requestRendererReply<TerminalPaneRevealReply>(mainWindow, {
+    requestChannel: 'ui:revealTerminalPane',
+    replyChannel: 'ui:terminalPaneRevealReply',
+    payload: target,
+    timeoutMs: TERMINAL_PANE_REVEAL_TIMEOUT_MS,
+    timeoutError: 'terminal_reveal_timeout'
+  })
+  const revealed = reply.revealed === true
   if (revealed) {
     focusExistingMainWindow({
       app,
@@ -26,39 +32,4 @@ export async function revealTerminalPaneInWindow(
     })
   }
   return revealed
-}
-
-function requestTerminalPaneRevealFromRenderer(
-  mainWindow: BrowserWindow,
-  target: TerminalPaneRevealTarget
-): Promise<boolean> {
-  if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
-    return Promise.reject(new Error('renderer_unavailable'))
-  }
-  const webContents = mainWindow.webContents
-  const requestId = randomUUID()
-  return new Promise<boolean>((resolve, reject) => {
-    const finish = (error: Error | null, revealed = false): void => {
-      clearTimeout(timeout)
-      ipcMain.removeListener('ui:terminalPaneRevealReply', onReply)
-      if (error) {
-        reject(error)
-      } else {
-        resolve(revealed)
-      }
-    }
-    const timeout = setTimeout(
-      () => finish(new Error('terminal_reveal_timeout')),
-      TERMINAL_PANE_REVEAL_TIMEOUT_MS
-    )
-    const onReply = (event: Electron.IpcMainEvent, reply: TerminalPaneRevealReply): void => {
-      // Visible request IDs confer no authority; only the targeted window can answer.
-      if (event.sender !== webContents || reply.requestId !== requestId) {
-        return
-      }
-      finish(null, reply.revealed === true)
-    }
-    ipcMain.on('ui:terminalPaneRevealReply', onReply)
-    webContents.send('ui:revealTerminalPane', { ...target, requestId })
-  })
 }

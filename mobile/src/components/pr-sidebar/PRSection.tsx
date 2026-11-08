@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Text, View } from 'react-native'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
 type Props = {
   // Omit header for self-explanatory action sections to save mobile space.
@@ -12,6 +13,7 @@ type Props = {
 
 // Use consistent desktop-style section/header divider; omit header only when title and trailing controls both absent.
 export function PRSection({ title, trailing, children }: Props) {
+  useMobileColorScheme()
   const showHeader = Boolean(title) || trailing != null
   return (
     <View style={styles.section}>

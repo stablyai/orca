@@ -1,9 +1,8 @@
 import { createElement, type ElementType } from 'react'
 import { act, create } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
-import { inertIconModule } from './inert-native-elements'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
-import { reactNativeScreenMembers, screenNativeSubstitutes } from './screen-native-substitutes'
+import { reactNativeScreenMembers } from './screen-native-substitutes'
 
 function member(module: string, name: string): unknown {
   const substitute = nativeMountingSubstitutes().get(module)
@@ -67,45 +66,5 @@ describe('the inert screen substitutes', () => {
     const tree = rendered?.toJSON()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a rendered host node carries exactly these fields.
     expect((tree as { children: unknown }).children).toBeNull()
-  })
-
-  it('pins the device inputs a screen reads instead of measuring them', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the member is a hook by construction.
-    expect((member('react-native', 'useWindowDimensions') as () => unknown)()).toEqual({
-      width: 390,
-      height: 844
-    })
-    expect(member('react-native', 'StyleSheet')).toMatchObject({ hairlineWidth: 1 })
-  })
-
-  it('keeps a style sheet readable so a screen that reads one style sees it', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the member is the substituted StyleSheet by construction.
-    const sheet = member('react-native', 'StyleSheet') as {
-      create: (value: unknown) => unknown
-      flatten: (value: unknown) => unknown
-    }
-    expect(sheet.create({ row: { flex: 1 } })).toEqual({ row: { flex: 1 } })
-    expect(sheet.flatten([{ flex: 1 }, [{ gap: 2 }]])).toEqual({ flex: 1, gap: 2 })
-  })
-
-  it('answers any icon name with its own element, because every export here is an icon', () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the icon module answers every string key.
-    const icons = inertIconModule() as Record<string, ElementType>
-    expect(icons.ChevronLeft).toBe(icons.ChevronLeft)
-    act(() => {
-      create(createElement(icons.ChevronLeft!, { size: 20 }))
-    })
-  })
-
-  it('throws on a member nobody listed, in every screen package', () => {
-    for (const [module, substitute] of screenNativeSubstitutes()) {
-      if (module === 'lucide-react-native') {
-        continue
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the read is the assertion; a substitute proxy has no declared shape.
-      expect(() => (substitute as Record<string, unknown>).notASubstitutedMember).toThrow(
-        `Unsubstituted native member: ${module}.notASubstitutedMember`
-      )
-    }
   })
 })

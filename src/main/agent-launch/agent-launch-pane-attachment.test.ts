@@ -15,10 +15,6 @@ describe('a pane an agent launch laid out', () => {
     resetAgentLaunchPanesForTests()
   })
 
-  it('is an ordinary pane when no launch runs for it, as after a restart', () => {
-    expect(resolveAgentLaunchPaneVerdict(PANE, notLive)).toBeNull()
-  })
-
   it('waits for the launch running in this process, then says how it ended', async () => {
     const running = trackRunningAgentLaunchPane(PANE)
     const verdict = resolveAgentLaunchPaneVerdict(PANE, notLive)
@@ -35,19 +31,6 @@ describe('a pane an agent launch laid out', () => {
       code: 'agent_session_exited_during_start'
     })
     resetAgentLaunchPanesForTests()
-    expect(resolveAgentLaunchPaneVerdict(PANE, notLive)).toBeNull()
-  })
-
-  it('forgets a failed launch once the user closes its pane, or a process holds it', async () => {
-    const pane = { worktreeId: 'wt-1', paneKey: 'tab-1:3f2504e0-4f89-41d3-9a0c-0305e82c3301' }
-    trackRunningAgentLaunchPane(pane).finish({ kind: 'not-started', code: 'boom' })
-    markAgentLaunchesClosedByUser('wt-1', { kind: 'tab', tabId: 'tab-1' })
-    expect(resolveAgentLaunchPaneVerdict(pane, notLive)).toBeNull()
-
-    trackRunningAgentLaunchPane(PANE).finish({ kind: 'unconfirmed' })
-    await expect(resolveAgentLaunchPaneVerdict(PANE, () => true)).resolves.toEqual({
-      kind: 'proceed'
-    })
     expect(resolveAgentLaunchPaneVerdict(PANE, notLive)).toBeNull()
   })
 

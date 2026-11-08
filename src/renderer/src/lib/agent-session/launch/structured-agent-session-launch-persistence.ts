@@ -1,11 +1,11 @@
-import { structuredAgentSessionTabId } from '../../../../../shared/structured-agent-session-projection'
+import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   validRecord,
   parseStructuredLaunchSurfaceAddress,
   type StructuredAgentLaunchPersistedRecord
 } from './structured-agent-session-launch-record'
 
-import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat-session-option-defaults'
+import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -176,6 +176,24 @@ export function writeStructuredAgentLaunchRecord(
   load()
   records.set(record.sessionId, record)
   writeRecords()
+}
+
+export function updateStructuredAgentLaunchRecords(
+  changes: Iterable<readonly [string, StructuredAgentLaunchPersistedRecord | null]>
+): void {
+  load()
+  let changed = false
+  for (const [sessionId, record] of changes) {
+    if (record) {
+      records.set(sessionId, record)
+      changed = true
+    } else if (records.delete(sessionId)) {
+      changed = true
+    }
+  }
+  if (changed) {
+    writeRecords()
+  }
 }
 
 export function deleteStructuredAgentLaunchRecord(sessionId: string): void {

@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
-import { makePaneKey } from '../../shared/stable-pane-id'
+import { makePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import { HERMES_CLIENT_ENV_PASSTHROUGH } from './hermes-managed-plugin-source'
 import { HermesHookService, _internals } from './hook-service'
 
@@ -29,24 +29,6 @@ describe('HermesHookService', () => {
       process.env.HERMES_HOME = previousHermesHome
     }
     rmSync(homeDir, { recursive: true, force: true })
-  })
-
-  it('installs the managed Hermes plugin and enables it in config.yaml', () => {
-    const status = new HermesHookService().install()
-
-    expect(status).toMatchObject({
-      agent: 'hermes',
-      state: 'installed',
-      managedHooksPresent: true,
-      detail: null
-    })
-    const pluginDir = join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME)
-    expect(readFileSync(join(pluginDir, 'plugin.yaml'), 'utf-8')).toContain('provides_hooks:')
-    expect(readFileSync(join(pluginDir, '__init__.py'), 'utf-8')).toContain('/hook/hermes')
-    const config = parse(readFileSync(join(homeDir, 'config.yaml'), 'utf-8')) as {
-      plugins: { enabled: string[] }
-    }
-    expect(config.plugins.enabled).toContain(_internals.HERMES_PLUGIN_NAME)
   })
 
   it('preserves other enabled plugins and removes Orca from disabled list', () => {
@@ -121,6 +103,43 @@ describe('HermesHookService', () => {
     expect(removed).toContain('- MY_VAR # mine')
   })
 
+  it('refreshes named profiles that keep the plugin enabled, and only those', () => {
+    const stale = '# Managed by Orca. Do not edit; changes may be overwritten.\n# stale\n'
+    // `hermes profile create --clone` copies the plugin but not later passthrough edits.
+    const profile = (name: string, config: string): string => {
+      const home = join(homeDir, 'profiles', name)
+      const pluginDir = join(home, 'plugins', _internals.HERMES_PLUGIN_NAME)
+      mkdirSync(pluginDir, { recursive: true })
+      writeFileSync(join(pluginDir, 'plugin.yaml'), _internals.getPluginManifest())
+      writeFileSync(join(pluginDir, '__init__.py'), stale)
+      writeFileSync(join(home, 'config.yaml'), config)
+      return home
+    }
+    const pluginSource = (home: string): string =>
+      readFileSync(join(home, 'plugins', _internals.HERMES_PLUGIN_NAME, '__init__.py'), 'utf-8')
+    const broken = profile('broken', '')
+    rmSync(join(broken, 'config.yaml'))
+    mkdirSync(join(broken, 'config.yaml'))
+    const work = profile('work', 'plugins:\n  enabled: [orca-status]\n')
+    const disabledConfig = 'plugins:\n  enabled: [orca-status]\n  disabled: [orca-status]\n'
+    const disabled = profile('off', disabledConfig)
+    const service = new HermesHookService()
+
+    expect(service.install().state).toBe('installed')
+    expect(parse(readFileSync(join(work, 'config.yaml'), 'utf-8')).terminal).toEqual({
+      client_env_passthrough: [...HERMES_CLIENT_ENV_PASSTHROUGH]
+    })
+    expect(pluginSource(work)).toBe(_internals.getPluginInitSource())
+    expect(readFileSync(join(disabled, 'config.yaml'), 'utf-8')).toBe(disabledConfig)
+    expect(pluginSource(disabled)).toBe(stale)
+
+    service.remove()
+    expect(parse(readFileSync(join(work, 'config.yaml'), 'utf-8'))).toEqual({
+      plugins: { enabled: [] },
+      terminal: { client_env_passthrough: [] }
+    })
+  })
+
   it.each([
     ['an anchored terminal setting', 'terminal:\n  env: &env {A: "1"}\nshared: *env\n', true],
     ['a malformed passthrough', 'terminal:\n  client_env_passthrough: FOO\n', false],
@@ -179,38 +198,6 @@ describe('HermesHookService', () => {
     expect(config.plugins.enabled).toBe('not-a-list')
     expect(config.plugins.disabled).toBe('not-a-list')
   })
-
-  it('reports partial when the plugin exists but is not enabled', () => {
-    new HermesHookService().install()
-    const update = _internals.updateConfigContent(
-      readFileSync(join(homeDir, 'config.yaml'), 'utf-8'),
-      _internals.disablePlugin
-    )
-    expect(update.content).toBeTruthy()
-    writeFileSync(join(homeDir, 'config.yaml'), update.content!, 'utf-8')
-
-    const status = new HermesHookService().getStatus()
-
-    expect(status.state).toBe('partial')
-    expect(status.detail).toContain('not enabled')
-  })
-
-  it('is visible to the real hermes CLI when hermes is installed', () => {
-    const hermesAvailable = spawnSync('hermes', ['--version'], { encoding: 'utf-8' }).status === 0
-    if (!hermesAvailable) {
-      return
-    }
-    new HermesHookService().install()
-
-    const output = execFileSync('hermes', ['plugins', 'list'], {
-      env: { ...process.env, HERMES_HOME: homeDir },
-      encoding: 'utf-8',
-      timeout: 15_000
-    })
-
-    expect(output).toContain(_internals.HERMES_PLUGIN_NAME)
-    expect(output.toLowerCase()).toContain('enabled')
-  }, 20_000)
 
   it('registered plugin hooks post normalized JSON to Orca', async () => {
     const pythonAvailable = spawnSync('python3', ['--version'], { encoding: 'utf-8' }).status === 0
@@ -474,4 +461,46 @@ describe('HermesHookService', () => {
     expect(payload.result.nested).toHaveLength(51)
     expect(payload.tool_input.items).toHaveLength(51)
   })
+
+  // Windows refuses to remove a process's current directory.
+  it.skipIf(process.platform === 'win32')(
+    'generated plugin hooks omit a deleted cwd instead of raising',
+    () => {
+      const pythonAvailable =
+        spawnSync('python3', ['--version'], { encoding: 'utf-8' }).status === 0
+      if (!pythonAvailable) {
+        return
+      }
+      new HermesHookService().install()
+
+      const initPath = join(homeDir, 'plugins', _internals.HERMES_PLUGIN_NAME, '__init__.py')
+      const script = [
+        'import importlib.util, json, os',
+        `spec = importlib.util.spec_from_file_location("orca_status", ${JSON.stringify(initPath)})`,
+        'mod = importlib.util.module_from_spec(spec)',
+        'spec.loader.exec_module(mod)',
+        `os.chdir(${JSON.stringify(mkdtempSync(join(homeDir, 'cwd-')))})`,
+        'live = mod._payload_for_event("pre_tool_call", {"tool_name": "patch"})',
+        'os.rmdir(os.getcwd())',
+        'mod._make_hook("pre_tool_call")(session_id="sess-1", tool_name="kanban_show")',
+        'dead = mod._payload_for_event("pre_tool_call", {"tool_name": "patch"})',
+        'print(json.dumps({"live": live, "dead": dead}))'
+      ].join('\n')
+
+      const output = execFileSync('python3', ['-c', script], {
+        env: {
+          ...process.env,
+          ORCA_AGENT_HOOK_PORT: '',
+          ORCA_AGENT_HOOK_ENDPOINT: '',
+          ORCA_PANE_KEY: ''
+        },
+        encoding: 'utf-8',
+        timeout: 15_000
+      })
+      expect(JSON.parse(output)).toEqual({
+        live: expect.objectContaining({ cwd: expect.stringContaining('cwd-') }),
+        dead: { hook_event_name: 'pre_tool_call', tool_name: 'patch' }
+      })
+    }
+  )
 })

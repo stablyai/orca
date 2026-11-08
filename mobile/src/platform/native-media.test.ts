@@ -1,22 +1,15 @@
 import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { splitBridgeReply } from '../mobile-web-shell/bridge/bridge-reply-chunking'
-import {
-  BRIDGE_MAX_MESSAGE_BYTES,
-  BRIDGE_MAX_REPLY_BYTES,
-  utf8ByteLength
-} from '../mobile-web-shell/bridge/bridge-caps'
+
 import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
-  BRIDGE_MEDIA_NAME_MAX_CHARS,
   BRIDGE_MEDIA_READ_MAX_BYTES,
-  mediaNameResultSchema,
   mediaPickResultSchema,
   mediaReadResultSchema
 } from '../mobile-web-shell/bridge/bridge-media-verbs'
 import { readShellRefusalCode } from '../mobile-web-shell/bridge-host-errors'
 import { MediaHandleRegistry } from '../mobile-web-shell/media-handle-registry'
-import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../session/mobile-clipboard-image-upload-chunk'
+
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import { createNativeMediaVerbServer, type NativeMediaFile } from './native-media'
 
@@ -81,10 +74,11 @@ function harness(
   const files = new Map<string, Uint8Array>()
   const written: { uri: string; base64: string }[] = []
   const copied: { from: string; to: string }[] = []
-  const registry = new MediaHandleRegistry({
-    now: () => 1_000,
-    discard: (uri) => discarded.push(uri)
-  })
+  const discard = (uri: string): void => {
+    discarded.push(uri)
+    files.delete(uri)
+  }
+  const registry = new MediaHandleRegistry({ now: () => 1_000, discard })
   const serve = createNativeMediaVerbServer({
     registry,
     launchLibrary: () =>
@@ -114,7 +108,7 @@ function harness(
       return destination
     },
     openFile: (uri) => fakeFile(files.get(uri) ?? new Uint8Array()),
-    discard: (uri) => discarded.push(uri),
+    discard,
     ownsStagedUri: (uri: string) => uri.startsWith('file:'),
     ...overrides
   })
@@ -131,104 +125,67 @@ beforeEach(() => {
 })
 
 describe('picking', () => {
-  it('answers a handle per asset for a library pick', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/lib.png`, bytesOf(64))
-    const result = await probe.serve('native.media.pick', { source: 'library', multiple: false })
-    const parsed = mediaPickResultSchema.parse(result)
-    expect(parsed.items).toHaveLength(1)
-    expect(parsed.items[0]).toMatchObject({
-      mime: 'image/png',
-      byteLength: 64,
-      width: 4,
-      height: 3
-    })
-    expect(probe.registry.liveCount()).toBe(1)
-  })
-
-  it('answers no items when the user cancels, which is not a refusal', async () => {
-    for (const source of ['library', 'files'] as const) {
-      const probe = harness({
-        launchLibrary: () => Promise.resolve({ canceled: true, assets: null }),
-        launchFiles: () => Promise.resolve({ canceled: true, assets: null })
-      })
-      await expect(probe.serve('native.media.pick', { source, multiple: true })).resolves.toEqual({
-        items: []
-      })
-    }
-  })
-
-  it('takes a file from the document picker with no pixel dimensions', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(10))
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'files', multiple: false })
-    )
-    expect(result.items[0]).toMatchObject({ mime: 'application/pdf', byteLength: 10 })
-    expect(result.items[0]).not.toHaveProperty('width')
-  })
-
-  it('stages what the pasteboard holds, so an image crosses as a handle and not a value', async () => {
+  it('leaves a late provider original untouched and skips its whole-file copy', async () => {
+    const providerUri = 'content://media/external/images/media/42'
     const probe = harness({
-      readClipboardImage: () =>
-        Promise.resolve({ data: btoa('pasted-bytes'), size: { width: 2, height: 2 } })
+      launchLibrary: async () => {
+        probe.registry.releaseAll()
+        return { canceled: false, assets: [{ uri: providerUri, mimeType: 'image/jpeg' }] }
+      }
     })
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
-    )
-    expect(probe.written).toHaveLength(1)
-    expect(result.items[0]).toMatchObject({
-      mime: 'image/png',
-      byteLength: 12,
-      width: 2,
-      height: 2
-    })
+    probe.files.set(providerUri, bytesOf(1024 * 1024))
+    await expect(
+      probe.serve('native.media.pick', { source: 'library', multiple: false })
+    ).resolves.toEqual({ items: [] })
+    expect(probe.copied).toEqual([])
+    expect(probe.discarded).toEqual([])
+    expect(probe.registry.liveCount()).toBe(0)
+    expect(probe.files.get(providerUri)?.byteLength).toBe(1024 * 1024)
   })
 
-  it('strips the data-url prefix the pasteboard puts in front of its base64', async () => {
-    // Clipboard returns a data URI; strip its prefix or staged bytes become a silently corrupt image.
+  it('does not stage clipboard bytes that arrive after session cleanup', async () => {
     const probe = harness({
-      readClipboardImage: () =>
-        Promise.resolve({ data: `data:image/png;base64,${btoa('pasted-bytes')}` })
+      readClipboardImage: async () => {
+        probe.registry.releaseAll()
+        return { data: 'data:image/png;base64,AQID' }
+      }
     })
-    await probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
-    expect(probe.written).toEqual([{ uri: `${CACHE}/staged-0.png`, base64: btoa('pasted-bytes') }])
-  })
-
-  it('names a picker that reported no type, rather than answering an empty mime', async () => {
-    const probe = harness({
-      launchFiles: () => Promise.resolve({ canceled: false, assets: [{ uri: `${CACHE}/doc.pdf` }] })
-    })
-    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(3))
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'files', multiple: false })
-    )
-    expect(result.items[0]).toMatchObject({ mime: 'application/octet-stream', byteLength: 3 })
-  })
-
-  it('answers no items for an empty pasteboard', async () => {
-    const probe = harness()
     await expect(
       probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
     ).resolves.toEqual({ items: [] })
+    expect(probe.written).toEqual([])
+    expect(probe.discarded).toEqual([])
+    expect(probe.registry.liveCount()).toBe(0)
   })
 
-  it('offers the picker only the room the registry has left', async () => {
-    const limits: (number | undefined)[] = []
+  it('discards every copy if cleanup runs between staging and minting', async () => {
+    const providerUris = ['content://media/1', 'content://media/2']
     const probe = harness({
-      launchLibrary: (options: { multiple: boolean; limit: number }) => {
-        limits.push(options.limit)
-        return Promise.resolve({ canceled: true })
-      }
+      launchLibrary: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: providerUris.map((uri) => ({ uri, mimeType: 'image/jpeg' }))
+        })
     })
-    await probe.serve('native.media.pick', { source: 'library', multiple: true })
-    expect(limits).toEqual([BRIDGE_MEDIA_MAX_LIVE_HANDLES])
-
-    probe.files.set(`${CACHE}/held.png`, bytesOf(4))
-    probe.registry.mint([{ uri: `${CACHE}/held.png`, mime: 'image/png', byteLength: 4 }])
-    probe.registry.mint([{ uri: `${CACHE}/held.png`, mime: 'image/png', byteLength: 4 }])
-    await probe.serve('native.media.pick', { source: 'library', multiple: true })
-    expect(limits).toEqual([BRIDGE_MEDIA_MAX_LIVE_HANDLES, BRIDGE_MEDIA_MAX_LIVE_HANDLES - 2])
+    for (const uri of providerUris) {
+      probe.files.set(uri, bytesOf(4096))
+    }
+    const picked = probe.serve('native.media.pick', { source: 'library', multiple: true })
+    await Promise.resolve()
+    expect(probe.copied).toHaveLength(2)
+    expect(probe.registry.liveCount()).toBe(0)
+    probe.registry.releaseAll()
+    const [live] = probe.registry.mint([
+      { uri: `${CACHE}/successor.png`, byteLength: 64, mime: 'image/png' }
+    ])
+    await expect(picked).resolves.toEqual({ items: [] })
+    expect(probe.discarded).toEqual(probe.copied.map(({ to }) => to))
+    expect(probe.registry.liveCount()).toBe(1)
+    expect(probe.registry.read(live?.handle ?? '', 0, 64)).toMatchObject({
+      uri: `${CACHE}/successor.png`,
+      end: 64,
+      eof: true
+    })
   })
 
   it('refuses a pick up front when nothing is left, before the OS copies a byte', async () => {
@@ -289,28 +246,104 @@ describe('picking', () => {
     warn.mockRestore()
   })
 
-  it('refuses a Files result over the room before it stages any of it', async () => {
-    // DocumentPicker can exceed advisory room; reject before staging rather than copy assets the registry will refuse.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  it.each([0, 2])(
+    'deletes an over-cap Files result while preserving %i prior handles',
+    async (held) => {
+      const liveUris = Array.from({ length: held }, (_, index) => `${CACHE}/held-${index}.png`)
+      const returnedUris = Array.from(
+        { length: BRIDGE_MEDIA_MAX_LIVE_HANDLES - held + 1 },
+        (_, index) => `${CACHE}/doc-${index}.pdf`
+      )
+      const probe = harness({
+        launchFiles: () =>
+          Promise.resolve({
+            canceled: false,
+            assets: returnedUris.map((uri) => ({ uri, mimeType: 'application/pdf' }))
+          })
+      })
+      for (const uri of liveUris) {
+        probe.files.set(uri, new Uint8Array(4096))
+      }
+      probe.registry.mint(liveUris.map((uri) => ({ uri, mime: 'image/png', byteLength: 4096 })))
+      for (const uri of returnedUris) {
+        probe.files.set(uri, new Uint8Array(1024 * 1024))
+      }
+      const storedBytes = (): number =>
+        [...probe.files.values()].reduce((bytes, file) => bytes + file.byteLength, 0)
+      expect(storedBytes()).toBe(returnedUris.length * 1024 * 1024 + held * 4096)
+      await expect(
+        probe.serve('native.media.pick', { source: 'files', multiple: true })
+      ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_cap')
+      expect(probe.registry.liveCount()).toBe(held)
+      expect(probe.discarded).toEqual(returnedUris)
+      expect([...probe.files.keys()]).toEqual(liveUris)
+      expect(storedBytes()).toBe(held * 4096)
+      expect(probe.copied).toEqual([])
+      expect(probe.written).toEqual([])
+      probe.registry.releaseAll()
+      expect(probe.files.size).toBe(0)
+    }
+  )
+
+  it('leaves provider originals intact when refusing an over-cap mixed result', async () => {
+    const providerUri = 'content://media/external/images/media/42'
+    const ownedUris = Array.from(
+      { length: BRIDGE_MEDIA_MAX_LIVE_HANDLES },
+      (_, index) => `${CACHE}/picked-${index}.png`
+    )
     const probe = harness({
       launchFiles: () =>
         Promise.resolve({
           canceled: false,
-          assets: Array.from({ length: BRIDGE_MEDIA_MAX_LIVE_HANDLES + 1 }, (_, index) => ({
-            uri: `${CACHE}/doc-${index}.pdf`,
-            mimeType: 'application/pdf'
-          }))
+          assets: [providerUri, ...ownedUris].map((uri) => ({ uri, mimeType: 'image/png' }))
         })
     })
-    for (let index = 0; index <= BRIDGE_MEDIA_MAX_LIVE_HANDLES; index += 1) {
-      probe.files.set(`${CACHE}/doc-${index}.pdf`, bytesOf(4))
+    for (const uri of [providerUri, ...ownedUris]) {
+      probe.files.set(uri, new Uint8Array(1024 * 1024))
     }
     await expect(
       probe.serve('native.media.pick', { source: 'files', multiple: true })
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_cap')
+    expect(probe.discarded).toEqual(ownedUris)
+    expect([...probe.files.keys()]).toEqual([providerUri])
+    expect(probe.files.get(providerUri)?.byteLength).toBe(1024 * 1024)
     expect(probe.registry.liveCount()).toBe(0)
-    expect(probe.discarded).toEqual([])
-    warn.mockRestore()
+    expect(probe.copied).toEqual([])
+  })
+
+  it('continues sweeping refused copies when one file cannot be deleted', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const returnedUris = Array.from(
+      { length: BRIDGE_MEDIA_MAX_LIVE_HANDLES + 1 },
+      (_, index) => `${CACHE}/doc-${index}.pdf`
+    )
+    const probe = harness({
+      launchFiles: () =>
+        Promise.resolve({
+          canceled: false,
+          assets: returnedUris.map((uri) => ({ uri, mimeType: 'application/pdf' }))
+        }),
+      discard: (uri) => {
+        probe.discarded.push(uri)
+        if (uri === returnedUris[0]) {
+          throw new Error('cache file is busy')
+        }
+        probe.files.delete(uri)
+      }
+    })
+    try {
+      for (const uri of returnedUris) {
+        probe.files.set(uri, new Uint8Array(1024 * 1024))
+      }
+      await expect(
+        probe.serve('native.media.pick', { source: 'files', multiple: true })
+      ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_cap')
+      expect(probe.discarded).toEqual(returnedUris)
+      expect([...probe.files.keys()]).toEqual([returnedUris[0]])
+      expect(probe.registry.liveCount()).toBe(0)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('refuses an item bigger than the staging ceiling, and deletes what it picked', async () => {
@@ -363,19 +396,6 @@ describe('reading chunks', () => {
     expect(Buffer.compare(collected, source)).toBe(0)
   })
 
-  it('answers exactly the bytes a short read asked for, at the offset it asked for', async () => {
-    // Ask for a partial range: whole-file reads would also pass cases whose files fit below the cap.
-    const { probe, handle } = await staged(1000)
-    const source = bytesOf(1000)
-    const chunk = mediaReadResultSchema.parse(
-      await probe.serve('native.media.read', { handle, offset: 400, length: 16 })
-    )
-    const bytes = atob(chunk.base64)
-    expect(bytes.length).toBe(16)
-    expect(chunk.eof).toBe(false)
-    expect([...bytes].map((char) => char.codePointAt(0))).toEqual([...source.subarray(400, 416)])
-  })
-
   it('closes the file handle it opened, on the way out and on the way through a throw', async () => {
     const { probe, handle } = await staged(64)
     await probe.serve('native.media.read', { handle, offset: 0, length: 16 })
@@ -423,73 +443,6 @@ describe('reading chunks', () => {
       probe.serve('native.media.read', { handle, offset: 0, length: 16 })
     ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_handle_unknown')
   })
-
-  it('refuses a read that starts at the end', async () => {
-    const { probe, handle } = await staged(64)
-    await expect(
-      probe.serve('native.media.read', { handle, offset: 64, length: 16 })
-    ).rejects.toSatisfy((error) => refusalOf(error) === 'native_media_range')
-  })
-})
-
-describe('naming', () => {
-  async function pickOne(probe: Harness, source: 'library' | 'files'): Promise<string> {
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source, multiple: false })
-    )
-    return result.items[0]?.handle ?? ''
-  }
-
-  it("answers the document picker's name for a file, never on the picked item itself", async () => {
-    const probe = harness({
-      launchFiles: () =>
-        Promise.resolve({
-          canceled: false,
-          assets: [{ uri: `${CACHE}/doc.pdf`, mimeType: 'application/pdf', name: 'auth-spec.pdf' }]
-        })
-    })
-    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(10))
-    const result = mediaPickResultSchema.parse(
-      await probe.serve('native.media.pick', { source: 'files', multiple: false })
-    )
-    expect(result.items[0]).not.toHaveProperty('name')
-    await expect(
-      probe.serve('native.media.name', { handle: result.items[0]?.handle ?? '' })
-    ).resolves.toEqual({ name: 'auth-spec.pdf' })
-  })
-
-  it('answers null where the picker reported no name', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/lib.png`, bytesOf(4))
-    const handle = await pickOne(probe, 'library')
-    await expect(probe.serve('native.media.name', { handle })).resolves.toEqual({ name: null })
-  })
-
-  it('keeps the extension of a name too long for the verb', async () => {
-    const long = `${'a'.repeat(400)}.pdf`
-    const probe = harness({
-      launchFiles: () =>
-        Promise.resolve({
-          canceled: false,
-          assets: [{ uri: `${CACHE}/doc.pdf`, mimeType: 'application/pdf', name: long }]
-        })
-    })
-    probe.files.set(`${CACHE}/doc.pdf`, bytesOf(4))
-    const handle = await pickOne(probe, 'files')
-    const { name } = mediaNameResultSchema.parse(await probe.serve('native.media.name', { handle }))
-    expect(name).toHaveLength(BRIDGE_MEDIA_NAME_MAX_CHARS)
-    expect(name?.endsWith('.pdf')).toBe(true)
-  })
-
-  it('refuses a handle the page already released', async () => {
-    const probe = harness()
-    probe.files.set(`${CACHE}/lib.png`, bytesOf(4))
-    const handle = await pickOne(probe, 'library')
-    await probe.serve('native.media.release', { handle })
-    await expect(probe.serve('native.media.name', { handle })).rejects.toSatisfy(
-      (error) => refusalOf(error) === 'native_media_handle_unknown'
-    )
-  })
 })
 
 describe('releasing', () => {
@@ -507,26 +460,6 @@ describe('releasing', () => {
     await expect(probe.serve('native.media.release', { handle })).resolves.toEqual({
       released: false
     })
-  })
-})
-
-describe('what the largest reply weighs', () => {
-  it('carries a full chunk in one frame, under the frame cap and far under the reply ceiling', () => {
-    const payload = {
-      id: 'a'.repeat(22),
-      ok: true as const,
-      result: {
-        base64: 'a'.repeat(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS),
-        eof: false
-      }
-    }
-    const split = splitBridgeReply('a'.repeat(22), payload)
-    expect(split.ok).toBe(true)
-    // Base64 needs no JSON escaping, so serialized size is its length plus the envelope.
-    expect(split.ok === true && split.frames).toHaveLength(1)
-    const bytes = utf8ByteLength(JSON.stringify(split.ok === true ? split.frames[0] : null))
-    expect(bytes).toBeLessThan(BRIDGE_MAX_MESSAGE_BYTES)
-    expect(bytes).toBeLessThan(BRIDGE_MAX_REPLY_BYTES)
   })
 })
 

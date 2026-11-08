@@ -1,8 +1,9 @@
 /** Folded rows retain the first occurrence date; count/latest occurrence must expose continuing failures rather than suggesting one old event. */
 
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { formatAutomationDateTime } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 type AutomationRunOccurrences = Pick<AutomationRun, 'occurrenceCount' | 'lastOccurrenceAt'>
 
@@ -12,19 +13,28 @@ export function isAutomationRunFolded(run: AutomationRunOccurrences): boolean {
 }
 
 /** Null for the single-occurrence rows, which is every row written before folding. */
-export function automationRunOccurrenceLabel(run: AutomationRunOccurrences): string | null {
+export function automationRunOccurrenceLabel(
+  run: AutomationRunOccurrences,
+  t: Translate = translate,
+  intlLocale?: string
+): string | null {
   if (!isAutomationRunFolded(run)) {
     return null
   }
   const count = run.occurrenceCount ?? 1
-  // Avoid i18next’s reserved count parameter, which would require _one/_other catalog keys.
-  const times = String(count)
   // Older hosts may supply count without the jointly stamped timestamp; still show the count.
   return run.lastOccurrenceAt
-    ? translate(
-        'auto.components.automations.runHistory.occurrencesWithLatest',
-        '{{times}} times, most recently {{date}}',
-        { times, date: formatAutomationDateTime(run.lastOccurrenceAt) }
+    ? t(
+        'auto.components.automations.runHistory.occurrencesWithLatestCount',
+        '{{count}} times, most recently {{date}}',
+        {
+          count,
+          date: formatAutomationDateTime(run.lastOccurrenceAt, t, intlLocale),
+          defaultValue_one: '{{count}} time, most recently {{date}}'
+        }
       )
-    : translate('auto.components.automations.runHistory.occurrences', '{{times}} times', { times })
+    : t('auto.components.automations.runHistory.occurrencesCount', '{{count}} times', {
+        count,
+        defaultValue_one: '{{count}} time'
+      })
 }

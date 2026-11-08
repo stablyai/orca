@@ -1,10 +1,11 @@
+import type * as UseMobileSessionDiffCommentsModule from '../../../source-control/review/use-mobile-session-diff-comments'
+import type * as UseMobileSessionMarkdownActionsModule from '../../../files/session-documents/use-mobile-session-markdown-actions'
+import type * as UseQuickCommandsModule from '../../../terminal/quick-commands/use-quick-commands'
 import { hookMount, performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
-import type {
-  DiffNotesDelivery,
-  MarkdownDocState
-} from '../../../session/mobile-session-route-types'
+import type { DiffNotesDelivery } from '../../../source-control/review/mobile-review-comment-state'
+import type { MarkdownDocState } from '../../../files/session-documents/session-document-state'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 
@@ -17,9 +18,9 @@ export function sessionNotesMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.diff-notes': ({ client, effect }) => {
-      const useComments = modules.load<
-        typeof import('../../../session/use-mobile-session-diff-comments')
-      >('mobile/src/session/use-mobile-session-diff-comments.ts').useMobileSessionDiffComments
+      const useComments = modules.load<typeof UseMobileSessionDiffCommentsModule>(
+        'mobile/src/source-control/review/use-mobile-session-diff-comments.ts'
+      ).useMobileSessionDiffComments
       let diffComments: DiffComment[] = []
       const diffCommentsRef = { current: diffComments }
       let busy = false
@@ -78,9 +79,9 @@ export function sessionNotesMountAdapters(
       }
     },
     'session.markdown-save': ({ client, effect }) => {
-      const useMarkdown = modules.load<
-        typeof import('../../../session/use-mobile-session-markdown-actions')
-      >('mobile/src/session/use-mobile-session-markdown-actions.ts').useMobileSessionMarkdownActions
+      const useMarkdown = modules.load<typeof UseMobileSessionMarkdownActionsModule>(
+        'mobile/src/files/session-documents/use-mobile-session-markdown-actions.ts'
+      ).useMobileSessionMarkdownActions
       let markdownDocs = new Map<string, MarkdownDocState>([
         [
           TAB,
@@ -116,7 +117,8 @@ export function sessionNotesMountAdapters(
             readMarkdownTab: () => {
               effect('read-markdown-tab', {})
               return Promise.resolve()
-            }
+            },
+            dictationLeaveHold: { holdsLeave: false, hold: () => false }
           })
         )
       })
@@ -140,8 +142,8 @@ export function sessionNotesMountAdapters(
       }
     },
     'settings.quick-commands': ({ client }) => {
-      const useQuickCommands = modules.load<typeof import('../../../session/use-quick-commands')>(
-        'mobile/src/session/use-quick-commands.ts'
+      const useQuickCommands = modules.load<typeof UseQuickCommandsModule>(
+        'mobile/src/terminal/quick-commands/use-quick-commands.ts'
       ).useQuickCommands
       let enabled = true
       let model: ReturnType<typeof useQuickCommands>

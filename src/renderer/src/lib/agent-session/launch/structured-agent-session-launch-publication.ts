@@ -7,7 +7,7 @@ import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
   notifyStructuredLaunchListeners
 } from './structured-agent-session-launch-registry'
-import { forgetUnlistedCreatedChat } from '../../structured-agent-session-unlisted-created-chats'
+import { forgetUnlistedCreatedChat } from './pane/structured-agent-session-unlisted-created-chats'
 
 function confirmStructuredLaunchFirstMessagePublication(
   worktreeId: string,
@@ -35,6 +35,9 @@ export function markStructuredAgentSessionLaunchPublished(
     if (persisted?.executionHostId !== executionHostId) {
       return false
     }
+    if (persisted.explicitLaunchOptions && persisted.createMessageSupport !== true) {
+      return false
+    }
     if (persisted.firstMessage) {
       confirmStructuredLaunchFirstMessagePublication(worktreeId, sessionId)
       return false
@@ -57,6 +60,9 @@ export function markStructuredAgentSessionLaunchPublished(
   // Still in flight: its own settlement publishes once the picks held during launch land.
   if (state.callers.outcome === 'pending') {
     return true
+  }
+  if (state.intent.explicitLaunchOptions && state.intent.createMessageSupport !== true) {
+    return false
   }
   if (state.intent.params.firstMessage) {
     confirmStructuredLaunchFirstMessagePublication(worktreeId, sessionId)

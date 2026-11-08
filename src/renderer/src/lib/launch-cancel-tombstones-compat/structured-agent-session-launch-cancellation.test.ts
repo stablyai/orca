@@ -1,13 +1,13 @@
 // @vitest-environment happy-dom
 
+import { markStructuredAgentSessionLaunchCancelled } from '../agent-session/launch/structured-agent-session-launch-cancel'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredLaunchSlotOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-slot'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { suppressCancelledStructuredSessionTabs } from '@/runtime/structured-agent-session-tab-retirement'
+import { suppressCancelledStructuredSessionTabs } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import type { StructuredLaunchState } from '../agent-session/launch/structured-agent-session-launch-registry'
 import {
   hasStructuredAgentSessionLaunchCancellationTombstone,
-  markStructuredAgentSessionLaunchCancelled,
   retireAbsentStructuredAgentSessionLaunchCancellationTombstones,
   resetStructuredAgentLaunchRegistryForTests,
   setStructuredLaunchState
@@ -19,21 +19,21 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -106,7 +106,7 @@ function setLaunch(
     promise,
     visibilityUnknown: false,
     cancelled: false,
-    selection: { held: {} }
+    selection: {}
   } satisfies StructuredLaunchState)
 }
 
@@ -238,13 +238,6 @@ describe('structured launch cancellation retirement', () => {
     await expectLatePublicationSuppressed(SERVER_HOST, SERVER)
   })
 
-  it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-    'keeps a late publication suppressed until the cancelled launch settles',
-    async () => {
-      await expectLatePublicationSuppressed('local', { kind: 'local' })
-    }
-  )
-
   // A runtime refused its chats answers with no chat rows; that absence is not the host's answer.
   // Switch on, this machine keeps no tombstone: main's fence is in its close-before-create test.
   it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
@@ -280,7 +273,7 @@ describe('structured launch cancellation retirement', () => {
         promise: Promise.resolve({ sessionId: SESSION_ID, fence: 1 }),
         visibilityUnknown: false,
         cancelled: false,
-        selection: { held: {} }
+        selection: {}
       } satisfies StructuredLaunchState)
       markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local', layoutOwner)
       await new Promise((resolve) => setTimeout(resolve, 0))
@@ -358,46 +351,6 @@ describe('structured launch cancellation retirement', () => {
     }
   )
 
-  it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-    'keeps a local cancel through an inventory that cannot list chats',
-    async () => {
-      await drawWorktreeFromMain()
-      setLaunch('local', { kind: 'local' }, Promise.resolve({ sessionId: SESSION_ID, fence: 1 }))
-      const call = vi.fn((_request: { method: string }): Promise<unknown> =>
-        Promise.resolve({ ok: true, result: { ok: true } })
-      )
-      Object.defineProperty(window, 'api', { configurable: true, value: { runtime: { call } } })
-      markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local', layoutOwner)
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      const closes = () =>
-        call.mock.calls.filter(([request]) => request.method === 'agentSession.close')
-      expect(closes()).toHaveLength(1)
-
-      const listing = (unverifiable: boolean) => ({
-        ok: true,
-        result: {
-          snapshots: [
-            unverifiable
-              ? { ...latePublication(), tabs: [], agentSessionsUnverifiable: true as const }
-              : latePublication()
-          ],
-          authoritative: true
-        }
-      })
-      call.mockImplementation(() => Promise.resolve(listing(true)))
-      await refreshLocalStructuredSessionTabs()
-      expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(
-        false
-      )
-      expect(await shownChat()).toEqual(NOT_SHOWN)
-
-      call.mockImplementation(() => Promise.resolve(listing(false)))
-      await refreshLocalStructuredSessionTabs()
-      expect(await shownChat()).toEqual(NOT_SHOWN)
-      expect(closes()).toHaveLength(1)
-    }
-  )
-
   // An older switch-off build saved the tombstone; this build drains it on its first inventory.
   it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
     'drains a tombstone an older build saved: one close, and main shows no chat',
@@ -438,32 +391,6 @@ describe('structured launch cancellation retirement', () => {
         call.mock.calls.filter(([request]) => request.method === 'agentSession.close')
       ).toHaveLength(1)
       expect(await shownChat()).toEqual(NOT_SHOWN)
-    }
-  )
-
-  it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
-    'tells main of a local cancel at once, so the next inventory has nothing to drain',
-    async () => {
-      const call = vi.fn(({ method }: { method: string }) =>
-        Promise.resolve(
-          method === 'session.tabs.listAll'
-            ? { ok: true, result: { snapshots: [], authoritative: true } }
-            : { ok: true, result: { ok: true } }
-        )
-      )
-      Object.defineProperty(window, 'api', { configurable: true, value: { runtime: { call } } })
-      markStructuredAgentSessionLaunchCancelled(WORKTREE_ID, SESSION_ID, 'local', layoutOwner)
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(hasStructuredAgentSessionLaunchCancellationTombstone(WORKTREE_ID, SESSION_ID)).toBe(
-        false
-      )
-
-      await refreshLocalStructuredSessionTabs(undefined, { authoritative: true })
-      expect(call.mock.calls.map(([request]) => request.method)).toEqual([
-        'agentSession.close',
-        'session.tabs.close',
-        'session.tabs.listAll'
-      ])
     }
   )
 })

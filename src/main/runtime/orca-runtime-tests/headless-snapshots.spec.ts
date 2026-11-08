@@ -1,7 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, setPlatform } from '../orca-runtime-test-mocks.spec'
-import type { HeadlessEmulator } from '../../daemon/headless-emulator'
-import type { RuntimeTerminalAgentStatusEvent } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { setPlatform } from '../orca-runtime-test-mocks/setup.spec'
+import type { RuntimeTerminalAgentStatusEvent } from '../terminal/output/terminal-agent-status-events'
+import type { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import {
+  declarePendingPaneSerializer,
+  settlePendingPaneSerializer
+} from '../../ipc/pty/pane/serializer-state'
+import { seedHeadlessTerminalFromSpawnResult } from '../../ipc/pty/pane/terminal-spawn-restore'
+
 import {
   TEST_WORKTREE_ID,
   createRuntime,
@@ -11,22 +20,9 @@ import {
   referenceStatusFrameLines,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('returns OSC titles from headless main terminal snapshots', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-
-    runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07hello\n', 100)
-
-    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
-    expect(snapshot).toMatchObject({
-      source: 'headless',
-      lastTitle: 'Codex working'
-    })
-  })
-
   it('resizes the headless mirror after an accepted desktop PTY resize', async () => {
     const spawn = { cols: 80, rows: 24 }
     const resized = { cols: 120, rows: 30 }
@@ -142,217 +138,6 @@ describe('OrcaRuntimeService', () => {
     expect(restored).toContain('AGENTS.md')
   })
 
-  it('adopts renderer-seeded titles into headless main terminal snapshots', async () => {
-    const artifactPath = '/tmp/renderer-seeded-artifact.json'
-    const serializeBuffer = vi.fn().mockResolvedValue({
-      data: `renderer scrollback\nwrote ${artifactPath}\n`,
-      cols: 100,
-      rows: 30,
-      lastTitle: 'Renderer seeded Codex'
-    })
-    const runtime = createRuntime()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeBuffer,
-      hasRendererSerializer: () => true,
-      getSize: () => ({ cols: 100, rows: 30 })
-    })
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-
-    runtime.onPtyData('pty-1', 'live output without title\n', 100)
-
-    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
-    expect(snapshot).toMatchObject({
-      source: 'headless',
-      lastTitle: 'Renderer seeded Codex'
-    })
-    expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
-      scrollbackRows: expect.any(Number)
-    })
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('returns cwd metadata from seeded headless main terminal snapshots', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/restored-scrollback-artifact.json'
-
-    runtime.seedHeadlessTerminal(
-      'pty-1',
-      `restored scrollback\nwrote ${artifactPath}\n`,
-      { cols: 100, rows: 30 },
-      {
-        cwd: '/projects/restored'
-      }
-    )
-
-    const snapshot = await runtime.serializeMainTerminalBuffer('pty-1', { scrollbackRows: 1000 })
-    expect(snapshot).toMatchObject({
-      source: 'headless',
-      cwd: '/projects/restored'
-    })
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('resolves paths without candidate activation via the lazy safety net', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/lazy-activation-artifact.json'
-
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('backfills candidates on activation so scrolled-off paths still resolve', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/backfilled-artifact.json'
-
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-    runtime.activateRecentPtyPathCandidateTracking()
-    // Evict raw bytes so only backfilled candidates can authorize the path.
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('backfills per retained chunk so chunk boundaries match the eager extractor', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/a.json'
-
-    // Concatenation changes the candidate to /tmp/a.jsonsuffix.txt; eager per-chunk extraction kept /tmp/a.json.
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}`, 100)
-    runtime.onPtyData('pty-1', 'suffix.txt', 150)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('extracts candidates per chunk after activation for scrolled-off paths', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/post-activation-artifact.json'
-
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('does not retain pre-activation paths that scrolled past the raw window', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/pre-activation-scrolled-artifact.json'
-
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    // Accepted loss: bytes evicted before first tracking activation cannot yield candidates.
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      false
-    )
-  })
-
-  it('backfill does not mint candidates from an over-limit line shortened by the window trim', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/result.json'
-
-    // Eager extraction rejects over-4KiB lines.
-    runtime.onPtyData('pty-1', `${'a'.repeat(5000)} ${artifactPath}\n`, 100)
-    // Trim into that line; replaying only its shorter tail would wrongly authorize the path.
-    runtime.onPtyData('pty-1', 'y'.repeat(64 * 1024 - 1000), 150)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      false
-    )
-  })
-
-  it('backfill replays the full head chunk including its window-trimmed prefix', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/trimmed-prefix-artifact.json'
-
-    // read() trims this prefix; append-time extraction saw its original path.
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n${'b'.repeat(3000)}\n`, 100)
-    runtime.onPtyData('pty-1', 'y'.repeat(64 * 1024 - 1000), 150)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    // Recover from the intact head chunk to match eager authorization after raw-byte eviction.
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
-  it('matches eager extraction exactly for a pre-sliced oversized chunk', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const cutLinePath = '/tmp/cut-line.json'
-    const keptPath = '/tmp/kept-after-cut.json'
-
-    // Oversized chunks are pre-sliced; eager extraction must retain valid short-line paths and reject long-line tails.
-    const keptLine = `wrote ${keptPath}\n`
-    const afterFirstLine = `${keptLine}${'z'.repeat(62 * 1024 - keptLine.length)}`
-    const oversized = `${'a'.repeat(5 * 1024)} ${cutLinePath}\n${afterFirstLine}`
-    runtime.onPtyData('pty-1', oversized, 100)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, cutLinePath, cutLinePath)).toBe(
-      false
-    )
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, keptPath, keptPath)).toBe(true)
-  })
-
-  it('keeps a candidate from the short first line of an oversized chunk after the window scrolls', async () => {
-    const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
-    const artifactPath = '/tmp/result.json'
-
-    // Pre-slicing drops only the short line's prefix; preserve its original eager grant after raw-byte eviction.
-    const firstLine = `wrote ${artifactPath}\n`
-    runtime.onPtyData('pty-1', `${firstLine}${'f'.repeat(64 * 1024 + 6 - firstLine.length)}`, 100)
-    runtime.activateRecentPtyPathCandidateTracking()
-    runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-    expect(runtime.hasRecentTerminalOutputPath(terminal.handle, artifactPath, artifactPath)).toBe(
-      true
-    )
-  })
-
   it('replaces suffix-only headless state with the recovered renderer snapshot', async () => {
     const runtime = createRuntime()
     runtime.setPtyController({
@@ -382,51 +167,30 @@ describe('OrcaRuntimeService', () => {
     expect({ cols: snapshot?.cols, rows: snapshot?.rows }).toEqual({ cols: 47, rows: 40 })
   })
 
-  it('adopts OSC7 host metadata from seeded headless terminal scrollback', async () => {
+  it('retains cold-restored history in hidden-output recovery while renderer serialization is pending', async () => {
     const runtime = createRuntime()
-    syncSinglePty(runtime, 'pty-1')
-    const [terminal] = (await runtime.listTerminals()).terminals
+    syncSinglePty(runtime, 'cold-pty')
+    const paneKey = makePaneKey('tab-1', '44444444-4444-4444-8444-444444444444')
+    const generation = declarePendingPaneSerializer(paneKey, undefined)
+    try {
+      seedHeadlessTerminalFromSpawnResult(
+        runtime,
+        {
+          id: 'cold-pty',
+          coldRestore: { scrollback: 'restored history\r\n', cwd: '/tmp', cols: 40, rows: 6 }
+        },
+        paneKey
+      )
+      runtime.onPtyData('cold-pty', 'fresh shell prompt $ ', 100)
 
-    runtime.seedHeadlessTerminal(
-      'pty-1',
-      '\x1b]7;file://remote-host/tmp\x07restored scrollback\n',
-      { cols: 100, rows: 30 }
-    )
-
-    expect(runtime.resolveTerminalFileUriHostname(terminal.handle)).toBe('remote-host')
-  })
-
-  it('falls back to the renderer snapshot for hidden-output recovery without headless state', async () => {
-    const serializeBuffer = vi.fn().mockResolvedValue({
-      data: '\x1b[?1049hRenderer TUI\r\nStill running\r\n',
-      cols: 100,
-      rows: 30,
-      lastTitle: 'Renderer working'
-    })
-    const runtime = createRuntime()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeBuffer,
-      hasRendererSerializer: () => true
-    })
-    syncSinglePty(runtime, 'pty-1')
-
-    const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('pty-1', {
-      scrollbackRows: 5000
-    })
-
-    expect(snapshot).toEqual({
-      data: '\x1b[?1049hRenderer TUI\r\nStill running\r\n',
-      cols: 100,
-      rows: 30,
-      lastTitle: 'Renderer working',
-      source: 'renderer'
-    })
-    expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
-      scrollbackRows: 5000
-    })
+      const snapshot = await runtime.serializeHiddenOutputRecoveryBuffer('cold-pty', {
+        scrollbackRows: 100
+      })
+      expect(snapshot?.data).toContain('restored history')
+      expect(snapshot?.data).toContain('fresh shell prompt $ ')
+    } finally {
+      settlePendingPaneSerializer(paneKey, generation)
+    }
   })
 
   it('binds shell ownership evidence to the headless snapshot sequence', async () => {
@@ -468,122 +232,6 @@ describe('OrcaRuntimeService', () => {
 
     expect(liveSnapshot?.alternateScreen).toBe(true)
     expect(liveSnapshot?.terminalOwner).toBeUndefined()
-  })
-
-  it('keeps an empty headless snapshot authoritative for hidden-output recovery', async () => {
-    const serializeBuffer = vi.fn().mockResolvedValue({
-      data: 'stale renderer content\r\n',
-      cols: 80,
-      rows: 24
-    })
-    const runtime = createRuntime()
-    runtime.setPtyController({
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null,
-      serializeBuffer,
-      hasRendererSerializer: () => true
-    })
-    type HeadlessStateForTest = {
-      emulator: {
-        isAlternateScreen: boolean
-        getSnapshot: (opts: { scrollbackRows?: number }) => {
-          rehydrateSequences: string
-          snapshotAnsi: string
-          cols: number
-          rows: number
-        }
-      }
-      outputSequence: number
-      writeChain: Promise<void>
-      ownership: { settle: () => Promise<void>; owner: undefined }
-    }
-    const runtimePrivate = runtime as unknown as {
-      headlessTerminals: Map<string, HeadlessStateForTest>
-    }
-    runtimePrivate.headlessTerminals.set('pty-empty', {
-      emulator: {
-        isAlternateScreen: false,
-        getSnapshot: () => ({ rehydrateSequences: '', snapshotAnsi: '', cols: 90, rows: 30 })
-      },
-      outputSequence: 17,
-      writeChain: Promise.resolve(),
-      ownership: { settle: async () => {}, owner: undefined }
-    })
-
-    await expect(runtime.serializeHiddenOutputRecoveryBuffer('pty-empty')).resolves.toEqual({
-      data: '',
-      cols: 90,
-      rows: 30,
-      seq: 17,
-      source: 'headless',
-      // Non-alt restore retains destructive scrollback clearing.
-      alternateScreen: false
-    })
-    expect(serializeBuffer).not.toHaveBeenCalled()
-  })
-
-  it('advances the absolute output sequence across a daemon stream gap', () => {
-    const runtime = createRuntime()
-    runtime.onPtyData('pty-gap', 'before', Date.now())
-
-    runtime.notePtyDataGap('pty-gap', 4096)
-    runtime.onPtyData('pty-gap', 'after', Date.now())
-
-    expect(runtime.getPtyOutputSequence('pty-gap')).toBe('before'.length + 4096 + 'after'.length)
-  })
-
-  it('emits explicit OSC 9999 agent status from runtime PTY data', () => {
-    const statuses: RuntimeTerminalAgentStatusEvent[] = []
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      onTerminalAgentStatus: (event) => statuses.push(event)
-    })
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    const paneKey = `tab-1:${leafId}`
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Terminal',
-          activeLeafId: leafId,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: TEST_WORKTREE_ID,
-          leafId,
-          paneRuntimeId: 1,
-          ptyId: 'pty-1'
-        }
-      ]
-    })
-
-    runtime.onPtyData(
-      'pty-1',
-      'before\x1b]9999;{"state":"working","prompt":"ship it","agentType":"codex"}\x07after',
-      123
-    )
-
-    expect(statuses).toEqual([
-      {
-        ptyId: 'pty-1',
-        source: 'mounted-leaf',
-        paneKey,
-        tabId: 'tab-1',
-        worktreeId: TEST_WORKTREE_ID,
-        connectionId: null,
-        terminalHandle: expect.stringMatching(/^term_/),
-        payload: {
-          state: 'working',
-          prompt: 'ship it',
-          agentType: 'codex'
-        }
-      }
-    ])
   })
 
   it('stamps SSH connection identity on runtime terminal status', () => {

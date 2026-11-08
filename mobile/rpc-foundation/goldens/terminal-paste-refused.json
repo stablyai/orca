@@ -87,17 +87,13 @@
         }
       }
     },
-    "528166d1face": {
-      "connectionId": "unresolved",
-      "crash": {
-        "$rpc": "null"
-      },
-      "pasteOutcome": "sent"
-    },
-    "87b511344653": {
-      "name": "refresh-can-paste",
+    "86cf27deee09": {
+      "name": "toast",
       "ordinal": 7,
-      "value": {}
+      "value": {
+        "durationMs": 1500,
+        "message": "Paste failed"
+      }
     },
     "8e065efdacec": {
       "name": "flush-live-input",
@@ -128,6 +124,13 @@
       "value": {
         "$rpc": "undefined"
       }
+    },
+    "ebe2af37c0a0": {
+      "connectionId": "unresolved",
+      "crash": {
+        "$rpc": "null"
+      },
+      "pasteOutcome": "error"
     }
   },
   "recording": {
@@ -143,8 +146,8 @@
             "copy": "eb79a9b3682a",
             "paste": "eb79a9b3682a"
           },
-          "state": "528166d1face",
-          "effects": ["a4fb8cfbcc58", "8e065efdacec", "87b511344653"]
+          "state": "ebe2af37c0a0",
+          "effects": ["a4fb8cfbcc58", "8e065efdacec", "86cf27deee09"]
         }
       }
     ]

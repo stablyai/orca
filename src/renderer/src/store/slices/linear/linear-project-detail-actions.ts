@@ -6,7 +6,7 @@ import type {
   LinearSliceSet
 } from './linear-slice-contract'
 import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
-import { linearGetProject } from '@/runtime/runtime-linear-project-client'
+import { linearGetProject } from '@/runtime/linear/runtime-linear-project-client'
 import {
   evictStaleEntries,
   isFresh,
@@ -48,7 +48,7 @@ export function createLinearProjectDetailActions(
         inflight &&
         inflight.contextKey === contextKey &&
         inflight.mutationGeneration === getLinearMutationGeneration() &&
-        (!options?.force || inflight.force)
+        !options?.force
       ) {
         return inflight.promise
       }
@@ -122,7 +122,6 @@ export function createLinearProjectDetailActions(
 
       entry = {
         promise,
-        force: Boolean(options?.force),
         contextKey,
         mutationGeneration: requestMutationGeneration
       }

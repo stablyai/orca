@@ -21,12 +21,12 @@ export type DictationCapture = {
   readonly onChunk: (
     handler: (chunk: DictationCaptureChunk) => void
   ) => DictationCaptureSubscription
-  // Notify loss without a reason argument because all callers cancel alike: native began/blocked, page equivalents, or refused reads.
+  // Notify loss without a reason argument because callers treat every source alike: native began/blocked, page equivalents, or refused reads.
   readonly onInterruption: (handler: () => void) => DictationCaptureSubscription
 }
 
 // 1024-byte 16 kHz/16-bit events arrive every 32 ms; forwarding each would consume almost all 64 request slots on a two-second link.
 export const DICTATION_NATIVE_EVENT_INTERVAL_MS = 32
 
-// Batch at 500 ms so a two-second desktop round trip holds four forwards instead of about 63. Each 16 KB PCM batch fits well below the bridge frame cap.
-export const DICTATION_CAPTURE_DRAIN_INTERVAL_MS = 500
+// Short batches bring the host's live text sooner; the chunk send window, not this interval, bounds the bridge slots a slow link holds.
+export const DICTATION_CAPTURE_DRAIN_INTERVAL_MS = 150

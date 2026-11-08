@@ -17,7 +17,8 @@ import {
   WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY
 } from '../../../shared/protocol-version'
 import { translate } from '@/i18n/i18n'
-import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
+import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 
 export type PrepareEphemeralVmWorkspaceTargetArgs = {
   repoId: string
@@ -62,7 +63,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
     ...(args.provisionId ? { provisionId: args.provisionId } : {})
   })
   if (!provisioned.ok) {
-    return { ok: false, error: provisioned.error, stderr: provisioned.stderr }
+    return { ok: false, error: ephemeralVmErrorText(provisioned), stderr: provisioned.stderr }
   }
 
   const checkoutMode = getEphemeralVmRecipeResultCheckoutMode(provisioned.runtime.recipeResult)

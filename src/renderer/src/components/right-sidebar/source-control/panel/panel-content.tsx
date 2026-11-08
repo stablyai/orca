@@ -1,3 +1,4 @@
+import { useGitCommitActionsSupport } from '@/runtime/source-control/git/git-commit-actions-capability'
 import { GitHistoryPanel } from '../sync/git-history-panel'
 import { shouldShowSourceControlCompareUnavailableCard } from './header-toolbar'
 import { shouldRenderCommitArea } from '../commit/component-gates'
@@ -8,9 +9,12 @@ import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { useSourceControlScope } from './worktree-scope'
 
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
+  // Folder sections sit in cards, so the dock matches the card instead of the sidebar.
+  const dockBackground = useSourceControlScope() ? 'bg-card/95' : 'bg-sidebar/95'
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -29,10 +33,12 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     gitHistoryState,
     handleAbortOperationForConflict,
     handleCommitAction,
+    handleCompleteMerge,
     handleContextMenu,
     handleOpenDiff,
     handleResolveConflictsWithAI,
     handleSelect,
+    handleResolveConflict,
     handleStage,
     handleStageAllPaths,
     handleStageSectionPaths,
@@ -40,8 +46,10 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     handleUnstage,
     handleUnstagePaths,
     hasUncommittedEntries,
+    isResolvingConflictsWithAI,
     isAbortingOperation,
     isCheckingRecoveryAdmission,
+    isCommitting,
     isExecutingBulk,
     isGitHistoryVisible,
     loadCommitFiles,
@@ -64,6 +72,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     setBaseRefDialogOpen,
     sourceControlAiActionsVisible,
     sourceControlViewMode,
+    statusReadError,
     toggleSection,
     toggleSubmodule,
     toggleTreeDir,
@@ -75,10 +84,16 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     visibleTreeRowsBySection
   } = model
 
+  const recovery = useGitCommitActionsSupport(
+    conflictOperation === 'revert' ? model.activeRepoTarget : null
+  )
   const hasFilteredUncommittedEntries = displaySections.length > 0
   const hasFilteredBranchEntries = filteredBranchEntries.length > 0
   const showGenericEmptyState =
-    !hasUncommittedEntries && branchSummary?.status === 'ready' && branchEntries.length === 0
+    statusReadError === undefined &&
+    !hasUncommittedEntries &&
+    branchSummary?.status === 'ready' &&
+    branchEntries.length === 0
 
   return (
     <>
@@ -86,9 +101,11 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
         unresolvedConflictCount={unresolvedConflictReviewEntries.length}
         conflictOperation={conflictOperation}
         sourceControlAiActionsVisible={sourceControlAiActionsVisible}
-        isRecoveryBusy={isCheckingRecoveryAdmission}
+        isRecoveryBusy={isCheckingRecoveryAdmission || isResolvingConflictsWithAI}
         isAbortingOperation={isAbortingOperation}
         onAbortOperation={handleAbortOperationForConflict}
+        isCompletingMerge={isCommitting}
+        onCompleteMerge={() => void handleCompleteMerge()}
         onResolveWithAi={() => void handleResolveConflictsWithAI()}
         onReviewConflicts={() => {
           openConflictReview(
@@ -99,6 +116,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           )
         }}
         repositoryHuge={repositoryHuge}
+        statusReadError={statusReadError}
         worktreeId={currentWorktreeId}
         onRetryStatus={refreshActiveGitStatus}
         onStageAllChanges={handleStageWorktreeChanges}
@@ -115,9 +133,11 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
       {/* Keep CommitArea through clean/mid-commit states (#1448); only active conflict operations replace the action surface. */}
       <SourceControlForkPushNotice pushTarget={activeWorktree.pushTarget ?? null} />
 
-      {shouldRenderCommitArea(unresolvedConflicts.length, conflictOperation) && (
-        <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />
-      )}
+      {shouldRenderCommitArea(
+        unresolvedConflicts.length,
+        conflictOperation,
+        recovery.supported
+      ) && <SourceControlCommitSurface {...props} showGenericEmptyState={showGenericEmptyState} />}
 
       {hasFilteredUncommittedEntries && (
         <SourceControlUncommittedSections
@@ -168,6 +188,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           activeConnectionId={activeConnectionId}
           handleOpenDiff={handleOpenDiff}
           handleStage={handleStage}
+          handleResolveConflict={handleResolveConflict}
           handleUnstage={handleUnstage}
           requestDiscardEntry={requestDiscardEntry}
           diffCommentCountByPath={diffCommentCountByPath}
@@ -189,6 +210,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
 
       {branchSummary?.status === 'ready' && hasFilteredBranchEntries && (
         <SourceControlBranchSection
+          activeOpenRowKeys={activeOpenRowKeys}
           branchSummary={branchSummary}
           filteredBranchEntries={filteredBranchEntries}
           totalBranchEntryCount={branchEntries.length}
@@ -211,12 +233,15 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
 
       {isGitHistoryVisible && (
         // Dock history as reference context while the rest of the pane scrolls.
-        <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
+        <div
+          className={`sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border ${dockBackground} backdrop-blur-sm`}
+        >
           <GitHistoryPanel
+            worktreeId={currentWorktreeId ?? undefined}
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
             onToggle={() => toggleSection('history')}
-            onRefresh={() => void refreshGitHistory()}
+            onRefresh={() => void refreshGitHistory({ wakeWslDistro: true })}
             onOpenCommit={(item) => void openHistoryCommitDiff(item)}
             onLoadCommitFiles={loadCommitFiles}
             onOpenCommitFile={openCommitFile}

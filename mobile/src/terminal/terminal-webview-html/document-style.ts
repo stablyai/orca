@@ -1,4 +1,4 @@
-import { colors } from '../../theme/mobile-theme'
+import { colors, paletteForScheme } from '../../theme/mobile-theme'
 
 // Only native WebViews own document roots; injecting these rules on the page would restyle the app beyond terminal unmount.
 export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -8,6 +8,9 @@ export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-si
     width: 100%;
     height: 100%;
   }`
+
+// The thumb sits on terminal content, themed by the desktop rather than the app scheme.
+const SCROLL_THUMB_COLOR = paletteForScheme('dark').textSecondary
 
 // Keep element rules separate from native script strings so pages can inject only host-scoped styles.
 export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
@@ -65,7 +68,7 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     width: 3px;
     min-height: 24px;
     border-radius: 999px;
-    background: ${colors.textSecondary};
+    background: ${SCROLL_THUMB_COLOR};
     will-change: transform, height;
   }
   /* Why: selection overlay sits in unscaled viewport coords, above the

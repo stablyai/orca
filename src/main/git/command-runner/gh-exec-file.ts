@@ -10,11 +10,8 @@ import {
   type GhRateLimitBucket
 } from '../gh-rate-limit-breaker'
 import { extractExecError, parseRetryAfterMs } from '../exec-error'
-import {
-  resolveCommand,
-  resolveDefaultWslCli,
-  type ResolvedCommand
-} from './wsl-command-resolution'
+import { resolveCommand, type ResolvedCommand } from './wsl-command-resolution'
+import { resolveDefaultWslCliFallback } from './default-wsl-cli-fallback'
 import {
   canFallBackToHostGitHubCli,
   isHostCommandMissing,
@@ -41,7 +38,8 @@ import {
 
 // cwd is optional; wslDistro routes global calls when Windows has no host gh binary.
 // Retry only idempotent calls: a failed response can follow a completed write.
-export type GhExecOptions = Omit<GitExecOptions, 'cwd'> & {
+export type GhExecOptions = Omit<GitExecOptions, 'cwd' | 'stdin'> & {
+  stdin?: string | Uint8Array
   cwd?: string
   wslDistro?: string
   idempotent?: boolean
@@ -191,6 +189,7 @@ export async function ghExecFileWithScopeAsync(
           timeout: timeoutMs,
           env: nonInteractiveGhEnv(boundEnv ?? options.env),
           signal: options.signal,
+          stdin: options.stdin,
           onChildTerminated: lifetime?.capture(),
           onDeadlineKill: () => logHostedCliDeadlineKill('gh', resolved.binary, args, timeoutMs)
         },
@@ -246,7 +245,7 @@ export async function ghExecFileWithScopeAsync(
         !options.wslDistro &&
         isHostCommandMissing(err, 'gh')
       ) {
-        const wslResolved = resolveDefaultWslCli('gh', args)
+        const wslResolved = await resolveDefaultWslCliFallback('gh', args)
         if (wslResolved) {
           // Global calls have no cwd to route WSL-only Windows installs.
           resolved = wslResolved

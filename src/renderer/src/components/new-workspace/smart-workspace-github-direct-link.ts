@@ -3,13 +3,13 @@ import type { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
-} from '@/lib/github-work-item-source-lookup'
+} from '@/lib/work-items/github/github-work-item-source-lookup'
 import { lookupSmartGitHubSubmitItem } from '@/lib/smart-github-submit'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
   buildTaskSourceContextFromRepo,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type {
   CrossRepoPrompt,
   RepoBackedSearchTarget,
@@ -74,7 +74,6 @@ export async function resolveSmartWorkspaceGithubDirectLink({
   }
   const selectedSlug = await getRepoSlugCached(selectedRepo, githubSourceContext, repoSlugCache)
   if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
-    handledCrossRepoUrlRef.current = query
     const item = await lookupSmartGitHubSubmitItem({
       repoPath: selectedRepo.path,
       repoId: selectedRepo.id,
@@ -90,7 +89,11 @@ export async function resolveSmartWorkspaceGithubDirectLink({
       workItem: lookupGitHubWorkItemForSource,
       workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
     })
-    return { items: item ? [item] : [], prompt: null }
+    // Why: a repo without a GitHub origin (e.g. upstream-only) has no slug, so a miss may be cross-repo.
+    if (item || selectedSlug) {
+      handledCrossRepoUrlRef.current = query
+      return { items: item ? [item] : [], prompt: null }
+    }
   }
   const matchingTarget = await findMatchingRepoForSlug(
     repos.map((repo) => ({

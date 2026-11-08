@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Session } from 'electron'
 
 const electron = vi.hoisted(() => {
@@ -39,10 +39,12 @@ vi.mock('electron', () => ({
   BrowserWindow: electron.BrowserWindow,
   webContents: { getAllWebContents: electron.getAllWebContents }
 }))
-vi.mock('../electron-debugger-lease', () => ({
+vi.mock('../cdp/debugger/electron-debugger-lease', () => ({
   acquireElectronDebugger: vi.fn(() => lease)
 }))
 
+import { withCookieMutationLock } from './browser-cookie-import-clear'
+import { writeImportedCookies, type SourceCookieToWrite } from './browser-cookie-import-write'
 import { openCookieClearStore } from './browser-cookie-clear-store'
 
 function targetSession(): Session {
@@ -54,48 +56,52 @@ describe('cookie clear debugger lifecycle', () => {
     electron.windows.length = 0
     electron.getAllWebContents.mockReturnValue([])
     lease.release.mockClear()
+    vi.useFakeTimers()
   })
 
-  it('memoizes a pending hidden-window attachment across concurrent callers', async () => {
-    const store = openCookieClearStore(targetSession())
-    const snapshot = store.snapshotClearIdentities([])
-    const restore = store.restoreClearIdentities([])
+  afterEach(() => vi.useRealTimers())
 
-    expect(electron.windows).toHaveLength(1)
-    electron.windows[0].resolveLoad()
-    await Promise.all([snapshot, restore])
-    expect(
-      electron.windows[0].webContents.debugger.sendCommand.mock.calls.map(([method]) => method)
-    ).toEqual(['Network.getAllCookies'])
-    store.dispose()
+  it('retires a hung command before releasing the lock, fails remaining rows immediately, then admits a second import', async () => {
+    const owner = targetSession()
+    const row: SourceCookieToWrite = {
+      url: 'https://app.example/',
+      domain: 'app.example',
+      name: 'sid',
+      value: 'old',
+      path: '/',
+      secure: true,
+      httpOnly: false,
+      sameSite: 'lax',
+      expirationDate: undefined,
+      partition: { status: 'unpartitioned' }
+    }
+    const first = withCookieMutationLock(owner, async () => {
+      const store = openCookieClearStore(owner)
+      try {
+        return await writeImportedCookies(store, [row, { ...row, name: 'remaining' }], {
+          log: () => {}
+        })
+      } finally {
+        store.dispose()
+      }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    const window = electron.windows[0]
+    window.webContents.debugger.sendCommand.mockImplementation(() => new Promise(() => {}))
+    window.resolveLoad()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await first).toMatchObject({ importedCount: 0, writeRejected: 2 })
+    expect(window.webContents.debugger.sendCommand).toHaveBeenCalledOnce()
+    expect(window.destroy).toHaveBeenCalledOnce()
     expect(lease.release).toHaveBeenCalledOnce()
-  })
-
-  it('releases an attachment that resolves after disposal', async () => {
-    const store = openCookieClearStore(targetSession())
-    const snapshot = store.snapshotClearIdentities([])
-
-    store.dispose()
-    electron.windows[0].resolveLoad()
-    await expect(snapshot).rejects.toThrow(/disposed during debugger attachment/)
-    expect(lease.release).toHaveBeenCalledOnce()
-    expect(electron.windows[0].destroy).toHaveBeenCalledOnce()
-    await expect(store.restoreClearIdentities([])).rejects.toThrow(/store was disposed/)
-    expect(electron.windows).toHaveLength(1)
-  })
-
-  it('attempts the whole frozen restore snapshot after one cookie is rejected', async () => {
-    const store = openCookieClearStore(targetSession())
-    const restore = store.restoreClearIdentities([
-      { url: 'https://first.example/', name: 'first', value: 'one', sameSite: 'unspecified' },
-      { url: 'https://second.example/', name: 'second', value: 'two', sameSite: 'unspecified' }
-    ])
-    const sendCommand = electron.windows[0].webContents.debugger.sendCommand
-    sendCommand.mockResolvedValueOnce({ success: false }).mockResolvedValueOnce({ success: true })
-
-    electron.windows[0].resolveLoad()
-
-    await expect(restore).rejects.toThrow(/restore/i)
-    expect(sendCommand.mock.calls.map(([, params]) => params?.name)).toEqual(['first', 'second'])
+    const second = withCookieMutationLock(owner, async () => {
+      expect(window.destroy).toHaveBeenCalledOnce()
+      const store = openCookieClearStore(owner)
+      const write = store.writeCookieIdentity({ ...row, value: 'new' })
+      electron.windows[1].resolveLoad()
+      await write
+      store.dispose()
+    })
+    await second
   })
 })

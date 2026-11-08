@@ -1,5 +1,5 @@
 import { basename, dirname, extname, join, resolve } from 'node:path'
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { AiVaultAgent } from '../../shared/ai-vault/contracts/ai-vault-types'
 import {
   isAiVaultDeletableAgent,
   isAiVaultSyntheticSessionPath,
@@ -7,15 +7,19 @@ import {
   type AiVaultSessionDeleteRejectionCode,
   type AiVaultSessionDeleteRemoval,
   type AiVaultSessionDeleteValidationResult
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { AI_VAULT_AGENT_SOURCES, isDiscoverableSessionFile } from './session-scanner-agent-sources'
-import { subagentTranscriptsDirFor } from './session-scanner-subagent-transcripts'
+import {
+  AI_VAULT_AGENT_SOURCES,
+  isDiscoverableSessionFile,
+  sessionRowRootDirs
+} from './session-scanner-agent-sources'
+import { subagentTranscriptsDirFor } from './scanners/claude/session-scanner-subagent-transcripts'
 import type { AiVaultScanOptions } from './session-scanner-types'
 
 // These sessions own their containing directory, including companion files.
@@ -57,8 +61,7 @@ export function validateAiVaultSessionDeleteTarget(
   // Collapse traversal before textual containment checks.
   const resolvedPath = resolve(filePath)
   const source = AI_VAULT_AGENT_SOURCES[agent]
-  const roots = source
-    .rootDirs(args.rootOptions ?? {}, args.wslHomeDirs ?? [])
+  const roots = sessionRowRootDirs(agent, args.rootOptions ?? {}, args.wslHomeDirs ?? [])
     // An empty root resolves to cwd and would silently allowlist it.
     .filter((rootDir) => rootDir.trim().length > 0)
     .map((rootDir) => resolve(rootDir))

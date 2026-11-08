@@ -57,6 +57,8 @@ export type PtyManagementApi = {
     killedCount: number
     remainingCount: number
     killedSessionIds?: string[]
+    /** Some sessions could not be listed, so the counts may miss some. */
+    listingIncomplete?: boolean
   }>
   killOne: (args: { sessionId: string }) => Promise<{ success: boolean }>
   restart: () => Promise<{ success: boolean }>

@@ -1,8 +1,8 @@
 import {
   countInProcessFallbackTerminals,
   listLiveDaemonSessionsWithProtocol
-} from '../daemon/daemon-provider-state'
-import type { DaemonSessionInfo } from '../daemon/types'
+} from '../daemon/providers/lifecycle/daemon-provider-state'
+import type { DaemonSessionInfo } from '../daemon/protocol/daemon-session-info'
 import type { OrcadTerminalCensus } from '../../shared/orcad-terminal-census'
 
 const UNVERIFIABLE: OrcadTerminalCensus = {
@@ -31,8 +31,9 @@ export async function collectOrcadTerminalCensus(
   const timestampsKnown = sessions.every(
     (session) => Number.isFinite(session.createdAt) && session.createdAt > 0
   )
-  const protocols = new Set(sessions.map((session) => session.protocolVersion))
-  const [protocol] = protocols
+  const protocols = [...new Set(sessions.map((session) => session.protocolVersion))].sort(
+    (a, b) => a - b
+  )
   return {
     liveSessions: sessions.length + inProcess,
     // Fallback terminals lack creation times, so activation-relative counts remain unknown.
@@ -40,8 +41,9 @@ export async function collectOrcadTerminalCensus(
       timestampsKnown && inProcess === 0
         ? sessions.filter((session) => session.createdAt >= activatedAt).length
         : null,
-    // Mixed daemon generations cannot establish one protocol owner for build compatibility.
-    daemonProtocolVersion: protocols.size === 1 && protocol !== undefined ? protocol : null,
+    // Older desktops read only the scalar, which cannot name mixed generations.
+    daemonProtocolVersion: protocols.length === 1 ? protocols[0] : null,
+    daemonProtocolVersions: protocols,
     inProcessSessions: inProcess
   }
 }

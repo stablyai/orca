@@ -1,11 +1,11 @@
 import {
   normalizePluginConsents,
   normalizePluginIdList
-} from '../../shared/plugins/plugin-consent-state'
-import type { Store } from '../persistence'
+} from '../../shared/plugins/approval/plugin-consent-state'
+import type { Store } from '../persistence/loading-store/store'
 import type { PluginService } from './plugin-service'
-import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
-import { verifyInstructionalPluginContent } from './plugin-instructional-content-integrity'
+import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
+import { verifyDeclarativePluginContent } from './plugin-declarative-content-integrity'
 
 // Desktop and headless writes share qualified-key consent; capability or worker-tier expansion requires reapproval.
 
@@ -16,7 +16,6 @@ export async function applyPluginConsent(input: {
   pluginKey: PluginConsentRequest['pluginKey']
   reviewedFingerprint: PluginConsentRequest['reviewedFingerprint']
   decision: PluginConsentRequest['decision']
-  originWebContentsId?: number
 }): Promise<void> {
   const { store, pluginService, pluginKey } = input
   const plugin = pluginService.findValidPlugin(pluginKey)
@@ -28,8 +27,9 @@ export async function applyPluginConsent(input: {
     throw new Error(`plugin ${pluginKey} changed since its permissions were reviewed`)
   }
   if (input.decision === 'approve') {
-    // Direct IPC/serve callers bypass the dialog; verify instructional bytes in main.
-    await verifyInstructionalPluginContent(plugin)
+    // Why: IPC and serve callers can bypass the renderer dialog, so main must
+    // prove every declarative byte is still reviewable before enabling it.
+    await verifyDeclarativePluginContent(plugin)
   }
   const settings = store.getSettings()
   const disabled = new Set(normalizePluginIdList(settings.disabledPlugins))
@@ -40,10 +40,32 @@ export async function applyPluginConsent(input: {
   } else {
     disabled.add(pluginKey)
   }
+  // Why every window, the clicking one too: its store never applied this write itself, and
+  // theme resolution reads `disabledPlugins` from it.
   store.updateSettings(
     { disabledPlugins: [...disabled], pluginConsents: consents },
-    { notifyListeners: true, originWebContentsId: input.originWebContentsId }
+    { notifyListeners: true }
   )
+  await pluginService.reconcileActivationState()
+}
+
+/** Drops a plugin's recorded approval without disabling it, so it waits for review. */
+export async function revokePluginConsent(input: {
+  store: Store
+  pluginService: PluginService | null
+  pluginKey: string
+}): Promise<void> {
+  const { store, pluginService, pluginKey } = input
+  // Why throw: an install that cannot drop the old approval must not publish.
+  if (!pluginService) {
+    throw new Error('plugin service is not running')
+  }
+  const consents = normalizePluginConsents(store.getSettings().pluginConsents)
+  if (!(pluginKey in consents)) {
+    return
+  }
+  delete consents[pluginKey]
+  store.updateSettings({ pluginConsents: consents }, { notifyListeners: true })
   await pluginService.reconcileActivationState()
 }
 
@@ -53,10 +75,10 @@ export async function applyPluginEnablement(input: {
   pluginService: PluginService
   pluginKey: string
   enabled: boolean
-  originWebContentsId?: number
 }): Promise<void> {
   const { store, pluginService, pluginKey, enabled } = input
-  if (!pluginService.findValidPlugin(pluginKey)) {
+  const plugin = pluginService.findValidPlugin(pluginKey)
+  if (!plugin) {
     throw new Error(`cannot change enablement for unknown plugin ${pluginKey}`)
   }
   const settings = store.getSettings()
@@ -66,9 +88,6 @@ export async function applyPluginEnablement(input: {
   } else {
     disabled.add(pluginKey)
   }
-  store.updateSettings(
-    { disabledPlugins: [...disabled] },
-    { notifyListeners: true, originWebContentsId: input.originWebContentsId }
-  )
+  store.updateSettings({ disabledPlugins: [...disabled] }, { notifyListeners: true })
   await pluginService.reconcileActivationState()
 }

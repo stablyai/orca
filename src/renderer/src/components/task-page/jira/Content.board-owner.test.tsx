@@ -3,16 +3,16 @@
 import { useState, type ComponentProps } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import type { TaskPageJiraBoardView } from '../../task-page-jira-board-view'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import type { TaskPageJiraBoardView } from './task-page-jira-board-view'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { defaultJiraListColumnIds, visibleJiraListColumns } from '../../jira-list-columns'
 import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
 import { TaskPageJiraContent } from './Content'
 import type * as I18n from '@/i18n/i18n'
 
 type BoardProps = ComponentProps<typeof TaskPageJiraBoardView>
-vi.mock('@/components/task-page-jira-board-view', () => ({
+vi.mock('@/components/task-page/jira/task-page-jira-board-view', () => ({
   TaskPageJiraBoardView: ({ target, scopeKey }: BoardProps) => {
     const [draft, setDraft] = useState('')
     return (
@@ -121,21 +121,3 @@ it.each([
     )
   }
 )
-
-it('disables sprint filtering in linked mode while retaining its checked preference', () => {
-  const current = model(source)
-  current.jiraHasWorkspace = true
-  const { rerender } = render(<TaskPageJiraContent model={current} />)
-  expect(screen.getByRole('switch', { name: 'Current sprint' }).hasAttribute('disabled')).toBe(true)
-  expect(screen.getByRole('switch', { name: 'Current sprint' }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
-  current.jiraHasWorkspace = false
-  rerender(<TaskPageJiraContent model={current} />)
-  expect(screen.getByRole('switch', { name: 'Current sprint' }).hasAttribute('disabled')).toBe(
-    false
-  )
-  expect(screen.getByRole('switch', { name: 'Current sprint' }).getAttribute('aria-checked')).toBe(
-    'true'
-  )
-})

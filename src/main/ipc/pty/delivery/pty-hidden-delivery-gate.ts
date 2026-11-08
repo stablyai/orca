@@ -1,5 +1,6 @@
 /** Drop hidden renderer delivery after model ingestion; reveal restores a snapshot, while sidecar interest keeps raw bytes flowing. */
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { _resetPtyEscapeBoundaryForTest, clearPtyEscapeBoundary } from './pty-escape-boundary'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
   GlobalSettings,
@@ -131,6 +132,7 @@ export function clearHiddenRendererPtyDeliveryState(id: string): void {
   runtimeOwnedHiddenRendererPtys.delete(id)
   deliveryInterestRendererPtys.delete(id)
   droppedSinceHiddenPtys.delete(id)
+  clearPtyEscapeBoundary(id)
 }
 
 export type HiddenRendererPtyDeliveryDebug = {
@@ -159,5 +161,6 @@ export function _resetHiddenRendererPtyDeliveryGateForTest(): void {
   runtimeOwnedHiddenRendererPtys.clear()
   deliveryInterestRendererPtys.clear()
   droppedSinceHiddenPtys.clear()
+  _resetPtyEscapeBoundaryForTest()
   resetHiddenRendererPtyDeliveryDebugCounters()
 }

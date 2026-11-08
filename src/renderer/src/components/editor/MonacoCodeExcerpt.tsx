@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { monaco } from '@/lib/monaco-setup'
-import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
-import { useAppStore } from '@/store'
+import { EDITOR_TYPOGRAPHY_SURFACE_CLASS, editorTypographyTextStyle } from '@/lib/editor-typography'
+import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { cn } from '@/lib/utils'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null
 
@@ -31,17 +31,18 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
 
 /** Monaco token HTML per line; loads lazy tokenizers (e.g. Python) before colorizing. */
 export function useMonacoColorizedLines(lines: string[], language: string): string[] {
-  const isDark = useDocumentDarkTheme()
+  const monacoTheme = useMonacoTheme()
   const code = useMemo(() => lines.join('\n'), [lines])
+  const lineCount = lines.length
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    monaco.editor.setTheme(monacoTheme)
+  }, [monacoTheme])
 
   // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.
   useEffect(() => {
-    if (lines.length === 0) {
+    if (lineCount === 0) {
       setHtmlLines([])
       return
     }
@@ -50,19 +51,22 @@ export function useMonacoColorizedLines(lines: string[], language: string): stri
     // Wait for lazy tokenizers before colorizing; colorizeModelLine would emit default tokens while contributions load.
     void ensureColorizationLanguage(language)
       .catch(() => undefined)
-      .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
-      .then((html) => {
+      .then(async () => {
         if (cancelled) {
           return
         }
-        const nextLines = html.split('<br/>').slice(0, lines.length)
+        const html = await monaco.editor.colorize(code, language, { tabSize: 2 })
+        if (cancelled) {
+          return
+        }
+        const nextLines = html.split('<br/>').slice(0, lineCount)
         setHtmlLines(nextLines)
       })
 
     return () => {
       cancelled = true
     }
-  }, [code, language, lines, isDark])
+  }, [code, language, lineCount, monacoTheme])
 
   return htmlLines
 }
@@ -82,19 +86,16 @@ export default function MonacoCodeExcerpt({
   highlightedEndLine,
   language
 }: MonacoCodeExcerptProps): React.JSX.Element {
-  const settings = useAppStore((s) => s.settings)
-  const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
-  const editorFontSize = computeEditorFontSize(
-    settings?.terminalFontSize ?? 13,
-    editorFontZoomLevel
-  )
-  const fontFamily = resolveEditorFontFamily(settings)
+  const typography = useEditorTypography()
   const htmlLines = useMonacoColorizedLines(lines, language)
 
   return (
     <div
-      className="overflow-x-auto py-1 text-[12px] leading-5"
-      style={{ fontFamily, fontSize: editorFontSize }}
+      className={cn(
+        'code-editor-colors overflow-x-auto py-1 text-[12px] leading-5',
+        EDITOR_TYPOGRAPHY_SURFACE_CLASS
+      )}
+      style={editorTypographyTextStyle(typography)}
     >
       {lines.map((codeLine, index) => {
         const lineNumber = firstLineNumber + index
@@ -102,10 +103,7 @@ export default function MonacoCodeExcerpt({
           lineNumber >= highlightedStartLine && lineNumber <= highlightedEndLine
         const html = htmlLines[index] || (codeLine ? undefined : '&nbsp;')
         return (
-          <div
-            key={lineNumber}
-            className={cn('flex font-mono', isCommentedLine && 'bg-emerald-500/10')}
-          >
+          <div key={lineNumber} className={cn('flex', isCommentedLine && 'bg-ring/15')}>
             <span className="w-12 shrink-0 select-none border-r border-border/40 px-2 text-right text-muted-foreground tabular-nums">
               {lineNumber}
             </span>

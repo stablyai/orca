@@ -1,13 +1,17 @@
-import type { DispatchContextRow, TaskRow, WorkerDispatchRow } from '../../types'
+import type { DispatchContextRow, TaskRow, WorkerDispatchRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { ensureMutationReceiptCapacity } from '../../mutation-receipt-capacity'
-import { CURRENT_CONTRACT_VERSION } from '../contract-constants'
+import { ensureMutationReceiptCapacity } from '../mutation-receipts/mutation-receipt-capacity'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { insertStartingDispatchContextRow } from '../dispatch-row-writer'
 import { recordedCreatorIdentity, type DispatchCreator } from '../dispatch-depth'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
-import { taskNotFoundError, taskNotStartableError } from '../../task-dispatch-refusal'
+import {
+  taskNotFoundError,
+  taskNotStartableError
+} from '../../coordinator/dispatch/task-dispatch-refusal'
+import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -43,6 +47,12 @@ export function createStartingWorkerDispatch(
     maxDepth: number
     /** A worker's own Dispatch that authorized this helper; it must still be the creator here. */
     requiredCreatorDispatchId?: string
+    /** The settled Dispatch whose worker this follow-up continues; only one follow-up claims it. */
+    followUpOf?: string
+    /** Another mutation's pending receipt (a send's follow-up), told what this start accepted. */
+    acceptedBy?: { callerFingerprint: string; requestId: string }
+    /** The Dispatch whose unread mail this follow-up's Task tells it to check, moved to it in the claim. */
+    takesMailOf?: string
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -70,6 +80,14 @@ export function createStartingWorkerDispatch(
            ) VALUES (?, ?, ?, ?, 'pending')`
         )
         .run(receipt.callerFingerprint, receipt.requestId, receipt.method, receipt.payloadHash)
+    }
+    const claimedFollowUp = params.followUpOf ? getFollowUpDispatch(this, params.followUpOf) : null
+    if (claimedFollowUp) {
+      throw new OrchestrationError(
+        'follow_up_claimed',
+        `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
+        { followUpDispatchId: claimedFollowUp.id }
+      )
     }
     const task = params.taskId
       ? this.getTask(params.taskId)
@@ -145,7 +163,15 @@ export function createStartingWorkerDispatch(
         { effectsApplied: false }
       )
     }
-    if (params.mutationReceipt) {
+    if (creatorDispatchId && this.isWorkerStopRequested(creatorDispatchId)) {
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `Dispatch ${creatorDispatchId} is being stopped, so it cannot start a helper.`,
+        { effectsApplied: false }
+      )
+    }
+    const accepting = params.mutationReceipt ?? params.acceptedBy
+    if (accepting) {
       this.db
         .prepare(
           `UPDATE mutation_receipts
@@ -154,8 +180,8 @@ export function createStartingWorkerDispatch(
         )
         .run(
           JSON.stringify({ accepted: { taskId: task.id, dispatchId: id } }),
-          params.mutationReceipt.callerFingerprint,
-          params.mutationReceipt.requestId
+          accepting.callerFingerprint,
+          accepting.requestId
         )
     }
     insertStartingDispatchContextRow(this.db, {
@@ -168,8 +194,12 @@ export function createStartingWorkerDispatch(
       retryOfDispatchId: params.retryOf ?? null,
       priorFailures,
       creatorDispatchId,
+      followUpOfDispatchId: params.followUpOf ?? null,
       ...recordedCreatorIdentity(params.creator)
     })
+    if (params.takesMailOf) {
+      takeFollowUpMail(this, params.takesMailOf, id)
+    }
     this.db
       .prepare(
         `INSERT INTO worker_dispatches (

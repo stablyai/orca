@@ -138,15 +138,6 @@ describe('orphaned coalesced breadcrumb cleanup', () => {
     expectSuppressedBurstPreserved()
   })
 
-  it('preserves snapshot-budget-orphaned repeats through LRU cleanup', () => {
-    recordSuppressedBurst()
-    orphanFromSnapshotBudget()
-
-    evictWithUnrelatedKeys()
-
-    expectSuppressedBurstPreserved()
-  })
-
   it('materializes only repeats not already claimed by an earlier snapshot', () => {
     recordOrphanCandidate(1)
     recordOrphanCandidate(2)

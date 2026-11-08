@@ -2,14 +2,14 @@ import { isDeepStrictEqual } from 'node:util'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody
-} from '../../../shared/agent-session-journal-types'
-import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
-import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
-import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
-import { unhandledProviderFrameJournalItem } from '../agent-session-wire/unhandled-provider-frame'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { cancelledJournalPromptBody } from '../agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
+import { requiresTerminalSettlement } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
+import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
+import { unhandledProviderFrameJournalItem } from '../agent-session-wire/providers/unhandled-provider-frame'
 import { relightsProviderTimelineBackgroundTask } from './provider-timeline-background-tasks'
-import { providerTimelineEntryBytes, providerTimelinePlacement } from './provider-timeline-context'
+import { providerTimelinePlacement } from './provider-timeline-context'
 import type {
   ProviderTimelineDecidedEvent,
   ProviderTimelineDecision,
@@ -74,7 +74,7 @@ export function decideItem(
     event.type === 'item.open' ? 'open' : event.type === 'item.update' ? 'update' : 'close'
   const row = context.rows.item('item', providerKey(event.item), event.join?.thread ?? null)
   const key = row.itemId
-  const closed = state.items.get(key)?.closed === true
+  const closed = state.closedItems.has(key)
   const scope = providerTimelinePlacement(context, state, event.join)
   const placed = turnOf(scope)
   if (
@@ -85,14 +85,7 @@ export function decideItem(
     return { dropped: 'item-settled' }
   }
   const obligation = change !== 'close' && requiresTerminalSettlement(event.body)
-  const bytes = providerTimelineEntryBytes({
-    key: event.item,
-    join: event.join,
-    body: event.body,
-    producer: event.producer
-  })
   return {
-    ...(obligation ? { hold: { key, bytes } } : {}),
     writes: [
       {
         reservedBytes: estimateStructuredAgentSessionItemBytes(row.identity, event.body),
@@ -109,8 +102,10 @@ export function decideItem(
       if (change === 'close') {
         next.close(key, placed)
       } else if (obligation) {
-        next.items.set(key, { kind: 'item', row, turnItemId: placed, bytes, closed: false })
-      } else if (change === 'open' || next.items.get(key)?.closed !== true) {
+        next.closedItems.delete(key)
+        next.items.set(key, { kind: 'item', row, turnItemId: placed })
+      } else if (change === 'open' || !next.closedItems.has(key)) {
+        next.closedItems.delete(key)
         next.items.delete(key)
       }
     }
@@ -130,21 +125,13 @@ export function decideRequest(
   }
   const scope = providerTimelinePlacement(context, state, event.join)
   const turn = turnOf(scope)
-  const bytes = providerTimelineEntryBytes({
-    key: event.request,
-    join: event.join,
-    body: event.body,
-    producer: event.producer
-  })
   const opened: ProviderTimelineOpenItem = {
     kind: 'request',
     row: null,
     turnItemId: turn,
-    bytes,
-    closed: false
+    ...(event.outlivesTurn ? { outlivesTurn: true as const } : {})
   }
   return {
-    hold: { key, bytes },
     writes: [
       {
         reservedBytes: estimateStructuredAgentSessionItemBytes(
@@ -157,7 +144,12 @@ export function decideRequest(
           // Reused request IDs need new incarnations; never overwrite existing rows.
           const row = context.rows.nextRequest(event.request, at)
           opened.row = row
-          if (turn !== null && providerTimelineTurnRowState(at, turn) === 'settled') {
+          // A live request outliving its turn still needs its card.
+          if (
+            turn !== null &&
+            !event.outlivesTurn &&
+            providerTimelineTurnRowState(at, turn) === 'settled'
+          ) {
             return null
           }
           return { identity: row.identity, body: event.body }

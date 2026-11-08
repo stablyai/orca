@@ -2,10 +2,10 @@ import { z } from 'zod'
 import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../tab-activation-intent'
 import { OptionalBoolean } from './rpc-param-primitives'
-import { sleepingAgentLaunchConfigSchema } from '../workspace-session-sleeping-agents'
-import type { TuiAgent } from '../tui-agent'
-import { isTuiAgent } from '../tui-agent-config'
-import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal-quick-command-prompt-limit'
+import { sleepingAgentLaunchConfigSchema } from '../workspace-session/workspace-session-sleeping-agents'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
+import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { ResumeProviderSessionParam, WindowsShellOverrideParam } from './terminal-unary-params'
 
 export const WorktreeTabSelector = z.object({
@@ -121,6 +121,19 @@ export const UpdatePaneLayout = WorktreeTabSelector.extend({
   renamedLeafIds: z.array(z.string().max(128)).max(64).optional().catch(undefined)
 })
 
+const MovePaneId = z
+  .unknown()
+  .transform((v) => (typeof v === 'string' ? v : ''))
+  .pipe(z.string().min(1).max(512))
+
+export const MovePaneToNewTab = WorktreeTabSelector.extend({
+  sourceTabId: MovePaneId,
+  targetTabId: MovePaneId,
+  leafId: MovePaneId,
+  // Where the client dropped the new tab; without it the host appends the tab.
+  targetGroupId: z.string().min(1).max(512).optional(),
+  index: z.number().int().min(0).optional()
+})
 export const SetTabProps = WorktreeTabSelector.extend({
   tabId: z
     .unknown()
@@ -164,6 +177,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
     .max(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH)
     .refine((value) => value.trim().length > 0, { message: 'Agent prompt cannot be empty' })
     .optional(),
+  trustWorktreeId: z.string().min(1).max(32_768).optional(),
   // agent is the legacy preset; launchAgent preserves launch-plan identity/config across runtime boundaries.
   launchAgent: z
     .custom<TuiAgent>(isTuiAgent, {

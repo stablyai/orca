@@ -1,16 +1,19 @@
-import type { AgentLaunchResult } from '../../shared/agent-launch-intent'
+import type {
+  AgentLaunchResult,
+  AgentLaunchResult as AgentLaunchPublishedSurface
+} from '../../shared/agent-launch/contracts/agent-launch-intent'
 import type { ConnectorAgent } from '../../shared/external-conversation-link'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch-params'
 import { executeAgentLaunch } from '../agent-launch/agent-launch-executor'
-import type { AgentLaunchPublishedSurface } from '../agent-launch/agent-launch-execution'
+
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace
 } from '../agent-hooks/agent-transition-detector'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { resolveUnlaunchedIntent } from '../runtime/rpc/methods/agent-launch-intent-resolution'
-import { agentLaunchSurfaceFactory } from '../runtime/rpc/methods/agent-launch-surfaces'
-import { agentLaunchWorkspaceFactory } from '../runtime/rpc/methods/agent-launch-worktree-creation'
+import { resolveUnlaunchedIntent } from '../runtime/rpc/methods/agent-launch/agent-launch-intent-resolution'
+import { agentLaunchSurfaceFactory } from '../runtime/rpc/methods/agent-launch/agent-launch-surfaces'
+import { agentLaunchWorkspaceFactory } from '../runtime/rpc/methods/agent-launch/agent-launch-worktree-creation'
 import { refusalOf } from './external-conversation-chain'
 import { refused, type Delivery } from './external-conversation-types'
 
@@ -34,15 +37,16 @@ export function runtimeConversationLauncher(runtime: OrcaRuntimeService): Conver
   const context = { runtime }
   return {
     launch: async ({ agent, target, prompt }, onSurfacePublished, signal) => {
-      const intent = await resolveUnlaunchedIntent(
+      const { intent, decidedMode } = await resolveUnlaunchedIntent(
         { agent, target, prompt: { text: prompt, delivery: 'submit' } },
         runtime,
-        null
+        null,
+        { terminalOnly: true }
       )
       return executeAgentLaunch({
         runtime,
         intent,
-        terminalOnly: true,
+        decidedMode,
         surfaces: agentLaunchSurfaceFactory(context, undefined, undefined, false, undefined, {
           early: null,
           presentation: 'background'

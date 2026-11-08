@@ -2,29 +2,33 @@ import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../sha
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repo-types'
-import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
+import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { listRepoWorktreesForDetectedScan } from '../../../repo-worktrees'
+import { listRepoWorktreesForDetectedScan } from '../../../workspaces/catalog/repo-worktrees'
 import {
   getRegisteredWorktreeRootsRevision,
   registerWorktreeRootsForRepo
-} from '../../registered-worktree-roots-cache'
+} from '../removal/registered-worktree-roots-cache'
 import type { NativeLocalWorktreeMetadataScanExpectation } from '../../../persistence/tracking-repos/missing-local-worktree-metadata-pruning'
 import {
   bumpLocalWorktreeScanGeneration,
   getLocalWorktreeScanGeneration,
   isLocalWorktreeScanGenerationCurrent,
   resetLocalWorktreeScanGenerationsForTests
-} from '../../../local-worktree-scan-generation'
-import { pruneLineageForMissingRepoWorktrees } from '../../../worktree-lineage-pruning'
+} from '../../../workspaces/catalog/local-worktree-scan-generation'
+import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import {
   __resetLocalWorktreeMetadataPruneGateForTests,
   isLocalWorktreeMetadataPruneDue,
   markLocalWorktreeMetadataPruneStarted,
   recordLocalWorktreeListingForPruneGate,
   requireLocalWorktreeMetadataPrune
-} from '../../../local-worktree-metadata-prune-gate'
+} from '../../../workspaces/catalog/local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
+import {
+  assertWslUncPathRunning,
+  wslDistroForPath
+} from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 // Coalesce renderer polls while bounding external-change lag.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
@@ -111,6 +115,20 @@ export function __getDetectedWorktreeScanCacheStatsForTests(): {
   }
 }
 
+// A stopped distro fails the scan as unavailable (rows are retained) instead of booting it (E9).
+// Not async: a host scan must start and settle on the same ticks as before.
+function listUnlessWslDistroStopped(
+  repo: Repo,
+  options: ReturnType<typeof getLocalProjectWorktreeGitOptions>
+): ReturnType<typeof listRepoWorktreesForDetectedScan> {
+  if (!wslDistroForPath(repo.path, options.wslDistro)) {
+    return listRepoWorktreesForDetectedScan(repo, options)
+  }
+  return assertWslUncPathRunning(repo.path, options.wslDistro).then(() =>
+    listRepoWorktreesForDetectedScan(repo, options)
+  )
+}
+
 export async function listDetectedGitWorktrees(
   store: Store,
   repo: Repo
@@ -164,7 +182,7 @@ export async function listDetectedGitWorktrees(
       : undefined
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
+    promise: listUnlessWslDistroStopped(repo, localWorktreeGitOptions),
     sideEffectToken: { generation, authorizedRootsRevision, ...localWorktreeGitOptions },
     hygieneDue,
     ...(metadataPruneExpectation

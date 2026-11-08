@@ -1,7 +1,7 @@
 /** Evaluate reservation identity/replay/CAS without I/O; commit applies the winning record and operation row in one store transaction. */
 
-import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import { assertAgentSessionOptionsAdmitted } from '../../agent-session-record-options'
+import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { AgentSessionAdmissionModels } from '../records/agent-session-record-options'
 import { chatAgentsShareConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
@@ -10,13 +10,13 @@ import {
   pruneAgentSessionOperationRows,
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeaseOwnerVerdict,
   evaluateAgentSessionAcquisition,
   type AgentSessionOwnerProbe
-} from '../../../../shared/agent-session-lease-adjudication'
+} from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import {
   agentSessionExecutionLocationsEqual,
   isAgentSessionLaunchEnv,
@@ -25,26 +25,32 @@ import {
   type AgentSessionLaunchArgs,
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
-} from '../../../../shared/agent-session-record'
-import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session-launch-args'
-import { isAgentSessionSurfaceTabId } from '../../../../shared/agent-session-surface-tab-id'
-import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { isAgentSessionLaunchArgs } from '../../../../shared/agent-session/lifecycle/agent-session-launch-args'
+import { agentSessionProviderHandleRoot } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type {
   StructuredAgentId,
   AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session-provider-handle'
+} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import {
   reserveAgentSessionOwner,
   type AgentSessionReservation
 } from './agent-session-lease-transitions'
-import type { AgentSessionStoreState } from '../../agent-session-store-state'
-import { agentSessionRecordIdentityFields } from '../../agent-session-record-founding'
+import {
+  listAgentSessionConversations,
+  selectWritableAgentSessionRecord,
+  requireWritableAgentSessionRecord,
+  type AgentSessionStoreState
+} from '../records/agent-session-store-state'
+import { agentSessionRecordIdentityFields } from '../records/agent-session-record-founding'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { assertReservedTabUnheld } from '../agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
+  forkedFrom?: AgentSessionRecord['forkedFrom']
   /** Host-resolved floating directory committed with the first owner reservation. */
   launchDirectory?: string
   sessionId: string
@@ -58,11 +64,13 @@ export type AgentSessionReserveRequest = {
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
   /** Saved catalog rows those options are admitted against; transient, never written. */
-  models?: Parameters<typeof assertAgentSessionOptionsAdmitted>[1]
+  models?: AgentSessionAdmissionModels
   /** Reserved tab ids are checked before spawn and claimed only when the tab publishes. */
   surfaceTabId?: string
   /** Seed an adopted handle to resume its conversation; absent means a fresh provider conversation. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
+  /** Only an adopting create is named before its first message. */
+  conversationName?: string
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */
@@ -107,12 +115,11 @@ export function requireAgentSessionRecordForReplay(
   sessionId: string
 ): AgentSessionRecord {
   const replayedId = row.outcome.status === 'succeeded' ? row.outcome.sessionId : sessionId
-  const record = state.records.get(replayedId)
-  if (!record) {
+  if (selectWritableAgentSessionRecord(state, replayedId).kind === 'missing') {
     // Missing recorded effects cannot be replayed; running again would spawn twice.
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'recordMissing' })
   }
-  return record
+  return requireWritableAgentSessionRecord(state, replayedId)
 }
 
 export function admitPendingAgentSessionReservationReplay(
@@ -147,13 +154,13 @@ export function validateAgentSessionReservationInput(request: AgentSessionReserv
   if (request.options && !isAgentSessionOptions(request.options)) {
     throw new Error('agent_session_options_invalid')
   }
-  assertAgentSessionOptionsAdmitted(request.provider, request.models, request.options)
 }
 
 export function applyAgentSessionReservation(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest,
-  leaseTtlMs: number
+  leaseTtlMs: number,
+  legacyIds: readonly string[] = []
 ): {
   record: AgentSessionRecord
   disposition: Exclude<AgentSessionReserveDisposition, 'replayed'>
@@ -169,17 +176,18 @@ export function applyAgentSessionReservation(
   }
   // Check inside the transaction: concurrent adoptions mint different session ids, so CAS alone cannot prevent two writers on one provider conversation.
   assertAdoptedConversationUnowned(state, request)
-  const existing = state.records.get(request.sessionId)
-  if (!existing) {
-    if (state.unreadableRecords.has(request.sessionId)) {
-      throw agentSessionRefusalError('execution_owner_reconciling', { reason: 'recordUnreadable' })
-    }
+  const selected = selectWritableAgentSessionRecord(state, request.sessionId)
+  if (selected.kind === 'unreadable') {
+    requireWritableAgentSessionRecord(state, request.sessionId)
+  }
+  if (selected.kind !== 'writable') {
     if (request.expectedFence !== null) {
       throw agentSessionRefusalError('agent_session_checkpoint_stale', { reason: 'recordMissing' })
     }
-    assertReservedTabUnheld(state, request)
+    assertReservedTabUnheld(state, request, legacyIds)
     return { record: createAgentSessionRecord(request, reservation), disposition: 'created' }
   }
+  const existing = selected.record
   if (
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
@@ -196,7 +204,7 @@ export function applyAgentSessionReservation(
   if (request.expectedFence === null && !recreatable) {
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
-  assertReservedTabUnheld(state, request)
+  assertReservedTabUnheld(state, request, legacyIds)
   const pinned = {
     ...existing,
     ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
@@ -222,7 +230,7 @@ export function assertAdoptedConversationUnowned(
     return
   }
   const root = agentSessionProviderHandleRoot(adopted.handle)
-  for (const record of state.records.values()) {
+  for (const record of listAgentSessionConversations(state)) {
     if (record.sessionId === request.sessionId) {
       continue
     }
@@ -241,25 +249,6 @@ export function assertAdoptedConversationUnowned(
         owner: { sessionId: record.sessionId, workspaceId: record.location.workspaceId }
       })
     }
-  }
-}
-
-/** Check tab-id conflicts before spawn; claim only on publication so failed creates leave no restorable tab. */
-export function assertReservedTabUnheld(
-  state: AgentSessionStoreState,
-  request: AgentSessionReserveRequest
-): void {
-  if (request.surfaceTabId === undefined) {
-    return
-  }
-  if (!isAgentSessionSurfaceTabId(request.surfaceTabId)) {
-    throw agentSessionRefusalError('agent_session_operation_invalid', {
-      reason: 'requestMalformed'
-    })
-  }
-  const holder = state.sessionTabs?.sessionIdFor(request.surfaceTabId)
-  if (holder !== undefined && holder !== request.sessionId) {
-    throw agentSessionRefusalError('agent_session_conflict', { reason: 'tabIdTaken' })
   }
 }
 
@@ -295,7 +284,8 @@ function createAgentSessionRecord(
 export function commitAgentSessionReservation(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest,
-  leaseTtlMs: number
+  leaseTtlMs: number,
+  legacyIds: readonly string[] = []
 ): AgentSessionReserveResult {
   const decision = evaluateAgentSessionReserveOperation(state, request)
   const existing = state.records.get(request.sessionId)
@@ -310,7 +300,7 @@ export function commitAgentSessionReservation(
       throw agentSessionRefusalError(decision.code, decision.details)
     }
     const row = pendingAgentSessionOperationRow({ ...request.operation, now: request.now })
-    return reserveWithOperationRow(state, continued, row, leaseTtlMs)
+    return reserveWithOperationRow(state, continued, row, leaseTtlMs, legacyIds)
   }
   if (decision.decision === 'replay') {
     const record = requireAgentSessionRecordForReplay(state, decision.row, request.sessionId)
@@ -318,21 +308,22 @@ export function commitAgentSessionReservation(
       return { record, disposition: 'replayed', operationRow: decision.row }
     }
     if (continued) {
-      return reserveWithOperationRow(state, continued, decision.row, leaseTtlMs)
+      return reserveWithOperationRow(state, continued, decision.row, leaseTtlMs, legacyIds)
     }
     const retried = admitPendingAgentSessionReservationReplay(record, request)
     return { record: retried, disposition: 'replayed', operationRow: decision.row }
   }
-  return reserveWithOperationRow(state, request, decision.row, leaseTtlMs)
+  return reserveWithOperationRow(state, request, decision.row, leaseTtlMs, legacyIds)
 }
 
 function reserveWithOperationRow(
   state: AgentSessionStoreState,
   request: AgentSessionReserveRequest,
   row: AgentSessionOperationRow,
-  leaseTtlMs: number
+  leaseTtlMs: number,
+  legacyIds: readonly string[] = []
 ): AgentSessionReserveResult {
-  const result = applyAgentSessionReservation(state, request, leaseTtlMs)
+  const result = applyAgentSessionReservation(state, request, leaseTtlMs, legacyIds)
   state.operations.set(agentSessionOperationKey(row.callerKey, row.operationId), row)
   state.records.set(result.record.sessionId, result.record)
   return { ...result, operationRow: row }

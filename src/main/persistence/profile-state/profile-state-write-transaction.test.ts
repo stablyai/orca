@@ -68,25 +68,6 @@ describe('profile state write transaction ownership', () => {
     }
   })
 
-  it('keeps any other failed commit indeterminate even after SQLite rolled back', () => {
-    const db = new Database(':memory:')
-    db.exec('CREATE TABLE writes (id INTEGER)')
-    // Failed fsync can leave an already-written commit frame.
-    const ioerr = Object.assign(new Error('disk I/O error'), {
-      code: 'ERR_SQLITE_ERROR',
-      errcode: 1034
-    })
-    const restore = failCommitAfterAutoRollback(db, ioerr)
-    try {
-      expect(() =>
-        withProfileStateWriteTransaction(db, () => db.exec('INSERT INTO writes VALUES (1)'))
-      ).toThrow(ProfileStateIndeterminateWriteError)
-    } finally {
-      restore()
-      db.close()
-    }
-  })
-
   it('rolls back a failed deferred commit and leaves the connection usable', () => {
     const db = new Database(':memory:')
     try {

@@ -1,116 +1,79 @@
-import { FlatList, Pressable, Text, View } from 'react-native'
-import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
-import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
-import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
-import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { useRef, useState } from 'react'
+import type { View } from 'react-native'
+import { ChevronLeft, MoreHorizontal } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { ActionSheetAction } from './ActionSheetModal'
+import { NavBar, NavBarTitleButton } from './nav-bar/NavBar'
+import { NavBarButton } from './nav-bar/NavBarButton'
+import { PullDownMenu } from './nav-bar/PullDownMenu'
 
 type Props = {
-  filter: MobileDiffReviewQueueFilter
-  isWideLayout: boolean
-  prSidebarIsGithubRepo: boolean
-  prSidebarCanDock: boolean
-  queueLength: number
-  reviewedCount: number
-  unsentCount: number
-  worktreeLabel: string
+  /** The ⋯ menu's actions. */
+  actions: ActionSheetAction[]
+  /** The current file's name, or null before a file is showing. */
+  fileName: string | null
+  subtitle: string
   onBack: () => void
-  onOpenActions: () => void
-  onOpenPRSidebar: () => void
-  onSelectFilter: (filter: MobileDiffReviewQueueFilter) => void
+  onOpenFiles: () => void
 }
 
 export function MobileDiffReviewHeader({
-  filter,
-  isWideLayout,
-  prSidebarIsGithubRepo,
-  prSidebarCanDock,
-  queueLength,
-  reviewedCount,
-  unsentCount,
-  worktreeLabel,
+  actions,
+  fileName,
+  subtitle,
   onBack,
-  onOpenActions,
-  onOpenPRSidebar,
-  onSelectFilter
+  onOpenFiles
 }: Props) {
-  // Show PR icon on narrow/overlay GitHub repos; wide docked sidebar needs no trigger.
-  const showPRTrigger = shouldShowTrigger({
-    isGithubRepo: prSidebarIsGithubRepo,
-    isWideLayout,
-    canDock: prSidebarCanDock
-  })
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const moreRef = useRef<View>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
   return (
-    <View style={styles.header}>
-      <View style={styles.topBar}>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeft size={19} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-        <View style={styles.titleBlock}>
-          <Text style={styles.title} numberOfLines={1}>
-            Changes
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {worktreeLabel}
-          </Text>
-        </View>
-        {showPRTrigger ? (
-          <Pressable
-            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-            onPress={onOpenPRSidebar}
-            accessibilityRole="button"
-            accessibilityLabel="Open pull request sidebar"
-          >
-            <ListChecks size={19} color={colors.textPrimary} strokeWidth={2.2} />
-          </Pressable>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={onOpenActions}
-          accessibilityRole="button"
-          accessibilityLabel="Open review actions"
-        >
-          <MoreHorizontal size={19} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-      </View>
-      <View style={styles.progressRow}>
-        <Text style={styles.progressText}>
-          {reviewedCount}/{queueLength} reviewed
-        </Text>
-        <Text style={styles.progressText}>
-          {mobileReviewCountLabel(unsentCount, 'unsent note', 'unsent notes')}
-        </Text>
-      </View>
-      <FlatList
-        data={REVIEW_FILTERS}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item}
-        contentContainerStyle={styles.filterRow}
-        renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [
-              styles.filterChip,
-              filter === item && styles.filterChipActive,
-              pressed && styles.filterChipPressed
-            ]}
-            onPress={() => onSelectFilter(item)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: filter === item }}
-            accessibilityLabel={`Show ${item} review files`}
-          >
-            <Text style={[styles.filterText, filter === item && styles.filterTextActive]}>
-              {item === 'all' ? 'All' : item[0]?.toUpperCase() + item.slice(1)}
-            </Text>
-          </Pressable>
-        )}
+    <>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={onBack}
+            accessibilityLabel={t('common.back', 'Back')}
+          />
+        }
+        {...(fileName
+          ? {
+              center: (
+                <NavBarTitleButton
+                  title={fileName}
+                  subtitle={subtitle}
+                  onPress={onOpenFiles}
+                  accessibilityLabel={t(
+                    'components.diffReviewHeader.jumpToFile',
+                    '{{fileName}}, jump to another file',
+                    { fileName }
+                  )}
+                />
+              )
+            }
+          : { title: t('components.diffReviewHeader.title', 'Changes') })}
+        trailing={
+          <NavBarButton
+            ref={moreRef}
+            icon={MoreHorizontal}
+            onPress={() => setMenuOpen(true)}
+            active={menuOpen}
+            accessibilityLabel={t(
+              'components.diffReviewHeader.openReviewActions',
+              'Open review actions'
+            )}
+          />
+        }
       />
-    </View>
+      <PullDownMenu
+        visible={menuOpen}
+        anchorRef={moreRef}
+        groups={[actions]}
+        onClose={() => setMenuOpen(false)}
+      />
+    </>
   )
 }

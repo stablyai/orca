@@ -5,7 +5,7 @@ import { mountFixture } from '../recorder-fixture-shape'
 import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
+import type { RpcClientContextValue } from '../../../transport/connection/rpc-client-context-contract'
 
 const HOST = 'host-1'
 
@@ -56,8 +56,9 @@ export function notificationTestScreenMountAdapters(
           }
           if (name === 'send-test') {
             // Invoke the handler the actual screen rendered; the inert Pressable never fires itself.
+            // Found by its label: the Troubleshooting row is a button too.
             const button = renderedElementProps(screen.tree(), 'Pressable').find(
-              (props) => props.accessibilityRole === 'button'
+              (props) => props.accessibilityLabel === 'Send test notification'
             )
             const press = button?.onPress
             if (typeof press !== 'function') {

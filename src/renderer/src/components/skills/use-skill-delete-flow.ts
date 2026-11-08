@@ -13,7 +13,7 @@ import {
   deleteSkillsOnRuntimeTarget,
   previewSkillDeletionOnRuntimeTarget,
   runtimeTargetSupportsSkillDelete
-} from '../../runtime/runtime-skills-client'
+} from '../../runtime/skills/configuration/runtime-skills-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   skillDeleteActionLabel,
@@ -22,7 +22,7 @@ import {
   skillDeletePlacementSummary,
   skillDeleteRetainedSourceLines
 } from './skill-delete-copy'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type SkillDeleteFlow = {
   /** False while the target is unresolved or the host predates the capability. */
@@ -210,7 +210,8 @@ function unsupportedReason(
 }
 
 function skillDeletedToast(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.deletedOne', 'Deleted {{count}} skill', { count })
-    : translate('auto.components.skills.count.deletedOther', 'Deleted {{count}} skills', { count })
+  return translate('auto.components.skills.count.deleted', 'Deleted {{count}} skills', {
+    count,
+    defaultValue_one: 'Deleted {{count}} skill'
+  })
 }

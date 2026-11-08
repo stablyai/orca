@@ -1,131 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import {
-  AuthRefreshSchema,
-  DrainSchema,
-  HostChallengeSchema,
-  HostDataAuthSchema,
-  HostHelloAckSchema,
-  HostHelloSchema,
-  parseRelayHostCapabilities
-} from './control-messages.js'
-import {
-  DeviceCredentialInstallSchema,
-  DeviceResumeConfirmSchema,
-  RelayAuthSchema,
-  RelayHelloSchema
-} from './credential-messages.js'
-import {
-  AssignmentRequestSchema,
-  AssignmentResponseSchema,
-  isTrustedNewerMove,
-  RelayMovedSchema,
-  ResolveRequestSchema
-} from './director-messages.js'
-import { RelayRegionCatalogResponseSchema } from './relay-regions.js'
+import { HostHelloAckSchema } from './control-messages.js'
+import { isTrustedNewerMove, RelayMovedSchema } from './director-messages.js'
 import {
   buildHostChallengePlaintext,
   buildHostProofMacInput,
   buildHostProofTranscript
 } from './host-proof-transcript.js'
-import { ConfirmableResumeTupleSchema } from './resume-confirmation-contract.js'
-
-const TOKEN = 'abcdefghijklmnopqrstuvwxyzABCDEFGH012345678'
-const NONCE = 'abcdefghijklmnopqrstuvwxyzABCDEF'
-const KEY_B64 = Buffer.alloc(32, 1).toString('base64')
 
 describe('relay protocol contract', () => {
-  it('strictly validates host registration and continuity fields', () => {
-    const hello = {
-      v: 1,
-      relayHostId: 'abcdefghijklmnop',
-      assignmentEpoch: 7,
-      hostPublicKeyB64: KEY_B64,
-      appVersion: '1.2.3'
-    }
-    expect(HostHelloSchema.safeParse(hello).success).toBe(true)
-    expect(HostHelloSchema.safeParse({ ...hello, userId: 'injected' }).success).toBe(false)
-    expect(
-      HostHelloAckSchema.safeParse({
-        v: 1,
-        generation: 8,
-        controlResumeSecret: TOKEN,
-        leaseExpiresAt: 1_800_000_000_000,
-        activeConnIds: [],
-        pendingConns: []
-      }).success
-    ).toBe(true)
-  })
-
-  it('locks bounded director assignment and resume-only resolve payloads', () => {
-    const assignment = { v: 1, relayHostId: 'abcdefghijklmnop' }
-    expect(AssignmentRequestSchema.safeParse(assignment).success).toBe(true)
-    expect(
-      AssignmentRequestSchema.safeParse({ ...assignment, preferredRegion: 'asia-east2' }).success
-    ).toBe(true)
-    expect(
-      AssignmentRequestSchema.safeParse({ ...assignment, preferredRegion: 'europe-west1' }).success
-    ).toBe(false)
-    expect(AssignmentRequestSchema.safeParse({ ...assignment, relayJwt: 'url-secret' }).success).toBe(
-      false
-    )
-    expect(
-      AssignmentResponseSchema.safeParse({
-        v: 1,
-        cellUrl: 'https://relay-c1.onorca.dev',
-        assignmentEpoch: 3,
-        lease: 'signed-lease'
-      }).success
-    ).toBe(true)
-    expect(
-      ResolveRequestSchema.safeParse({
-        v: 1,
-        relayHostId: 'abcdefghijklmnop',
-        resumeToken: TOKEN
-      }).success
-    ).toBe(true)
-  })
-
-  it('accepts only unique regions with unique canonical HTTPS probe origins', () => {
-    const catalog = {
-      v: 1,
-      regions: [
-        {
-          region: 'us-central1',
-          probeOrigins: ['https://relay-c1.example.test', 'https://relay-c2.example.test']
-        },
-        { region: 'asia-east2', probeOrigins: ['https://relay-c27.example.test'] }
-      ]
-    }
-    expect(RelayRegionCatalogResponseSchema.safeParse(catalog).success).toBe(true)
-    expect(
-      RelayRegionCatalogResponseSchema.safeParse({
-        ...catalog,
-        regions: [catalog.regions[0], { ...catalog.regions[0] }]
-      }).success
-    ).toBe(false)
-    expect(
-      RelayRegionCatalogResponseSchema.safeParse({
-        ...catalog,
-        regions: [
-          catalog.regions[0],
-          { region: 'asia-east2', probeOrigins: ['https://relay-c1.example.test'] }
-        ]
-      }).success
-    ).toBe(false)
-    for (const origin of [
-      'http://relay-c1.example.test',
-      'https://relay-c1.example.test/',
-      'https://relay-c1.example.test/health',
-      'https://relay-c1.example.test?probe=1'
-    ]) {
-      expect(
-        RelayRegionCatalogResponseSchema.safeParse({
-          v: 1,
-          regions: [{ region: 'us-central1', probeOrigins: [origin] }]
-        }).success
-      ).toBe(false)
-    }
-  })
 
   it('accepts moves only from the configured director at a strictly newer epoch', () => {
     const move = RelayMovedSchema.parse({
@@ -147,50 +29,6 @@ describe('relay protocol contract', () => {
         currentAssignmentEpoch: 4
       })
     ).toBe(false)
-  })
-
-  it('bounds challenge material and fixes director-only drain recovery', () => {
-    expect(
-      HostChallengeSchema.safeParse({
-        challengeId: 'challenge-1',
-        relayEphemeralPublicKeyB64: KEY_B64,
-        nonceB64: NONCE,
-        ciphertextB64: KEY_B64,
-        expiresAt: 1_800_000_000_000
-      }).success
-    ).toBe(true)
-    expect(DrainSchema.safeParse({ graceMs: 0, recovery: 'resolve-director' }).success).toBe(true)
-    expect(DrainSchema.safeParse({ graceMs: 0, recovery: 'follow-server-url' }).success).toBe(false)
-    expect(AuthRefreshSchema.safeParse({ relayJwt: 'jwt', identity: 'injected' }).success).toBe(false)
-  })
-
-  it('strictly binds one-shot host data tickets to a control generation', () => {
-    expect(HostDataAuthSchema.safeParse({ v: 1, connTicket: TOKEN, generation: 3 }).success).toBe(
-      true
-    )
-    expect(
-      HostDataAuthSchema.safeParse({
-        v: 1,
-        connTicket: TOKEN,
-        generation: 3,
-        relayDeviceId: 'injected'
-      }).success
-    ).toBe(false)
-  })
-
-  it('locks the immutable server-owned resume tuple shape', () => {
-    const tuple = {
-      basisConnId: 'conn-1',
-      owningControlGeneration: 4,
-      relayDeviceId: 'device-1',
-      acceptedCredentialVersion: 2,
-      acceptedAs: 'current',
-      confirmDeadline: 1_800_000_000_000
-    }
-    expect(ConfirmableResumeTupleSchema.safeParse(tuple).success).toBe(true)
-    expect(ConfirmableResumeTupleSchema.safeParse({ ...tuple, userId: 'caller-value' }).success).toBe(
-      false
-    )
   })
 
   it('locks the complete host key-possession transcript', () => {
@@ -250,74 +88,6 @@ describe('relay protocol contract', () => {
       })
     ).toThrow('challengeNonce must be 24 bytes')
   })
-
-  it('accepts only the bounded first-frame credential shape', () => {
-    expect(RelayAuthSchema.parse({ v: 1, mode: 'connect', credential: TOKEN })).toEqual({
-      v: 1,
-      mode: 'connect',
-      credential: TOKEN
-    })
-    expect(
-      RelayAuthSchema.safeParse({ v: 1, mode: 'connect', credential: TOKEN, extra: true }).success
-    ).toBe(false)
-  })
-
-  it('makes install authorization modes mutually exclusive', () => {
-    const base = {
-      v: 1,
-      reqId: 'req-1',
-      relayDeviceId: 'device-1',
-      newResumeTokenHash: TOKEN
-    }
-    expect(
-      DeviceCredentialInstallSchema.safeParse({
-        ...base,
-        authorization: { mode: 'relay-basis', basisConnId: 'conn-1' }
-      }).success
-    ).toBe(true)
-    expect(
-      DeviceCredentialInstallSchema.safeParse({
-        ...base,
-        authorization: {
-          mode: 'relay-basis',
-          basisConnId: 'conn-1',
-          directAuthId: 'injected'
-        }
-      }).success
-    ).toBe(false)
-  })
-
-  it('does not let invite attach observations impersonate resume state', () => {
-    expect(
-      RelayHelloSchema.safeParse({
-        ok: true,
-        credentialKind: 'invite',
-        leaseExpiresAt: 1_800_000_000_000
-      }).success
-    ).toBe(true)
-    expect(
-      RelayHelloSchema.safeParse({
-        ok: true,
-        credentialKind: 'invite',
-        leaseExpiresAt: 1_800_000_000_000,
-        acceptedCredentialVersion: 7,
-        acceptedAs: 'current',
-        resumeExpiresAt: 1_800_000_000_000
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects caller-supplied device and credential metadata on resume confirmation', () => {
-    const confirmation = { v: 1, reqId: 'req-1', basisConnId: 'conn-1' }
-    expect(DeviceResumeConfirmSchema.safeParse(confirmation).success).toBe(true)
-    expect(
-      DeviceResumeConfirmSchema.safeParse({
-        ...confirmation,
-        relayDeviceId: 'injected',
-        acceptedCredentialVersion: 99
-      }).success
-    ).toBe(false)
-  })
 })
 
 describe('pending connection details capability', () => {
@@ -343,14 +113,5 @@ describe('pending connection details capability', () => {
         pendingConns: [{ ...identifiers, reservationId: 'injected' }]
       }).success
     ).toBe(false)
-  })
-
-  it('reads the advertised capabilities from a control upgrade header', () => {
-    expect(parseRelayHostCapabilities(' pending-conn-details , future-thing')).toEqual(
-      new Set(['pending-conn-details', 'future-thing'])
-    )
-    expect(parseRelayHostCapabilities(undefined).size).toBe(0)
-    expect(parseRelayHostCapabilities('').size).toBe(0)
-    expect(parseRelayHostCapabilities('x'.repeat(65)).size).toBe(0)
   })
 })

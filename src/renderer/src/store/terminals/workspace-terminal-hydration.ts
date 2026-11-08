@@ -1,12 +1,12 @@
-import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
+  type WorkspaceKey,
   folderWorkspaceKey,
-  parseWorkspaceKey,
+  isWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
-import { buildByIdIndex } from '../slices/worktree-by-id-index'
-import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
+import { buildByIdIndex } from '../../../../shared/first-row-by-id-index'
+import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
@@ -25,7 +25,7 @@ import { buildWorkspaceTerminalLayoutPlan } from './workspace-terminal-layout-pl
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
 import { retainUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { restoreActiveTabIdByWorktree } from './workspace-terminal-active-tabs'
-import { retainPairedTerminalTabCloseIntentsForCatalog } from '../../runtime/paired-terminal-tab-close-intents'
+import { retainPairedTerminalTabCloseIntentsForCatalog } from '../../runtime/web-session-tabs-sync/closing/paired-terminal-tab-close-intents'
 
 export function createWorkspaceTerminalHydrationActions(
   set: TerminalStoreSet,
@@ -87,14 +87,12 @@ export function createWorkspaceTerminalHydrationActions(
           // An empty workspace is valid; fall back from active repo to avoid a blank landing screen.
           return fallbackActiveWorktreeId
         })()
-        const activeWorkspaceKey: WorkspaceKey | null =
-          session.activeWorkspaceKey && validWorktreeIds.has(session.activeWorkspaceKey)
-            ? session.activeWorkspaceKey
-            : activeWorktreeId
-              ? parseWorkspaceKey(activeWorktreeId)
-                ? (activeWorktreeId as WorkspaceKey)
-                : worktreeWorkspaceKey(activeWorktreeId)
-              : null
+        // Derive from the restored worktree; older builds could persist a key naming another workspace.
+        const activeWorkspaceKey: WorkspaceKey | null = activeWorktreeId
+          ? isWorkspaceKey(activeWorktreeId)
+            ? activeWorktreeId
+            : worktreeWorkspaceKey(activeWorktreeId)
+          : null
         const activeWorkspaceExecutionHostId =
           activeWorkspaceKey && session.activeWorkspaceExecutionHostId
             ? session.activeWorkspaceExecutionHostId
@@ -160,6 +158,9 @@ export function createWorkspaceTerminalHydrationActions(
             : {}),
           ...(options?.contestedPrimaryHostBySessionKey
             ? { contestedPrimaryHostBySessionKey: options.contestedPrimaryHostBySessionKey }
+            : {}),
+          ...(options?.hydratedRuntimeSessionHostIds
+            ? { hydratedRuntimeSessionHostIds: options.hydratedRuntimeSessionHostIds }
             : {}),
           repos: runtimeSessionPlaceholders.repos,
           tabsByWorktree,

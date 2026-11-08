@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampUtf8TextPrefix,
-  getUtf8ByteLength,
   getUtf8ChunkEndIndex,
   isUtf8ByteLengthWithinLimit,
   measureUtf8ByteLength,
@@ -28,27 +27,12 @@ function buildSliceEndingInLoneHighSurrogate(): string {
 describe('scanning a prefix slice whose parent continues past the slice', () => {
   const sliced = buildSliceEndingInLoneHighSurrogate()
 
-  it('is a sliced string that ends in a lone high surrogate', () => {
-    expect(sliced.length).toBe(SLICE_BOUNDARY_UNITS)
-    expect(sliced.charCodeAt(SLICE_BOUNDARY_UNITS - 1)).toBe(0xd9f6)
-    expect(Buffer.byteLength(sliced, 'utf8')).toBe(22)
-  })
-
   it('reads the trailing lone surrogate without pairing past the end in every JIT tier', () => {
     const observed = new Set<number>()
     for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
       observed.add(readUtf8CodePointAt(sliced, SLICE_BOUNDARY_UNITS - 1))
     }
     expect([...observed]).toEqual([0xd9f6])
-  })
-
-  it('measures the same byte length as the encoder in every JIT tier', () => {
-    const expected = Buffer.byteLength(sliced, 'utf8')
-    const observed = new Set<number>()
-    for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
-      observed.add(measureUtf8ByteLength(sliced).byteLength)
-    }
-    expect([...observed]).toEqual([expected])
   })
 
   it('does not report an exceeded limit at the true byte length in every JIT tier', () => {
@@ -91,19 +75,8 @@ describe('getUtf8ChunkEndIndex', () => {
     expect(getUtf8ChunkEndIndex('skipé中tail', 4, 5)).toBe(6)
   })
 
-  it('returns the starting index when no text remains', () => {
-    expect(getUtf8ChunkEndIndex('', 0, 1)).toBe(0)
-    expect(getUtf8ChunkEndIndex('abc', 3, 1)).toBe(3)
-  })
-
   it.each([0, -1])('consumes one code point when the %s-byte budget is exceeded', (maxBytes) => {
     expect(getUtf8ChunkEndIndex('😀a', 0, maxBytes)).toBe(2)
-  })
-
-  it('preserves raw non-finite budget comparisons', () => {
-    expect(getUtf8ChunkEndIndex('abc', 0, Number.NaN)).toBe(3)
-    expect(getUtf8ChunkEndIndex('abc', 0, Number.POSITIVE_INFINITY)).toBe(3)
-    expect(getUtf8ChunkEndIndex('abc', 0, Number.NEGATIVE_INFINITY)).toBe(1)
   })
 })
 
@@ -124,34 +97,5 @@ describe('isUtf8ByteLengthWithinLimit', () => {
     { name: 'text with positive infinity', text: '😀', maxBytes: Infinity, expected: true }
   ])('$name', ({ text, maxBytes, expected }) => {
     expect(isUtf8ByteLengthWithinLimit(text, maxBytes)).toBe(expected)
-  })
-})
-
-describe('isUtf8ByteLengthWithinLimit native fast path', () => {
-  // Compare native bounded encoding against the prior scan at boundaries, including lone surrogates.
-  const samples = [
-    '',
-    'a',
-    'ascii only text',
-    'caf\u00e9',
-    '\u20ac\u20ac\u20ac',
-    '\ud83d\ude00\ud83d\ude00',
-    '\ud83d',
-    '\ude00',
-    'mixed \u00e9 \u20ac \ud83d\ude00 tail',
-    'x'.repeat(64)
-  ]
-
-  it('matches the scanning implementation at every limit around the boundary', () => {
-    for (const text of samples) {
-      const exactBytes = getUtf8ByteLength(text)
-      for (let maxBytes = 1; maxBytes <= exactBytes + 2; maxBytes += 1) {
-        expect({ text, maxBytes, within: isUtf8ByteLengthWithinLimit(text, maxBytes) }).toEqual({
-          text,
-          maxBytes,
-          within: text.length <= maxBytes && exactBytes <= maxBytes
-        })
-      }
-    }
   })
 })

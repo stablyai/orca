@@ -14,6 +14,23 @@ export function readOrcadE2EIdleTimeoutMs(env: NodeJS.ProcessEnv): number | null
     : null
 }
 
+/** Client-chosen quiet period for the hosts it launches; older orcads ignore it and keep the default. */
+export const ORCAD_IDLE_TIMEOUT_ENV = 'ORCA_ORCAD_IDLE_TIMEOUT_MS'
+const ORCAD_IDLE_TIMEOUT_MIN_MS = 60_000
+/** WSL hosts: an idle orcad holds the distro's VM (about 1.2 GB); a cold reopen costs about 4 s. */
+export const WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS = 5 * 60_000
+
+/** Only shortens the default; anything unset, malformed or under a minute keeps it. */
+export function readOrcadIdleTimeoutMs(env: NodeJS.ProcessEnv): number | null {
+  const raw = env[ORCAD_IDLE_TIMEOUT_ENV]
+  const value = raw ? Number(raw) : Number.NaN
+  return Number.isSafeInteger(value) &&
+    value >= ORCAD_IDLE_TIMEOUT_MIN_MS &&
+    value <= ORCAD_IDLE_EXIT_TIMEOUT_MS
+    ? value
+    : null
+}
+
 /** Written to the data root just before an idle stop; the next start reports and clears it. */
 export const ORCAD_IDLE_STOP_RECORD_FILENAME = 'orcad-idle-stop.json'
 
@@ -28,3 +45,12 @@ export const OrcadIdleStopRecordSchema = z.object({
 })
 
 export type OrcadIdleStopRecord = z.infer<typeof OrcadIdleStopRecordSchema>
+
+/**
+ * In a WSL distro's data root (`~/.orca`): orcad's pid, written on an idle stop that left no
+ * terminal daemon. The distro holder ends once that pid exits, so WSL may stop the idle distro.
+ */
+export const ORCAD_WSL_HOLDER_RELEASE_FILENAME = 'wsl-holder-release'
+
+/** Beside the release request: the first few things keeping an idle distro held, one line. */
+export const ORCAD_WSL_HOLDER_BLOCKED_FILENAME = 'wsl-holder-blocked'

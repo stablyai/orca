@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text, View } from 'react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export const SHELL_OPENING_LABEL = 'Opening workspace'
 
 // Ease in to hold opacity while the compositor catches up with the reported renderer paint; linear fade exposed two bare-surface frames.
-export const SHELL_PAGE_COVER_FADE_MS = 220
+export const SHELL_PAGE_COVER_FADE_MS = 100
 
 // Keep indicator and caption layout fixed so waiting screens share the same label height.
 export function ShellWaitingFrame({
@@ -17,6 +19,7 @@ export function ShellWaitingFrame({
   indicator?: ReactNode
   caption?: string
 }) {
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.indicatorSlot}>
@@ -32,6 +35,7 @@ export function ShellWaitingFrame({
 
 // Cover the mounted view until first paint, not ready; keep it noninteractive so a missing report cannot block an otherwise usable page.
 export function ShellPageCover({ label, visible }: { label: string; visible: boolean }) {
+  useMobileColorScheme()
   const opacity = useRef(new Animated.Value(1)).current
   const [mounted, setMounted] = useState(visible)
 
@@ -72,7 +76,7 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   cover: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -105,4 +109,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontVariant: ['tabular-nums']
   }
-})
+}))

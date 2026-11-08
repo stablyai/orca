@@ -1,7 +1,7 @@
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'
 import { taskRepoServer } from './task-repo-host-routing'
-import { settingsRead } from '../transport/settings-read-operations'
+import { settingsRead } from '../settings/mobile-settings-read-operations'
 import type { WorkspaceSshStateModel } from './use-mobile-tasks-workspace-ssh-state'
 import {
   WORKTREE_CREATE_TIMEOUT_MS,
@@ -33,6 +33,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
     ensureWorkspaceSshReady,
     getWorkspaceTargetRepo,
     hostId,
+    repos,
     resolveCreateSetupDecision,
     router,
     runtimeTaskSettings,
@@ -132,6 +133,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
           setupResolution.setupTrust.contentHash !== approvedSetupContentHash &&
           !isSetupHookTrusted(
             trustedOrcaHooks,
+            repos,
             targetRepo.id,
             setupResolution.setupTrust.contentHash
           )
@@ -286,6 +288,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       ensureWorkspaceSshReady,
       getWorkspaceTargetRepo,
       hostId,
+      repos,
       resolveCreateSetupDecision,
       router,
       runtimeTaskSettings,

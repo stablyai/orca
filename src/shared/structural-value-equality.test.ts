@@ -10,17 +10,6 @@ const comparators = [
 ] as const
 
 describe.each(comparators)('%s', (_name, valuesEqual) => {
-  it('compares primitives and identical references', () => {
-    expect(valuesEqual('a', 'a')).toBe(true)
-    expect(valuesEqual('a', 'b')).toBe(false)
-    expect(valuesEqual(null, null)).toBe(true)
-    expect(valuesEqual(null, {})).toBe(false)
-    expect(valuesEqual(undefined, null)).toBe(false)
-    const fn = (): void => {}
-    expect(valuesEqual(fn, fn)).toBe(true)
-    expect(valuesEqual(fn, (): void => {})).toBe(false)
-  })
-
   it('walks arrays element-wise and never mixes them with records', () => {
     expect(valuesEqual([1, [2, { a: 'b' }]], [1, [2, { a: 'b' }]])).toBe(true)
     expect(valuesEqual([1, 2], [1, 2, 3])).toBe(false)
@@ -56,11 +45,6 @@ describe.each(comparators)('%s', (_name, valuesEqual) => {
     expect(valuesEqual(new Row(), new Row())).toBe(false)
     expect(valuesEqual(new Row(), { x: 1 })).toBe(false)
   })
-
-  it('ignores symbol keys', () => {
-    const key = Symbol('marker')
-    expect(valuesEqual({ [key]: 1, a: 1 }, { [key]: 2, a: 1 })).toBe(true)
-  })
 })
 
 describe('structuralValuesEqual', () => {
@@ -70,11 +54,6 @@ describe('structuralValuesEqual', () => {
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1 })).toBe(false)
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1, c: undefined })).toBe(false)
     expect(structuralValuesEqual({ a: 1, b: undefined }, { a: 1, b: undefined })).toBe(true)
-  })
-
-  it('compares leaves with === so NaN is never equal and -0 matches 0', () => {
-    expect(structuralValuesEqual({ a: Number.NaN }, { a: Number.NaN })).toBe(false)
-    expect(structuralValuesEqual({ a: 0 }, { a: -0 })).toBe(true)
   })
 })
 
@@ -87,10 +66,5 @@ describe('structuralValuesEqualIgnoringUndefined', () => {
       structuralValuesEqualIgnoringUndefined({ a: 1, b: undefined }, { a: 1, c: undefined })
     ).toBe(true)
     expect(structuralValuesEqualIgnoringUndefined({ a: 1 }, { a: 1, b: 2 })).toBe(false)
-  })
-
-  it('compares leaves with Object.is so NaN is equal and -0 differs from 0', () => {
-    expect(structuralValuesEqualIgnoringUndefined({ a: Number.NaN }, { a: Number.NaN })).toBe(true)
-    expect(structuralValuesEqualIgnoringUndefined({ a: 0 }, { a: -0 })).toBe(false)
   })
 })

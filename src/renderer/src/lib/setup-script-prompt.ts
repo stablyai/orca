@@ -1,11 +1,13 @@
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
-import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
+import type { SetupScriptImportCandidate } from '../../../shared/workspace-setup/setup-script-imports'
 import type { RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
-import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-result'
+import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
+import { isRuntimeScopeForbiddenError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { hasEffectiveSetupCommand } from './setup-script-status'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -26,6 +28,19 @@ export type SetupScriptPromptInspection =
       status: 'forbidden'
       repoId: string
     }
+  // The repo's WSL distro is stopped: nothing to say until it runs, and a Retry could not succeed.
+  | {
+      status: 'distro-stopped'
+      repoId: string
+    }
+
+/**
+ * States the card shows nothing for: mobile-scope forbiddance (the global banner explains it) and a
+ * stopped WSL distro (focus re-inspects, so the card returns once it runs; a Retry could not succeed).
+ */
+export function isSilentSetupScriptPromptState(state: { status: string }): boolean {
+  return state.status === 'forbidden' || state.status === 'distro-stopped'
+}
 
 export async function inspectSetupScriptPromptState({
   repo,
@@ -39,7 +54,9 @@ export async function inspectSetupScriptPromptState({
   try {
     const hooksResult = await checkHooks()
     if (hooksResult.status === 'error') {
-      return { status: 'error', repoId: repo.id }
+      return hooksResult.unavailable === 'wsl-distro-stopped'
+        ? { status: 'distro-stopped', repoId: repo.id }
+        : { status: 'error', repoId: repo.id }
     }
     const hasEffectiveSetup = hasEffectiveSetupCommand(repo, hooksResult)
     if (hasEffectiveSetup) {
@@ -80,6 +97,12 @@ export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boo
 
 export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): string {
   return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
+}
+
+/** The repo of a dismissal key, host-qualified (`<host>\0<repoId>`) or legacy bare. */
+export function getSetupScriptPromptDismissalRepoId(entry: string): string {
+  const identity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+  return identity.slice(identity.indexOf('\0') + 1)
 }
 
 export function isSetupScriptPromptDismissed(
@@ -178,14 +201,56 @@ export function buildImportedHookSettings(
   }
 }
 
-export function formatCandidateSource(candidate: SetupScriptImportCandidate): string {
+export type DetectedSetupPreviewContent = {
+  setup: string
+  archive: string | null
+  editable: boolean
+}
+
+// Mirrors what buildImportedHookSettings saves; only package-manager guesses are editable before saving.
+export function getDetectedSetupPreviewContent(
+  candidate: SetupScriptImportCandidate,
+  packageManagerSetupDraft: string
+): DetectedSetupPreviewContent {
+  const editable = candidate.provider === 'package-manager'
+  return {
+    setup: editable ? packageManagerSetupDraft : candidate.setup,
+    archive: candidate.archive ?? null,
+    editable
+  }
+}
+
+export function getSetupScriptFirstLine(setup: string): { firstLine: string; hasMore: boolean } {
+  const lines = setup
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+  return { firstLine: lines[0] ?? '', hasMore: lines.length > 1 }
+}
+
+// Product names stay as detected; descriptive labels translate by provider.
+function candidateLabel(candidate: SetupScriptImportCandidate, t: Translate = translate): string {
+  if (candidate.provider === 'codex') {
+    return t('setupScriptPrompt.candidateLabels.codexEnvironment', 'Codex environment')
+  }
+  if (candidate.provider === 'package-manager') {
+    return t('setupScriptPrompt.candidateLabels.packageManager', 'package manager')
+  }
+  return candidate.label
+}
+
+export function formatCandidateSource(
+  candidate: SetupScriptImportCandidate,
+  t?: Translate
+): string {
+  const label = candidateLabel(candidate, t)
   const [primaryFile, ...remainingFiles] = candidate.files
   if (!primaryFile) {
-    return candidate.label
+    return label
   }
   return remainingFiles.length > 0
-    ? `${candidate.label} (${primaryFile} +${remainingFiles.length})`
-    : `${candidate.label} (${primaryFile})`
+    ? `${label} (${primaryFile} +${remainingFiles.length})`
+    : `${label} (${primaryFile})`
 }
 
 // Show matched filenames as provenance: one name, two with and, or first +N more; never substitute provider labels.

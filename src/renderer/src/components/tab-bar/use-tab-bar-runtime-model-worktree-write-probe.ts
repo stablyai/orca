@@ -68,7 +68,6 @@ export const probeWindowsCapabilities: WindowsTerminalCapabilities = {
 export const localProjectRuntimeSpy = vi.fn(() => undefined)
 
 const AGENT_PROJECTIONS = Object.freeze({
-  nativeChatEnabled: false,
   tabAgentTypesByTabId: Object.freeze({}),
   nativeChatTabWideFallbackUnsafeTabsById: Object.freeze({})
 })

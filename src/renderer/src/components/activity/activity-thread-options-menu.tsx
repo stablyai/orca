@@ -17,13 +17,13 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { OptionsFilterCountBadge } from '@/components/sidebar/options-filter-count-badge'
-import { formatActiveFilterLabel } from '../../../../shared/workspace-view/workspace-row-filters'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { OptionsFilterCountBadge } from '@/components/sidebar/worktree-list/controls/options-filter-count-badge'
 import {
   ActivityScopeFilterMenuItems,
   useActivityScopeFilterCount
 } from './activity-scope-filter-controls'
-import type { ActivityGroupBy } from './activity-thread-types'
+import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
 
 const GROUP_BY_OPTIONS = [
   'none',
@@ -33,18 +33,18 @@ const GROUP_BY_OPTIONS = [
   'agent'
 ] as const satisfies readonly ActivityGroupBy[]
 
-function getActivityGroupByLabel(groupBy: ActivityGroupBy): string {
+function getActivityGroupByLabel(groupBy: ActivityGroupBy, t: Translate = translate): string {
   switch (groupBy) {
     case 'none':
-      return translate('auto.components.activity.ActivityPrototypePage.none', 'None')
+      return t('auto.components.activity.ActivityPrototypePage.none', 'None')
     case 'status':
-      return translate('auto.components.activity.ActivityPrototypePage.4a3986b200', 'Status')
+      return t('auto.components.activity.ActivityPrototypePage.4a3986b200', 'Status')
     case 'project':
-      return translate('auto.components.activity.ActivityPrototypePage.8c3b621ddf', 'Project')
+      return t('auto.components.activity.ActivityPrototypePage.8c3b621ddf', 'Project')
     case 'worktree':
-      return translate('auto.components.activity.ActivityPrototypePage.b29191b3e0', 'Worktree')
+      return t('auto.components.activity.ActivityPrototypePage.b29191b3e0', 'Worktree')
     case 'agent':
-      return translate('auto.components.activity.ActivityPrototypePage.f6396e1f85', 'Agent')
+      return t('auto.components.activity.ActivityPrototypePage.f6396e1f85', 'Agent')
   }
 }
 
@@ -79,21 +79,21 @@ export function ActivityThreadOptionsMenu({
   unreadOnly?: boolean
   onUnreadOnlyChange?: (unreadOnly: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const skipCloseAutoFocusRef = React.useRef(false)
   const activeFilterCount =
     useActivityScopeFilterCount() + (onUnreadOnlyChange && unreadOnly ? 1 : 0)
-  const activeFilterLabel = formatActiveFilterLabel(activeFilterCount)
   const optionsLabel =
     activeFilterCount > 0
-      ? translate(
-          'auto.components.activity.ActivityPrototypePage.threadListOptionsActive',
-          'Thread list options ({{value0}} active)',
-          { value0: activeFilterLabel }
+      ? t(
+          'auto.components.activity.ActivityPrototypePage.threadListOptionsActiveFilters',
+          'Thread list options ({{count}} filters active)',
+          {
+            count: activeFilterCount,
+            defaultValue_one: 'Thread list options ({{count}} filter active)'
+          }
         )
-      : translate(
-          'auto.components.activity.ActivityPrototypePage.db8a1878b5',
-          'Thread list options'
-        )
+      : t('auto.components.activity.ActivityPrototypePage.db8a1878b5', 'Thread list options')
 
   return (
     <DropdownMenu>
@@ -114,12 +114,15 @@ export function ActivityThreadOptionsMenu({
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
           {activeFilterCount > 0
-            ? translate(
-                'auto.components.activity.ActivityPrototypePage.activityOptionsActive',
-                'Activity options ({{value0}})',
-                { value0: activeFilterLabel }
+            ? t(
+                'auto.components.activity.ActivityPrototypePage.activityOptionsFilterCount',
+                'Activity options ({{count}} filters)',
+                {
+                  count: activeFilterCount,
+                  defaultValue_one: 'Activity options ({{count}} filter)'
+                }
               )
-            : translate(
+            : t(
                 'auto.components.activity.ActivityPrototypePage.activityOptions',
                 'Activity options'
               )}
@@ -138,7 +141,7 @@ export function ActivityThreadOptionsMenu({
         }}
       >
         <DropdownMenuLabel>
-          {translate('auto.components.activity.ActivityPrototypePage.filtersSection', 'Filters')}
+          {t('auto.components.activity.ActivityPrototypePage.filtersSection', 'Filters')}
         </DropdownMenuLabel>
         {onUnreadOnlyChange ? (
           <DropdownMenuCheckboxItem
@@ -146,10 +149,7 @@ export function ActivityThreadOptionsMenu({
             onCheckedChange={(checked) => onUnreadOnlyChange(checked === true)}
             onSelect={(event) => event.preventDefault()}
           >
-            {translate(
-              'auto.components.activity.ActivityPrototypePage.showUnreadOnly',
-              'Show unread only'
-            )}
+            {t('auto.components.activity.ActivityPrototypePage.showUnreadOnly', 'Show unread only')}
           </DropdownMenuCheckboxItem>
         ) : null}
         {onShowChildAgentsChange ? (
@@ -158,7 +158,7 @@ export function ActivityThreadOptionsMenu({
             onCheckedChange={(checked) => onShowChildAgentsChange(checked === true)}
             onSelect={(event) => event.preventDefault()}
           >
-            {translate(
+            {t(
               'auto.components.activity.ActivityPrototypePage.showChildAgents',
               'Show child agents'
             )}
@@ -167,20 +167,17 @@ export function ActivityThreadOptionsMenu({
         <ActivityScopeFilterMenuItems />
         <DropdownMenuSeparator />
         <DropdownMenuLabel>
-          {translate('auto.components.activity.ActivityPrototypePage.viewSection', 'View')}
+          {t('auto.components.activity.ActivityPrototypePage.viewSection', 'View')}
         </DropdownMenuLabel>
         {groupBy && onGroupByChange ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <span className="flex flex-1 items-center justify-between gap-3">
                 <span>
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.770d458144',
-                    'Group by'
-                  )}
+                  {t('auto.components.activity.ActivityPrototypePage.770d458144', 'Group by')}
                 </span>
                 <span className="min-w-0 truncate text-[11px] font-medium text-muted-foreground">
-                  {getActivityGroupByLabel(groupBy)}
+                  {getActivityGroupByLabel(groupBy, t)}
                 </span>
               </span>
             </DropdownMenuSubTrigger>
@@ -195,7 +192,7 @@ export function ActivityThreadOptionsMenu({
                     value={value}
                     onSelect={(event) => event.preventDefault()}
                   >
-                    {getActivityGroupByLabel(value)}
+                    {getActivityGroupByLabel(value, t)}
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
@@ -207,7 +204,7 @@ export function ActivityThreadOptionsMenu({
           onCheckedChange={(checked) => onCompactModeChange(checked === true)}
           onSelect={(event) => event.preventDefault()}
         >
-          {translate('auto.components.activity.ActivityPrototypePage.f70e4bec47', 'Compact mode')}
+          {t('auto.components.activity.ActivityPrototypePage.f70e4bec47', 'Compact mode')}
         </DropdownMenuCheckboxItem>
         {onShowSearchChange ? (
           <DropdownMenuCheckboxItem
@@ -218,7 +215,7 @@ export function ActivityThreadOptionsMenu({
               onShowSearchChange(show)
             }}
           >
-            {translate('auto.components.activity.ActivityPrototypePage.showSearch', 'Show search')}
+            {t('auto.components.activity.ActivityPrototypePage.showSearch', 'Show search')}
           </DropdownMenuCheckboxItem>
         ) : null}
         {onMarkAllThreadsRead || onClearCompleted ? (
@@ -228,10 +225,7 @@ export function ActivityThreadOptionsMenu({
               <DropdownMenuItem onSelect={onMarkAllThreadsRead} disabled={!hasUnreadThreads}>
                 <CheckCheck className="size-3.5 text-muted-foreground" />
                 <span>
-                  {translate(
-                    'auto.components.activity.ActivityPrototypePage.023ff75afe',
-                    'Mark all read'
-                  )}
+                  {t('auto.components.activity.ActivityPrototypePage.023ff75afe', 'Mark all read')}
                 </span>
               </DropdownMenuItem>
             ) : null}
@@ -239,7 +233,7 @@ export function ActivityThreadOptionsMenu({
               <DropdownMenuItem onSelect={onClearCompleted} disabled={!hasCompletedThreads}>
                 <Trash2 className="size-3.5 text-muted-foreground" />
                 <span>
-                  {translate(
+                  {t(
                     'auto.components.activity.ActivityPrototypePage.clearCompleted',
                     'Clear completed'
                   )}

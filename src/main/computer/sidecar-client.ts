@@ -7,11 +7,14 @@ import type {
   ComputerProviderCapabilities,
   ComputerSnapshotResult
 } from '../../shared/runtime-types'
-import { normalizeComputerActionResult } from './computer-action-verification-normalization'
+import {
+  normalizeComputerActionResult,
+  rejectContradictedComputerAction
+} from './computer-action-verification-normalization'
 import { isComputerSidecarDiagnostic, logComputerDiagnostic } from './computer-sidecar-diagnostics'
 import { validateComputerSidecarPasteText } from './computer-sidecar-paste-validation'
 import { RuntimeClientError } from './runtime-client-error'
-import { getForkedChildEntryPath } from '../forked-child-entry-path'
+import { getForkedChildEntryPath } from '../worker-threads/forked-child-entry-path'
 
 // Bundled beside orcad.js on servers and under out/main on desktop.
 export const COMPUTER_SIDECAR_ENTRY_FILENAME = 'computer-sidecar.js'
@@ -84,8 +87,10 @@ export async function callComputerSidecarAction(
   if (validation) {
     await validation
   }
-  return normalizeComputerActionResult(
-    (await getComputerSidecar().call(method, params)) as ComputerActionResult
+  return rejectContradictedComputerAction(
+    normalizeComputerActionResult(
+      (await getComputerSidecar().call(method, params)) as ComputerActionResult
+    )
   )
 }
 

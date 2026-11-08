@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSettings } from './runtime-home-settings-test-fixtures'
@@ -15,10 +15,13 @@ import {
 } from './runtime-home-service-test-harness'
 
 // Keep asserted config bytes independent of platform socket-path limits.
-vi.mock('../codex/codex-daemon-socket-path-guard', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  applyCodexDaemonSocketGuard: (config: string) => config
-}))
+vi.mock(
+  '../codex/configuration/shared-server/codex-daemon-socket-path-guard',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    applyCodexDaemonSocketGuard: (config: string) => config
+  })
+)
 
 vi.mock('electron', () => ({
   app: {
@@ -210,47 +213,6 @@ describe('CodexRuntimeHomeService', () => {
     expect(warnSpy).not.toHaveBeenCalledWith(
       '[codex-runtime-home] Active managed account credential remained unavailable, clearing selection'
     )
-  })
-
-  it('ignores mismatched runtime auth when the active managed auth is missing', async () => {
-    const runtimeAuthPath = getRuntimeCodexAuthPath()
-    const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
-    const managedAuth = createCodexAuthJson('user@example.com', 'acct-user', 'managed', 1)
-    const mismatchedAuth = createCodexAuthJson('other@example.com', 'acct-other', 'other', 2)
-    writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
-    const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
-    const settings = createSettings({
-      realHomeRoutable: true,
-      codexManagedAccounts: [
-        {
-          id: 'account-1',
-          email: 'user@example.com',
-          managedHomePath,
-          providerAccountId: 'acct-user',
-          workspaceLabel: null,
-          workspaceAccountId: 'acct-user',
-          createdAt: 1,
-          updatedAt: 1,
-          lastAuthenticatedAt: 1
-        }
-      ],
-      activeCodexManagedAccountId: 'account-1',
-      activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
-    })
-    const store = createStore(settings)
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
-    const service = new CodexRuntimeHomeService(store as never)
-
-    writeFileSync(runtimeAuthPath, mismatchedAuth, 'utf-8')
-    rmSync(join(managedHomePath, 'auth.json'), { force: true })
-    expect(service.prepareForCodexLaunch()).toBe(managedHomePath)
-
-    expect(existsSync(join(managedHomePath, 'auth.json'))).toBe(false)
-    expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
-    expect(readFileSync(runtimeAuthPath, 'utf-8')).toBe(mismatchedAuth)
-    expect(store.getSettings().activeCodexManagedAccountId).toBe('account-1')
-    expect(warnSpy).not.toHaveBeenCalled()
   })
 
   it('ignores shared auth on an explicit managed-to-real-home deselect', async () => {

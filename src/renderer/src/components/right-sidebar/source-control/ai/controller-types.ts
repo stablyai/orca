@@ -1,18 +1,18 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import type { WorktreeAgentInventoryState } from '@/lib/agent-detection-target-inventory'
 import type {
   GitConflictOperation,
   GitStatusEntry
-} from '../../../../../../shared/git-status-types'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+} from '../../../../../../shared/git/status/git-status-types'
+import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 
 export type SourceControlAiStoreSnapshot = Pick<AppState, 'settings' | 'repos'> &
-  WorktreeAgentInventoryState
+  Omit<WorktreeAgentInventoryState, 'repos'>
 
 export type SourceControlAiControllerParams = {
-  settings: GlobalSettings | null
+  settings: SourceControlRenderSettings | null
   /** The repo owner's transport; it scopes model discovery. */
   target: RuntimeClientTarget | null
   activeRepo: Repo | null
@@ -28,6 +28,7 @@ export type SourceControlAiControllerParams = {
   commitError: string | null
   pushRecoveryPrompt: string | null
   updateSettings: AppState['updateSettings']
+  updateSettingsOrThrow: AppState['updateSettingsOrThrow']
   updateRepo: AppState['updateRepo']
   openSettingsTarget: AppState['openSettingsTarget']
   openSettingsPage: AppState['openSettingsPage']

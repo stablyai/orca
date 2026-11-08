@@ -2,16 +2,16 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
-import { retainValidFilterRepoIds } from '../slices/repo-filter-selection'
-import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/worktree-visibility-owner-settings'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { retainValidFilterRepoIds } from './repo-filter-selection'
+import { readRuntimeWorktreeVisibilitySnapshot } from '../slices/settings/worktree-visibility-owner-settings'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
+import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
 import type { FetchedRepoCatalog } from './repo-catalog-merge'
 import type { LocalRepoCatalogFetchOutcome } from './repo-catalog-fencing'
 import type { RepoSlice } from './repo-state'
-import { arrayElementsUnchanged } from '../catalog-identity'
+import { arrayElementsUnchanged } from '../../lib/catalog-reconciliation/catalog-identity'
 import {
   latestAllHostRepoCatalogGenerationByStore,
   startLocalRepoCatalogFetch
@@ -21,7 +21,7 @@ import {
   isHostCatalogFenceCurrent,
   loadRuntimeHostCatalogs,
   type HostCatalogFence
-} from '../host-catalog-fencing'
+} from '../host-catalog/host-catalog-fence'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
@@ -30,9 +30,14 @@ import {
   reconcileFetchedCatalogWorktreeState,
   reconcileSupersededSshRepos
 } from './repo-catalog-merge'
-import { getRuntimeTargetHostId } from '../../runtime/runtime-client-target'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import { noteLiveRepoCatalogApplied } from './saved-host-catalog-rows'
+import {
+  withWslMovedRepoIds,
+  withWslMovedSetupScriptDismissals
+} from './wsl-moved-repo-ui-retention'
 
 export function createAllHostRepoCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -40,6 +45,7 @@ export function createAllHostRepoCatalogActions(
 ): Pick<RepoSlice, 'fetchReposForAllHosts'> {
   return {
     fetchReposForAllHosts: async (options) => {
+      const hostRefreshes: Promise<void>[] = []
       const settleLocalCatalog = startLocalRepoCatalogFetch(get)
       let generation = 0
       set((s) => {
@@ -84,7 +90,12 @@ export function createAllHostRepoCatalogActions(
           return {
             repos: finalizedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileFetchedCatalogWorktreeState(s, catalog, finalizedRepos),
+            ...reconcileFetchedCatalogWorktreeState(
+              s,
+              catalog,
+              finalizedRepos,
+              reconciliation.pendingReadoptions
+            ),
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(finalizedRepos, s.repos)
               ? {}
@@ -94,23 +105,47 @@ export function createAllHostRepoCatalogActions(
             setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
           }
         })
+        noteLiveRepoCatalogApplied(get, catalog.hostId)
         // Why: keep the safe-auto fork sync (as fetchRepos does) so cold-start, which now routes here, still updates safe-auto forks.
         scheduleSafeAutoForkSync(hostRepos)
+        if (options?.onHostLoaded) {
+          const onHostLoaded = options.onHostLoaded
+          hostRefreshes.push(
+            Promise.resolve()
+              .then(async () => {
+                if (isCurrent(fence)) {
+                  await onHostLoaded(catalog.hostId)
+                }
+              })
+              .catch((err: unknown) => {
+                console.warn(`Failed to refresh worktrees for host ${catalog.hostId}:`, err)
+              })
+          )
+        }
         return true
       }
       const validateRepoScopedUi = (): void => {
         set((s) => {
           const validRepoIds = new Set(s.repos.map((repo) => repo.id))
           const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
+          // A moved repo's host may be the catalog that didn't load (e.g. its WSL environment).
+          const retainedRepoIds = withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
           return {
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-            filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
-            setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, retainedRepoIds),
+            setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
               s.setupScriptPromptDismissedRepoIds,
-              validRepoHostIdentities
+              filterSetupScriptPromptDismissalsToValidRepos(
+                s.setupScriptPromptDismissedRepoIds,
+                validRepoHostIdentities
+              ),
+              s.wslMovedProjects
             ),
-            trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(s.trustedOrcaHooks, validRepoIds)
+            trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(
+              s.trustedOrcaHooks,
+              retainedRepoIds
+            )
           }
         })
       }
@@ -121,7 +156,14 @@ export function createAllHostRepoCatalogActions(
       const localFence = claimHostCatalogFence(get, 'repos', { kind: 'local' })
       try {
         if (
-          !applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }, get().repos), localFence)
+          !applyCatalog(
+            await fetchRepoCatalogForTarget(
+              { kind: 'local' },
+              get().repos,
+              get().githubSourceCollections
+            ),
+            localFence
+          )
         ) {
           failed = true
         }
@@ -134,9 +176,11 @@ export function createAllHostRepoCatalogActions(
       settleLocalCatalog(localCatalogOutcome)
       // Why: a newer local-only refresh must not cancel this load's unrelated remote catalogs.
       if (latestAllHostRepoCatalogGenerationByStore.get(get) !== generation) {
+        await Promise.all(hostRefreshes)
         return
       }
       if (options?.remoteHosts === 'skip') {
+        await Promise.all(hostRefreshes)
         return
       }
 
@@ -146,7 +190,7 @@ export function createAllHostRepoCatalogActions(
         'repos',
         async (target, fence) => {
           const [catalogResult, visibilitySnapshot] = await Promise.all([
-            fetchRepoCatalogForTarget(target, get().repos).then(
+            fetchRepoCatalogForTarget(target, get().repos, get().githubSourceCollections).then(
               (catalog) => ({ ok: true as const, catalog }),
               (error: unknown) => ({ ok: false as const, error })
             ),
@@ -187,6 +231,7 @@ export function createAllHostRepoCatalogActions(
         },
         () => latestAllHostRepoCatalogGenerationByStore.get(get) === generation
       )
+      await Promise.all(hostRefreshes)
       // Validate saved repo UI only after all hosts answer; local-first paint otherwise erases offline-runtime filters.
       if (!failed && get().reposFetchGeneration === generation) {
         validateRepoScopedUi()

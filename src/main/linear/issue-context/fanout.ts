@@ -2,7 +2,7 @@ import type { LinearErrorCode } from '../../../shared/linear/agent-access'
 import type { LinearWorkspaceCandidate } from '../../../shared/linear/agent-result-types'
 import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import { getClients, getStatus, type LinearClientForWorkspace } from '../client'
-import { LinearAgentAccessError, classifyLinearError, linearError, linearMessage } from './errors'
+import { toLinearAccessError, type LinearAgentAccessError } from './errors'
 
 export type WorkspaceReadFailure = {
   workspace: LinearWorkspaceCandidate
@@ -11,20 +11,20 @@ export type WorkspaceReadFailure = {
   error: LinearAgentAccessError
 }
 
-export function getFanoutClientEntries(): {
+export function getFanoutClientEntries(signal?: AbortSignal): {
   entries: LinearClientForWorkspace[]
   failures: WorkspaceReadFailure[]
 } {
   const workspaces = getStatus().workspaces ?? []
   if (workspaces.length === 0) {
-    return { entries: getClients('all'), failures: [] }
+    return { entries: getClients('all', signal), failures: [] }
   }
 
   const entries: LinearClientForWorkspace[] = []
   const failures: WorkspaceReadFailure[] = []
   for (const workspace of workspaces) {
     try {
-      const entry = getClients(workspace.id)[0]
+      const entry = getClients(workspace.id, signal)[0]
       if (entry) {
         entries.push(entry)
       }
@@ -50,11 +50,4 @@ export function workspaceFailure(
     message: error.message,
     error
   }
-}
-
-function toLinearAccessError(error: unknown): LinearAgentAccessError {
-  if (error instanceof LinearAgentAccessError) {
-    return error
-  }
-  return linearError(classifyLinearError(error), linearMessage(error))
 }

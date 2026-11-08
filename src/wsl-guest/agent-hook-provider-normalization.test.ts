@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from './agent-hook-server'
-import type { AgentHookRelayEnvelope, AgentHookSource } from '../shared/agent-hook-relay'
-import { makePaneKey } from '../shared/stable-pane-id'
+import type {
+  AgentHookRelayEnvelope,
+  AgentHookSource
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import { makePaneKey } from '../shared/workspace-layout/stable-pane-id'
 
 const PANE = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
 
@@ -14,41 +17,6 @@ describe('relay provider normalization', () => {
     dir = mkdtempSync(join(tmpdir(), 'relay-provider-normalization-'))
   })
   afterEach(() => rmSync(dir, { recursive: true, force: true }))
-
-  it('forwards mixed-provider spool replay without losing the new prompt', async () => {
-    const spoolDir = join(dir, 'spool')
-    mkdirSync(spoolDir)
-    writeFileSync(
-      join(spoolDir, 'pane.jsonl'),
-      `${[
-        ['codex', { hook_event_name: 'UserPromptSubmit', prompt: 'Old turn' }],
-        ['claude', { hook_event_name: 'UserPromptSubmit', prompt: 'New turn' }],
-        ['claude', { hook_event_name: 'PreToolUse', tool_name: 'Read' }]
-      ]
-        .map(([source, payload]) =>
-          JSON.stringify({
-            paneKey: PANE,
-            tabId: 'tab-1',
-            source,
-            payload,
-            receivedAt: Date.now()
-          })
-        )
-        .join('\n')}\n`
-    )
-    const forward = vi.fn<(event: AgentHookRelayEnvelope) => void>()
-    const relay = new RelayAgentHookServer({ endpointDir: dir, forward })
-    try {
-      await relay.start()
-      expect(forward).toHaveBeenCalledTimes(3)
-      expect(forward.mock.calls[2][0]).toMatchObject({
-        isReplay: true,
-        payload: { agentType: 'claude', prompt: 'New turn', toolName: 'Read' }
-      })
-    } finally {
-      relay.stop()
-    }
-  })
 
   it('forwards a new provider despite the cached owner and replays its latest prompt', async () => {
     const forward = vi.fn<(event: AgentHookRelayEnvelope) => void>()

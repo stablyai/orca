@@ -11,10 +11,11 @@ import {
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
-import { grantDirAcl, isPermissionError } from '../win32-utils'
+import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { grantDirAcl } from '../windows/windows-directory-acl'
+import { isPermissionError } from '../filesystem/permission-errors'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
-import { writeRollingFileBackup } from '../rolling-file-backup'
+import { writeRollingFileBackup } from '../filesystem/rolling-file-backup'
 import { renameOverLockedTarget } from './locked-executable-rename'
 import {
   getWindowsNativeHookAgent,
@@ -216,6 +217,18 @@ function hookHasManagedCommand(hook: HookCommandConfig, matches: (value?: string
   return matches(hook.command) || args.some((arg) => typeof arg === 'string' && matches(arg))
 }
 
+// Users may opt a managed hook into async; keep that choice when the hook is rewritten.
+export function withPreviousManagedAsync(
+  hook: HookCommandConfig,
+  definitions: HookDefinition[],
+  matches: (command: string | undefined) => boolean
+): HookCommandConfig {
+  const async = definitions
+    .flatMap((definition) => (Array.isArray(definition.hooks) ? definition.hooks : []))
+    .find((prev) => typeof prev.async === 'boolean' && hookHasManagedCommand(prev, matches))?.async
+  return async === undefined ? hook : { ...hook, async }
+}
+
 export function hookDefinitionHasManagedCommand(
   definition: HookDefinition,
   isManagedCommand: (command: string | undefined) => boolean
@@ -342,3 +355,5 @@ export function writeHooksJson(
     }
   }
 }
+
+export { writeHooksJsonAsync } from './hooks-json-write-async'

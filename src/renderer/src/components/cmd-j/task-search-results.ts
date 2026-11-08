@@ -5,9 +5,9 @@ import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
-import { parseCmdJTaskSourceUrl } from '@/lib/worktree-palette-task-url-match'
-import { isWorktreePaletteQueryTooLarge } from '@/lib/worktree-palette-query-bounds'
+} from '../../../../shared/work-items/task-source-context'
+import { parseCmdJTaskSourceUrl } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
+import { isWorktreePaletteQueryTooLarge } from '../../../../shared/palette-match/worktree-palette-query-bounds'
 
 export type CmdJTask =
   | { provider: 'linear'; issue: LinearIssue }

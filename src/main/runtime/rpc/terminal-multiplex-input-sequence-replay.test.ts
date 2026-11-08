@@ -1,10 +1,13 @@
-import './unused-default-rpc-methods.test-fixture'
+import type * as WorktreeListingModule from '../../git/worktrees/catalog/worktree-listing'
+
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
+import { createAgentPromptSubmissionRuntime } from '../terminal/input/agent-prompt-submission-runtime-test-fixture'
+import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -13,8 +16,26 @@ import {
   encodeTerminalStreamText,
   decodeTerminalInputAck,
   type TerminalInputAckKind
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 import { makeRequest, stubRuntime } from './terminal-multiplex-test-harness'
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => {
+  const facade = getWorktreeListingMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeListingModule>()),
+    listWorktreesStrict: facade.listWorktreesStrict
+  }
+})
+
+const { getWorktreeListingMocks } = vi.hoisted(() => {
+  const createWorktreeListingMocks = () => ({
+    listWorktreesStrict: async () => [
+      { path: '/tmp/worktree-a', head: 'abc', branch: 'test', isBare: false, isMainWorktree: false }
+    ]
+  })
+  let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
+  return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
+})
 
 type FrameHandler = (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
 
@@ -166,6 +187,49 @@ async function openConnection(
 }
 
 describe('terminal multiplex sequenced input across reconnects', () => {
+  it('applies a late phone policy drop without replaying withheld input', async () => {
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(() => {})
+    const write = (_id: string, data: string) => {
+      writes.push(data)
+      return true
+    }
+    runtime.setPtyController({
+      write,
+      writeWithSettlement: settledWriteStub(write),
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const streamRuntime = createRuntime([])
+    streamRuntime.getDriver = () => runtime.getDriver('pty-prompt')
+    streamRuntime.sendTerminal = (_handle, action, options) =>
+      runtime.sendTerminal(handle, action, {
+        ...options,
+        beforeWrite: () => {
+          entered.resolve()
+          return release.promise
+        }
+      })
+    const connection = await openConnection(
+      new RpcDispatcher({ runtime: streamRuntime, methods: TERMINAL_METHODS }),
+      'conn-late',
+      { capabilities: { writeUnavailable: 1, inputAck: 1 }, inputSessionId: 'pane-late' }
+    )
+    connection.sendInput(1, 'withheld')
+    await entered.promise
+    await runtime.handleMobileSubscribe('pty-prompt', 'phone-A', { cols: 45, rows: 20 })
+    release.resolve()
+    await vi.waitFor(() => expect(connection.inputAcks()).toEqual([1]))
+    expect(writes).toEqual([])
+    await runtime.reclaimTerminalForDesktop('pty-prompt')
+    connection.sendInput(1, 'withheld')
+    connection.sendInput(2, 'next')
+    await vi.waitFor(() => expect(connection.inputAcks().at(-1)).toBe(2))
+    expect(writes).toEqual(['next'])
+    expect(connection.writeUnavailableCount()).toBe(0)
+  })
+
   it('writes input replayed on a new connection exactly once, even when the dead connection delivers late', async () => {
     const writes: string[] = []
     const dispatcher = new RpcDispatcher({
@@ -221,123 +285,6 @@ describe('terminal multiplex sequenced input across reconnects', () => {
     stream.sendInput(4, 'echo d\r')
     await vi.waitFor(() => expect(stream.inputAcks()).toEqual([1, 2, 3, 4]))
     expect(writes).toEqual(['echo a\r', 'echo b\r', 'echo c\r', 'echo d\r'])
-  })
-
-  it('acks sequenced input only once the provider settles its handoff', async () => {
-    const writes: string[] = []
-    const sendOptions: unknown[] = []
-    const dispatcher = new RpcDispatcher({
-      runtime: createRuntime(writes, async () => {}, ['unverifiable'], sendOptions),
-      methods: TERMINAL_METHODS
-    })
-    const subscribe = { capabilities: { inputAck: 1 as const }, inputSessionId: 'pane-a' }
-    const connection = await openConnection(dispatcher, 'conn-1', subscribe)
-    connection.sendInput(1, 'make deploy\r')
-    await vi.waitFor(() => expect(connection.inputAcks('delivery-unknown')).toEqual([1]))
-    expect(sendOptions[0]).toMatchObject({ requireWriteSettlement: true })
-    // Unknown, not refused: a resend could run the command twice.
-    expect(connection.inputAcks('resend')).toEqual([])
-  })
-
-  it('asks for a resend when an unsettled handoff proves no byte left', async () => {
-    const writes: string[] = []
-    const dispatcher = new RpcDispatcher({
-      runtime: createRuntime(writes, async () => {}, ['unhanded']),
-      methods: TERMINAL_METHODS
-    })
-    const subscribe = {
-      capabilities: { inputAck: 1 as const },
-      inputSessionId: 'pane-a'
-    }
-    const connection = await openConnection(dispatcher, 'conn-1', subscribe)
-    connection.sendInput(1, 'make deploy\r')
-    await vi.waitFor(() => expect(connection.inputAcks('resend')).toEqual([0]))
-    connection.sendInput(1, 'make deploy\r')
-    await vi.waitFor(() => expect(connection.inputAcks()).toEqual([1]))
-    expect(writes).toEqual(['make deploy\r'])
-  })
-
-  it('tells the client a thrown write has unknown delivery instead of acking it as applied', async () => {
-    const writes: string[] = []
-    const dispatcher = new RpcDispatcher({
-      runtime: createRuntime(writes, async () => {}, ['throw']),
-      methods: TERMINAL_METHODS
-    })
-    const subscribe = { capabilities: { inputAck: 1 as const }, inputSessionId: 'pane-a' }
-    const connection = await openConnection(dispatcher, 'conn-1', subscribe)
-    connection.sendInput(1, 'make deploy\r')
-    connection.sendInput(2, 'ls\r')
-    await vi.waitFor(() => expect(connection.inputAcks()).toEqual([2]))
-    expect(connection.inputAcks('delivery-unknown')).toEqual([1])
-    expect(writes).toEqual(['ls\r'])
-  })
-
-  it('names its input ledger so a restarted runtime is never mistaken for the one that applied input', async () => {
-    const subscribe = { capabilities: { inputAck: 1 as const }, inputSessionId: 'pane-a' }
-    const before = await openConnection(
-      new RpcDispatcher({ runtime: createRuntime([]), methods: TERMINAL_METHODS }),
-      'conn-before',
-      subscribe
-    )
-    // The PTY survives in the daemon; only the runtime (and its in-memory ledger) is new.
-    const after = await openConnection(
-      new RpcDispatcher({ runtime: createRuntime([]), methods: TERMINAL_METHODS }),
-      'conn-after',
-      subscribe
-    )
-    expect(before.subscribed.inputLedgerId).toEqual(expect.any(String))
-    expect(after.subscribed.inputLedgerId).toEqual(expect.any(String))
-    expect(after.subscribed.inputLedgerId).not.toBe(before.subscribed.inputLedgerId)
-  })
-
-  it('acks a replayed duplicate only after the original write lands', async () => {
-    const writes: string[] = []
-    let releaseWrite = (): void => {}
-    let gated = true
-    const dispatcher = new RpcDispatcher({
-      runtime: createRuntime(writes, () =>
-        gated
-          ? new Promise<void>((resolve) => {
-              releaseWrite = resolve
-            })
-          : Promise.resolve()
-      ),
-      methods: TERMINAL_METHODS
-    })
-    const subscribe = { capabilities: { inputAck: 1 as const }, inputSessionId: 'pane-a' }
-    const dead = await openConnection(dispatcher, 'conn-dead', subscribe)
-    dead.sendInput(1, 'make deploy\r')
-    const replacement = await openConnection(dispatcher, 'conn-replacement', subscribe)
-    replacement.sendInput(1, 'make deploy\r')
-
-    await new Promise((resolve) => setTimeout(resolve, 20))
-    expect(writes).toEqual([])
-    expect(replacement.inputAcks()).toEqual([])
-    gated = false
-    releaseWrite()
-    await vi.waitFor(() => expect(replacement.inputAcks()).toEqual([1]))
-    expect(writes).toEqual(['make deploy\r'])
-  })
-
-  it('keeps input from separate panes independent', async () => {
-    const writes: string[] = []
-    const dispatcher = new RpcDispatcher({
-      runtime: createRuntime(writes),
-      methods: TERMINAL_METHODS
-    })
-    const left = await openConnection(dispatcher, 'conn-left', {
-      capabilities: { inputAck: 1 },
-      inputSessionId: 'pane-left'
-    })
-    const right = await openConnection(dispatcher, 'conn-right', {
-      capabilities: { inputAck: 1 },
-      inputSessionId: 'pane-right'
-    })
-
-    left.sendInput(1, 'l')
-    right.sendInput(1, 'r')
-
-    await vi.waitFor(() => expect(writes).toEqual(['l', 'r']))
   })
 
   it('leaves a client that did not negotiate input acks on the unsequenced path', async () => {

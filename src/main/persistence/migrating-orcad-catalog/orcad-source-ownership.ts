@@ -3,8 +3,8 @@ import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/ex
 import {
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHostState
-} from '../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+} from '../../../shared/folder-workspaces/folder-workspace-execution-host'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Repo } from '../../../shared/repo-types'
 

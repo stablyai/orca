@@ -245,7 +245,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
   expect(completed.status).toBe(0)
   expect.soft(JSON.parse(completed.stdout)).toMatchObject({
     ok: true,
-    result: { lifecycle: { action: 'completed' } }
+    result: { lifecycle: 'completed' }
   })
   await expect
     .poll(async () => {

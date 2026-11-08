@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { Repo } from '../../../shared/repo-types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
   deleteRepoSlugCacheKey,
   nextRepoSlugFailureRetryDelay,
@@ -10,13 +10,15 @@ import {
   rememberRepoSlug,
   repoSlugCacheKey,
   repoSlugOwnerTarget,
-  repoUpstreamIdentityKey,
   slugByRepoId,
   slugCacheKey,
   type RepoSlugMatches,
   type SlugIndex
 } from './repo-slug-cache'
-import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
+import {
+  githubRepoIdentityKey,
+  repoUpstreamIdentityKey
+} from '../../../shared/github/repository-identity-key'
 import { createBoundedGenerationMap } from './bounded-generation-map'
 
 export { lookupReposBySlugFromCache } from './repo-slug-cache'
@@ -51,7 +53,7 @@ export function clearRepoSlugCacheEntry(repoId: string): void {
   }
 }
 
-async function resolveRepoSlug(repo: Repo): Promise<string | null> {
+export async function resolveRepoSlug(repo: Repo): Promise<string | null> {
   // The index spans hosts; read each repo’s remote metadata from its owner.
   const target = repoSlugOwnerTarget(repo)
   if (!target) {

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
 import { isUnambiguousSearchQuery } from './tab-create-entry-file-matches'
+import { classifyExplicitUrl } from './tab-create-entry-url-classification'
+import { useTranslate } from '../../i18n/use-translate'
 
 type NetworkSelectionArgs = {
   activeOptions: ActiveOption[]
@@ -24,6 +26,7 @@ export function useNetworkSafeTabEntrySelection({
   activeSelectedIndex: number | null
   selectedActiveOption: ActiveOption | undefined
 } {
+  const t = useTranslate()
   const pinnedOptionIndex = pinnedOptionId
     ? activeOptions.findIndex((option) => getActiveOptionId(option) === pinnedOptionId)
     : -1
@@ -33,10 +36,11 @@ export function useNetworkSafeTabEntrySelection({
   const rankedOption = pinnedOptionIndex < 0 ? activeOptions[0] : undefined
   const rankedClassification =
     rankedOption?.kind === 'entry' ? rankedOption.option.classification : null
-  // Wait for file indexing before history navigation so an unseen file match cannot lose to a network destination.
+  // Explicit URLs cannot match workspace files, even when represented by a history row.
   const rankedNetworkAction =
     !forcedSearch &&
-    (rankedOption?.kind === 'history' ||
+    ((rankedOption?.kind === 'history' &&
+      classifyExplicitUrl(query.trim(), t)?.kind !== 'explicit-url') ||
       rankedClassification?.kind === 'search' ||
       rankedClassification?.kind === 'host-url')
   // Hold network Enter until scanning cannot change ranking: completed/failed indexing or an unambiguous search phrase.

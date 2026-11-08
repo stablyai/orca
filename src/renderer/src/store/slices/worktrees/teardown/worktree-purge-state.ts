@@ -1,7 +1,8 @@
+import { retireRemovedWorktreeCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
 import type { AppState } from '../../../types'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
-import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
+import type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
+import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
@@ -30,20 +31,30 @@ import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/h
  */
 export function buildWorktreePurgeState(
   s: AppState,
-  worktreeTargets: WorktreePurgeTargets
+  worktreeTargets: WorktreePurgeTargets,
+  changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const targets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
     typeof target === 'string' ? { id: target } : target
   )
+  for (const target of targets) {
+    retireRemovedWorktreeCommitDrafts(target.id, target.hostId)
+  }
   const twinScopes = collectHostTwinPurgeScopes(s, targets)
   if (twinScopes.size === 0) {
-    return buildFullWorktreePurgeState(s, targets)
+    return buildFullWorktreePurgeState(s, targets, changedPaneKeys)
   }
   const twinIds = new Set([...twinScopes.values()].flatMap((twins) => [...twins.keys()]))
   const fullTargets = targets.filter((target) => !target.hostId || !twinIds.has(target.id))
-  let patch = fullTargets.length > 0 ? buildFullWorktreePurgeState(s, fullTargets) : {}
+  let patch =
+    fullTargets.length > 0 ? buildFullWorktreePurgeState(s, fullTargets, changedPaneKeys) : {}
   for (const [hostId, twinHostIds] of twinScopes) {
-    const twinPatch = buildHostTwinPurgeState({ ...s, ...patch }, hostId, twinHostIds)
+    const twinPatch = buildHostTwinPurgeState(
+      { ...s, ...patch },
+      hostId,
+      twinHostIds,
+      changedPaneKeys
+    )
     patch = {
       ...patch,
       ...twinPatch,
@@ -77,7 +88,8 @@ export function buildWorktreePurgeState(
 /** Drops every bucket under the targets' ids; visit recency alone stays host-scoped. */
 export function buildFullWorktreePurgeState(
   s: AppState,
-  normalizedTargets: readonly WorktreePurgeTarget[]
+  normalizedTargets: readonly WorktreePurgeTarget[],
+  changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
@@ -148,7 +160,13 @@ export function buildFullWorktreePurgeState(
       tabIds: doomed.doomedTabIds,
       activeFileCleared
     }),
-    ...buildWorktreePurgeSurfacePatch(s, omitters, doomed.doomedTabIds, nextSleeping),
+    ...buildWorktreePurgeSurfacePatch(
+      s,
+      omitters,
+      doomed.doomedTabIds,
+      nextSleeping,
+      changedPaneKeys
+    ),
     worktreeLineageById: omitByWorktree(s.worktreeLineageById),
     workspaceLineageByChildKey: omitWorkspaceLineageByWorktree(s.workspaceLineageByChildKey),
     deleteStateByWorktreeId: removeDeleteStatesForWorktreeIds(
@@ -176,8 +194,10 @@ export function buildFullWorktreePurgeState(
       s.gitBranchCompareRequestStatusHeadByWorktree
     ),
     gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
+    gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
     explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
     showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+    gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
     expandedDirs: omitByWorktree(s.expandedDirs),
     recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
     recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),

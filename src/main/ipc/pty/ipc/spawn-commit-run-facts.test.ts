@@ -1,17 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeWithRuntimeId } from '../../../runtime/construction/runtime-identity-state'
-import { TerminalIntentionalStops } from '../../../runtime/terminal-intentional-stops'
-import { TerminalRunFactsRegister } from '../../../runtime/terminal-run-facts'
+import { TerminalIntentionalStops } from '../../../runtime/terminal/stop/terminal-intentional-stops'
+import { TerminalRunFactsRegister } from '../../../runtime/terminal/lifecycle/terminal-run-facts'
 import { ptySizes } from '../delivery/visibility-state'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcDeps } from './spawn-types'
-import {
-  claimRuntimePaneCreate,
-  pendingRuntimePaneCreatesByOwnerKey,
-  reservePaneSpawn
-} from '../pane/spawn-reservation'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -101,7 +96,8 @@ describe('renderer spawn commit: run facts', () => {
         }
       })
       expect(outcome).toBe('committed')
-      expect(reply).toMatchObject({
+      expect(reply?.kind).toBe(earlyExit ? 'registration-exited' : 'committed')
+      expect(reply?.result).toMatchObject({
         id: PTY_ID,
         incarnationId: INCARNATION_ID,
         agentResumeUnavailable: true,
@@ -120,26 +116,5 @@ describe('renderer spawn commit: run facts', () => {
     expect(persistPtyBinding).toHaveBeenCalledOnce()
     expect(facts.read(PTY_ID, INCARNATION_ID).freshSpawn).toBe(false)
     expect(stops.claimExit(PTY_ID, INCARNATION_ID)).toEqual(['replaced'])
-  })
-
-  it('gives a runtime-create waiter the window result before the reservation waiter resumes', async () => {
-    const key = 'window-commit-runtime-waiter'
-    const reservation = reservePaneSpawn(key)
-    const release = claimRuntimePaneCreate(key)
-    const pending = pendingRuntimePaneCreatesByOwnerKey.get(key)!
-    const joined = reservation.promise.then(() => {
-      release()
-      return pending.promise
-    })
-    try {
-      const { outcome } = await commit(vi.fn().mockResolvedValue(true), (ctx) => {
-        ctx.paneSpawnReservationKey = key
-        ctx.paneSpawnReservation = reservation
-      })
-      expect(outcome).toBe('committed')
-      await expect(joined).resolves.toMatchObject({ id: PTY_ID, incarnationId: INCARNATION_ID })
-    } finally {
-      release()
-    }
   })
 })

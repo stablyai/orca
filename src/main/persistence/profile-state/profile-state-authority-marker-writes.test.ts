@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as durableFileWrite from '../../durable-file-write'
+import * as durableFileWrite from '../../filesystem/durable-file-write'
 import { prepareProfileProjectDomainChanges } from '../../orca-profiles/profile-project-domain-changes'
 import {
   readProfileProjectTransferState,

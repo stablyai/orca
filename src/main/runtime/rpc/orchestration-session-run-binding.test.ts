@@ -1,11 +1,10 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
-} from '../structured-worker-identity'
+} from '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   createSessionCallerHarness,
   orchestrationRequest,
@@ -17,7 +16,7 @@ import {
 } from './orchestration-session-caller-test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
-vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
+vi.mock('../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => hostRef.current
 }))
 
@@ -31,6 +30,7 @@ function deliveryId(result: Record<string, unknown>): string {
 describe('structured lead Run binding through the RPC dispatcher', () => {
   let h: SessionCallerHarness
   let dispatchId: string
+  let leadHandle: string
 
   function call(sessionId: string, method: string, params: Record<string, unknown> = {}) {
     return h
@@ -41,6 +41,7 @@ describe('structured lead Run binding through the RPC dispatcher', () => {
   beforeEach(async () => {
     h = createSessionCallerHarness(hostRef)
     const handle = mintStructuredWorkerHandle()
+    leadHandle = handle
     const paneKey = mintStructuredWorkerPaneKey(SESSION_Y)
     structuredWorkerIdentities.register({
       handle,
@@ -61,6 +62,16 @@ describe('structured lead Run binding through the RPC dispatcher', () => {
       maxDepth: Number.MAX_SAFE_INTEGER
     }).id
   })
+  // A Run this lead created earlier and that lost its binding: the one kind a worker may resume.
+  function orphanedOwnRun(): string {
+    const id = h.db.createRun({
+      objective: 'resume',
+      coordinatorHandle: leadHandle,
+      coordinatorPaneKey: null
+    }).id
+    h.db.db.prepare('UPDATE runs SET coordinator_handle = NULL WHERE id = ?').run(id)
+    return id
+  }
   afterEach(() => {
     h.runtime.cancelMessageWaiters(`dispatch:${dispatchId}`)
     h.close()
@@ -70,16 +81,7 @@ describe('structured lead Run binding through the RPC dispatcher', () => {
   it.each(['runCreate', 'runUse'] as const)(
     'cancels a parked session Dispatch check on %s',
     async (method) => {
-      const params =
-        method === 'runCreate'
-          ? { objective: 'child' }
-          : {
-              id: h.db.createRun({
-                objective: 'unbound',
-                coordinatorHandle: null,
-                coordinatorPaneKey: null
-              }).id
-            }
+      const params = method === 'runCreate' ? { objective: 'child' } : { id: orphanedOwnRun() }
       const wait = vi.spyOn(h.runtime, 'waitForMessage')
       const waiting = call(SESSION_Y, 'check', { wait: true, timeoutMs: 500 })
       await vi.waitFor(() =>

@@ -1,27 +1,35 @@
-import { encodePairingOffer } from '../../../shared/pairing'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import {
   getPreferredPairingOffer,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { disconnectRegisteredSshTarget } from '../../ipc/ssh/ssh-session-teardown'
-import type { OrcadMigrationDestinationCatalog } from '../../ssh/orcad-migration-cutover-coordinator'
+import type { OrcadMigrationDestinationCatalog } from '../migration/cutover/orcad-migration-cutover-coordinator'
 import {
   abortRemoteOrcadMigrationCatalog,
   commitRemoteOrcadMigrationCatalog,
-  listRemoteOrcadRepositories,
   readRemoteOrcadMigrationCatalogState,
-  stageRemoteOrcadMigrationCatalog,
+  stageRemoteOrcadMigrationCatalog
+} from '../migration/catalog/orcad-migration-catalog-client'
+import { listRemoteOrcadRepositories } from '../migration/linking/orcad-server-repositories'
+import {
+  stageRemoteOrcadMigrationBlobChunk,
   stageRemoteOrcadMigrationSnapshotChunk
-} from '../../ssh/orcad-migration-catalog-client'
-import { abortRemoteOrcadMigrationCatalogByReference } from '../../ssh/orcad-migration-catalog-reference-client'
-import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/ssh-host-relay-census-for-target'
-import { isBridgeableLease } from '../../ssh/legacy-relay/legacy-relay-bridge-leases'
+} from '../migration/transfers/orcad-migration-chunk-client'
+import { readRemoteOrcadMigrationCapabilities } from '../migration/catalog/orcad-migration-capabilities-client'
+import { abortRemoteOrcadMigrationCatalogByReference } from '../migration/catalog/orcad-migration-catalog-reference-client'
+import {
+  enableRemoteOrcadAutomation,
+  type EnableServerAutomation
+} from '../../persistence/migrating-orcad-catalog/orcad-migration-moved-automations'
+import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/endpoints/ssh-host-relay-census-for-target'
+import { isBridgeableLease } from '../../ssh/legacy-relay/bridge/legacy-relay-bridge-leases'
 import type { OrcadManagedConversionArgs } from './orcad-runtime-conversion'
-import type { OrcadServerRepository } from '../../ssh/orcad-migration-repository-link'
+import type { OrcadServerRepository } from '../migration/linking/orcad-server-repositories'
 import {
   listRemoteOrcadFolderCatalog,
   type OrcadServerFolderCatalog
-} from '../../ssh/orcad-server-folder-workspaces'
+} from '../migration/linking/orcad-server-folder-workspaces'
 
 export function orcadMigrationDestinationFor(
   environment: KnownRuntimeEnvironment
@@ -35,7 +43,9 @@ export function orcadMigrationDestinationFor(
     abort: (manifest) => abortRemoteOrcadMigrationCatalog(pairingCode, manifest, options),
     abortByReference: (manifest) =>
       abortRemoteOrcadMigrationCatalogByReference(pairingCode, manifest, options),
-    stageChunk: (request) => stageRemoteOrcadMigrationSnapshotChunk(pairingCode, request, options)
+    stageChunk: (request) => stageRemoteOrcadMigrationSnapshotChunk(pairingCode, request, options),
+    readCapabilities: () => readRemoteOrcadMigrationCapabilities(pairingCode, options),
+    stageBlobChunk: (request) => stageRemoteOrcadMigrationBlobChunk(pairingCode, request, options)
   }
 }
 
@@ -59,11 +69,20 @@ export function orcadServerFolderCatalogFor(
   )
 }
 
+export function orcadServerAutomationEnablerFor(
+  environment: KnownRuntimeEnvironment
+): EnableServerAutomation {
+  const pairingCode = encodePairingOffer(getPreferredPairingOffer(environment))
+  const options = environment.runtimeId ? { expectedRuntimeId: environment.runtimeId } : {}
+  return (automation) => enableRemoteOrcadAutomation(pairingCode, automation, options)
+}
+
 export function conversionCollaborators(): Pick<
   OrcadManagedConversionArgs,
   | 'destinationFor'
   | 'serverRepositoriesFor'
   | 'serverFolderCatalogFor'
+  | 'serverAutomationEnablerFor'
   | 'censusHost'
   | 'isBridgedPaneLease'
   | 'releaseDirectSession'
@@ -72,6 +91,7 @@ export function conversionCollaborators(): Pick<
     destinationFor: orcadMigrationDestinationFor,
     serverRepositoriesFor: orcadServerRepositoriesFor,
     serverFolderCatalogFor: orcadServerFolderCatalogFor,
+    serverAutomationEnablerFor: orcadServerAutomationEnablerFor,
     censusHost: (target) => censusHostRelayTerminalsFor(target)(),
     isBridgedPaneLease: isBridgeableLease,
     releaseDirectSession: disconnectRegisteredSshTarget

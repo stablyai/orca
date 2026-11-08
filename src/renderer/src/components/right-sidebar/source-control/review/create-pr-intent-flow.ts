@@ -1,27 +1,22 @@
+import type { SourceControlStoreActions } from '../listing/use-store-actions'
+import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
+import type { SourceControlWorktreeOperationState } from '../panel/use-worktree-operation-state'
+import type { SourceControlCreatePrIntentTarget } from './use-create-pr-intent-target'
+import type { SourceControlCreateReviewComposer } from './use-create-review-composer'
+import type { SourceControlHostedReviewCreated } from './use-hosted-review-created'
+import type { SourceControlHostedReviewState } from './use-hosted-review-state'
 import type { WorktreeGitCopy } from '@/lib/worktree-git-copy'
-import {
-  isBehindOnlyUpstream,
-  shouldForcePushWithLeaseForUpstream
-} from '../../../../../../shared/git-upstream-status'
 import type {
   HostedReviewCreationEligibility,
   HostedReviewProvider
-} from '../../../../../../shared/hosted-review'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
-} from '../../../../../../shared/hosted-review-refs'
-import type { GitStatusEntry, GitUpstreamStatus } from '../../../../../../shared/git-status-types'
-import { summarizeCommitFailure } from '../commit/commit-failure-summary'
-import { getStageAllPaths } from '../commit/discard-all-sequence'
-
-export type CreatePrIntentRemoteStep =
-  | 'publish'
-  | 'push'
-  | 'force_push'
-  | 'fast_forward'
-  | 'blocked'
-  | 'none'
+} from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import { summarizeCommitFailure } from '../../../../../../shared/source-control/recovery/source-control-commit-failure'
+import { getStageAllPaths } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 
 export type CreatePrIntentRunToken = {
   repoId: string
@@ -141,40 +136,6 @@ export function resolveCreatePrIntentReviewBase({
   )
 }
 
-export function resolveCreatePrIntentRemoteStep({
-  upstreamStatus,
-  hostedReviewCreation,
-  branchCommitsAhead,
-  hasCurrentBranch
-}: {
-  upstreamStatus: GitUpstreamStatus | undefined
-  hostedReviewCreation?: HostedReviewCreationEligibility | null
-  branchCommitsAhead?: number
-  hasCurrentBranch: boolean
-}): CreatePrIntentRemoteStep {
-  if (!hasCurrentBranch || !hostedReviewCreation || hostedReviewCreation.canCreate) {
-    return 'none'
-  }
-
-  if (hostedReviewCreation.blockedReason === 'no_upstream') {
-    return branchCommitsAhead && branchCommitsAhead > 0 ? 'publish' : 'blocked'
-  }
-
-  if (hostedReviewCreation.blockedReason === 'needs_push') {
-    return 'push'
-  }
-
-  if (hostedReviewCreation.blockedReason === 'needs_sync') {
-    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
-      return 'force_push'
-    }
-    // Enforce ff-only at execution time to prevent mid-flight divergence or pull.ff=no from silently creating merge commits.
-    return isBehindOnlyUpstream(upstreamStatus) ? 'fast_forward' : 'blocked'
-  }
-
-  return 'none'
-}
-
 export function shouldAttemptCreateHostedReviewForIntent(
   eligibility: HostedReviewCreationEligibility
 ): boolean {
@@ -185,13 +146,6 @@ export function shouldAttemptCreateHostedReviewForIntent(
       eligibility.blockedReason === null &&
       Boolean(eligibility.head?.trim()))
   )
-}
-
-export function shouldGenerateHostedReviewDetailsForIntent(
-  eligibility: HostedReviewCreationEligibility
-): boolean {
-  // Generate before main rechecks unavailable lookups so recovered creates never submit fallback fields.
-  return shouldAttemptCreateHostedReviewForIntent(eligibility)
 }
 
 export function resolveCreatePrIntentGeneratedReviewFields(
@@ -233,4 +187,17 @@ export function getCreatePrIntentCommitFailureNoticeMessage(
   }
 
   return copy.withSummary(summary)
+}
+
+export type CreatePrIntentReviewOptions = Pick<
+  SourceControlCreateReviewComposer,
+  'prBase' | 'prBody'
+> & {
+  activeRepo: SourceControlWorktreeContext['activeRepo']
+  createHostedReview: SourceControlStoreActions['createHostedReview']
+  operationStore: SourceControlWorktreeOperationState['operationStore']
+  getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
+  handlePullRequestCreated: SourceControlHostedReviewCreated['handlePullRequestCreated']
+  hostedReviewCreateCopy: SourceControlHostedReviewState['hostedReviewCreateCopy']
+  prImageUploadPendingRef?: React.RefObject<boolean>
 }

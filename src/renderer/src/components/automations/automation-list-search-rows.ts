@@ -1,5 +1,5 @@
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
-import type { Automation } from '../../../../shared/automations-types'
+import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { Repo } from '../../../../shared/repo-types'
 import type { AutomationListRow } from './automation-list-row-identity'
 import { getAgentLabel } from './automation-draft-model'

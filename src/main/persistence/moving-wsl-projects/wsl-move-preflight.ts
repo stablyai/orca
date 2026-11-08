@@ -1,7 +1,6 @@
 // No files move: prove rewritten paths identify the same objects before fencing anything.
 import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/orcad-runtime-capabilities'
-import { isDrvfsLinuxPath } from '../../../shared/wsl-paths'
-import { wslUncPathToLinux } from './wsl-move-path-rewriter'
+import { isDrvfsLinuxPath, wslUncPathToLinux } from '../../../shared/wsl-paths'
 
 /** Read once through desktop UNC paths and once on the host. */
 export type WslMovePathFacts = {

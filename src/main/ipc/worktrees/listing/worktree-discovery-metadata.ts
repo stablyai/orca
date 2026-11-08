@@ -6,7 +6,7 @@ import {
   hostWorktreeTargetForRepo,
   readWorktreeMetaForRepo
 } from '../../../persistence/host-qualified-worktree-meta'
-import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
+import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import { randomUUID } from 'node:crypto'
 
 export function getProjectHostSetupMetaUpdates(

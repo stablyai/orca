@@ -1,8 +1,6 @@
-import {
-  resolveTerminalShortcutAction,
-  type MacOptionAsAlt,
-  type TerminalShortcutAction
-} from '@/components/terminal-pane/terminal-shortcut-policy'
+import { resolveTerminalShortcutAction } from '@/components/terminal-pane/input/keyboard/terminal-shortcut-policy'
+import type { MacOptionAsAlt } from '@/components/terminal-pane/input/keyboard/terminal-option-shortcut-policy'
+import type { TerminalShortcutAction } from '@/components/terminal-pane/input/keyboard/terminal-shortcut-policy'
 import { getLayoutCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import type { OptionKeyLocationState } from '@/lib/keyboard-layout/option-key-location-state'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
@@ -40,7 +38,7 @@ export function resolvePreviewShortcutAction(
     context.optionKeyLocations,
     context.clientPlatform === 'win32',
     context.keybindings,
-    // Why: PSReadLine on a local ConPTY binds Ctrl+←/→ itself; \eb/\ef would print stray b/f.
+    // Why: a local ConPTY reads \eb/\ef as Alt+B/F (stray b/f in PSReadLine), so Ctrl/Alt+←/→ defer.
     () => context.terminalInput?.localWindowsConpty === true,
     context.getKittyKeyboardFlags,
     getLayoutCharacterForCode,

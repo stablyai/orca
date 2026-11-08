@@ -20,7 +20,11 @@ process.once('exit', killActivePortScanCommands)
 
 async function handleRequest(request: PortScanCommandRequest): Promise<PortScanCommandResponse> {
   try {
-    const { stdout, spawnMs } = await runPortScanCommandInProcess(request.command, request.args)
+    const { stdout, spawnMs } = await runPortScanCommandInProcess(
+      request.command,
+      request.args,
+      request.darwinOperation
+    )
     return { id: request.id, ok: true, stdout, spawnMs }
   } catch (err) {
     return {

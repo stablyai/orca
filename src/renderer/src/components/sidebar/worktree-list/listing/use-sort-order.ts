@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -15,8 +15,11 @@ import {
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
-import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  getWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Compute settled order synchronously; selection side effects must not reorder rows under the user.
 function useSettledSidebarWorktreeSortOrder(args: {
@@ -40,7 +43,9 @@ function useSettledSidebarWorktreeSortOrder(args: {
   const recomputedSort = useMemo(() => {
     const state = useAppStore.getState()
     const ranking = rankWorktreesForSort({
-      worktrees: getAllWorktreesFromState(state).filter((worktree) => !worktree.isArchived),
+      worktrees: getIndexedAllWorktrees(selectWorktreesByRepo(state)).filter(
+        (worktree) => !worktree.isArchived
+      ),
       sortBy,
       latched: sessionHasHadLiveSmartSignal.current,
       repoMap,
@@ -48,7 +53,8 @@ function useSettledSidebarWorktreeSortOrder(args: {
       sources: state
     })
     return {
-      sortedIds: ranking.sorted.map((w) => w.id),
+      // Why host identity: same-id copies on two machines are separate cards with their own ranks.
+      sortedIds: ranking.sorted.map(getWorktreeHostIdentity),
       detectedLiveSmartSignal: ranking.detectedLiveSmartSignal
     }
     // settledSortEpoch is an intentional trigger not read in the memo; its change signals a recompute.
@@ -76,7 +82,10 @@ function useSettledSidebarWorktreeSortOrder(args: {
       return
     }
     // Why: sortOrder lives in each host's worktreeMeta, so persist each host's ids on that host.
-    persistWorktreeSortOrderByHost(useAppStore.getState(), sortedIds)
+    persistWorktreeSortOrderByHost(
+      useAppStore.getState(),
+      sortedIds.map(getWorktreeIdFromHostIdentity)
+    )
   }, [sortedIds, sortBy])
 
   return sortedIds
@@ -92,7 +101,7 @@ function useStampSidebarWorktreeSortOrder(args: {
   const ranked = useMemo(
     () =>
       rankWorktreesForSort({
-        worktrees: getAllWorktreesFromState({ worktreesByRepo }).filter(
+        worktrees: getIndexedAllWorktrees(worktreesByRepo).filter(
           (worktree) => !worktree.isArchived
         ),
         sortBy,

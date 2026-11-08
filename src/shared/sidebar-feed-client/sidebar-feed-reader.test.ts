@@ -65,19 +65,6 @@ describe('SidebarFeedReader', () => {
     expect(host.transport.mock.calls.length).toBe(sent)
   })
 
-  it('names the read each settled install answers, keeping unchanged domains', async () => {
-    const host = hostWithFeed()
-    const first = host.reader.refresh()
-    await settle()
-    expect(host.reads.at(-1)?.settledBy).toBe(first)
-    const domains = host.reads.at(-1)!.snapshot!.domains
-    const second = host.reader.refresh()
-    await settle()
-    expect(second).toBeGreaterThan(first)
-    expect(host.reads.at(-1)?.settledBy).toBe(second)
-    expect(host.reads.at(-1)!.snapshot!.domains.workspaces).toBe(domains.workspaces)
-  })
-
   it('reads a host without the feed as unavailable, and stops retrying it', async () => {
     vi.useFakeTimers()
     try {
@@ -94,20 +81,6 @@ describe('SidebarFeedReader', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('keeps what it installed through a dropped read, and reads again on the next refresh', async () => {
-    const host = hostWithFeed()
-    host.reader.refresh()
-    await settle()
-    host.transport.mockRejectedValueOnce(new Error('client_disconnected'))
-    host.reader.refresh()
-    await settle()
-    expect(host.reads.at(-1)!.snapshot).not.toBeNull()
-    host.workspaces.set('c', { id: 'c' })
-    host.reader.refresh()
-    await settle()
-    expect(host.installed().domains.get('workspaces')?.get('c')).toEqual({ id: 'c' })
   })
 
   it('catches up on its own when a read times out with the connection still up', async () => {

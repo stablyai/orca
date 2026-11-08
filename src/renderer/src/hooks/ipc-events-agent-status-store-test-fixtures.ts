@@ -2,9 +2,9 @@ import { expect, vi } from 'vitest'
 import type {
   AgentStatusBatchTransaction,
   AgentStatusBatchUpdate
-} from '../store/slices/agent-status'
+} from '../store/slices/agent-status/agent-status-contract'
 import type { AppState } from '../store/types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 export const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 export const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
@@ -184,6 +184,7 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     suppressedPtyExitIds: {},
     markAgentAttentionUnread: vi.fn(),
     agentStatusByPaneKey: {},
+    agentLaunchConfigByPaneKey: {},
     setAgentStatuses: vi.fn(() => []),
     recordAgentProviderSession: vi.fn(),
     setAgentProgramStatus: vi.fn(() => true),

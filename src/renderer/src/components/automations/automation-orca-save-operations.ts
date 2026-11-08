@@ -3,13 +3,14 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import type {
   AutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   deleteAutomationForTarget,
   listAutomationsForTarget,
@@ -33,7 +34,7 @@ import type { AutomationHostTarget } from './automation-host-client'
 import type { AutomationAuthorityChangeReason } from './automation-host-invalidation'
 import type { AutomationSaveContext } from './automation-save-context'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type AutomationMoveOperationContext = {
   automationDispatchContext: AutomationDispatchContext
@@ -57,6 +58,7 @@ export type AutomationEditDestinationInput = {
     projectId: string
     workspaceId: string
   }
+  targetEdited?: boolean
   rowKey: string | null
   automationDialogTarget: AutomationHostTarget
   editHostEntries: Parameters<typeof revalidateAutomationCreateDestination>[1]
@@ -73,23 +75,25 @@ export type AutomationEditDestinationResult =
 
 /** Validates an edited row's destination and identifies a cross-authority move. */
 export function resolveAutomationEditDestination(
-  input: AutomationEditDestinationInput
+  input: AutomationEditDestinationInput,
+  t: Translate = translate
 ): AutomationEditDestinationResult {
   const destinationHostChanged =
     input.editingDestination !== null &&
     input.editingDestination.destination.entry.stableKey !==
       input.rowRecoveryHost(input.rowKey)?.stableKey
   const destinationChanged =
-    input.currentAutomation !== null &&
-    (destinationHostChanged ||
-      input.currentAutomation.projectId !== input.draft.projectId ||
-      input.currentAutomation.workspaceId !== (input.draft.workspaceId || null) ||
-      input.currentAutomation.workspaceMode !== input.draft.workspaceMode)
+    input.targetEdited ??
+    (input.currentAutomation !== null &&
+      (destinationHostChanged ||
+        input.currentAutomation.projectId !== input.draft.projectId ||
+        input.currentAutomation.workspaceId !== (input.draft.workspaceId || null) ||
+        input.currentAutomation.workspaceMode !== input.draft.workspaceMode))
   if (!input.editingAutomationId || !input.currentAutomation || !destinationChanged) {
     return { ok: true, editDestination: undefined, moveTarget: null }
   }
   if (!input.editingDestination || input.editingDestination.projectId !== input.draft.projectId) {
-    return { ok: false, notice: unavailableDestinationNotice() }
+    return { ok: false, notice: unavailableDestinationNotice(t) }
   }
   const revalidated = revalidateAutomationCreateDestination(
     input.editingDestination.destination,
@@ -99,8 +103,8 @@ export function resolveAutomationEditDestination(
     return {
       ok: false,
       notice: {
-        message: translate(
-          'auto.components.automations.createDestination.stale',
+        message: t(
+          'auto.components.automations.createDestination.projectStale',
           '{host} changed while this form was open. Choose the project again before saving.'
         ).replace('{host}', revalidated.entry.label),
         recovery: 'retry',
@@ -109,7 +113,7 @@ export function resolveAutomationEditDestination(
     }
   }
   if (revalidated.status !== 'ready') {
-    return { ok: false, notice: unavailableDestinationNotice() }
+    return { ok: false, notice: unavailableDestinationNotice(t) }
   }
   const sourceAuthorityKey =
     input.automationDialogTarget.kind === 'environment'
@@ -130,10 +134,10 @@ export function resolveAutomationEditDestination(
   }
 }
 
-function unavailableDestinationNotice(): AutomationActionNotice {
+function unavailableDestinationNotice(t: Translate = translate): AutomationActionNotice {
   return {
-    message: translate(
-      'auto.components.automations.createDestination.unavailable',
+    message: t(
+      'auto.components.automations.createDestination.projectUnavailable',
       'Choose an available project on this host before saving.'
     ),
     recovery: 'retry',
@@ -261,5 +265,21 @@ export async function saveExistingAutomation(
     },
     'save',
     destination
+  )
+}
+
+export function showAutomationSavedToast(
+  moveTarget: AutomationCreateDestination | null,
+  editingAutomationId: string | null
+): void {
+  toast.success(
+    moveTarget
+      ? translate(
+          'auto.components.automations.AutomationsPage.moved',
+          'Automation moved to {host}.'
+        ).replace('{host}', () => moveTarget.entry.authorityLabel)
+      : editingAutomationId !== null
+        ? translate('auto.components.automations.AutomationsPage.244727e655', 'Automation updated.')
+        : translate('auto.components.automations.AutomationsPage.2a20596d6b', 'Automation saved.')
   )
 }

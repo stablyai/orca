@@ -1,4 +1,5 @@
-import { parseWslPath, toWindowsWslPath } from '../../wsl'
+import { isDrvfsLinuxPath, toWindowsWslPath, toWindowsWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 
 /** Windows arguments need Linux spellings for WSL Git: UNC paths become native and drives map under /mnt. */
 export function translateArgsForWsl(args: string[]): string[] {
@@ -33,7 +34,9 @@ export function translateWslOutputPaths(
     return output
   }
 
+  // A repo saved under the distro's view of a drive keeps that spelling: its worktree ids use it.
+  const toWindows = wsl && isDrvfsLinuxPath(wsl.linuxPath) ? toWindowsWslUncPath : toWindowsWslPath
   return output.replace(/(?<=worktree )(\/.+)$/gm, (_match, linuxPath: string) =>
-    toWindowsWslPath(linuxPath, distro)
+    toWindows(linuxPath, distro)
   )
 }

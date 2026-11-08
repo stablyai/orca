@@ -11,7 +11,11 @@ type DeclaredNotification = {
 }
 export type DeclaredDeviceState = {
   readonly deviceStore?: Readonly<Record<string, string>>
-  readonly deviceState?: { readonly notificationTray?: readonly DeclaredNotification[] }
+  readonly deviceState?: {
+    readonly notificationTray?: readonly DeclaredNotification[]
+    readonly notificationPermissions?: { readonly status: string; readonly canAskAgain: boolean }
+    readonly pushToken?: { readonly type: string; readonly data: string }
+  }
 }
 type DeviceEffect = (name: string, value: unknown) => void
 
@@ -32,9 +36,9 @@ export function declaredDeviceSubstitutes(declared: DeclaredDeviceState): {
   if (store) {
     substitutes.set('@react-native-async-storage/async-storage', declaredDeviceStore(store, effect))
   }
-  const tray = declared.deviceState?.notificationTray
-  if (tray) {
-    substitutes.set('expo-notifications', declaredNotificationTray(tray, effect))
+  const notifications = declared.deviceState
+  if (notifications) {
+    substitutes.set('expo-notifications', declaredNotifications(notifications, effect))
   }
   return {
     substitutes,
@@ -61,18 +65,31 @@ function declaredDeviceStore(
   })
 }
 
-function declaredNotificationTray(
-  tray: readonly DeclaredNotification[],
+function declaredNotifications(
+  device: NonNullable<DeclaredDeviceState['deviceState']>,
   effect: DeviceEffect
 ): unknown {
   return partialNativeModule('expo-notifications', {
     // Preserve namespace-import traps with __esModule; see native-module-traps.ts.
     __esModule: true,
     // Clone each read so consumers cannot mutate the scenario’s declaration.
-    getPresentedNotificationsAsync: () => Promise.resolve(structuredClone(tray)),
-    dismissNotificationAsync: (identifier: string) => {
-      effect('notification-tray.dismiss', { identifier })
-      return Promise.resolve()
-    }
+    ...(device.notificationTray && {
+      getPresentedNotificationsAsync: () =>
+        Promise.resolve(structuredClone(device.notificationTray)),
+      dismissNotificationAsync: (identifier: string) => {
+        effect('notification-tray.dismiss', { identifier })
+        return Promise.resolve()
+      }
+    }),
+    ...(device.notificationPermissions && {
+      getPermissionsAsync: () => Promise.resolve(structuredClone(device.notificationPermissions)),
+      scheduleNotificationAsync: (request: unknown) => {
+        effect('notification.schedule', request)
+        return Promise.resolve('recorded-local-notification')
+      }
+    }),
+    ...(device.pushToken && {
+      getDevicePushTokenAsync: () => Promise.resolve(structuredClone(device.pushToken))
+    })
   })
 }

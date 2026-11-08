@@ -1,15 +1,14 @@
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity
-} from '../../shared/agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../shared/agent-session-journal-producer'
-import { readAgentSessionFailureFact, providerDiagnostic } from '../../shared/agent-session-failure'
-import { agentSessionFailureWords } from '../../shared/agent-session-failure-words'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionRevisionJournal
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
+import {
+  readAgentSessionFailureFact,
+  providerDiagnostic
+} from '../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionRevisionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import {
   agentJournalTurnRowReservedBytes,
   resolveAgentJournalTurnRowWrite,
@@ -27,15 +26,11 @@ export function writeClaudeTerminalFailure(
 ): void {
   const turnItemId = agentJournalItemKey(identity)
   const failureIdentity = claudeTerminalFailureIdentity(turnItemId)
-  const options = {
-    criticalRoot: true as const,
-    turnScope: { kind: 'turn' as const, turnItemId },
-    lifecycle: true
-  }
+  const options = { turnScope: { kind: 'turn' as const, turnItemId }, lifecycle: true }
   const revise = sink.tryReviseResolvedItemAndPublish
   if (!revise) {
     sink.appendItem(failureIdentity, body, options)
-    sink.publish({ criticalRoot: true })
+    sink.publish()
     return
   }
   const reservedBytes = Buffer.byteLength(JSON.stringify({ failureIdentity, body }), 'utf8') + 8192
@@ -121,7 +116,7 @@ export function refineClaudeQuotaTurnEnd(
         reservedBytes
       )
     },
-    { criticalRoot: true, lifecycle: true, turnScope: { kind: 'thread' } }
+    { turnScope: { kind: 'thread' }, lifecycle: true }
   )
   return true
 }

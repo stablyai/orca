@@ -3,7 +3,8 @@ import type {
   ClaudeUsageSummary
 } from '../../../../shared/claude-usage-types'
 import type { CodexUsageDailyPoint, CodexUsageSummary } from '../../../../shared/codex-usage-types'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 
 export type ClaudeShareData = {
@@ -18,14 +19,14 @@ export type CodexShareData = {
   daily: CodexUsageDailyPoint[]
 }
 
-export function formatTokens(value: number): string {
+export function formatTokens(value: number, intlLocale: string = getIntlLocale()): string {
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
   }
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString()
+  return value.toLocaleString(intlLocale)
 }
 
 export function formatCost(value: number | null): string {
@@ -35,9 +36,13 @@ export function formatCost(value: number | null): string {
   return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`
 }
 
-export function formatDateRange(range: string): string {
+export function formatDateRange(range: string, intlLocale: string = getIntlLocale()): string {
   const now = new Date()
-  const end = now.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+  const end = now.toLocaleDateString(intlLocale, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  })
   if (range === 'all') {
     return `Through ${end}`
   }
@@ -46,7 +51,7 @@ export function formatDateRange(range: string): string {
     return end
   }
   const start = new Date(now.getTime() - days * 86_400_000)
-  const startStr = start.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const startStr = start.toLocaleDateString(intlLocale, { month: 'short', day: 'numeric' })
   return `${startStr} – ${end}`
 }
 
@@ -86,42 +91,42 @@ export function getDailySegments(
   ]
 }
 
-export function getLegendItems(provider: 'claude' | 'codex') {
+export function getLegendItems(provider: 'claude' | 'codex', t: Translate = translate) {
   if (provider === 'claude') {
     return [
       {
-        label: translate('auto.components.stats.share.card.utils.c2d7b23d57', 'Input'),
+        label: t('auto.components.stats.share.card.utils.c2d7b23d57', 'Input'),
         color: 'rgba(56, 189, 248, 0.8)'
       },
       {
-        label: translate('auto.components.stats.share.card.utils.33d38e2177', 'Output'),
+        label: t('auto.components.stats.share.card.utils.33d38e2177', 'Output'),
         color: 'rgba(52, 211, 153, 0.8)'
       },
       {
-        label: translate('auto.components.stats.share.card.utils.cc28cb965e', 'Cache read'),
+        label: t('auto.components.stats.share.card.utils.cc28cb965e', 'Cache read'),
         color: 'rgba(251, 191, 36, 0.7)'
       },
       {
-        label: translate('auto.components.stats.share.card.utils.9d166247ee', 'Cache write'),
+        label: t('auto.components.stats.share.card.utils.9d166247ee', 'Cache write'),
         color: 'rgba(217, 70, 239, 0.7)'
       }
     ]
   }
   return [
     {
-      label: translate('auto.components.stats.share.card.utils.c2d7b23d57', 'Input'),
+      label: t('auto.components.stats.share.card.utils.c2d7b23d57', 'Input'),
       color: 'rgba(56, 189, 248, 0.8)'
     },
     {
-      label: translate('auto.components.stats.share.card.utils.33d38e2177', 'Output'),
+      label: t('auto.components.stats.share.card.utils.33d38e2177', 'Output'),
       color: 'rgba(52, 211, 153, 0.8)'
     },
     {
-      label: translate('auto.components.stats.share.card.utils.4ee864629a', 'Cached input'),
+      label: t('auto.components.stats.share.card.utils.4ee864629a', 'Cached input'),
       color: 'rgba(251, 191, 36, 0.7)'
     },
     {
-      label: translate('auto.components.stats.share.card.utils.7080aeaebb', 'Reasoning'),
+      label: t('auto.components.stats.share.card.utils.7080aeaebb', 'Reasoning'),
       color: 'rgba(217, 70, 239, 0.7)'
     }
   ]
@@ -178,6 +183,8 @@ export function BackgroundGlows(): React.JSX.Element {
 export function CardFooter(props: {
   summary: { inputTokens: number; outputTokens: number }
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <div
       style={{
@@ -192,12 +199,16 @@ export function CardFooter(props: {
     >
       <div style={{ display: 'table-cell', verticalAlign: 'middle' }}>
         <span style={{ fontSize: 12, color: '#888' }}>
-          <strong style={{ color: '#ccc' }}>{formatTokens(props.summary.inputTokens)}</strong>{' '}
-          {translate('auto.components.stats.share.card.utils.5d66fdd7c2', 'input')}
+          <strong style={{ color: '#ccc' }}>
+            {formatTokens(props.summary.inputTokens, intlLocale)}
+          </strong>{' '}
+          {t('auto.components.stats.share.card.utils.5d66fdd7c2', 'input')}
         </span>
         <span style={{ fontSize: 12, color: '#888', marginLeft: 16 }}>
-          <strong style={{ color: '#ccc' }}>{formatTokens(props.summary.outputTokens)}</strong>{' '}
-          {translate('auto.components.stats.share.card.utils.d864fc5f98', 'output')}
+          <strong style={{ color: '#ccc' }}>
+            {formatTokens(props.summary.outputTokens, intlLocale)}
+          </strong>{' '}
+          {t('auto.components.stats.share.card.utils.d864fc5f98', 'output')}
         </span>
       </div>
       <div style={{ display: 'table-cell', verticalAlign: 'middle', textAlign: 'right' }}>
@@ -218,10 +229,7 @@ export function CardFooter(props: {
             marginLeft: 5
           }}
         >
-          {translate(
-            'auto.components.stats.share.card.utils.19f4b4dc75',
-            'github.com/stablyai/orca'
-          )}
+          {t('auto.components.stats.share.card.utils.19f4b4dc75', 'github.com/stablyai/orca')}
         </span>
       </div>
     </div>

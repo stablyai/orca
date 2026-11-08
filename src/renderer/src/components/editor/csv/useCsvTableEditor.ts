@@ -16,6 +16,9 @@ import {
   type CsvTableMutation
 } from './csv-text-document'
 import { useCsvPendingCell } from './useCsvPendingCell'
+import { CsvPreviewError } from './csv-preview-error'
+import { formatCsvPreviewError } from './csv-preview-error-message'
+import { useTranslate } from '../../../i18n/use-translate'
 
 export function useCsvTableEditor({
   document,
@@ -36,6 +39,7 @@ export function useCsvTableEditor({
   onSave?: (content: string) => Promise<boolean>
   onStructureChange: (mutation: CsvTableMutation) => void
 }) {
+  const t = useTranslate()
   const ownerId = useId()
   const [selected, setSelected] = useState<CsvCellSelection | null>(null)
   const [editing, setEditing] = useState<CsvCellEditSession | null>(null)
@@ -45,7 +49,7 @@ export function useCsvTableEditor({
     setEditing(next)
   }
   const [focusVersion, setFocusVersion] = useState(0)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<unknown>(null)
   const [saving, setSaving] = useState(false)
   const mounted = useRef(true)
   const current = useRef(document)
@@ -68,7 +72,7 @@ export function useCsvTableEditor({
     selected && columns ? { anchor: clamp(selected.anchor), focus: clamp(selected.focus) } : null
   const fail = (reason: unknown): void => {
     if (mounted.current) {
-      setError(reason instanceof Error ? reason.message : String(reason))
+      setError(reason)
     }
   }
   const update = (mutation?: CsvTableMutation): string | null => {
@@ -78,7 +82,7 @@ export function useCsvTableEditor({
     const draft = editingRef.current
     try {
       if (draft && draft.source !== document.source) {
-        throw new Error('CSV changed while this cell was being edited. Cancel and try again.')
+        throw new CsvPreviewError('edit-conflict')
       }
       const cellMutation: CsvTableMutation = {
         kind: 'cells',
@@ -169,7 +173,7 @@ export function useCsvTableEditor({
     setSaving(true)
     try {
       if (!(await onSave(source))) {
-        throw new Error('CSV could not be saved. Your edits remain in the draft.')
+        throw new CsvPreviewError('save-failed')
       }
     } catch (reason) {
       fail(reason)
@@ -242,7 +246,7 @@ export function useCsvTableEditor({
   return {
     interaction,
     selection,
-    error,
+    error: error === null ? null : formatCsvPreviewError(error, t),
     saving,
     apply,
     save,

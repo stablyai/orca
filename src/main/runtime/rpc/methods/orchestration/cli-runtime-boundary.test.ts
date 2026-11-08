@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../core'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
-import type { OrchestrationDb } from '../../../orchestration/db'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 
 type CliRuntimeClient = {
   isRemote?: boolean
@@ -27,6 +27,9 @@ describe('orchestration CLI/runtime boundary', () => {
     h.cleanup()
     restoreTerminalHandle()
     vi.doUnmock('../../../../../cli/format')
+    vi.doUnmock('../../../../../cli/runtime-client')
+    vi.unstubAllEnvs()
+    vi.restoreAllMocks()
     vi.resetModules()
   })
 

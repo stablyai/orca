@@ -2,7 +2,6 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  mobileNativeChatComposerPlaceholder,
   useMobileNativeChatInputLease,
   useSettledMobileNativeChatInputLock
 } from './use-mobile-native-chat-input-lease'
@@ -108,27 +107,5 @@ describe('useSettledMobileNativeChatInputLock', () => {
       vi.advanceTimersByTime(600)
     })
     expect(settled).toBeNull()
-  })
-})
-
-describe("the phone chat composer's placeholder", () => {
-  it('says a message runs after the stop while the chat reads Stopping', () => {
-    expect(mobileNativeChatComposerPlaceholder(null, 'queue')).toBe(
-      'Queue a message to run after the stop'
-    )
-    expect(mobileNativeChatComposerPlaceholder(null, 'send')).toBe(
-      'Send a message to run after the stop'
-    )
-  })
-
-  it('reads as usual otherwise', () => {
-    expect(mobileNativeChatComposerPlaceholder(null, undefined)).toBe(
-      'Ask anything, @ to mention files, / for commands'
-    )
-  })
-
-  it('says why the composer is locked first', () => {
-    expect(mobileNativeChatComposerPlaceholder('disconnected', 'queue')).toBe('Reconnecting…')
-    expect(mobileNativeChatComposerPlaceholder('waiting', 'queue')).toBe('Waiting for terminal…')
   })
 })

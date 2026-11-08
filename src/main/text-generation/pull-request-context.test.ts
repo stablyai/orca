@@ -121,45 +121,6 @@ describe('getPullRequestDraftContext', () => {
     expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['rebase']), expect.anything())
   })
 
-  it('does not fetch unrelated fork remotes before generating PR context', async () => {
-    const execGit = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'fetch') {
-        expect(args).not.toContain('--all')
-        expect(args[2]).toBe('origin')
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\nstale-fork\n', stderr: '' }
-      }
-      if (args[0] === 'show-ref') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'branch') {
-        return { stdout: 'feature/pr-details\n', stderr: '' }
-      }
-      if (args[0] === 'merge-base') {
-        return { stdout: 'abc123\n', stderr: '' }
-      }
-      if (args[0] === 'log') {
-        return { stdout: '- feat: change\n', stderr: '' }
-      }
-      if (args[0] === 'diff') {
-        return { stdout: 'M\tREADME.md\n', stderr: '' }
-      }
-      throw new Error(`Unexpected git args: ${args.join(' ')}`)
-    })
-
-    await expect(getPullRequestDraftContext(execGit, createContextInput())).resolves.toMatchObject({
-      branch: 'feature/pr-details'
-    })
-
-    expect(execGit).not.toHaveBeenCalledWith(['fetch', '--all', '--prune'], expect.any(Object))
-    expect(execGit).not.toHaveBeenCalledWith(
-      expect.arrayContaining(['stale-fork']),
-      expect.any(Object)
-    )
-  })
-
   it('does not guess between multiple non-preferred remote bases for a bare base name', async () => {
     const execGit = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'fetch') {
@@ -167,6 +128,9 @@ describe('getPullRequestDraftContext', () => {
       }
       if (args[0] === 'remote') {
         return { stdout: 'contributor-a\ncontributor-b\n', stderr: '' }
+      }
+      if (args[0] === 'for-each-ref') {
+        return { stdout: '', stderr: '' }
       }
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
@@ -189,19 +153,19 @@ describe('getPullRequestDraftContext', () => {
 
     await getPullRequestDraftContext(execGit, createContextInput())
 
-    expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(0)
     const showRefCalls = execGit.mock.calls.filter(([args]) => args[0] === 'show-ref')
-    const exactRefs = showRefCalls
-      .filter(([args]) => args.includes('--verify'))
-      .map(([args]) => args.at(-1))
-    expect(exactRefs).toEqual(
-      expect.arrayContaining([
-        'refs/remotes/origin/main',
-        'refs/remotes/upstream/main',
-        'refs/remotes/contributor-a/main',
-        'refs/remotes/contributor-b/main'
-      ])
-    )
+    expect(showRefCalls.some(([args]) => args.includes('--verify'))).toBe(false)
+    const exactProbes = execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')
+    expect(exactProbes).toHaveLength(1)
+    expect(exactProbes[0][0]).toEqual([
+      'for-each-ref',
+      '--format=%(refname)',
+      '--',
+      'refs/remotes/origin/main',
+      'refs/remotes/upstream/main',
+      'refs/remotes/contributor-a/main',
+      'refs/remotes/contributor-b/main'
+    ])
     expect(showRefCalls.some(([args]) => args.join(' ') === 'show-ref -- main')).toBe(true)
 
     expect(execGit).not.toHaveBeenCalledWith(
@@ -245,55 +209,13 @@ describe('getPullRequestDraftContext', () => {
     expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['fetch']), expect.any(Object))
   })
 
-  it('bounds exact remote-ref probe concurrency for a large remote list', async () => {
-    const remoteNames = Array.from({ length: 20 }, (_, index) => `remote-${index}`)
-    let exactProbeCount = 0
-    let activeProbes = 0
-    let maxActiveProbes = 0
-    const execGit = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'remote') {
-        return { stdout: `${remoteNames.join('\n')}\n`, stderr: '' }
-      }
-      if (args[0] === 'show-ref') {
-        if (args.some((arg) => arg.startsWith('refs/remotes/'))) {
-          exactProbeCount += 1
-          activeProbes += 1
-          maxActiveProbes = Math.max(maxActiveProbes, activeProbes)
-          await new Promise((resolve) => setTimeout(resolve, 0))
-          activeProbes -= 1
-        }
-        throw Object.assign(new Error('missing exact ref'), { code: 1 })
-      }
-      if (args[0] === 'branch') {
-        return { stdout: 'feature\n', stderr: '' }
-      }
-      if (args[0] === 'merge-base') {
-        return { stdout: 'abc123\n', stderr: '' }
-      }
-      if (args[0] === 'log' || args[0] === 'diff') {
-        return { stdout: 'change\n', stderr: '' }
-      }
-      throw new Error(`Unexpected git args: ${args.join(' ')}`)
-    })
-
-    await expect(getPullRequestDraftContext(execGit, createContextInput())).resolves.toMatchObject({
-      branch: 'feature'
-    })
-
-    expect(exactProbeCount).toBe(22)
-    // Require saturated concurrency: an upper bound alone would also pass serial probes.
-    expect(maxActiveProbes).toBe(8)
-  })
-
   it('resolves a unique slash-containing remote with an exact probe', async () => {
     const execGit = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: 'foo/bar\n', stderr: '' }
       }
-      if (args[0] === 'show-ref') {
-        return args.at(-1) === 'refs/remotes/foo/bar/feature/fix'
-          ? { stdout: '' }
-          : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/foo/bar/feature/fix\n' }
       }
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
@@ -319,7 +241,6 @@ describe('getPullRequestDraftContext', () => {
       ['fetch', '--no-tags', 'foo/bar', '+refs/heads/feature/fix:refs/remotes/foo/bar/feature/fix'],
       expect.any(Object)
     )
-    expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(0)
   })
 
   it('preserves Git-valid punctuation in configured remote names', async () => {
@@ -464,81 +385,6 @@ describe('getPullRequestDraftContext', () => {
     expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['fetch']), expect.any(Object))
   })
 
-  it('reports no branch change because PR context preparation is read-only', async () => {
-    const execGit = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\n', stderr: '' }
-      }
-      if (args[0] === 'show-ref') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'branch') {
-        return { stdout: 'feature\n', stderr: '' }
-      }
-      if (args[0] === 'merge-base') {
-        return { stdout: 'abc123\n', stderr: '' }
-      }
-      if (args[0] === 'log') {
-        return { stdout: '- feat: change\n', stderr: '' }
-      }
-      if (args[0] === 'diff') {
-        return { stdout: 'M\tREADME.md\n', stderr: '' }
-      }
-      throw new Error(`Unexpected git args: ${args.join(' ')}`)
-    })
-
-    const context = await getPullRequestDraftContext(execGit, createContextInput())
-
-    expect(context?.branchChangedByPreparation).toBe(false)
-    expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['rebase']), expect.anything())
-    expect(execGit).not.toHaveBeenCalledWith(
-      expect.arrayContaining(['rev-parse']),
-      expect.anything()
-    )
-  })
-
-  it('keeps a remote-qualified base when the selected base includes the remote', async () => {
-    const execGit = vi.fn<GitExec>(async (args) => {
-      if (args[0] === 'fetch') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'remote') {
-        return { stdout: 'origin\nupstream\n', stderr: '' }
-      }
-      if (args[0] === 'show-ref') {
-        return { stdout: '', stderr: '' }
-      }
-      if (args[0] === 'branch') {
-        return { stdout: 'feature\n', stderr: '' }
-      }
-      if (args[0] === 'merge-base') {
-        return { stdout: 'abc123\n', stderr: '' }
-      }
-      if (args[0] === 'log') {
-        return { stdout: '- feat: change\n', stderr: '' }
-      }
-      if (args[0] === 'diff') {
-        return { stdout: 'M\tREADME.md\n', stderr: '' }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await getPullRequestDraftContext(execGit, createContextInput('upstream/main'))
-
-    expect(execGit).toHaveBeenCalledWith(
-      ['fetch', '--no-tags', 'upstream', '+refs/heads/main:refs/remotes/upstream/main'],
-      expect.any(Object)
-    )
-    expect(execGit).not.toHaveBeenCalledWith(expect.arrayContaining(['rebase']), expect.anything())
-    expect(execGit).toHaveBeenCalledWith(
-      ['merge-base', 'upstream/main', 'HEAD'],
-      expect.any(Object)
-    )
-  })
-
   it('preserves a legal branch whose final component is HEAD', async () => {
     const execGit = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'remote') {
@@ -609,10 +455,8 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n', stderr: '' }
       }
-      if (args[0] === 'show-ref') {
-        return args.at(-1) === 'refs/remotes/origin/main'
-          ? { stdout: '', stderr: '' }
-          : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
+      if (args[0] === 'for-each-ref') {
+        return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
       if (args[0] === 'fetch' || args[0] === 'branch') {
         return { stdout: '', stderr: '' }
@@ -633,9 +477,6 @@ describe('getPullRequestDraftContext', () => {
       ['fetch', '--no-tags', 'origin', '+refs/heads/main:refs/remotes/origin/main'],
       expect.any(Object)
     )
-    expect(
-      execGit.mock.calls.filter(([args]) => args[0] === 'show-ref' && args.includes('--verify'))
-    ).toHaveLength(3)
-    expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(0)
+    expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(1)
   })
 })

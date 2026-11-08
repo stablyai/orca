@@ -1,8 +1,14 @@
+import { useAppStore } from '@/store'
+import {
+  automationChatSupport,
+  automationDraftSurface,
+  automationLaunchWorkspace
+} from './automation-launch-surface'
 import { toast } from 'sonner'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { isValidAutomationSchedule } from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 import { translate } from '@/i18n/i18n'
-import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
+import { acceptsAutomationDraftSchedule } from '../../../../shared/automations/scheduling/automation-schedule-input-gate'
 import {
   draftExtraAgentArgsNeedFreshSession,
   getDraftExtraAgentArgsError,
@@ -17,10 +23,27 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
     const { store, local, destinationForm, destination } = context
     const { settings } = store
     const { draft, editingAutomationId, setIsSaving, setEditorNotice } = local
+    const { draftAtOpen } = local
+    const targetEdited = editingAutomationId === null || local.targetEdited
+    const scheduleEdited =
+      editingAutomationId === null ||
+      !draftAtOpen ||
+      (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(
+        (key) => draft[key] !== draftAtOpen[key]
+      )
+    const extrasEdited =
+      editingAutomationId === null ||
+      !draftAtOpen ||
+      draft.launchSetupPatch !== undefined ||
+      draft.surface !== draftAtOpen.surface ||
+      draft.extraAgentArgs !== draftAtOpen.extraAgentArgs ||
+      draft.agentId !== draftAtOpen.agentId ||
+      draft.reuseSession !== draftAtOpen.reuseSession ||
+      draft.workspaceMode !== draftAtOpen.workspaceMode
     const { hour, minute } = parseDraftTime(draft.time)
     if (
-      !draft.projectId ||
-      (draft.workspaceMode === 'existing' && !draft.workspaceId) ||
+      (targetEdited &&
+        (!draft.projectId || (draft.workspaceMode === 'existing' && !draft.workspaceId))) ||
       !draft.prompt.trim()
     ) {
       toast.error(
@@ -31,7 +54,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       )
       return
     }
-    if (draft.scheduleWarning) {
+    if (scheduleEdited && draft.scheduleWarning) {
       toast.error(
         translate(
           'auto.components.automations.AutomationsPage.64bdb2304f',
@@ -41,6 +64,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       return
     }
     if (
+      scheduleEdited &&
       draft.preset === 'custom' &&
       !acceptsAutomationDraftSchedule({
         customSchedule: draft.customSchedule,
@@ -68,22 +92,50 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       )
       return
     }
-    const extrasError = draftExtraAgentArgsNeedFreshSession(draft)
-      ? translate(
-          'auto.components.automations.extraAgentArgs.needsFreshSession',
-          'Extra arguments require a fresh session for every run.'
-        )
-      : getDraftExtraAgentArgsError(draft)
-    if (extrasError) {
+    const resolution =
+      editingAutomationId !== null
+        ? destinationForm.editHostResolution
+        : destination.createDestination.control.resolution
+    const chatSupported = automationChatSupport(
+      useAppStore.getState(),
+      draft,
+      automationLaunchWorkspace(draft, resolution)
+    )
+    const surface = automationDraftSurface(draft, settings, chatSupported)
+    if (surface === 'chat' && chatSupported !== true) {
+      return
+    }
+    const effectiveDraft = { ...draft, surface }
+    const extrasError = draftExtraAgentArgsNeedFreshSession(effectiveDraft)
+      ? draft.launchPreferences !== undefined || draft.agentArgs !== undefined
+        ? translate(
+            'auto.components.automations.launchSettings.needsFreshSession',
+            'Agent launch settings require a fresh session for every run.'
+          )
+        : translate(
+            'auto.components.automations.extraAgentArgs.needsFreshSession',
+            'Extra arguments require a fresh session for every run.'
+          )
+      : getDraftExtraAgentArgsError(effectiveDraft)
+    if (extrasEdited && extrasError) {
       toast.error(extrasError)
       return
     }
+    setEditorNotice(null)
     setIsSaving(true)
     try {
+      if (editingAutomationId === null) {
+        const checked = destination.createDestination.check(draft.projectId)
+        if (!checked.ok) {
+          setEditorNotice(checked.notice)
+          return
+        }
+      }
       const selectedWorkspaceExists =
+        destinationForm.recordedTargetSelected ||
         draft.workspaceMode !== 'existing' ||
         destinationForm.dialogWorktrees.some((worktree) => worktree.id === draft.workspaceId)
-      if (!selectedWorkspaceExists) {
+      if (targetEdited && !selectedWorkspaceExists) {
         toast.error(
           translate(
             'auto.components.automations.AutomationsPage.32534e7c9c',
@@ -92,14 +144,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
         )
         return
       }
-      if (editingAutomationId === null) {
-        const checked = destination.createDestination.check(draft.projectId)
-        if (!checked.ok) {
-          setEditorNotice(checked.notice)
-          return
-        }
-      }
-      await saveOrcaAutomation(context, { hour, minute, now })
+      await saveOrcaAutomation(context, { hour, minute, now, surface })
     } catch (error) {
       toast.error(
         error instanceof Error

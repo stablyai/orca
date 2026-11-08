@@ -2,7 +2,7 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { selectedCountLabel } from './skill-display-labels'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 import { SKILLS_SUBTITLE_ACTION_CLASS } from './skills-subtitle-action'
@@ -37,6 +37,7 @@ export function SkillsSelectionHeader({
   onCancel: () => void
   onSubmit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <header className="shrink-0 border-b border-border">
       <div className={cn(SKILLS_PAGE_COLUMN, 'flex items-center gap-2 py-3')}>
@@ -47,19 +48,13 @@ export function SkillsSelectionHeader({
               size="icon"
               className="size-7 shrink-0 rounded-full"
               onClick={onCancel}
-              aria-label={translate(
-                'auto.components.skills.SkillsSelectionHeader.exit',
-                'Exit selection'
-              )}
+              aria-label={t('auto.components.skills.SkillsSelectionHeader.exit', 'Exit selection')}
             >
               <X className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate(
-              'auto.components.skills.SkillsSelectionHeader.exitTooltip',
-              'Exit selection · Esc'
-            )}
+            {t('auto.components.skills.SkillsSelectionHeader.exitTooltip', 'Exit selection · Esc')}
           </TooltipContent>
         </Tooltip>
         <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
@@ -68,7 +63,7 @@ export function SkillsSelectionHeader({
           <h1 className="truncate text-sm font-semibold">{title}</h1>
           <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <span className="shrink-0" role="status" aria-live="polite">
-              {selectedCountLabel(selectedCount)}
+              {selectedCountLabel(selectedCount, t)}
             </span>
             <span aria-hidden>·</span>
             <Button
@@ -78,7 +73,7 @@ export function SkillsSelectionHeader({
               disabled={eligibleCount === 0}
               onClick={onSelectAll}
             >
-              {translate(
+              {t(
                 'auto.components.skills.SkillsSelectionHeader.selectAll',
                 'Select all {{count}} eligible',
                 { count: eligibleCount }
@@ -92,7 +87,7 @@ export function SkillsSelectionHeader({
               disabled={selectedCount === 0}
               onClick={onClear}
             >
-              {translate('auto.components.skills.SkillsSelectionHeader.clear', 'Clear')}
+              {t('auto.components.skills.SkillsSelectionHeader.clear', 'Clear')}
             </Button>
           </div>
         </div>

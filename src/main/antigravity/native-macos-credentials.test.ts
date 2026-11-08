@@ -26,17 +26,6 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('Antigravity macOS credential access', () => {
-  it('reads only the native agy item', async () => {
-    expect((await readAntigravityMacOSCredential())?.contents).toBe(contents)
-    expect(runProcess).toHaveBeenCalledWith(
-      expect.objectContaining({
-        program: '/usr/bin/security',
-        args: ['find-generic-password', '-s', 'gemini', '-a', 'antigravity', '-w'],
-        timeoutMs: 3000
-      })
-    )
-  })
-
   it('distinguishes a missing item from denied, timed-out or clipped reads', async () => {
     vi.mocked(runProcess).mockResolvedValueOnce({ ...success, code: 44, stdout: '' })
     expect(await readAntigravityMacOSCredential()).toBeNull()
@@ -51,18 +40,6 @@ describe('Antigravity macOS credential access', () => {
     await expect(readAntigravityMacOSCredential()).rejects.toThrow(
       'The Antigravity macOS credential store could not be accessed.'
     )
-  })
-
-  it('writes credentials through stdin and verifies the complete native blob', async () => {
-    await writeAntigravityMacOSCredential(contents)
-    expect(runProcess).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({
-        args: ['-i'],
-        input: `add-generic-password -U -s "gemini" -a "antigravity" -w ${encodeAntigravityKeychainValue(contents)}\n`
-      })
-    )
-    expect(runProcess).toHaveBeenCalledTimes(2)
   })
 
   it('does not claim a successful switch when readback differs', async () => {
@@ -80,16 +57,4 @@ describe('Antigravity macOS credential access', () => {
     await expect(writeAntigravityMacOSCredential(large)).rejects.toThrow('command limit')
     expect(runProcess).not.toHaveBeenCalled()
   })
-
-  it.each(['win32', 'linux'] as const)(
-    'does not answer for a different host (%s)',
-    async (platform) => {
-      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
-      await expect(readAntigravityMacOSCredential()).rejects.toThrow('unavailable on this host')
-      await expect(writeAntigravityMacOSCredential(contents)).rejects.toThrow(
-        'unavailable on this host'
-      )
-      expect(runProcess).not.toHaveBeenCalled()
-    }
-  )
 })

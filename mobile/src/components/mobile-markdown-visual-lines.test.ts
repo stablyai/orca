@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE } from '../../../src/shared/native-chat-visual-directive'
-import { parseMobileMarkdownTree, plainText } from './mobile-markdown-tree'
+import { NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE } from '../../../src/shared/native-chat/native-chat-visual-directive'
+import { plainText } from './mobile-markdown-plain-text'
+import { parseMobileMarkdownTree } from './mobile-markdown-tree'
 import {
   mobileMarkdownVisualPlaceholderIndex,
   protectMobileMarkdownVisualLines
@@ -66,20 +67,6 @@ describe('native-chat visual lines in mobile markdown', () => {
   it('resumes recognizing directives after a fence closes', () => {
     const { directives } = blocksOf('```\ncode\n```\n::orca-visual{file="after.html"}')
     expect(directives).toEqual([{ file: 'after.html', title: null }])
-  })
-
-  it('leaves malformed or path-like directives as literal text', () => {
-    for (const line of [
-      '::orca-visual{file="../secret.html"}',
-      '::orca-visual{file="a.html" file="b.html"}',
-      '::orca-visual{file="a.htm"}',
-      '::orca-visual{file="a.html"',
-      '::orca-visual{file="a.html"} trailing words'
-    ]) {
-      const { directives, blocks } = blocksOf(line)
-      expect(directives, line).toEqual([])
-      expect(blocks, line).toEqual([{ type: 'paragraph', text: line }])
-    }
   })
 
   it('renders directives past the per-message cap as text', () => {

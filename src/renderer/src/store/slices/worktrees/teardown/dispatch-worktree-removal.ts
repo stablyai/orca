@@ -1,10 +1,10 @@
-import { showNestedWorktreePreservedBranchesToast } from '@/components/sidebar/nested-worktree-preserved-branches-toast'
+import { showNestedWorktreePreservedBranchesToast } from '@/components/sidebar/workspace-actions/deletion/nested-worktree-preserved-branches-toast'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
-import type { RemoveWorktreeOptions } from '../../worktree-removal-options'
+import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
+import type { RemoveWorktreeOptions } from './worktree-removal-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import {
   isWorktreeRemovalReplyLost,

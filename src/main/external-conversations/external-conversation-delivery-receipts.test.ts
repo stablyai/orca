@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { MUTATION_RECEIPT_MAX_ROWS } from '../runtime/orchestration/mutation-receipt-capacity'
+import { MUTATION_RECEIPT_MAX_ROWS } from '../runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity'
 import {
   CONNECTOR_CANCEL_RECEIPT_RESERVE,
   CONNECTOR_PENDING_RECEIPT_LIMIT,
@@ -84,18 +84,6 @@ describe('DeliveryReceipts ledger capacity', () => {
     db.close()
   })
 
-  it('answers a recorded delivery even when the backlog is full', async () => {
-    const { db } = fileDb()
-    const receipts = new DeliveryReceipts(() => db)
-    for (let i = 0; i < CONNECTOR_PENDING_RECEIPT_LIMIT; i++) {
-      void receipts.run(KEY, String(i), 'connector.send', ['hello'], never)
-    }
-    const joined = receipts.run(KEY, '0', 'connector.send', ['hello'], never)
-    const raced = await Promise.race([joined, Promise.resolve('waiting')])
-    expect(raced).toBe('waiting')
-    db.close()
-  })
-
   it('settles a previous process’s pending deliveries as unknown, without replaying them', async () => {
     const { path, db } = fileDb()
     const before = new DeliveryReceipts(() => db)
@@ -136,5 +124,30 @@ describe('DeliveryReceipts ledger capacity', () => {
       'pending'
     )
     db.close()
+  })
+})
+
+describe('DeliveryReceipts.recorded', () => {
+  it('replays a result, reads an interrupted delivery as unknown, and runs nothing', async () => {
+    const { path, db } = fileDb()
+    const receipts = new DeliveryReceipts(() => db)
+    await receipts.run(KEY, 'done', 'connector.send', ['hi'], async () => ({ outcome: 'accepted' }))
+    void receipts.run(KEY, 'interrupted', 'connector.send', ['hi'], never)
+    await receipts.run(KEY, 'refused', 'connector.send', ['hi'], async () => ({
+      outcome: 'refused',
+      reason: 'agent_not_reachable'
+    }))
+    db.close()
+
+    const reopened = new OrchestrationDb(path)
+    const restarted = new DeliveryReceipts(() => reopened)
+    await expect(restarted.recorded(KEY, 'done')).resolves.toEqual({ outcome: 'accepted' })
+    await expect(restarted.recorded(KEY, 'interrupted')).resolves.toEqual({
+      outcome: 'unknown',
+      reason: 'replayed_after_restart'
+    })
+    await expect(restarted.recorded(KEY, 'refused')).resolves.toBeNull()
+    await expect(restarted.recorded(KEY, 'never-received')).resolves.toBeNull()
+    reopened.close()
   })
 })

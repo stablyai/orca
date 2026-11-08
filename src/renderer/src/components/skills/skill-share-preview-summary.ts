@@ -1,5 +1,6 @@
 import type { SkillSharePreview } from '../../../../shared/skill-sharing-contract'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export function byteLabel(bytes: number): string {
   if (bytes < 1024) {
@@ -11,16 +12,18 @@ export function byteLabel(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function scriptCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.share.scriptOne', '{{count}} script', { count })
-    : translate('auto.components.skills.share.scriptOther', '{{count}} scripts', { count })
+function scriptCountLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.share.script', '{{count}} scripts', {
+    count,
+    defaultValue_one: '{{count}} script'
+  })
 }
 
-function executableCountLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.share.executableOne', '{{count}} executable', { count })
-    : translate('auto.components.skills.share.executableOther', '{{count}} executables', { count })
+function executableCountLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.share.executable', '{{count}} executables', {
+    count,
+    defaultValue_one: '{{count}} executable'
+  })
 }
 
 export type SkillShareRiskSummary = { risky: boolean; label: string }
@@ -28,28 +31,29 @@ export type SkillShareRiskSummary = { risky: boolean; label: string }
 /** Name executable/script content explicitly; omit empty counts. */
 export function summarizeExecutableContent(
   scriptCount: number,
-  executableCount: number
+  executableCount: number,
+  t: Translate = translate
 ): SkillShareRiskSummary {
   const parts: string[] = []
   if (scriptCount > 0) {
-    parts.push(scriptCountLabel(scriptCount))
+    parts.push(scriptCountLabel(scriptCount, t))
   }
   if (executableCount > 0) {
-    parts.push(executableCountLabel(executableCount))
+    parts.push(executableCountLabel(executableCount, t))
   }
   return parts.length === 0
     ? {
         risky: false,
-        label: translate(
-          'auto.components.skills.share.noExecutableContent',
-          'No scripts or executables'
-        )
+        label: t('auto.components.skills.share.noExecutableContent', 'No scripts or executables')
       }
     : { risky: true, label: parts.join(', ') }
 }
 
-export function summarizeShareRisk(preview: SkillSharePreview): SkillShareRiskSummary {
-  return summarizeExecutableContent(preview.scriptPaths.length, preview.executablePaths.length)
+export function summarizeShareRisk(
+  preview: SkillSharePreview,
+  t?: Translate
+): SkillShareRiskSummary {
+  return summarizeExecutableContent(preview.scriptPaths.length, preview.executablePaths.length, t)
 }
 
 export type SkillShareSensitiveFile = { path: string; script: boolean; executable: boolean }

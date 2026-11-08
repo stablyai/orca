@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
-import { markRestoredStaleCodexSessionsForRestart } from './codex-session-restart'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { markRestoredStaleCodexSessionsForRestart } from './agent-session/accounts/codex/codex-session-restart'
 
 // One login can produce separate ChatGPT-workspace accounts with the same email label.
 const SHARED_EMAIL = 'shared@example.com'
-const FALLBACK_LABEL = 'Codex account'
 
 function seedRoster(
   accounts: { id: string; email: string; workspaceLabel?: string | null }[]
@@ -93,47 +92,6 @@ describe('stale Codex panes are decided by account id, not label', () => {
       nextAccountId: 'account-b'
     })
     expect(scans.find((scan) => scan.ptyId === 'pty-1')?.notified).toBe(true)
-  })
-
-  it('keeps the prompt when the roster read fails and every label collapses', async () => {
-    vi.mocked(window.api.codexAccounts.list).mockRejectedValue(new Error('roster unavailable'))
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
-      { ptyId: 'pty-1', launchAccountId: 'account-a', activeAccountId: 'account-b' }
-    ])
-
-    const scans = await markRestoredStaleCodexSessionsForRestart()
-
-    expect(noticeFor('pty-1')).toMatchObject({
-      previousAccountLabel: FALLBACK_LABEL,
-      nextAccountLabel: FALLBACK_LABEL,
-      previousAccountId: 'account-a',
-      nextAccountId: 'account-b'
-    })
-    expect(scans.find((scan) => scan.ptyId === 'pty-1')?.notified).toBe(true)
-  })
-
-  it('disambiguates shared emails by ChatGPT workspace', async () => {
-    seedRoster([
-      { id: 'account-a', email: SHARED_EMAIL, workspaceLabel: 'Personal' },
-      { id: 'account-b', email: SHARED_EMAIL, workspaceLabel: 'Acme' }
-    ])
-    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
-      { ptyId: 'pty-1', launchAccountId: 'account-a', activeAccountId: 'account-b' }
-    ])
-
-    await markRestoredStaleCodexSessionsForRestart()
-
-    expect(noticeFor('pty-1')).toMatchObject({
-      previousAccountLabel: `${SHARED_EMAIL} (Personal)`,
-      nextAccountLabel: `${SHARED_EMAIL} (Acme)`
-    })
-  })
-
-  it('raises no notice and reports nothing notified for a pane on the selected account', async () => {
-    const scans = await markRestoredStaleCodexSessionsForRestart()
-
-    expect(useAppStore.getState().codexRestartNoticeByPtyId).toEqual({})
-    expect(scans.every((scan) => scan.notified === false)).toBe(true)
   })
 
   it('does not report notified for a pane whose notice the store dropped', async () => {

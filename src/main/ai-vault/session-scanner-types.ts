@@ -1,16 +1,17 @@
+import type { Dirent } from 'node:fs'
 import type {
   AiVaultAgent,
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   TranscriptMessageSink,
   TranscriptSessionIdentity
-} from './session-transcript-consumers'
-import type { SessionSidecarObservation } from './session-sidecar-stat'
-import type { OpenCodeWslRuntime } from './session-scanner-opencode-wsl-runtime'
+} from './transcripts/session-transcript-consumers'
+import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
+import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
@@ -27,11 +28,15 @@ export type AiVaultScanOptions = {
   geminiSessionsDir?: string
   antigravityBrainDir?: string
   antigravityAppHome?: string
+  /** Orca's managed Antigravity chat transcripts; resolved by the host process. */
+  antigravityChatBrainDir?: string
   includeAntigravityIdeSessions?: boolean
   copilotSessionsDir?: string
   cursorProjectsDir?: string
   opencodeStorageDir?: string
   opencodeDbPaths?: readonly string[]
+  /** Managed account OpenCode data directories; resolved by the host process. */
+  opencodeAccountDataDirs?: readonly string[]
   zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
@@ -87,6 +92,8 @@ export type SessionFileDiscovery = {
   files: FileWithMtime[]
   // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
   scopeFiles?: FileWithMtime[]
+  // Conversation folder -> one top-level artifact file, seen while walking Antigravity brains.
+  antigravityArtifactPaths?: ReadonlyMap<string, string>
 }
 
 export type SessionParseResult = {
@@ -150,4 +157,14 @@ export type CodexUsageSnapshot = {
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
+}
+
+export type SessionFileWalkOptions = {
+  extensions: Set<string>
+  filePredicate?: (path: string) => boolean
+  // Return false to prune a subtree; depth 0 denotes a child of rootDir.
+  directoryPredicate?: (name: string, depth: number) => boolean
+  strictErrors?: boolean
+  readDirectory?: (dirPath: string) => Promise<Dirent[]>
+  signal?: AbortSignal
 }

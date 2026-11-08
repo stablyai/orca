@@ -4,6 +4,8 @@ import type { Tab } from '../../../shared/tab-types'
 const mocks = vi.hoisted(() => {
   const tabs: Record<string, Tab[]> = {}
   return {
+    navigate: vi.fn(),
+    moved: vi.fn(() => false),
     call: vi.fn(),
     supports: vi.fn(),
     apply: vi.fn(),
@@ -17,6 +19,14 @@ const mocks = vi.hoisted(() => {
     }
   }
 })
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
+vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
+  refreshLocalStructuredSessionWorktreeTabs: async () => undefined
+}))
+vi.mock('./workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: mocks.navigate
+}))
+vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: mocks.moved }))
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
@@ -27,9 +37,12 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) => ({
   ...(await original<Record<string, unknown>>()),
-  callRuntimeRpc: mocks.call,
+  callRuntimeRpc: mocks.call
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))
 vi.mock('@/runtime/local-structured-session-tabs-sync/snapshot-apply', async (original) => ({
@@ -37,8 +50,11 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/snapshot-apply', async (or
   applyStructuredSessionTabSnapshots: mocks.apply
 }))
 
-import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
-import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { openExistingStructuredSession } from './open-existing-structured-session'
+import {
+  activateAiVaultStructuredSession,
+  openDesktopStructuredSession
+} from './activate-ai-vault-structured-session'
 
 const TARGET = { kind: 'environment', environmentId: 'remote-2' } as const
 function tab(id: string, host: 'local' | 'runtime:remote-2'): Tab {
@@ -58,39 +74,145 @@ function tab(id: string, host: 'local' | 'runtime:remote-2'): Tab {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.state.activeWorktreeId = 'workspace'
+  mocks.moved.mockReturnValue(false)
   mocks.state.unifiedTabsByWorktree = { workspace: [tab('wrong-local', 'local')] }
   mocks.supports.mockResolvedValue(true)
   mocks.call.mockImplementation(async (_host, method: string) => {
+    if (method === 'orchestration.partyLocation') {
+      return { location: { kind: 'chat', sessionId: 'sender', worktreeId: 'workspace' } }
+    }
     if (method === 'agentSession.reveal') {
       // The paired mirror, rather than the local snapshot apply, publishes the revealed tab.
       mocks.state.unifiedTabsByWorktree.workspace.push(tab('right-remote', 'runtime:remote-2'))
     }
-    return { ok: true }
+    return { ok: true, sessionId: 'sender', workspaceId: 'workspace', agent: 'claude' }
   })
 })
 
-it('keeps the known host through the default refresh/reveal/activation path without applying its snapshot as local', async () => {
-  await expect(
-    activateAiVaultStructuredSession(
-      {
-        structuredSession: { workspaceId: 'workspace', sessionId: 'sender' }
-      },
-      undefined,
-      TARGET
+it('bounds a missing local History lookup and releases coalescing for a legitimate retry', async () => {
+  vi.useFakeTimers()
+  try {
+    mocks.state.unifiedTabsByWorktree = {}
+    mocks.call.mockImplementation(async (_host, method) =>
+      method === 'orchestration.partyLocation' ? new Promise(() => {}) : { ok: true }
     )
-  ).resolves.toBe(true)
-  expect(mocks.supports).toHaveBeenCalledWith(
-    'remote-2',
-    STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
-    expect.any(Number)
+    const session = { structuredSession: { sessionId: 'missing', workspaceId: 'workspace' } }
+    const first = activateAiVaultStructuredSession(session, undefined, { kind: 'local' })
+    const second = activateAiVaultStructuredSession(session, undefined, { kind: 'local' })
+    await vi.advanceTimersByTimeAsync(5001)
+    await Promise.all([first, second])
+    expect(
+      mocks.call.mock.calls.filter((call) => call[1] === 'orchestration.partyLocation')
+    ).toHaveLength(1)
+    const retry = activateAiVaultStructuredSession(session, undefined, { kind: 'local' })
+    await vi.advanceTimersByTimeAsync(5001)
+    await retry
+    expect(
+      mocks.call.mock.calls.filter((call) => call[1] === 'orchestration.partyLocation')
+    ).toHaveLength(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('derives the implicit owner and refuses the equal-ID other-owner decoy', async () => {
+  mocks.state.unifiedTabsByWorktree.workspace.unshift(tab('wrong-remote', 'runtime:remote-2'))
+  const pointer = { structuredSession: { workspaceId: 'workspace', sessionId: 'sender' } }
+  expect(await activateAiVaultStructuredSession(pointer)).toBe(true)
+  expect(mocks.activateTab).toHaveBeenCalledExactlyOnceWith('wrong-local', {
+    worktreeId: 'workspace'
+  })
+  expect(mocks.supports).not.toHaveBeenCalled()
+  mocks.activateTab.mockClear()
+  await activateAiVaultStructuredSession(pointer, undefined, TARGET)
+  expect(mocks.activateTab).toHaveBeenCalledExactlyOnceWith('wrong-remote', {
+    worktreeId: 'workspace'
+  })
+})
+
+it.each(['initialize', 'activate'] as const)(
+  'admits before synchronous %s re-entry',
+  async (boundary) => {
+    const pointer = { workspaceId: 'workspace', sessionId: 'sync' }
+    const joined: Promise<unknown>[] = []
+    const joiningInitialize = vi.fn(() => true)
+    const joiningPresent = vi.fn()
+    const reenter = () =>
+      joined.push(
+        openExistingStructuredSession(pointer, {
+          target: TARGET,
+          initialize: joiningInitialize,
+          present: joiningPresent
+        })
+      )
+    const parts = {
+      tabs: () => [{ id: 'sync-tab', sessionId: pointer.sessionId }],
+      activate: vi.fn(() => {
+        if (boundary === 'activate') {
+          reenter()
+        }
+        return true
+      }),
+      refresh: vi.fn(async () => undefined),
+      reveal: vi.fn(async () => 'gone' as const)
+    }
+    const present = vi.fn()
+    expect(
+      await openExistingStructuredSession(pointer, {
+        target: TARGET,
+        deps: parts,
+        present,
+        initialize: () => {
+          if (boundary === 'initialize') {
+            reenter()
+          }
+          return true
+        }
+      })
+    ).toBe('activated')
+    expect(await Promise.all(joined)).toEqual(['activated'])
+    expect(parts.activate).toHaveBeenCalledOnce()
+    expect(present).toHaveBeenCalledOnce()
+    expect(joiningInitialize).not.toHaveBeenCalled()
+    expect(joiningPresent).not.toHaveBeenCalled()
+  }
+)
+
+it('keeps indirect continuation discovery independent from direct exact selection', async () => {
+  mocks.state.unifiedTabsByWorktree.workspace.push(tab('direct', 'runtime:remote-2'))
+  const successor = tab('successor-issued', 'runtime:remote-2')
+  successor.entityId = 'successor'
+  successor.agentSessionAgent = 'codex'
+  mocks.state.unifiedTabsByWorktree.workspace.push(successor)
+  const located = Promise.withResolvers<{
+    location: { kind: 'chat'; sessionId: string; worktreeId: string }
+  }>()
+  const locate = vi.fn(() => located.promise)
+  const indirect = openDesktopStructuredSession(
+    { kind: 'notification', worktreeId: 'workspace', sessionId: 'sender' },
+    TARGET,
+    undefined,
+    locate
   )
-  expect(mocks.call.mock.calls.map(([host, method]) => [host, method])).toEqual([
-    [TARGET, 'session.tabs.list'],
-    [TARGET, 'agentSession.reveal'],
-    [TARGET, 'session.tabs.list'],
-    [TARGET, 'session.tabs.activate']
-  ])
-  expect(mocks.apply).not.toHaveBeenCalled()
-  expect(mocks.activateTab).toHaveBeenCalledOnce()
-  expect(mocks.activateTab).toHaveBeenCalledWith('right-remote', { worktreeId: 'workspace' })
+  const direct = activateAiVaultStructuredSession(
+    { structuredSession: { workspaceId: 'workspace', sessionId: 'sender' } },
+    undefined,
+    TARGET
+  )
+  expect(await direct).toBe(true)
+  expect(mocks.activateTab).toHaveBeenCalledExactlyOnceWith('direct', { worktreeId: 'workspace' })
+  located.resolve({ location: { kind: 'chat', sessionId: 'successor', worktreeId: 'workspace' } })
+  expect(await indirect).toEqual({
+    kind: 'opened',
+    target: { sessionId: 'successor', worktreeId: 'workspace', agent: 'codex' },
+    tab: { id: 'successor-issued', sessionId: 'successor', agent: 'codex' }
+  })
+  expect(locate).toHaveBeenCalledOnce()
+  expect(mocks.activateTab).toHaveBeenLastCalledWith('successor-issued', {
+    worktreeId: 'workspace'
+  })
+  expect(
+    mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.reveal')
+  ).toHaveLength(0)
 })

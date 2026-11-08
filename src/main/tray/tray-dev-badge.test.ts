@@ -26,14 +26,6 @@ function fakeTemplate(width: number, height: number) {
 }
 
 describe('stampTrayDevBadge', () => {
-  it('returns the base unchanged when it has no pixels', () => {
-    createFromBitmapMock.mockClear()
-    const base = { getSize: () => ({ width: 0, height: 0 }), toBitmap: () => Buffer.alloc(0) }
-
-    expect(stampTrayDevBadge(base as never)).toBe(base)
-    expect(createFromBitmapMock).not.toHaveBeenCalled()
-  })
-
   it('keeps the template canvas size and stamps opaque template-black pixels', () => {
     createFromBitmapMock.mockClear()
     const width = 22

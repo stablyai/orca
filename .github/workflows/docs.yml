@@ -38,7 +38,7 @@ jobs:
   check:
     name: Build and test
     if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout pull request
@@ -80,7 +80,7 @@ jobs:
     if: >-
       github.repository == 'stablyai/orca' &&
       (github.event_name == 'release' || github.event_name == 'workflow_dispatch')
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       deploy: ${{ steps.validate.outputs.deploy }}
@@ -200,7 +200,7 @@ jobs:
       needs.release_gate.result == 'success' &&
       needs.release_gate.outputs.deploy == 'true'
     needs: release_gate
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
       name: docs-production

@@ -11,6 +11,8 @@ import {
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
 import { resolveComposerRepoId } from './new-workspace-composer-repo'
+import { findSoleHostCopy } from '../../../shared/worktree/host-qualified-identity'
+import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 
 export type WorkspaceCreationTarget = {
   projectId: string
@@ -163,7 +165,15 @@ export function resolveWorkspaceCreationTarget(
   if (projectHostSetupId) {
     const matchingSetups = allSetups.filter((entry) => entry.id === projectHostSetupId)
     const setupHostId = input.projectHostSetupHostId ?? (matchingSetups.length > 1 ? hostId : null)
-    const setup = matchingSetups.find((entry) => !setupHostId || entry.hostId === setupHostId)
+    // Unnamed: only actionable copies compete, so a lone runnable host still resolves.
+    const setup = findSoleHostCopy(
+      setupHostId
+        ? matchingSetups.filter((entry) => entry.hostId === setupHostId)
+        : matchingSetups.filter(
+            (entry) => !actionableHostIds || actionableHostIds.has(entry.hostId)
+          ),
+      (entry) => entry.hostId
+    )
     if (!setup) {
       return { status: 'unavailable', reason: 'setup-not-found' }
     }
@@ -174,12 +184,16 @@ export function resolveWorkspaceCreationTarget(
     if (!isReadySetup(setup)) {
       return { status: 'unavailable', reason: 'setup-not-ready' }
     }
-    // Canonicalize legacy same-host duplicate drafts to the picker’s first setup so displayed and created paths match.
+    // Canonicalize legacy same-checkout duplicates to the first setup; a distinct same-host checkout is its own target.
+    const checkoutPath = normalizeRuntimePathForComparison(setup.path)
     const canonical =
       findReadySetupTarget(
         setups,
         reposById,
-        (entry) => entry.projectId === setup.projectId && entry.hostId === setup.hostId
+        (entry) =>
+          entry.projectId === setup.projectId &&
+          entry.hostId === setup.hostId &&
+          normalizeRuntimePathForComparison(entry.path) === checkoutPath
       ) ?? createTarget(setup, reposById)
     if (canonical) {
       return { status: 'ready', target: canonical }

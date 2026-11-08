@@ -1,7 +1,7 @@
 // Choose fence longer than every contained backtick run; fixed triple fence would turn inner code into paragraphs. Reader preserves chosen opening width.
 
-/** Longer than the longest backtick run inside, and never under three. */
-export function codeFenceFor(code: string): string {
+/** Longer than the longest backtick run inside, with the minimum chosen by block or inline syntax. */
+export function codeFenceFor(code: string, minimumLength = 3): string {
   let longest = 0
   let longRun: RegExp | undefined
   let start = code.indexOf('`')
@@ -17,7 +17,7 @@ export function codeFenceFor(code: string): string {
     longest = Math.max(longest, end - start)
     start = code.indexOf('`', end)
   }
-  return '`'.repeat(Math.max(3, longest + 1))
+  return '`'.repeat(Math.max(minimumLength, longest + 1))
 }
 
 /** The run a line opens a block with, and the language it names, or null when it opens none. */

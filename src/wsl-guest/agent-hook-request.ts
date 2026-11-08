@@ -1,18 +1,24 @@
-import { checkHookOwnerPresence } from '../shared/agent-hook-owner-presence'
+import { checkHookOwnerPresence } from '../shared/agent-hook-listener/presence/agent-hook-owner-presence'
+import type { HookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
 import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
-import type { createHookTransportInterferenceTracker } from '../shared/agent-hook-transport-interference'
-import { isHookRequestTruncatedError } from '../shared/agent-hook-transport-interference'
+import type { createHookTransportInterferenceTracker } from '../shared/agent-hook-listener/transport/agent-hook-transport-interference'
+import { isHookRequestTruncatedError } from '../shared/agent-hook-listener/transport/agent-hook-transport-interference'
 import type { HookListenerState } from '../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
-import type { AgentHookSource } from '../shared/agent-hook-relay'
+import type { AgentHookSource } from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
 import { hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { bindOpenCodeTuiSession } from '../shared/agent-hook-listener/opencode-session-registry'
 import type { RelayProviderHookNormalization } from './agent-hook-provider-normalization'
+import {
+  relayHookRootAcquisition,
+  type RelayHookAdmissionOptions
+} from './agent-hook-event-admission'
+import { CLAUDE_AGENT_VIEW_PATH } from '../shared/claude-agent-view'
 
 export async function handleRelayHookRequest(
   req: IncomingMessage,
@@ -20,9 +26,11 @@ export async function handleRelayHookRequest(
   options: {
     isCurrent: () => boolean
     token: string
+    forwardClaudeAgentView?: (body: unknown) => Promise<unknown>
     env: string
     state: HookListenerState
     checkAgentPresence: (paneKey: string) => Promise<void>
+    readHookRootEvidence?: HookRootEvidenceReader
     providerNormalization: RelayProviderHookNormalization
     isPaneSurfaceRetired: (paneKey: string) => boolean
     getAgentLaunchToken: (paneKey: string) => string | undefined
@@ -30,7 +38,8 @@ export async function handleRelayHookRequest(
       event: AgentHookEventPayload,
       source: AgentHookSource,
       env?: string,
-      version?: string
+      version?: string,
+      admission?: RelayHookAdmissionOptions
     ) => AgentHookEventPayload | undefined
     ingestTmuxHook?: (source: AgentHookSource, body: unknown) => Promise<boolean>
     retryScheduler: AgentHookResultRetryScheduler
@@ -55,6 +64,13 @@ export async function handleRelayHookRequest(
   })
   try {
     const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+    if (pathname === CLAUDE_AGENT_VIEW_PATH) {
+      const body = await readRequestBody(req)
+      const reply = options.isCurrent() ? await options.forwardClaudeAgentView?.(body) : {}
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify(reply ?? {}))
+      return
+    }
     const source = resolveHookSource(pathname)
     if (!source) {
       res.writeHead(404)
@@ -78,7 +94,12 @@ export async function handleRelayHookRequest(
       source,
       hookBody,
       options.env,
-      options.checkAgentPresence
+      options.checkAgentPresence,
+      relayHookRootAcquisition(options.readHookRootEvidence, options.state, (event) =>
+        options.applyEvent(event, source, hookBodyEnv(hookBody), hookBodyVersion(hookBody), {
+          checkPresence: false
+        })
+      )
     )
     if (!options.isCurrent()) {
       res.writeHead(204)
@@ -100,11 +121,16 @@ export async function handleRelayHookRequest(
         }
       }
     )
+    if (source === 'muse' && !event) {
+      options.retryScheduler.rearmIgnoredMuseHook(hookBody)
+    }
     if (event) {
       // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
       const env = hookBodyEnv(hookBody)
       const version = hookBodyVersion(hookBody)
-      const stored = options.applyEvent(event, source, env, version)
+      const stored = options.applyEvent(event, source, env, version, {
+        onAccepted: (row) => options.retryScheduler.observeClaudeHook(row)
+      })
       if (stored) {
         if (admittedOpenCodeTuiOwner) {
           bindOpenCodeTuiSession(options.state, source, hookBody, event.providerSession?.id)

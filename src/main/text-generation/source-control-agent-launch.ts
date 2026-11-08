@@ -1,10 +1,9 @@
+import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { resolveCliCommand } from '../codex-cli/command'
-import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
-import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
-import { SOURCE_CONTROL_KILL_SITE } from './source-control-local-process'
 import { wslAwareSpawn } from '../git/runner'
+import { spawnSupervisedAgent } from './source-control-supervised-agent-spawn'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess,
@@ -40,8 +39,11 @@ function buildWslLauncherEnv(explicitEnv: NodeJS.ProcessEnv | undefined): NodeJS
 }
 
 export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
+  const wslDistro = input.preparation
+    ? wslDistroForCommand(input.cwd, input.wslDistro)
+    : input.wslDistro
   const spawnEnv = input.env ?? process.env
-  if (process.platform === 'win32' && input.wslDistro) {
+  if (process.platform === 'win32' && wslDistro) {
     // Apply command assignments after guest login-shell setup, never to the Windows launcher.
     const assignments = Object.entries(input.commandEnv ?? {}).map(
       ([key, value]) => `${key}=${value}`
@@ -55,8 +57,9 @@ export const spawnSourceControlAgent: SpawnSourceControlAgent = (input) => {
         env: buildWslLauncherEnv(input.env),
         stdio: [input.stdinMode, 'pipe', 'pipe'],
         windowsHide: true,
-        wslDistro: input.wslDistro,
-        useWslLoginShell: true
+        wslDistro,
+        useWslLoginShell: true,
+        ...(input.preparation ? { preparation: input.preparation } : {})
       }
     ) as SpawnedSourceControlAgentProcess
   }
@@ -85,34 +88,4 @@ function spawnWindowsAgent(
     env: withCliRuntimeOnPath(resolvedBinary, spawnEnv),
     ...(input.useCwdForNative ? { cwd: input.cwd } : {})
   })
-}
-
-// Supervisor owns the agent group so parent quit/death still stops generation.
-function spawnSupervisedAgent(
-  input: SourceControlAgentSpawnInput,
-  spawnEnv: NodeJS.ProcessEnv
-): SpawnedSourceControlAgentProcess {
-  const spec = createProviderSpawnSpec(
-    {
-      command: input.binary,
-      args: input.args,
-      ...(input.useCwdForNative && input.cwd !== undefined ? { cwd: input.cwd } : {})
-    },
-    withCliRuntimeOnPath(input.binary, spawnEnv),
-    process.platform,
-    { lifetime: 'one-shot' }
-  )
-  const child = spawnProcess({
-    program: spec.program,
-    args: spec.args,
-    env: spec.env,
-    cwd: spec.cwd,
-    detached: spec.detached,
-    stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
-  })
-  guardSupervisedProviderGroup(child, {
-    site: SOURCE_CONTROL_KILL_SITE,
-    supervised: spec.supervised
-  })
-  return Object.assign(child, { supervised: spec.supervised })
 }

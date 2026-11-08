@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 // These paths use supplied file context without resolving its editor connection.
 const boundaryMocks = vi.hoisted(() => ({
@@ -13,14 +13,19 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: boundaryMocks.getConnectionIdForFile
 }))
 
-const mocks = vi.hoisted(() => ({ statRuntimePath: vi.fn() }))
+const mocks = vi.hoisted(() => ({ statRuntimePath: vi.fn(), readRuntimeDirectory: vi.fn() }))
 
-vi.mock('@/runtime/runtime-file-routing', () => ({ isRemoteRuntimeFileOperation: () => false }))
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
+  isRemoteRuntimeFileOperation: () => false
+}))
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
   statRuntimePath: mocks.statRuntimePath
 }))
+vi.mock('@/runtime/files/reads/runtime-directory-read', () => ({
+  readRuntimeDirectory: mocks.readRuntimeDirectory
+}))
 
-import { statUserOpenedPath } from './user-opened-local-path'
+import { readUserOpenedDirectory, statUserOpenedPath } from './user-opened-local-path'
 
 const project: RuntimeFileOperationArgs = {
   target: { kind: 'local' as const },
@@ -57,17 +62,6 @@ describe('statUserOpenedPath', () => {
     mocks.statRuntimePath.mockReset()
   })
 
-  it('keeps a project file that stays in the project contained', async () => {
-    answer(true, true)
-
-    await expect(statUserOpenedPath(project, '/repo/src/a.ts')).resolves.toEqual({
-      isDirectory: false,
-      escapesWorktree: false
-    })
-    expect(mocks.statRuntimePath).toHaveBeenCalledTimes(1)
-    expect(mocks.statRuntimePath).toHaveBeenCalledWith(project, '/repo/src/a.ts')
-  })
-
   it.each([false, true])(
     'reports a project link that leads out of the project (directory: %s)',
     async (isDirectory) => {
@@ -77,9 +71,12 @@ describe('statUserOpenedPath', () => {
         isDirectory,
         escapesWorktree: true
       })
-      expect(mocks.statRuntimePath).toHaveBeenLastCalledWith(project, '/repo/link', {
-        kind: 'user-file'
-      })
+      expect(mocks.statRuntimePath).toHaveBeenLastCalledWith(
+        project,
+        '/repo/link',
+        { kind: 'user-file' },
+        { wakeWslDistro: true }
+      )
     }
   )
 
@@ -113,8 +110,68 @@ describe('statUserOpenedPath', () => {
       isDirectory: false,
       escapesWorktree: false
     })
-    expect(mocks.statRuntimePath).toHaveBeenCalledExactlyOnceWith(context, filePath, {
-      kind: 'user-file'
+    expect(mocks.statRuntimePath).toHaveBeenCalledExactlyOnceWith(
+      context,
+      filePath,
+      { kind: 'user-file' },
+      { wakeWslDistro: true }
+    )
+  })
+})
+
+describe('readUserOpenedDirectory', () => {
+  const OUTSIDE = 'Access denied: path resolves outside allowed directories.'
+  const entries = [{ name: 'notes.md', isDirectory: false, isSymlink: false }]
+  const FOLLOW = { followProjectFolderLink: true }
+
+  /** Main's answers: contained listings refuse; a project-folder-link listing answers `linkAnswer`. */
+  function answerList(containedError: Error, linkAnswer: Error | typeof entries): void {
+    mocks.readRuntimeDirectory.mockImplementation(
+      async (_context: unknown, _path: string, options: { access?: unknown }) => {
+        if (!options.access) {
+          throw containedError
+        }
+        if (linkAnswer instanceof Error) {
+          throw linkAnswer
+        }
+        return linkAnswer
+      }
+    )
+  }
+
+  beforeEach(() => {
+    mocks.readRuntimeDirectory.mockReset()
+  })
+
+  it('lists a project folder link that leads outside as one', async () => {
+    answerList(new Error(OUTSIDE), entries)
+
+    await expect(readUserOpenedDirectory(project, '/repo/linked', FOLLOW)).resolves.toEqual({
+      entries,
+      escapesWorktree: true
     })
+    expect(mocks.readRuntimeDirectory).toHaveBeenLastCalledWith(project, '/repo/linked', {
+      access: { kind: 'project-folder-link' }
+    })
+  })
+
+  it('never follows a link unless the caller allows it', async () => {
+    answerList(new Error(OUTSIDE), entries)
+
+    await expect(readUserOpenedDirectory(project, '/repo/linked', {})).rejects.toThrow(OUTSIDE)
+  })
+
+  it('keeps other failures and paths outside the project as they are', async () => {
+    answerList(new Error('ENOENT: no such directory'), entries)
+    await expect(readUserOpenedDirectory(project, '/repo/gone', FOLLOW)).rejects.toThrow('ENOENT')
+
+    answerList(new Error(OUTSIDE), entries)
+    await expect(readUserOpenedDirectory(project, '/elsewhere', FOLLOW)).rejects.toThrow(OUTSIDE)
+  })
+
+  it('shows why a link target cannot be listed', async () => {
+    answerList(new Error(OUTSIDE), new Error('EPERM: operation not permitted'))
+
+    await expect(readUserOpenedDirectory(project, '/repo/linked', FOLLOW)).rejects.toThrow('EPERM')
   })
 })

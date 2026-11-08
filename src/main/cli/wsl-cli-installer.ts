@@ -1,6 +1,7 @@
 import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { getDefaultWslDistro } from '../wsl'
-import { runWslProcess } from '../wsl/wsl-runner'
+import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
+import { runWslProcess } from '../wsl/execution/wsl-runner'
+import { describeWslProcessFailure } from '../wsl/execution/wsl-process-failure'
 import { CliInstaller } from './cli-installer'
 import {
   buildManagedLegacyRemoveCommand,
@@ -13,7 +14,7 @@ import {
   getWslLauncherMarker,
   parseManagedLauncherTarget
 } from './wsl-cli-scripts'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../shared/shell/launch/shell-argument-quoting'
 import { buildWslCliInstallCommand } from './wsl-cli-registration-command'
 import {
   buildWslCliStatus,
@@ -305,7 +306,7 @@ async function runWslCommand(
     throw new WslCliLoginPathUnavailableError(distro)
   }
   if (result.code !== 0) {
-    throw new Error(result.stderr.trim() || `WSL command failed with exit code ${result.code}.`)
+    throw new Error(describeWslProcessFailure(result))
   }
   return result.stdout
 }

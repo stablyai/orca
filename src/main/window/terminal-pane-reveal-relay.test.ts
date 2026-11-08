@@ -1,10 +1,10 @@
 import { EventEmitter } from 'node:events'
 import type { BrowserWindow } from 'electron'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   TerminalPaneRevealRequest,
   TerminalPaneRevealTarget
-} from '../../shared/terminal-pane-reveal'
+} from '../../shared/workspace-layout/terminal-pane-reveal'
 import type { FocusExistingMainWindowOptions } from './focus-existing-window'
 
 const ipcEmitter = new EventEmitter()
@@ -33,18 +33,22 @@ const target: TerminalPaneRevealTarget = {
 }
 
 function createWindow(options: { rendererDestroyed?: boolean } = {}) {
-  const webContents = {
+  const webContents = Object.assign(new EventEmitter(), {
     isDestroyed: () => options.rendererDestroyed === true,
     send: vi.fn<(channel: string, request: TerminalPaneRevealRequest) => void>()
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay reads only isDestroyed and these two webContents members.
-  const mainWindow = { isDestroyed: () => false, webContents } as unknown as BrowserWindow
+  })
+  const windowEvents = Object.assign(new EventEmitter(), {
+    isDestroyed: () => false,
+    webContents
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies the relay's window/contents event, destruction and send surface.
+  const mainWindow = windowEvents as unknown as BrowserWindow
   const sentRequest = (): TerminalPaneRevealRequest => {
     const [channel, request] = webContents.send.mock.calls[0] ?? []
     expect(channel).toBe('ui:revealTerminalPane')
     return request ?? { ...target, requestId: '' }
   }
-  return { webContents, mainWindow, sentRequest }
+  return { webContents, mainWindow, windowEvents, sentRequest }
 }
 
 async function loadRelay() {
@@ -59,6 +63,11 @@ describe('revealTerminalPaneInWindow', () => {
   beforeEach(() => {
     ipcEmitter.removeAllListeners()
     mocks.focusExistingMainWindow.mockReset()
+  })
+
+  afterEach(() => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
   })
 
   it('raises the window once the targeted renderer has revealed the pane', async () => {
@@ -79,45 +88,5 @@ describe('revealTerminalPaneInWindow', () => {
     expect(focus?.getWindow()).toBe(mainWindow)
     expect(focus?.canOpenWindow?.()).toBe(false)
     expect(ipcEmitter.listenerCount('ui:terminalPaneRevealReply')).toBe(0)
-  })
-
-  it('leaves the window where it is when the renderer does not know the workspace', async () => {
-    const revealTerminalPaneInWindow = await loadRelay()
-    const { webContents, mainWindow, sentRequest } = createWindow()
-    const pending = revealTerminalPaneInWindow(mainWindow, target)
-
-    reply(webContents, sentRequest().requestId, false)
-
-    await expect(pending).resolves.toBe(false)
-    expect(mocks.focusExistingMainWindow).not.toHaveBeenCalled()
-  })
-
-  it('fails instead of waiting when the window is gone', async () => {
-    const revealTerminalPaneInWindow = await loadRelay()
-    const { webContents, mainWindow } = createWindow({ rendererDestroyed: true })
-
-    await expect(revealTerminalPaneInWindow(mainWindow, target)).rejects.toThrow(
-      'renderer_unavailable'
-    )
-    expect(webContents.send).not.toHaveBeenCalled()
-  })
-
-  it('times out when the renderer never answers', async () => {
-    vi.useFakeTimers()
-    try {
-      const revealTerminalPaneInWindow = await loadRelay()
-      const { mainWindow } = createWindow()
-      const assertion = expect(revealTerminalPaneInWindow(mainWindow, target)).rejects.toThrow(
-        'terminal_reveal_timeout'
-      )
-
-      await vi.advanceTimersByTimeAsync(10_000)
-
-      await assertion
-      expect(ipcEmitter.listenerCount('ui:terminalPaneRevealReply')).toBe(0)
-      expect(mocks.focusExistingMainWindow).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

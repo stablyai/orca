@@ -1,14 +1,22 @@
 // Run the real bundle, stdio mux, installers, and HTTP ingest using node in place of wsl.exe.
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { delimiter, join } from 'node:path'
 import { createServer } from 'node:net'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { AgentHookServer } from './server'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { createManagedHookLocalFilesystem } from './managed-hook-local-filesystem.test-fixture'
-import { codexHookService } from '../codex/hook-service'
+import { codexHookService } from '../codex/hooks/installation/hook-service'
 
 const BUNDLE_DIR = join(process.cwd(), 'out', 'relay', 'wsl')
 const BUNDLE_JS = join(BUNDLE_DIR, 'wsl-agent-hook-relay.js')
@@ -37,10 +45,14 @@ describe.skipIf(process.platform === 'win32')(
 
     beforeAll(() => {
       if (!existsSync(BUNDLE_JS)) {
-        execFileSync(process.execPath, [join('config', 'scripts', 'build-wsl-guest.mjs')], {
-          cwd: process.cwd(),
-          stdio: 'ignore'
-        })
+        execFileSync(
+          process.execPath,
+          [join('config', 'scripts', 'remote-host-build', 'wsl-guest', 'build-wsl-guest.mjs')],
+          {
+            cwd: process.cwd(),
+            stdio: 'ignore'
+          }
+        )
       }
     }, 120_000)
 
@@ -53,6 +65,16 @@ describe.skipIf(process.platform === 'win32')(
 
     it('delivers a Claude hook POST from the live relay into ingestRemote and installs guest hooks', async () => {
       fakeHome = mkdtempSync(join('/tmp', 'wsl-live-home-'))
+      // Guest detection runs `claude --version`; stub it so the relay never runs the host's real CLI.
+      const agentBin = join(fakeHome, 'agent-bin')
+      mkdirSync(agentBin)
+      for (const [name, version] of [
+        ['claude', '2.1.0 (Claude Code)'],
+        ['codex', 'codex-cli 0.160.0']
+      ]) {
+        writeFileSync(join(agentBin, name), `#!/bin/sh\necho '${version}'\n`)
+        chmodSync(join(agentBin, name), 0o755)
+      }
       const preferredPort = await pickFreePort()
       const version = readFileSync(join(BUNDLE_DIR, '.version'), 'utf8').trim()
 
@@ -83,9 +105,12 @@ describe.skipIf(process.platform === 'win32')(
         listDistros: async () => ['LiveDistro'],
         spawnRelay: (_distro, env) => {
           child = spawn(process.execPath, [BUNDLE_JS], {
-            env: { ...env, HOME: fakeHome },
-            stdio: ['pipe', 'pipe', 'pipe']
-          }) as ChildProcessWithoutNullStreams
+            env: {
+              ...env,
+              HOME: fakeHome,
+              PATH: `${agentBin}${delimiter}${env.PATH ?? process.env.PATH ?? ''}`
+            }
+          })
           return child
         },
         runInstall: async () => {
@@ -108,7 +133,10 @@ describe.skipIf(process.platform === 'win32')(
           }
         }),
         warn: (message) => warns.push(message),
-        transientRetryDelayMs: 1
+        transientRetryDelayMs: 1,
+        // A bridge terminal stays open, so no relay idles out mid-test.
+        bridgePtyPresence: { count: () => 1, onChange: () => () => {} },
+        daemonBridgeSessions: async () => 'none' as const
       })
 
       manager.ensureForDistro('LiveDistro', codexHome)

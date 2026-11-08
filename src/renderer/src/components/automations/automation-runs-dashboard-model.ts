@@ -1,4 +1,7 @@
-import type { AutomationRun, AutomationRunStatus } from '../../../../shared/automations-types'
+import type {
+  AutomationRun,
+  AutomationRunStatus
+} from '../../../../shared/automations/history/automation-run'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationListRow } from './automation-list-row-identity'
@@ -74,7 +77,7 @@ export function buildAutomationRunsDashboardEntries(
       (runsByRowKey.get(row.key) ?? []).map((run) => ({
         key: `${row.key}:${run.id}`,
         hostKey: getAutomationRunsHostKey(row),
-        searchText: [row.automation.name, run.title, row.hostLabel].join('\n').toLocaleLowerCase(),
+        searchText: [row.automation.name, run.title, row.hostLabel].join('\n').toLowerCase(),
         row,
         run,
         scope: getAutomationRunsScope(row)
@@ -110,7 +113,7 @@ export function filterAutomationRunsDashboardEntries({
   query: string
   hostKeys: readonly string[]
 }): AutomationRunsDashboardEntry[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase()
+  const normalizedQuery = query.trim().toLowerCase()
   const selectedHosts = new Set(hostKeys)
   return entries.filter((entry) => {
     if (
