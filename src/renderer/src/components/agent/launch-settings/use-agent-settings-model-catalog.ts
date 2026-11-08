@@ -13,9 +13,9 @@ import {
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   subscribeHostModelCatalogForgotten
-} from '@/runtime/host-model-catalog-snapshots'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { structuredAgentSessionHostKey } from '@/runtime/structured-agent-session-host-capability'
+} from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { structuredAgentSessionHostKey } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useAppStore } from '@/store'
 
 const SETTINGS_LAUNCH = { newLaunch: true, seedsModel: true }

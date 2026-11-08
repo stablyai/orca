@@ -6,7 +6,7 @@ import {
   forgetHostModelCatalogSnapshots,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
-} from '@/runtime/host-model-catalog-snapshots'
+} from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { useAppStore } from '@/store'
 import { TooltipProvider } from '../../ui/tooltip'
 import { AgentLaunchChoiceEditor } from './AgentLaunchChoiceEditor'
@@ -14,7 +14,7 @@ import { AgentLaunchChoiceEditor } from './AgentLaunchChoiceEditor'
 const call = vi.hoisted(() => vi.fn())
 const menus = vi.hoisted(() => new Map<string, string[]>())
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: call
 }))
 vi.mock('./AgentChoiceMenu', () => ({
