@@ -10,10 +10,7 @@ import type {
 import { claimAgentSessionAttachmentsInTransaction } from '../agent-session-attachments/agent-session-attachment-claims'
 import type { JournalWriterOperation } from './journal-writer-command'
 import { AgentSessionJournalError, assertJournalFence } from './writing/journal-write-guards'
-import {
-  writeJournalDomainCurrentItem,
-  nextJournalDomainItemOrdinal
-} from './journal-domain-current-item'
+import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { selectJournalDomainSubmissionCard } from './journal-domain-submission-consume'
 import type {
   JournalDomainSubmissionCommit,
@@ -202,7 +199,6 @@ export function applyJournalDomainSubmission(
   if (!blocked) {
     result.items = writeJournalDomainCurrentItem(db, target, {
       item,
-      ordinal: nextJournalDomainItemOrdinal(db, target),
       hidden: false,
       ownerFence: input.fence
     })

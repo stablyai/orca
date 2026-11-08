@@ -1,6 +1,6 @@
 import {
-  journalDomainItemLifecycleColumns,
-  journalDomainItemReadColumns
+  JOURNAL_DOMAIN_ITEM_COLUMNS,
+  journalDomainItemColumns
 } from './journal-domain-item-read-columns'
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import Database from '../../sqlite/sync-database'
@@ -12,7 +12,6 @@ import type {
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { JournalSqlBatch } from './journal-sql-batch'
 import {
@@ -61,10 +60,11 @@ export function messageFixture(db = new Database(':memory:')) {
   }
   const seedItem = (item: AgentJournalRenderItem) => {
     const payload = JSON.stringify(item)
-    const metadata = journalDomainHistoryMetadata(item, payload)
+    const { metadata, values } = journalDomainItemColumns(item, payload)
     db.prepare(`INSERT INTO journal_items
     (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json,
-     root,subagent_row,subagent_group_key,turn_marker,wire_bytes,placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out,lifecycle_state,live_work,context_window,unverified_end,turn_completed_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+     placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})
+     VALUES(${Array.from({ length: 10 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')})`).run(
       target.sessionId,
       target.epoch,
       item.itemId,
@@ -74,14 +74,8 @@ export function messageFixture(db = new Database(':memory:')) {
       item.sequenceIndex ?? 0,
       1,
       payload,
-      metadata.root,
-      metadata.subagentRow,
-      metadata.subagentGroupKey,
-      metadata.turnMarker,
-      metadata.wireBytes,
       journalDomainItemPlacement(item),
-      ...journalDomainItemReadColumns(item),
-      ...journalDomainItemLifecycleColumns(item)
+      ...values
     )
     writeJournalDomainItemNames(
       db,

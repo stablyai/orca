@@ -1,3 +1,4 @@
+import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
   AgentJournalRenderItem,
@@ -63,21 +64,23 @@ export function applyJournalDomainContextCommand(
   db: Database.Database,
   target: Target,
   operation: JournalDomainContextOperation,
-  savedAt: number
+  savedAt: number,
+  stopSettle?: JournalStopSettleFact
 ): JournalDomainContextCommit {
   if (!db.isTransaction) {
     throw new Error('journal context command requires its writer transaction')
   }
   return operation.kind === 'context-clear'
-    ? clearJournalDomainContext(db, target, operation.boundary, savedAt)
-    : replaceJournalDomainContext(db, target, operation, savedAt)
+    ? clearJournalDomainContext(db, target, operation.boundary, savedAt, stopSettle)
+    : replaceJournalDomainContext(db, target, operation, savedAt, stopSettle)
 }
 
 function clearJournalDomainContext(
   db: Database.Database,
   target: Target,
   boundary: AgentSessionProviderContextBoundary,
-  savedAt: number
+  savedAt: number,
+  stopSettle?: JournalStopSettleFact
 ): JournalDomainContextCommit {
   const fence = boundary.afterFence
   const divider = applyJournalDomainItem(
@@ -94,7 +97,8 @@ function clearJournalDomainContext(
       },
       options: { fence, turnScope: { kind: 'thread' } }
     },
-    savedAt
+    savedAt,
+    stopSettle
   )
   const sequence = divider.cursor.sequence + 1
   const unsettled = db

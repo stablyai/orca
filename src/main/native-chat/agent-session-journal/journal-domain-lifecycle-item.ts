@@ -5,10 +5,7 @@ import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalLifecycleMutationInput } from './writing/journal-lifecycle-mutation'
 import { journalLifecycleMutationItemId } from './writing/journal-lifecycle-mutation'
 import { readJournalDomainDispatchItem } from './journal-domain-dispatch-placement'
-import {
-  writeJournalDomainCurrentItem,
-  nextJournalDomainItemOrdinal
-} from './journal-domain-current-item'
+import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { isProviderUserMessageEcho } from './projection/journal-item-echo'
 import { journalItemRevisionValue } from './projection/journal-item-fold'
 import { journalRenderItem } from './projection/journal-render-item'
@@ -93,7 +90,6 @@ export function writeJournalDomainLifecycleItem(
   const items = writeJournalDomainCurrentItem(db, target, {
     item: previous ? journalItemRevisionValue(previous.item, rendered) : rendered,
     ...(previous ? { previous } : {}),
-    ordinal: previous?.ordinal ?? nextJournalDomainItemOrdinal(db, target),
     hidden: previous?.hidden ?? false,
     ownerFence: row.ownerFence!,
     executionOwner: previous?.executionOwner,

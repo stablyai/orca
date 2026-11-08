@@ -1,11 +1,10 @@
 import { insertJournalDomainImportedSubmission } from './journal-domain-import-submissions'
 import {
-  journalDomainItemLifecycleColumns,
-  journalDomainItemReadColumns
+  JOURNAL_DOMAIN_ITEM_COLUMNS,
+  journalDomainItemColumns
 } from './journal-domain-item-read-columns'
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import type Database from '../../sqlite/sync-database'
-import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
@@ -53,18 +52,16 @@ export function insertJournalDomainImportPage(
     case 'items': {
       const insert =
         db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
-        sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,root,subagent_row,
-        subagent_group_key,turn_marker,wire_bytes,turn_item_id,original_stop_note_json,
+        sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,original_stop_note_json,
         queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id,
-        placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out,lifecycle_state,live_work,context_window,unverified_end,turn_completed_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
+        placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})
+        VALUES(${Array.from({ length: 18 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')}) ON CONFLICT DO NOTHING`)
       for (const {
         ordinal,
         ownerFence,
         executionOwner,
         hidden,
         item,
-        turnItemId,
         originalStopNoteJson,
         queueCommandTurn,
         queueFailedOutcome,
@@ -73,7 +70,7 @@ export function insertJournalDomainImportPage(
         queueFailureReportTurnItemId
       } of page.rows) {
         const payload = JSON.stringify(item)
-        const metadata = journalDomainHistoryMetadata(item, payload)
+        const { metadata, values } = journalDomainItemColumns(item, payload)
         const result = insert.run(
           ...prefix,
           item.itemId,
@@ -85,12 +82,6 @@ export function insertJournalDomainImportPage(
           executionOwner,
           payload,
           Number(hidden),
-          metadata.root,
-          metadata.subagentRow,
-          metadata.subagentGroupKey,
-          metadata.turnMarker,
-          metadata.wireBytes,
-          turnItemId,
           originalStopNoteJson,
           Number(queueCommandTurn),
           Number(queueFailedOutcome),
@@ -98,8 +89,7 @@ export function insertJournalDomainImportPage(
           queueFailureWitnessedThrough,
           queueFailureReportTurnItemId,
           journalDomainItemPlacement(item),
-          ...journalDomainItemReadColumns(item),
-          ...journalDomainItemLifecycleColumns(item)
+          ...values
         )
         if (Number(result.changes) > 0) {
           writeJournalDomainItemNames(

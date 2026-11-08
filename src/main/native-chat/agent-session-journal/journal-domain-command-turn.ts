@@ -1,3 +1,4 @@
+import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type Database from '../../sqlite/sync-database'
 import {
   agentJournalItemKey,
@@ -21,10 +22,7 @@ import {
   type JournalDomainSubmissionTarget
 } from './journal-domain-submission-records'
 import { readJournalDomainDispatchItem } from './journal-domain-dispatch-placement'
-import {
-  nextJournalDomainItemOrdinal,
-  writeJournalDomainCurrentItem
-} from './journal-domain-current-item'
+import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import { journalItemRevisionValue } from './projection/journal-item-fold'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import { spendJournalSqlCommandCards } from './journal-sql-message-effects'
@@ -45,7 +43,8 @@ export function applyJournalDomainCommandTurn(
   db: Database.Database,
   target: JournalDomainSubmissionTarget,
   operation: JournalDomainCommandTurnOperation,
-  savedAt: number
+  savedAt: number,
+  stopSettle?: JournalStopSettleFact
 ): JournalDomainInputCommit<JournalCommandOpenResult | undefined> {
   if (!db.isTransaction) {
     throw new Error('journal command turn requires its writer transaction')
@@ -109,7 +108,8 @@ export function applyJournalDomainCommandTurn(
             turnScope: AGENT_JOURNAL_THREAD_SCOPE
           }
         },
-        savedAt
+        savedAt,
+        stopSettle
       )
       const step = {
         ...commit,
@@ -180,7 +180,7 @@ export function applyJournalDomainCommandTurn(
           ...writeJournalDomainCurrentItem(db, target, {
             item: stored ? journalItemRevisionValue(stored.item, next) : next,
             ...(stored ? { previous: stored } : {}),
-            ordinal: stored?.ordinal ?? nextJournalDomainItemOrdinal(db, target),
+            stopSettle,
             hidden: stored?.hidden ?? false,
             ownerFence: stored?.ownerFence ?? dispatch.fence,
             executionOwner: stored?.executionOwner,

@@ -91,7 +91,13 @@ export class JournalSqlCommand {
       case 'command-settle': {
         const result =
           operation.kind === 'command-open' || operation.kind === 'command-settle'
-            ? applyJournalDomainCommandTurn(this.db, target, operation, savedAt)
+            ? applyJournalDomainCommandTurn(
+                this.db,
+                target,
+                operation,
+                savedAt,
+                command.facts?.stopSettle
+              )
             : applyJournalDomainInputRecovery(
                 this.db,
                 target,
@@ -135,7 +141,8 @@ export class JournalSqlCommand {
                   agentSessionJournalProviderHandle(command.facts!.identity)
               }
             : operation,
-          savedAt
+          savedAt,
+          command.facts?.stopSettle
         )
         return finishJournalSqlCommand(
           this.db,

@@ -1,12 +1,11 @@
 import {
-  journalDomainItemReadColumns,
-  journalDomainItemLifecycleColumns
+  JOURNAL_DOMAIN_ITEM_COLUMNS,
+  journalDomainItemColumns
 } from './journal-domain-item-read-columns'
 import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { journalDomainStopNote, refreshJournalDomainStopNotes } from './journal-domain-stop-notes'
 import {
@@ -21,7 +20,7 @@ import { observeJournalDomainTurnScope } from './journal-domain-turn-scope'
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
   previous?: { item: AgentJournalRenderItem; ordinal: number; hidden: boolean }
-  ordinal: number
+  ordinal?: number
   hidden: boolean
   ownerFence: number
   executionOwner?: number | null
@@ -29,7 +28,7 @@ export type JournalDomainCurrentItemWrite = {
   stopSettle?: JournalStopSettleFact
 }
 
-export function nextJournalDomainItemOrdinal(
+function nextJournalDomainItemOrdinal(
   db: Database.Database,
   target: { sessionId: string; epoch: string }
 ): number {
@@ -54,6 +53,8 @@ export function writeJournalDomainCurrentItem(
     throw new Error('journal item persistence requires its writer transaction')
   }
   const prefix = [target.sessionId, target.epoch] as const
+  const ordinal =
+    input.ordinal ?? input.previous?.ordinal ?? nextJournalDomainItemOrdinal(db, target)
   const body = normalizeJournalDomainItemBody(
     db,
     target,
@@ -85,29 +86,22 @@ export function writeJournalDomainCurrentItem(
           .get(...prefix, next.itemId)
       : undefined
   const payload = JSON.stringify(next)
-  const metadata = journalDomainHistoryMetadata(next, payload)
+  const { metadata, values } = journalDomainItemColumns(next, payload)
   db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,execution_owner,payload_json,
-      hidden,root,subagent_row,subagent_group_key,turn_marker,wire_bytes,turn_item_id,original_stop_note_json,
-      queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id,
-      placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out,lifecycle_state,live_work,context_window,unverified_end,turn_completed_at)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
+      hidden,original_stop_note_json,queue_command_turn,queue_failed_outcome,queue_failed_at,
+      queue_failure_witnessed_through,queue_failure_report_turn_item_id,placement_json,${JOURNAL_DOMAIN_ITEM_COLUMNS.join(',')})
+    VALUES(${Array.from({ length: 18 + JOURNAL_DOMAIN_ITEM_COLUMNS.length }, () => '?').join(',')})
+    ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
       ordinal=excluded.ordinal, revision=excluded.revision, sequence=excluded.sequence, sequence_index=excluded.sequence_index,
       owner_fence=excluded.owner_fence, execution_owner=excluded.execution_owner, payload_json=excluded.payload_json,
-      hidden=excluded.hidden, root=excluded.root, subagent_row=excluded.subagent_row, subagent_group_key=excluded.subagent_group_key,
-      turn_marker=excluded.turn_marker, wire_bytes=excluded.wire_bytes,
-      turn_item_id=excluded.turn_item_id, original_stop_note_json=excluded.original_stop_note_json,
+      hidden=excluded.hidden, original_stop_note_json=excluded.original_stop_note_json,
       queue_command_turn=excluded.queue_command_turn, queue_failed_outcome=excluded.queue_failed_outcome,
       queue_failed_at=excluded.queue_failed_at, queue_failure_witnessed_through=excluded.queue_failure_witnessed_through,
-      queue_failure_report_turn_item_id=excluded.queue_failure_report_turn_item_id,
-      placement_json=excluded.placement_json,kind=excluded.kind,message_role=excluded.message_role,
-      turn_id=excluded.turn_id,opener_item_id=excluded.opener_item_id,context_clear=excluded.context_clear,
-      goal_transition=excluded.goal_transition,producer_agent_id=excluded.producer_agent_id,
-      producer_parent_ref=excluded.producer_parent_ref,producer_attempt=excluded.producer_attempt,
-      prompt=excluded.prompt,signed_out=excluded.signed_out,lifecycle_state=excluded.lifecycle_state,live_work=excluded.live_work,
-      context_window=excluded.context_window,unverified_end=excluded.unverified_end,turn_completed_at=excluded.turn_completed_at`).run(
+      queue_failure_report_turn_item_id=excluded.queue_failure_report_turn_item_id,placement_json=excluded.placement_json,
+      ${JOURNAL_DOMAIN_ITEM_COLUMNS.map((column) => `${column}=excluded.${column}`).join(',')}`).run(
     ...prefix,
     next.itemId,
-    input.ordinal,
+    ordinal,
     next.revision,
     next.sequence,
     next.sequenceIndex ?? 0,
@@ -115,12 +109,6 @@ export function writeJournalDomainCurrentItem(
     input.executionOwner ?? null,
     payload,
     Number(input.hidden),
-    metadata.root,
-    metadata.subagentRow,
-    metadata.subagentGroupKey,
-    metadata.turnMarker,
-    metadata.wireBytes,
-    stopNote.turnItemId,
     stopNote.originalStopNoteJson,
     failure.commandTurn,
     failure.failedOutcome,
@@ -128,14 +116,13 @@ export function writeJournalDomainCurrentItem(
     failure.witnessedThrough,
     failure.reportTurnItemId,
     journalDomainItemPlacement(next),
-    ...journalDomainItemReadColumns(next),
-    ...journalDomainItemLifecycleColumns(next)
+    ...values
   )
   writeJournalDomainItemNames(
     db,
     target,
     next,
-    { ordinal: input.ordinal, hidden: input.hidden },
+    { ordinal, hidden: input.hidden },
     metadata.namedSubagentIds,
     input.previous
   )

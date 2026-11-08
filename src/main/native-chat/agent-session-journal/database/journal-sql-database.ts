@@ -149,15 +149,17 @@ export class JournalSqlDatabase {
         }
         epoch = founded
       }
-      const first = await this.readers.domainHistory({
+      const head = await this.readers.point({
         sessionId: identity.sessionId,
-        direction: 'hydrate'
+        operation: { kind: 'metadata' }
       })
+      if (head.kind !== 'metadata') {
+        throw new Error('journal reader returned no opening head')
+      }
       const target = { sessionId: identity.sessionId, epoch, ownerToken: randomUUID() }
-      const cursor = first.page.liveCursor ?? first.page.window.nextCursor
       const commit: JournalWriterCommit = {
-        cursor,
-        value: { epoch, sequence: cursor.sequence },
+        cursor: head.cursor,
+        value: head.physicalCursor,
         inputChanged: false,
         items: [],
         keys: [],

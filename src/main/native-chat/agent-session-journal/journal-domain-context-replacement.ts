@@ -1,3 +1,4 @@
+import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournalProviderHandle } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -16,10 +17,7 @@ import type { AgentJournalRenderItem } from '../../../shared/agent-session/journ
 import type { AgentJournalEpochReason } from './durable-rows/journal-row-schema'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import type { JournalReplacementItem } from './context-epochs/journal-epoch-replacement'
-import {
-  nextJournalDomainItemOrdinal,
-  writeJournalDomainCurrentItem
-} from './journal-domain-current-item'
+import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 import {
   journalDomainEventItem,
   removeJournalDomainItem,
@@ -80,7 +78,8 @@ export function replaceJournalDomainContext(
   db: Database.Database,
   target: Target,
   operation: JournalDomainContextReplacement,
-  savedAt: number
+  savedAt: number,
+  stopSettle?: JournalStopSettleFact
 ): JournalDomainContextCommit {
   const prefix = [target.sessionId, target.epoch] as const
   const head = readJournalDomainContextHead(db, target)
@@ -231,7 +230,7 @@ export function replaceJournalDomainContext(
             }
           }
         : {}),
-      ordinal: stored ? Number(stored.ordinal) : nextJournalDomainItemOrdinal(db, target),
+      stopSettle,
       hidden: Boolean(stored?.hidden),
       writtenSequence: sequence,
       ownerFence: item.ownerFence,

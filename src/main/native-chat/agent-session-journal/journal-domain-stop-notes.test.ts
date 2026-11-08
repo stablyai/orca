@@ -102,7 +102,7 @@ it('commits Stop display revisions with the turn, catches up by ordinary identit
     db
       .prepare('SELECT turn_item_id,original_stop_note_json FROM journal_items WHERE item_id=?')
       .get(noteId)
-  ).toEqual({ turn_item_id: null, original_stop_note_json: null })
+  ).toEqual({ turn_item_id: turnId, original_stop_note_json: null })
   expect(turn('interrupted').items.map((value) => value.itemId)).toEqual([turnId])
 })
 

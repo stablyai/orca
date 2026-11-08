@@ -6,6 +6,7 @@ import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-
 import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { claudeAgentRowFacts } from '../../claude/claude-subagent-journaled-identities'
+import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { journalItemLifecycleState } from './journal-item-status-metadata'
 import { lostLiveWorkJournalBody } from './item-lifecycle/journal-subagent-liveness'
 import { isUnverifiedEndAgentJournalToolCall } from '../../../shared/agent-journal-tool-call-lifecycle'
@@ -56,7 +57,7 @@ export function journalDomainItemReadColumns(
     body.kind,
     body.kind === 'message' ? body.role : null,
     turn?.turnId ?? null,
-    body.kind === 'turn' ? (body.userItemId ?? null) : null,
+    turn?.userItemId ?? null,
     Number(isAgentSessionContextClear(body)),
     Number(currentAgentSessionThreadGoalSourceBySequence([item]) !== undefined),
     producer?.agentId ?? null,
@@ -73,4 +74,47 @@ export function journalDomainItemReadColumns(
         readWholeAgentSessionFailureFact(body.failure)?.kind === 'notSignedIn'
     )
   ]
+}
+
+export const JOURNAL_DOMAIN_ITEM_COLUMNS = [
+  'root',
+  'subagent_row',
+  'subagent_group_key',
+  'turn_marker',
+  'wire_bytes',
+  'turn_item_id',
+  'kind',
+  'message_role',
+  'turn_id',
+  'opener_item_id',
+  'context_clear',
+  'goal_transition',
+  'producer_agent_id',
+  'producer_parent_ref',
+  'producer_attempt',
+  'prompt',
+  'signed_out',
+  'lifecycle_state',
+  'live_work',
+  'context_window',
+  'unverified_end',
+  'turn_completed_at'
+] as const
+
+/** One payload projection supplies import, current writes and derived Stop revisions. */
+export function journalDomainItemColumns(item: AgentJournalRenderItem, payload: string) {
+  const metadata = journalDomainHistoryMetadata(item, payload)
+  return {
+    metadata,
+    values: [
+      metadata.root,
+      metadata.subagentRow,
+      metadata.subagentGroupKey,
+      metadata.turnMarker,
+      metadata.wireBytes,
+      item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null,
+      ...journalDomainItemReadColumns(item),
+      ...journalDomainItemLifecycleColumns(item)
+    ]
+  }
 }
