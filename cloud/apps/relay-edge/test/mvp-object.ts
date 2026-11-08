@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: one end-to-end suite against a running Worker; the checks share keys, hosts and sockets in order. */
 // Phase 2 checks: the edge on the object backend (credential store on each HostRelay's own SQLite,
 // assignments pushed by the director over signed admin calls). No Postgres. Drives the SHIPPED
 // desktop control client and the shipped phone hello parser in local workerd.
@@ -6,142 +5,41 @@
 // Against a deployed phase-2 Worker (test JWKS = spike/.keys.json, test signing key from a file):
 //   MVP_URL=https://<worker> MVP_KEY_FILE=<path> MVP_ISSUER=<ADMIN_ISSUER> npx tsx test/mvp-object.ts
 import { spawn, type ChildProcess } from 'node:child_process'
-import { createHash, randomBytes } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
 import { DatabaseSync } from 'node:sqlite'
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SignJWT, exportJWK, generateKeyPair, importJWK, type KeyLike } from 'jose'
-import nacl from 'tweetnacl'
+import { exportJWK, generateKeyPair, importJWK, type KeyLike } from 'jose'
 import WebSocket from 'ws'
-import { RelayControlClient } from '../../../../src/main/runtime/mobile-cloud-relay/relay-control-client'
-import { CloudRelayTransport } from '../../../../src/main/runtime/rpc/relay-transport'
 import { RelayPhoneHelloSchema } from '../../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
-
-const PORT = 8789
-const REMOTE = process.env.MVP_URL?.replace(/\/$/, '')
-const ORIGIN = REMOTE ?? `http://127.0.0.1:${PORT}`
-const WS_ORIGIN = ORIGIN.replace(/^http/, 'ws')
-const SIGNING_KEY = process.env.MVP_KEY_FILE ? readFileSync(process.env.MVP_KEY_FILE, 'utf8').trim() : randomBytes(36).toString('base64url')
-const DIRECTOR = process.env.MVP_ISSUER ?? 'https://director.test.invalid'
-const ERASE_KEY = randomBytes(36).toString('base64url')
-const ERASER = 'https://api.erasure.test.invalid'
-const ISSUER = 'https://auth.test.invalid'
-const EPOCH = 7
-const USER = 'user-mvp'
-
-const results: { name: string; ok: boolean; detail: string }[] = []
-function record(name: string, ok: boolean, detail = ''): void {
-  results.push({ name, ok, detail })
-  console.log(`${ok ? 'PASS' : 'FAIL'} ${name} ${detail}`)
-}
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-const b64url = (b: Uint8Array) => Buffer.from(b).toString('base64url')
-const sha = (s: string) => createHash('sha256').update(s).digest('base64url')
-async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
-  const end = Date.now() + ms
-  while (Date.now() < end) {
-    if (cond()) { return true }
-    await sleep(25)
-  }
-  return cond()
-}
-
-type Host = { relayHostId: string; keypair: { publicKey: Uint8Array; secretKey: Uint8Array; publicKeyB64: string } }
-
-function newHost(): Host {
-  const box = nacl.box.keyPair()
-  return {
-    relayHostId: createHash('sha256').update(box.publicKey).digest('base64url').slice(0, 16),
-    keypair: { publicKey: box.publicKey, secretKey: box.secretKey, publicKeyB64: Buffer.from(box.publicKey).toString('base64') }
-  }
-}
-
-async function mint(key: KeyLike, relayHostId: string, issuer = ISSUER): Promise<string> {
-  return new SignJWT({ purpose: 'host-control', prof: `prof-${USER}`, relayHostId })
-    .setProtectedHeader({ alg: 'ES256', kid: REMOTE ? 'spike' : 'mvp' })
-    .setSubject(USER)
-    .setIssuer(issuer)
-    .setAudience('orca-relay')
-    .setIssuedAt()
-    .setExpirationTime('5m')
-    .sign(key)
-}
-
-function control(host: Host, jwt: string, epoch = EPOCH) {
-  const events = { closes: [] as number[], opens: [] as { connId: string }[] }
-  let transport: CloudRelayTransport | null = null
-  const client = new RelayControlClient({
-    cellUrl: ORIGIN,
-    relayJwt: jwt,
-    relayHostId: host.relayHostId,
-    assignmentEpoch: epoch,
-    identity: { userId: USER, profileId: `prof-${USER}`, organizationId: '' },
-    keypair: host.keypair as never,
-    appVersion: 'mvp',
-    onConnectionOpen: (m) => {
-      events.opens.push(m)
-      void transport?.openConnection(m)
-    },
-    onDrain: () => {},
-    onClose: (code) => events.closes.push(code),
-    createSocket: (url, token) =>
-      new WebSocket(url, {
-        headers: { authorization: `Bearer ${token}`, 'x-orca-host-capabilities': 'pending-conn-details,idle-regional-rehome-v1' },
-        perMessageDeflate: false,
-        maxPayload: 64 * 1024
-      })
-  })
-  return {
-    client,
-    events,
-    attach(generation: number) {
-      transport = new CloudRelayTransport({ cellUrl: ORIGIN, relayHostId: host.relayHostId, generation })
-      transport.onMessage(((m: string | Uint8Array, reply: (r: string | Uint8Array) => void) => reply(m)) as never)
-      return transport
-    }
-  }
-}
-
-function phone(relayHostId: string, credential: string) {
-  const ws = new WebSocket(`${WS_ORIGIN}/v1/connect/${relayHostId}`, { perMessageDeflate: false })
-  const state = { hello: null as Record<string, unknown> | null, closed: null as number | null, reason: '' }
-  ws.on('open', () => ws.send(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential })))
-  ws.on('message', (raw) => {
-    if (state.hello === null) { state.hello = JSON.parse(raw.toString()) }
-  })
-  ws.on('close', (code, reason) => {
-    state.closed = code
-    state.reason = reason.toString()
-  })
-  ws.on('error', () => {})
-  return { ws, state }
-}
-
-async function phoneOutcome(relayHostId: string, credential: string) {
-  const p = phone(relayHostId, credential)
-  await waitFor(() => p.state.hello !== null || p.state.closed !== null, 8000)
-  return p
-}
-
-
-// ---- director side: the signed admin calls (as the director will make them) ----
-async function adminCall(op: string, body: unknown, opts: { key?: string; issuer?: string; tokenOp?: string; tokenBody?: string } = {}) {
-  const raw = JSON.stringify(body)
-  const token = await new SignJWT({ purpose: 'edge-admin', op: opts.tokenOp ?? op, bodySha256: sha(opts.tokenBody ?? raw) })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuer(opts.issuer ?? DIRECTOR)
-    .setAudience('orca-relay-edge-admin')
-    .setIssuedAt()
-    .setExpirationTime('1m')
-    .sign(new TextEncoder().encode(opts.key ?? SIGNING_KEY))
-  const r = await fetch(`${ORIGIN}/__admin/${op}`, { method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' }, body: raw })
-  const text = await r.text()
-  return { status: r.status, json: text ? (JSON.parse(text) as Record<string, unknown>) : null }
-}
-const assign = (relayHostId: string, cellId: string, assignmentEpoch: number, devices?: unknown[]) =>
-  adminCall('assign', { userId: USER, relayHostId, cellId, assignmentEpoch, ...(devices ? { devices } : {}) })
+import {
+  DIRECTOR,
+  EPOCH,
+  ERASE_KEY,
+  ERASER,
+  ISSUER,
+  ORIGIN,
+  PORT,
+  SIGNING_KEY,
+  REMOTE,
+  USER,
+  WS_ORIGIN,
+  adminCall,
+  assign,
+  b64url,
+  control,
+  mint,
+  newHost,
+  phoneOutcome,
+  record,
+  results,
+  sha,
+  sleep,
+  waitFor,
+  type Host
+} from './harness-mvp-object'
 
 async function mainRemote(): Promise<void> {
   // Deployed Worker: inline test JWKS (spike keys), no issuer check, no local dev server.

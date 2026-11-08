@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: the splice object pairs the phone and data sockets of one connection; forwarding, guards, counters and teardown share the same attachments. */
 // Pooled splice objects: each host has up to SPLICE_SLOTS of them (`<relayHostId>.<slot>`), reused
 // across phone connects so a connect never pays for creating a new object. An object holds the
 // phone socket and host data socket of every splice in its slot (normally one; more only when the
@@ -13,23 +12,7 @@ import { MESSAGE_TOO_BIG, frameOver, timingSafeEqualStr } from './bytes'
 import type { Env } from './env'
 import { metric } from './metrics'
 import { parseConnId } from './splice-slot'
-
-type State = {
-  connId: string
-  relayHostId: string
-  phase: 'auth' | 'pending' | 'spliced'
-  deadline: number
-  connTicket?: string
-  generation?: number
-}
-type SocketKind = 'phone' | 'data'
-// Per-direction flood guard: bytes forwarded to a peer since that peer last sent anything.
-// place: client ingress '<continent>/<colo>', for metrics.
-// sentBytes/sentFrames: what this socket sent, kept on the attachment so it survives hibernation.
-type GuardAttachment = { silentBytes: number; windowStart: number; place?: string; sentBytes?: number; sentFrames?: number }
-
-const NO_DEADLINE = Number.MAX_SAFE_INTEGER
-const KEY_PREFIX = 'splice:'
+import { KEY_PREFIX, NO_DEADLINE, type GuardAttachment, type SocketKind, type State } from './splice-state'
 
 export class SpliceRelay extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
