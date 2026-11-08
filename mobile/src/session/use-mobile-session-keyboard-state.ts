@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useRef } from 'react'
-import { useSoftKeyboard } from '../platform/keyboard-occlusion'
+import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 import { useTerminalViewportRefit } from '../terminal/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../terminal/terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
@@ -19,7 +19,6 @@ export type MobileSessionKeyboardScope = Pick<
   | 'hostId'
   | 'router'
   | 'setCustomKeys'
-  | 'setKeyboardHeight'
   | 'setShowCustomKeyModal'
   | 'showNativeChatRef'
   | 'subscribeToTerminal'
@@ -54,7 +53,6 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     tabLayoutsRef,
     setCustomKeys,
     setShowCustomKeyModal,
-    setKeyboardHeight,
     deviceTokenRef,
     clientRef,
     viewportRef,
@@ -91,14 +89,14 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     subscribeToTerminal
   })
 
-  // Use the keyboard seam because web Keyboard emits nothing; publish visibility before height so refits defer while it opens.
-  const softKeyboard = useSoftKeyboard()
+  // Use the keyboard seam because web Keyboard emits nothing; visibility goes out with the event, before the lift renders, so refits defer while it opens.
   useEffect(() => {
-    notifyKeyboardVisibility(softKeyboard.visible)
-  }, [notifyKeyboardVisibility, softKeyboard.visible])
-  useEffect(() => {
-    setKeyboardHeight(softKeyboard.height)
-  }, [setKeyboardHeight, softKeyboard.height])
+    notifyKeyboardVisibility(currentSoftKeyboardHeight() > 0)
+    return subscribeSoftKeyboard(
+      () => notifyKeyboardVisibility(true),
+      () => notifyKeyboardVisibility(false)
+    )
+  }, [notifyKeyboardVisibility])
 
   const heldTabStripRevealRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cancelHeldTabStripReveal = useCallback(() => {

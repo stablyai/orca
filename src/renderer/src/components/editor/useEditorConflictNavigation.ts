@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getNextConflictNavigationIndex } from './ConflictComponents'
 import {
   findGitConflictBlocks,

@@ -1,8 +1,8 @@
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
-import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
-import { useManagedRuntimeInstall } from '@/runtime/use-managed-runtime-install'
+import { antigravityChatSignInRunning } from '@/runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
+import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
 import { useAntigravityChatSignIn } from '../../provider-accounts/AntigravityChatSignInRow'
 import {
@@ -15,6 +15,8 @@ import {
 } from '../../settings/accounts/scope/accounts-pane-runtime'
 import type { AgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
+import { structuredChatUnavailableOnPlatform } from '../../../../../shared/agent-session/structured-chat-platform-support'
+import { isWindowsDesktopClient } from '@/lib/windows-path-access'
 
 // The chat choice is this computer's, so the downloaded chat programs are too.
 const CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
@@ -53,6 +55,24 @@ export function AgentOpensAsControl({
   )
 }
 
+/** This desktop's chat host lacks the agent's chat; false on web clients, whose host OS is unknown. */
+export function chatUnavailableOnThisDesktop(agent: string): boolean {
+  return structuredChatUnavailableOnPlatform(agent, isWindowsDesktopClient() ? 'win32' : null)
+}
+
+/** Why an agent opens in a terminal on a Windows host; the Chat | CLI choice still routes remote hosts. */
+export function ChatUnavailableOnWindowsNote({ label }: { label: string }): React.JSX.Element {
+  return (
+    <p className="text-xs text-muted-foreground">
+      {translate(
+        'settings.agents.chatUnavailableOnWindows',
+        "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
+        { value0: label }
+      )}
+    </p>
+  )
+}
+
 /** The program Orca downloads for an agent's chats, apart from its CLI; mounted only while its row is open. */
 export function AgentChatRuntimeArea({
   agent,
@@ -66,6 +86,9 @@ export function AgentChatRuntimeArea({
   const signIn = useAntigravityChatSignIn(
     agent === 'antigravity' && runtime.kind === 'active' ? CHAT_HOST : null
   )
+  if (chatUnavailableOnThisDesktop(agent)) {
+    return <ChatUnavailableOnWindowsNote label={label} />
+  }
   if (runtime.kind !== 'active') {
     return null
   }

@@ -429,16 +429,9 @@ describe('actual stream result partitions', () => {
           const outer = ['outer-refused', 'outer-refused-no-message', 'method-not-found'].includes(
             partition
           )
+          // Workspace options reads: one at start, one more when the replayed ready after the cutover arrives intact.
           const expected =
-            partition === 'normal'
-              ? [5, 4]
-              : outer && position !== 'last'
-                ? [2, 2]
-                : failed
-                  ? [2, 2]
-                  : position === 'middle'
-                    ? [4, 4]
-                    : [4, 3]
+            partition === 'normal' || (position === 'middle' && !outer && !failed) ? 2 : 1
           if (failed) {
             expect('error' in run.outcome).toBe(true)
             if (!('error' in run.outcome) || !(run.outcome.error instanceof RecordingStreamGuard)) {
@@ -456,8 +449,8 @@ describe('actual stream result partitions', () => {
               { cutover: { status: 'fulfilled' } }
             )
             expect(run.outcome.recording.checkpoints.at(-1)!.observation.state).toEqual({
-              fetchWorktrees: expected[0],
-              fetchRepoMetadata: expected[1],
+              refreshWorktrees: 0,
+              syncViewSettings: expected,
               running: false
             })
           }
@@ -508,12 +501,10 @@ describe('actual stream result partitions', () => {
             expect(frames).toHaveLength(2 + unsubscribeIds.length)
           }
           expect(run.requests).toEqual([])
-          expect(run.effects.filter((effect) => effect.name === 'fetchWorktrees')).toHaveLength(
-            expected[0]!
+          expect(run.effects.filter((effect) => effect.name === 'syncViewSettings')).toHaveLength(
+            expected
           )
-          expect(run.effects.filter((effect) => effect.name === 'fetchRepoMetadata')).toHaveLength(
-            expected[1]!
-          )
+          expect(run.effects.filter((effect) => effect.name === 'refreshWorktrees')).toHaveLength(0)
           if (mode !== 'native') {
             const posted = run.pairs[0]!.toShell.map((json) => JSON.parse(json))
             expect(posted.filter((frame) => frame.type === 'subscribe')).toHaveLength(1)
@@ -533,8 +524,8 @@ describe('actual stream result partitions', () => {
               expect(run.outcome.error).toBeInstanceOf(RecordingStreamGuard)
               expect(run.actions).toEqual(['start'])
               expect(run.reads.at(-1)).toEqual({
-                fetchWorktrees: 2,
-                fetchRepoMetadata: 2,
+                refreshWorktrees: 0,
+                syncViewSettings: 1,
                 running: true
               })
               break

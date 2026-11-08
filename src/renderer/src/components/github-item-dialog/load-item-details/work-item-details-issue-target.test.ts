@@ -7,7 +7,7 @@ import {
   workItemDetailsCache
 } from './work-item-details-cache'
 
-vi.mock('@/lib/github-work-item-details-cache-events', () => ({
+vi.mock('@/lib/work-items/github/github-work-item-details-cache-events', () => ({
   onGitHubWorkItemDetailsCacheMutation: vi.fn()
 }))
 

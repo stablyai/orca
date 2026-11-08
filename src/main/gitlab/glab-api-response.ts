@@ -32,7 +32,7 @@ export function parseGlabPaginationHeader(
     return undefined
   }
   const parsed = Number.parseInt(value, 10)
-  return Number.isFinite(parsed) && parsed >= minimum ? parsed : undefined
+  return Number.isSafeInteger(parsed) && parsed >= minimum ? parsed : undefined
 }
 
 /** A non-list body carrying no GitLab error text — opaque data, so there is nothing to classify. */

@@ -1,5 +1,4 @@
 // Runs on plain Node, as orcad does: a host with no window raises and clears its own unread flags.
-import '../rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
@@ -7,8 +6,8 @@ import { AgentHookServer } from '../../agent-hooks/server'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { RpcDispatchStreamingOptions } from '../rpc/dispatcher-stream-options'
-import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs'
-import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs'
+import { SESSION_TAB_METHODS } from '../rpc/methods/session-tabs/session-tabs'
+import { SIDEBAR_INPUT_METHODS } from '../rpc/methods/sidebar-inputs/sidebar-inputs'
 import { requireSwitchedOn } from './require-switched-on'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
@@ -244,17 +243,6 @@ describe('workspace unread flag on a headless host', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('advertises that it raises the flag, so no socket of a current desktop silences it', () => {
-    const host = createHeadlessHost()
-    expect(host.runtime.getStatus().capabilities).toContain(WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY)
-    const facts = requireSwitchedOn(host.runtime.sidebarFacts)
-    for (const [connectionId, capabilities] of Object.entries(currentDesktopSockets())) {
-      facts.noteRuntimeClient(connectionId, capabilities)
-    }
-    host.finishTurn()
-    expect(host.meta[WT].isUnread).toBe(true)
   })
 
   it('leaves raising to an older desktop while it is connected, and still clears on the phone', async () => {

@@ -14,6 +14,7 @@ import {
   listedModels,
   record
 } from './structured/launch/claude-structured-model-catalog'
+import { claudeCatalogSignedOut } from './claude-model-catalog-signed-out'
 import {
   claudeFastModeSupport,
   wireClaudeModels
@@ -23,6 +24,10 @@ import { readClaudeControlResponses } from './claude-control-responses'
 import { claudeStructuredLaunchArgs } from './structured/launch/claude-structured-launch-args'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
+import {
+  envWithPathRelativeTo,
+  catalogListingDirectory
+} from '../../shared/node-cli-command-resolution'
 import {
   CLAUDE_DEFAULT_SETTING_SOURCES,
   resolveClaudeStructuredInvocation,
@@ -114,7 +119,8 @@ export function createClaudeModelCatalogProbe(
     accountHome: Parameters<AgentModelCatalogProbe>[0],
     cwd?: string,
     lookup: AgentModelCatalogLookup = 'recover',
-    operation?: StructuredAgentResolutionOperation
+    operation?: StructuredAgentResolutionOperation,
+    launchDirectory = cwd
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
     const configuredArgs = claudeStructuredLaunchArgs(
@@ -127,18 +133,17 @@ export function createClaudeModelCatalogProbe(
       ),
       ...configuredArgs.additionalDirectories.flatMap((directory) => ['--add-dir', directory])
     ]
-    const argsFor = (strictMcp: boolean) => [
+    const argsFor = (strictMcp: boolean, sources: readonly string[]) => [
       ...buildClaudeModelListArgs(strictMcp, userArgs),
-      ...(cwd ? ['--setting-sources', CLAUDE_DEFAULT_SETTING_SOURCES.join(',')] : []),
+      ...(cwd ? ['--setting-sources', sources.join(',')] : []),
       ...userArgs
     ]
-    const args = argsFor(true)
     const launchDeps = {
       ...deps,
       operation,
       ...(lookup === 'saved' ? { resolveInheritedEnv: deps.resolveSavedEnvironment } : {}),
       ...(lookup === 'recover' ? {} : { refreshEnvironmentAfterMiss: undefined }),
-      ...(cwd ? { resolveWorkingDirectory: () => cwd } : {})
+      ...(launchDirectory ? { resolveWorkingDirectory: () => launchDirectory } : {})
     }
     const sources = await resolveClaudeChildEnvSources(launchDeps)
     assertStructuredAgentResolutionCurrent(operation)
@@ -153,32 +158,46 @@ export function createClaudeModelCatalogProbe(
       sources
     )
     assertStructuredAgentResolutionCurrent(operation)
+    // A command line that may name files relative to the chat's folder runs there, reading only
+    // user settings so the project's settings never narrow the account's list.
+    const listIn = catalogListingDirectory(
+      command,
+      [...prefixArgs, ...userArgs],
+      cwd,
+      launchDirectory
+    )
+    const settingSources = listIn === cwd ? CLAUDE_DEFAULT_SETTING_SOURCES : ['user']
+    const args = argsFor(true, settingSources)
     return {
       identity: {
         command,
         prefixArgs,
         args,
-        cwd,
+        cwd: listIn,
         overlay: Object.entries(sources.overlay ?? {}).sort()
       },
-      run: async (signal?: AbortSignal): Promise<AgentModelCatalogSuccess> => {
-        assertStructuredAgentResolutionCurrent(operation)
+      run: async (
+        signal?: AbortSignal,
+        runOperation = operation
+      ): Promise<AgentModelCatalogSuccess> => {
+        assertStructuredAgentResolutionCurrent(runOperation)
         signal?.throwIfAborted()
         const outcome = await runClaudeBackgroundAttempts({
           agentId: 'claude',
           run: (strictMcp) => {
-            assertStructuredAgentResolutionCurrent(operation)
+            assertStructuredAgentResolutionCurrent(runOperation)
             signal?.throwIfAborted()
             return (deps.runListing ?? runAgentModelCatalogListing)(
               {
                 command,
-                args: [...prefixArgs, ...argsFor(strictMcp)],
-                ...(cwd ? { cwd } : {}),
+                args: [...prefixArgs, ...argsFor(strictMcp, settingSources)],
+                ...(listIn ? { cwd: listIn } : {}),
                 stdin: `${CLAUDE_MODEL_LIST_STDIN}${JSON.stringify({ type: 'control_request', request_id: 'orca-model-settings', request: { subtype: 'get_settings' } })}\n${JSON.stringify({ type: 'control_request', request_id: 'orca-signin-discovery', request: { subtype: 'initialize' } })}\n`
               },
               {
                 site: 'claude-model-catalog-probe',
-                inheritedEnv: env,
+                // The listing runs from the account folder; relative PATH entries still mean the chat's.
+                inheritedEnv: launchDirectory ? envWithPathRelativeTo(env, launchDirectory) : env,
                 signal,
                 partialOutput: {
                   timeoutMs: 2_000,
@@ -254,35 +273,4 @@ export function createClaudeModelCatalogProbe(
       ).run(options?.signal),
     { resolve, resolveLegacy: (home, operation) => resolve(home, undefined, 'recover', operation) }
   )
-}
-
-function claudeCatalogSignedOut(
-  initialization: unknown,
-  settings: unknown,
-  env: Readonly<Record<string, string>>
-): boolean {
-  const account = record(record(initialization)?.account)
-  const effective = record(record(settings)?.effective)
-  if (
-    !account ||
-    !effective ||
-    account.tokenSource !== 'none' ||
-    (account.apiProvider !== undefined && account.apiProvider !== 'firstParty') ||
-    (account.apiKeySource && account.apiKeySource !== 'none') ||
-    account.email ||
-    account.subscriptionType
-  ) {
-    return false
-  }
-  const configuredEnv = record(effective.env)
-  const endpoint = configuredEnv?.ANTHROPIC_BASE_URL ?? env.ANTHROPIC_BASE_URL
-  if (typeof endpoint === 'string' && endpoint.trim()) {
-    try {
-      const url = new URL(endpoint)
-      return url.protocol === 'https:' && url.hostname === 'api.anthropic.com'
-    } catch {
-      return false
-    }
-  }
-  return true
 }

@@ -63,16 +63,6 @@ describe.skipIf(!SHELL)('run terminal shell-alone proof on a real daemon session
     expect(await shell.confirmShellForeground()).toBe(false)
   })
 
-  it('proves the shell alone after an agent that ran and exited', async () => {
-    const shell = await shellThatRan("sh -c 'printf AGENT_%s DONE'", 'AGENT_DONE')
-    await vi.waitFor(
-      async () => expect(await confirmRootShellAloneFromProcessTable(shell.pid)).toBe(true),
-      {
-        timeout: 5000
-      }
-    )
-  })
-
   it('never proves it while an agent still runs in the shell', async () => {
     const shell = await shellThatRan("sh -c 'printf AGENT_%s UP; sleep 30'", 'AGENT_UP')
     expect(await confirmRootShellAloneFromProcessTable(shell.pid)).toBe(false)

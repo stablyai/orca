@@ -11,11 +11,9 @@ import {
 } from '../../../shared/project-execution-runtime'
 import type * as localPreflightContext from '@/lib/local-preflight-context'
 import { resolveAgentResumeLaunchTarget } from '@/lib/agent-resume-launch-target'
-import {
-  makeTerminalTab,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeTerminalTab } from '@/store/terminals/terminal-row.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import {
   buildPaneAccountRestartStartup,
   resolveAgentAccountRestartResumeStartup,

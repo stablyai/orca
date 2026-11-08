@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
 
 // Require provider for compose routing; preserve unknown tokens that newer hosts may publish.

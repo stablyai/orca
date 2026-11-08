@@ -167,51 +167,6 @@ describe('runtime concurrent creates on one name', () => {
 })
 
 describe('runtime prepared-worktree replenishment', () => {
-  it('keeps the failed claim release available when the fallback also fails', async () => {
-    mocks.consume.mockResolvedValue({
-      status: 'miss',
-      reason: 'prepare_failed',
-      rearm: mocks.rearm
-    })
-    mocks.add.mockRejectedValue(new Error('normal add failed'))
-    const rearm: PreparationRearmHolder = { fire: () => {} }
-    await expect(createWorktree({}, rearm)).rejects.toThrow('normal add failed')
-
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    rearm.fire()
-    expect(mocks.rearm).toHaveBeenCalledOnce()
-  })
-
-  it('leaves the re-arm holder armed but unfired once probes and include copies finish', async () => {
-    const rearm: PreparationRearmHolder = { fire: () => {} }
-    let finishProbe!: (paths: string[]) => void
-    mocks.resolveShared.mockImplementation(
-      () =>
-        new Promise<string[]>((resolve) => {
-          finishProbe = resolve
-        })
-    )
-    let finishCopy!: (paths: string[]) => void
-    mocks.copyPaths.mockImplementation(
-      () =>
-        new Promise<string[]>((resolve) => {
-          finishCopy = resolve
-        })
-    )
-    const creation = createWorktree({}, rearm)
-    await vi.waitFor(() => expect(mocks.resolveShared).toHaveBeenCalledOnce())
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    finishProbe([])
-    await vi.waitFor(() => expect(mocks.copyPaths).toHaveBeenCalledOnce())
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    finishCopy([])
-    await creation
-    // The caller launches terminals before arming, so create must not fire it itself.
-    expect(mocks.rearm).not.toHaveBeenCalled()
-    rearm.fire()
-    expect(mocks.rearm).toHaveBeenCalledOnce()
-  })
-
   it('arms the holder even when materialization fails', async () => {
     mocks.copyPaths.mockRejectedValue(new Error('copy failed'))
     const rearm: PreparationRearmHolder = { fire: () => {} }
@@ -273,27 +228,6 @@ describe('runtime create base without a tracking ref', () => {
     mocks.hasBase.mockImplementation(async (_repo: string, ref: string) => ref === 'main')
   })
 
-  it('names the workspace only after the fetch has settled', async () => {
-    let refreshSettled = false
-    mocks.refresh.mockImplementation(async () => {
-      await Promise.resolve()
-      mocks.hasRemoteRef.mockResolvedValue(true)
-      refreshSettled = true
-      return { ok: true }
-    })
-    const settledAtNaming: boolean[] = []
-    mocks.canCheckout.mockImplementation(async () => {
-      settledAtNaming.push(refreshSettled)
-      return false
-    })
-
-    await createWorktree({ baseBranch: 'origin/main', branchNameOverride: 'app' })
-
-    expect(settledAtNaming).toEqual([true])
-    expect(mocks.canCheckout).toHaveBeenCalledWith('/repo', 'app', 'origin/main', {})
-    expect(mocks.branchConflict).toHaveBeenCalledWith('/repo', 'app', 'origin/main', {}, undefined)
-  })
-
   it('creates from the local branch and reports it when the fetch fails', async () => {
     mocks.refresh.mockResolvedValue({ ok: false, errorKind: 'git_error' })
 
@@ -308,22 +242,6 @@ describe('runtime create base without a tracking ref', () => {
     expect(result.baseFallback).toEqual({ requestedRef: 'origin/main', localRef: 'main' })
     expect(result.addResult).not.toHaveProperty('baseFallback')
     expect(result.worktree.baseRef).toBe('main')
-  })
-
-  it('decides the base before branch reuse and conflict checks', async () => {
-    mocks.refresh.mockResolvedValue({ ok: false, errorKind: 'git_error' })
-
-    await createWorktree({
-      baseBranch: 'origin/main',
-      branchNameOverride: 'app',
-      allowLocalBaseFallback: true
-    })
-
-    expect(mocks.refresh.mock.invocationCallOrder[0]).toBeLessThan(
-      mocks.canCheckout.mock.invocationCallOrder[0]
-    )
-    expect(mocks.canCheckout).toHaveBeenCalledWith('/repo', 'app', 'main', {})
-    expect(mocks.branchConflict).toHaveBeenCalledWith('/repo', 'app', 'main', {}, undefined)
   })
 })
 

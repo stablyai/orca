@@ -1,6 +1,5 @@
 import type * as WorktreeScanCacheModule from '../../../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../../../git/worktrees/catalog/worktree-listing'
-import '../../../unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,10 +10,14 @@ import {
   AGENT_PROMPT_TEST_WORKTREE_ID,
   createAgentPromptSubmissionRuntime
 } from '../../../../terminal/input/agent-prompt-submission-runtime-test-fixture'
-import { OrchestrationDb } from '../../../../orchestration/db'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
 import type { RpcRequest } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import * as FailedStartTeardown from './failed-worker-start-teardown'
 

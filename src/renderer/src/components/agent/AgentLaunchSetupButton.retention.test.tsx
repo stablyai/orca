@@ -8,14 +8,12 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { retireAgentPickerDrafts } from './agent-launch-picker-drafts'
 import { AgentLaunchSetupButton } from './AgentLaunchSetupButton'
 import { agentLaunchPromptScopeKey } from './AgentLaunchPromptComposer'
-import { changePrompt } from '../native-chat/native-chat-prompt-editor.test-support'
-import {
-  clearNativeChatComposerDraftsForTests,
-  readNativeChatComposerDraft,
-  writeLaunchSetupOptions
-} from '../native-chat/native-chat-composer-draft-store'
-import * as sources from '../native-chat/native-chat-launch-draft-source'
-import { transitionLaunchDrafts } from '../native-chat/native-chat-launch-draft-transition'
+import { changePrompt } from '../native-chat/composer/editor/native-chat-prompt-editor.test-support'
+import { clearNativeChatComposerDraftsForTests } from '../native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
+import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-composer-draft-memory'
+import * as sources from '../native-chat/drafts/native-chat-launch-draft-source'
+import { transitionLaunchDrafts } from '../native-chat/drafts/native-chat-launch-draft-transition'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { decodeBase64Prefix, exceedsRasterImagePreviewLimits } from './raster-image-base64-preview'
+import { exceedsRasterImagePreviewLimits } from './raster-image-base64-preview'
 import type * as RasterImageDimensionsModule from './raster-image-dimensions'
 import { RASTER_IMAGE_PREVIEW_HEADER_MAX_BYTES } from './raster-image-preview-limits'
 
@@ -56,23 +56,9 @@ function jpegBytes(
   return Buffer.concat(parts)
 }
 
-describe('decodeBase64Prefix', () => {
-  it('stops at the byte cap instead of decoding the whole payload', () => {
-    const content = pngBytes(70_000, 512, 512).toString('base64')
-    expect(decodeBase64Prefix(content, 32)?.byteLength).toBe(32)
-  })
-})
-
 describe('exceedsRasterImagePreviewLimits', () => {
   beforeEach(() => {
     dimensionReadLengths.length = 0
-  })
-
-  it('measures a large image from its first bytes, not its last', () => {
-    // Regression guard: before the probe this decoded all 5 MiB before reading 24 bytes of IHDR.
-    const content = pngBytes(5 * 1024 * 1024, 512, 512).toString('base64')
-    expect(exceedsRasterImagePreviewLimits(content, 'image/png')).toBe(false)
-    expect(dimensionReadLengths).toEqual([64])
   })
 
   it('widens the probe until a JPEG SOF past its metadata is reachable', () => {

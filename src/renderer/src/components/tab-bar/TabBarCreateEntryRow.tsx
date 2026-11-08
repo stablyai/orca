@@ -1,3 +1,5 @@
+import { tabAgentLaunchOptionDisabled } from './tab-agent-launch-options'
+import { terminalPendingLabel } from './new-tab-agent-menu-model'
 import React from 'react'
 import {
   FilePlus,
@@ -16,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { FilePathCursorTooltip, FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import { SEARCH_ENGINE_LABELS } from '../../../../shared/browser-url'
-import { formatBrowserHistoryUrl } from '@/lib/browser-history-match'
+import { formatBrowserHistoryUrl } from '@/lib/browser/history/browser-history-match'
 import type { ActiveOption } from './tab-create-entry-active-option'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentLaunchSetupButton } from '../agent/AgentLaunchSetupButton'
@@ -52,7 +54,8 @@ export function EntryActionRow({
   onClick,
   onUseAgent,
   option,
-  selected
+  selected,
+  terminalPending
 }: {
   disabled?: boolean
   id: string
@@ -62,8 +65,11 @@ export function EntryActionRow({
   onClick: () => void
   option: ActiveOption
   selected: boolean
+  terminalPending?: boolean
 }): React.JSX.Element {
   const presentation = getActionPresentation(option, labelOverride)
+  const launchDisabled =
+    disabled || (option.kind === 'agent' && tabAgentLaunchOptionDisabled(option.option))
 
   const row = (
     <div className="flex items-center gap-1">
@@ -72,7 +78,7 @@ export function EntryActionRow({
         id={id}
         role="option"
         aria-selected={selected}
-        disabled={disabled}
+        disabled={launchDisabled}
         className={cn(
           // Why min-w-0: a long agent setup must truncate so the row's › stays inside the menu.
           'flex h-6 w-full min-w-0 items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
@@ -116,6 +122,7 @@ export function EntryActionRow({
               : undefined
           }
           disabled={disabled}
+          terminalBlocked={terminalPending}
           onUse={onUseAgent}
         />
       ) : null}
@@ -221,7 +228,12 @@ function getActionPresentation(
   }
   if (option.kind === 'agent') {
     return {
-      detail: [option.option.label, option.option.reason].filter(Boolean).join(' · '),
+      detail: [
+        option.option.label,
+        option.option.reason ?? (option.option.terminalWaiting ? terminalPendingLabel() : undefined)
+      ]
+        .filter(Boolean)
+        .join(' · '),
       icon: <AgentIcon agent={option.option.agent} size={14} />,
       label:
         labelOverride ??

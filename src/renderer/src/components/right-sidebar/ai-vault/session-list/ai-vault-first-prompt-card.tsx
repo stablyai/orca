@@ -4,6 +4,7 @@ import { Check, Copy, LoaderCircle, TextCursorInput } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import type { AiVaultSessionPromptPreview } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-display'
@@ -31,6 +32,7 @@ export function FirstPromptCard({
   preview: AiVaultSessionPromptPreview | null
   copyHidden?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   // Initialize loading here to avoid synchronous effect state updates (react-doctor: no-adjust-state-on-prop-change).
   const [fullText, setFullText] = useState<string | null>(null)
   const [loading, setLoading] = useState(() => canLoadFullFirstPrompt(session))
@@ -156,14 +158,12 @@ export function FirstPromptCard({
         <span className="text-muted-foreground/80">
           <TextCursorInput className="size-3" />
         </span>
-        <span>{promptSectionLabel(displaySource)}</span>
+        <span>{promptSectionLabel(displaySource, t)}</span>
       </div>
       <div className="rounded-md border border-border/70 bg-foreground/[0.04] px-2.5 py-2">
         <div className="mb-1 flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            <span>
-              {translate('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')}
-            </span>
+            <span>{t('auto.components.right.sidebar.AiVaultSessionDetails.userRole', 'You')}</span>
             {loading || copying ? (
               <LoaderCircle className="size-3 shrink-0 animate-spin text-muted-foreground/70" />
             ) : null}
@@ -180,18 +180,18 @@ export function FirstPromptCard({
                 copyFirstPrompt()
               }}
               className="h-6 shrink-0 gap-1 px-1.5 text-[10px] text-muted-foreground"
-              aria-label={copyPromptLabel(displaySource)}
+              aria-label={copyPromptLabel(displaySource, t)}
             >
               {copied ? <Check className="size-3" /> : <Copy className="size-3" />}
               {copied
-                ? translate('auto.components.right.sidebar.AiVaultSessionDetails.copied', 'Copied')
-                : translate('auto.components.right.sidebar.AiVaultSessionDetails.copy', 'Copy')}
+                ? t('auto.components.right.sidebar.AiVaultSessionDetails.copied', 'Copied')
+                : t('auto.components.right.sidebar.AiVaultSessionDetails.copy', 'Copy')}
             </Button>
           )}
         </div>
         {showEmpty ? (
           <p className="text-[11px] leading-4 text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.right.sidebar.AiVaultSessionDetails.noFirstPromptAvailable',
               'No first prompt available'
             )}
@@ -199,7 +199,7 @@ export function FirstPromptCard({
         ) : (
           <p className="scrollbar-sleek max-h-48 select-text overflow-y-auto whitespace-pre-wrap text-[12px] leading-[1.35] text-foreground/90 [overflow-wrap:anywhere]">
             {displayText ||
-              translate(
+              t(
                 'auto.components.right.sidebar.AiVaultSessionDetails.loadingFirstPrompt',
                 'Loading first prompt…'
               )}
@@ -210,36 +210,36 @@ export function FirstPromptCard({
   )
 }
 
-function promptSectionLabel(source: AiVaultSessionPromptPreview['source'] | undefined): string {
+function promptSectionLabel(
+  source: AiVaultSessionPromptPreview['source'] | undefined,
+  t: Translate = translate
+): string {
   if (source === 'first-user-prompt') {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionDetails.firstPrompt',
-      'First prompt'
-    )
+    return t('auto.components.right.sidebar.AiVaultSessionDetails.firstPrompt', 'First prompt')
   }
   if (source === 'preview-window') {
-    return translate(
-      'auto.components.right.sidebar.AiVaultSessionDetails.recentPrompt',
-      'Recent prompt'
-    )
+    return t('auto.components.right.sidebar.AiVaultSessionDetails.recentPrompt', 'Recent prompt')
   }
-  return translate('auto.components.right.sidebar.AiVaultSessionDetails.prompt', 'Prompt')
+  return t('auto.components.right.sidebar.AiVaultSessionDetails.prompt', 'Prompt')
 }
 
-function copyPromptLabel(source: AiVaultSessionPromptPreview['source'] | undefined): string {
+function copyPromptLabel(
+  source: AiVaultSessionPromptPreview['source'] | undefined,
+  t: Translate = translate
+): string {
   if (source === 'first-user-prompt') {
-    return translate(
+    return t(
       'auto.components.right.sidebar.AiVaultSessionDetails.copyFirstPrompt',
       'Copy first prompt'
     )
   }
   if (source === 'preview-window') {
-    return translate(
+    return t(
       'auto.components.right.sidebar.AiVaultSessionDetails.copyRecentPrompt',
       'Copy recent prompt'
     )
   }
-  return translate('auto.components.right.sidebar.AiVaultSessionDetails.copyPrompt', 'Copy prompt')
+  return t('auto.components.right.sidebar.AiVaultSessionDetails.copyPrompt', 'Copy prompt')
 }
 
 function promptCopiedLabel(source: AiVaultSessionPromptPreview['source'] | undefined): string {

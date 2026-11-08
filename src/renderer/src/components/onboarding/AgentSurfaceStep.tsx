@@ -11,7 +11,7 @@ import { Trans } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { i18n, translate } from '@/i18n/i18n'
-import { nativeChatToolRowVerb } from '@/components/native-chat/native-chat-tool-line-label'
+import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/native-chat-tool-line-label'
 import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
 import type { AgentSurface } from './use-onboarding-flow-types'
 

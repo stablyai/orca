@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { readRuntimeIssueCommand, writeRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
+import {
+  readRuntimeIssueCommand,
+  writeRuntimeIssueCommand
+} from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { watchRefusedWslRead } from '@/runtime/wsl-refused-read-watch'
+import { watchRefusedWslRead } from '@/runtime/hosts/wsl/wsl-refused-read-watch'
 
 export function useRepositoryIssueCommand({
   repoId,

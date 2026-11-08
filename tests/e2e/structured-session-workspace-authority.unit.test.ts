@@ -9,12 +9,11 @@ import * as gitRemoval from '../../src/main/git/worktrees/removal/worktree-remov
 import * as pushTargetCleanup from '../../src/main/ipc/worktree-remote'
 import { finishRuntimeLocalWorktreeRemoval } from '../../src/main/runtime/workspaces/removal/runtime-registered-local-worktree-removal'
 import { getRuntimeFolderWorkspaceInstanceId } from '../../src/main/runtime/workspaces/catalog/runtime-folder-workspace'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import { openAgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store-factory'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-reveal'
+import { STRUCTURED_AGENT_SESSION_REVEAL_METHODS } from '../../src/main/runtime/rpc/methods/structured-sessions/conversation/structured-agent-session-reveal'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
 import {
   acquireWatcherRemovalGate,
@@ -563,7 +562,7 @@ it('fences actual folder-extra teardown through forget without denying its survi
   const cleanup = rig.runtime.removeWorktreeMetadataAndHistory.bind(rig.runtime)
   vi.spyOn(rig.runtime, 'removeWorktreeMetadataAndHistory').mockImplementation((...args) => {
     expect(() => beginWatcherInstall(root)).toThrow()
-    cleanup(...args)
+    return cleanup(...args)
   })
   expect(await rig.runtime.removeManagedWorktree(`id:${workspace}`)).toEqual({})
   expect(await reveal(rig)).toMatchObject({

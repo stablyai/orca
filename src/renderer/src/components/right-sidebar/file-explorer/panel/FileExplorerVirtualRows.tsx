@@ -8,7 +8,7 @@ import { InlineInputRow, type InlineInput } from '../mutations/file-explorer-inl
 import { shouldShowIgnoredDecoration, STATUS_COLORS } from '../../../../lib/git-path-decoration'
 import type { DirCache, FileExplorerOperationOwner, TreeNode } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { getFileExplorerOperationExecutionHostId } from '../navigation/file-explorer-operation-owner'
 import type { WorkspaceFileDragSource } from '@/lib/workspace-file-drag'
 

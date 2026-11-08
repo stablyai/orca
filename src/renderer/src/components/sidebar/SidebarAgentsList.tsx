@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { hasActivityThreadWorkspace } from '@/components/activity/activity-thread-actions'
 import { useActivityThreadActionBindings } from '@/components/activity/use-activity-thread-action-bindings'
 import { ActivityThreadListPane } from '@/components/activity/activity-thread-list-pane'
@@ -17,7 +17,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Select threads by revealing their existing panes; threads whose panes are gone remain listed but inert. */
 export type SidebarAgentsListProps = {
@@ -41,6 +41,7 @@ export default function SidebarAgentsList({
   optionsTarget,
   scrollTopRef
 }: SidebarAgentsListProps): React.JSX.Element {
+  const t = useTranslate()
   // Subscribe here because the translated search row mounts conditionally.
   useTranslation()
   const compactMode = useAppStore((s) => s.agentsCompactMode)
@@ -74,11 +75,10 @@ export default function SidebarAgentsList({
     visibleThreadGroups
   } = useAgentPaneThreads({ query, readFilter, groupBy, selectedPaneKey, showChildAgents })
 
-  useEffect(() => {
-    if (!selectedPaneKeyIsLive) {
-      setSelectedPaneKey(null)
-    }
-  }, [selectedPaneKeyIsLive])
+  if (!selectedPaneKeyIsLive) {
+    // Clear a vanished pane during render so it cannot reselect if the pane key returns.
+    setSelectedPaneKey(null)
+  }
 
   const {
     markThreadRead,
@@ -134,15 +134,12 @@ export default function SidebarAgentsList({
                 handleShowSearchChange(false)
               }
             }}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.activity.ActivityPrototypePage.795cbf26e2',
               'Filter...'
             )}
             className="h-7 w-full text-[11px] shadow-none focus-visible:ring-0"
-            aria-label={translate(
-              'auto.components.activity.ActivityPrototypePage.search',
-              'Search'
-            )}
+            aria-label={t('auto.components.activity.ActivityPrototypePage.search', 'Search')}
           />
         </div>
       ) : null}

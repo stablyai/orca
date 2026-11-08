@@ -13,8 +13,8 @@ import { callEnvironmentEnvelope } from './web-runtime-calls'
 import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible
-} from '@/runtime/runtime-rpc-client'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 const network = vi.hoisted(() => ({
   client: { connectionEpoch: 1, runtimeId: 'a', call: vi.fn() },

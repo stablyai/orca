@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import type { AppState } from '../../types'
 import './agent-status'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
-import { createTestStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 
 describe('captureAllSleepingAgentSessions', () => {
   it('captures launch config into live checkpoints and refreshes late registration', () => {

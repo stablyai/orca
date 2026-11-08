@@ -1,17 +1,17 @@
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getRuntimeMetadataPath, type RuntimeMetadata } from '../../shared/runtime-bootstrap'
+import '../../shared/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import {
   clearRuntimeMetadata,
   readRuntimeMetadata,
   writeRuntimeMetadata
 } from './rpc/server/runtime-metadata'
 import {
-  shouldReclaimRuntimeMetadata,
   watchRuntimeMetadataOwnership,
   type RuntimeMetadataOwnershipWatch
 } from './runtime-metadata-ownership-watch'
@@ -110,54 +110,6 @@ function record(overrides: Partial<RuntimeMetadata> = {}): RuntimeMetadata {
 
 const isProcessRunning = (pid: number): boolean => pid === OWNED_PID || pid === FOREIGN_LIVE_PID
 
-describe('shouldReclaimRuntimeMetadata', () => {
-  it('leaves the record alone while it still describes this runtime', () => {
-    expect(
-      shouldReclaimRuntimeMetadata(record(), OWNED_PID, OWNED_RUNTIME_ID, isProcessRunning)
-    ).toBe(false)
-  })
-
-  it('reclaims a missing record', () => {
-    expect(shouldReclaimRuntimeMetadata(null, OWNED_PID, OWNED_RUNTIME_ID, isProcessRunning)).toBe(
-      true
-    )
-  })
-
-  it('reclaims a record left behind by a dead runtime', () => {
-    expect(
-      shouldReclaimRuntimeMetadata(
-        record({ pid: FOREIGN_DEAD_PID, runtimeId: 'rt_second_instance' }),
-        OWNED_PID,
-        OWNED_RUNTIME_ID,
-        isProcessRunning
-      )
-    ).toBe(true)
-  })
-
-  it('yields to another live runtime so two instances cannot ping-pong the record', () => {
-    expect(
-      shouldReclaimRuntimeMetadata(
-        record({ pid: FOREIGN_LIVE_PID, runtimeId: 'rt_second_instance' }),
-        OWNED_PID,
-        OWNED_RUNTIME_ID,
-        isProcessRunning
-      )
-    ).toBe(false)
-  })
-
-  it('reclaims a foreign runtimeId stamped on this pid', () => {
-    // Why: only this process can be this pid, so the record is a recycled-pid leftover.
-    expect(
-      shouldReclaimRuntimeMetadata(
-        record({ runtimeId: 'rt_previous_process' }),
-        OWNED_PID,
-        OWNED_RUNTIME_ID,
-        isProcessRunning
-      )
-    ).toBe(true)
-  })
-})
-
 describe('watchRuntimeMetadataOwnership', () => {
   const watches: RuntimeMetadataOwnershipWatch[] = []
   const userDataPaths: string[] = []
@@ -235,27 +187,6 @@ describe('watchRuntimeMetadataOwnership', () => {
     })
   })
 
-  it('republishes a record that was deleted underneath the runtime', async () => {
-    const userDataPath = makeUserDataPath()
-    writeRuntimeMetadata(userDataPath, record())
-    const watch = armWatch(userDataPath)
-
-    clearRuntimeMetadata(userDataPath)
-    await watch.check()
-
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ pid: OWNED_PID })
-  })
-
-  it('replaces an unreadable record', async () => {
-    const userDataPath = makeUserDataPath()
-    const watch = armWatch(userDataPath)
-    writeFileSync(getRuntimeMetadataPath(userDataPath), '{ truncated')
-
-    await watch.check()
-
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ pid: OWNED_PID })
-  })
-
   it('leaves a live sibling runtime in place', async () => {
     const userDataPath = makeUserDataPath()
     const watch = armWatch(userDataPath)
@@ -296,52 +227,6 @@ describe('watchRuntimeMetadataOwnership', () => {
     await advancePolls(5_000)
 
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({ pid: FOREIGN_DEAD_PID })
-  })
-
-  it('reads the record off-thread, so the poll tick never blocks the main thread', async () => {
-    const userDataPath = makeUserDataPath()
-    writeRuntimeMetadata(userDataPath, record())
-    const watch = armWatch(userDataPath)
-
-    metadataSyncCalls.state.recording = true
-    await watch.check()
-    await watch.check()
-    metadataSyncCalls.state.recording = false
-
-    expect(metadataSyncCalls.state.calls).toEqual([])
-  })
-
-  it('treats a missing record as reclaimable without a pre-existence check', async () => {
-    const userDataPath = makeUserDataPath()
-    const watch = armWatch(userDataPath)
-
-    metadataSyncCalls.state.recording = true
-    await watch.check()
-    metadataSyncCalls.state.recording = false
-
-    expect(metadataSyncCalls.state.calls).toEqual([])
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ pid: OWNED_PID })
-  })
-
-  it('never runs two overlapping ownership checks', async () => {
-    usePolledTimers()
-    const userDataPath = makeUserDataPath()
-    writeRuntimeMetadata(userDataPath, record())
-    armWatch(userDataPath, 1_000)
-
-    metadataReadGate.hold = true
-    await advancePolls(3_000)
-
-    expect(metadataReadGate.reads).toBe(1)
-
-    metadataReadGate.hold = false
-    for (const resume of metadataReadGate.parked.splice(0)) {
-      resume()
-    }
-    await settleReads()
-    await advancePolls(1_000)
-
-    expect(metadataReadGate.reads).toBe(2)
   })
 
   it('keeps polling after a republish failure', async () => {

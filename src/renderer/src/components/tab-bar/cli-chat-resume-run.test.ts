@@ -1,3 +1,4 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
@@ -63,10 +64,13 @@ vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: mocks.activate
 }))
 // Switch-on, main opens the chat's tab and its frame draws it.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(
     await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeRpcClientWithLayoutApply(await importOriginal()),
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
@@ -75,8 +79,8 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import {
   getStructuredAgentSessionLaunchLifecycle,
@@ -95,15 +99,15 @@ import {
   stopStructuredLaunchSlotTracking
 } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { buildHydratedTabState } from '@/store/slices/tabs-hydration'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { buildHydratedTabState } from '@/store/slices/tabs/tabs-hydration'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '@/store'
 
 import { runCliChatResume } from './cli-chat-resume-run'
 
-import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
+import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
 import {
   clearWebSessionFocusIntent,
   peekWebSessionFocusIntent
@@ -113,7 +117,7 @@ import { registerSessionTabIpcBridge } from '@/hooks/ipc-events/session-tab-ipc-
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 import {
   SOURCE,

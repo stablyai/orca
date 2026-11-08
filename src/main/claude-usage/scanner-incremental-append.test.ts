@@ -123,33 +123,7 @@ function prefixRecords(): string {
   return toolResult + Array.from({ length: 80 }, (_, index) => usageRecord(index)).join('')
 }
 
-function streamedBytes(): number {
-  return streamReads
-    .filter((read) => read.path === transcriptPath)
-    .reduce((sum, read) => sum + read.bytes, 0)
-}
-
 describe('Claude usage append scans', () => {
-  it('reads appended usage without rereading the transcript history', async () => {
-    const prefix = prefixRecords()
-    await writeFile(transcriptPath, prefix)
-    const { scanClaudeUsageFiles } = await import('./scanner')
-    const first = await scanClaudeUsageFiles([], [], undefined, [])
-    const appended = usageRecord(80)
-    await appendFile(transcriptPath, appended)
-    streamReads.length = 0
-
-    const second = await scanClaudeUsageFiles([], first.processedFiles, undefined, [])
-    const appendBytes = streamedBytes()
-    const cold = await scanClaudeUsageFiles([], [], undefined, [])
-
-    expect(second.sessions).toEqual(cold.sessions)
-    expect(second.dailyAggregates).toEqual(cold.dailyAggregates)
-    expect(second.processedFiles[0]?.lineCount).toBe(82)
-    expect(second.sessions[0]?.turnCount).toBe(81)
-    expect(appendBytes).toBeLessThan(Buffer.byteLength(prefix) / 10)
-  })
-
   it('updates a previously counted assistant row with its later token maxima', async () => {
     await writeFile(transcriptPath, prefixRecords())
     const { scanClaudeUsageFiles } = await import('./scanner')

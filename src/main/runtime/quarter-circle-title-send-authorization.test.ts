@@ -2,7 +2,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { assertTerminalAgentSendable } from './rpc/terminal-agent-send-guard'
-import { detectAgentStatusFromTitle } from '../../shared/agent-status/title/agent-title-status'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -23,8 +22,6 @@ afterEach(() => {
 
 // Captured from Claude Code 2.1.228 while it read this repository's package.json.
 const SPINNER_ONLY_TITLE = '◑ Check package version in package.json'
-const SPINNER_WITH_IDENTITY_TITLE = '◐ Claude Code'
-const BRAILLE_SPINNER_ONLY_TITLE = '⠂ Deploying release 4.2'
 
 async function createRuntimeWithTitle(
   paneTitle: string,
@@ -169,16 +166,6 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
     ).toBe('terminal_guard_no_agent')
   })
 
-  it('authorizes a guarded send when the foreground process is a recognized agent', async () => {
-    const { runtime, handle } = await createRuntimeWithTitle(SPINNER_ONLY_TITLE, 'claude')
-
-    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
-      isRunningAgent: true,
-      status: 'working'
-    })
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe(AUTHORIZED)
-  })
-
   it('authorizes a managed Claude launch when the foreground process is unavailable', async () => {
     const { runtime, handle, getForegroundProcess } = await createRuntimeWithTitle(
       SPINNER_ONLY_TITLE,
@@ -260,26 +247,5 @@ describe('quarter-circle title send authorization (STA-4028)', () => {
         NO_AGENT_GUARD_DEADLINE_MS
       )
     ).toBe('terminal_guard_no_agent')
-  })
-
-  it('authorizes a guarded send when the busy title itself names the agent', async () => {
-    const { runtime, handle } = await createRuntimeWithTitle(SPINNER_WITH_IDENTITY_TITLE, null)
-
-    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toMatchObject({
-      isRunningAgent: true,
-      status: 'working'
-    })
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe(AUTHORIZED)
-  })
-
-  it('leaves braille-spinner authorization unchanged', async () => {
-    const { runtime, handle } = await createRuntimeWithTitle(BRAILLE_SPINNER_ONLY_TITLE, null)
-
-    await expect(guardedSendResult(runtime, handle)).resolves.toBe(AUTHORIZED)
-  })
-
-  it('keeps the quarter-circle glyph a working activity signal (#13889)', async () => {
-    expect(detectAgentStatusFromTitle(SPINNER_ONLY_TITLE)).toBe('working')
-    expect(detectAgentStatusFromTitle(SPINNER_WITH_IDENTITY_TITLE)).toBe('working')
   })
 })

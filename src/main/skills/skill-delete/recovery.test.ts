@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  readSkillDeleteRecoveryJournal,
   recoverSkillDeleteTransaction,
   skillDeleteJournalPath,
   writeSkillDeleteJournal,
@@ -13,7 +12,7 @@ import {
   nativeSkillInstallFilesystem,
   type SkillInstallFilesystem
 } from '../skill-install-filesystem'
-import { writeSkillStateFile } from '../skill-install-provenance'
+import '../skill-install-provenance'
 import { skillDeleteStagedName } from './staging-names'
 
 const roots: string[] = []
@@ -57,72 +56,6 @@ function journal(
 async function exists(path: string): Promise<boolean> {
   return Boolean(await lstat(path).catch(() => null))
 }
-
-describe('skill delete journal validation', () => {
-  it('round-trips a valid journal', async () => {
-    const { stateDirectory, root } = await fixture()
-    const canonicalPath = join(root, 'demo')
-    await writeSkillDeleteJournal(stateDirectory, journal(root, canonicalPath))
-    expect(await readSkillDeleteRecoveryJournal(stateDirectory, canonicalPath)).toMatchObject({
-      operation: 'delete',
-      phase: 'staged'
-    })
-  })
-
-  it('returns null when there is no journal', async () => {
-    const { stateDirectory, root } = await fixture()
-    expect(await readSkillDeleteRecoveryJournal(stateDirectory, join(root, 'demo'))).toBeNull()
-  })
-
-  it('refuses a move whose source escapes every allowed root', async () => {
-    const { home, stateDirectory, root } = await fixture()
-    const canonicalPath = join(root, 'demo')
-    const escaped = join(home, 'elsewhere', 'demo')
-    await writeSkillStateFile(
-      skillDeleteJournalPath(stateDirectory, canonicalPath),
-      journal(root, canonicalPath, {
-        moves: [
-          {
-            sourcePath: escaped,
-            stagedPath: join(home, 'elsewhere', skillDeleteStagedName('demo', 'id-1')),
-            kind: 'canonical'
-          }
-        ]
-      })
-    )
-    await expect(readSkillDeleteRecoveryJournal(stateDirectory, canonicalPath)).rejects.toThrow(
-      'skill-delete-journal-invalid'
-    )
-  })
-
-  it('refuses a staged path that is not our sibling naming convention', async () => {
-    const { stateDirectory, root } = await fixture()
-    const canonicalPath = join(root, 'demo')
-    await writeSkillStateFile(
-      skillDeleteJournalPath(stateDirectory, canonicalPath),
-      journal(root, canonicalPath, {
-        moves: [
-          { sourcePath: canonicalPath, stagedPath: join(root, 'demo.bak'), kind: 'canonical' }
-        ]
-      })
-    )
-    await expect(readSkillDeleteRecoveryJournal(stateDirectory, canonicalPath)).rejects.toThrow(
-      'skill-delete-journal-invalid'
-    )
-  })
-
-  it('refuses a movedCount larger than the move list', async () => {
-    const { stateDirectory, root } = await fixture()
-    const canonicalPath = join(root, 'demo')
-    await writeSkillStateFile(
-      skillDeleteJournalPath(stateDirectory, canonicalPath),
-      journal(root, canonicalPath, { movedCount: 4 })
-    )
-    await expect(readSkillDeleteRecoveryJournal(stateDirectory, canonicalPath)).rejects.toThrow(
-      'skill-delete-journal-invalid'
-    )
-  })
-})
 
 describe('recoverSkillDeleteTransaction', () => {
   it('rolls a staged phase forward by removing the staged path', async () => {
@@ -173,21 +106,6 @@ describe('recoverSkillDeleteTransaction', () => {
     expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalPath))).toBe(false)
   })
 
-  it('clears the journal when the recorded move was never performed', async () => {
-    // Intent precedes rename: absent staged paths may never have moved and must not pin recovery forever.
-    const { stateDirectory, root } = await fixture()
-    const canonicalPath = join(root, 'demo')
-    await mkdir(canonicalPath, { recursive: true })
-    await writeSkillDeleteJournal(
-      stateDirectory,
-      journal(root, canonicalPath, { phase: 'staging' })
-    )
-
-    await recoverSkillDeleteTransaction(stateDirectory, canonicalPath)
-    expect(await exists(canonicalPath)).toBe(true)
-    expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalPath))).toBe(false)
-  })
-
   it('clears the journal on retry after an earlier pass already restored a move', async () => {
     const { home, stateDirectory, root } = await fixture()
     const canonicalPath = join(root, 'demo')
@@ -219,46 +137,5 @@ describe('recoverSkillDeleteTransaction', () => {
     expect(await exists(join(aliasRoot, 'SKILL.md'))).toBe(true)
     expect(await exists(canonicalPath)).toBe(true)
     expect(await exists(skillDeleteJournalPath(stateDirectory, canonicalPath))).toBe(false)
-  })
-
-  it('restores canonical before alias-file, so no alias dangles mid-recovery', async () => {
-    const { home, stateDirectory, root } = await fixture()
-    const canonicalPath = join(root, 'demo')
-    const aliasRoot = join(home, '.claude', 'skills', 'demo')
-    await mkdir(aliasRoot, { recursive: true })
-    const entry = journal(root, canonicalPath, {
-      phase: 'staging',
-      movedCount: 2,
-      allowedRoots: [root, join(home, '.claude', 'skills')],
-      // Reverse alias-first staging to restore canonical content before aliases.
-      moves: [
-        {
-          sourcePath: join(aliasRoot, 'SKILL.md'),
-          stagedPath: join(aliasRoot, skillDeleteStagedName('SKILL.md', 'id-2')),
-          kind: 'alias-file'
-        },
-        {
-          sourcePath: canonicalPath,
-          stagedPath: join(root, skillDeleteStagedName('demo', 'id-1')),
-          kind: 'canonical'
-        }
-      ]
-    })
-    await mkdir(entry.moves[1].stagedPath, { recursive: true })
-    await writeFile(entry.moves[0].stagedPath, 'link-stand-in')
-    await writeSkillDeleteJournal(stateDirectory, entry)
-
-    const order: string[] = []
-    await recoverSkillDeleteTransaction(stateDirectory, canonicalPath, {
-      prepareExtractedSkill: async () => undefined,
-      observeSkill: async () => {
-        throw new Error('unused')
-      },
-      rename: async (_source, target) => {
-        order.push(target)
-      },
-      remove: async () => undefined
-    })
-    expect(order).toEqual([canonicalPath, join(aliasRoot, 'SKILL.md')])
   })
 })

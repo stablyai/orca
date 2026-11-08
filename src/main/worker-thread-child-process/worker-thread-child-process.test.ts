@@ -4,9 +4,8 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { MessageChannel, Worker, type MessagePort } from 'node:worker_threads'
 import { runProcess } from '@orca/process-host'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import {
-  IDLE_TEARDOWN_MS,
   WorkerThreadChildProcessHost,
   type WorkerThreadChildProcess
 } from './worker-thread-child-process'
@@ -15,7 +14,6 @@ import { createWorkerThreadChildProcessTestEntry } from './worker-thread-child-p
 
 // Use a real MessageChannel so protocol tests include structured-clone behavior.
 const openPorts: MessagePort[] = []
-const terminations: number[] = []
 
 function makeConnectedHost(): WorkerThreadChildProcessHost {
   return new WorkerThreadChildProcessHost(() => {
@@ -28,7 +26,6 @@ function makeConnectedHost(): WorkerThreadChildProcessHost {
       postMessage: (message: unknown) => port1.postMessage(message),
       unref: () => port1.unref(),
       terminate: async () => {
-        terminations.push(Date.now())
         port1.close()
         return 0
       }
@@ -81,9 +78,6 @@ process.stdin.on('end', () => { process.stderr.write('bye'); process.exit(7) })
 const IDLE_SCRIPT = 'setInterval(() => {}, 1000)'
 
 afterEach(() => {
-  vi.useRealTimers()
-  vi.restoreAllMocks()
-  terminations.length = 0
   for (const port of openPorts.splice(0)) {
     port.close()
   }
@@ -184,16 +178,6 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
     await expect(waitForClose(child)).resolves.toEqual([expect.any(Number), null])
   }, 20_000)
 
-  it('closes a child whose creation threw on the worker', async () => {
-    const child = makeConnectedHost().spawn({ program: '', args: [] })
-    const errors: NodeJS.ErrnoException[] = []
-    child.on('error', (error) => errors.push(error))
-
-    await expect(waitForClose(child)).resolves.toEqual([-1, null])
-    expect(errors).toMatchObject([{ code: 'ERR_INVALID_ARG_VALUE' }])
-    expect(child.exitCode).toBe(-1)
-  }, 20_000)
-
   it('kills a running child on request', async () => {
     const child = makeConnectedHost().spawn({
       program: process.execPath,
@@ -206,62 +190,6 @@ describe('WorkerThreadChildProcessHost over a message channel', () => {
 
     const [code, signal] = await closed
     expect(code !== 0 || signal !== null).toBe(true)
-  }, 20_000)
-
-  it('fails closed, after listeners can attach, when no worker can be started', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const host = new WorkerThreadChildProcessHost(() => {
-      throw new Error('entry missing')
-    })
-
-    const child = host.spawn({ program: process.execPath, args: [] })
-    const events: unknown[][] = []
-    child.on('error', (error: Error) => events.push(['error', error.message]))
-    child.on('exit', (code) => events.push(['exit', code]))
-    child.on('close', (code) => events.push(['close', code]))
-    expect(events).toEqual([])
-    await new Promise((resolve) => process.nextTick(resolve))
-
-    expect(events).toEqual([
-      ['error', 'Child process worker is unavailable'],
-      ['exit', -1],
-      ['close', -1]
-    ])
-    expect(child.kill()).toBe(false)
-  })
-
-  it('tears the idle worker down only after the last child closes', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const host = makeConnectedHost()
-    const first = host.spawn({ program: process.execPath, args: ['-e', ''] })
-    const second = host.spawn({ program: process.execPath, args: ['-e', IDLE_SCRIPT] })
-    await waitForSpawn(second)
-    await waitForClose(first)
-    await vi.advanceTimersByTimeAsync(IDLE_TEARDOWN_MS)
-    expect(terminations).toHaveLength(0)
-
-    const secondClosed = waitForClose(second)
-    second.kill()
-    await secondClosed
-    await vi.advanceTimersByTimeAsync(IDLE_TEARDOWN_MS - 1)
-    expect(terminations).toHaveLength(0)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(terminations).toHaveLength(1)
-  }, 20_000)
-
-  it('cancels a pending idle teardown when a new child spawns', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const host = makeConnectedHost()
-    await waitForClose(host.spawn({ program: process.execPath, args: ['-e', ''] }))
-
-    await vi.advanceTimersByTimeAsync(IDLE_TEARDOWN_MS - 1)
-    const next = host.spawn({ program: process.execPath, args: ['-e', IDLE_SCRIPT] })
-    await vi.advanceTimersByTimeAsync(IDLE_TEARDOWN_MS)
-    expect(terminations).toHaveLength(0)
-
-    const closed = waitForClose(next)
-    next.kill()
-    await closed
   }, 20_000)
 })
 

@@ -1,3 +1,4 @@
+import { withReconciledBrowserTabs } from './mobile-session-browser-group-projection'
 import { expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionBrowserTab,
@@ -115,7 +116,7 @@ it('removes retired client pages and publishes live ones while retaining rendere
     }
   )
 
-  expect(published?.tabs).toEqual([rendererPage, livePage])
+  expect(published?.tabs).toEqual([{ ...rendererPage, isActive: true }, livePage])
   expect(published?.tabGroups?.[0].tabOrder).toEqual(['renderer-tab', 'live'])
   expect(published?.activeTabId).toBe('renderer-tab')
   expect(published?.publicationEpoch).toBe(snapshot.publicationEpoch)
@@ -131,6 +132,58 @@ it('never publishes a row twice when the live build reclaims a renderer-owned id
 
   const published = reconcile({ live: [reclaimed] })
 
-  expect(published?.tabs).toEqual([reclaimed])
+  expect(published?.tabs).toEqual([{ ...reclaimed, isActive: true }])
   expect(published?.tabGroups?.[0].tabOrder).toEqual([rendererPage.id])
+})
+
+it('retains a browser workspace alias until its last page is actually retired, then selects the replacement', () => {
+  const closed = {
+    ...rendererPage,
+    id: 'closed',
+    browserPageId: 'closed',
+    browserWorkspaceId: 'shared',
+    isActive: true
+  }
+  const survivor = { ...closed, id: 'surviving', browserPageId: 'surviving', isActive: false }
+  const replacement = {
+    ...rendererPage,
+    id: 'replacement',
+    browserPageId: 'replacement',
+    browserWorkspaceId: 'replacement'
+  }
+  const existing = {
+    ...snapshot,
+    activeTabId: 'closed',
+    tabs: [closed, replacement],
+    tabGroups: [{ id: 'group', activeTabId: 'shared', tabOrder: ['shared', 'replacement'] }]
+  }
+  const onePageLeft = withReconciledBrowserTabs(
+    existing,
+    [survivor, replacement],
+    ['surviving', 'replacement'],
+    new Set(['closed', 'replacement'])
+  )
+  expect(onePageLeft.activeTabId).toBe('surviving')
+  expect(onePageLeft.tabGroups?.[0]?.activeTabId).toBe('shared')
+  const lastPageClosed = withReconciledBrowserTabs(
+    onePageLeft,
+    [replacement],
+    ['replacement'],
+    new Set(['surviving', 'replacement'])
+  )
+  expect(lastPageClosed.activeTabId).toBe('replacement')
+  expect(lastPageClosed.tabGroups?.[0]?.activeTabId).toBe('replacement')
+  expect(lastPageClosed.tabs.map((tab) => [tab.id, tab.isActive])).toEqual([['replacement', true]])
+  const newlyDiscovered = withReconciledBrowserTabs(
+    {
+      ...existing,
+      tabs: [closed],
+      tabGroups: [{ id: 'group', activeTabId: 'shared', tabOrder: ['shared'] }]
+    },
+    [replacement],
+    ['replacement'],
+    new Set(['closed'])
+  )
+  expect(newlyDiscovered.activeTabId).toBe('replacement')
+  expect(newlyDiscovered.tabGroups?.[0]?.activeTabId).toBe('replacement')
 })

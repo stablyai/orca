@@ -1,9 +1,8 @@
 import { memo } from 'react'
-import { useAppStore } from '@/store'
 import { useTranslation } from 'react-i18next'
 import { shallow } from 'zustand/shallow'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import SortableTab from './SortableTab'
 import TerminalSortableTab from './TerminalSortableTab'
 import EditorFileTab from './EditorFileTab'
@@ -78,7 +77,7 @@ function TabBarItemRow({
     unifiedTabId: item.unifiedTabId,
     visibleTabId: item.id,
     tabType: item.type,
-    label: getTabDragLabel(item, generatedTabTitlesEnabled, useAppStore.getState()),
+    label: getTabDragLabel(item, generatedTabTitlesEnabled, conversationName),
     iconPath: item.type === 'editor' ? item.data.filePath : undefined,
     color: item.type === 'terminal' ? (item.data.color ?? null) : null
   }

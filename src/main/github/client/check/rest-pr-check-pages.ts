@@ -5,6 +5,7 @@ import { noteRepositoryRateLimitSpend } from '../../rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
 import { assertRateLimitBudget } from '../lookup/pr-lookup-rate-limit'
 import { isPendingApprovalSuiteWithoutRuns } from './pr-checks-response-mapping'
+import { PENDING_APPROVAL_ROLLUP_ROW } from './pr-check-rollup'
 
 const checkRunSchema = z.object({
   id: z.number().optional(),
@@ -37,7 +38,8 @@ async function readPages<T>(
   endpoint: string,
   field: string,
   row: z.ZodType<T>,
-  noCache: boolean
+  noCache: boolean,
+  pageLimit = Number.POSITIVE_INFINITY
 ): Promise<T[]> {
   const schema = z.looseObject({
     total_count: z.number().int().nonnegative()
@@ -66,6 +68,9 @@ async function readPages<T>(
     if (rows.length === total) {
       return rows
     }
+    if (page >= pageLimit) {
+      throw new Error('Incomplete REST PR checks response')
+    }
   }
 }
 
@@ -73,7 +78,8 @@ export function readRestPRCheckRuns(
   repository: GitHubApiRepository,
   headSha: string,
   options: GhExecOptions,
-  noCache = true
+  noCache = true,
+  pageLimit?: number
 ) {
   return readPages(
     repository,
@@ -82,7 +88,8 @@ export function readRestPRCheckRuns(
     'check-runs',
     'check_runs',
     checkRunSchema,
-    noCache
+    noCache,
+    pageLimit
   )
 }
 
@@ -90,16 +97,27 @@ export function readRestPRCommitStatuses(
   repository: GitHubApiRepository,
   headSha: string,
   options: GhExecOptions,
-  noCache = true
+  noCache = true,
+  pageLimit?: number
 ) {
-  return readPages(repository, headSha, options, 'status', 'statuses', commitStatusSchema, noCache)
+  return readPages(
+    repository,
+    headSha,
+    options,
+    'status',
+    'statuses',
+    commitStatusSchema,
+    noCache,
+    pageLimit
+  )
 }
 
 export function readRestPRCheckSuites(
   repository: GitHubApiRepository,
   headSha: string,
   options: GhExecOptions,
-  noCache = true
+  noCache = true,
+  pageLimit?: number
 ) {
   return readPages(
     repository,
@@ -108,24 +126,35 @@ export function readRestPRCheckSuites(
     'check-suites',
     'check_suites',
     checkSuiteSchema,
-    noCache
+    noCache,
+    pageLimit
   )
 }
 
-export async function readRestPRCheckRollup(
-  repository: GitHubApiRepository,
-  headSha: string,
-  options: GhExecOptions
-): Promise<unknown[]> {
-  const runs = await readRestPRCheckRuns(repository, headSha, options)
-  const statuses = await readRestPRCommitStatuses(repository, headSha, options)
-  const suites = await readRestPRCheckSuites(repository, headSha, options)
+/** REST rows in the GraphQL rollup's field names, so both reads give a check the same identity. */
+export function restPRCheckRollupRows(
+  runs: readonly z.infer<typeof checkRunSchema>[],
+  statuses: readonly z.infer<typeof commitStatusSchema>[],
+  suites: readonly z.infer<typeof checkSuiteSchema>[]
+): unknown[] {
   const representedSuites = new Set(
     runs.flatMap((run) => (run.check_suite ? [run.check_suite.id] : []))
   )
   return [
-    ...runs.map((run) => ({ status: run.status, conclusion: run.conclusion })),
-    ...statuses,
+    ...runs.map((run) => ({
+      __typename: 'CheckRun',
+      name: run.name,
+      databaseId: run.id,
+      status: run.status,
+      conclusion: run.conclusion,
+      ...(run.check_suite ? { checkSuite: { databaseId: run.check_suite.id } } : {})
+    })),
+    ...statuses.map((status) => ({
+      ...status,
+      __typename: 'StatusContext',
+      targetUrl: status.target_url ?? null,
+      createdAt: status.created_at ?? null
+    })),
     ...suites
       .filter((suite) =>
         isPendingApprovalSuiteWithoutRuns(
@@ -133,6 +162,18 @@ export async function readRestPRCheckRollup(
           suite.id !== undefined && representedSuites.has(suite.id)
         )
       )
-      .map(() => ({ status: 'COMPLETED', conclusion: 'ACTION_REQUIRED' }))
+      .map(() => ({ ...PENDING_APPROVAL_ROLLUP_ROW }))
   ]
+}
+
+export async function readRestPRCheckRollup(
+  repository: GitHubApiRepository,
+  headSha: string,
+  options: GhExecOptions,
+  pageLimit?: number
+): Promise<unknown[]> {
+  const runs = await readRestPRCheckRuns(repository, headSha, options, true, pageLimit)
+  const statuses = await readRestPRCommitStatuses(repository, headSha, options, true, pageLimit)
+  const suites = await readRestPRCheckSuites(repository, headSha, options, true, pageLimit)
+  return restPRCheckRollupRows(runs, statuses, suites)
 }

@@ -28,6 +28,7 @@ export type AgentLaunchSetupPanelProps = {
   getDraft: () => AgentPickerDraft | undefined
   mode?: 'launch' | 'select'
   disabled?: boolean
+  terminalBlocked?: boolean
   onDraftChange: (draft: AgentPickerDraft) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }
@@ -61,6 +62,7 @@ export function AgentLaunchSetupButton({
   mode = 'launch',
   renderAnchor,
   disabled,
+  terminalBlocked,
   submenu = false,
   open: controlledOpen,
   replacedByAnotherSetup = false,
@@ -77,6 +79,7 @@ export function AgentLaunchSetupButton({
   mode?: 'launch' | 'select'
   renderAnchor?: (trigger: ReactElement) => ReactElement
   disabled?: boolean
+  terminalBlocked?: boolean
   submenu?: boolean
   open?: boolean
   replacedByAnotherSetup?: boolean
@@ -161,8 +164,12 @@ export function AgentLaunchSetupButton({
           draft={setup.draft}
           getDraft={setup.getDraft}
           disabled={disabled}
+          terminalBlocked={terminalBlocked}
           onDraftChange={setup.change}
           onUse={(draft) => {
+            if (mode !== 'select' && terminalBlocked && draft.surface === 'terminal') {
+              return false
+            }
             const options = { ...draft, surface: setup.draft.surface }
             delete options.prompt
             if (!setup.accept(mode === 'select' ? draft : options)) {

@@ -1,7 +1,10 @@
 import { useCallback, useMemo } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
-import type { AgentLaunchRouteStore, ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
+import type {
+  AgentLaunchRouteStore,
+  ProspectiveWorkspace
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   agentPickerDraft,
   type AgentPickerDraft,

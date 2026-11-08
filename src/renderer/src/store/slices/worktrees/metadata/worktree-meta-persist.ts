@@ -4,9 +4,9 @@ import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../../../shar
 import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import {
   assertRuntimeEnvironmentCapability,
-  callRuntimeRpc,
   runtimeEnvironmentSupportsCapability
-} from '../../../../runtime/runtime-rpc-client'
+} from '../../../../runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import {
   TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY,
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,

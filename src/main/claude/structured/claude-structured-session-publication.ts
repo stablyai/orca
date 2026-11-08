@@ -6,7 +6,7 @@ import { refreshClaudeStructuredSessionOptions } from './launch/claude-structure
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput
-} from '../../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
 import type { ClaudePromptRegistry } from '../claude-prompt-registry'
 import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'

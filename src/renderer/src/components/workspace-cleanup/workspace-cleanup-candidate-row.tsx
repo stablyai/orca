@@ -46,7 +46,7 @@ import {
   getWorkspaceCleanupCandidateHostLabel
 } from './workspace-cleanup-host-label'
 import { getReviewTooltip } from './workspace-cleanup-row-labels'
-import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 
 export type WorkspaceCleanupDeletionPhase = 'deleting' | 'queued'
 

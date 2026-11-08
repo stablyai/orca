@@ -3,7 +3,7 @@ import {
   ensureBrowserClientHostsForRestoredPages,
   resetRestoredBrowserClientHostAttachForTests
 } from './restored-client-hosted-browser-host-attach'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 
 type Placement = { kind: 'client'; browserHostClientId: string } | { kind: 'server' }
 

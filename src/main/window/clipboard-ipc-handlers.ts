@@ -46,6 +46,7 @@ import { readClipboardImageSource } from './clipboard-image-source'
 import { readClipboardCopiedFilePaths } from './clipboard-copied-file-paths'
 import { buildClipboardImageThumbnail } from './clipboard-image-thumbnail'
 import { readClipboardNativeImage } from './clipboard-native-image'
+import { encodeClipboardNativeImagePng } from './clipboard-image-png-encode'
 import {
   ClipboardPublisherBusyError,
   publishClipboardOperation,
@@ -173,20 +174,16 @@ export function registerClipboardHandlers(
         return null
       }
       const image = readClipboardNativeImage()
-      if (image.isEmpty()) {
-        if (!source.windowsFileFormats) {
-          return null
-        }
-        const copiedFilePng = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
+      let png: Buffer | null = null
+      if (!image.isEmpty()) {
+        png = await encodeClipboardNativeImagePng(image)
+      } else if (source.windowsFileFormats) {
+        png = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
           createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
           openFile: (filePath) => open(filePath, 'r')
         })
-        return copiedFilePng
-          ? saveClipboardImageBufferForTarget(copiedFilePng, args, handlerOptions)
-          : null
       }
-      assertClipboardImageDimensionsWithinLimit(image.getSize())
-      return saveClipboardImageBufferForTarget(image.toPNG(), args, handlerOptions)
+      return png ? saveClipboardImageBufferForTarget(png, args, handlerOptions) : null
     }
   )
   ipcMain.handle('clipboard:savePastedTextAsFile', (event, args: SavePastedTextAsFileArgs) => {
@@ -258,33 +255,22 @@ export function registerClipboardHandlers(
   ipcMain.handle('clipboard:writeImage', (event, dataUrl: string) => {
     assertTrustedClipboardSender(event)
     // Validate PNG data URIs in main too; renderer checks cannot constrain direct IPC.
+    // Why: reject every refusal so callers never report a copy that left the clipboard unchanged.
     const prefix = 'data:image/png;base64,'
     if (typeof dataUrl !== 'string' || !dataUrl.startsWith(prefix)) {
-      return
+      throw new Error('Clipboard image must be a PNG data URL')
     }
     const contentBase64 = dataUrl.slice(prefix.length)
-    try {
-      assertClipboardImageBase64LengthWithinLimit(contentBase64.length)
-    } catch {
-      return
-    }
+    assertClipboardImageBase64LengthWithinLimit(contentBase64.length)
     return publishClipboardOperation(contentBase64.length * 2, () => {
       // createFromDataURL silently fails on large images in some macOS/Electron versions; decode base64 then use createFromBuffer.
       const buffer = Buffer.from(contentBase64, 'base64')
-      try {
-        assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
-      } catch {
-        return
-      }
+      assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
       const image = nativeImage.createFromBuffer(buffer)
       if (image.isEmpty()) {
-        return
+        throw new Error('Clipboard image could not be decoded')
       }
-      try {
-        assertClipboardImageDimensionsWithinLimit(image.getSize())
-      } catch {
-        return
-      }
+      assertClipboardImageDimensionsWithinLimit(image.getSize())
       clipboard.writeImage(image)
     })
   })

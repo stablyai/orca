@@ -1,5 +1,5 @@
 import type { SessionOptionValue } from '../../shared/native-chat/input/native-chat-session-options'
-import { conversationRecordReader } from './orchestration/structured-session-lineage'
+import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import type { RuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { installRuntimeLinearCommandSurface } from './integrations/linear/runtime-linear-command-surface'
 import { publishNativeChatFollowUpChanges } from './runtime-native-chat-follow-up-events'
@@ -213,6 +213,8 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Startup settled; opening still waits for a launch-capable client. */
   noteAgentLaunchStartupSettled(): void {
     this.agentLaunchRecordWarmup.startupSettled()
+    // Desktop and serve: CI-line watches start here, past first paint, chat or no chat.
+    this.startPullRequestWatches()
   }
 
   /** Warm up before the first client launch so that launch does not open the record. */
@@ -260,7 +262,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
   /** Apply a window command to the partitions that hold its tab. */
   async applyLayoutCommand(
     command: Layout.WindowLayoutCommand,
-    run?: Pick<Layout.LayoutCommandRunOptions, 'admit'>
+    run?: Pick<Layout.LayoutCommandRunOptions, 'admit' | 'visibility'>
   ): Promise<LayoutApplyReply> {
     // Wait for live terminal placement before creating the first workspace surface.
     const placing = this.livePlacementSettledFor(command)

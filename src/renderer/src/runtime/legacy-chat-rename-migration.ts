@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
 import { shallow } from 'zustand/shallow'
-import { getStructuredAgentSessionTabs } from '@/components/native-chat/structured-agent-session-tabs'
+import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { normalizeAgentSessionConversationName } from '../../../shared/agent-session/agent-session-conversation-name'
-import { subscribeLocalRuntimeCapabilitiesKnown } from './local-runtime-capabilities'
-import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
+import { subscribeLocalRuntimeCapabilitiesKnown } from './hosts/capabilities/local-runtime-capabilities'
+import { subscribeRuntimeHostContactRegained } from './hosts/connections/runtime-host-contact-regained'
 import {
   legacyStructuredChatRenameOwner,
   structuredAgentSessionCatalogOwnerInputs,
