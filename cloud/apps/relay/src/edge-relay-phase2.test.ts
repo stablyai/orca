@@ -7,7 +7,7 @@ import {
   type EdgeAssignBody,
   type EdgeDeviceRow
 } from './edge-admin-client.js'
-import { EDGE_CELL_ID, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
+import { EDGE_CELL_ID, EDGE_EXPORT_SKIP_AFTER_MS, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
@@ -26,6 +26,7 @@ const USER = 'user-1'
 
 const databases: RelayDatabase[] = []
 afterEach(async () => {
+  vi.restoreAllMocks()
   for (const database of databases.splice(0)) await database.close()
 })
 
@@ -109,9 +110,13 @@ class FakeEdge implements EdgeAdmin {
     if (this.connected) return { outcome: 'busy' as const }
     return { outcome: 'exported' as const, assignment: this.assignment, devices: this.devices }
   }
+
+  async drain() {
+    return { outcome: 'idle' as const }
+  }
 }
 
-async function harness(cohort: 'host' | 'account' = 'host') {
+async function harness(cohort: 'host' | 'account' = 'host', extra: Partial<EdgeRelayConfig> = {}) {
   const database = await openInMemoryRelayDatabase()
   databases.push(database)
   const edgeConfig: EdgeRelayConfig = {
@@ -120,10 +125,12 @@ async function harness(cohort: 'host' | 'account' = 'host') {
     allowHosts: cohort === 'host' ? new Set([HOST]) : new Set(),
     allowUsers: cohort === 'account' ? new Set([USER]) : new Set(),
     denyHosts: new Set(),
-    regions: new Set(['us-central1', 'asia-east2'])
+    regions: new Set(['us-central1', 'asia-east2']),
+    ...extra
   }
   const fake = new FakeEdge()
-  const edge = new EdgeAssignments(database, edgeConfig, Date.now, fake)
+  const clock = { now: Date.now() }
+  const edge = new EdgeAssignments(database, edgeConfig, () => clock.now, fake)
   await edge.ensureEdgeCell()
   const gce = {
     userId: USER,
@@ -169,7 +176,7 @@ async function harness(cohort: 'host' | 'account' = 'host') {
   const row = async () =>
     (await database.query(`SELECT cell_id, assignment_epoch FROM relay_assignments WHERE relay_host_id = ?`, [HOST]))[0]
   const leaveCohort = () => (edgeConfig.denyHosts as Set<string>).add(HOST)
-  return { database, fake, assignments, assign, insertDevice, postgresDevices, row, leaveCohort }
+  return { database, fake, clock, assignments, assign, insertDevice, postgresDevices, row, leaveCohort }
 }
 
 describe('relay edge phase 2: the director moves host data with the host', () => {
@@ -235,6 +242,77 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     expect(response.status).toBe(503)
     expect(response.headers.get('retry-after')).toBe('2')
     expect(h.assignments.assign).not.toHaveBeenCalled()
+  })
+
+  it('503s a leaving host while the edge export is unavailable, until it has failed for 120 s', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const skipped = () => warn.mock.calls.filter(([line]) => String(line).includes('orca_relay_edge_export_skipped'))
+    const h = await harness()
+    await h.insertDevice(device('phone-a'))
+    await h.assign()
+    // On the edge phone-a was revoked; the edge then goes down.
+    h.fake.devices = [device('phone-a', { revoked_at: 1_800_000_000_000 })]
+    h.fake.down = true
+    h.leaveCohort()
+    expect((await h.assign()).status).toBe(503)
+    h.clock.now += EDGE_EXPORT_SKIP_AFTER_MS - 1
+    const early = await h.assign()
+    expect(early.status).toBe(503)
+    expect(early.headers.get('retry-after')).toBe('2')
+    expect(h.assignments.assign).not.toHaveBeenCalled()
+    expect(skipped()).toHaveLength(0)
+    h.clock.now += 1
+    const response = await h.assign()
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
+    // Postgres keeps what it had: the edge's revoke is lost, nothing is written back.
+    expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
+    expect(skipped()).toHaveLength(1)
+    expect(JSON.parse(String(skipped()[0]![0]))).toEqual({
+      event: 'orca_relay_edge_export_skipped',
+      reason: 'relay_edge_admin_unavailable:network',
+      failingForMs: EDGE_EXPORT_SKIP_AFTER_MS
+    })
+  })
+
+  it('restarts the unavailable clock after any usable export answer', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = await harness()
+    await h.assign()
+    h.leaveCohort()
+    h.fake.down = true
+    expect((await h.assign()).status).toBe(503)
+    h.clock.now += 100_000
+    // The edge answers (busy: the desktop is still connected): that is a success.
+    h.fake.down = false
+    h.fake.connected = true
+    expect((await h.assign()).status).toBe(503)
+    h.fake.down = true
+    h.clock.now += 100_000
+    expect((await h.assign()).status).toBe(503)
+    h.clock.now += EDGE_EXPORT_SKIP_AFTER_MS - 1
+    expect((await h.assign()).status).toBe(503)
+    h.clock.now += 1
+    expect((await h.assign()).status).toBe(200)
+  })
+
+  it('skips the export on the first unavailable answer with a 0 ms threshold, and fences when the edge answers', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = await harness('host', { exportSkipAfterMs: 0 })
+    await h.insertDevice(device('phone-a'))
+    await h.assign()
+    h.leaveCohort()
+    let exportCalls = 0
+    h.fake.exportHost = async () => {
+      exportCalls += 1
+      throw new EdgeAdminUnavailableError('status_503')
+    }
+    const response = await h.assign()
+    expect(response.status).toBe(200)
+    expect(exportCalls).toBe(1)
+    expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
+    expect(h.fake.assignment).toMatchObject({ cellId: 'us-c1', assignmentEpoch: 9 })
   })
 
   it('keeps Postgres devices when the edge object holds no assignment (never pushed or erased)', async () => {

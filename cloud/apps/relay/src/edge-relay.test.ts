@@ -82,7 +82,7 @@ function fingerprint(membership: CellAdmissionMembership): string {
 }
 
 describe('edge cohort', () => {
-  it('lets deny beat allow, allow beat region and share, and scopes the share by region', () => {
+  it('lets deny beat allow, host allow beat region and share, and scopes accounts and the share by region', () => {
     const host = 'abcdefghijklmnop'
     expect(inEdgeCohort(edgeConfig({ rolloutPercent: 100 }), host, 'us-central1')).toBe(true)
     expect(inEdgeCohort(edgeConfig({ rolloutPercent: 100 }), host, undefined)).toBe(true)
@@ -91,9 +91,12 @@ describe('edge cohort', () => {
       inEdgeCohort(edgeConfig({ rolloutPercent: 100, regions: new Set(['us-central1', 'asia-east2']) }), host, 'asia-east2')
     ).toBe(true)
     expect(inEdgeCohort(edgeConfig({ rolloutPercent: 0 }), host, 'us-central1')).toBe(false)
-    // An allowed account brings every host it has, in any region; deny still wins.
-    const team = edgeConfig({ allowUsers: new Set(['user-team']), regions: new Set() })
-    expect(inEdgeCohort(team, host, 'asia-east2', 'user-team')).toBe(true)
+    // An allowed account brings every host it has in the cohort's regions; deny still wins.
+    const team = edgeConfig({ allowUsers: new Set(['user-team']), regions: new Set(['us-central1']) })
+    expect(inEdgeCohort(team, host, 'us-central1', 'user-team')).toBe(true)
+    expect(inEdgeCohort(team, host, undefined, 'user-team')).toBe(true)
+    expect(inEdgeCohort(team, host, 'asia-east2', 'user-team')).toBe(false)
+    expect(inEdgeCohort({ ...team, regions: new Set() }, host, 'us-central1', 'user-team')).toBe(false)
     expect(inEdgeCohort(team, host, 'us-central1', 'user-other')).toBe(false)
     expect(inEdgeCohort(team, host, 'us-central1')).toBe(false)
     expect(inEdgeCohort({ ...team, denyHosts: new Set([host]) }, host, 'us-central1', 'user-team')).toBe(false)

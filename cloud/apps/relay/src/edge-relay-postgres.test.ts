@@ -144,7 +144,8 @@ describePostgres('relay edge on PostgreSQL', () => {
         outcome: 'exported' as const,
         assignment: { userId: host.userId, cellId: EDGE_CELL_ID, assignmentEpoch: 1 },
         devices: held
-      })
+      }),
+      drain: async () => ({ outcome: 'idle' as const })
     }
     const edge = new EdgeAssignments(database, edgeConfig, Date.now, admin)
     await edge.ensureEdgeCell()
