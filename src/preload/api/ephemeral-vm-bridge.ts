@@ -18,6 +18,12 @@ export const ephemeralVmApi = {
   listRuntimes: () => ipcRenderer.invoke('ephemeralVm:listRuntimes'),
   attachWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:attachWorkspace', args),
   resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),
+  suspendWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:suspendWorkspace', args),
+  onRuntimesChanged: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('ephemeralVm:runtimesChanged', listener)
+    return () => ipcRenderer.removeListener('ephemeralVm:runtimesChanged', listener)
+  },
   cleanup: (args) => ipcRenderer.invoke('ephemeralVm:cleanup', args),
   stopCleanup: (args) => ipcRenderer.invoke('ephemeralVm:stopCleanup', args),
   forgetRuntime: (args) => ipcRenderer.invoke('ephemeralVm:forgetRuntime', args),

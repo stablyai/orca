@@ -138,6 +138,22 @@ export function toCleanupLastErrorFields(failure: EphemeralVmFailure | null): {
   }
 }
 
+/** Suspend/resume record fields; undefined writes nothing, null clears all three. */
+export function toLifecycleLastErrorFields(failure: EphemeralVmFailure | null | undefined): {
+  lifecycleLastError?: string
+  lifecycleLastErrorCode?: string
+  lifecycleLastErrorParams?: Record<string, string | number>
+} {
+  if (failure === undefined) {
+    return {}
+  }
+  return {
+    lifecycleLastError: failure?.error,
+    lifecycleLastErrorCode: failure?.errorCode,
+    lifecycleLastErrorParams: failure?.errorParams
+  }
+}
+
 /** Only the coded fields, for spreading next to an existing English `error`. */
 export function pickEphemeralVmFailureCode(
   failure: Partial<EphemeralVmFailure>

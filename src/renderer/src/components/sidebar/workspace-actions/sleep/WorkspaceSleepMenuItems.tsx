@@ -3,26 +3,19 @@ import { Moon } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-
-type WorkspaceSleepMenuItemsProps = {
-  isMultiContext: boolean
-  sleepLabel: string
-  sleepDisabled: boolean
-  descendantCount: number
-  subtreeSleepDisabled: boolean
-  onSleep: () => void
-  onSleepSubtree: () => void
-}
+import type { WorktreeContextMenuModel } from '../context-menu/use-worktree-context-menu-model'
+import { WorkspaceVmLifecycleMenuItems } from './WorkspaceVmLifecycleMenuItems'
 
 export function WorkspaceSleepMenuItems({
-  isMultiContext,
-  sleepLabel,
-  sleepDisabled,
-  descendantCount,
-  subtreeSleepDisabled,
-  onSleep,
-  onSleepSubtree
-}: WorkspaceSleepMenuItemsProps): JSX.Element {
+  model
+}: {
+  model: WorktreeContextMenuModel
+}): JSX.Element {
+  const { isMultiContext, sleepLabel, deletingContext, sleepableWorktrees } = model
+  const sleepDisabled = deletingContext || sleepableWorktrees.length === 0
+  const descendantCount = model.lineageDescendantCount
+  const subtreeSleepDisabled = model.deletingSubtree || model.subtreeSleepableWorktrees.length === 0
+  const onSleep = model.handleCloseTerminals
   return (
     <>
       <Tooltip>
@@ -47,7 +40,7 @@ export function WorkspaceSleepMenuItems({
       {!isMultiContext && descendantCount > 0 ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <DropdownMenuItem onSelect={onSleepSubtree} disabled={subtreeSleepDisabled}>
+            <DropdownMenuItem onSelect={model.handleSleepSubtree} disabled={subtreeSleepDisabled}>
               <Moon className="size-3.5" />
               {translate(
                 'auto.components.sidebar.WorktreeContextMenu.sleepWithDescendants',
@@ -63,6 +56,14 @@ export function WorkspaceSleepMenuItems({
             )}
           </TooltipContent>
         </Tooltip>
+      ) : null}
+      {!isMultiContext ? (
+        <WorkspaceVmLifecycleMenuItems
+          worktreeId={model.worktree.id}
+          hasSleepableActivity={sleepableWorktrees.length > 0}
+          disabled={deletingContext}
+          onSleep={onSleep}
+        />
       ) : null}
     </>
   )

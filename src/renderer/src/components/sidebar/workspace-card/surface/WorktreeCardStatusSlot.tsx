@@ -11,7 +11,15 @@ import { FilledBellIcon } from '../identity/worktree-card-glyphs'
 import { checksLabel } from '../review/workspace-review-check-label'
 import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from '../activity/use-worktree-activity-status'
-import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
+import { useShallow } from 'zustand/react/shallow'
+import { useAppStore } from '@/store'
+import {
+  selectEphemeralVmWorkspaceRuntime,
+  selectEphemeralVmWorkspaceWaking
+} from '@/store/slices/ephemeral-vm-lifecycle'
+import { selectIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
+import { getEphemeralVmHostState } from '../../../../../../shared/execution-host-health'
+import { WorktreeCardVmStateBadge } from './WorktreeCardVmStateBadge'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from '../review/worktree-review-presentation'
 import type { WorkspaceReviewChecksSummary } from '../../../../../../shared/workspace-review-checks'
@@ -126,7 +134,16 @@ export function WorktreeCardStatusSlot({
   const collectionChecks = reviewChecks && reviewChecks.total > 1 ? reviewChecks : undefined
   const isReviewStale = reviewStale || Boolean(collectionChecks?.stale)
   const status = useWorktreeActivityStatus(worktreeId)
-  const isSleeping = useIsSleepingWorktree(worktreeId)
+  // One subscription per card: rows mount by the hundreds, and every listener runs on each store write.
+  const { isSleeping, vmRuntime, vmWaking } = useAppStore(
+    useShallow((state) => ({
+      isSleeping: selectIsSleepingWorktree(state, worktreeId),
+      vmRuntime: selectEphemeralVmWorkspaceRuntime(state, worktreeId),
+      vmWaking: selectEphemeralVmWorkspaceWaking(state, worktreeId)
+    }))
+  )
+  const vmState = vmRuntime ? getEphemeralVmHostState(vmRuntime.status, vmWaking) : null
+  const vmFailure = vmRuntime?.failure ?? null
   const statusLabel = getWorktreeStatusLabel(status) || status
   // Sleeping remains distinct from quiet done/branch/review states; attention keeps its own glyph.
   const canShowSleepingStatus =
@@ -221,6 +238,15 @@ export function WorktreeCardStatusSlot({
 
   if (!showStatus && !unreadActionEnabled) {
     return null
+  }
+
+  // A VM that is not running cannot have live activity; its lifecycle is the row's status.
+  // The classic card's unread bell still wins so it can be cleared.
+  if (vmState && showStatus && !(unreadActionEnabled && isUnread)) {
+    return overlayNewCardUnreadStatus(
+      <WorktreeCardVmStateBadge state={vmState} failure={vmFailure} className={className} />,
+      newCardStyle && isUnread
+    )
   }
 
   if (!unreadActionEnabled) {

@@ -44,7 +44,7 @@ function getHostStatusDetail(host: SidebarHostOption): string {
     return describeRuntimeCompatBlock(host.compatibility)
   }
   const detail = host.failureReason ?? host.detail
-  return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${detail ? ` - ${detail}` : ''}`
+  return `${getSidebarHostHealthLabel(host.health, host.blockedReason, host.vmState)}${detail ? ` - ${detail}` : ''}`
 }
 
 export function AddRepoHostSelector({
@@ -91,7 +91,11 @@ export function AddRepoHostSelector({
                 title={getHostStatusDetail(selectedHost)}
                 className="shrink-0 text-[11px] font-normal text-muted-foreground"
               >
-                {getSidebarHostHealthLabel(selectedHost.health, selectedHost.blockedReason)}
+                {getSidebarHostHealthLabel(
+                  selectedHost.health,
+                  selectedHost.blockedReason,
+                  selectedHost.vmState
+                )}
               </span>
             ) : null}
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />

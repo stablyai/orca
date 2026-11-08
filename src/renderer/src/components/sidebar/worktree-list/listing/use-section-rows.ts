@@ -39,6 +39,7 @@ import {
 } from '../controls/sidebar-host-options'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectEphemeralVmHostLifecycles } from '@/store/slices/ephemeral-vm-lifecycle'
 
 function createSidebarHostOptionsSelector() {
   let inputs: readonly unknown[] = []
@@ -59,7 +60,8 @@ function createSidebarHostOptionsSelector() {
       hostLabelOverrides,
       state.wslHostStatuses,
       selectWslHostsServing(state),
-      state.wslHostServerFiles === 'missing'
+      state.wslHostServerFiles === 'missing',
+      selectEphemeralVmHostLifecycles(state)
     ]
     if (shallow(inputs, nextInputs)) {
       return result
@@ -75,7 +77,8 @@ function createSidebarHostOptionsSelector() {
       hostLabelOverrides,
       wslHostStatuses: state.wslHostStatuses,
       wslHostsEnabled: selectWslHostsServing(state),
-      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
+      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing',
+      ephemeralVmHosts: selectEphemeralVmHostLifecycles(state)
     })
     if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
       result = next

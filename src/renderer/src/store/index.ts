@@ -40,6 +40,7 @@ import { createDictationSlice } from './slices/dictation'
 import { createWorkspaceCleanupSlice } from './slices/workspace-cleanup'
 import { createWorkspaceCleanupBrowseSlice } from './slices/workspace-cleanup-browse'
 import { createRuntimeStatusSlice } from './slices/runtime-status'
+import { createEphemeralVmLifecycleSlice } from './slices/ephemeral-vm-lifecycle'
 import { createPullRequestGenerationSlice } from './slices/pull-request-generation'
 import { createCommitMessageGenerationSlice } from './slices/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confirm'
@@ -147,7 +148,8 @@ export const useAppStore = create<AppState>()(
           ...createTerminalQuickCommandHostsSlice(...a),
           ...createStructuredSessionLaunchDirectorySlice(...a),
           ...createStructuredChatSleptAtSlice(...a),
-          ...createWorkspaceAttentionSlice(...a)
+          ...createWorkspaceAttentionSlice(...a),
+          ...createEphemeralVmLifecycleSlice(...a)
         }
       })
     ),

@@ -58,14 +58,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     contextWorkspaceStatus,
     deleteLabel,
     deletingContext,
-    deletingSubtree,
     developerMenuRevealed,
     eligibleParentCount,
     effectiveSelectedWorktrees,
     folderWorkspaceId,
     handleAssignWorkspaceStatus,
     handleCloseAutoFocus,
-    handleCloseTerminals,
     handleCopyName,
     handleCopyPath,
     handleCreateGroupFromRepo,
@@ -77,7 +75,6 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleRemoveParentLink,
     handleRemoveProjectFromGroup,
     handleRename,
-    handleSleepSubtree,
     handleTogglePin,
     handleToggleRead,
     hasAnyContextLineage,
@@ -96,9 +93,6 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     setDeveloperMenuRevealed,
     setMenuOpenState,
     setMenuPoint,
-    sleepLabel,
-    sleepableWorktrees,
-    subtreeSleepableWorktrees,
     suppressOpeningPointerEvent,
     validParentWorktreeId,
     worktree,
@@ -317,15 +311,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <DropdownMenuSeparator />
             </>
           ) : null}
-          <WorkspaceSleepMenuItems
-            isMultiContext={isMultiContext}
-            sleepLabel={sleepLabel}
-            sleepDisabled={deletingContext || sleepableWorktrees.length === 0}
-            descendantCount={lineageDescendantCount}
-            subtreeSleepDisabled={deletingSubtree || subtreeSleepableWorktrees.length === 0}
-            onSleep={handleCloseTerminals}
-            onSleepSubtree={handleSleepSubtree}
-          />
+          <WorkspaceSleepMenuItems model={model} />
           {/* Git cannot remove primary checkouts; keep disabled Delete beside the enabled Remove Project action. */}
           {!isMultiContext && removesProject ? (
             <Tooltip>

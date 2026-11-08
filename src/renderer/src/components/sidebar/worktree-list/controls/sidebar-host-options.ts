@@ -10,8 +10,10 @@ import {
 } from '../../../../../../shared/execution-host'
 import {
   buildExecutionHostRegistry,
+  type EphemeralVmHostLifecycle,
   type ExecutionHostHealth,
-  type ExecutionHostRegistryEntry
+  type ExecutionHostRegistryEntry,
+  type ExecutionHostVmState
 } from '../../../../../../shared/execution-host-registry'
 
 import { getExecutionHostHealthLabel } from '@/lib/runtime-host-copy'
@@ -49,6 +51,8 @@ export type SidebarHostOption = {
   // Host menus need the compatibility verdict to explain version skew.
   compatibility?: RuntimeCompatVerdict
   blockedReason?: RuntimeHostBlockedReason
+  /** The VM lifecycle behind a VM-backed host, when it rather than transport explains health. */
+  vmState?: ExecutionHostVmState
   // Host headers use this status to describe authentication requirements.
   connectionStatus?: SshConnectionStatus
   aliasHostIds?: readonly ExecutionHostId[]
@@ -64,6 +68,7 @@ export type SidebarHostScopeOption = {
   label: string
   detail: string
   health: ExecutionHostHealth | 'mixed'
+  vmState?: ExecutionHostVmState
 }
 
 export function buildSidebarHostOptions(args: {
@@ -84,6 +89,7 @@ export function buildSidebarHostOptions(args: {
   wslHostsEnabled?: boolean
   /** True keeps WSL hosts' rows but marks them unable to run in this build. */
   wslHostServerFilesMissing?: boolean
+  ephemeralVmHosts?: readonly EphemeralVmHostLifecycle[]
 }): SidebarHostOption[] {
   const configuredSshTargetIds = new Set(args.sshTargetLabels.keys())
   const projectSshTargetIds = new Set<string>()
@@ -114,7 +120,8 @@ export function buildSidebarHostOptions(args: {
     sshConnectionStates: args.sshConnectionStates,
     runtimeEnvironments: args.runtimeEnvironments,
     runtimeStatusByEnvironmentId: args.runtimeStatusByEnvironmentId,
-    hostLabelOverrides: args.hostLabelOverrides
+    hostLabelOverrides: args.hostLabelOverrides,
+    ephemeralVmHosts: args.ephemeralVmHosts
   }).map((host) => {
     if (host.kind === 'local') {
       return { ...host, presence: 'local' }
@@ -184,7 +191,8 @@ export function buildSidebarHostScopeOptions(
       id: host.id,
       label: host.label,
       detail: host.detail,
-      health: host.health
+      health: host.health,
+      ...(host.vmState ? { vmState: host.vmState } : {})
     }))
   ]
 }
@@ -212,11 +220,12 @@ export function getSidebarHostVisibilityLabel(
 
 export function getSidebarHostHealthLabel(
   health: SidebarHostScopeOption['health'],
-  blockedReason?: RuntimeHostBlockedReason
+  blockedReason?: RuntimeHostBlockedReason,
+  vmState?: ExecutionHostVmState
 ): string {
   return health === 'mixed'
     ? translate('runtime.health.mixed', 'Mixed')
-    : getExecutionHostHealthLabel(health, blockedReason)
+    : getExecutionHostHealthLabel(health, blockedReason, vmState)
 }
 
 // Diagnostics do not change host choices; retain every other exposed registry field.

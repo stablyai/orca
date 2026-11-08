@@ -11,6 +11,11 @@ import {
   resolveEnvironment,
   updateEnvironmentFromPairingCode
 } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import {
+  EphemeralVmFailureError,
+  ephemeralVmFailureFromError,
+  pickEphemeralVmFailureCode
+} from '../../shared/ephemeral-vm-failure-copy'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
@@ -42,7 +47,10 @@ export async function resumeEphemeralVmWorkspace(
     runtimeId: runtime.id
   })
   if (!result.ok) {
-    throw new Error(result.error)
+    throw new EphemeralVmFailureError({
+      error: result.error,
+      ...pickEphemeralVmFailureCode(result)
+    })
   }
   if (!result.runtime.recipeResult) {
     return result.runtime
@@ -89,7 +97,8 @@ export async function resumeEphemeralVmWorkspace(
       })
     } catch (error) {
       updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-        status: 'resume_failed'
+        status: 'resume_failed',
+        lifecycleLastError: ephemeralVmFailureFromError(error)
       })
       throw error
     }

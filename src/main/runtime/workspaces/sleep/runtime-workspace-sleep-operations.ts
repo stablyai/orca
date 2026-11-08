@@ -72,6 +72,11 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     return this.workspaceSleep.wakeVm(worktreeId)
   }
 
+  /** The user's Suspend VM, serialised with any wake of the same VM. */
+  suspendWorkspaceVm(worktreeId: string): Promise<void> {
+    return this.workspaceSleep.suspendVm(worktreeId)
+  }
+
   /** Where this workspace's recipe VM stands for a client about to reach its server. */
   workspaceVmState(worktreeId: string, recordSuspended: boolean): RecipeVmState {
     return this.workspaceSleep.vmState(worktreeId, recordSuspended)

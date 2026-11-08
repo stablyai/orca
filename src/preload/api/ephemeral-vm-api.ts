@@ -4,7 +4,8 @@ import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-re
 import type { EphemeralVmRecipeResultWarning } from '../../shared/ephemeral-vm-recipe-diagnostics'
 import type {
   EphemeralVmProvisionedRuntimeRecord,
-  EphemeralVmRuntimeRecord
+  EphemeralVmRuntimeRecord,
+  EphemeralVmWorkspaceLifecycleResult
 } from '../../shared/ephemeral-vm-runtimes'
 import type { EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 
@@ -68,7 +69,11 @@ export type EphemeralVmApi = {
     runtimeId: string
     workspaceId: string
   }) => Promise<EphemeralVmRuntimeRecord>
-  resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+  resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
+  /** Suspends the workspace's VM without closing panels; sleep closes them first. */
+  suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
+  /** Fires after any runtime record write; re-list to read the new lifecycle status. */
+  onRuntimesChanged: (callback: () => void) => () => void
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   /** Drops an interrupted write-ahead record that never received a recipe result. */

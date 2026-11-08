@@ -253,6 +253,12 @@ function getHostHealthUnavailableDetail(
       return 'Connect this host to set up projects'
     case 'error':
       return 'Host connection needs attention'
+    case 'provisioning':
+      return 'VM is still provisioning'
+    case 'suspended':
+      return 'Resume this VM to set up projects'
+    case 'waking':
+      return 'VM is waking'
     case 'available':
     case 'blocked':
     case 'local':

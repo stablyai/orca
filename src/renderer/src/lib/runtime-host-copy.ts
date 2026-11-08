@@ -1,11 +1,15 @@
 import { translate } from '@/i18n/i18n'
-import type { ExecutionHostHealth } from '../../../shared/execution-host-health'
+import type {
+  ExecutionHostHealth,
+  ExecutionHostVmState
+} from '../../../shared/execution-host-health'
 import type { RuntimeHostBlockedReason } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeCompatVerdict } from '../../../shared/protocol-compat'
 
 export function getExecutionHostHealthLabel(
   health: ExecutionHostHealth,
-  blockedReason?: RuntimeHostBlockedReason
+  blockedReason?: RuntimeHostBlockedReason,
+  vmState?: ExecutionHostVmState
 ): string {
   switch (health) {
     case 'local':
@@ -17,7 +21,17 @@ export function getExecutionHostHealthLabel(
     case 'disconnected':
       return translate('runtime.health.disconnected', 'Disconnected')
     case 'error':
-      return translate('runtime.health.error', 'Needs attention')
+      return vmState === 'resume_failed'
+        ? translate('runtime.health.resumeFailed', 'Resume failed')
+        : vmState === 'provision_failed'
+          ? translate('runtime.health.setupFailed', 'Setup failed')
+          : translate('runtime.health.error', 'Needs attention')
+    case 'provisioning':
+      return translate('runtime.health.provisioning', 'Provisioning')
+    case 'suspended':
+      return translate('runtime.health.suspended', 'Suspended')
+    case 'waking':
+      return translate('runtime.health.waking', 'Waking')
     case 'blocked':
       return blockedReason === 'access-revoked'
         ? translate('runtime.health.repair', 'Re-pair needed')

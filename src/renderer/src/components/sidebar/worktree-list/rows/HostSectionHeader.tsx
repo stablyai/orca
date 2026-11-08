@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, ChevronDown, Loader2, Server, ServerOff } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Loader2, Moon, Server, ServerOff } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -40,7 +40,7 @@ function HostHeaderHealthIcon({
   health: HostHeaderRow['health']
 }): React.JSX.Element | null {
   // Why: only surface states needing attention; healthy is the silent default.
-  if (health === 'connecting') {
+  if (health === 'connecting' || health === 'waking' || health === 'provisioning') {
     return <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
   }
   if (health === 'blocked' || health === 'error') {
@@ -62,6 +62,8 @@ export function HostSectionHeader({
 }): React.JSX.Element {
   const isBlocked = row.health === 'blocked'
   const isDisconnected = row.health === 'disconnected'
+  // A suspended VM is asleep on purpose: muted like disconnected, but never an error.
+  const isSuspended = row.health === 'suspended'
   const detail = getHostHeaderDetail(row)
   return (
     <div className="px-2 pt-1">
@@ -76,7 +78,7 @@ export function HostSectionHeader({
           onDragPointerDown && 'cursor-grab active:cursor-grabbing',
           isBlocked
             ? 'border-destructive/40 bg-destructive/10'
-            : isDisconnected
+            : isDisconnected || isSuspended
               ? 'border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35 text-muted-foreground'
               : 'border-worktree-sidebar-border bg-worktree-sidebar-accent/70',
           dragging && 'pointer-events-none opacity-0'
@@ -90,7 +92,12 @@ export function HostSectionHeader({
           }
         }}
       >
-        {isDisconnected ? (
+        {isSuspended ? (
+          <Moon
+            className="size-3.5 shrink-0 text-muted-foreground/80"
+            data-host-header-vm-state="suspended"
+          />
+        ) : isDisconnected ? (
           <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
         ) : (
           <Server className="size-3.5 shrink-0 text-muted-foreground" />
@@ -101,7 +108,7 @@ export function HostSectionHeader({
           <span
             className={cn(
               'min-w-0 truncate text-[12px] font-semibold leading-none',
-              isDisconnected ? 'text-muted-foreground' : 'text-foreground'
+              isDisconnected || isSuspended ? 'text-muted-foreground' : 'text-foreground'
             )}
           >
             {row.label}

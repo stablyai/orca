@@ -2,8 +2,42 @@ import { translate } from '@/i18n/i18n'
 import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 
 export function getHostHeaderDetail(
-  row: Pick<HostHeaderRow, 'health' | 'blockedReason' | 'connectionStatus' | 'kind' | 'detail'>
+  row: Pick<
+    HostHeaderRow,
+    'health' | 'blockedReason' | 'vmState' | 'connectionStatus' | 'kind' | 'detail'
+  >
 ): { text: string; isWarning: boolean } | null {
+  // A VM's lifecycle names the state; suspended is intentional, so only failures warn.
+  if (row.vmState === 'provision_failed') {
+    return {
+      text: translate('auto.components.sidebar.WorktreeList.hostVmSetupFailed', 'Setup failed'),
+      isWarning: true
+    }
+  }
+  if (row.vmState === 'resume_failed') {
+    return {
+      text: translate('auto.components.sidebar.WorktreeList.hostVmResumeFailed', 'Resume failed'),
+      isWarning: true
+    }
+  }
+  if (row.health === 'suspended') {
+    return {
+      text: translate('auto.components.sidebar.WorktreeList.hostVmSuspended', 'Suspended'),
+      isWarning: false
+    }
+  }
+  if (row.health === 'waking') {
+    return {
+      text: translate('auto.components.sidebar.WorktreeList.hostVmWaking', 'Waking…'),
+      isWarning: false
+    }
+  }
+  if (row.health === 'provisioning') {
+    return {
+      text: translate('auto.components.sidebar.WorktreeList.hostVmProvisioning', 'Provisioning…'),
+      isWarning: false
+    }
+  }
   // Revoked pairing requires a new link rather than a host update.
   if (row.health === 'blocked' && row.blockedReason === 'access-revoked') {
     return {

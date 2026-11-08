@@ -26,9 +26,19 @@ import {
   annotateManagedOrcadExecutionHosts,
   type ManagedOrcadDeploymentSummary
 } from './managed-orcad-execution-host'
-import { getSshConnectionHealth, type ExecutionHostHealth } from './execution-host-health'
+import {
+  getSshConnectionHealth,
+  type EphemeralVmHostLifecycle,
+  type ExecutionHostHealth,
+  type ExecutionHostVmState
+} from './execution-host-health'
+import { applyEphemeralVmHostLifecycles } from './execution-host-vm-lifecycle'
 
-export type { ExecutionHostHealth } from './execution-host-health'
+export type {
+  EphemeralVmHostLifecycle,
+  ExecutionHostHealth,
+  ExecutionHostVmState
+} from './execution-host-health'
 
 export type ExecutionHostRegistryEntry = {
   id: ExecutionHostId
@@ -40,6 +50,8 @@ export type ExecutionHostRegistryEntry = {
   compatibility?: RuntimeCompatVerdict
   /** Present only while health is blocked; local evidence, never published to peers. */
   blockedReason?: RuntimeHostBlockedReason
+  /** Present only while a VM-backed host's lifecycle, not its transport, explains its health. */
+  vmState?: ExecutionHostVmState
   capabilities?: readonly string[]
   appVersion?: string | null
   protocolVersion?: number | null
@@ -195,6 +207,8 @@ export function buildExecutionHostRegistry(args: {
   hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
   /** Defaults to this process's platform, which only the host itself may use. */
   localHostLabel?: string
+  /** VM runtime records by the server they host; their lifecycle outranks transport health. */
+  ephemeralVmHosts?: readonly EphemeralVmHostLifecycle[]
 }): ExecutionHostRegistryEntry[] {
   const hosts = new Map<ExecutionHostId, ExecutionHostRegistryEntry>()
   hosts.set(LOCAL_EXECUTION_HOST_ID, {
@@ -292,6 +306,7 @@ export function buildExecutionHostRegistry(args: {
     runtimeEnvironments: args.runtimeEnvironments ?? [],
     sshConnectionStates: args.sshConnectionStates
   })
+  applyEphemeralVmHostLifecycles(hosts, args.ephemeralVmHosts)
 
   const overrides = args.hostLabelOverrides
   if (!overrides || overrides.size === 0) {

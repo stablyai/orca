@@ -53,6 +53,15 @@ export function getAvailabilityStatusLabel(
       return disconnectedStatusLabel()
     case 'error':
       return connectionIssueStatusLabel()
+    case 'provisioning':
+      return translate(
+        'auto.components.taskSourceContextSummary.statusProvisioning',
+        'provisioning'
+      )
+    case 'suspended':
+      return translate('auto.components.taskSourceContextSummary.statusSuspended', 'suspended')
+    case 'waking':
+      return translate('auto.components.taskSourceContextSummary.statusWaking', 'waking')
   }
 }
 

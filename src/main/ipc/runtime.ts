@@ -15,6 +15,7 @@ import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import { DESKTOP_RPC_CALLER } from '../runtime/rpc/rpc-caller-identity'
 import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
+import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
 import { publishMobileProjectSections } from '../runtime/sidebar-inputs/mobile-project-sections-snapshot'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
@@ -35,10 +36,18 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('runtime:subscribe')
   ipcMain.removeAllListeners('runtime:unsubscribe')
   ipcMain.removeHandler('ephemeralVm:resumeWorkspace')
+  ipcMain.removeHandler('ephemeralVm:suspendWorkspace')
 
   // The window's wake shares the runtime's single VM wake path with its sleep's suspend.
   ipcMain.handle('ephemeralVm:resumeWorkspace', (_event, args: { workspaceId: string }) =>
-    runtime.wakeWorkspaceVm(args.workspaceId)
+    toWorkspaceLifecycleResult(() => runtime.wakeWorkspaceVm(args.workspaceId))
+  )
+  // Suspend VM with nothing open; a workspace with open panels sleeps, which suspends it after.
+  ipcMain.handle('ephemeralVm:suspendWorkspace', (_event, args: { workspaceId: string }) =>
+    toWorkspaceLifecycleResult(async () => {
+      await runtime.suspendWorkspaceVm(args.workspaceId)
+      return null
+    })
   )
 
   ipcMain.handle(
