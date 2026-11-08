@@ -33,7 +33,7 @@ export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): b
 
 // Why: Host mode covers the tree but can leave focus on shared chrome (toolbar); tree
 // shortcuts would otherwise act on the hidden tree's selection (Delete trashes it).
-export function isExplorerTreeCoveredByHostMode(shell: Element | null): boolean {
+function isExplorerTreeCoveredByHostMode(shell: Element | null): boolean {
   return shell?.querySelector('[data-file-explorer-host-overlay]') != null
 }
 
