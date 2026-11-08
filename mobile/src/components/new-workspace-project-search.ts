@@ -7,6 +7,11 @@ import type {
   NewWorkspaceRunTargetOption
 } from './new-workspace-project-targets'
 
+/** Id of a project row narrowed to one host, unique across hosts. */
+export function newWorkspaceProjectHostRowId(projectId: string, hostId: string): string {
+  return `${projectId}\u0000${hostId}`
+}
+
 type SearchRepo = Pick<Repo, 'id' | 'displayName' | 'path'> &
   Partial<Pick<Repo, 'connectionId' | 'executionHostId' | 'upstream' | 'gitRemoteIdentity'>>
 
@@ -37,7 +42,7 @@ export function searchNewWorkspaceProjectOptions<TRepo extends SearchRepo>(
     // Picking a host-narrowed row also picks that host, so the run target follows the query.
     return match.hostIndexes.map((index) => ({
       ...option,
-      id: `${option.id}\u0000${getRepoExecutionHostId(hostRepos[index])}`,
+      id: newWorkspaceProjectHostRowId(option.id, getRepoExecutionHostId(hostRepos[index])),
       detail: hostLabels[index],
       repo: hostRepos[index]
     }))
@@ -103,7 +108,7 @@ export function quickPickNewWorkspaceTargets<TRepo extends SearchRepo>(
       const repoHostId = getRepoExecutionHostId(repo)
       if (hostId === null || repoHostId === hostId) {
         picks.push({
-          id: `${option.id}\u0000${repoHostId}`,
+          id: newWorkspaceProjectHostRowId(option.id, repoHostId),
           label: option.label,
           hostLabel: hostLabels[index],
           repo

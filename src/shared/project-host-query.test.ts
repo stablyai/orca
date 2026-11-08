@@ -11,6 +11,7 @@ describe('matchProjectHostQuery', () => {
   it('keeps every host when the query names only the project', () => {
     expect(matchProjectHostQuery('orc', orca)).toEqual({ hostIndexes: null })
     expect(matchProjectHostQuery('stablyai', orca)).toEqual({ hostIndexes: null })
+    expect(matchProjectHostQuery('orca stablyai', orca)).toEqual({ hostIndexes: null })
   })
 
   it('narrows to the named host when host and project are typed together', () => {

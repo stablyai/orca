@@ -15,6 +15,7 @@ import type {
 } from './new-workspace-project-targets'
 import { getMobileWorkspaceRepoBadgeColor } from './new-worktree-modal-types'
 import {
+  newWorkspaceProjectHostRowId,
   searchNewWorkspaceProjectOptions,
   searchNewWorkspaceRunTargetOptions
 } from './new-workspace-project-search'
@@ -85,13 +86,19 @@ export function NewWorktreeModalDrawers(props: {
         title={t('components.newWorktreeModalDrawers.project', 'Project')}
         items={props.projectPickerItems}
         selectedId={props.selectedProjectId ?? ''}
+        isSelected={(item) =>
+          item.id === props.selectedProjectId ||
+          (props.selectedRepo !== null &&
+            item.id ===
+              newWorkspaceProjectHostRowId(
+                props.selectedProjectId ?? '',
+                getRepoExecutionHostId(props.selectedRepo)
+              ))
+        }
         onSelect={(item) => props.onRepoChange(item.repo)}
         onClose={props.onTransitionToForm}
         search={{
-          placeholder: t(
-            'components.newWorktreeModalDrawers.searchProjects',
-            'Search projects or host project'
-          ),
+          placeholder: t('components.newWorktreeModalDrawers.searchProjects', 'Search projects'),
           emptyLabel,
           filter: (items, query) =>
             searchNewWorkspaceProjectOptions(

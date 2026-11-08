@@ -28,6 +28,9 @@ export function matchProjectHostQuery(
   const hostWords = words.filter(
     (word) => !includes(target.name, word) && !includes(target.detail, word)
   )
+  if (hostWords.length === 0) {
+    return { hostIndexes: null }
+  }
   // A query made only of host words would list every project on that host; that is wanted too.
   const hostIndexes = target.hostLabels.flatMap((label, index) =>
     hostWords.every((word) => includes(label, word)) ? [index] : []

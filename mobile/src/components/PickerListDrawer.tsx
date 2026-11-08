@@ -26,6 +26,8 @@ type Props<T extends PickerListItem> = {
   title: string
   items: T[]
   selectedId: string
+  /** Overrides id equality, e.g. for rows whose id adds a host to the project id. */
+  isSelected?: (item: T) => boolean
   onSelect: (item: T) => void
   onClose: () => void
   renderIcon?: (item: T) => ReactNode
@@ -37,6 +39,7 @@ export function PickerListDrawer<T extends PickerListItem>({
   title,
   items,
   selectedId,
+  isSelected,
   onSelect,
   onClose,
   renderIcon,
@@ -123,7 +126,7 @@ export function PickerListDrawer<T extends PickerListItem>({
             title={item.label}
             subtitle={item.detail || undefined}
             leading={renderIcon ? (renderIcon(item) ?? null) : undefined}
-            selected={item.id === selectedId}
+            selected={isSelected ? isSelected(item) : item.id === selectedId}
             onPress={() => closeThenSelect(item)}
           />
         )}

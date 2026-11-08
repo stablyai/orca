@@ -1205,12 +1205,13 @@
       "runOn": "Run on",
       "agent": "Agent",
       "noMatches": "No matches",
-      "searchProjects": "Search projects or host project",
+      "searchProjects": "Search projects",
       "searchHosts": "Search hosts"
     },
     "newWorktreeQuickPick": {
-      "placeholder": "Type host and project",
-      "noMatches": "No matches"
+      "placeholder": "Search projects",
+      "noMatches": "No matches",
+      "filterByHost": "Filter by {{host}}"
     },
     "newWorktreeProjectTargetFields": {
       "project": "Project",

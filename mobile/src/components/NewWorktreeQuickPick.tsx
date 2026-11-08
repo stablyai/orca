@@ -14,7 +14,7 @@ import { listNewWorkspaceHosts, quickPickNewWorkspaceTargets } from './new-works
 
 const QUICK_PICK_LIMIT = 5
 
-/** Type "host project" (or tap a host) to set the project and its run target in one pick. */
+/** Search projects (or tap a run target) to set the project and where it runs in one pick. */
 export function NewWorktreeQuickPick(props: {
   projects: NewWorkspaceProjectOption<MobileWorkspaceRepo>[]
   repos: MobileWorkspaceRepo[]
@@ -48,7 +48,7 @@ export function NewWorktreeQuickPick(props: {
       <MobileSearchField
         value={query}
         onChangeText={setQuery}
-        placeholder={t('components.newWorktreeQuickPick.placeholder', 'Type host and project')}
+        placeholder={t('components.newWorktreeQuickPick.placeholder', 'Search projects')}
       />
       {hosts.length > 1 ? (
         <View style={styles.chipRow}>
@@ -59,6 +59,13 @@ export function NewWorktreeQuickPick(props: {
                 key={host.id}
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
+                accessibilityLabel={t(
+                  'components.newWorktreeQuickPick.filterByHost',
+                  'Filter by {{host}}',
+                  {
+                    host: host.label
+                  }
+                )}
                 style={[styles.chip, selected && styles.chipSelected]}
                 onPress={() => setHostId(selected ? null : host.id)}
               >
