@@ -2,7 +2,6 @@ import { hashKey, type QueryClient, type QueryKey } from '@tanstack/react-query'
 import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import { defineHostMutation } from '../query/host-mutation'
-import { hostQueryKey } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   fetchAddIssueComment,
@@ -17,7 +16,7 @@ import type { GitHubPrRepoSlug } from './github-pr-rpc'
 import {
   acceptPrComments,
   patchPrDetails,
-  prDetailsQuery,
+  prQueryKeys,
   readPrComments,
   type PrDetailsInput,
   type PrQueryScope
@@ -59,16 +58,9 @@ export type PrCommentWriteVars = {
 }
 
 export function prCommentTarget(queries: PrQueryScope | null): PrCommentTarget {
-  return queries?.detailsInput
-    ? {
-        key: hostQueryKey(
-          queries.host.hostId,
-          prDetailsQuery.family,
-          queries.target,
-          queries.detailsInput
-        ),
-        input: queries.detailsInput
-      }
+  const { detailsKey } = prQueryKeys(queries)
+  return detailsKey && queries?.detailsInput
+    ? { key: detailsKey, input: queries.detailsInput }
     : null
 }
 
@@ -90,25 +82,30 @@ function sendWrite(client: RpcClient, vars: PrCommentWriteVars): Promise<GitHubP
   }
 }
 
+function mapComments(
+  details: GitHubWorkItemDetails,
+  change: (comment: PRComment) => PRComment | null
+): GitHubWorkItemDetails {
+  return { ...details, comments: details.comments.flatMap((comment) => change(comment) ?? []) }
+}
+
 // What the write does to the shown comments before the host answers; new comments wait for the re-read.
 function applyWrite(details: GitHubWorkItemDetails, write: PrCommentWrite): GitHubWorkItemDetails {
-  const map = (change: (comment: PRComment) => PRComment | null): GitHubWorkItemDetails => ({
-    ...details,
-    comments: details.comments.flatMap((comment) => change(comment) ?? [])
-  })
   switch (write.kind) {
     case 'resolve':
-      return map((comment) =>
+      return mapComments(details, (comment) =>
         comment.threadId === write.params.threadId
           ? { ...comment, isResolved: write.params.resolve }
           : comment
       )
     case 'edit':
-      return map((comment) =>
+      return mapComments(details, (comment) =>
         comment.id === write.params.commentId ? { ...comment, body: write.params.body } : comment
       )
     case 'delete':
-      return map((comment) => (comment.id === write.params.commentId ? null : comment))
+      return mapComments(details, (comment) =>
+        comment.id === write.params.commentId ? null : comment
+      )
     default:
       return details
   }
@@ -123,24 +120,15 @@ function revertWrite(
   const was = new Map(before.comments.map((comment) => [comment.id, comment]))
   switch (write.kind) {
     case 'resolve':
-      return {
-        ...current,
-        comments: current.comments.map((comment) =>
-          comment.threadId === write.params.threadId && was.has(comment.id)
-            ? { ...comment, isResolved: was.get(comment.id)!.isResolved }
-            : comment
-        )
-      }
+      return mapComments(current, (comment) => {
+        const old = comment.threadId === write.params.threadId ? was.get(comment.id) : undefined
+        return old ? { ...comment, isResolved: old.isResolved } : comment
+      })
     case 'edit': {
       const old = was.get(write.params.commentId)
-      return old
-        ? {
-            ...current,
-            comments: current.comments.map((comment) =>
-              comment.id === old.id ? { ...comment, body: old.body } : comment
-            )
-          }
-        : current
+      return mapComments(current, (comment) =>
+        old && comment.id === old.id ? { ...comment, body: old.body } : comment
+      )
     }
     case 'delete': {
       const index = before.comments.findIndex((comment) => comment.id === write.params.commentId)

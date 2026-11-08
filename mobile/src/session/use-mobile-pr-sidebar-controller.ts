@@ -10,13 +10,15 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import {
   githubRepoSlugQuery,
+  NO_BRANCH,
+  NO_CHECKS,
+  NO_PR,
   patchPrDetails,
   prBranchReviewQuery,
   prChecksQuery,
   prDetailsQuery,
   prDetailsRepo,
   prRepoParams,
-  type PrBranchInput,
   type PrChecksInput,
   type PrDetailsInput,
   type PrQueryScope,
@@ -48,9 +50,6 @@ export type PrSidebarLoadOptions = {
 }
 
 const NO_INPUT = {}
-const NO_BRANCH: PrBranchInput = { branch: '', head: null }
-const NO_PR = { owner: null, name: null, host: null, number: 0 }
-const NO_CHECKS: PrChecksInput = { ...NO_PR, head: null }
 
 // Keep HEAD out of identity: a commit re-reads the PR without clearing what is shown.
 export function buildMobilePrSidebarIdentity(args: {

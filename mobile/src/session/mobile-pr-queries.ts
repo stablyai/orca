@@ -16,7 +16,7 @@ import {
 } from '../../../src/shared/github/work-item-target'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import { defineHostQuery } from '../query/host-query'
-import type { HostQueryParams, HostQueryTarget } from '../query/host-query-key'
+import { hostQueryKey, type HostQueryParams, type HostQueryTarget } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   clearMobileWorktreeReviewLink,
@@ -31,7 +31,6 @@ import {
   fetchWorkItemDetails,
   type GitHubPrRepoSlug
 } from './github-pr-rpc'
-import { GITHUB_CONNECTION_CHANGED } from '../transport/github-target-invocation'
 import { githubPrCommentsRead } from './github-pr-read-operations'
 import { githubPrRequestParams } from './github-pr-repo-slug'
 import { loadPrBranchReview, type PrBranchReview } from './mobile-pr-sidebar-state'
@@ -87,18 +86,10 @@ export type PrQueryScope = {
   detailsInput: PrDetailsInput | null
 }
 
-// A LAN/relay switch during a GitHub read's account or source check sent nothing, and the connected edge never
-// fires for it, so the read starts once more on the new path.
-async function againIfConnectionChanged<T>(read: () => Promise<T>): Promise<T> {
-  try {
-    return await read()
-  } catch (error) {
-    if (error instanceof Error && error.message === GITHUB_CONNECTION_CHANGED) {
-      return read()
-    }
-    throw error
-  }
-}
+// Stand-in inputs for a disabled observer while there is no branch or PR yet.
+export const NO_BRANCH: PrBranchInput = { branch: '', head: null }
+export const NO_PR: PrDetailsInput = { owner: null, name: null, host: null, number: 0 }
+export const NO_CHECKS: PrChecksInput = { ...NO_PR, head: null }
 
 /** Whether the workspace's repo has a GitHub remote, which gates the PR tab. */
 export const githubRepoSlugQuery = defineHostQuery({
@@ -140,23 +131,21 @@ export const prBranchReviewQuery = defineHostQuery({
   refetchOnWindowFocus: true,
   fetch: async (client, target, input: PrBranchInput, previous: PrBranchReview | undefined, read) =>
     keepCheckObservation(
-      await againIfConnectionChanged(() =>
-        loadPrBranchReview(
-          {
-            fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
-            fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
-            clearWorktreeReviewLink: (wt, shouldApply) =>
-              clearMobileWorktreeReviewLink(client, wt, shouldApply),
-            fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args)
-          },
-          {
-            worktreeId: target.worktree ?? '',
-            branch: input.branch,
-            headSha: input.head,
-            // Only an action's read re-learns host status; revalidations reuse what this connection knows.
-            refresh: read.live
-          }
-        )
+      await loadPrBranchReview(
+        {
+          fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
+          fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
+          clearWorktreeReviewLink: (wt, shouldApply) =>
+            clearMobileWorktreeReviewLink(client, wt, shouldApply),
+          fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args)
+        },
+        {
+          worktreeId: target.worktree ?? '',
+          branch: input.branch,
+          headSha: input.head,
+          // Only an action's read re-learns host status; revalidations reuse what this connection knows.
+          refresh: read.live
+        }
       ),
       previous
     )
@@ -196,18 +185,14 @@ export const prDetailsQuery = defineHostQuery({
     if (!repository) {
       throw new Error('Unable to identify this pull request. Open it again.')
     }
-    const fetchDetails = async () => {
-      const outcome = await fetchWorkItemDetails(client, target.worktree ?? '', {
-        prNumber: input.number,
-        prRepo: repository,
-        refresh: read.live
-      })
-      if (!outcome.ok) {
-        throw new Error(outcome.error)
-      }
-      return outcome
+    const outcome = await fetchWorkItemDetails(client, target.worktree ?? '', {
+      prNumber: input.number,
+      prRepo: repository,
+      refresh: read.live
+    })
+    if (!outcome.ok) {
+      throw new Error(outcome.error)
     }
-    const outcome = await againIfConnectionChanged(fetchDetails)
     if (
       !matchesGitHubWorkItemTarget(outcome.result?.item, {
         repository,
@@ -228,13 +213,11 @@ export const prAssignableUsersQuery = defineHostQuery({
   staleTime: 10 * 60_000,
   fetch: async (client, target, input: PrRepoParams): Promise<GitHubAssignableUser[]> => {
     const repo = prRepoSlug(input)
-    return againIfConnectionChanged(async () => {
-      const outcome = await fetchAssignableUsers(client, target.worktree ?? '', repo)
-      if (!outcome.ok) {
-        throw new Error(outcome.error)
-      }
-      return outcome.result
-    })
+    const outcome = await fetchAssignableUsers(client, target.worktree ?? '', repo)
+    if (!outcome.ok) {
+      throw new Error(outcome.error)
+    }
+    return outcome.result
   }
 })
 
@@ -298,4 +281,20 @@ export function patchPrSummary(
   queryClient.setQueryData<PrBranchReview>(branchKey, (review) =>
     review?.kind === 'found' ? { ...review, pr: patch(review.pr) } : review
   )
+}
+
+/** The cache keys a write patches: the shown PR's summary and details, when known. */
+export function prQueryKeys(scope: PrQueryScope | null): {
+  summaryKey: QueryKey | null
+  detailsKey: QueryKey | null
+} {
+  const hostId = scope?.host.hostId ?? ''
+  return {
+    summaryKey: scope?.branchInput
+      ? hostQueryKey(hostId, prBranchReviewQuery.family, scope.target, scope.branchInput)
+      : null,
+    detailsKey: scope?.detailsInput
+      ? hostQueryKey(hostId, prDetailsQuery.family, scope.target, scope.detailsInput)
+      : null
+  }
 }

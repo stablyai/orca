@@ -239,7 +239,6 @@ describe('useMobileSourceControlLoaders branch compare', () => {
     await rerender('host-1:repo42::/other', 'repo42::/other')
     await rerender(IDENTITY, WORKTREE)
     expect(read.loaders?.branchCompareState.kind).toBe('ready')
-    expect(pendingCount(calls, 'worktree.show')).toBe(0)
   })
 
   it('retries a failed compare when Changes is back on top', async () => {

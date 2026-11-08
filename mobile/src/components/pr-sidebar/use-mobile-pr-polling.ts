@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import {
   ChecksDetailPollingPolicy,
@@ -8,6 +8,9 @@ import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import { useHostQuery } from '../../query/host-query'
 import {
+  NO_BRANCH,
+  NO_CHECKS,
+  NO_PR,
   prBranchReviewQuery,
   prChecksQuery,
   prDetailsQuery,
@@ -37,11 +40,8 @@ type Cadence = {
 }
 
 const FIRST_BACKOFF_MS = 60_000
-const NO_BRANCH = { branch: '', head: null }
 const NO_HOST = { hostId: '', client: null }
 const NO_TARGET = { exec: 'local' as const }
-const NO_CHECKS = { owner: null, name: null, host: null, number: 0, head: null }
-const NO_DETAILS = { owner: null, name: null, host: null, number: 0 }
 
 function freshCadence(resource: string | null): Cadence {
   return {
@@ -85,14 +85,18 @@ function stepCadence(
   return cadence
 }
 
-function pollDelayMs(cadence: Cadence, pr: PRInfo): number | null {
+function pollDelayMs(
+  cadence: Cadence,
+  state: PRInfo['state'],
+  checksStatus: PRInfo['checksStatus'] | undefined
+): number | null {
   const policy = new ChecksDetailPollingPolicy()
   if (cadence.failed) {
     policy.fail()
   } else if (cadence.checks) {
     policy.accept(cadence.checks)
   }
-  return policy.delayMs(pr.state, pr.checksStatus, cadence.backoffMs)
+  return policy.delayMs(state, checksStatus, cadence.backoffMs)
 }
 
 // Desktop's checks-panel cadence (shared policy): 1 min while open, backing off to 2 min when nothing
@@ -119,7 +123,12 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
   const resource = pr ? prSidebarResourceKey(pr) : null
   const [cadence, setCadence] = useState(() => freshCadence(resource))
   const current = cadence.resource === resource ? cadence : freshCadence(resource)
-  const delay = running && pr ? pollDelayMs(current, pr) : null
+  const prState = pr?.state
+  const checksStatus = pr?.checksStatus
+  const delay = useMemo(
+    () => (running && prState ? pollDelayMs(current, prState, checksStatus) : null),
+    [running, current, prState, checksStatus]
+  )
   const refetchInterval = delay ?? false
   useHostQuery(prBranchReviewQuery, host, target, queries?.branchInput ?? NO_BRANCH, {
     enabled: running && queries?.branchInput != null,
@@ -131,7 +140,7 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
   })
   // Thread resolution and comment edits leave the PR's updatedAt alone, so open Comments polls its details too.
   const pollDetails = running && live === 'details' && queries?.detailsInput != null
-  useHostQuery(prDetailsQuery, host, target, queries?.detailsInput ?? NO_DETAILS, {
+  useHostQuery(prDetailsQuery, host, target, queries?.detailsInput ?? NO_PR, {
     enabled: pollDetails,
     refetchInterval: pollDetails ? refetchInterval : false
   })
