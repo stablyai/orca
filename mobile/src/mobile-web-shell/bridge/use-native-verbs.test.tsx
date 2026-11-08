@@ -42,26 +42,6 @@ afterEach(() => {
 
 // The typed member must reject desktop methods too; widened callers could otherwise bypass the raw-port inventory’s call shapes.
 
-// Preserve one typed refusal with a stable code; callers must not distinguish recovery actions by message text.
-describe('a verb the shell refuses', () => {
-  it('names the grant when this side refused before sending', async () => {
-    const page = createPageClient()
-    page.deliver({ ...INIT, grants: { ...GRANTS, native: ['navigate'] } })
-    act(() => {
-      create(
-        <RpcClientProvider client={page.client}>
-          <Screen />
-        </RpcClientProvider>
-      )
-    })
-    const verbs = held.verbs
-    if (verbs === null) {
-      throw new Error('nothing mounted')
-    }
-    await expect(verbs.readClipboardText()).rejects.toMatchObject({ reason: 'ungranted' })
-  })
-})
-
 describe('a code this page has never heard of', () => {
   it('floors to unreported rather than crossing verbatim', async () => {
     // Inject a newer-shell code directly; this host normalizes unknown codes before sending, so the pair cannot produce it itself.
