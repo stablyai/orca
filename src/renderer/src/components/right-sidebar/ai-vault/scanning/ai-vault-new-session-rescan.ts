@@ -11,18 +11,20 @@ export function useAiVaultNewSessionRescan(
   // rescan waits for budget rather than leaving new sessions invisible.
   const forcedRescanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const requestForcedRescan = useCallback(() => {
-    if (claimAiVaultForcedRescan()) {
-      void refresh({ background: true, force: true })
-      return
+    function attempt(): void {
+      if (claimAiVaultForcedRescan()) {
+        void refresh({ background: true, force: true })
+        return
+      }
+      if (forcedRescanTimerRef.current !== null) {
+        return
+      }
+      forcedRescanTimerRef.current = setTimeout(() => {
+        forcedRescanTimerRef.current = null
+        attempt()
+      }, aiVaultForcedRescanDelay())
     }
-    const waitMs = aiVaultForcedRescanDelay()
-    if (forcedRescanTimerRef.current !== null) {
-      return
-    }
-    forcedRescanTimerRef.current = setTimeout(() => {
-      forcedRescanTimerRef.current = null
-      requestForcedRescan()
-    }, waitMs)
+    attempt()
   }, [refresh])
 
   useEffect(
