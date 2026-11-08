@@ -7,6 +7,7 @@ import { HOST_ID, readBearer, verifyRelayJwt } from './jwt'
 import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
+import { objectHealth } from './health'
 import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
@@ -96,6 +97,7 @@ export default {
       return Response.json({ ok: true, connectionCapacityProtocol: 2 })
     }
     if (url.search) { return reject(400) }
+    if (url.pathname === '/__health/object') { return objectHealth(env, request) }
     const admin = url.pathname.match(/^\/__admin\/(assign|export|erase|drain)$/)
     if (admin) { return handleAdmin(env, request, admin[1] as AdminOp) }
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
@@ -146,11 +148,20 @@ export default {
     if (url.pathname === '/v1/host/control') {
       if (!isUpgrade) { return reject(426) }
       const token = readBearer(request.headers.get('authorization'))
-      const claims = token ? await verifyRelayJwt(env, token) : null
-      if (!claims) { return reject(401) }
-      return forward(env, request, claims.relayHostId, {
+      const verified = token ? await verifyRelayJwt(env, token) : null
+      if (!verified?.ok) {
+        // No keys to judge the token (cold isolate, auth unreachable): 503, not 401. Shipped
+        // desktops treat any refused upgrade the same (a network error, retried through the
+        // director), so this changes no client behavior; it keeps an outage out of the 401s.
+        if (verified?.reason === 'keys_unavailable') {
+          metric(env, 'control_upgrade', 1, 'keys_unavailable', [], '', requestPlace(request))
+          return reject(503, 5)
+        }
+        return reject(401)
+      }
+      return forward(env, request, verified.claims.relayHostId, {
         'x-edge-kind': 'control',
-        'x-edge-claims': JSON.stringify(claims)
+        'x-edge-claims': JSON.stringify(verified.claims)
       })
     }
 

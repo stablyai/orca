@@ -48,7 +48,7 @@ export class HostRelay extends HostRelayPhones {
   > {
     const refused = await this.claimAdminJti(replay)
     if (refused) { return refused }
-    if (this.ctx.getWebSockets('control').length > 0) { return { outcome: 'busy' } }
+    if (this.liveControls().length > 0) { return { outcome: 'busy' } }
     const devices = this.store.freezeForExport()
     await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moving')
     await this.reschedule()
@@ -76,8 +76,7 @@ export class HostRelay extends HostRelayPhones {
   // desktop re-asks the director), and goes through the same path as that expiry. The assignment,
   // devices and splices are left as they are.
   async adminDrain(replay?: AdminReplayGuard | null): Promise<ReplayRefusal | { outcome: 'idle' } | { outcome: 'drained'; controls: number }> {
-    // A socket whose attachment is cleared is already gone (closing, still listed).
-    const controls = this.ctx.getWebSockets('control').filter((ws) => this.attachment(ws) !== null)
+    const controls = this.liveControls()
     // An idle drain of a host nobody pushed changes nothing and must not give the object storage,
     // so its jti is not recorded; a copy of that token can at most drain a control that arrived
     // since, which sends the desktop back to the director once.
@@ -90,6 +89,19 @@ export class HostRelay extends HostRelayPhones {
       await this.onSocketGone(ws, RELAY_CLOSE_CODE.DRAINING, '')
     }
     return { outcome: 'drained', controls: controls.length }
+  }
+
+  // A socket whose attachment is cleared is already gone (closing, still listed): drain and export
+  // both ignore it, so a just-drained desktop does not make the export that follows answer busy.
+  private liveControls(): WebSocket[] {
+    return this.ctx.getWebSockets('control').filter((ws) => this.attachment(ws) !== null)
+  }
+
+  // Health probe (GET /__health/object, health.ts), only ever called on the canary object: one
+  // read of the object's SQLite. No writes, no alarm, no storage created.
+  healthCheck(): { ok: true } {
+    this.ctx.storage.sql.exec('SELECT 1').one()
+    return { ok: true }
   }
 
   private async claimAdminJti(replay: AdminReplayGuard | null | undefined): Promise<ReplayRefusal | null> {

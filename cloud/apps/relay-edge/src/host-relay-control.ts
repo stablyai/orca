@@ -57,10 +57,18 @@ export abstract class HostRelayControl extends HostRelayHandshake {
       metric(this.env, 'auth_refresh', 1, 'invalid', [], '', this.attachment(ws)?.place)
       return
     }
-    const claims = await verifyRelayJwt(this.env, parsed.data.relayJwt)
+    const verified = await verifyRelayJwt(this.env, parsed.data.relayJwt)
     // Re-read after the await: the attachment may have moved on (pongs, pings) meanwhile.
     const current = this.attachment(ws)
     if (!current || current.k !== 'control') { return }
+    // Keys unavailable (cold isolate, auth unreachable) says nothing about the token: keep the
+    // socket and its current session unchanged; the next refresh retries. The alarm still closes
+    // it at exp + grace, so this never extends access.
+    if (!verified.ok && verified.reason === 'keys_unavailable') {
+      metric(this.env, 'auth_refresh', 1, 'keys_unavailable', [], '', current.place)
+      return
+    }
+    const claims = verified.ok ? verified.claims : null
     const same =
       claims &&
       claims.userId === current.claims.userId &&
