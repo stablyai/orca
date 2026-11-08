@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MARINE_CREATURES } from '../../../../shared/marine-creatures'
 import { encodeClaudeProjectPath } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
-import { resetProjectDirCwdCacheForTests } from '../../../ai-vault/session-scanner-scope-discovery'
 import { discoverRetiredWorktreeNames } from './worktree-retirement-discovery'
 
 const FIRST = MARINE_CREATURES[0].toLowerCase()
@@ -13,7 +12,6 @@ describe('retirement discovery of Claude buckets', () => {
   let home: string
 
   beforeEach(async () => {
-    resetProjectDirCwdCacheForTests()
     home = await mkdtemp(join(tmpdir(), 'orca-retire-claude-'))
   })
 
@@ -34,13 +32,13 @@ describe('retirement discovery of Claude buckets', () => {
   }
 
   it.each([
-    ['the cut falls inside the workspace name', 195, (root: string) => root],
-    ['the workspace root alone is longer than the cut', 230, (root: string) => root],
+    ['the cut falls inside the workspace name', 195, false],
+    ['the workspace root alone is longer than the cut', 230, false],
     // Case-insensitive volumes let the transcript spell the same root differently.
-    ['the transcript spells the root in another case', 230, (root: string) => root.toUpperCase()]
-  ])('keeps a long workspace path spent when %s', async (_case, rootLength, recordedRoot) => {
+    ['the transcript spells the root in another case', 230, true]
+  ])('keeps a long workspace path spent when %s', async (_case, rootLength, upperCaseCwd) => {
     const root = `/synthetic/${'a'.repeat(rootLength - '/synthetic/'.length)}`
-    await addHashedBucket(`${recordedRoot(root)}/${FIRST}`)
+    await addHashedBucket(`${upperCaseCwd ? root.toUpperCase() : root}/${FIRST}`)
 
     const retired = await discoverRetiredWorktreeNames({ workspaceRoots: [root], home, env: {} })
 

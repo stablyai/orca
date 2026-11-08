@@ -4,9 +4,8 @@ import { join } from 'node:path'
 import { isWslUncPath, parseWslUncPath } from '../../../../shared/wsl-paths'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import {
-  CLAUDE_BUCKET_NAME_MAX_LENGTH,
   claudeProjectBucketNameBelowScope,
-  isClaudeProjectBucketInScope
+  mayBeHashedClaudeProjectBucketName
 } from '../../../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { CLAUDE_CWD_BUCKET_LAYOUT } from '../../../ai-vault/session-cwd-bucket-layouts'
 import {
@@ -122,8 +121,7 @@ type ClaudeProjectsSource = {
 }
 
 // Session History's bucket rules (long-path cut, roots, case, both WSL spellings); missed buckets risk reissuing used paths.
-function claudeProjectsSource(projectsDir: string, paths: readonly string[]): ClaudeProjectsSource {
-  const roots = paths.filter((path) => path.length > 0)
+function claudeProjectsSource(projectsDir: string, roots: string[]): ClaudeProjectsSource {
   return {
     projectsDir,
     roots,
@@ -140,12 +138,13 @@ async function claudeProjectsSources(args: {
 }): Promise<{ sources: ClaudeProjectsSource[]; complete: boolean }> {
   const sources: ClaudeProjectsSource[] = []
   let complete = true
-  if (args.workspaceRoots.some((root) => root.length > 0)) {
+  const hostRoots = args.workspaceRoots.filter((root) => root.length > 0)
+  if (hostRoots.length > 0) {
     for (const projectsDir of new Set([
       getClaudeProjectsDir(args.home ?? homedir(), args.env ?? process.env),
       ...claudeProfileHistoryDirs('projects')
     ])) {
-      sources.push(claudeProjectsSource(projectsDir, args.workspaceRoots))
+      sources.push(claudeProjectsSource(projectsDir, hostRoots))
     }
   }
   const linuxRootsByDistro = new Map<string, string[]>()
@@ -193,11 +192,10 @@ export async function discoverRetiredWorktreeNames(args: {
     const listing = await readDirectoryNames(source.projectsDir)
     refused ||= listing.refused
     for (const bucket of listing.names) {
-      leafNames.push(...extractBucketLeafCandidates(bucket, source.encodedParents))
-      if (
-        bucket.length > CLAUDE_BUCKET_NAME_MAX_LENGTH &&
-        isClaudeProjectBucketInScope(bucket.toLowerCase(), source.encodedParents)
-      ) {
+      const candidates = extractBucketLeafCandidates(bucket, source.encodedParents)
+      leafNames.push(...candidates)
+      // An in-scope hashed bucket always leaves a remainder (its hash), so it has candidates.
+      if (candidates.length > 0 && mayBeHashedClaudeProjectBucketName(bucket)) {
         const projectDir = join(source.projectsDir, bucket)
         leafNames.push(
           ...(await hashedBucketLeafNames(projectDir, source.roots, () => (refused = true)))
