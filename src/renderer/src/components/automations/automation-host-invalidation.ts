@@ -1,10 +1,10 @@
 /** Invalidate only the scoped entry or unscoped publisher authority. Coalesce event bursts in one microtask so definition/run/usage writes share one refresh and legacy authority request. */
 
-import { hostStableKey } from '../../../../shared/automation-owner-key'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import type {
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
 import type { AutomationHostCache } from './automation-host-cache'
 

@@ -1,7 +1,7 @@
 import { constants, type Stats } from 'node:fs'
 import { lstat, open, realpath, rm } from 'node:fs/promises'
 import { basename, resolve } from 'node:path'
-import type { NativeFileDropCopyFailureReason } from '../../shared/native-file-drop'
+import type { NativeFileDropCopyFailureReason } from '../../shared/file-import/native-file-drop'
 import {
   formatByteCeiling,
   REMOTE_IMPORT_MAX_FILE_BYTES,

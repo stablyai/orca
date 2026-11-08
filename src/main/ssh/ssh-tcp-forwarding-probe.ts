@@ -13,6 +13,8 @@ const ADMINISTRATIVELY_PROHIBITED = 1
 const CONNECT_FAILED = 2
 const TCP_FORWARDING_PROBE_TIMEOUT_MS = 10_000
 const FORWARD_CHANNEL_CHECK_TIMEOUT_MS = 5_000
+// Why: ssh -L binds only after its own login; a slow ProxyCommand (e.g. Coder) can take many seconds. Same budget as a system SSH connect.
+const FORWARD_LISTEN_TIMEOUT_MS = 30_000
 // The client logs a failed open just before it drops the socket; the two can arrive out of order.
 const FORWARD_CHANNEL_FAILURE_LOG_GRACE_MS = 500
 const FORWARD_CHANNEL_FAILURE_LOG_POLL_MS = 25
@@ -68,10 +70,23 @@ export function probeTcpForwarding(
   })
 }
 
+export type ForwardChannelCheckOptions = {
+  /** Wait for a reply once a dial connects. */
+  channelTimeoutMs?: number
+  /** Wait for the listener to come up, i.e. for the forward's own login. */
+  listenTimeoutMs?: number
+  /** Aborted when the forward exits: no listener can come up any more. */
+  signal?: AbortSignal
+}
+
 /** A listener alone proves no remote channel: dial through it. Reply bytes or a channel still open at timeout prove it opened. */
 export function checkForwardChannel(
   forward: Pick<StartedPortForward, 'entry' | 'lastChannelOpenFailure'>,
-  timeoutMs = FORWARD_CHANNEL_CHECK_TIMEOUT_MS
+  {
+    channelTimeoutMs = FORWARD_CHANNEL_CHECK_TIMEOUT_MS,
+    listenTimeoutMs = FORWARD_LISTEN_TIMEOUT_MS,
+    signal
+  }: ForwardChannelCheckOptions = {}
 ): Promise<ForwardChannelVerdict> {
   const readFailure = forward.lastChannelOpenFailure
   if (!readFailure) {
@@ -99,13 +114,13 @@ export function checkForwardChannel(
       clearTimeout(timer)
       clearTimeout(redial)
       clearInterval(poll)
+      signal?.removeEventListener('abort', onTimeout)
       socket?.destroy()
       resolve(verdict)
     }
-    const timer = setTimeout(
-      () => settle(verdictOf() ?? (everConnected ? 'unverifiable' : 'not-listening')),
-      timeoutMs
-    )
+    const onTimeout = (): void =>
+      settle(verdictOf() ?? (everConnected ? 'unverifiable' : 'not-listening'))
+    let timer = setTimeout(onTimeout, listenTimeoutMs)
     const awaitFailureLog = (): void => {
       if (settled || poll) {
         return
@@ -126,7 +141,12 @@ export function checkForwardChannel(
       socket = current
       current.once('connect', () => {
         connected = true
-        everConnected = true
+        if (!everConnected) {
+          // Listening proves the login finished; the channel answer gets its own, shorter wait.
+          everConnected = true
+          clearTimeout(timer)
+          timer = setTimeout(onTimeout, channelTimeoutMs)
+        }
         current.write(FORWARD_CHANNEL_CHECK_BYTES)
       })
       current.once('data', () => settle('allowed'))
@@ -139,6 +159,11 @@ export function checkForwardChannel(
           redial = setTimeout(dial, FORWARD_CHANNEL_REDIAL_MS)
         }
       })
+    }
+    signal?.addEventListener('abort', onTimeout, { once: true })
+    if (signal?.aborted) {
+      onTimeout()
+      return
     }
     dial()
   })

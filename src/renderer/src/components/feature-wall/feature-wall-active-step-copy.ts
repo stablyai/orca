@@ -3,12 +3,17 @@ import type { ReviewStep } from '../../../../shared/review-steps'
 import type { WorkbenchStep } from '../../../../shared/workbench-steps'
 import type { FeatureWallActiveStepCopy } from './FeatureWallTourPanel'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getLocalizedFeatureWallStepCopy } from './feature-wall-tour-localized-copy'
 
-export function tourContinueLabel(finished: boolean, doneLabel: string): string {
+export function tourContinueLabel(
+  finished: boolean,
+  doneLabel: string,
+  t: Translate = translate
+): string {
   return finished
     ? doneLabel
-    : translate('auto.components.feature.wall.FeatureWallTourSurface.continue', 'Continue')
+    : t('auto.components.feature.wall.FeatureWallTourSurface.continue', 'Continue')
 }
 
 export function getFeatureWallActiveStepCopy(

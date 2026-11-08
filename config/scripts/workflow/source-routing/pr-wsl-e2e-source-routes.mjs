@@ -18,6 +18,15 @@ export const PR_WSL_E2E_SOURCE_ROUTES = [
       )
   },
   {
+    // Startup recovery decides which journaled moves still fence after a restart.
+    id: 'wsl-move.fence',
+    specs: ['tests/e2e/wsl-move-fence.spec.ts'],
+    matches: (file) =>
+      /^src\/(?:main\/(?:persistence\/moving-wsl-projects\/wsl-move-(?:scope-guard|fence|reset|startup|startup-rewrite|cutover-journal)|ipc\/pty\/host-env\/spawn-cwd|wsl\/host-lifecycle\/wsl-host-gate(?:-startup)?)|shared\/wsl-move\/wsl-move-cutover)\.ts$/.test(
+        file
+      )
+  },
+  {
     id: 'terminal.windows-wsl-launch-and-paste',
     specs: [
       'tests/e2e/golden-tab-bar-agent-launch.spec.ts',

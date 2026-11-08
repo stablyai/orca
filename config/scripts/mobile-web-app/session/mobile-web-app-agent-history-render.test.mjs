@@ -155,10 +155,10 @@ async function openRoute(route, awaitText, options = {}) {
 }
 
 /** Every grant-gated notify the page posted, whole and in order, as the shell received them. The
- *  paint report is not one: every page posts it once its route screen has a frame. */
+ *  paint report and the location report are not: every page posts them for its route screen. */
 async function readNotifies(page) {
   const notifies = await page.evaluate(() => globalThis.__orcaRenderCheckNotifies ?? [])
-  return notifies.filter((frame) => frame.name !== paintName)
+  return notifies.filter((frame) => frame.name !== paintName && frame.name !== 'location')
 }
 
 describeRender('the agent-history route in a real browser', () => {

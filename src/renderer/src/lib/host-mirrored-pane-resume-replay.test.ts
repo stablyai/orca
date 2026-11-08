@@ -1,16 +1,17 @@
 import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
-import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
-import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent.test-fixture'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { resumeSleepingAgentSessionsForWorktree } from './agent-session/resume/resume-sleeping-agent-session'
+import { makeCreatedAgentWorktree } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   hasHostSessionMirrorHydrated,
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
-} from '@/runtime/host-session-mirror-hydration'
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
+} from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
+import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 // Mirror settlement must replay deferred recovery and reset per connection, or duplicate-launch prevention would strand resumes.
 

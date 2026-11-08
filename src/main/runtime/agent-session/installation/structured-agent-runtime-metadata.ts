@@ -1,15 +1,19 @@
 import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
-import { ACP_LAUNCH_SPECS, type AcpLaunchSpec } from '../../../acp/acp-launch-specs'
-import { acpStructuredAgentDefinition } from '../../../acp/acp-structured-agent-definitions'
-import { resolveAcpLaunchCommand } from '../../../acp/acp-structured-launch-resolution'
+import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
+import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
+import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
+import {
+  resolveAcpLaunchCommand,
+  selectAcpHostAccountHome
+} from '../../../acp/launch/acp-launch-command'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { CLAUDE_CLI_CONVERSATIONS } from '../../../claude/claude-cli-conversations'
 import { CODEX_CLI_CONVERSATIONS } from '../../../codex/history/journal-views/codex-cli-conversations'
 import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
 import { supportsClaudeStructuredLocation } from '../../../claude/structured/launch/claude-structured-location-support'
-import { supportsAcpStructuredLocation } from '../../../acp/acp-structured-location-support'
+import { supportsAcpStructuredLocation } from '../../../acp/session/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../../../pi/rpc-runtime-metadata'
 import { getClaudeProfileRouter } from '../../../claude-accounts/claude-profile-installed-router'
 import {
@@ -43,7 +47,14 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       const options = { commandSettings, dataDirectory: getProfileUserDataPath() }
       return { ...resolveAcpLaunchCommand(spec, env, options), env }
     },
-    ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {})
+    ...(managedRuntime ? { installable: () => managedRuntime.pin() !== null } : {}),
+    ...(spec.hostBackend
+      ? {
+          hostAlternative: async (shellEnv, settings) =>
+            (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
+            null
+        }
+      : {})
   }
 }
 
@@ -79,8 +90,25 @@ function acpMetadata(spec: AcpLaunchSpec): StructuredAgentRuntimeMetadata {
           }
         }
       : {}),
-    resolveAccountHome: ({ launchEnv }, { stateDirectory }) =>
-      spec.account.resolve({ launchEnv, stateDirectory }),
+    // New chats prefer a compatible host program, which their account home then pins; reads such
+    // as Orca's own sign-in keep the agent's account.
+    resolveAccountHome: async (
+      { launchEnv, purpose, permissionMode },
+      { stateDirectory, hostLaunchEnvironment, hostSettings }
+    ) => {
+      // A host program without the chat's permission mode never takes it; `own` sets none.
+      const host =
+        spec.hostBackend &&
+        purpose === 'launch' &&
+        (permissionMode === undefined ||
+          permissionMode === 'own' ||
+          spec.hostBackend.spec.permissionModeConfig?.values[permissionMode] !== undefined)
+          ? await hostLaunchEnvironment(spec.agent)
+              .then((env) => selectAcpHostAccountHome(spec, env, stateDirectory, hostSettings()))
+              .catch(() => null)
+          : null
+      return host ?? spec.account.resolve({ launchEnv, stateDirectory })
+    },
     modelCatalog: (context) => acpModelCatalogDiscovery(spec, context),
     transcriptImport: spec.transcriptImport,
     sessionHistory: spec.sessionHistory
@@ -91,7 +119,7 @@ async function resolveCodexAccountHomePath(
   request: StructuredAgentAccountHomeRequest,
   services: StructuredAgentAccountHomeServices
 ): Promise<string> {
-  const { launchEnv, purpose, workspacePath } = request
+  const { launchEnv, purpose, workspacePath, location } = request
   const codexHome = await resolveStructuredCodexAccountHomePath({
     launchEnv,
     resolveLaunchHome:
@@ -102,7 +130,8 @@ async function resolveCodexAccountHomePath(
       workspacePath: await workspacePath(),
       launchEnv,
       codexHome,
-      settings: services.workspaceTrustSettings()
+      settings: services.workspaceTrustSettings(),
+      repoDecision: services.workspaceTrustRepoDecision(location)
     })
   }
   return codexHome

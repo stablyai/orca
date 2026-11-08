@@ -17,7 +17,7 @@ export const SHELL_PREFIXES = [
   'src/main/startup/hydrate-shell-path',
   'src/main/startup/login-shell-environment',
   'src/main/startup/shell-path-probe',
-  'src/renderer/src/components/terminal-pane/fish-color-scheme',
+  'src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme',
   'src/shared/fish-',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes',
   'src/shared/startup-shell-portability',

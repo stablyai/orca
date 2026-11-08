@@ -1,7 +1,7 @@
 import { terminalInputSend } from './mobile-terminal-operations'
 import { describe, expect, it, vi } from 'vitest'
 import { sendTerminalLiveAccessoryRawBytes } from './terminal-live-accessory-raw-send'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 function captureClient(
   result: Promise<unknown> = Promise.resolve({

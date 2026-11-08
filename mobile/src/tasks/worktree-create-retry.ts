@@ -1,7 +1,7 @@
 import { translate } from '../i18n/mobile-i18n'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import {
   agentLaunchRun,
   agentLaunchReplayRun,

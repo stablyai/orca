@@ -25,8 +25,11 @@ export type MobileQueuedEditHostFixture = {
   dispose: () => Promise<void>
 }
 
+export type MobileQueuedEditHostClockFixtureModule = {
+  HOST_TEST_NOW: number
+}
+
 export type MobileQueuedEditHostFixtureModule = {
-  now: number
   createMobileQueuedEditHostFixture: () => Promise<MobileQueuedEditHostFixture>
 }
 

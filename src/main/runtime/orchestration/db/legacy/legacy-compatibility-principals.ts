@@ -2,9 +2,10 @@ import type {
   LegacyAdoptionRow,
   LegacyCompatibilityPrincipalRow,
   LegacyPrincipalRole
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
-import { LEGACY_RUN_ID, LEGACY_CONTRACT_VERSION } from '../contract-constants'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
+import { LEGACY_CONTRACT_VERSION } from '../contract-constants'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 

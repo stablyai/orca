@@ -1,3 +1,8 @@
+import { historicalTurnLifecycle } from '../../structured/journal/codex-structured-journal-translation-restore'
+import { agentJournalTurnBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { interruptedAgentJournalToolCall } from '../../../../shared/agent-journal-tool-call-lifecycle'
+import { codexJournalItem } from '../../structured/items/codex-structured-item-translation'
+import type { CodexHelperName } from '../../structured/items/codex-collab-agent-item-translation'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -60,9 +65,52 @@ export function preserveSavedHistoryPayload(
     if (item.status == null) {
       translated.state = old.state
     }
+    if (old.endedAs === 'interrupted') {
+      translated = interruptedAgentJournalToolCall(translated)
+    }
     if (translated.output === undefined && old.output !== undefined) {
       translated.output = old.output
     }
   }
   return translated
+}
+
+export function projectCodexHistoryItem(
+  item: CodexThreadItem,
+  saved: AgentJournalRenderItem | null = null,
+  interrupted = false,
+  helperName?: CodexHelperName
+): AgentJournalItemBody | null {
+  if (item.type === 'subAgentActivity') {
+    return null
+  }
+  let body =
+    item.type === 'contextCompaction'
+      ? { kind: 'status' as const, text: 'Context compacted', presentation: 'compaction' as const }
+      : codexJournalItem(item, helperName).body
+  if (!body) {
+    return null
+  }
+  body = preserveSavedHistoryPayload(item, body, saved)
+  if (body.kind === 'tool-call' && (interrupted || body.endedAs === 'interrupted')) {
+    body = interruptedAgentJournalToolCall(body)
+    if (item.type === 'commandExecution') {
+      delete body.exitCode
+      delete body.durationMs
+    }
+  }
+  return body
+}
+
+export function projectCodexHistoryTurn(
+  segment: string,
+  source: Record<string, unknown>,
+  userItemId?: string
+) {
+  const lifecycle = historicalTurnLifecycle(segment, source)!
+  delete lifecycle.userItemId
+  if (userItemId) {
+    lifecycle.userItemId = userItemId
+  }
+  return agentJournalTurnBody(lifecycle)
 }

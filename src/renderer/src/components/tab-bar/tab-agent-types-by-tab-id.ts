@@ -6,7 +6,7 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
-} from '../native-chat/native-chat-leaf-routing'
+} from '../native-chat/pane/routing/native-chat-leaf-routing'
 
 type TabBarAgentProjectionSelectorDependencies = {
   onStatusEntryVisited?: (paneKey: string) => void

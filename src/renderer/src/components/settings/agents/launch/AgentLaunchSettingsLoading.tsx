@@ -1,8 +1,9 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AllAgentsPermissionSetting } from '../../../agent/launch-settings/AgentPermissionChoiceControls'
 
 export function AgentLaunchSettingsLoading(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <fieldset disabled className="min-w-0 space-y-8">
       <AgentDefaultSetting
@@ -10,17 +11,19 @@ export function AgentLaunchSettingsLoading(): React.JSX.Element {
         detectedIds={null}
         enabledDetectedAgents={[]}
         catalog={[]}
-        description={translate(
+        description={t(
           'settings.agents.hostDefaults',
           'Defaults for new agents on the selected host.'
         )}
         onSetDefault={() => {}}
-      />
-      <AllAgentsPermissionSetting
-        choice={null}
-        withoutAutoChoice={null}
-        onChange={() => {}}
-        onChangeWithoutAuto={() => {}}
+        permissions={
+          <AllAgentsPermissionSetting
+            choice={null}
+            withoutAutoChoice={null}
+            onChange={() => {}}
+            onChangeWithoutAuto={() => {}}
+          />
+        }
       />
     </fieldset>
   )

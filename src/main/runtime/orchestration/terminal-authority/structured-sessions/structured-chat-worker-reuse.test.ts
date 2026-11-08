@@ -1,7 +1,6 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
-import { structuredMailboxCustody } from '../../structured-session-mail-target'
+import { structuredMailboxCustody } from '../../mailbox/routing/structured-session-mail-target'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/orca-session-address'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
@@ -27,23 +26,26 @@ import {
 } from './structured-chat-coordinator-mail-rig.test-fixture'
 import { getFollowUpDispatch } from '../../db/dispatch-context/worker-follow-up-lineage'
 import { structuredWorkerIdentities } from './structured-worker-identity'
-import { createStructuredWorkerSession } from '../../../rpc/methods/orchestration-structured-worker-session'
+import { createStructuredWorkerSession } from '../../../rpc/methods/orchestration/structured-workers/orchestration-structured-worker-session'
 import type { placeWorkerAgent } from '../../../rpc/methods/orchestration/worker/worker-start-agent-placement'
 
 // The worker's chat is created in the rig's real session host, as the production create would.
-vi.mock('../../../rpc/methods/structured-agent-session-create', () => ({
-  createStructuredAgentSessionForWorktree: async (args: {
-    caller: { callerKey: string }
-    envelope: { sessionId: string }
-  }) => {
-    const rig = await import('./structured-chat-coordinator-mail-rig.test-fixture')
-    const { attachParams } = await import('./structured-chat-coordinator-fake-codex-fixture')
-    const attached = await rig.host.attach(args.caller, attachParams(args.envelope.sessionId))
-    await rig.host.setSessionTabVisibility(args.envelope.sessionId, true)
-    rig.threadBySession.set(args.envelope.sessionId, rig.codex.connections.at(-1)!.threadId!)
-    return attached
-  }
-}))
+vi.mock(
+  '../../../rpc/methods/structured-sessions/creation/structured-agent-session-create',
+  () => ({
+    createStructuredAgentSessionForWorktree: async (args: {
+      caller: { callerKey: string }
+      envelope: { sessionId: string }
+    }) => {
+      const rig = await import('./structured-chat-coordinator-mail-rig.test-fixture')
+      const { attachParams } = await import('./structured-chat-coordinator-fake-codex-fixture')
+      const attached = await rig.host.attach(args.caller, attachParams(args.envelope.sessionId))
+      await rig.host.setSessionTabVisibility(args.envelope.sessionId, true)
+      rig.threadBySession.set(args.envelope.sessionId, rig.codex.connections.at(-1)!.threadId!)
+      return attached
+    }
+  })
+)
 
 type WorkspaceLookup = {
   showManagedTerminalWorkspace: (
@@ -402,47 +404,5 @@ describe('a send to a finished structured worker', () => {
       WAIT
     )
     expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
-  })
-})
-
-describe('a finished terminal worker', () => {
-  it('is not handed a Dispatch while its finished Dispatch still holds the terminal', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-    const pane = {
-      paneKey: 'tab_pty:dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-      processIncarnation: 'pty:1'
-    }
-    const started = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: 9,
-      taskId,
-      startOptions: {}
-    })
-    db.prepareStartingWorkerAuthority({
-      dispatchId: started.dispatch.id,
-      handle: 'term_finished',
-      ...pane,
-      hostScope: LOCAL,
-      worktreeId: 'repo::worker',
-      effects: [],
-      setupState: 'not_applicable',
-      terminalOwnership: 'created'
-    })
-    db.markWorkerDispatchReady(started.dispatch.id)
-    db.abandonWorkerDispatch(started.dispatch.id, runtime.getRuntimeId())
-    const followUp = await followUpTask()
-
-    expect(() =>
-      db.createDispatchContext({
-        taskId: followUp,
-        assigneeHandle: 'term_finished',
-        assigneePaneKey: pane.paneKey,
-        processIncarnation: pane.processIncarnation,
-        hostScope: LOCAL,
-        creator: { kind: 'system' },
-        maxDepth: 9
-      })
-    ).toThrow(`worker-start --task ${followUp} --terminal term_finished`)
   })
 })

@@ -33,7 +33,7 @@ import { NotificationStep } from '../onboarding/NotificationStep'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 import { getLocalizedFeatureWallSetupChecklistCopy } from './feature-wall-setup-checklist-localized-copy'
 
@@ -290,6 +290,7 @@ function TaskSourcesAction(): React.JSX.Element {
 export function FeatureWallSetupChecklist(
   props: FeatureWallSetupChecklistProps
 ): React.JSX.Element {
+  const t = useTranslate()
   const { activeStep, progress, onSelectStep, layout = 'modal' } = props
   const isEmbedded = layout === 'embedded'
   const activeDone = activeStep ? progress.stepDone[activeStep.id] : false
@@ -324,10 +325,7 @@ export function FeatureWallSetupChecklist(
         )}
       >
         <SetupSection
-          title={translate(
-            'auto.components.feature.wall.FeatureWallSetupChecklist.1a6a7d6c80',
-            'Setup'
-          )}
+          title={t('auto.components.feature.wall.FeatureWallSetupChecklist.1a6a7d6c80', 'Setup')}
           steps={setupSteps}
           startOrdinal={1}
           activeStepId={activeStep?.id ?? null}
@@ -335,7 +333,7 @@ export function FeatureWallSetupChecklist(
           onSelectStep={onSelectStep}
         />
         <SetupSection
-          title={translate(
+          title={t(
             'auto.components.feature.wall.FeatureWallSetupChecklist.713cc529a5',
             'Milestones'
           )}
@@ -370,10 +368,7 @@ export function FeatureWallSetupChecklist(
                 {activeDone ? (
                   <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
                     <Check className="size-3.5" />
-                    {translate(
-                      'auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405',
-                      'Done'
-                    )}
+                    {t('auto.components.feature.wall.FeatureWallSetupChecklist.13294d3405', 'Done')}
                   </span>
                 ) : null}
               </div>

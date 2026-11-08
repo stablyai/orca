@@ -1,4 +1,8 @@
-import { chatNameInputs, layoutNameInputs, terminalNameInputs } from '../orchestration-sender-name'
+import {
+  chatNameInputs,
+  layoutNameInputs,
+  terminalNameInputs
+} from '../mailbox/senders/orchestration-sender-name'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 /** Excludes scrollback, focus, bells and other session bookkeeping from name invalidation. */

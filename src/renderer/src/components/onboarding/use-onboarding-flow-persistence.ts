@@ -1,4 +1,6 @@
 import { useCallback, useRef } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import {
@@ -23,6 +25,15 @@ export async function persistStep(
     lastCompletedStep: Math.max(stepNumber, -1),
     ...updates
   })
+}
+
+function notifyProgressSaveFailure(): void {
+  toast.error(
+    translate(
+      'auto.components.onboarding.use.onboarding.flow.52acfbef51',
+      'Could not save progress'
+    )
+  )
 }
 
 function selectedAgentOrBlank(agent: TuiAgent | null): TuiAgent | 'blank' {
@@ -92,7 +103,7 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
     async (
       outcome: 'completed' | 'dismissed',
       lastStepReached: StepNumber,
-      completedPath?: 'add_project_modal',
+      completedPath?: 'add_project_modal' | 'workspace',
       dismissedExtras?: DismissedExtras
     ): Promise<boolean> => {
       if (closedRef.current) {
@@ -112,6 +123,7 @@ export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: Clo
         // A failed write did not close onboarding; release the latch for retry.
         closedRef.current = false
         setError(err instanceof Error ? err.message : String(err))
+        notifyProgressSaveFailure()
         return false
       }
       onOnboardingChange(nextState)
@@ -180,13 +192,20 @@ export function usePersistCurrentStep({
         // Why: the Chat UI choice saves with the default agent, so leaving mid-step changes nothing.
         return { ok: true }
       }
-      if (currentStepId === 'agent') {
-        // Continue confirms the visible choice before late detection can replace it during the save.
-        agentInteractedRef.current = true
+      if (currentStepId === 'agent' || currentStepId === 'notifications') {
+        if (currentStepId === 'agent') {
+          // Continue confirms the visible choice before late detection can replace it during the save.
+          agentInteractedRef.current = true
+        }
         const defaultTuiAgent = selectedAgentOrBlank(selectedAgent)
         await updateSettings({
           ...agentSurfaceSettingsUpdate(settings, agentSurface),
           defaultTuiAgent,
+          ...(currentStepId === 'notifications'
+            ? {
+                notifications: buildCompletedOnboardingNotificationSettings(settings.notifications)
+              }
+            : {}),
           // Off adds no flag, as it always has: each agent's own settings apply.
           ...(yoloPermissionsChosen.current
             ? applyAllAgentsPermission(settings, yoloPermissions ? 'full-access' : 'own')
@@ -200,7 +219,7 @@ export function usePersistCurrentStep({
         const choseAgent = defaultTuiAgent !== 'blank'
         const wasAlreadyChosen = onboardingChecklist.choseAgent
         onOnboardingChange(
-          await persistStep(1, {
+          await persistStep(currentStepId === 'agent' ? 1 : ONBOARDING_FINAL_STEP, {
             checklist: { ...onboardingChecklist, choseAgent }
           })
         )
@@ -210,19 +229,14 @@ export function usePersistCurrentStep({
             time_since_completed_ms: 0
           })
         }
+        if (currentStepId === 'notifications') {
+          useAppStore.getState().recordFeatureInteraction('notifications')
+        }
         return { ok: true }
       }
       if (currentStepId === 'theme') {
         await updateSettings({ theme })
         onOnboardingChange(await persistStep(2))
-        return { ok: true }
-      }
-      if (currentStepId === 'notifications') {
-        await updateSettings({
-          notifications: buildCompletedOnboardingNotificationSettings(settings.notifications)
-        })
-        useAppStore.getState().recordFeatureInteraction('notifications')
-        onOnboardingChange(await persistStep(ONBOARDING_FINAL_STEP))
         return { ok: true }
       }
       if (currentStepId === 'windows_terminal') {
@@ -238,6 +252,7 @@ export function usePersistCurrentStep({
       return { ok: false }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+      notifyProgressSaveFailure()
       return { ok: false }
     }
   }, [

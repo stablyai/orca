@@ -77,6 +77,8 @@ export type BrowserScreencastReadyResult = {
   browserPageId: string
   format: 'jpeg' | 'png'
   tab: BrowserTabInfo
+  // Echo of `frameAck: 1`: the host holds frames until the viewer acks them.
+  frameAck?: true
 }
 
 export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
