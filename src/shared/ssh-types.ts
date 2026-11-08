@@ -1,6 +1,7 @@
 import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
 import type { OrcadSshProvisioningIntent } from './orcad-ssh-provisioning'
 import type { NodeDistMirrorAttempt } from './node-dist-mirror'
+import type { SshRepoReadoption } from './ssh-repo-readoption'
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60
@@ -138,7 +139,7 @@ export type RemovedSshTargetTombstone = {
   removedAt: number
 }
 
-export type { SshRepoReadoption } from './ssh-repo-readoption'
+export type { SshRepoReadoption }
 
 export type SshTargetAddResult = {
   target: SshTarget
