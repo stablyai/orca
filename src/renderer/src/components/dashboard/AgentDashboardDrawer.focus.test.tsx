@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import type { ComponentProps } from 'react'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -46,6 +46,11 @@ vi.mock('../dashboard-popout/AgentKanbanBoard', () => ({
 vi.mock('./AgentDashboardSettingsMenu', () => ({
   AgentDashboardSettingsMenu: ({ onSwitchToPopout }: { onSwitchToPopout: () => void }) => (
     <button onClick={onSwitchToPopout}>Pop out</button>
+  )
+}))
+vi.mock('../orchestration-history/RunHistoryBrowser', () => ({
+  RunHistoryBrowser: ({ onBack }: { onBack: () => void }) => (
+    <button onClick={onBack}>Return to agents</button>
   )
 }))
 
@@ -102,6 +107,15 @@ async function closed(): Promise<void> {
 }
 
 describe('AgentDashboardDrawer focus return', () => {
+  it('opens run history from Agents and returns to the board without closing the drawer', async () => {
+    render(<AgentDashboardDrawer statusBarVisible />)
+    act(() => useAppStore.setState({ agentDashboardDrawerOpen: true }))
+    fireEvent.click(screen.getByRole('button', { name: 'Run history' }))
+    expect(screen.queryByRole('textbox', { name: 'Search agents' })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Return to agents' }))
+    expect(screen.getByRole('textbox', { name: 'Search agents' })).toBeInTheDocument()
+    expect(useAppStore.getState().agentDashboardDrawerOpen).toBe(true)
+  })
   it.each(['Escape', 'Close dashboard'])('returns to the opener after %s', async (dismiss) => {
     fixture()
     const opener = await openFrom()

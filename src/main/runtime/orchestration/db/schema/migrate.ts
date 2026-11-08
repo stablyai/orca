@@ -18,6 +18,7 @@ import { migrateV44 } from './migrate-v44'
 import { migrateV45 } from './migrate-v45'
 import { migrateV46 } from './migrate-v46'
 import { DROP_REMOVED_WORK_TRIGGERS_SQL } from '../reset/removed-orchestration-work-store'
+import { DROP_RUN_EVENT_TRIGGERS_SQL } from '../runs/run-event-capture'
 
 // CREATE TABLE IF NOT EXISTS won't alter existing tables; migrate atomically before bumping user_version.
 export function migrate(this: OrchestrationDb): void {
@@ -34,6 +35,7 @@ export function migrate(this: OrchestrationDb): void {
     )
     // Why: their bodies name columns a step may drop or rebuild; the open after migrate recreates them.
     this.db.exec(DROP_REMOVED_WORK_TRIGGERS_SQL)
+    this.db.exec(DROP_RUN_EVENT_TRIGGERS_SQL)
     applySchemaMigrationsV2ToV12.call(this, current)
     applySchemaMigrationsV13ToV30.call(this, current)
     migrateMailboxPointerEnterV33.call(this, current)

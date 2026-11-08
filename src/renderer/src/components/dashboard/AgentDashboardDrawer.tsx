@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { AgentKanbanBoard } from '../dashboard-popout/AgentKanbanBoard'
 import { isXtermHelperTextarea } from '../terminal-pane/input/focus/regular-terminal-focus-ownership'
-import type { AgentRevealArgs } from '../dashboard-popout/AgentTerminalDialog'
 import {
   isWorkspaceBoardKeepOpenTarget,
   useWorkspaceKanbanOutsideDismiss
@@ -14,10 +10,8 @@ import {
   STATUS_BAR_RESERVE_HEIGHT,
   WORKSPACE_TOP_CHROME_HEIGHT
 } from '../sidebar/workspace-chrome-metrics'
-import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
-import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
-import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
 import { useTranslate } from '@/i18n/use-translate'
+import { AgentDashboardDrawerBody } from './AgentDashboardDrawerBody'
 import { trackSidebarLiveWidth } from '@/components/sidebar/sidebar-live-width'
 
 // Nested interactive overlays own Escape before the companion sheet; exclude the sheet’s own role=dialog marker.
@@ -30,59 +24,6 @@ const AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR = [
   '[role="menu"][data-state="open"]',
   '[role="listbox"][data-state="open"]'
 ].join(', ')
-
-/** Mount only while open to keep live snapshot derivation off the closed path. */
-function AgentDashboardDrawerBody({
-  onClose,
-  onFocusHandoff,
-  onMenuOpenChange
-}: {
-  onClose: () => void
-  onFocusHandoff: () => void
-  onMenuOpenChange: (open: boolean) => void
-}): React.JSX.Element {
-  const snapshot = useLiveDashboardSnapshot()
-  useAgentDashboardTelemetry('in_window')
-
-  // Pop-out IPC rejects this renderer; in-window reads/reveals must use the store directly.
-  const handleAckAgent = useCallback((paneKey: string, intent: AgentSubjectReadIntent) => {
-    useAppStore.getState().acknowledgeAgents([paneKey], undefined, intent)
-  }, [])
-  const handleRevealAgent = useCallback(
-    (args: AgentRevealArgs) => {
-      if (revealDashboardAgent(args)) {
-        onFocusHandoff()
-      } else {
-        onClose()
-      }
-    },
-    [onClose, onFocusHandoff]
-  )
-
-  // Hand off to pop-out mode instead of retaining a drawer inconsistent with the setting.
-  const handleSwitchToPopout = useCallback(() => {
-    onFocusHandoff()
-    void window.api.dashboard.openPopout?.()
-  }, [onFocusHandoff])
-
-  return (
-    <AgentKanbanBoard
-      snapshot={snapshot}
-      // Let the companion sheet’s sidebar surface show through.
-      containerClassName="h-full w-full bg-transparent"
-      onAckAgent={handleAckAgent}
-      onRevealAgent={handleRevealAgent}
-      onBrowserForeground={onFocusHandoff}
-      onClose={onClose}
-      headerActions={
-        <AgentDashboardSettingsMenu
-          onSwitchToPopout={handleSwitchToPopout}
-          onOpenChange={onMenuOpenChange}
-        />
-      }
-    />
-  )
-}
 
 type AgentDashboardDrawerProps = {
   leftSidebarStyle?: React.CSSProperties

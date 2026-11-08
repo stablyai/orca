@@ -1,6 +1,7 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readRunRemovedWork } from '../../../../orchestration/db/reset/removed-orchestration-work-read'
+import { readRunEvents } from '../../../../orchestration/db/runs/run-event-read'
 import { boundRunWorkerNext } from '../../../../orchestration/db/runs/worker-run-binding'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
@@ -10,6 +11,7 @@ import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,
+  RunEventsParams,
   RunCurrentParams,
   RunListParams,
   RunShowParams,
@@ -48,6 +50,13 @@ export function createBoundRun(
 }
 
 export const ORCHESTRATION_RUN_METHODS = [
+  defineMethod({
+    name: 'orchestration.runEvents',
+    permission: 'workspace',
+    params: RunEventsParams,
+    handler: (params, { runtime }) =>
+      readRunEvents(runtime.getOrchestrationDb().db, params.id, params)
+  }),
   defineMethod({
     name: 'orchestration.runCreate',
     permission: 'workspace',

@@ -53,7 +53,7 @@ vi.mock('./workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.reveal
 }))
 vi.mock('./wsl-moved-chat-activation', () => ({ activateWslMovedWorkspace: () => false }))
-import { openAgentMessageSender } from './open-agent-message-sender'
+import { openAgentMessageSender, openOrchestrationAddress } from './open-agent-message-sender'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 const host = { kind: 'environment', environmentId: 'remote-2' } as const
 const party: AgentMessageSender['party'] = {
@@ -170,4 +170,20 @@ it('coalesces one sender but keeps selected hosts independent', async () => {
   wait.resolve({ location: null })
   await Promise.all([a, b, c])
   expect(mocks.toast).toHaveBeenCalledTimes(2)
+})
+it('opens a history Dispatch by address through its selected host, with no message', async () => {
+  mocks.rpc.mockResolvedValue({ location: { kind: 'terminal', handle: 'term_worker' } })
+  await expect(openOrchestrationAddress('dispatch:d1', host)).resolves.toBe(true)
+  expect(mocks.rpc).toHaveBeenCalledExactlyOnceWith(
+    host,
+    'orchestration.partyOpen',
+    { address: 'dispatch:d1' },
+    { timeoutMs: 5000 }
+  )
+  expect(mocks.focus).toHaveBeenCalledExactlyOnceWith('term_worker', 'remote-2')
+})
+it('keeps history open when its agent cannot be found', async () => {
+  mocks.rpc.mockResolvedValue({ location: null })
+  await expect(openOrchestrationAddress('dispatch:d1', host)).resolves.toBe(false)
+  expect(mocks.reveal).not.toHaveBeenCalled()
 })

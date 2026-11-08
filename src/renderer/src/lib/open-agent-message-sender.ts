@@ -11,6 +11,8 @@ import {
   type StructuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
 import { useAppStore } from '@/store'
+import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
+import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   focusTerminal,
@@ -244,5 +246,40 @@ export async function openOrchestrationCrewAgent(
       row.label,
       feedback
     )
+  }
+}
+
+/** Open an agent from its orchestration address; true once its pane or chat is in front of the user. */
+export async function openOrchestrationAddress(
+  address: string,
+  host: RuntimeClientTarget
+): Promise<boolean> {
+  const orcaSessionId = parseOrcaSessionAddress(address)
+  const terminalHandle =
+    orcaSessionId || address.startsWith('dispatch:') || address.startsWith('run:') ? null : address
+  const environmentId = host.kind === 'environment' ? host.environmentId : null
+  let focused = true
+  try {
+    const result = await openDesktopStructuredSession(
+      { kind: 'sender', party: { address, orcaSessionId, terminalHandle }, messageIds: [] },
+      host
+    )
+    if (result.kind !== 'terminal') {
+      return result.kind === 'opened'
+    }
+    await focusTerminal(result.handle, environmentId, {
+      gone: () => {
+        focused = false
+        showAgentPaneUnavailable()
+      },
+      lookupFailure: (failure) => {
+        focused = false
+        showLookupFailure(failure, address)
+      }
+    })
+    return focused
+  } catch (error) {
+    showLookupFailure(isRuntimeCompatBlockError(error) ? 'update' : 'unreachable', address)
+    return false
   }
 }

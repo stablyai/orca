@@ -113,11 +113,9 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'orchestration',
     keys: [
-      'orchestration run-create',
-      'orchestration run-use',
-      'orchestration run-current',
-      'orchestration run-list',
-      'orchestration run-show',
+      ...['create', 'use', 'current', 'list', 'events', 'show'].map(
+        (run) => `orchestration run-${run}`
+      ),
       'orchestration send',
       'orchestration check',
       'orchestration reply',
