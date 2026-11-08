@@ -15,7 +15,7 @@ import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-attachments/agent-session-attachment-claims'
 
 export const JOURNAL_BUSY_TIMEOUT_MS = 5000
-export const JOURNAL_SIZE_LIMIT_BYTES = 32 * 1024 * 1024
+export const JOURNAL_SIZE_LIMIT_BYTES = 128 * 1024 * 1024
 const JOURNAL_SYNCHRONOUS = 'NORMAL'
 
 export type OpenJournalDatabase = {
