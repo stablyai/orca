@@ -134,7 +134,8 @@ export function AgentSessionSourceHomeInput({
           }}
           placeholder={runtimeLabel}
           spellCheck={false}
-          className="h-7 flex-1 font-mono text-xs"
+          variant="code"
+          className="h-7 flex-1"
         />
         {value.trim() && (
           <Button
