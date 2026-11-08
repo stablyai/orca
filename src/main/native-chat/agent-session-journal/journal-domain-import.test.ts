@@ -134,6 +134,45 @@ it('imports settlement identity order and live lifecycle facts, discarding both 
                     input: {},
                     state: index === 0 ? 'running' : 'completed'
                   }
+                },
+                {
+                  kind: 'item',
+                  itemId: 'legacy-window',
+                  revision: 1,
+                  body: {
+                    kind: 'status',
+                    text: 'Interrupted',
+                    turnLifecycle: {
+                      turnId: 'legacy-turn',
+                      state: 'interrupted',
+                      completedAt: 110.5,
+                      contextUsage: { window: { tokens: 100, capturedAt: 109 } }
+                    }
+                  }
+                },
+                {
+                  kind: 'item',
+                  itemId: 'reasoning',
+                  revision: 1,
+                  body: {
+                    kind: 'message',
+                    role: 'assistant',
+                    state: 'running',
+                    blocks: [{ type: 'text', text: 'Working' }]
+                  }
+                },
+                {
+                  kind: 'item',
+                  itemId: 'unverified-tool',
+                  revision: 1,
+                  body: {
+                    kind: 'tool-call',
+                    callId: 'unverified-tool',
+                    name: 'read',
+                    input: {},
+                    state: 'failed',
+                    endedAs: 'unverifiable'
+                  }
                 }
               ]
       })
@@ -155,6 +194,21 @@ it('imports settlement identity order and live lifecycle facts, discarding both 
       .prepare("SELECT item_id,lifecycle_state,live_work FROM journal_items WHERE item_id='tool'")
       .get()
   ).toEqual({ item_id: 'tool', lifecycle_state: 'running', live_work: 0 })
+  expect(
+    db.prepare('SELECT item_id FROM journal_items WHERE hidden=0 AND context_window=1').all()
+  ).toEqual([{ item_id: 'legacy-window' }])
+  expect(
+    db.prepare('SELECT item_id FROM journal_items WHERE hidden=0 AND unverified_end=1').all()
+  ).toEqual([{ item_id: 'unverified-tool' }])
+  expect(
+    db
+      .prepare(`SELECT item_id FROM journal_items WHERE hidden=0 AND root=1
+        AND kind IN ('turn','status') AND lifecycle_state='interrupted' AND turn_completed_at=110.5`)
+      .all()
+  ).toEqual([{ item_id: 'legacy-window' }])
+  expect(
+    db.prepare("SELECT lifecycle_state FROM journal_items WHERE item_id='reasoning'").get()
+  ).toEqual({ lifecycle_state: 'running' })
   maintain(db, { kind: 'import-discard', sessionId: 'session' })
   expect(db.prepare('SELECT settlement_id FROM journal_settlements').all()).toEqual([])
   expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])

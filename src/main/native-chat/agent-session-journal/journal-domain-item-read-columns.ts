@@ -8,11 +8,26 @@ import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/ag
 import { claudeAgentRowFacts } from '../../claude/claude-subagent-journaled-identities'
 import { journalItemLifecycleState } from './journal-item-status-metadata'
 import { lostLiveWorkJournalBody } from './item-lifecycle/journal-subagent-liveness'
+import { isUnverifiedEndAgentJournalToolCall } from '../../../shared/agent-journal-tool-call-lifecycle'
 
 export function journalDomainItemLifecycleColumns(
   item: AgentJournalRenderItem
-): readonly [lifecycleState: string | null, liveWork: number] {
-  return [journalItemLifecycleState(item.body), Number(lostLiveWorkJournalBody(item.body) !== null)]
+): readonly [
+  lifecycleState: string | null,
+  liveWork: number,
+  contextWindow: number,
+  unverifiedEnd: number,
+  turnCompletedAt: number | null
+] {
+  const { body } = item
+  const turn = readAgentJournalTurn(body)
+  return [
+    (body.kind === 'message' ? body.state : journalItemLifecycleState(body)) ?? null,
+    Number(lostLiveWorkJournalBody(body) !== null),
+    Number(turn?.contextUsage?.window !== undefined),
+    Number(body.kind === 'tool-call' && isUnverifiedEndAgentJournalToolCall(body)),
+    typeof turn?.completedAt === 'number' ? turn.completedAt : null
+  ]
 }
 
 /** Bound in item-read column order by the one item/import upsert. */

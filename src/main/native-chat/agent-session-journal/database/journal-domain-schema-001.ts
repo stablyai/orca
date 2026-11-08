@@ -111,11 +111,19 @@ CREATE TABLE journal_items (
   signed_out INTEGER NOT NULL DEFAULT 0,
   lifecycle_state TEXT,
   live_work INTEGER NOT NULL DEFAULT 0,
+  context_window INTEGER NOT NULL DEFAULT 0,
+  unverified_end INTEGER NOT NULL DEFAULT 0,
+  turn_completed_at REAL,
   PRIMARY KEY(session_id, epoch, item_id)
 );
 CREATE INDEX journal_items_ordinal ON journal_items(session_id,epoch,ordinal);
 CREATE INDEX journal_items_unsettled ON journal_items(session_id,epoch,ordinal,item_id)
-  WHERE lifecycle_state IN ('running','pending') OR live_work=1;
+  WHERE hidden=0 AND (lifecycle_state IN ('running','pending') OR live_work=1);
+CREATE INDEX journal_items_context_window ON journal_items(session_id,epoch) WHERE hidden=0 AND context_window=1;
+CREATE INDEX journal_items_unverified_end ON journal_items(session_id,epoch,ordinal,item_id) WHERE hidden=0 AND unverified_end=1;
+CREATE INDEX journal_items_unverifiable_turn ON journal_items(session_id,epoch,ordinal,item_id) WHERE hidden=0 AND kind IN ('turn','status') AND lifecycle_state='unverifiable';
+CREATE INDEX journal_items_interrupted_root ON journal_items(session_id,epoch,turn_completed_at,sequence,sequence_index,ordinal,item_id)
+  WHERE hidden=0 AND root=1 AND kind IN ('turn','status') AND lifecycle_state='interrupted' AND turn_completed_at IS NOT NULL;
 CREATE TABLE journal_settlements (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
