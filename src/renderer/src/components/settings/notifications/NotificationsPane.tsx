@@ -236,11 +236,8 @@ export function NotificationsPane({
 
       {getRendererAppPlatform() === 'darwin' ? (
         <NotificationSettingToggle
-          label={translate(
-            'auto.components.settings.NotificationsPane.b50c251b25',
-            'Show Dock Badge'
-          )}
-          description={translate(
+          label={t('auto.components.settings.NotificationsPane.b50c251b25', 'Show Dock Badge')}
+          description={t(
             'auto.components.settings.NotificationsPane.4e76a4246d',
             'Show the unread count on the macOS Dock icon.'
           )}

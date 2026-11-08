@@ -72,6 +72,7 @@ function harness(
       customSoundVolume: 1,
       mutedNotificationSourceIds: [],
       notifyHiddenWorkspaces: true,
+      showDockBadge: true,
       ...options.settings
     }),
     readWorkspaceLabels: () => ({ repoLabel: 'orca', worktreeLabel: 'feature' }),
