@@ -89,7 +89,7 @@ export async function getWorkItemDetails(
         iid,
         connectionId,
         localGitOptions,
-        options.markViewerComments === true
+        options.markViewerComments !== false
       )
     }
     return await fetchMRDetails(repoPath, projectRef, iid, connectionId, localGitOptions, options)
@@ -106,7 +106,7 @@ async function fetchIssueDetails(
   iid: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  markViewerComments = false
+  markViewerComments = true
 ): Promise<GitLabWorkItemDetails | null> {
   const [issueRes, comments] = await Promise.all([
     glabExecFileAsync(
@@ -169,7 +169,8 @@ async function fetchMRDetails(
       iid,
       connectionId,
       localGitOptions,
-      options.markViewerComments === true
+      // Checks polling never reads viewerDidAuthor, so it skips the viewer lookup with the other review details.
+      options.markViewerComments ?? options.includeReviewDetails !== false
     )
   ])
   const mrRaw = JSON.parse(mrRes.stdout) as GitLabRawMR

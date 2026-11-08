@@ -206,10 +206,11 @@ describe('getWorkItemDetails', () => {
 
   it.each([
     { markViewerComments: true, mine: true },
-    // Desktop reads never ask, so they skip the viewer lookup.
-    { markViewerComments: undefined, mine: undefined }
+    { markViewerComments: undefined, mine: true },
+    // Desktop detail reads opt out of the viewer lookup.
+    { markViewerComments: false, mine: undefined }
   ])(
-    'marks only the reading glab account notes when asked: %o',
+    'marks only the reading glab account notes unless the read opts out: %o',
     async ({ markViewerComments, mine }) => {
       const note = (id: number, username: string) => ({
         id,

@@ -66,7 +66,7 @@ export async function fetchDiscussionComments(
   iid: number,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  markViewer = false
+  markViewer = true
 ): Promise<MRComment[]> {
   const resource = type === 'mr' ? 'merge_requests' : 'issues'
   const hostArgs = glabHostnameArgs(projectRef, connectionId)
