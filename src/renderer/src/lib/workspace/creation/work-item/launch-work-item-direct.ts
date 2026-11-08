@@ -35,15 +35,8 @@ import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agen
 export async function launchWorkItemDirect(
   args: LaunchWorkItemDirectArgs
 ): Promise<DirectWorkItemLaunchResult> {
-  const {
-    item,
-    repoId,
-    openModalFallback,
-    baseBranch,
-    telemetrySource,
-    launchSource,
-    agentOverride
-  } = args
+  const { item, repoId, openModalFallback, baseBranch } = args
+  const { telemetrySource, launchSource, agentOverride } = args
   args = captureDirectWorkItemLaunchArgs(args)
   let agentArgs = args.agentArgs
   let creationAccepted = false
