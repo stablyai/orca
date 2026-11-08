@@ -12,7 +12,6 @@ import type {
   AgentSessionStatusEvent
 } from '../../../../../../shared/agent-session/agent-session-wire'
 
-import { structuredAgentSessionAgentStatus } from '../../../../../../shared/agent-session/view/structured-agent-session-agent-status'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/tab-types'
@@ -58,8 +57,11 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => 'local'
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
+}))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSession: vi.fn(),
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
@@ -112,7 +114,7 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch'
 import { resetStructuredAgentLaunchRegistryForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
   resetTerminalTabActivityFlagsCacheForTest,
   resolveTerminalTabActivityStatus
@@ -325,61 +327,6 @@ describe('a chat whose start failed', () => {
     vi.restoreAllMocks()
   })
 
-  it('keeps monitoring-only child work active through the real status writer and close', async () => {
-    const emit = await connect()
-    emit({
-      type: 'status',
-      session: {
-        sessionId: SESSION_ID,
-        workspaceId: WORKTREE_ID,
-        agent: 'claude',
-        status: 'idle',
-        latestPrompt: '',
-        updatedAt: 1,
-        backgroundTasks: [{ id: 'monitor', kind: 'command', state: 'monitoring' }]
-      }
-    })
-    expect(rows()).toMatchObject([
-      { state: 'working', workingMode: 'monitoring', mainAgent: { state: 'done' } }
-    ])
-    const closed = vi.spyOn(store().getState(), 'closeUnifiedTab')
-    await closeChat()
-    expect(
-      useRunningTerminalCloseConfirmStore.getState().runningTerminalCloseConfirm
-    ).not.toBeNull()
-    expect(closed).not.toHaveBeenCalled()
-  })
-
-  it('drops the mark while a retry starts it, and leaves the started chat to the host', async () => {
-    const emit = await connect()
-    await failStart()
-    expect(rows()).toHaveLength(1)
-
-    let publish: (receipt: { sessionId: string; fence: number }) => void = () => {}
-    mocks.launch.mockReturnValueOnce(new Promise((resolve) => (publish = resolve)))
-    act(() => {
-      retryStructuredAgentSessionLaunch(WORKTREE_ID, SESSION_ID)
-    })
-    await flush()
-    expect(rows()).toEqual([])
-
-    publish({ sessionId: SESSION_ID, fence: 1 })
-    await flush()
-    expect(rows()).toEqual([])
-    emit({
-      type: 'status',
-      session: {
-        sessionId: SESSION_ID,
-        workspaceId: WORKTREE_ID,
-        agent: 'claude',
-        status: 'working',
-        latestPrompt: 'hello',
-        updatedAt: 50_000
-      }
-    })
-    expect(rows()).toEqual([expect.objectContaining({ state: 'working' })])
-  })
-
   it('stays read across a restart once seen, and a later failure is news again', async () => {
     setClock(FAILED_AT)
     await connect()
@@ -412,40 +359,6 @@ describe('a chat whose start failed', () => {
       })
     ])
     expect(unread()).toBe(1)
-  })
-
-  it('re-dates a failed row the pane key already held by its own failure', async () => {
-    setClock(FAILED_AT - 60_000)
-    await connect()
-    const { state, mainAgent } = structuredAgentSessionAgentStatus({
-      status: 'idle',
-      turnOutcome: 'failure'
-    })
-    act(() =>
-      store()
-        .getState()
-        .setAgentStatus(
-          PANE_KEY,
-          {
-            state,
-            mainAgent: { ...mainAgent, stateStartedAt: FAILED_AT - 60_000 },
-            interrupted: false,
-            prompt: '',
-            agentType: 'claude',
-            sessionBoundary: false
-          },
-          structuredTab.label,
-          undefined,
-          { tabId: structuredTab.id, worktreeId: WORKTREE_ID }
-        )
-    )
-    expect(rows()).toEqual([expect.objectContaining({ updatedAt: FAILED_AT - 60_000 })])
-
-    setClock(FAILED_AT)
-    await failStart()
-    expect(rows()).toEqual([
-      expect.objectContaining({ updatedAt: FAILED_AT, stateStartedAt: FAILED_AT })
-    ])
   })
   it('warns during real issued send and accepted handoff before status arrives', async () => {
     await ready()

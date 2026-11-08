@@ -1,6 +1,5 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import '../../../runtime/desktop-browser-bridge/desktop-browser-bridge-allowlist.spec'
 import { mkdtempSync } from 'node:fs'
 import { RuntimeBrowserCommands } from '../../../runtime/browser/commands/browser-commands'
 import { setRuntimeBrowserCommandsFactory } from '../../../runtime/browser/installation/runtime-browser-commands-factory'

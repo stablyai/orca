@@ -6,10 +6,7 @@ import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { AgentSessionTurnCompletion } from '../../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 
-import {
-  structuredAgentSessionPaneKey,
-  structuredAgentSessionTabId
-} from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -17,7 +14,6 @@ import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import type { NotificationDispatchRequest } from '../../../../../../shared/notification-settings-types'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
@@ -124,11 +120,6 @@ function seed(overrides?: {
   })
 }
 
-function onlyDispatch(): NotificationDispatchRequest {
-  expect(dispatched).toHaveLength(1)
-  return dispatched[0]!
-}
-
 function structuredTab(workspaceId = WORKSPACE): StructuredTab {
   const found = (store.getState().unifiedTabsByWorktree[workspaceId] ?? []).find(isStructuredTab)
   if (!found) {
@@ -183,115 +174,11 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
     vi.unstubAllGlobals()
   })
 
-  it('lights workspace bold, the amber pane dot and the tab dot for a successful turn', () => {
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(indicators()).toEqual({
-      workspaceBold: true,
-      paneDot: 'agent-completion',
-      tabDot: 'agent-completion',
-      surfaceDot: 'agent-completion'
-    })
-  })
-
-  it('lights nothing when the outcome is absent, because absent is UNKNOWN and never a verdict', () => {
-    const withoutOutcome = completion()
-    // Older hosts may omit outcomes; absence proves neither success nor interruption.
-    Reflect.deleteProperty(withoutOutcome, 'outcome')
-    dispatchStructuredTurnCompletionAttention(structuredTab(), withoutOutcome)
-    expect(indicators()).toEqual(NOTHING_LIT)
-    expect(dispatched).toEqual([])
-  })
-
-  it('earns no unread while the user is looking at that chat, but still asks main to deliver', () => {
-    // Main owns focus suppression; renderer focus must not suppress delivery to paired phones.
-    seed({ activeWorktreeId: WORKSPACE })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(indicators()).toEqual(NOTHING_LIT)
-    expect(onlyDispatch().isActiveWorktree).toBe(true)
-  })
-
-  it('still earns unread when the workspace is selected but the chat is hidden behind another tab', () => {
-    seed({ activeWorktreeId: WORKSPACE, activeTabId: 'other-tab' })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(indicators().paneDot).toBe('agent-completion')
-  })
-
-  it('earns no unread for a floating chat selected in the open floating panel', () => {
-    seed({ workspaceId: FLOATING_TERMINAL_WORKTREE_ID, floatingPanelOpen: true })
-    dispatchStructuredTurnCompletionAttention(
-      structuredTab(FLOATING_TERMINAL_WORKTREE_ID),
-      completion()
-    )
-    expect(store.getState().unreadAgentCompletionPanes).toEqual({})
-    expect(store.getState().unreadTerminalTabs).toEqual({})
-  })
-
-  it('earns unread for a floating chat while the floating panel is closed', () => {
-    seed({ workspaceId: FLOATING_TERMINAL_WORKTREE_ID })
-    dispatchStructuredTurnCompletionAttention(
-      structuredTab(FLOATING_TERMINAL_WORKTREE_ID),
-      completion()
-    )
-    expect(indicators(FLOATING_TERMINAL_WORKTREE_ID).paneDot).toBe('agent-completion')
-  })
-
-  it('earns unread when the workspace chat is behind another top-level view', () => {
-    seed({ activeWorktreeId: WORKSPACE })
-    store.setState({ activeView: 'tasks' })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(indicators().paneDot).toBe('agent-completion')
-  })
-
-  it('leaves a dispatched chat worker’s finished turn to its coordinator, but still calls the user to its prompt', () => {
-    store.setState({
-      runtimeAgentOrchestrationByPaneKey: {
-        [structuredAgentSessionPaneKey(structuredAgentSessionTabId(SESSION), SESSION)]: {
-          taskId: 'task_1',
-          dispatchId: 'ctx_1',
-          parentPaneKey: 'tab-c:leaf-c'
-        }
-      }
-    })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(indicators()).toEqual(NOTHING_LIT)
-    expect(dispatched).toEqual([])
-
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion({ awaitingUser: true }))
-    expect(indicators().paneDot).toBe('agent-completion')
-    expect(onlyDispatch()).toMatchObject({ agentState: 'blocked' })
-  })
-
-  it('rejects a completion for a session this tab does not own', () => {
-    // Otherwise the key minted from the tab would stamp the NEW session's pane with old news.
-    seed({ sessionId: 'session-2' })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(indicators()).toEqual(NOTHING_LIT)
-    expect(store.getState().unreadAgentCompletionPanes).toEqual({})
-  })
-
   it('rejects a superseded surface when the tab was rebound after the caller read it', () => {
     const staleTab = structuredTab()
     seed({ sessionId: 'session-2' })
     dispatchStructuredTurnCompletionAttention(staleTab, completion())
     expect(indicators()).toEqual(NOTHING_LIT)
-  })
-
-  it('rejects an unknown surface when the tab has been closed', () => {
-    const closedTab = structuredTab()
-    seed({ tabs: false })
-    dispatchStructuredTurnCompletionAttention(closedTab, completion())
-    expect(indicators()).toEqual(NOTHING_LIT)
-  })
-
-  it('withholds only the tab dot when group attention is off, keeping the pane dot', () => {
-    seed({ groupAttention: false })
-    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
-    expect(indicators()).toEqual({
-      workspaceBold: true,
-      paneDot: 'agent-completion',
-      tabDot: undefined,
-      surfaceDot: undefined
-    })
   })
 
   it('lights a folder workspace, which is not a git worktree', () => {

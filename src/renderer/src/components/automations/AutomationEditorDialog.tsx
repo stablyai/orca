@@ -1,4 +1,4 @@
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import React from 'react'
 import { useAppStore } from '@/store'
 import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -13,10 +13,12 @@ import { getAgentCatalog } from '@/lib/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type {
   AutomationLaunchPreferences,
-  AutomationLaunchSetupPatch,
+  AutomationLaunchSetupPatch
+} from '../../../../shared/automations/launch/automation-launch-types'
+import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'

@@ -3,7 +3,7 @@ import type * as AgentStatusModule from '@/lib/agent-status'
 import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../testing/app-store-cascade-api.test-fixture'
-import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
+import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 
 type HeldCreate = { resolve: (value: unknown) => void; reject: (error: Error) => void }
 

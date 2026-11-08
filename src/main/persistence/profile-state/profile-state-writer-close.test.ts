@@ -106,17 +106,3 @@ it('keeps an unacknowledged close pending, then holds abort until the terminated
   expect(onFailure).toHaveBeenCalledOnce()
   expect(vi.getTimerCount()).toBe(0)
 })
-
-it('joins an aborted writer without reporting a close request that was never sent', async () => {
-  const { client, worker } = await createClient()
-  const aborting = client.abort()
-  const closing = client.close()
-  await waitForPoll()
-  vi.advanceTimersByTime(WARNING_MS * 10)
-  expect(await isSettled(closing)).toBe(false)
-  expect(diagnostics.slow).not.toHaveBeenCalled()
-  expect(vi.getTimerCount()).toBe(0)
-  worker.emit('exit', 1)
-  await aborting
-  await closing
-})

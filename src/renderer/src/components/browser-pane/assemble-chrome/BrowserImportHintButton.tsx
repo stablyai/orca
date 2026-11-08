@@ -23,6 +23,7 @@ import { getBrowserCookieImportSourceLabels } from '../../../../../shared/browse
 import { shouldShowBrowserImportHint } from './browser-import-hint-visibility'
 import { formatBrowserImportSummary } from './browser-detected-browsers-summary'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 
 type BrowserImportHintButtonProps = {
@@ -34,6 +35,7 @@ export function BrowserImportHintButton({
   profileId,
   compact = false
 }: BrowserImportHintButtonProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [importMenuOpen, setImportMenuOpen] = useState(false)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
@@ -170,7 +172,7 @@ export function BrowserImportHintButton({
           variant="secondary"
           size="sm"
           className="h-7 shrink-0 rounded-full px-2.5 text-xs"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.browser.pane.BrowserImportHintButton.4f5ffaa6a1',
             'Import browser data'
           )}
@@ -179,24 +181,21 @@ export function BrowserImportHintButton({
           <Import className="size-3.5" />
           {compact
             ? null
-            : translate(
-                'auto.components.browser.pane.BrowserImportHintButton.b24fef25be',
-                'Import'
-              )}
+            : t('auto.components.browser.pane.BrowserImportHintButton.b24fef25be', 'Import')}
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" side="bottom" sideOffset={6} className="w-80 p-3">
         <div className="space-y-3">
           <div className="space-y-1.5">
             <div className="text-sm font-medium text-foreground">
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserImportHintButton.4f5ffaa6a1',
                 'Import browser data'
               )}
             </div>
             <p className="text-xs leading-5 text-muted-foreground">{importSummary}</p>
             <p className="text-[11px] leading-4 text-muted-foreground/80">
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserImportHintButton.e52a955e6f',
                 'You can always find this in Settings > Browser.'
               )}
@@ -213,10 +212,7 @@ export function BrowserImportHintButton({
                   className="h-7 px-2.5 text-xs"
                   disabled={browserSessionImportState?.status === 'importing'}
                 >
-                  {translate(
-                    'auto.components.browser.pane.BrowserImportHintButton.244266c122',
-                    'Import…'
-                  )}
+                  {t('auto.components.browser.pane.BrowserImportHintButton.244266c122', 'Import…')}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-52">
@@ -225,7 +221,7 @@ export function BrowserImportHintButton({
                   browser.profiles.length > 1 ? (
                     <DropdownMenuSub key={browser.family}>
                       <DropdownMenuSubTrigger>
-                        {translate(
+                        {t(
                           'auto.components.browser.pane.BrowserImportHintButton.0c6d254eca',
                           'From {{value0}}',
                           { value0: browser.label }
@@ -251,7 +247,7 @@ export function BrowserImportHintButton({
                       key={browser.family}
                       onSelect={() => void handleImportFromBrowser(browser.family)}
                     >
-                      {translate(
+                      {t(
                         'auto.components.browser.pane.BrowserImportHintButton.0c6d254eca',
                         'From {{value0}}',
                         { value0: browser.label }
@@ -261,7 +257,7 @@ export function BrowserImportHintButton({
                 )}
                 {detectedBrowsers.length > 0 ? <DropdownMenuSeparator /> : null}
                 <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-                  {translate(
+                  {t(
                     'auto.components.browser.pane.BrowserImportHintButton.e0e125e074',
                     'From File…'
                   )}
@@ -275,7 +271,7 @@ export function BrowserImportHintButton({
               onClick={handleOpenBrowserSettings}
               className="rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserImportHintButton.77351d22f5',
                 'Browser Settings'
               )}
@@ -286,10 +282,7 @@ export function BrowserImportHintButton({
               onClick={handleHideHint}
               className="ml-auto rounded-sm text-xs text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
-              {translate(
-                'auto.components.browser.pane.BrowserImportHintButton.05e675fe96',
-                'Hide Hint'
-              )}
+              {t('auto.components.browser.pane.BrowserImportHintButton.05e675fe96', 'Hide Hint')}
             </button>
           </div>
         </div>

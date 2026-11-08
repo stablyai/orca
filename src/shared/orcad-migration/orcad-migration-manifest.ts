@@ -1,5 +1,6 @@
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
-import type { Automation, AutomationRun } from '../automations-types'
+import type { Automation } from '../automations/automation-definition'
+import type { AutomationRun } from '../automations/history/automation-run'
 import type { OrcadMigrationManifestVersion } from './orcad-migration-manifest-validation'
 import type { ProjectGroup } from '../project-group-types'
 import type { Repo } from '../repo-types'

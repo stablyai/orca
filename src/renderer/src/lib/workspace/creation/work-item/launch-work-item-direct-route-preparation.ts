@@ -3,7 +3,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import type { RepoHostFields } from '@/lib/agent-detection-target-inventory'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
 import {
   refineLocalLaunchPlatform,
   resolveRepoExecutionHostPlatform,
@@ -34,6 +34,11 @@ export type DirectWorkItemAgentLaunchPreparation = {
   unavailable: boolean
   effectiveAgent: TuiAgent | null
   agentArgs?: string | null
+  freshLaunchInputs?: {
+    agentArgs?: string | null
+    actionAgentArgs?: string
+    sessionOptions?: Readonly<Record<string, string>>
+  }
   startupPlan: ReturnType<typeof buildDirectWorkItemStartup>['startupPlan']
   draftLaunchedNatively: boolean
   startupPlanFailed: boolean
@@ -91,6 +96,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   agentLaunchPreferences?: LaunchWorkItemDirectArgs['agentLaunchPreferences']
   agentOverride?: TuiAgent
   agentArgs?: string | null
+  actionAgentArgs?: string
   sessionOptions?: Readonly<Record<string, string>>
   chatSessionOptions?: Readonly<Record<string, string>>
   resolveLaunchInputs?: LaunchWorkItemDirectArgs['resolveLaunchInputs']
@@ -216,6 +222,12 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
     unavailable: false,
     effectiveAgent,
     agentArgs,
+    freshLaunchInputs: {
+      ...(inputs?.actionAgentArgs !== undefined || args.actionAgentArgs !== undefined
+        ? { actionAgentArgs: inputs?.actionAgentArgs ?? args.actionAgentArgs }
+        : { agentArgs }),
+      sessionOptions
+    },
     startupPlan,
     draftLaunchedNatively,
     startupPlanFailed,

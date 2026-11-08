@@ -1,8 +1,17 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { catchUpClaudeTranscript } from '../../../../claude/claude-transcript-catch-up'
+import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from './structured-agent-session-logger-test-support'
+import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import { usableJournalHistoryOrigin } from '../../../agent-session-journal/context-epochs/journal-history-origin'
+import { recoverStructuredRewind } from '../../rewind/structured-rewind-recovery'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
@@ -189,4 +198,144 @@ describe('rewinding a chat whose agent forks', () => {
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toBeUndefined()
     expect(closeSession).not.toHaveBeenCalled()
   })
+})
+
+it('publishes the saved copy receipt after a crash before Claude rewind completion', async () => {
+  const session = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!
+  const journal = session.journal
+  const items = journal.snapshot().items.map((item) => ({
+    identity: parseAgentJournalItemKey(item.itemId)!,
+    body: item.body,
+    observedAt: item.observedAt,
+    ownerFence: 0,
+    turnScope: item.turnScope
+  }))
+  await journal.replaceEpochItems('session_created', 1, items, undefined, undefined, {
+    version: 1,
+    kind: 'native_copy',
+    agent: 'claude',
+    unit: 'claude-entry',
+    providerHandle: { kind: 'claude', sessionId: SOURCE, leafUuid: 'answer-2' },
+    ids: ['old-covered']
+  })
+  forkForRewind.mockResolvedValueOnce({
+    ok: true,
+    fork: { ...FORK, resumeCursor: 'copy-answer', coverage: ['copy-prompt', 'copy-answer'] }
+  })
+  const crash = vi
+    .spyOn(journal, 'replaceEpochItems')
+    .mockRejectedValueOnce(new Error('crash before completion'))
+  await expect(rewindSecondPrompt()).rejects.toThrow('crash before completion')
+  crash.mockRestore()
+  expect(store.getRecord(HOST_TEST_SESSION)?.rewind).toMatchObject({
+    phase: 'provider-succeeded',
+    providerFork: { coverage: ['copy-prompt', 'copy-answer'] }
+  })
+  const projects = join(directory, 'claude-home', 'projects', '-work')
+  await mkdir(projects, { recursive: true })
+  const nativeRows = [
+    {
+      type: 'user',
+      uuid: 'copy-prompt',
+      parentUuid: null,
+      message: { role: 'user', content: 'copied prompt' }
+    },
+    {
+      type: 'assistant',
+      uuid: 'copy-answer',
+      parentUuid: 'copy-prompt',
+      message: {
+        id: 'msg_copy',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'copied answer' }]
+      }
+    },
+    {
+      type: 'user',
+      uuid: 'CLI-during-crash',
+      parentUuid: 'copy-answer',
+      message: { role: 'user', content: 'new CLI prompt' }
+    },
+    {
+      type: 'assistant',
+      uuid: 'CLI-answer',
+      parentUuid: 'CLI-during-crash',
+      message: {
+        id: 'msg_cli',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'new CLI answer' }]
+      }
+    }
+  ].map((row) => ({
+    ...row,
+    sessionId: FORK.sessionId,
+    isSidechain: false,
+    timestamp: '2026-11-06T12:00:00Z'
+  }))
+  await writeFile(
+    join(projects, `${FORK.sessionId}.jsonl`),
+    nativeRows.map((row) => `${JSON.stringify(row)}\n`).join('')
+  )
+  await journal.close()
+  store = await openTestAgentSessionRecordStore(directory)
+  const recovered = new AgentSessionJournal({
+    identity: {
+      sessionId: HOST_TEST_SESSION,
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'claude',
+      providerHandle: claudeProviderHandle(SOURCE, 'answer-2')
+    },
+    database: openTestJournalHostDatabase(directory)
+  })
+  await recovered.open()
+  await recoverStructuredRewind(
+    { store, logger: createStructuredAgentSessionLogger() },
+    HOST_TEST_SESSION,
+    recovered,
+    store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
+  )
+  const origin = usableJournalHistoryOrigin(recovered.historyOrigin())
+  expect(origin).toEqual({
+    version: 1,
+    kind: 'native_copy',
+    agent: 'claude',
+    unit: 'claude-entry',
+    providerHandle: { kind: 'claude', sessionId: FORK.sessionId, leafUuid: 'copy-answer' },
+    ids: ['copy-prompt', 'copy-answer']
+  })
+  expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.providerFork?.coverage).toBeUndefined()
+  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  deferred.bind({
+    journal: recovered,
+    fence: store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence,
+    publish: () => {}
+  })
+  try {
+    const open = () =>
+      catchUpClaudeTranscript({
+        sessionId: HOST_TEST_SESSION,
+        providerSessionId: FORK.sessionId,
+        leafUuid: 'copy-answer',
+        claudeConfigDir: join(directory, 'claude-home'),
+        cwd: '/work',
+        sink: deferred.sink
+      })
+    expect(await open()).toBe(true)
+    expect(await open()).toBe(true)
+    const messages = recovered.snapshot().items.filter((item) => item.body.kind === 'message')
+    expect(
+      messages.flatMap((item) => (item.body.kind === 'message' ? item.body.blocks : []))
+    ).toContainEqual({ type: 'text', text: 'new CLI prompt' })
+    expect(
+      messages.filter(
+        (item) =>
+          item.body.kind === 'message' &&
+          item.body.blocks.some((block) => block.type === 'text' && block.text === 'new CLI answer')
+      )
+    ).toHaveLength(1)
+  } finally {
+    deferred.close()
+    await recovered.close()
+  }
 })

@@ -27,6 +27,8 @@ export type PRRefreshQueueEntry = {
   activeDelayNotified?: boolean
   followUp?: boolean
   windowId?: number
+  /** A watch job: the PR's current head, or with `headSha` one earlier head's checks. */
+  watch?: { prKey: string; headSha?: string }
 }
 
 export type PRRefreshEnqueue = {

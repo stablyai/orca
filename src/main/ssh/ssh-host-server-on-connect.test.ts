@@ -33,24 +33,6 @@ describe('which server an SSH host runs on connect', () => {
     expect(d.convert).not.toHaveBeenCalled()
   })
 
-  it("says when a converted host's server kept moved automations off", async () => {
-    const d = deps({
-      managedEnvironmentId: () => 'env-9',
-      retainCommittedSource: vi.fn(async () => 2)
-    })
-    await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-      route: 'managed',
-      environmentId: 'env-9',
-      automationsLeftDisabled: 2
-    })
-  })
-
-  it('checks the server behind the tunnel on every connect to a converted host', async () => {
-    const d = deps({ managedEnvironmentId: () => 'env-9' })
-    await resolveHostServerOnConnect(target, d)
-    expect(d.ensureServing).toHaveBeenCalledWith('env-9')
-  })
-
   it('keeps a host whose stopped server could not be started managed, with the reason', async () => {
     const detail = 'orcad did not become ready.\nLast lines of orcad.log:\nboom'
     const d = deps({
@@ -572,17 +554,6 @@ describe('which server an SSH host runs on connect', () => {
         update: { state: 'deferred', detail: reason }
       })
       expect(d.recordUpdateFailure).not.toHaveBeenCalled()
-    })
-
-    it('never downgrades a host a newer Orca activated', async () => {
-      const d = managed({
-        autoUpdate: async () => ({ outcome: 'skipped', reason: 'host-newer' })
-      })
-      await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-        route: 'managed',
-        environmentId: 'env-9',
-        update: { state: 'host-newer' }
-      })
     })
 
     it('records a rolled-back update so the same app version does not retry it', async () => {

@@ -1,10 +1,13 @@
-import { pendingTabRevision, pendingEntityWorkspaceIds } from '@/runtime/layout-owner-pending-tabs'
+import {
+  pendingTabRevision,
+  pendingEntityWorkspaceIds
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/tracking-mappings'
 import type { AppState } from '@/store/types'
 import { parsePaneKey, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/native-chat-leaf-routing'
+import { nativeChatLaunchAgentForLeaf } from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   EMPTY_NARROWED_BY_KEY,

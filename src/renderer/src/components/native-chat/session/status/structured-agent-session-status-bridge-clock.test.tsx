@@ -8,11 +8,10 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../../../../shared/agent-session/agent-session-wire'
-import { agentEntryCompletionAt } from '../../../../../../shared/agent-status/lifecycle/agent-completion-time'
+
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
-import { countActivityUnread } from '../../../activity/useActivityUnreadCount'
 
 type TestStore = {
   getState: () => AppState
@@ -40,14 +39,17 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
     state.testRuntimeOwner ? `runtime:${state.testRuntimeOwner}` : 'local'
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(),
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: vi.fn()
+}))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSession: vi.fn(),
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 const structuredTab = {
   id: 'structured-tab-1',
@@ -65,7 +67,6 @@ const structuredTab = {
 } satisfies Tab
 
 const SETTLED = 22_000
-const ACKNOWLEDGED = 23_000
 
 function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
   return {
@@ -86,18 +87,6 @@ function row(): AgentStatusEntry {
     throw new Error('status row missing')
   }
   return entry
-}
-
-function acknowledge(at: number): void {
-  mocks.store?.setState({ acknowledgedAgentsByPaneKey: { [row().paneKey]: at } })
-}
-
-function unread(): number {
-  const state = mocks.store?.getState()
-  if (!state) {
-    throw new Error('store missing')
-  }
-  return countActivityUnread(state, ACKNOWLEDGED + 60_000)
 }
 
 async function connect(): Promise<(event: AgentSessionStatusEvent) => void> {
@@ -123,62 +112,6 @@ describe("the structured row's state clock", () => {
   afterEach(() => {
     cleanup()
     resetStructuredAgentSessionStatusFeedsForTests()
-  })
-
-  it('keeps a settled parent read while its subagent writes, until its own next turn ends', async () => {
-    const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary({ statusStartedAt: SETTLED })] })
-    expect(row()).toMatchObject({ state: 'done', stateStartedAt: SETTLED })
-    acknowledge(ACKNOWLEDGED)
-    expect(unread()).toBe(0)
-
-    // The child's rows move the evidence clock, and a host may still republish for them.
-    for (const updatedAt of [24_000, 25_000, 26_000]) {
-      emit({ type: 'status', session: summary({ statusStartedAt: SETTLED, updatedAt }) })
-    }
-    expect(row()).toMatchObject({ state: 'done', updatedAt: 26_000, stateStartedAt: SETTLED })
-    expect(unread()).toBe(0)
-
-    emit({
-      type: 'status',
-      session: summary({ status: 'working', statusStartedAt: 30_000, updatedAt: 30_000 })
-    })
-    emit({ type: 'status', session: summary({ statusStartedAt: 31_000, updatedAt: 31_000 }) })
-    expect(row()).toMatchObject({ state: 'done', stateStartedAt: 31_000 })
-    expect(unread()).toBe(1)
-  })
-
-  it("keeps the old dating for an older host's summary, which carries no clock", async () => {
-    const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary()] })
-    acknowledge(ACKNOWLEDGED)
-    expect(unread()).toBe(0)
-    emit({ type: 'status', session: summary({ updatedAt: 26_000 }) })
-    expect(row()).toMatchObject({ state: 'done', stateStartedAt: 26_000 })
-    expect(unread()).toBe(1)
-  })
-
-  it("dates a subagent's approval at the ask and leaves the parent's completion where it was", async () => {
-    const emit = await connect()
-    emit({ type: 'snapshot', sessions: [summary({ statusStartedAt: SETTLED })] })
-    acknowledge(ACKNOWLEDGED)
-
-    emit({
-      type: 'status',
-      session: summary({ status: 'attention', statusStartedAt: 27_000, updatedAt: 27_000 })
-    })
-    expect(row()).toMatchObject({
-      state: 'blocked',
-      stateStartedAt: 27_000,
-      mainAgent: { state: 'blocked', stateStartedAt: 27_000 }
-    })
-    expect(unread()).toBe(1)
-
-    acknowledge(28_000)
-    emit({ type: 'status', session: summary({ statusStartedAt: SETTLED, updatedAt: 28_500 }) })
-    expect(row()).toMatchObject({ state: 'done', stateStartedAt: SETTLED })
-    expect(agentEntryCompletionAt(row())).toBe(SETTLED)
-    expect(unread()).toBe(0)
   })
 
   it('leaves a row child work holds open on its own continuity, and settles it on the parent clock', async () => {

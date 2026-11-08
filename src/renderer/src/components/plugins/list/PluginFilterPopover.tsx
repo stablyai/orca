@@ -1,6 +1,6 @@
 import { ListFilter } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Checkbox } from '../../ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
@@ -56,11 +56,9 @@ export function PluginFilterPopover({
   sources: readonly PluginMarketplaceHostSourceState[]
   onChange: (filter: PluginListFilter) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const active = filter.sourceIds.size
-  const label = translate(
-    'auto.components.settings.PluginFilterPopover.catalogLabel',
-    'Filter by catalog'
-  )
+  const label = t('auto.components.settings.PluginFilterPopover.catalogLabel', 'Filter by catalog')
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -73,13 +71,10 @@ export function PluginFilterPopover({
         {sources.length > 0 ? (
           <div
             role="group"
-            aria-label={translate(
-              'auto.components.settings.PluginFilterPopover.catalog',
-              'Catalog'
-            )}
+            aria-label={t('auto.components.settings.PluginFilterPopover.catalog', 'Catalog')}
           >
             <p className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">
-              {translate('auto.components.settings.PluginFilterPopover.catalog', 'Catalog')}
+              {t('auto.components.settings.PluginFilterPopover.catalog', 'Catalog')}
             </p>
             {sources.map((source) => (
               <FilterOption
@@ -102,7 +97,7 @@ export function PluginFilterPopover({
             disabled={active === 0}
             onClick={() => onChange({ ...filter, sourceIds: NO_PLUGIN_LIST_FILTER.sourceIds })}
           >
-            {translate('auto.components.settings.PluginFilterPopover.clear', 'Clear filters')}
+            {t('auto.components.settings.PluginFilterPopover.clear', 'Clear filters')}
           </Button>
         </div>
       </PopoverContent>

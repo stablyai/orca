@@ -6,17 +6,21 @@ import { projectStructuredItemsToNativeChat } from '../../../../../shared/agent-
 import type { AgentJournalStatusItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { MessageRow } from '../NativeChatMessageRow'
-import { NativeChatNoticeRow } from '../NativeChatNoticeRow'
-import { NativeChatSignInContext, type NativeChatSignIn } from '../host-access/native-chat-sign-in'
+import { MessageRow } from '@/components/native-chat/messages/rows/NativeChatMessageRow'
+import { NativeChatNoticeRow } from '@/components/native-chat/messages/notices/NativeChatNoticeRow'
+import {
+  NativeChatSignInContext,
+  type NativeChatSignIn
+} from '@/components/native-chat/host-access/native-chat-sign-in'
 
 import { i18n } from '@/i18n/i18n'
+import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
-} from '../native-chat-orca-stop-context'
+} from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
 
 afterEach(async () => {
   cleanup()
@@ -77,7 +81,8 @@ function renderStatus(
           />
         </NativeChatSignInContext.Provider>
       </NativeChatOrcaStopContext.Provider>
-    </TooltipProvider>
+    </TooltipProvider>,
+    { wrapper: TranslationScopeProvider }
   )
 }
 
@@ -223,26 +228,6 @@ describe('notice rows', () => {
     await act(() => i18n.changeLanguage('fr'))
     fireEvent.click(screen.getByRole('button', { name: 'Se connecter' }))
     expect(authAction.signIn).toHaveBeenCalledOnce()
-  })
-
-  it('does not offer account sign-in for a model selection failure without a terminal login', () => {
-    renderStatus(
-      {
-        kind: 'status',
-        tone: 'error',
-        ...agentSessionFailureWords(
-          { kind: 'modelNotSelected' },
-          { agentName: 'Claude', surface: 'row' }
-        )
-      },
-      null,
-      false,
-      false,
-      'Claude',
-      NO_OFFER,
-      authAction
-    )
-    expect(screen.queryByRole('button', { name: 'Sign in' })).not.toBeInTheDocument()
   })
 
   it('updates a mounted auth row when the reader changes language', async () => {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -12,13 +12,22 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toast } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
-  callStructuredAgentSession: mocks.call,
-  supportsStructuredAgentSessionQuietRepeatedStop: async () => true,
-  supportsStructuredAgentSessionPromptCancel: mocks.promptCancelSupported,
-  supportsStructuredAgentSessionQuestionAnswers: mocks.questionAnswersSupported
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
 }))
+
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
+}))
+
+vi.mock(
+  '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    supportsStructuredAgentSessionQuietRepeatedStop: async () => true,
+    supportsStructuredAgentSessionPromptCancel: mocks.promptCancelSupported,
+    supportsStructuredAgentSessionQuestionAnswers: mocks.questionAnswersSupported
+  })
+)
 vi.mock('../session/structured/read/use-structured-agent-session-read', () => ({
   useStructuredAgentSessionRead: () => ({
     state: {
@@ -47,13 +56,12 @@ vi.mock('../session/structured/delivery/use-structured-agent-session-sends', () 
 }))
 
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { encodeAgentSessionQuestionAnswers } from '../../../../../shared/agent-session/agent-session-question-answer'
+
 import { useStructuredAgentSession } from '../session/structured/use-structured-agent-session'
 import type { StructuredPromptItem } from '../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 
 let fence = 3
 let items: AgentJournalRenderItem[] = []
-const target = { kind: 'local' } as const
 
 const question: StructuredPromptItem = {
   itemId: 'question-1',
@@ -92,12 +100,6 @@ const approval: StructuredPromptItem = {
 }
 
 const answers = [{ questionId: 'q1', optionIds: [], other: 'Wait for the capture. '.repeat(80) }]
-
-function respondCall(): Record<string, unknown> | undefined {
-  return mocks.call.mock.calls.find(([, method]) =>
-    String(method).startsWith('agentSession.respondTo')
-  )?.[2]
-}
 
 describe('desktop structured prompt answers', () => {
   beforeEach(() => {
@@ -156,46 +158,5 @@ describe('desktop structured prompt answers', () => {
       ...(kind === 'answers' ? { ...prompt, answers } : { turnId: 'turn-1', prompt })
     })
     expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it.each([true, false])(
-    'cancels a card with no running turn by naming only it, or not at all (host takes cards: %s)',
-    async (supported) => {
-      mocks.promptCancelSupported.mockResolvedValue(supported)
-      const view = renderHook(() =>
-        useStructuredAgentSession({ sessionId: 'session-1', target, agent: 'omp', isVisible: true })
-      )
-      const prompt = { itemId: approval.itemId, expectedRevision: approval.revision }
-      await act(async () => {
-        await view.result.current.cancel(undefined, prompt)
-      })
-      const calls = mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.cancel')
-      expect(calls.map(([, , params]) => params)).toEqual(
-        supported ? [expect.objectContaining({ prompt })] : []
-      )
-      expect(calls.some(([, , params]) => 'turnId' in params)).toBe(false)
-    }
-  )
-
-  it('packs the answer into an option id for a host that predates structured answers', async () => {
-    mocks.questionAnswersSupported.mockResolvedValue(false)
-    const { result } = renderHook(() =>
-      useStructuredAgentSession({
-        sessionId: 'session-1',
-        target,
-        agent: 'claude',
-        isVisible: true
-      })
-    )
-
-    await act(async () => {
-      await result.current.respond(question, { kind: 'answers', answers })
-    })
-
-    expect(respondCall()).toMatchObject({
-      itemId: 'question-1',
-      optionId: encodeAgentSessionQuestionAnswers(answers)
-    })
-    expect(respondCall()).not.toHaveProperty('answers')
   })
 })

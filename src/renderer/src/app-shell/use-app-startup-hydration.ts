@@ -1,6 +1,6 @@
 import { restoreStructuredLaunchSurfaces } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
-import { restoreLocalStructuredChatsAtStartup } from '@/runtime/local-structured-chats'
+import { restoreLocalStructuredChatsAtStartup } from '@/runtime/native-chat/local-sessions/local-structured-chats'
 import { syncZoomCSSVar } from '@/lib/ui-zoom'
 import { installCodexDetachedPaneRestartExecutor } from '@/components/terminal-pane/account-restart/detached/codex-detached-pane-restart-scheduler'
 import { useAppStore } from '../store'
@@ -29,6 +29,7 @@ import {
   collectTerminalProviderSnapshotPtyIds,
   refreshTerminalProviderSnapshotCapabilities
 } from '../components/terminal/terminal-provider-snapshot-capability'
+import { probeTerminalProviderGoneSessions } from '../components/terminal/terminal-provider-gone-sessions'
 import {
   getRepoExecutionHostId,
   isOwnedSshTargetId,
@@ -262,10 +263,11 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+          const restoredPtyIds = collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
+          // Unawaited: liveness answers only widen parking later and must never delay reconnect.
+          void probeTerminalProviderGoneSessions(restoredPtyIds)
           await timeRendererStartupStep('terminal-provider-snapshot-capabilities', () =>
-            refreshTerminalProviderSnapshotCapabilities(
-              collectTerminalProviderSnapshotPtyIds(useAppStore.getState())
-            )
+            refreshTerminalProviderSnapshotCapabilities(restoredPtyIds)
           )
           reconnectStarted = true
           await timeRendererStartupStep('reconnect-terminals', () =>

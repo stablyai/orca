@@ -123,18 +123,23 @@ describe('NativeChatContextUsageRing', () => {
     expect(card()).toBeNull()
   })
 
-  it('stays closed when Escape lands during a pending hover', async () => {
+  it('dismisses the hover card and cancels pending hover when a context menu opens', async () => {
     const trigger = await renderRing()
+    const contextMenu = () =>
+      dispatch(trigger, new MouseEvent('contextmenu', { bubbles: true, button: 2 }))
 
     await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
-    await advance(100)
-    await pressEscape()
+    await contextMenu()
     await advance(500)
+    expect(card()).toBeNull()
 
-    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    await dispatch(trigger.parentElement!, pointer('pointerout', 'mouse'))
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    await advance(150)
+    expect(card()).not.toBeNull()
+    await contextMenu()
     expect(card()).toBeNull()
   })
-
   it('does not reopen a card dismissed with Escape once a stale hover would have fired', async () => {
     const trigger = await renderRing()
 
@@ -160,7 +165,8 @@ describe('NativeChatContextUsageRing', () => {
 
   it('spends an Escape typed in the composer on closing the card, not on stopping the agent', async () => {
     const { NativeChatContextUsageRing } = await import('./NativeChatContextUsageRing')
-    const { useNativeChatComposerKeyDown } = await import('../use-native-chat-composer-keydown')
+    const { useNativeChatComposerKeyDown } =
+      await import('@/components/native-chat/composer/editor/use-native-chat-composer-keydown')
     const interrupt = vi.fn()
     function ComposerWithRing(): React.JSX.Element {
       const onKeyDown = useNativeChatComposerKeyDown({

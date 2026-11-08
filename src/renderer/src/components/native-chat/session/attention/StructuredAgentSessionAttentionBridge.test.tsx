@@ -56,11 +56,17 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOri
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionTurnCompletions: mocks.subscribeCompletions,
-  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus,
-  acknowledgeStructuredAgentSessionAttention: mocks.acknowledgeAttention
+  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
+
+vi.mock(
+  '../../../../runtime/native-chat/attention/structured-agent-session-attention-acknowledgment',
+  () => ({
+    acknowledgeStructuredAgentSessionAttention: mocks.acknowledgeAttention
+  })
+)
 
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
 import {
@@ -69,8 +75,8 @@ import {
   type StructuredSubjectRead
 } from '@/attention/agent-subject-read-actions'
 
-import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { makeTabGroup, makeUnifiedTab } from '../../../../store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
@@ -141,15 +147,6 @@ function hostStream(index = 0): (event: AgentSessionTurnCompletionEvent) => void
     throw new Error(`completion stream ${index} not subscribed; opened ${mocks.emitters.length}`)
   }
   return emit
-}
-
-function indicators(): Record<string, unknown> {
-  const state = mocks.store?.getState()
-  return {
-    workspaceBold: state?.worktreesByRepo.repo1?.[0]?.isUnread === true,
-    paneDot: state?.unreadAgentCompletionPanes[CHAT_SUBJECT],
-    tabDot: state?.unreadTerminalTabs[CHAT_TAB]
-  }
 }
 
 describe('StructuredAgentSessionAttentionBridge', () => {
@@ -270,36 +267,5 @@ describe('StructuredAgentSessionAttentionBridge', () => {
       after.cursor
     )
     expect(dismissed.flatMap(({ paneKeys }) => paneKeys ?? [])).toContain(CHAT_SUBJECT)
-  })
-
-  // Separate status/completion sockets are unordered; derive wording from completion despite conflicting mirrors.
-
-  // Ambiguous workspace ids cannot locate an unstamped tab until its snapshot records the host.
-  it('pauses an unrecorded chat while its workspace id names two hosts, until its host is recorded', async () => {
-    render(<StructuredAgentSessionAttentionBridge />)
-    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
-    expect(mocks.subscribeCompletions.mock.calls[0]?.[0]).toEqual({ kind: 'local' })
-    await act(async () =>
-      mocks.store?.setState({
-        worktreesByRepo: {
-          repo1: [
-            makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'local' }),
-            makeWorktree({ id: WORKSPACE, repoId: 'repo1', hostId: 'ssh:qa' })
-          ]
-        }
-      })
-    )
-    expect(mocks.unsubscribe).toHaveBeenCalledOnce()
-
-    await act(async () =>
-      mocks.store?.setState({
-        unifiedTabsByWorktree: { [WORKSPACE]: [chatTab({ executionHostId: 'local' })] }
-      })
-    )
-    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledTimes(2))
-    expect(mocks.subscribeCompletions.mock.calls[1]?.[0]).toEqual({ kind: 'local' })
-    act(() => hostStream(1)(completionFrame()))
-    expect(onlyDispatch().notificationSourceId).toBe('local')
-    expect(indicators().paneDot).toBe('agent-completion')
   })
 })

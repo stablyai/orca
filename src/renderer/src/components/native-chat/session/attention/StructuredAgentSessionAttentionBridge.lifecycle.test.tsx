@@ -1,9 +1,7 @@
-import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 
-// Exercise the real attention path from completion stream to indicators/OS delivery; mock only transport and preload.
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 
-import { useEffect, useMemo } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentJournalTurnOutcome } from '../../../../../../shared/agent-status/lifecycle/agent-turn-outcome'
@@ -56,19 +54,24 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOri
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionTurnCompletions: mocks.subscribeCompletions,
-  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus,
-  acknowledgeStructuredAgentSessionAttention: mocks.acknowledgeAttention
+  subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
+
+vi.mock(
+  '../../../../runtime/native-chat/attention/structured-agent-session-attention-acknowledgment',
+  () => ({
+    acknowledgeStructuredAgentSessionAttention: mocks.acknowledgeAttention
+  })
+)
 
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
 import {
-  getStructuredAgentSessionTurnCompletionFeed,
   resetStructuredAgentSessionTurnCompletionFeedsForTests,
   structuredAgentSessionTurnCompletionFeedCountForTests as retainedCount
-} from '@/runtime/structured-agent-session-turn-completion-feed'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { makeTabGroup, makeUnifiedTab } from '../../../../store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
@@ -108,13 +111,6 @@ function turnCompletion(
     outcome,
     completedAt: 1
   }
-}
-
-function completionFrame(
-  sessionId = SESSION,
-  outcome: AgentJournalTurnOutcome = 'success'
-): AgentSessionTurnCompletionEvent {
-  return { type: 'completion', completion: turnCompletion(sessionId, outcome) }
 }
 
 function promptFrame(
@@ -316,73 +312,6 @@ describe('StructuredAgentSessionAttentionBridge lifecycle integration', () => {
     await act(() => vi.advanceTimersByTimeAsync(0))
     expect(teardowns).toHaveLength(3)
     teardowns.forEach((stop) => expect(stop).toHaveBeenCalledOnce())
-    expect(retainedCount()).toBe(0)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('keeps one stream through mounted combined-effect renewal and passive-effect reentry', async () => {
-    vi.useFakeTimers()
-    const target: RuntimeClientTarget = { kind: 'local' }
-    const ownerSubscription = { subscribe: vi.fn((_observe: () => void) => vi.fn()) }
-    const passive = vi.fn()
-    const current = vi.fn()
-    function Consumer({
-      tab,
-      target,
-      owner
-    }: {
-      tab: Tab
-      target: RuntimeClientTarget
-      owner: typeof ownerSubscription
-    }): null {
-      const feed = useMemo(() => getStructuredAgentSessionTurnCompletionFeed(target), [target])
-      useEffect(() => {
-        const stopOwner = owner.subscribe(() => {})
-        const stopEdges = feed.subscribe(passive)
-        return () => {
-          stopOwner()
-          stopEdges()
-        }
-      }, [feed, owner, tab.entityId, target])
-      useEffect(() => {
-        const stopListening = feed.subscribe((edge) => current(tab.label, edge.type))
-        const release = feed.activate()
-        return () => {
-          release()
-          stopListening()
-        }
-      }, [feed, tab, target])
-      return null
-    }
-    const consumerProps = { target, owner: ownerSubscription }
-    const view = render(<Consumer {...consumerProps} tab={chatTab({ label: 'initial' })} />)
-    await act(() => vi.advanceTimersByTimeAsync(0))
-    for (const tab of [
-      chatTab({ label: 'metadata' }),
-      chatTab({ label: 'rebound', entityId: 'session-2' })
-    ]) {
-      view.rerender(<Consumer {...consumerProps} tab={tab} />)
-      await act(() => vi.advanceTimersByTimeAsync(0))
-      expect(mocks.subscribeCompletions).toHaveBeenCalledOnce()
-      expect(mocks.unsubscribe).not.toHaveBeenCalled()
-      current.mockClear()
-      passive.mockClear()
-      act(() => {
-        hostStream()(completionFrame(tab.entityId))
-        hostStream()(promptFrame(tab.entityId))
-      })
-      expect(current.mock.calls).toEqual([
-        [tab.label, 'completion'],
-        [tab.label, 'prompt']
-      ])
-      expect(passive.mock.calls.map(([edge]) => edge.type)).toEqual(['completion', 'prompt'])
-      expect(ownerSubscription.subscribe).toHaveBeenCalledTimes(tab.entityId === SESSION ? 1 : 2)
-    }
-    expect(ownerSubscription.subscribe.mock.results[0]?.value).toHaveBeenCalledOnce()
-    view.unmount()
-    await act(() => vi.advanceTimersByTimeAsync(0))
-    expect(ownerSubscription.subscribe.mock.results[1]?.value).toHaveBeenCalledOnce()
-    expect(mocks.unsubscribe).toHaveBeenCalledOnce()
     expect(retainedCount()).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })

@@ -229,6 +229,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
+  Partial<Pick<AppState, 'splitLandingGroupIds'>> &
   Partial<RetiredTerminalTabSweepState> &
   Partial<
     Pick<

@@ -1,4 +1,4 @@
-import { transitionLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-transition'
+import { transitionLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-transition'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,

@@ -4,8 +4,8 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { NativeChatUsageLimitActionsProvider } from './NativeChatUsageLimitActions'
-import { NativeChatNoticeRow } from '../NativeChatNoticeRow'
-import type { NativeChatOrcaStopView } from '../native-chat-orca-stop-context'
+import { NativeChatNoticeRow } from '../messages/notices/NativeChatNoticeRow'
+import type { NativeChatOrcaStopView } from '../messages/notices/native-chat-orca-stop-context'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
@@ -27,23 +27,23 @@ const mocks = vi.hoisted(() => ({
   dialog: vi.fn()
 }))
 let status = new Map<string, Pick<AgentSessionStatusSummary, 'usageLimitContinue'>>()
-vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => 'supported'
 }))
-vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({
     activate: () => () => {},
     subscribe: () => () => {},
     getSnapshot: () => status
   })
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.options
 }))
-vi.mock('@/runtime/structured-conversation-name', () => ({
+vi.mock('@/runtime/native-chat/naming/structured-conversation-name', () => ({
   useStructuredChatTabConversationName: () => 'My chat'
 }))
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../../runtime/provider-accounts/ownership/use-active-account-owner', () => ({
   useActiveAccountOwner: () => ({
     target: { kind: 'environment', environmentId: 'other' },
     wslHostDistro: null

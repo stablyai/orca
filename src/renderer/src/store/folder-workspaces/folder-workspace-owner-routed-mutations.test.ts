@@ -394,13 +394,16 @@ function catalogOwner(store: {
   return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
 }
 
-import * as composerDrafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as composerDrafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as composerDraftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as composerDraftsOwner2 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import * as composerDraftsOwner3 from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import {
   addNativeChatPendingAttachment,
   nativeChatPendingAttachmentSnapshot,
   settleNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 it('retires removed folder launch submissions while preserving physical twins and new lifetimes', async () => {
   composerDrafts.clearNativeChatComposerDraftsForTests()
@@ -420,18 +423,18 @@ it('retires removed folder launch submissions while preserving physical twins an
     purgeWorktreeTerminalState: vi.fn()
   })
   const scope = (id: string, host = 'local') =>
-    composerDrafts.nativeChatLaunchPromptDraftScopeKey(folderWorkspaceKey(id), 'claude', host)
+    composerDraftsOwner1.nativeChatLaunchPromptDraftScopeKey(folderWorkspaceKey(id), 'claude', host)
   const liveScopes = [scope('live'), scope(twin.id, 'runtime:env-owner')]
   for (const key of liveScopes) {
-    composerDrafts.updateNativeChatComposerDraft(key, { text: 'keep' }, 'immediate')
+    composerDraftsOwner2.updateNativeChatComposerDraft(key, { text: 'keep' }, 'immediate')
   }
   const attempts = folders.map((folder, i) => {
     const key = scope(folder.id)
-    composerDrafts.updateNativeChatComposerDraft(key, { text: `task ${i}` }, 'immediate')
+    composerDraftsOwner2.updateNativeChatComposerDraft(key, { text: `task ${i}` }, 'immediate')
     addNativeChatPendingAttachment(key, { id: key, path: '', pending: true })
-    const submission = composerDrafts.captureNativeChatComposerSubmission(key)
+    const submission = composerDraftsOwner3.captureNativeChatComposerSubmission(key)
     if (i % 2 === 0) {
-      composerDrafts.updateNativeChatComposerDraft(key, { text: '' }, 'immediate')
+      composerDraftsOwner2.updateNativeChatComposerDraft(key, { text: '' }, 'immediate')
     }
     return submission
   })
@@ -453,11 +456,15 @@ it('retires removed folder launch submissions while preserving physical twins an
   }
   expect(shutdown).toHaveBeenCalledTimes(1)
   for (const key of liveScopes) {
-    expect(composerDrafts.readNativeChatComposerDraft(key).text).toBe('keep')
+    expect(composerDraftsOwner2.readNativeChatComposerDraft(key).text).toBe('keep')
   }
   store.setState((s) => ({ folderWorkspaces: [...s.folderWorkspaces, folders[0]] }))
   const recreated = scope(folders[0].id)
-  composerDrafts.updateNativeChatComposerDraft(recreated, { text: 'new lifetime' }, 'immediate')
+  composerDraftsOwner2.updateNativeChatComposerDraft(
+    recreated,
+    { text: 'new lifetime' },
+    'immediate'
+  )
   folders.forEach((folder, i) => {
     const key = scope(folder.id)
     // A same-ID survivor skips ordinary cleanup as on main, so only that folder's chip stays.
@@ -465,9 +472,9 @@ it('retires removed folder launch submissions while preserving physical twins an
     if (i > 0) {
       expect(settleNativeChatPendingAttachment(key, key, '/late.png')).toBe(false)
     }
-    composerDrafts.finishNativeChatComposerSubmission(key, attempts[i], true)
+    composerDraftsOwner2.finishNativeChatComposerSubmission(key, attempts[i], true)
   })
-  expect(composerDrafts.readNativeChatComposerDraft(recreated).text).toBe('new lifetime')
+  expect(composerDraftsOwner2.readNativeChatComposerDraft(recreated).text).toBe('new lifetime')
   composerDrafts.clearNativeChatComposerDraftsForTests()
   clearNativeChatPendingAttachmentsForTests()
 })

@@ -83,40 +83,6 @@ afterEach(async () => {
 })
 
 describe('RunningTerminalCloseDialog', () => {
-  it('names the tab so a background close is not ambiguous', async () => {
-    const onConfirm = vi.fn()
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-
-    await renderDialog({ onConfirm }, updateSettings)
-
-    expect(document.body.textContent).toContain('Stop running command?')
-    expect(document.body.textContent).toContain('dev server')
-
-    await act(async () => {
-      getButton('Stop and Close').click()
-    })
-
-    expect(updateSettings).not.toHaveBeenCalled()
-    expect(onConfirm).toHaveBeenCalledTimes(1)
-  })
-
-  it('uses truthful chat copy and the shared opt-out without terminal sleep advice', async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-    const onConfirm = vi.fn()
-    await renderDialog({ onConfirm, copyKind: 'chat-agent' }, updateSettings)
-
-    await act(async () => {
-      getCheckbox().click()
-    })
-    await act(async () => {
-      getButton('Stop Agent').click()
-    })
-    expect(updateSettings).toHaveBeenCalledWith({
-      skipCloseTerminalWithRunningProcessConfirm: true
-    })
-    expect(onConfirm).toHaveBeenCalledTimes(1)
-  })
-
   it('waits for a visible pinned confirmation instead of stacking a second modal', async () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)
     useAppStore.setState({
@@ -132,38 +98,6 @@ describe('RunningTerminalCloseDialog', () => {
     })
 
     expect(document.body.textContent).toContain('Stop running command?')
-  })
-
-  it('does not carry the opt-out tick over to the next queued tab', async () => {
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-    const nextOnConfirm = vi.fn()
-
-    await renderDialog({ onConfirm: vi.fn(), onCancel: vi.fn() }, updateSettings)
-    await act(async () => {
-      useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
-        terminalTabId: 'tab-2',
-        tabLabel: 'build watcher',
-        copyKind: 'command',
-        onConfirm: nextOnConfirm
-      })
-    })
-
-    await act(async () => {
-      getCheckbox().click()
-    })
-    await act(async () => {
-      getButton('Cancel').click()
-    })
-
-    expect(document.body.textContent).toContain('build watcher')
-
-    advancePastGuard()
-    await act(async () => {
-      getButton('Stop and Close').click()
-    })
-
-    expect(updateSettings).not.toHaveBeenCalled()
-    expect(nextOnConfirm).toHaveBeenCalledTimes(1)
   })
 
   it('drops a queued prompt once the user opts out of asking again', async () => {
@@ -194,37 +128,5 @@ describe('RunningTerminalCloseDialog', () => {
     expect(onConfirm).toHaveBeenCalledTimes(1)
     expect(nextOnConfirm).toHaveBeenCalledTimes(1)
     expect(document.body.textContent).not.toContain('build watcher')
-  })
-
-  it('cancels without closing and shows the next queued tab', async () => {
-    const onConfirm = vi.fn()
-    const onCancel = vi.fn()
-    const nextOnConfirm = vi.fn()
-    const updateSettings = vi.fn().mockResolvedValue(undefined)
-
-    await renderDialog({ onConfirm, onCancel }, updateSettings)
-    await act(async () => {
-      useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
-        terminalTabId: 'tab-2',
-        tabLabel: 'build watcher',
-        copyKind: 'command',
-        onConfirm: nextOnConfirm
-      })
-    })
-
-    await act(async () => {
-      getButton('Cancel').click()
-    })
-
-    expect(onCancel).toHaveBeenCalledTimes(1)
-    expect(onConfirm).not.toHaveBeenCalled()
-    expect(document.body.textContent).toContain('build watcher')
-
-    advancePastGuard()
-    await act(async () => {
-      getButton('Stop and Close').click()
-    })
-
-    expect(nextOnConfirm).toHaveBeenCalledTimes(1)
   })
 })

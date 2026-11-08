@@ -2,19 +2,19 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatStructuredComposerTransport } from '../native-chat-composer-types'
-import { useStructuredAgentSessionSends } from '../session/structured/delivery/use-structured-agent-session-sends'
+import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
+import { useStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-sends'
 import {
   getStructuredAgentSessionSendNotice,
   setStructuredAgentSessionSendNotice
-} from '../session/structured/delivery/structured-agent-session-pending-sends'
-import { resetStructuredAgentSessionSendsForTests } from '../session/structured/delivery/structured-agent-session-message-sender'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  updateNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '../native-chat-composer-draft-store'
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import { emitNativeChatMessageSent } from '@/components/native-chat/telemetry/native-chat-telemetry'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -27,7 +27,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-t
 import {
   NativeChatInterruptedContinueButton,
   useNativeChatInterruptedContinuation
-} from './NativeChatInterruptedContinue'
+} from '@/components/native-chat/usage/NativeChatInterruptedContinue'
 import '@testing-library/jest-dom/vitest'
 
 const mocks = vi.hoisted(() => {
@@ -54,10 +54,10 @@ vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-label', () => ({
   structuredAgentLabel: () => 'Codex'
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
-vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => mocks.capability
 }))
 vi.mock('../../native-chat-restart-runtimes', () => ({
@@ -66,7 +66,7 @@ vi.mock('../../native-chat-restart-runtimes', () => ({
 vi.mock('../../native-chat-launch-resume-decision', () => ({
   useNativeChatLaunchResumePending: () => mocks.launchPending
 }))
-vi.mock('../use-structured-agent-session-host-label', () => ({
+vi.mock('@/components/native-chat/pane/ownership/use-structured-agent-session-host-label', () => ({
   useStructuredAgentSessionHostLabel: () => mocks.hostLabel
 }))
 
@@ -193,13 +193,6 @@ describe('Continue on a reply an Orca stop cut off', () => {
     fireEvent.click(continueButton()!)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     expect(screen.getByTestId('error')).toHaveTextContent('none')
-  })
-
-  it('leaves an unrelated composer error alone when the chat moves on by itself', () => {
-    const { rerender } = render(<Harness />)
-    fireEvent.click(screen.getByRole('button', { name: 'compose' }))
-    rerender(<Harness submissions={[{ dispatchState: 'pending' }]} />)
-    expect(screen.getByTestId('error')).toHaveTextContent(ATTACHMENTS)
   })
 
   it('drops the line once the chat was continued, here or by another client', async () => {

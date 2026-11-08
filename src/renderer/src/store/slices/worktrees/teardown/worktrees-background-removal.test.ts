@@ -1,9 +1,7 @@
-import {
-  clearNativeChatComposerDraftsForTests,
-  updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { captureNativeChatComposerSubmission } from '@/components/native-chat/native-chat-composer-draft-memory'
-import { nativeChatLaunchPromptDraftScopeKey } from '@/components/native-chat/native-chat-launch-draft-source'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { updateNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { captureNativeChatComposerSubmission } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
+import { nativeChatLaunchPromptDraftScopeKey } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import 'sonner'
 import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'

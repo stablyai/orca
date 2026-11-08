@@ -1,6 +1,6 @@
 /** Manual Retry carries the same catalog incarnation as scheduled work so its response can pass the commit fence. */
 
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationHostFetchTarget } from './automation-host-scheduler'
 

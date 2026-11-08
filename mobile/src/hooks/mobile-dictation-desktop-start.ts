@@ -10,9 +10,9 @@ import {
   dictationSessionStart
 } from '../dictation/mobile-dictation-operations'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
-import { rpcPayloadMember } from '../transport/rpc-reader-payload'
-import { probeLivenessWhileWaiting } from '../transport/rpc-liveness-probe-while-waiting'
-import type { RpcClient } from '../transport/rpc-client'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
+import { probeLivenessWhileWaiting } from '../transport/rpc/rpc-liveness-probe-while-waiting'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 type StartMobileDictationDesktopSessionOptions = {
   client: RpcClient

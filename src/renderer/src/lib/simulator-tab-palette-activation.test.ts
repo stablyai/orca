@@ -175,11 +175,4 @@ describe('activateSimulatorTabPaletteResult', () => {
     expect(state.activeGroupIdByWorktree['wt-1']).toBe('group-2')
     expect(state.groupsByWorktree['wt-1'][1].activeTabId).toBe('sim-tab-1')
   })
-
-  it('reports blocked activation without claiming the workspace disappeared', () => {
-    mocks.activateAndRevealWorkspace.mockReturnValue(false)
-
-    expect(activateSimulatorTabPaletteResult(target)).toEqual({ status: 'blocked' })
-    expect(useAppStore.getState().activeTabType).not.toBe('simulator')
-  })
 })

@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => {
   return state
 })
 
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../runtime/provider-accounts/ownership/use-active-account-owner', () => ({
   useActiveAccountOwner: () => ({ target: mocks.owner, wslHostDistro: null })
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({

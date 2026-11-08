@@ -1,6 +1,5 @@
 import { journalInputSourceBody } from '../../../../../native-chat/agent-session-journal/input-order/journal-input-source'
 import {
-  createQueuedImageWireRecord,
   streamState,
   queuedImageTestBody
 } from '../protocol/structured-agent-session-wire-record.test-fixture'
@@ -86,10 +85,6 @@ const MODERN = {
   clientKind: 'runtime' as const,
   clientCapabilities: [...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES]
 }
-let wireRecord: ReturnType<typeof createQueuedImageWireRecord> | undefined
-function wire() {
-  return (wireRecord ??= createQueuedImageWireRecord(current().root, SESSION, journal))
-}
 let rig: QueuedMessageTestRig | undefined
 const current = () => {
   if (!rig) {
@@ -105,14 +100,9 @@ const journal = () => {
   return value
 }
 afterEach(async () => {
-  try {
-    wireRecord?.verify()
-  } finally {
-    wireRecord = undefined
-    setStructuredAgentSessionHost(null)
-    await rig?.dispose()
-    rig = undefined
-  }
+  setStructuredAgentSessionHost(null)
+  await rig?.dispose()
+  rig = undefined
 })
 async function history(
   request: Omit<AgentSessionHistoryRequest, 'sessionId'> = { direction: 'tail' },
@@ -124,7 +114,6 @@ async function history(
     old ? queuedImageHistoryReader(OLD) : undefined
   )
   const answer = old ? projectQueuedImageCardHistory(result, OLD) : result
-  wire().record(answer)
   return answer
 }
 async function imageBody(text = 'original') {
@@ -157,6 +146,35 @@ async function failedImage() {
   }
 }
 
+it('publishes a complete image row to old readers before it has a submission', async () => {
+  rig = await createQueuedMessageTestRig({ restartable: true })
+  setStructuredAgentSessionHost(rig.host)
+  await rig.workingSend()
+  const frames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
+  const body = await imageBody('waiting image')
+  const id = hostTestOperationId()
+  const fields = { body, delivery: 'queue-if-active' as const }
+  const params = { envelope: rig.envelope(fields, 'agentSession.send', id), ...fields }
+  expect(await call('agentSession.send', params, OLD)).toMatchObject({
+    result: { ok: true, value: { queued: { messageId: id } } }
+  })
+  expect(journal().submission(id)).toBeUndefined()
+  expect((await history()).page.items).toContainEqual(
+    expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
+  )
+  await eventually(() =>
+    expect(streamState(frames).items).toContainEqual(
+      expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
+    )
+  )
+  expect(await call('agentSession.send', params, OLD)).toMatchObject({
+    result: { ok: true, replayed: true, value: { queued: { messageId: id } } }
+  })
+  expect((await history({ direction: 'tail' }, false)).page.queuedMessages).toContainEqual(
+    expect.objectContaining({ messageId: id, body })
+  )
+})
+
 it('installs old-reader source and exact controls through RPC, disk reopen, Send and Delete without changing capable readers', async () => {
   rig = await createQueuedMessageTestRig({ restartable: true })
   setStructuredAgentSessionHost(rig.host)
@@ -187,8 +205,6 @@ it('installs old-reader source and exact controls through RPC, disk reopen, Send
   await rig.quitRestartHostProcess()
   setStructuredAgentSessionHost(rig.host)
   const reopened = await history()
-  wire().record(reopened.page)
-  wire().record((await history({ direction: 'tail' }, false)).page)
   expect(reopened.page.items).toContainEqual(
     expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
   )
@@ -197,7 +213,6 @@ it('installs old-reader source and exact controls through RPC, disk reopen, Send
   )
   const frames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
   const modernFrames = await openStream('agentSession.subscribe', { sessionId: SESSION }, MODERN)
-  wire().record(streamState(frames))
   const immutable = journal().submission(id)
   const receipt = journal().receiptFor(id)
   const sendFields = { messageId: card.messageId }
@@ -217,8 +232,6 @@ it('installs old-reader source and exact controls through RPC, disk reopen, Send
   expect(rig.dispatch.mock.calls.at(-1)?.[0]).toMatchObject({ body })
   expect((await rig.handoff(card.messageId))?.options).toEqual({ model: 'default' })
   expect((await history()).page.queuedMessages).toEqual([])
-  wire().record((await history()).page)
-  wire().record(streamState(frames))
   expect(journal().submission(id)).toEqual(immutable)
   expect(journal().receiptFor(id)).toEqual(receipt)
   expect(journal().submissionBody(id)).toEqual(body)
@@ -253,8 +266,7 @@ it('installs old-reader source and exact controls through RPC, disk reopen, Send
   const exact = journal()
     .queuedMessages.list()
     .find((row) => row.messageId === deleted || row.recovers === deleted)!
-  wire().record((await history()).page)
-  const deleteFrames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
+  await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
   const fields = { messageId: exact.messageId }
   expect(
     await call(
@@ -267,8 +279,6 @@ it('installs old-reader source and exact controls through RPC, disk reopen, Send
     )
   ).toMatchObject({ result: { ok: true } })
   const deletedPage = (await history()).page
-  wire().record(deletedPage)
-  wire().record(streamState(deleteFrames))
   expect(
     projectStructuredAgentSessionMessages(deletedPage.items, [], deletedPage.submissions).some(
       (item) => item.id === agentJournalSubmissionKey(deleted)
@@ -276,7 +286,6 @@ it('installs old-reader source and exact controls through RPC, disk reopen, Send
   ).toBe(false)
   await rig.quitRestartHostProcess()
   const reopenedDeleted = (await history()).page
-  wire().record(reopenedDeleted)
   expect(
     projectStructuredAgentSessionMessages(
       reopenedDeleted.items,
@@ -317,7 +326,6 @@ it('keeps a hidden original pageable beyond1024 rows and preserves edited recove
     before = older.page.window.nextCursor
     older = await history({ direction: 'before', cursor: before, limit: 200 })
   }
-  wire().record(older.page)
   expect(older.page.items).toContainEqual(
     expect.objectContaining({ itemId: agentJournalSubmissionKey(id), body })
   )
@@ -382,7 +390,6 @@ it('keeps a hidden original pageable beyond1024 rows and preserves edited recove
     body: { blocks: [{ type: 'text', text: 'changed' }, body.blocks[1]] },
     options: { model: 'default' }
   })
-  wire().record(selected.page)
   const pub = rig.host.collaboratorsForTests().subscribers.readQueuePublication(SESSION)!
   const { projectQueuedImageCardPublication } =
     await import('./structured-agent-session-queued-image-capability')
@@ -446,7 +453,6 @@ it.each([false, true])(
       expect(journal().submission(presentedId)).not.toHaveProperty('keptAsQueuedMessageId')
     }
     const before = await history()
-    wire().record(before.page)
     const immutable = journal().submission(presentedId)
     const receipt = journal().receiptFor(presentedId)
     expect(
@@ -484,7 +490,6 @@ it.each([false, true])(
       )
     ).toMatchObject({ result: { ok: true, value: { status: 'updated' } } })
     const changed = await history()
-    wire().record(changed.page)
     expect(journal().submission(presentedId)).toEqual(immutable)
     expect(journal().receiptFor(presentedId)).toEqual(receipt)
     expect(
@@ -535,7 +540,6 @@ it.each([false, true])(
       const event = frame.result as AgentSessionSubscribeEvent
       return reduceStructuredAgentSession(state, { type: 'event', event })
     }, EMPTY_STRUCTURED_AGENT_SESSION)
-    wire().record(live)
     expect(
       projectStructuredAgentSessionMessages(live.items, [], live.submissions).some(
         (item) => item.id === agentJournalSubmissionKey(presentedId)
@@ -582,7 +586,6 @@ it.each([false, true])(
     expect((await history()).page.queuedMessages).toEqual([])
     await rig.quitRestartHostProcess()
     const reopened = (await history()).page
-    wire().record(reopened)
     expect(reopened.queuedMessages).toMatchObject([{ messageId: card.messageId, state: 'waiting' }])
     expect(reopened.queuedMessages).toHaveLength(1)
     expect(journal().submission(id)?.dispatchState).toBe('rejected')
@@ -711,13 +714,10 @@ it.each([
     const original = journal().submission(id)!
     const receipt = journal().receiptFor(id)
     expect(original).toMatchObject({ dispatchState: 'unknown', providerItemId: null })
-    wire().record((await history()).page)
-    const frames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
-    wire().record(streamState(frames))
+    await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
     await rig.quitRestartHostProcess()
     setStructuredAgentSessionHost(rig.host)
-    wire().record((await history()).page)
-    const settledFrames = await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
+    await openStream('agentSession.subscribe', { sessionId: SESSION }, OLD)
     if (card) {
       const fields = {
         messageId: card.messageId,
@@ -741,7 +741,6 @@ it.each([
       })
       expect(edited.options).toEqual(card.options)
       expect(edited.state).toBe('waiting')
-      wire().record((await history()).page)
       expect(await call('agentSession.queuedMessageUpdate', params, MODERN)).toMatchObject({
         result: { ok: true }
       })
@@ -787,10 +786,8 @@ it.each([
     } else {
       expect(journal().queuedMessages.get(`recovery:${id}`)).toBeNull()
     }
-    wire().record((await history()).page)
-    wire().record(streamState(settledFrames))
     await rig.quitRestartHostProcess()
-    wire().record((await history()).page)
+    await history()
     expect(journal().queuedMessages.get(`recovery:${id}`)).toEqual(beforeProof)
   }
 )

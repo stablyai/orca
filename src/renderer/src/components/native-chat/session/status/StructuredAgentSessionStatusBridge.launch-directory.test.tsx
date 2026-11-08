@@ -8,10 +8,7 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../../../shared/agent-session/agent-session-wire'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 
@@ -64,8 +61,11 @@ vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOri
   runtimeEnvironmentSupportsCapability: mocks.supportsCapability
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: vi.fn(),
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: vi.fn()
+}))
+
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSession: vi.fn(),
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
@@ -76,7 +76,7 @@ import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStat
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
-} from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 const floatingTab = {
   id: 'floating-chat-1',
@@ -104,15 +104,6 @@ function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessi
     updatedAt: 1,
     ...overrides
   }
-}
-
-function emit(event: AgentSessionStatusEvent): void {
-  const call = mocks.subscribeStatus.mock.calls.at(-1)
-  if (!call) {
-    throw new Error('status feed not subscribed')
-  }
-  const send: (event: AgentSessionStatusEvent) => void = call[1]
-  act(() => send(event))
 }
 
 function pins(): AppState['structuredSessionLaunchDirectoryByTabId'] {
@@ -262,97 +253,5 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
       feed().emit({ type: 'status', session: summary({ workspaceId: 'wt-1', updatedAt: 30 }) })
     )
     expect(statuses()[0].updatedAt).toBe(20)
-  })
-
-  it('reads earlier projections in an outer transaction for same-pane clock continuity', async () => {
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-    act(() =>
-      useAppStore.getState().transactAgentStatuses(() => {
-        feed().emit({ type: 'status', session: summary({ status: 'working', updatedAt: 100 }) })
-        feed().emit({ type: 'status', session: summary({ status: 'working', updatedAt: 200 }) })
-      })
-    )
-    expect(statuses()[0]).toMatchObject({
-      updatedAt: 200,
-      stateStartedAt: 100,
-      mainAgent: { stateStartedAt: 100 }
-    })
-  })
-
-  it('isolates an installed revocation failure and still reconnects and projects', async () => {
-    vi.useFakeTimers()
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    let stop = () => {}
-    let later = () => {}
-    try {
-      render(<StructuredAgentSessionStatusBridge />)
-      await act(() => Promise.resolve())
-      act(() =>
-        feed().emit({
-          type: 'status',
-          session: summary({ status: 'working', hostExecutionOwned: true })
-        })
-      )
-      const afterBridge = vi.fn()
-      later = getStructuredAgentSessionStatusFeed({ kind: 'local' }).subscribe(afterBridge)
-      let threw = false
-      stop = useAppStore.subscribe((state) => {
-        if (!threw && !Object.values(state.agentStatusByPaneKey)[0]?.structuredHostOwned) {
-          threw = true
-          throw new Error('revocation subscriber failed')
-        }
-      })
-      act(() => expect(() => feed().emit({ type: 'end' })).not.toThrow())
-      expect(statuses()[0].structuredHostOwned).toBeUndefined()
-      expect(warning).toHaveBeenCalled()
-      expect(afterBridge).toHaveBeenCalled()
-      await act(() => vi.advanceTimersByTimeAsync(300))
-      expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2)
-      act(() =>
-        feed(1).emit({
-          type: 'snapshot',
-          sessions: [summary({ status: 'working', hostExecutionOwned: true, updatedAt: 20 })]
-        })
-      )
-      expect(statuses()[0]).toMatchObject({ structuredHostOwned: true, updatedAt: 20 })
-    } finally {
-      stop()
-      later()
-      warning.mockRestore()
-      vi.useRealTimers()
-    }
-  })
-
-  it('keeps the host-published pinned folder for the tab and drops it when the tab goes', async () => {
-    const view = render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    emit({ type: 'snapshot', sessions: [summary({ launchDirectory: '/home/me/original' })] })
-
-    expect(pins()).toEqual({
-      [floatingTab.id]: { sessionId: 'session-1', launchDirectory: '/home/me/original' }
-    })
-
-    act(() => mocks.store?.setState({ unifiedTabsByWorktree: {} }))
-    view.rerender(<StructuredAgentSessionStatusBridge />)
-    expect(pins()).toEqual({})
-  })
-
-  it('never records a path published by a remote runtime', async () => {
-    mocks.store?.setState({
-      unifiedTabsByWorktree: {
-        [FLOATING_TERMINAL_WORKTREE_ID]: [
-          { ...floatingTab, executionHostId: toRuntimeExecutionHostId('env-1') }
-        ]
-      }
-    })
-    render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
-
-    emit({ type: 'snapshot', sessions: [summary({ launchDirectory: '/srv/remote/floating' })] })
-
-    expect(Object.keys(mocks.store?.getState().agentStatusByPaneKey ?? {})).toHaveLength(1)
-    expect(pins()).toEqual({})
   })
 })

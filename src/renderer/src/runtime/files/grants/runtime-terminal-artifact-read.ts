@@ -1,7 +1,7 @@
 import type { RuntimeReadableFileContent } from '../runtime-file-client-types'
 import { readRemoteFileContent } from '../reads/runtime-remote-file-content'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
-import { chatScratchFileAddress } from '../../runtime-chat-scratch-file-address'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import { chatScratchFileAddress } from '../addressing/runtime-chat-scratch-file-address'
 import {
   acquireTerminalArtifactGrant,
   isRenewableGrantError,

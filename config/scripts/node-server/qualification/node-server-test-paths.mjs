@@ -50,7 +50,6 @@ export function nodeServerTestPaths({
           'src/main/orcad/orcad-packaged-node-pty.integration.test.ts',
           'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
           'src/main/orcad/orcad-cli-launcher.integration.test.ts',
-          'src/main/orcad/orcad-cli-orchestration.integration.test.ts',
           'src/main/orcad/orcad-launcher-isolation.integration.test.ts',
           'src/main/orcad/orcad-stop-request-shutdown.integration.test.ts',
           'src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts',

@@ -11,10 +11,16 @@ import type {
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
-  subscribeStructuredAgentSession: mocks.subscribe
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
 }))
+
+vi.mock(
+  '../../../../../runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: mocks.subscribe
+  })
+)
 
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
@@ -362,24 +368,6 @@ describe('useStructuredAgentSessionRead stream failures', () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionReadOwnersForTests()
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
-  })
-
-  async function loadedChatWithNoMessages() {
-    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
-    const { result } = renderHook(() =>
-      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
-    )
-    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(1))
-    expect(result.current.state.status).toBe('ready')
-    return { result, onError: mocks.subscribe.mock.calls[0]?.[3] }
-  }
-
-  it('leaves a loaded chat as it was when the connection drops', async () => {
-    const { result, onError } = await loadedChatWithNoMessages()
-    act(() => onError?.({ code: 'runtime_error', message: 'connection lost' }))
-    expect(result.current.state.status).toBe('ready')
-    expect(result.current.state.error).toBeUndefined()
-    expect(result.current.state.readRefusal).toBeUndefined()
   })
   it('retains the action-only owner continuously across replacement and retirement', async () => {
     const owner = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)

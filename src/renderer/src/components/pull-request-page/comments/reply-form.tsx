@@ -11,6 +11,7 @@ import {
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { MentionOption } from '../page-types'
 import { MentionTextarea } from '../mentions/textarea'
 
@@ -29,6 +30,7 @@ export function CommentReplyForm({
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
 }): React.JSX.Element {
+  const t = useTranslate()
   const images = useGitHubImagePending()
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -107,7 +109,7 @@ export function CommentReplyForm({
       />
       <div className="mt-2 flex justify-end gap-2">
         <Button variant="ghost" size="sm" onClick={onCancel}>
-          {translate('auto.components.PullRequestPage.6591b1fa82', 'Cancel')}
+          {t('auto.components.PullRequestPage.6591b1fa82', 'Cancel')}
         </Button>
         <Button
           size="sm"
@@ -115,8 +117,8 @@ export function CommentReplyForm({
           onClick={() => void submit()}
         >
           {submitting
-            ? translate('auto.components.PullRequestPage.894cfd884b', 'Posting…')
-            : translate('auto.components.PullRequestPage.f119e5f5ef', 'Reply')}
+            ? t('auto.components.PullRequestPage.894cfd884b', 'Posting…')
+            : t('auto.components.PullRequestPage.f119e5f5ef', 'Reply')}
         </Button>
       </div>
     </div>

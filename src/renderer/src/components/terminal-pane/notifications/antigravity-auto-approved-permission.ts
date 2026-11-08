@@ -6,7 +6,7 @@ const STARTUP_SHELLS: readonly AgentStartupShell[] = ['posix', 'powershell', 'cm
 /** agy reports PreToolUse(ask_permission) and then auto-approves it when launched with its bypass flag. */
 export function isAutoApprovedAntigravityPermission(
   status: { state: string; agentType?: string; toolName?: string } | undefined,
-  launch: { launchConfig: { agentArgs?: string }; identity: { agentType?: string } } | undefined
+  launch: { launchConfig?: { agentArgs?: string }; identity: { agentType?: string } } | undefined
 ): boolean {
   if (
     status?.state !== 'waiting' ||
@@ -16,6 +16,6 @@ export function isAutoApprovedAntigravityPermission(
   ) {
     return false
   }
-  const args = launch.launchConfig.agentArgs
+  const args = launch.launchConfig?.agentArgs
   return STARTUP_SHELLS.every((shell) => tuiAgentArgsBypassPermissions('antigravity', args, shell))
 }

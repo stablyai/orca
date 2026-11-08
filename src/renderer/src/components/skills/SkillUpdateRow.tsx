@@ -4,7 +4,7 @@ import {
   bundledSkillOutcomeText,
   type BundledSkillPlanSkillSummary
 } from '../../../../shared/bundled-skill-summary'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   locationPlaceLabel,
@@ -29,6 +29,7 @@ function ChoiceLine({
   reason: string | null
   replace?: SkillReplaceToggle
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!reason && !(replace && location.replaceable)) {
     return null
   }
@@ -45,7 +46,7 @@ function ChoiceLine({
             checked={replace.isReplaced(location.path)}
             onCheckedChange={(checked) => replace.onReplaceChange(location.path, checked === true)}
           />
-          {translate(
+          {t(
             'auto.components.skills.SkillUpdateRow.replaceWithOrca',
             "Replace with Orca's copy (keeps a backup)"
           )}
@@ -60,11 +61,12 @@ function LocationTable({
 }: {
   locations: readonly BundledSkillLocation[]
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-border bg-muted/40 px-3 py-2">
       {locations.map((location) => (
         <div key={location.path} className="min-w-0 text-xs text-muted-foreground">
-          <span>{locationPlaceLabel(location)}</span>
+          <span>{locationPlaceLabel(location, t)}</span>
           {' · '}
           <span className="font-mono text-2xs [overflow-wrap:anywhere]" title={location.path}>
             {location.displayPath}
@@ -89,19 +91,20 @@ export function SkillUpdateRow({
   replace?: SkillReplaceToggle
   showLocations: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const replacement = skill.locations.find((location) => location.state === 'replace')
   const headline =
     phase === 'pending'
-      ? translate('auto.components.skills.SkillFreshnessUpdateDialog.updating', 'Updating…')
+      ? t('auto.components.skills.SkillFreshnessUpdateDialog.updating', 'Updating…')
       : phase === 'result' && outcome
         ? // Why: a skill the run only reports on shows its left-alone lines, not "No change".
           bundledSkillOutcomeText(outcome) === 'No change' &&
           outcome.ops.some((op) => op.kind === 'leave')
           ? null
-          : skillOutcomeText(outcome)
+          : skillOutcomeText(outcome, t)
         : replacement
           ? locationStateText(replacement)
-          : skillPlanHeadline(skill.state)
+          : skillPlanHeadline(skill.state, t)
   const choices = skill.locations.filter(
     (location) => location.state === 'leave' || (phase !== 'result' && location.state === 'replace')
   )

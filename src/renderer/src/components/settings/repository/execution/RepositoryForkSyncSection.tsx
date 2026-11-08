@@ -15,6 +15,7 @@ import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-clien
 import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/git/git-operation-target'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { searchKeywords } from '../../search/settings-search-keywords'
 
 type RepositoryForkSyncSectionProps = {
@@ -103,6 +104,7 @@ export function RepositoryForkSyncSection({
   updateRepo,
   forceVisible
 }: RepositoryForkSyncSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   const upstream = repo.upstream
   const [syncing, setSyncing] = useState(false)
   const syncInFlightRef = useRef(false)
@@ -149,7 +151,7 @@ export function RepositoryForkSyncSection({
       }
     } catch (error) {
       toast.error(
-        translate('auto.components.settings.RepositoryForkSyncSection.failed', 'Fork sync failed'),
+        t('auto.components.settings.RepositoryForkSyncSection.failed', 'Fork sync failed'),
         { description: error instanceof Error ? error.message : String(error) }
       )
     } finally {
@@ -160,58 +162,55 @@ export function RepositoryForkSyncSection({
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.RepositoryForkSyncSection.title',
-        'Keep Fork Up to Date'
-      )}
-      description={translate(
+      title={t('auto.components.settings.RepositoryForkSyncSection.title', 'Keep Fork Up to Date')}
+      description={t(
         'auto.components.settings.RepositoryForkSyncSection.description',
         'Safely fast-forward this fork from upstream.'
       )}
-      keywords={searchKeywords([
-        repo.displayName,
-        upstream.owner,
-        upstream.repo,
-        { key: 'auto.components.settings.repository.search.fork', fallback: 'fork' },
-        { key: 'auto.components.settings.repository.search.upstream', fallback: 'upstream' },
-        { key: 'auto.components.settings.repository.search.syncFork', fallback: 'sync fork' },
-        {
-          key: 'auto.components.settings.repository.search.keepForkUpToDate',
-          fallback: 'keep fork up to date'
-        },
-        {
-          key: 'auto.components.settings.repository.search.fastForward',
-          fallback: 'fast-forward'
-        },
-        {
-          key: 'auto.components.settings.repository.search.behindUpstream',
-          fallback: 'behind upstream'
-        },
-        { key: 'auto.components.settings.repository.search.origin', fallback: 'origin' },
-        {
-          key: 'auto.components.settings.repository.search.defaultBranch',
-          fallback: 'default branch'
-        }
-      ])}
-      className="space-y-3"
+      keywords={searchKeywords(
+        [
+          repo.displayName,
+          upstream.owner,
+          upstream.repo,
+          { key: 'auto.components.settings.repository.search.fork', fallback: 'fork' },
+          { key: 'auto.components.settings.repository.search.upstream', fallback: 'upstream' },
+          { key: 'auto.components.settings.repository.search.syncFork', fallback: 'sync fork' },
+          {
+            key: 'auto.components.settings.repository.search.keepForkUpToDate',
+            fallback: 'keep fork up to date'
+          },
+          {
+            key: 'auto.components.settings.repository.search.fastForward',
+            fallback: 'fast-forward'
+          },
+          {
+            key: 'auto.components.settings.repository.search.behindUpstream',
+            fallback: 'behind upstream'
+          },
+          { key: 'auto.components.settings.repository.search.origin', fallback: 'origin' },
+          {
+            key: 'auto.components.settings.repository.search.defaultBranch',
+            fallback: 'default branch'
+          }
+        ],
+        t
+      )}
+      className="space-y-3 py-3"
       forceVisible={forceVisible}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <div className="text-sm font-semibold">
-            {translate(
-              'auto.components.settings.RepositoryForkSyncSection.title',
-              'Keep Fork Up to Date'
-            )}
+            {t('auto.components.settings.RepositoryForkSyncSection.title', 'Keep Fork Up to Date')}
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryForkSyncSection.longDescription',
               'When this fork is behind upstream, Orca can safely fast-forward its default branch. Orca skips the update if the branch has local-only commits or conflicts.'
             )}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryForkSyncSection.forkOf',
               'Fork of {{owner}}/{{repo}}',
               { owner: upstream.owner, repo: upstream.repo }
@@ -228,14 +227,14 @@ export function RepositoryForkSyncSection({
         >
           <RefreshCw className={syncing ? 'size-3.5 animate-spin' : 'size-3.5'} />
           {syncing
-            ? translate('auto.components.settings.RepositoryForkSyncSection.syncing', 'Syncing')
-            : translate('auto.components.settings.RepositoryForkSyncSection.syncNow', 'Sync Now')}
+            ? t('auto.components.settings.RepositoryForkSyncSection.syncing', 'Syncing')
+            : t('auto.components.settings.RepositoryForkSyncSection.syncNow', 'Sync Now')}
         </Button>
       </div>
       <SettingsSegmentedControl<ForkSyncMode>
         value={mode}
         onChange={updateMode}
-        ariaLabel={translate(
+        ariaLabel={t(
           'auto.components.settings.RepositoryForkSyncSection.modeLabel',
           'Fork sync mode'
         )}
@@ -243,20 +242,17 @@ export function RepositoryForkSyncSection({
         options={[
           {
             value: 'ask',
-            label: translate('auto.components.settings.RepositoryForkSyncSection.ask', 'Ask'),
+            label: t('auto.components.settings.RepositoryForkSyncSection.ask', 'Ask'),
             disabled: syncing
           },
           {
             value: 'safe-auto',
-            label: translate(
-              'auto.components.settings.RepositoryForkSyncSection.safeAuto',
-              'Safe Auto'
-            ),
+            label: t('auto.components.settings.RepositoryForkSyncSection.safeAuto', 'Safe Auto'),
             disabled: syncing
           },
           {
             value: 'off',
-            label: translate('auto.components.settings.RepositoryForkSyncSection.off', 'Off'),
+            label: t('auto.components.settings.RepositoryForkSyncSection.off', 'Off'),
             disabled: syncing
           }
         ]}

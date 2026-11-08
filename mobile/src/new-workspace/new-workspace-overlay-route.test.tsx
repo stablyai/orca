@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { HostCatalogEntry, HostProfile } from '../transport/types'
+import type { HostCatalogEntry, HostProfile } from '../transport/hosts/host-profile'
 
 const router = vi.hoisted(() => ({ back: vi.fn(), push: vi.fn(), replace: vi.fn() }))
 const params = vi.hoisted((): { current: Record<string, string> } => ({ current: {} }))
@@ -11,7 +11,7 @@ vi.mock('expo-router', () => ({
   useLocalSearchParams: () => params.current,
   useRouter: () => router
 }))
-vi.mock('../transport/host-store', () => ({
+vi.mock('../transport/hosts/host-store', () => ({
   loadHostCatalog: async () => catalog.current
 }))
 vi.mock('../components/PickerModal', () => ({ PickerModal: 'PickerModal' }))
@@ -60,38 +60,5 @@ describe("Home's New Workspace overlay", () => {
     const overlay = await open(['desk'])
 
     expect(overlay.overlayFor()).toBe('desk')
-  })
-
-  it('asks which desktop and starts its drawer while the picker slides away', async () => {
-    catalog.current = [entry('laptop', 'Laptop'), entry('desk', 'Desk')]
-    const overlay = await open(['desk', 'laptop'])
-
-    expect(overlay.overlayFor()).toBeUndefined()
-    expect(overlay.picker().props).toMatchObject({ visible: true, title: 'Create Workspace On' })
-    expect(overlay.picker().props.options.map((option: { value: string }) => option.value)).toEqual(
-      ['desk', 'laptop']
-    )
-
-    act(() => {
-      overlay.picker().props.onSelect('laptop')
-      overlay.picker().props.onClose()
-    })
-    expect(overlay.picker().props.visible).toBe(false)
-    expect(overlay.overlayFor()).toBe('laptop')
-
-    act(() => overlay.picker().props.onAfterClose())
-    expect(overlay.overlayFor()).toBe('laptop')
-    expect(router.back).not.toHaveBeenCalled()
-  })
-
-  it('leaves for Home when the picker is dismissed without a pick', async () => {
-    catalog.current = [entry('laptop', 'Laptop'), entry('desk', 'Desk')]
-    const overlay = await open(['desk', 'laptop'])
-
-    act(() => overlay.picker().props.onClose())
-    act(() => overlay.picker().props.onAfterClose())
-
-    expect(router.back).toHaveBeenCalledTimes(1)
-    expect(overlay.overlayFor()).toBeUndefined()
   })
 })

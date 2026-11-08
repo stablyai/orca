@@ -7,6 +7,7 @@ import { captureInsertionTarget } from './dictation-insertion-target'
 import { createDictationTranscriptDelivery } from './dictation-transcript-delivery'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   showDictationDisabledToast,
   showDictationNoModelToast,
@@ -30,6 +31,7 @@ import {
 } from '../../../../shared/dictation-session-machine'
 
 export function DictationController() {
+  const t = useTranslate()
   const dictationState = useAppStore((s) => s.dictationState)
   const setDictationState = useAppStore((s) => s.setDictationState)
   const setPartialTranscript = useAppStore((s) => s.setPartialTranscript)
@@ -314,11 +316,9 @@ export function DictationController() {
       recordStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef),
     onError: (sessionId, error) => {
       toast.error(
-        translate(
-          'auto.components.dictation.DictationController.de136f1199',
-          'Speech error: {{value0}}',
-          { value0: error }
-        )
+        t('auto.components.dictation.DictationController.de136f1199', 'Speech error: {{value0}}', {
+          value0: error
+        })
       )
       const { run } = dispatch({ type: 'abandon' })
       stopCapture()

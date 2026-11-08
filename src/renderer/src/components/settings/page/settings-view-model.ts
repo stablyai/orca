@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { SettingsNavGroup } from '@/lib/settings-navigation-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsStoreModel } from './use-settings-store-model'
 import type { SettingsInteractionController } from './use-settings-interaction-controller'
 import type { SettingsNavigationModel } from '../navigation/use-settings-navigation-model'
@@ -87,7 +88,8 @@ export type SettingsNavigationActions = ReturnType<typeof useSettingsNavigationA
 
 export function buildSettingsViewModel(
   model: SettingsStoreModel,
-  navigation: SettingsNavigationModel
+  navigation: SettingsNavigationModel,
+  t: Translate = translate
 ) {
   const generalNavSections = navigation.visibleNavSections.filter(
     (section) => !section.id.startsWith('repo-')
@@ -99,7 +101,7 @@ export function buildSettingsViewModel(
   const generalNavGroups: SettingsNavGroup[] = generalNavGroupDefinitions
     .map((group) => ({
       id: group.id,
-      title: translate(group.titleKey, group.titleDefault),
+      title: t(group.titleKey, group.titleDefault),
       sections: generalNavSections.filter((section) => section.group === group.id)
     }))
     .filter((group) => group.sections.length > 0 || group.id === 'setup')

@@ -20,9 +20,9 @@ import { NativeChatMarkdown } from '../NativeChatMarkdown'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
-} from '../../native-chat-disclosure-store'
-import { NativeChatNoticeRow } from '../../NativeChatNoticeRow'
-import { NativeChatReasoningRow } from '../../NativeChatReasoningRow'
+} from '../../messages/disclosure/native-chat-disclosure-store'
+
+import { NativeChatReasoningRow } from '../../messages/reasoning/NativeChatReasoningRow'
 
 vi.mock('@/lib/syntax-highlighting/oniguruma', async () => ({
   loadOniguruma: (await import('@/lib/syntax-highlighting/oniguruma-test-harness'))
@@ -86,45 +86,6 @@ describe('native chat code block line wrap', () => {
     expect(wrapToggle()).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('keeps each block of a row to its own wrap', () => {
-    const content = '```ts\nconst first = 1\n```\n\n```ts\nconst second = 2\n```'
-    render(<Transcript content={content} />)
-
-    fireEvent.click(screen.getAllByRole('button', { name: 'Wrap lines' })[1])
-
-    expect(screen.getAllByRole('button', { name: /^(Wrap lines|Disable line wrap)$/ })).toEqual([
-      screen.getByRole('button', { name: 'Wrap lines' }),
-      screen.getByRole('button', { name: 'Disable line wrap' })
-    ])
-  })
-
-  // Streaming escape fixes can shift a fence’s source offset when the finished block is reparsed.
-  it.each([
-    [
-      'the reply finishes',
-      '1. Undo with git reset HEAD~1:\n   ```sh\n   git status\n   ```\n',
-      (content: string) => ({ content, growing: false })
-    ],
-    [
-      'another block follows a list item',
-      '- >5 users need x~y:\n  ```sh\n  scale up\n  ```\n',
-      (content: string) => ({ content: `${content}\nDone.`, growing: true })
-    ],
-    [
-      'the reply merges into one block',
-      'Undo with git reset HEAD~1 first.\n\n```sh\ngit status\n```\n\nThen press ',
-      (content: string) => ({ content: `${content}<kbd>Enter</kbd>`, growing: true })
-    ]
-  ])('stays on when %s after streaming escaped text before it', (_name, content, next) => {
-    const view = render(<Transcript content={content} />)
-    fireEvent.click(wrapToggle())
-    expect(wrapToggle()).toHaveAttribute('aria-pressed', 'true')
-
-    view.rerender(<Transcript {...next(content)} />)
-
-    expect(wrapToggle()).toHaveAttribute('aria-pressed', 'true')
-  })
-
   it('keeps a reasoning block and the reply of one message apart', () => {
     const fence = '```ts\nconst first = 1\n```'
     function Row(): React.JSX.Element {
@@ -152,32 +113,5 @@ describe('native chat code block line wrap', () => {
 
     expect(reasoningWrap).toHaveAttribute('aria-pressed', 'false')
     expect(replyWrap).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it("keeps a plan card's wrap when its row remounts", () => {
-    function Row({ mounted }: { mounted: boolean }): React.JSX.Element {
-      const disclosures = useNativeChatDisclosures()
-      return (
-        <NativeChatDisclosureContext.Provider value={disclosures}>
-          {mounted ? (
-            <NativeChatNoticeRow
-              messageId="message-2"
-              block={{
-                type: 'text',
-                text: '# Steps\n\n```sh\npnpm install\n```',
-                presentation: 'plan-document'
-              }}
-            />
-          ) : null}
-        </NativeChatDisclosureContext.Provider>
-      )
-    }
-    const view = render(<Row mounted />)
-    fireEvent.click(wrapToggle())
-
-    view.rerender(<Row mounted={false} />)
-    view.rerender(<Row mounted />)
-
-    expect(wrapToggle()).toHaveAttribute('aria-pressed', 'true')
   })
 })

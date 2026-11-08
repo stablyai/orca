@@ -12,6 +12,7 @@ import type {
 } from './stream-schemas'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 import type { MultiplexPtyWaitAdmission } from './terminal-multiplex-pty-wait-admission'
+import type { TerminalMultiplexLinkEstimate } from './terminal-multiplex-link-estimate'
 import type { TerminalStreamEndVerdict } from '../../../../../shared/terminal/stream/terminal-stream-end-verdict'
 
 export type MultiplexSubscribeRequest = z.infer<typeof TerminalMultiplexSubscribeFrame>
@@ -34,6 +35,9 @@ export type TerminalMultiplexConnectionBase = {
   ptyWaitAdmission: MultiplexPtyWaitAdmission
   ackTotalInFlightBytes: number
   ackTotalWindowBytes: number
+  linkEstimate: TerminalMultiplexLinkEstimate
+  // Sum of streams' paced pending headroom, bounded by the connection window legacy would have used.
+  ackTotalHoldbackBytes: number
   ackFlushCursorStreamId: number | null
   resolveMultiplex: () => void
   multiplexClosed: Promise<void>
@@ -63,7 +67,11 @@ export type TerminalMultiplexFrameDelivery = {
     event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
   ) => void
   canSendAckGatedOutput: (stream: TerminalMultiplexStream, bytes: number) => boolean
-  sendAckGatedOutput: (stream: TerminalMultiplexStream, chunk: TerminalOutputFrameChunk) => boolean
+  sendAckGatedOutput: (
+    stream: TerminalMultiplexStream,
+    chunk: TerminalOutputFrameChunk,
+    fromBacklog?: boolean
+  ) => boolean
   queueOrSendOutput: (stream: TerminalMultiplexStream, chunk: TerminalOutputFrameChunk) => void
 }
 

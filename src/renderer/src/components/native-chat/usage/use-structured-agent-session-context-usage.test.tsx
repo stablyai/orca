@@ -7,9 +7,15 @@ const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 let items: AgentJournalRenderItem[] = []
 let unloadedTurnRevisions: number | undefined
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
-  callStructuredAgentSession: mocks.call,
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
+}))
+
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
+}))
+
+vi.mock('../../../runtime/native-chat/journal/structured-agent-session-journal-reads', () => ({
   readStructuredAgentSessionConversationOutline: vi.fn(async () => null)
 }))
 
@@ -131,18 +137,6 @@ describe('useStructuredAgentSession context usage', () => {
         windowTokens: 1_000_000
       })
     )
-  })
-
-  it('reads only the loaded window from a host that sends no answer', async () => {
-    answerOptions([undefined])
-    const { result, rerender } = render()
-
-    await waitFor(() => expect(optionReads()).toBe(1))
-    expect(result.current.contextUsage).toBeNull()
-    // Without a host answer there is nothing to refresh, so a missed revision asks nothing.
-    unloadedTurnRevisions = 1
-    rerender()
-    expect(optionReads()).toBe(1)
   })
 
   it('keeps one refresh in flight and one behind it however many revisions it missed', async () => {

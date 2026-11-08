@@ -58,7 +58,7 @@ type MockTransport = {
 
 const scheduleRuntimeGraphSync = vi.fn()
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
-const toastInfo = vi.fn()
+const toastInfo = vi.hoisted(() => vi.fn())
 const notifyCodexPaneBoundForStaleSweep = vi.fn()
 
 let mockStoreState: Record<string, unknown>
@@ -66,7 +66,7 @@ let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: Record<string, unknown>) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 

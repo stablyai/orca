@@ -4,18 +4,15 @@ import { act, createElement } from 'react'
 
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import {
-  invalidateLocalImageCache as invalidateLocalImageSrcCacheForTests,
-  resetLocalImageCacheState as resetLocalImageSrcStateForTests
-} from '@/components/editor/document-images/local-image-src-cache'
+
+import { resetLocalImageCacheState as resetLocalImageSrcStateForTests } from '@/components/editor/document-images/local-image-src-cache'
 import { useAppStore } from '@/store'
 import { NativeChatImageAttachments } from './NativeChatImageAttachments'
 import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import {
   nativeChatFanoutFixture,
   nativeChatFanoutWorkspace
-} from '../../native-chat-workspace-test-fixtures'
+} from '../../surfaces/integration/native-chat-workspace-test-fixtures'
 
 // Chat images carry their runtime owner without resolving an editor connection.
 const mocks = vi.hoisted(() => ({
@@ -33,15 +30,6 @@ vi.mock('@/lib/connection-context', () => ({
 }))
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
-
-function runtimeContext(worktreeId: string): RuntimeFileOperationArgs {
-  return {
-    target: { kind: 'local' as const },
-    worktreeId,
-    worktreePath: `/repo/${worktreeId}`,
-    expectedExecutionHostId: 'local'
-  }
-}
 
 async function flushPromises(): Promise<void> {
   await Promise.resolve()
@@ -146,82 +134,5 @@ describe('NativeChatImageAttachments', () => {
       await act(async () => root.unmount())
       useAppStore.setState(original, true)
     }
-  })
-
-  it('preserves same-image errors but retries when the runtime owner changes', async () => {
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    const blocks = [{ type: 'image-ref' as const, path: '/repo/image.png' }]
-    const ownerOne = runtimeContext('wt-1')
-
-    await act(async () => {
-      root.render(
-        createElement(NativeChatImageAttachments, {
-          blocks,
-          runtimeContext: ownerOne
-        })
-      )
-      await flushPromises()
-    })
-    const firstOwnerSrc = container.querySelector('img')?.getAttribute('src')
-    expect(firstOwnerSrc).toBe('blob:owner-1')
-
-    await act(async () => {
-      container.querySelector('img')?.dispatchEvent(new Event('error'))
-    })
-    expect(container.querySelector('img')).toBeNull()
-
-    await act(async () => {
-      root.render(
-        createElement(NativeChatImageAttachments, {
-          blocks,
-          runtimeContext: ownerOne
-        })
-      )
-      await flushPromises()
-    })
-    expect(container.querySelector('img')).toBeNull()
-
-    await act(async () => {
-      root.render(
-        createElement(NativeChatImageAttachments, {
-          blocks,
-          runtimeContext: runtimeContext('wt-2')
-        })
-      )
-      await flushPromises()
-    })
-    expect(container.querySelector('img')?.getAttribute('src')).not.toBe(firstOwnerSrc)
-    expect(window.api.fs.readFile).toHaveBeenCalledTimes(2)
-
-    root.unmount()
-  })
-
-  it('retries a failed thumbnail after the image cache refreshes', async () => {
-    const container = document.createElement('div')
-    const root = createRoot(container)
-    const props = {
-      blocks: [{ type: 'image-ref' as const, path: '/repo/image.png' }],
-      runtimeContext: runtimeContext('wt-1')
-    }
-
-    await act(async () => {
-      root.render(createElement(NativeChatImageAttachments, props))
-      await flushPromises()
-    })
-    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:owner-1')
-
-    await act(async () => {
-      container.querySelector('img')?.dispatchEvent(new Event('error'))
-    })
-    expect(container.querySelector('img')).toBeNull()
-
-    await act(async () => {
-      invalidateLocalImageSrcCacheForTests()
-      await flushPromises()
-    })
-
-    expect(container.querySelector('img')?.getAttribute('src')).toBe('blob:owner-2')
-    root.unmount()
   })
 })

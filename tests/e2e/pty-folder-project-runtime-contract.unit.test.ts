@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
 import type * as WslDistroGate from '../../src/main/wsl/discovery/wsl-background-distro-gate'
 import type { PtyApi } from '../../src/preload/api/pty-api'
-import type { RuntimePtyController } from '../../src/main/runtime/runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../../src/main/runtime/terminal/lifecycle/runtime-pty-controller-contract'
 import type { Project, ProjectHostSetup } from '../../src/shared/project-types'
 import { getDefaultSettings, getDefaultWorkspaceSession } from '../../src/shared/constants'
 import {
@@ -54,7 +54,9 @@ vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock(
   '@/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
   async (importOriginal) => ({

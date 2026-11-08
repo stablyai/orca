@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import Editor from '@monaco-editor/react'
 import type { editor, IRange } from 'monaco-editor'
-import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../shared/file-listing/file-document'
 import { useAppStore } from '@/store'
 import '@/lib/monaco-setup'
 import { monacoTypographyOptions } from '@/lib/editor-typography'

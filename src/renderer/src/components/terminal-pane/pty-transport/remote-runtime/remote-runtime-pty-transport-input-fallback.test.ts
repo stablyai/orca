@@ -254,6 +254,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       inputLedgerId: vi.fn(() => null),
       resize: vi.fn(() => true),
       serializeBuffer: vi.fn(async () => null),
+      setOutputCadence: vi.fn(),
       close: vi.fn()
     }
     const subscribeTerminal = vi

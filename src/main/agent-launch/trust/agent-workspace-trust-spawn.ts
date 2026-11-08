@@ -14,7 +14,7 @@ import {
   shouldPreTrustAgentWorkspace,
   resolveAgentWorkspaceTrustOwner,
   type AgentWorkspaceTrustDecision
-} from '../../../shared/agent-workspace-trust-decision'
+} from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 
 type AgentWorkspaceTrustSetting =
   | Partial<Pick<GlobalSettings, 'agentWorkspaceTrustEnabled'>>

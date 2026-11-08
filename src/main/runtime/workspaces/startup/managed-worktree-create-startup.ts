@@ -12,7 +12,11 @@ type StartupBuilders = {
   draft: (
     draft: string,
     requestedAgent?: TuiAgent,
-    launchSource?: string
+    launchSource?: string,
+    inputs?: Pick<
+      RuntimeManagedWorktreeCreateArgs,
+      'createdWithAgent' | 'startupAgentArgs' | 'startupSessionOptions' | 'startupLaunchPreferences'
+    >
   ) => ReturnType<typeof buildWorktreeStartupForDraft>
 }
 
@@ -35,13 +39,16 @@ export async function resolveManagedWorktreeCreateStartup(
   ) {
     throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
   }
-  const agentStartup = resolveWorktreeCreateAgentStartup(args, build.agent)
+  const agentStartup = args.startupDraft
+    ? null
+    : await resolveWorktreeCreateAgentStartup(args, build.agent)
   const draftStartup =
     !args.startup && !agentStartup && args.startupDraft
       ? await build.draft(
           args.startupDraft,
           args.startupDraftAgent ?? requestedAgent,
-          args.startupLaunchSource
+          args.startupLaunchSource,
+          args
         )
       : null
   const resolvedStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup

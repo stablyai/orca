@@ -7,9 +7,9 @@ import {
   pendingCreationChatDraftScopeKey,
   type PendingWorktreeCreation
 } from '@/lib/workspace/creation/pending-worktree-creation'
-import { deleteNativeChatComposerDraft } from '@/components/native-chat/native-chat-composer-draft-store'
-import { clearNativeChatPendingAttachments } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { releaseNativeChatStagedFiles } from '@/components/native-chat/native-chat-draft-attachment-staging'
+import { deleteNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-removal'
+import { clearNativeChatPendingAttachments } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { releaseNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 
 export function createBeginPendingWorktreeCreation(
   set: WorktreeSliceSet,

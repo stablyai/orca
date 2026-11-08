@@ -13,7 +13,7 @@ import type { RuntimeStatus } from '../../../../../shared/runtime-session-contra
 import { normalizeTerminalQuickCommands } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../../../shared/terminal-themes/terminal-custom-themes'
-import { normalizeTaskProviderSettings } from '../../../../../shared/task-providers'
+import { normalizeTaskProviderSettings } from '../../../../../shared/work-items/task-providers'
 import { normalizeOpenInApplications } from '../../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
 import { isRuntimeCatalogListingStale } from '../runtime-status/runtime-status-hydration'

@@ -1,6 +1,6 @@
 import { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import type { Repo } from '../../../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type {
   RuntimeWorktreeScanCache,
   RuntimeWorktreeScanRefresh

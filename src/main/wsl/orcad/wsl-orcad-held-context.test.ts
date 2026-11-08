@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
-import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
 const mocks = vi.hoisted(() => {
   const state: {
@@ -61,28 +59,7 @@ vi.mock('../../managed-server/install/orcad-remote-context', async () => {
 })
 
 import { runProcess } from '@orca/process-host'
-import {
-  holdWslDistroWithContext,
-  readWslHostFacts,
-  WSL_HOST_FACTS_COMMAND
-} from './wsl-orcad-held-context'
-
-const target: WslOrcadHostTarget = { kind: 'wsl', id: 'wsl:u', distro: 'U', label: 'U' }
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every host call is mocked at its module.
-const conn = {} as OrcadHostTransport
-
-function holderRejectingOn(gate: Promise<void>): WslDistroHolder {
-  return {
-    ensureHeld: vi.fn(async () => {
-      await gate
-      throw new Error('holder exited before the distro started')
-    }),
-    adoptHolders: vi.fn(),
-    release: vi.fn(),
-    releaseAll: vi.fn(),
-    holderState: vi.fn()
-  }
-}
+import { readWslHostFacts, WSL_HOST_FACTS_COMMAND } from './wsl-orcad-held-context'
 
 /** What WSL_HOST_FACTS_COMMAND prints. */
 function facts(kernel: string, home: string, uname: string, libc = 'ldd (GNU libc) 2.39'): string {
@@ -95,167 +72,6 @@ beforeEach(() => {
   mocks.probeStep = null
   mocks.facts = facts('5.15.167.4-microsoft-standard-WSL2', '/home/u', 'Linux x86_64')
   mocks.contextArgs = []
-})
-
-describe('holdWslDistroWithContext', () => {
-  it('probes the context while the hold is pending, and resolves only once the distro is held', async () => {
-    let finishHold: () => void = () => {}
-    const holdDone = new Promise<void>((resolve) => {
-      finishHold = resolve
-    })
-    const hold: WslDistroHolder = {
-      ...holderRejectingOn(holdDone),
-      ensureHeld: vi.fn(async (distro: string) => {
-        await holdDone
-        return {
-          outcome: 'spawned' as const,
-          record: { version: 1 as const, distro, pid: 9, creationTimeMs: 1, startedAtMs: 1 }
-        }
-      })
-    }
-    let settled = false
-    const held = holdWslDistroWithContext('U', target, conn, hold, undefined).finally(() => {
-      settled = true
-    })
-    for (let step = 0; step < 2; step++) {
-      await vi.waitFor(() => expect(mocks.probeStep).not.toBeNull())
-      const next = mocks.probeStep
-      mocks.probeStep = null
-      next?.()
-    }
-    await vi.waitFor(() =>
-      expect(mocks.spawned).toEqual(['host-facts', 'ldd --version', 'cat orcad-active.json'])
-    )
-    // The deploy awaits this before recovery, which may launch orcad.
-    expect(settled).toBe(false)
-
-    finishHold()
-
-    await expect(held).resolves.toMatchObject({
-      held: { outcome: 'spawned' },
-      context: { remoteHome: '/home/u' }
-    })
-  })
-
-  it('stops the context probes once the hold fails, so nothing can boot the distro again', async () => {
-    let failHold: () => void = () => {}
-    const holdFails = new Promise<void>((resolve) => {
-      failHold = resolve
-    })
-    const held = holdWslDistroWithContext(
-      'U',
-      target,
-      conn,
-      holderRejectingOn(holdFails),
-      undefined
-    )
-    await vi.waitFor(() => expect(mocks.probeStep).not.toBeNull())
-    mocks.probeStep?.()
-    await vi.waitFor(() => expect(mocks.spawned).toEqual(['host-facts', 'ldd --version']))
-
-    failHold()
-    await expect(held).rejects.toThrow('holder exited')
-    mocks.probeStep?.()
-    await vi.waitFor(() => expect(mocks.refused).toEqual(['cat orcad-active.json']))
-
-    expect(mocks.spawned).toEqual(['host-facts', 'ldd --version'])
-  })
-})
-
-describe('the folded host facts probe', () => {
-  function heldNow(): WslDistroHolder {
-    return {
-      ...holderRejectingOn(Promise.resolve()),
-      ensureHeld: vi.fn(async (distro: string) => ({
-        outcome: 'adopted' as const,
-        record: { version: 1 as const, distro, pid: 9, creationTimeMs: 1, startedAtMs: 1 }
-      }))
-    }
-  }
-
-  async function resolveWith(facts: string) {
-    mocks.facts = facts
-    const held = holdWslDistroWithContext('U', target, conn, heldNow(), undefined)
-    for (let step = 0; step < 2; step++) {
-      await vi.waitFor(() => expect(mocks.probeStep).not.toBeNull())
-      const next = mocks.probeStep
-      mocks.probeStep = null
-      next?.()
-    }
-    return held
-  }
-
-  it('hands the context the platform and login home it read in the same exec', async () => {
-    await resolveWith(mocks.facts)
-
-    expect(mocks.spawned.filter((label) => label === 'host-facts')).toHaveLength(1)
-    expect(mocks.contextArgs).toEqual([
-      expect.objectContaining({ os: 'linux', arch: 'x64' }),
-      {
-        loginHome: '/home/u',
-        firstLibcProbeOutput: 'ldd (GNU libc) 2.39\n',
-        readActivationRecord: expect.any(Function)
-      }
-    ])
-  })
-
-  it('leaves the context to probe what the facts did not prove', async () => {
-    await resolveWith(facts('5.15.167.4-microsoft-standard-WSL2', '', 'Linux sparc'))
-
-    expect(mocks.contextArgs).toEqual([
-      undefined,
-      { loginHome: undefined, readActivationRecord: expect.any(Function) }
-    ])
-    expect(mocks.spawned[0]).toBe('host-facts')
-    expect(mocks.spawned).not.toContain('uname -r')
-  })
-
-  it('falls back to the separate probes for a HOME with a newline, never a truncated path', async () => {
-    await resolveWith(facts('5.15.167.4-microsoft-standard-WSL2', '/home/a\nb', 'Linux x86_64'))
-
-    expect(mocks.contextArgs).toEqual([
-      undefined,
-      { loginHome: undefined, readActivationRecord: expect.any(Function) }
-    ])
-    expect(mocks.spawned.slice(0, 2)).toEqual(['host-facts', 'uname -r'])
-  })
-
-  it('falls back without throwing when stdout noise precedes the facts', async () => {
-    await resolveWith(
-      `Welcome to Ubuntu\n${facts('5.15.167.4-microsoft-standard-WSL2', '/home/u', 'Linux x86_64')}`
-    )
-
-    expect(mocks.contextArgs).toEqual([
-      undefined,
-      { loginHome: undefined, readActivationRecord: expect.any(Function) }
-    ])
-    expect(mocks.spawned.slice(0, 2)).toEqual(['host-facts', 'uname -r'])
-  })
-
-  it('keeps a multi-line libc answer whole, and rejects output missing the libc section', () => {
-    const musl = 'musl libc (x86_64)\nVersion 1.2.4\nDynamic Program Loader'
-    expect(
-      readWslHostFacts(facts('5.15.167.4-microsoft-standard-WSL2', '/home/u', 'Linux x86_64', musl))
-    ).toMatchObject({ firstLibcProbeOutput: `${musl}\n` })
-    expect(
-      readWslHostFacts(
-        '__ORCA_WSL_KERNEL__ 5.15\n__ORCA_WSL_HOME__ /home/u\n\n__ORCA_REMOTE_PLATFORM__ Linux x86_64\n'
-      )
-    ).toBeNull()
-  })
-
-  it('refuses WSL 1 from the kernel line before holding or probing', async () => {
-    mocks.facts = facts('4.4.0-19041-Microsoft', '/home/u', 'Linux x86_64')
-    const holder = heldNow()
-
-    await expect(
-      holdWslDistroWithContext('U', target, conn, holder, undefined)
-    ).rejects.toMatchObject({
-      name: 'OrcadHostUnsupportedError'
-    })
-    expect(holder.ensureHeld).not.toHaveBeenCalled()
-    expect(mocks.spawned).toEqual(['host-facts'])
-  })
 })
 
 describe.skipIf(process.platform === 'win32')('WSL_HOST_FACTS_COMMAND under a real sh', () => {

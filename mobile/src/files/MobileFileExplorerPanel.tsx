@@ -1,18 +1,32 @@
-import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react'
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import { FlatList, View, type ListRenderItem } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, FolderOpen, X } from 'lucide-react-native'
-import { useQueryClient, type QueryKey, type UseQueryResult } from '@tanstack/react-query'
+import {
+  partialMatchKey,
+  useQueryClient,
+  type QueryClient,
+  type QueryKey,
+  type UseQueryResult
+} from '@tanstack/react-query'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useHostQueries, useHostQuery } from '../query/host-query'
 import { hostQueryKey, hostScopeKey } from '../query/host-query-key'
 import { hostScreenState } from '../query/host-query-screen-state'
-import { useForceReconnect } from '../transport/host-client-hooks'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
-import { connectionRetryAction } from '../transport/connection-retry-action'
-import type { ConnectionState } from '../transport/types'
-import { getWorktreeLabel } from '../session/worktree-label'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { getWorktreeLabel } from '../worktree/worktree-label'
 import type { DirectoryCache, DirectoryState, FileExplorerRow } from './file-tree'
 import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -21,6 +35,8 @@ import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
 import { useMobileFileExplorerRows } from './mobile-file-explorer-rows'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import { useMobileFileExplorerRowActions } from './mobile-file-explorer-row-actions-sheet'
+import { useMobileFileExplorerPaging } from './use-mobile-file-explorer-paging'
+import { useRefreshHint } from '../query/refresh-hint'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
 import {
   MobileLoadErrorState,
@@ -68,11 +84,36 @@ function folderPathOf(key: QueryKey): string | undefined {
     : undefined
 }
 
+function directoryState(read: Extract<DirectoryRead, { kind: 'directory' }>): DirectoryState {
+  return { entries: read.entries, total: read.total, hasMore: read.hasMore }
+}
+
+// Counts listings landing under `prefix` (keep it stable), observed or not: a folder closed before its read (or a
+// later page) finished still feeds the filter.
+function useListingsVersion(queryClient: QueryClient, prefix: QueryKey): number {
+  const version = useRef(0)
+  const subscribe = useCallback(
+    (notify: () => void) =>
+      queryClient.getQueryCache().subscribe((event) => {
+        if (
+          event.type === 'updated' &&
+          event.action.type === 'success' &&
+          partialMatchKey(event.query.queryKey, prefix)
+        ) {
+          version.current += 1
+          notify()
+        }
+      }),
+    [prefix, queryClient]
+  )
+  return useSyncExternalStore(subscribe, () => version.current)
+}
+
 // A folder keeps its last rows while it refreshes or fails; only an empty one shows loading or why it is empty.
 function folderState(read: FolderRead, connState: ConnectionState): DirectoryState {
   switch (hostScreenState(read, connState)) {
     case 'data':
-      return { entries: read.data?.kind === 'directory' ? read.data.entries : [] }
+      return read.data?.kind === 'directory' ? directoryState(read.data) : { entries: [] }
     case 'empty-loading':
       return { entries: [], loading: true }
     case 'empty-error':
@@ -148,20 +189,31 @@ export function MobileFileExplorerPanel(props: {
     [hostId, queryClient, target]
   )
 
+  const { folderPaging, searching, showMore, searchAll } = useMobileFileExplorerPaging({
+    scope,
+    hostId,
+    client,
+    target
+  })
+  const listingsKey = useMemo(
+    () => [...hostScopeKey(hostId), fileDirectoryQuery.family, target],
+    [hostId, target]
+  )
+  const listingsVersion = useListingsVersion(queryClient, listingsKey)
+  const refreshing = useRefreshHint(searching)
+
   const directoryCache = useMemo((): DirectoryCache => {
     if (rootRead?.kind === 'legacy') {
       return rootRead.cache
     }
     // Closed folders and earlier visits stay in the cache, so the filter searches every folder opened before.
-    const cached = queryClient.getQueriesData<DirectoryRead>({
-      queryKey: [...hostScopeKey(hostId), fileDirectoryQuery.family, target]
-    })
+    const cached = queryClient.getQueriesData<DirectoryRead>({ queryKey: listingsKey })
     // fromEntries keeps a folder named __proto__ an own key; assignment would set the prototype.
     return Object.fromEntries([
       ...cached.flatMap(([key, data]): [string, DirectoryState][] => {
         const relativePath = folderPathOf(key)
         return relativePath !== undefined && data?.kind === 'directory'
-          ? [[relativePath, { entries: data.entries }]]
+          ? [[relativePath, directoryState(data)]]
           : []
       }),
       ...folders.map(({ relativePath }, index): [string, DirectoryState] => [
@@ -169,7 +221,8 @@ export function MobileFileExplorerPanel(props: {
         folderState(folderReads[index], connState)
       ])
     ])
-  }, [connState, folderReads, folders, hostId, queryClient, rootRead, target])
+    // listingsVersion marks cache writes that getQueriesData reads but nothing here observes.
+  }, [connState, folderReads, folders, listingsKey, listingsVersion, queryClient, rootRead])
 
   const { filter, setFilter, filtering, rows, shownExpanded, onToggleDirectory } =
     useMobileFileExplorerRows({
@@ -219,6 +272,9 @@ export function MobileFileExplorerPanel(props: {
         onRetryDirectory={retryDirectory}
         onToggleDirectory={onToggleDirectory}
         onOpenActions={openRowActions}
+        folderPaging={folderPaging}
+        onShowMore={showMore}
+        onSearchAll={searchAll}
       />
     )
   }
@@ -241,6 +297,7 @@ export function MobileFileExplorerPanel(props: {
         )
       }
       title={t('files.fileExplorerPanel.title', 'Files')}
+      refreshing={refreshing}
       subtitle={
         rootRead?.kind === 'legacy' && rootRead.truncated
           ? t('files.fileExplorerPanel.truncatedList', '{{worktreeLabel}} - Showing first 5000', {
@@ -300,6 +357,7 @@ export function MobileFileExplorerPanel(props: {
         data={rows}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
+        extraData={folderPaging}
         contentContainerStyle={[
           styles.listContent,
           treeReady && { paddingBottom: spacing.sm + filterBarHeight }
