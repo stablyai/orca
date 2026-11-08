@@ -659,6 +659,7 @@ import {
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
+import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
@@ -844,6 +845,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
+  'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
