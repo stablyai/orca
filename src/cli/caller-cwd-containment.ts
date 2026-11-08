@@ -4,7 +4,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
-import { resolveRealPathSync } from '../main/git/repo-git-marker-scan'
+import { resolveRealPathSync } from '../shared/real-path-sync'
 
 function ancestorNames(path: string): Set<string> {
   const names = new Set<string>()
