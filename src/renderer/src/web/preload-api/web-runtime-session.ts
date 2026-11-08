@@ -63,9 +63,13 @@ export async function observeWebRuntimeStatus(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const existing = webRuntimeState.activeClient?.statusOwner
-  if (existing) {
-    return existing.refresh({ timeoutMs, observeOnly: true })
+  if (webRuntimeState.activeClient) {
+    // Why: an observe must not be answered by a client built for a replaced pairing.
+    const client = cachedClientFor(environment) ?? getClientForEnvironment(environment)
+    const owner = client.statusOwner
+    if (owner) {
+      return owner.refresh({ timeoutMs, observeOnly: true })
+    }
   }
   const transient = new WebRuntimeClient(getPreferredWebRuntimeConnection(environment), {
     reconnect: false,
@@ -98,33 +102,28 @@ export function getClientForEnvironment(
   if (!isActivePairing(environment)) {
     throw new Error(PAIRING_CHANGED_MESSAGE)
   }
-  if (
-    !webRuntimeState.activeClient ||
-    webRuntimeState.activeClientEnvironmentId !== environment.id ||
-    webRuntimeState.activeClientPairingRevision !== pairingRevisionOf(environment)
-  ) {
+  let client = cachedClientFor(environment)
+  if (!client) {
     webRuntimeState.activeClient?.close()
-    webRuntimeState.activeClient = new WebRuntimeClient(
-      getPreferredWebRuntimeConnection(environment),
-      {
-        credential: credentialFor(environment),
-        allowKeyMigration: true,
-        status: {
-          environmentId: environment.id,
-          pairingRevision: environment.pairingRevision ?? environment.createdAt,
-          publish: (snapshot) => {
-            for (const listener of statusListeners) {
-              listener(snapshot)
-            }
-          },
-          verified: (response) => updateEnvironmentFromResponse(environment, response)
-        }
+    client = new WebRuntimeClient(getPreferredWebRuntimeConnection(environment), {
+      credential: credentialFor(environment),
+      allowKeyMigration: true,
+      status: {
+        environmentId: environment.id,
+        pairingRevision: environment.pairingRevision ?? environment.createdAt,
+        publish: (snapshot) => {
+          for (const listener of statusListeners) {
+            listener(snapshot)
+          }
+        },
+        verified: (response) => updateEnvironmentFromResponse(environment, response)
       }
-    )
+    })
+    webRuntimeState.activeClient = client
     webRuntimeState.activeClientEnvironmentId = environment.id
     webRuntimeState.activeClientPairingRevision = pairingRevisionOf(environment)
   }
-  return webRuntimeState.activeClient
+  return client
 }
 
 function credentialFor(environment: StoredWebRuntimeEnvironment) {
@@ -226,6 +225,15 @@ export function assertActiveEnvironment(environmentId: string): void {
 
 function pairingRevisionOf(environment: StoredWebRuntimeEnvironment): number {
   return environment.pairingRevision ?? environment.createdAt
+}
+
+function cachedClientFor(environment: StoredWebRuntimeEnvironment): WebRuntimeClient | null {
+  const client = webRuntimeState.activeClient
+  return client !== null &&
+    webRuntimeState.activeClientEnvironmentId === environment.id &&
+    webRuntimeState.activeClientPairingRevision === pairingRevisionOf(environment)
+    ? client
+    : null
 }
 
 /** Re-pairing the same server keeps its id, so only the revision tells the pairings apart. */
