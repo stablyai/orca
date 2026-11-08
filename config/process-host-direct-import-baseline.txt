@@ -4,10 +4,10 @@
 src/cli/handlers/core.ts
 src/cli/handlers/interactive-login-interruption.ts
 src/cli/runtime/launch.ts
-src/main/agent-hooks/managed-hook-owner-identity.ts
-src/main/agent-hooks/wsl-hook-relay-link.ts
-src/main/agent-hooks/wsl-hook-relay-manager.ts
-src/main/agent-hooks/wsl-hook-relay-sentinel.ts
+src/main/agent-hooks/installation/locking/managed-hook-owner-identity.ts
+src/main/agent-hooks/wsl-relay/wsl-hook-relay-link.ts
+src/main/agent-hooks/wsl-relay/wsl-hook-relay-manager.ts
+src/main/agent-hooks/wsl-relay/wsl-hook-relay-sentinel.ts
 src/main/ai-vault/scan-service/session-scanner-service-client-state.ts
 src/main/ai-vault/scan-service/session-scanner-service-client.ts
 src/main/ai-vault/scan-service/session-scanner-service-spawn.ts

@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { agentHookServer } from '../../../../agent-hooks/server'
+import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { TerminalSend } from '../../../../../shared/rpc-contract/terminal-unary-params'
 import {

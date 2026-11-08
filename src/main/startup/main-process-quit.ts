@@ -10,9 +10,9 @@ import {
   shutdownDaemon
 } from '../daemon/providers/lifecycle/daemon-provider-state'
 import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
-import { agentHookServer } from '../agent-hooks/server'
-import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { removeManagedAgentHooksAsync } from '../agent-hooks/managed-agent-hook-controls'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
+import { removeManagedAgentHooksAsync } from '../agent-hooks/installation/managed-agent-hook-controls'
 import { stopStructuredAgentSessionRuntime } from '../runtime/agent-session/structured-agent-session-runtime'
 import { setStructuredAgentSessionTeardownTrigger } from '../runtime/agent-session/structured-agent-session-runtime-teardown'
 import { awaitRuntimeFileWatcherUnsubscribes } from '../runtime/files/watch/file-watcher-leases'
