@@ -4,10 +4,11 @@ import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibilit
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 import type { RepoSlice } from '@/store/repos/repo-state'
+import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getRootProjectOrderUpdatesForSidebarDrop } from './root-project-header-drop'
 
 export async function saveRootProjectOrderForSidebarDrop(args: {
-  state: Pick<RepoSlice, 'repos' | 'projectGroups' | 'updateRepo' | 'updateProjectGroup'>
+  state: Pick<RepoSlice, 'repos' | 'projectGroups' | 'updateRepo' | 'updateProjectGroups'>
   visibleKeys: readonly string[]
   draggedKey: string
   dropIndex: number
@@ -22,26 +23,22 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
   if (updates.length === 0) {
     return true
   }
+  const groupCopiesById = Map.groupBy(state.projectGroups, (group) => group.id)
   const groupUpdates = updates.flatMap((update) => {
     if (update.entry.kind !== 'group') {
       return []
     }
     const groupId = update.entry.group.id
-    return state.projectGroups
-      .filter((group) => group.id === groupId)
-      .map((group) => ({ ...update, group }))
+    return (groupCopiesById.get(groupId) ?? []).map((group) => ({ ...update, group }))
   })
-  const groupIds = new Set(state.projectGroups.map((group) => group.id))
   const repoUpdates = updates.flatMap((update) => {
     if (update.entry.kind !== 'repo' || update.rootProjectOrder === undefined) {
       return []
     }
     const repoId = update.entry.repo.id
     const order = update.rootProjectOrder
-    return state.repos
-      .filter(
-        (repo) => repo.id === repoId && (!repo.projectGroupId || !groupIds.has(repo.projectGroupId))
-      )
+    return getIndexedReposById(state.repos, repoId)
+      .filter((repo) => !repo.projectGroupId || !groupCopiesById.has(repo.projectGroupId))
       .map((repo) => ({ repo, order }))
   })
   const targets = groupUpdates.flatMap((update) => {
@@ -68,28 +65,35 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
     return false
   }
   args.onCommit()
-  const mutations = groupUpdates.map(({ group, rootProjectOrder, tabOrder }) => ({
-    save: () =>
-      state.updateProjectGroup(
-        group.id,
-        {
-          ...(rootProjectOrder !== undefined ? { rootProjectOrder } : {}),
-          ...(tabOrder !== undefined ? { tabOrder } : {})
-        },
-        { hostId: getProjectGroupHostId(group) }
-      ),
-    restore: () =>
-      state.updateProjectGroup(
-        group.id,
-        {
-          ...(rootProjectOrder !== undefined
-            ? { rootProjectOrder: group.rootProjectOrder ?? null }
-            : {}),
-          ...(tabOrder !== undefined ? { tabOrder: group.tabOrder } : {})
-        },
-        { hostId: getProjectGroupHostId(group) }
-      )
-  }))
+  const mutations: { save: () => Promise<boolean>; restore: () => Promise<boolean> }[] = []
+  if (groupUpdates.length > 0) {
+    mutations.push({
+      save: () =>
+        state.updateProjectGroups(
+          groupUpdates.map(({ group, rootProjectOrder, tabOrder }) => ({
+            groupId: group.id,
+            hostId: getProjectGroupHostId(group),
+            updates: {
+              ...(rootProjectOrder !== undefined ? { rootProjectOrder } : {}),
+              ...(tabOrder !== undefined ? { tabOrder } : {})
+            }
+          }))
+        ),
+      restore: () =>
+        state.updateProjectGroups(
+          groupUpdates.map(({ group, rootProjectOrder, tabOrder }) => ({
+            groupId: group.id,
+            hostId: getProjectGroupHostId(group),
+            updates: {
+              ...(rootProjectOrder !== undefined
+                ? { rootProjectOrder: group.rootProjectOrder ?? null }
+                : {}),
+              ...(tabOrder !== undefined ? { tabOrder: group.tabOrder } : {})
+            }
+          }))
+        )
+    })
+  }
   for (const { repo, order } of repoUpdates) {
     const hostId = getRepoExecutionHostId(repo)
     mutations.push({

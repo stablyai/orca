@@ -32,6 +32,49 @@ function repo(id: string, overrides: Partial<Repo> = {}): Repo {
 beforeEach(() => clearRuntimeCompatibilityCache())
 
 describe('saving root project order', () => {
+  it('inserts a project among legacy groups and preserves their relative order', async () => {
+    const groups = [group('a'), group('b', { tabOrder: 1 }), group('c', { tabOrder: 2 })]
+    const project = repo('x')
+    const store = createTestStore()
+    store.setState({ projectGroups: groups, repos: [project] })
+    vi.stubGlobal('window', {
+      api: {
+        projectGroups: {
+          updateMany: async ({
+            mutations
+          }: {
+            mutations: { groupId: string; updates: ProjectGroupUpdate }[]
+          }) =>
+            mutations
+              .map(({ groupId, updates }) => ({
+                ...groups.find((entry) => entry.id === groupId),
+                ...updates
+              }))
+              .toReversed()
+        },
+        repos: {
+          update: async ({ updates }: { updates: Partial<Repo> }) => ({ ...project, ...updates })
+        }
+      }
+    })
+
+    await expect(
+      saveRootProjectOrderForSidebarDrop({
+        state: store.getState(),
+        visibleKeys: ['group:a', 'group:b', 'group:c', 'repo:x'],
+        draggedKey: 'repo:x',
+        dropIndex: 1,
+        onCommit: () => {}
+      })
+    ).resolves.toBe(true)
+    expect(store.getState().projectGroups).toMatchObject([
+      { id: 'a', tabOrder: 0 },
+      { id: 'b', rootProjectOrder: 1000, tabOrder: 1 },
+      { id: 'c', rootProjectOrder: 2000, tabOrder: 2 }
+    ])
+    expect(store.getState().repos).toMatchObject([{ id: 'x', projectGroupOrder: 0 }])
+  })
+
   it('persists the moved logical group on both owners and leaves unrelated roots intact', async () => {
     const local = group('a', { rootProjectOrder: 0 })
     const remote = { ...local, executionHostId: 'runtime:remote' }
