@@ -193,12 +193,12 @@ function resolveTimelineItem(
     }
     case 'text-snapshot':
     case 'guarded-item':
-      return resolveGuardedItem(view, resolution, placement)
+      return resolveJournalGuardedItem(view, resolution, placement)
   }
 }
 
-function resolveGuardedItem(
-  view: JournalTimelineView,
+export function resolveJournalGuardedItem(
+  view: Pick<JournalTimelineView, 'item' | 'itemBody'>,
   resolution: Extract<JournalTimelineItemResolution, { kind: 'text-snapshot' | 'guarded-item' }>,
   placement: AgentJournalTurnScope
 ): JournalTimelineItemResult {

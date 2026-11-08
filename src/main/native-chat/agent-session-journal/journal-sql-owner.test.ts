@@ -15,6 +15,8 @@ import { CommandReceiptExistsError } from './writing/command-receipt-transaction
 import { AgentSessionJournalError } from './writing/journal-write-guards'
 import { AgentSessionAttachmentExpiredError } from '../agent-session-attachments/agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
+import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { message } from './journal-sql-message.test-fixture'
 
 const roots: string[] = []
 const owners: JournalSqlOwner[] = []
@@ -29,6 +31,10 @@ async function fixture() {
   const filename = join(root, 'journal.db')
   const { db } = openJournalDatabase(filename)
   seedJournalSqlCommands(db)
+  migrateJournalDomainSchema(db)
+  db.prepare(
+    `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES('session','epoch',1,1)`
+  ).run()
   db.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('session', '{}')
   db.close()
   const owner = new JournalSqlOwner(filename, root, journalSqlWorkerPath())
@@ -45,6 +51,32 @@ const write = (text: string, fence = 1): JournalWriterCommand => ({
     body: { kind: 'status', text },
     options: { fence, turnScope: { kind: 'thread' } }
   }
+})
+
+it('uses the existing writer for domain messages and returns committed bodies without changing legacy data', async () => {
+  const { owner, filename } = await fixture()
+  const probe = new Database(filename)
+  const legacy = () => probe.prepare('SELECT row_json FROM journal_rows ORDER BY seq').all()
+  const before = legacy()
+  const outcomes = await Promise.all(
+    ['first', 'last'].map((text) =>
+      owner.messages({
+        target: { sessionId: 'session', epoch: 'epoch' },
+        steps: [message(text)],
+        savedAt: 100
+      })
+    )
+  )
+  expect(outcomes.map((commit) => commit.cursor)).toEqual([
+    { epoch: 'epoch', sequence: 2 },
+    { epoch: 'epoch', sequence: 3 }
+  ])
+  expect(outcomes.map((commit) => commit.items[0]?.body)).toEqual([
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'first' }] },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'last' }] }
+  ])
+  expect(legacy()).toEqual(before)
+  probe.close()
 })
 
 it('runs real source-worker commands in order, preserves typed receipt failures and joins close after admitted writes', async () => {

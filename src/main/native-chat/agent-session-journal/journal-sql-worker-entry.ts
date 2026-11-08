@@ -13,6 +13,8 @@ import type { JournalSqlRequest, JournalSqlResponse } from './journal-sql-protoc
 import { assertJournalWritable } from './writing/journal-write-guards'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
 import { initializeJournalSqlProjection } from './journal-sql-schema-migration'
+import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { commitJournalSqlMessages } from './journal-sql-message-commit'
 
 if (
   !parentPort ||
@@ -43,6 +45,7 @@ try {
   commands = new JournalSqlCommand(db, stateDirectory)
   if (!readOnly) {
     initializeJournalSqlProjection(db)
+    migrateJournalDomainSchema(db)
     checkpoint = new JournalCheckpointOwner(db, workerData.filename)
   }
   reply({ type: 'ready', readOnly })
@@ -81,16 +84,21 @@ function reply(response: JournalSqlResponse): void {
 
 type WriteRequest = {
   id: number
-  command: Exclude<JournalSqlRequest['command'], { type: 'close' }>
+  command: Exclude<JournalSqlRequest['command'], { type: 'close' | 'messages' }>
 }
 type CommitResponse = Extract<JournalSqlResponse, { type: 'committed' | 'effects' | 'maintenance' }>
 
 /** Bound ready work before opening a transaction, then yield after its acknowledgements. */
 async function drain(): Promise<void> {
+  if (queue[0]?.command.type === 'messages') {
+    await drainMessages(queue.shift()!)
+    scheduleNextDrain()
+    return
+  }
   const pending = takeJournalSqlReadyBatch(queue, (command) => commands?.streamed(command) === true)
   const writes = pending.filter(
     (entry): entry is { request: WriteRequest; normal: boolean } =>
-      entry.request.command.type !== 'close'
+      entry.request.command.type !== 'close' && entry.request.command.type !== 'messages'
   )
   const close = pending.find(({ request }) => request.command.type === 'close')?.request
   const database = db
@@ -184,6 +192,58 @@ async function drain(): Promise<void> {
       })
     }
   }
+  scheduleNextDrain()
+}
+
+async function drainMessages(request: JournalSqlRequest): Promise<void> {
+  if (request.command.type !== 'messages' || !db || !batch) {
+    throw new Error('journal message drain has no writer')
+  }
+  try {
+    if (fault) {
+      throw fault
+    }
+    assertJournalWritable(readOnly, request.command.job.command.target.sessionId)
+    const result = await commitJournalSqlMessages(db, batch, [request.command.job], (commit) => {
+      reply({ type: 'messages', id: request.id, commit })
+    })
+    const outcome = result.outcomes[0]
+    if (outcome && !outcome.committed) {
+      reply({
+        type: 'failed',
+        id: request.id,
+        outcome: 'rolled-back',
+        error: journalSqlFailure(outcome.error)
+      })
+    }
+    let postcommit = result.postcommit
+    try {
+      checkpoint?.afterCommit()
+    } catch (error) {
+      postcommit ??= error
+    }
+    if (postcommit) {
+      fault = postcommit
+      reply({
+        type: 'failed',
+        outcome: 'not-dispatched',
+        fatal: true,
+        error: journalSqlFailure(postcommit)
+      })
+    }
+  } catch (error) {
+    fault ??= batch.fault
+    reply({
+      type: 'failed',
+      id: request.id,
+      outcome: error instanceof JournalSqlBatchError ? error.outcome : 'indeterminate',
+      fatal: fault !== undefined,
+      error: journalSqlFailure(error)
+    })
+  }
+}
+
+function scheduleNextDrain(): void {
   scheduled = false
   // Requests admitted while this drain awaited its commands start the next drain.
   if (queue.length > 0 && db) {
