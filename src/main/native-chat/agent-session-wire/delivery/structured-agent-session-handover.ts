@@ -17,7 +17,7 @@ import { isAbortSignalReason } from '../../../../shared/abort-signal-reason'
 import { isAgentSessionOptionRejectedError } from '../options/structured-agent-session-option-error'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { resolveHandover } from '../operations/structured-agent-session-operation-settlement'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { readContextStructuredAgentSessionTurnScope } from '../observations/structured-agent-session-read-work'
 import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-session-adapter'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
@@ -46,7 +46,7 @@ export async function beginSubmissionHandover(
   isBound: () => boolean
 ): Promise<StructuredAgentSessionPendingHandover | null> {
   const { clientMessageId } = submission
-  const body = ctx.journal.itemBody(agentJournalSubmissionKey(clientMessageId))
+  const body = await ctx.journal.reads.itemBody(agentJournalSubmissionKey(clientMessageId))
   if (body?.kind !== 'message') {
     await ctx.journal.resolveDispatch({
       clientMessageId,
@@ -66,7 +66,7 @@ export async function beginSubmissionHandover(
     return null
   }
   // Join only current turns; persist stopped-history carry before writing to the provider.
-  const turnScope = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+  const turnScope = await readContextStructuredAgentSessionTurnScope(ctx)
   let carried: StoppedHistoryDelivery | null = null
   let ownsChild = stillCurrent
   let closing: UnsentSendHold['cause'] | undefined

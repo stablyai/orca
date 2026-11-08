@@ -296,7 +296,7 @@ describe('ACP compaction settlement', () => {
         sessionId: SESSION,
         fence: 1,
         turnId: command.turnId,
-        resolveLiveTurnId: () => command.turnId
+        resolveLiveTurnId: async () => command.turnId
       })
     ).resolves.toEqual({ cancelled: true })
     const { turn, inside } = await ended(rig, command)

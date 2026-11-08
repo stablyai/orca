@@ -5,7 +5,7 @@ import {
   cancelAgentSessionUsageLimitContinue,
   type UsageLimitContinueIdentity
 } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { latestUsageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { usageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -183,7 +183,7 @@ export function mutateWithChatStop<TValue>(
   const stop = async (ctx: AgentSessionTurnContext): Promise<ChatStopOutcome> => {
     // Capture once on the lane; the acceptance receipt owns the exact-cut withdrawal.
     if (turnId === undefined) {
-      withdrawnCut = latestUsageLimitContinueIdentity(ctx.journal.statusRead())
+      withdrawnCut = usageLimitContinueIdentity(await ctx.journal.reads.usageLimitCut())
     }
     const operations = context.acquireAborts.captureOperations(sessionId)
     const flight = context.startFlights.get(sessionId)
@@ -201,7 +201,7 @@ export function mutateWithChatStop<TValue>(
     const previouslyStopped =
       target.turnId !== null &&
       isStructuredAgentSessionCommandTurnId(target.turnId) &&
-      structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId)
+      (await structuredAgentSessionCommandWasStopped(ctx.journal, target.turnId))
     const accepted = await acceptCapturedChatStop(
       ctx,
       target,

@@ -111,19 +111,22 @@ export function isStructuredAgentSessionStopNote(itemId: string): boolean {
 }
 
 /** Read Stop from the journal so cached state cannot outlive the command. */
-export function structuredAgentSessionCommandWasStopped(
-  journal: Pick<AgentSessionJournal, 'itemsRead'>,
+export async function structuredAgentSessionCommandWasStopped(
+  journal: Pick<AgentSessionJournal, 'reads'>,
   turnId: string
-): boolean {
+): Promise<boolean> {
   const { itemId } = structuredAgentSessionCommandTurn(turnId.slice('compact:'.length))
-  return journal
-    .itemsRead()
-    .items.some(
-      (item) =>
-        item.turnScope?.kind === 'turn' &&
-        item.turnScope.turnItemId === itemId &&
-        isStructuredAgentSessionStopNote(item.itemId)
-    )
+  let stopped = false
+  await journal.reads.visitItems(
+    { kinds: ['status'] },
+    (noteId, _sequence, _body, { turnScope }) => {
+      stopped ||=
+        turnScope?.kind === 'turn' &&
+        turnScope.turnItemId === itemId &&
+        isStructuredAgentSessionStopNote(noteId)
+    }
+  )
+  return stopped
 }
 
 export type StructuredAgentSessionCommandHandoverContext = {

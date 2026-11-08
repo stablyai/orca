@@ -59,7 +59,7 @@ export type StructuredAgentSessionAdapterStop = {
     stoppedAt?: number
     dispatchStatus?: { state: AgentJournalDispatchState; recovered: boolean } | null
     /** Re-read journal turn immediately before interrupt; direct callers may omit this guard. */
-    resolveLiveTurnId?: () => string | null
+    resolveLiveTurnId?: () => Promise<string | null>
   }): Promise<AgentSessionCancelOutcome>
   /** Wait for in-flight work or grace expiry measured from interrupt issuance. */
   awaitStoppedRequestEnd?(sessionId: string, stoppedAt: number): Promise<void>

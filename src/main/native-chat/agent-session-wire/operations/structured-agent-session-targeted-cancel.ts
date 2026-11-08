@@ -37,7 +37,7 @@ export async function runTargetedCancel(
     const capturedStops = params.captureStops?.(targets)
     const unreadable = params.childWork !== undefined && children === undefined
     const initialUnlisted = params.unlisted?.present() ?? false
-    if (targets.length === 0 && !unreadable && !(initialUnlisted && atRest(ctx))) {
+    if (targets.length === 0 && !unreadable && !(initialUnlisted && (await atRest(ctx)))) {
       return { ok: true, value: { ...named, cancelled: false } }
     }
     const accepted = await acceptStopTarget(ctx)
@@ -89,8 +89,8 @@ export async function runTargetedCancel(
   }
 }
 
-function atRest(ctx: AgentSessionTurnContext): boolean {
-  return !isMainAgentWorking(ctx)
+async function atRest(ctx: AgentSessionTurnContext): Promise<boolean> {
+  return !(await isMainAgentWorking(ctx))
 }
 
 /** Tasks outlive their opening turn, so feedback is thread-scoped and keyed by Stop operation. */

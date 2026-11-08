@@ -7,14 +7,12 @@ import {
   type AgentJournalItemBody
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { isMainAgentWorking } from '../operations/structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { readContextStructuredAgentSessionTurn } from '../observations/structured-agent-session-read-work'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 import type { JournalStopFailedOn } from '../../agent-session-journal/queued-messages/queued-message-pause'
 import { structuredAgentSessionFailedStopMark } from './structured-agent-session-stopping'
 import { structuredAgentSessionStopNoteIdentity } from '../operations/structured-agent-session-command-turn'
-import { structuredAgentSessionNamedTurnScope } from './structured-agent-session-turn-stop-notes'
 
 /** Queued immediately behind Stop, so no later turn can intervene; wait only for an accepted interrupt. */
 export type StructuredAgentSessionStopWindDown = {
@@ -116,20 +114,16 @@ export async function endStoppedStructuredAgentSession(
 
 /** Revise only while work runs; ended work took the Stop regardless of child exit. */
 async function reviseStopNoteUnconfirmed(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork' | 'readWork'>,
   identity: AgentJournalItemIdentity
 ): Promise<void> {
-  if (!isMainAgentWorking(ctx)) {
+  const live = await readContextStructuredAgentSessionTurn(ctx)
+  if (!live.working) {
     return
   }
   const itemId = agentJournalItemKey(identity)
-  let written: { turnScope?: AgentJournalTurnScope } | undefined
-  ctx.journal.visitItemsWithLinkage((id, _sequence, _body, linkage) => {
-    if (id === itemId) {
-      written = linkage
-    }
-  })
-  if (written === undefined) {
+  const written = await ctx.journal.reads.item(itemId)
+  if (written === null) {
     return
   }
   const body: AgentJournalItemBody = {
@@ -138,9 +132,8 @@ async function reviseStopNoteUnconfirmed(
   }
   // Row scopes are immutable: atomically rekey a turnless note onto running work so its proven end finds it.
   // With no open turn, key/scope stay unchanged and no turn end revises it.
-  const running = contextStructuredAgentSessionCurrentWork(ctx).activeTurnId()
-  const turnScope =
-    running !== null ? structuredAgentSessionNamedTurnScope(ctx.journal, running) : null
+  const running = live.activeTurnId
+  const turnScope = live.turnScope.kind === 'turn' ? live.turnScope : null
   const onTurn = running !== null ? structuredAgentSessionStopNoteIdentity(running) : identity
   if (turnScope && agentJournalItemKey(onTurn) !== itemId) {
     await ctx.journal.appendLifecycleBatch({

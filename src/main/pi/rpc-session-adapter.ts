@@ -141,7 +141,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.session(input.sessionId, input.fence)
-    const turnId = input.resolveLiveTurnId ? input.resolveLiveTurnId() : session.lane.openTurnId
+    const turnId = await (input.resolveLiveTurnId?.() ?? session.lane.openTurnId)
     if (input.turnId !== undefined && input.turnId !== turnId) {
       return { cancelled: false }
     }

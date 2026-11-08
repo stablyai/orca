@@ -25,7 +25,7 @@ import {
 import { isAgentSessionAttachmentExpiredError } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
 import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { readContextStructuredAgentSessionTurnScope } from '../observations/structured-agent-session-read-work'
 
 function refused(
   reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,
@@ -81,7 +81,7 @@ export async function performThreadGoalChange(
   let replacesGoal = false
   if (change.kind === 'set') {
     // Read before the objective message lands; it is not a goal transition.
-    replacesGoal = ctx.journal.threadGoal() !== null
+    replacesGoal = (await ctx.journal.reads.threadGoalSource()).goal !== null
   }
   try {
     // Journal first: active goals start work immediately, which must follow the objective in the transcript.
@@ -97,7 +97,7 @@ export async function performThreadGoalChange(
             blocks: [{ type: 'text', text: change.objective }],
             sentAs: 'goal'
           },
-          { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() }
+          { fence: ctx.fence, turnScope: await readContextStructuredAgentSessionTurnScope(ctx) }
         )
       } catch (error) {
         if (isAgentSessionAttachmentExpiredError(error)) {

@@ -7,7 +7,7 @@ import {
   type QueuedMessageRow
 } from '../../agent-session-journal/queued-messages/queued-message-table'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { readContextStructuredAgentSessionTurn } from '../observations/structured-agent-session-read-work'
 import {
   structuredAgentSessionStopNamesEndedTurn,
   structuredAgentSessionStopNamesTurnNotLive
@@ -20,15 +20,15 @@ export function unsettledQueuedMessages(journal: AgentSessionJournal): QueuedMes
 
 /** Distinguish unrecorded work, repeated Stop without later sends, and late Stops naming ended turns. */
 export async function stopReachesUnrecordedWork(
-  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>,
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork' | 'readWork'>,
   namedTurnId: string | undefined
 ): Promise<'unrecorded' | 'repeat' | 'late'> {
-  const work = contextStructuredAgentSessionCurrentWork(ctx)
+  const { activeTurnId: live, working } = await readContextStructuredAgentSessionTurn(ctx)
+  const work = { activeTurnId: () => live, working: () => working }
   if (structuredAgentSessionStopNamesEndedTurn(ctx.journal, work, namedTurnId)) {
     return 'late'
   }
-  const live = work.activeTurnId()
-  const inForce = ctx.journal.queuedMessages.userStopInForce()
+  const inForce = await ctx.journal.queuedMessages.userStopInForce()
   if (inForce === null) {
     return 'unrecorded'
   }

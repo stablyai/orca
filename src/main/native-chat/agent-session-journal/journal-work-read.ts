@@ -11,7 +11,11 @@ export type JournalWorkRead =
 
 export type JournalWorkReadResult =
   | { kind: 'state'; state: JournalObserverResult['work'] }
-  | { kind: 'turn'; activeTurn: JournalObserverResult['work']['activeTurn'] }
+  | {
+      kind: 'turn'
+      activeTurn: JournalObserverResult['work']['activeTurn']
+      working: boolean
+    }
   | { kind: 'item'; current: boolean }
   | {
       kind: 'send'

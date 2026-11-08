@@ -85,10 +85,23 @@ export async function readContextStructuredAgentSessionWork<K extends JournalWor
 export async function readContextStructuredAgentSessionTurnScope(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork' | 'readWork'>
 ): Promise<AgentJournalTurnScope> {
-  const { activeTurn } = await readContextStructuredAgentSessionWork(ctx, { kind: 'turn' })
-  return activeTurn
-    ? { kind: 'turn', turnItemId: activeTurn.item.itemId }
-    : AGENT_JOURNAL_THREAD_SCOPE
+  return (await readContextStructuredAgentSessionTurn(ctx)).turnScope
+}
+
+/** One answer for Stop's live-turn, scope and working checks. */
+export async function readContextStructuredAgentSessionTurn(
+  ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork' | 'readWork'>
+): Promise<{ working: boolean; activeTurnId: string | null; turnScope: AgentJournalTurnScope }> {
+  const { activeTurn, working } = await readContextStructuredAgentSessionWork(ctx, {
+    kind: 'turn'
+  })
+  return {
+    working,
+    activeTurnId: activeTurn?.turnId ?? null,
+    turnScope: activeTurn
+      ? { kind: 'turn', turnItemId: activeTurn.item.itemId }
+      : AGENT_JOURNAL_THREAD_SCOPE
+  }
 }
 
 function readMemoryWork<K extends JournalWorkRead['kind']>(
@@ -108,7 +121,7 @@ function readMemoryAnswer(
 ): JournalWorkReadResult {
   switch (operation.kind) {
     case 'turn':
-      return { kind: 'turn', activeTurn: work.activeTurn() }
+      return { kind: 'turn', activeTurn: work.activeTurn(), working: work.working() }
     case 'item':
       return { kind: 'item', current: work.isCurrentItem(operation.itemId) }
     case 'send':

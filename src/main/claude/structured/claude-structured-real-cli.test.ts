@@ -506,7 +506,7 @@ describe.skipIf(!realClaudeAvailable)(suiteTitle, () => {
             sessionId: 'real-cli-handshake',
             turnId: 'turn-a',
             fence: 1,
-            resolveLiveTurnId: () => 'turn-a',
+            resolveLiveTurnId: async () => 'turn-a',
             dispatchStatus: { state: 'pending', recovered: false }
           })
         ).resolves.toEqual({ cancelled: true })

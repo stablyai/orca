@@ -105,7 +105,7 @@ function readWork(
     case 'state':
       return { kind: 'state', state: readJournalSqlWorkState(context, work) }
     case 'turn':
-      return { kind: 'turn', activeTurn: work.activeTurn() }
+      return { kind: 'turn', activeTurn: work.activeTurn(), working: work.working() }
     case 'item':
       return { kind: 'item', current: work.isCurrentItem(operation.itemId) }
     case 'send':

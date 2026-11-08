@@ -25,8 +25,11 @@ function requireSession(sessions: Map<string, ClaudeSession>, sessionId: string)
 }
 
 /** Fall back to memory when the journal has not admitted a turn row. */
-function claudeLiveTurnId(session: ClaudeSession, request: CancelInput): string | null {
-  return request.resolveLiveTurnId?.() ?? session.translator?.currentTurnId ?? null
+async function claudeLiveTurnId(
+  session: ClaudeSession,
+  request: CancelInput
+): Promise<string | null> {
+  return (await request.resolveLiveTurnId?.()) ?? session.translator?.currentTurnId ?? null
 }
 
 /** Session-scoped interrupts also cover written messages awaiting their first turn echo. */
@@ -38,11 +41,11 @@ function cancelClaudeConversation(
   onDispatchSettledLate: ClaudeLateDispatchSettlement | undefined
 ): Promise<{ cancelled: boolean }> {
   const acquisitionGeneration = session.acquisitionGeneration
-  const isCurrent = (): boolean =>
+  const isCurrent = async (): Promise<boolean> =>
     sessions.get(request.sessionId) === session &&
     session.fence === request.fence &&
     session.acquisitionGeneration === acquisitionGeneration &&
-    (claudeLiveTurnId(session, request) !== null || session.dispatchWaiters.length > 0)
+    ((await claudeLiveTurnId(session, request)) !== null || session.dispatchWaiters.length > 0)
   return cancelClaudeTurn(
     session,
     timeoutMs,
@@ -67,7 +70,7 @@ export async function cancelClaudeStructuredTurn(input: {
     return { cancelled: false }
   }
   const requestedTurnId = request.turnId
-  const liveTurnId = claudeLiveTurnId(session, request)
+  const liveTurnId = await claudeLiveTurnId(session, request)
   // A conversation Stop also sweeps queued follow-ups and written messages awaiting an echo.
   if (
     requestedTurnId === undefined ||
@@ -84,8 +87,8 @@ export async function cancelClaudeStructuredTurn(input: {
     )
   }
   // Prefer the client-visible turn; absent journal rows must not block Stop under backpressure.
-  const ownsRequestedTurn = (): boolean => {
-    const liveTurnId = claudeLiveTurnId(session, request)
+  const ownsRequestedTurn = async (): Promise<boolean> => {
+    const liveTurnId = await claudeLiveTurnId(session, request)
     return liveTurnId === null ? session.dispatchSequence === 0 : liveTurnId === requestedTurnId
   }
   // Direct callers lack durable admission status; retain fencing for unacknowledged dispatches.
@@ -103,12 +106,13 @@ export async function cancelClaudeStructuredTurn(input: {
   return cancelClaudeTurn(
     session,
     timeoutMs,
-    () => {
+    async () => {
+      const owned = compactionOwnsTurn() || (await ownsRequestedTurn())
       const current =
         sessions.get(request.sessionId) === session &&
         session.fence === request.fence &&
         session.acquisitionGeneration === acquisitionGeneration &&
-        (compactionOwnsTurn() || (ownsRequestedTurn() && dispatchAdmissionIsCurrent()))
+        (compactionOwnsTurn() || (owned && dispatchAdmissionIsCurrent()))
       // Suppress compaction reporting when the interrupted command ends.
       if (current && compactionOwnsTurn()) {
         session.translator?.commandInterruptRequested(requestedTurnId)
