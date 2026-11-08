@@ -6,8 +6,8 @@ import {
   makeWorktree
 } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 import WorktreeCard from '../sidebar/workspace-card/surface/WorktreeCard'
-import type React from 'react'
 import type { AppState } from '../../store/types'
+import type React from 'react'
 import type { CSSProperties } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { TooltipProvider } from '../ui/tooltip'
@@ -88,7 +88,7 @@ function SelectionPreview({ palette }: { palette?: ThemeVariables }): React.JSX.
               layout="top"
             />
             <ActivityBarButton
-              item={{ id: 'explorer', icon: LayoutGrid, title: 'Files side', shortcut: '' }}
+              item={{ id: 'workspaces', icon: LayoutGrid, title: 'Workspaces', shortcut: '' }}
               active
               onClick={() => {}}
               layout="side"

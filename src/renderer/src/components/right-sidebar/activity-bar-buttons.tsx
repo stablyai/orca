@@ -164,7 +164,7 @@ export function ActivityBarButton({
             active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
           )}
           onClick={onClick}
-          aria-pressed={active}
+          aria-current={active ? 'page' : undefined}
           data-workspace-board-dismiss=""
           aria-label={activityItemAriaLabel(item, effectiveStatus, t)}
         >
@@ -181,10 +181,10 @@ export function ActivityBarButton({
           )}
 
           {active && isTop && (
-            <div className="absolute bottom-0 left-[25%] right-[25%] h-[2px] bg-tab-active-indicator rounded-t" />
+            <div className="absolute bottom-0 left-[25%] right-[25%] h-[2px] bg-activity-bar-indicator rounded-t" />
           )}
           {active && !isTop && (
-            <div className="absolute right-0 top-[25%] bottom-[25%] w-[2px] bg-tab-active-indicator rounded-l" />
+            <div className="absolute right-0 top-[25%] bottom-[25%] w-[2px] bg-activity-bar-indicator rounded-l" />
           )}
         </button>
       </TooltipTrigger>

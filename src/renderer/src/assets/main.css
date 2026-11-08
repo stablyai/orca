@@ -159,6 +159,8 @@
     var(--tab-active-foreground, var(--foreground))
   );
   --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
+  /* Active right sidebar tool line: the theme's tab indicator, else the foreground it always used. */
+  --color-activity-bar-indicator: var(--tab-active-indicator, var(--foreground));
   /* The theme's accent where one is set (link color); the built-in note blue otherwise. */
   --color-theme-accent: var(--text-link, var(--callout-note));
   --color-git-graph-ref: var(--git-graph-ref);
