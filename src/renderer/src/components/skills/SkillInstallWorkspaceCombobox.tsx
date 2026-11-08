@@ -12,7 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { FilePathCursorTooltip } from '@/components/file-path-cursor-tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'
 
 export type SkillInstallWorkspaceComboboxProps = {
@@ -50,6 +50,7 @@ export function SkillInstallWorkspaceCombobox({
   placeholder,
   triggerClassName
 }: SkillInstallWorkspaceComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState(value)
@@ -140,15 +141,15 @@ export function SkillInstallWorkspaceCombobox({
     [open, value]
   )
 
-  const defaultPlaceholder = translate(
+  const defaultPlaceholder = t(
     'auto.components.skills.SkillInstallTargetFields.5845cfe543',
     'Choose a worktree or folder'
   )
 
   const selectedKindLabel =
     selectedChoice?.kind === 'worktree'
-      ? translate('auto.components.skills.SkillInstallTargetFields.d628c416a2', 'Git worktree')
-      : translate('auto.components.skills.SkillInstallTargetFields.7a366323e7', 'Folder')
+      ? t('auto.components.skills.SkillInstallTargetFields.d628c416a2', 'Git worktree')
+      : t('auto.components.skills.SkillInstallTargetFields.7a366323e7', 'Folder')
   const selectedFullLabel = selectedChoice
     ? `${selectedChoice.label} · ${selectedKindLabel}`
     : undefined
@@ -194,7 +195,7 @@ export function SkillInstallWorkspaceCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             ref={setInputNode}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.skills.SkillInstallWorkspaceCombobox.search',
               'Search workspaces...'
             )}
@@ -204,7 +205,7 @@ export function SkillInstallWorkspaceCombobox({
           <TooltipProvider delayDuration={200}>
             <CommandList className="max-h-72">
               <CommandEmpty>
-                {translate(
+                {t(
                   'auto.components.skills.SkillInstallWorkspaceCombobox.empty',
                   'No workspaces found.'
                 )}
@@ -213,14 +214,11 @@ export function SkillInstallWorkspaceCombobox({
                 const isSelected = choice.id === value
                 const kindLabel =
                   choice.kind === 'worktree'
-                    ? translate(
+                    ? t(
                         'auto.components.skills.SkillInstallTargetFields.d628c416a2',
                         'Git worktree'
                       )
-                    : translate(
-                        'auto.components.skills.SkillInstallTargetFields.7a366323e7',
-                        'Folder'
-                      )
+                    : t('auto.components.skills.SkillInstallTargetFields.7a366323e7', 'Folder')
                 const fullLabel = `${choice.label} · ${kindLabel}`
 
                 return (

@@ -22,7 +22,7 @@ import {
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
 } from '../../../workspaces/removal/worktree-removal-safety'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../catalog/runtime-worktree-selection'
 import { isLocalRuntimeWorktreePathMissing } from '../catalog/runtime-worktree-filesystem'
 
@@ -42,7 +42,7 @@ export async function removeRuntimeUnregisteredWorktree(args: {
   store: RuntimeStore
   acquireWatcherRemoval: (path: string) => Promise<RemovalGate>
   stopPtys: (worktreeId: string, allow: boolean) => Promise<void>
-  finishRemoval: () => void
+  finishRemoval: () => void | Promise<void>
 }): Promise<{}> {
   const { repo, target, registeredWorktrees, removedMeta, route } = args
   const removalHome = resolveWorktreeRemovalHome(route)
@@ -77,7 +77,7 @@ export async function removeRuntimeUnregisteredWorktree(args: {
       try {
         await cleanupPushTarget(args)
       } finally {
-        args.finishRemoval()
+        await args.finishRemoval()
       }
     } finally {
       await gate.finish(true)
@@ -105,7 +105,7 @@ async function deleteUnregisteredDirectory(
     try {
       await cleanupPushTarget(args)
     } finally {
-      args.finishRemoval()
+      await args.finishRemoval()
     }
   } finally {
     await gate.finish(completed)

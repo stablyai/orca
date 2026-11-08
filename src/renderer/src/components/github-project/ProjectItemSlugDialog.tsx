@@ -5,7 +5,7 @@ import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import type { GitHubItemDialogProjectOrigin } from '@/components/GitHubItemDialog'
 import { SlugDialogBody } from './slug-dialog/SlugDialogBody'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
   projectOrigin: GitHubItemDialogProjectOrigin | null
@@ -18,6 +18,7 @@ export default function ProjectItemSlugDialog({
   sourceTarget,
   onClose
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const open = projectOrigin !== null
 
   return (
@@ -30,15 +31,12 @@ export default function ProjectItemSlugDialog({
       >
         <VisuallyHidden.Root asChild>
           <SheetTitle>
-            {translate(
-              'auto.components.github.project.ProjectItemSlugDialog.4450efea9c',
-              'GitHub item'
-            )}
+            {t('auto.components.github.project.ProjectItemSlugDialog.4450efea9c', 'GitHub item')}
           </SheetTitle>
         </VisuallyHidden.Root>
         <VisuallyHidden.Root asChild>
           <SheetDescription>
-            {translate(
+            {t(
               'auto.components.github.project.ProjectItemSlugDialog.e55a5c4e68',
               'Project row preview.'
             )}

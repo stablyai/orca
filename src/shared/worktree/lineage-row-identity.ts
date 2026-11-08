@@ -1,4 +1,5 @@
 import { parseWorkspaceKey, worktreeWorkspaceKey, type WorkspaceKey } from '../workspace-scope'
+import type { CrossStoreParentRef } from './lineage-types'
 import type { Worktree } from './types'
 
 export function workspaceKeyOfRow(row: Pick<Worktree, 'id'>): WorkspaceKey {
@@ -13,4 +14,15 @@ export function lineageInstanceIdOfRow(
 ): string | undefined {
   const scope = parseWorkspaceKey(row.id)
   return scope?.type === 'folder' ? scope.folderWorkspaceId : row.instanceId || undefined
+}
+
+/** The ref a child in another store saves for this parent row, or undefined without an identity. */
+export function crossStoreParentRefOfRow(
+  installationId: string | undefined,
+  row: Pick<Worktree, 'id' | 'instanceId'>
+): CrossStoreParentRef | undefined {
+  const instanceId = lineageInstanceIdOfRow(row)
+  return installationId && instanceId
+    ? { installationId, workspaceKey: workspaceKeyOfRow(row), instanceId }
+    : undefined
 }

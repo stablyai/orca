@@ -1,16 +1,40 @@
 import { useMemo } from 'react'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { resolveOwner, runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/actions/git-operation-target'
+import { UNRESOLVED_GIT_HOST_ERROR } from '@/store/slices/editor/git/git-operation-target'
+import type { AttachedWorktreeOwner } from '../../folder-workspace-attached-worktrees'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+
+export function sourceControlFileWatchRuntimeEnvironmentId(
+  state: AppState,
+  owner: AttachedWorktreeOwner
+): string | null | undefined {
+  const match = resolveOwner(state, {
+    workspaceId: owner.worktreeId,
+    ...(owner.worktree.hostId ? { hostId: owner.executionHostId } : {})
+  })
+  // A runtime proxy to nested SSH cannot watch that filesystem either.
+  if (match.kind !== 'resolved' || match.owner.at !== 'local') {
+    return undefined
+  }
+  const endpoint = match.owner.endpoint
+  return endpoint.kind === 'environment' ? endpoint.environmentId : null
+}
 
 function ownerTargetFor(
   state: AppState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  hostId?: ExecutionHostId
 ): RuntimeClientTarget | null {
-  return worktreeId ? runtimeTargetForWorkspaceOwner(state, { workspaceId: worktreeId }) : null
+  return worktreeId
+    ? runtimeTargetForWorkspaceOwner(state, {
+        workspaceId: worktreeId,
+        ...(hostId ? { hostId } : {})
+      })
+    : null
 }
 
 /** Resolve the worktree owner, never mutable host focus; missing/disagreeing rows return null. */
@@ -22,11 +46,12 @@ export function getWorktreeGitOwnerTarget(
 
 /** {@link getWorktreeGitOwnerTarget} as a hook with a stable identity per owner. */
 export function useWorktreeGitOwnerTarget(
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  hostId?: ExecutionHostId
 ): RuntimeClientTarget | null {
   // Subscribe by primitive owner key; fresh resolver objects would rerender every write.
   const ownerKey = useAppStore((state) => {
-    const target = ownerTargetFor(state, worktreeId)
+    const target = ownerTargetFor(state, worktreeId, hostId)
     return target ? (target.kind === 'environment' ? `env:${target.environmentId}` : 'local') : null
   })
   return useMemo(

@@ -28,6 +28,7 @@ import { MobileMarkdownCallout } from './MobileMarkdownCallout'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownDetails } from './MobileMarkdownDetails'
 import { MobileMarkdownMath } from './MobileMarkdownMath'
+import { drawnBlock } from './mobile-markdown-drawn-blocks'
 import { translate } from '../i18n/mobile-i18n'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 
@@ -37,6 +38,7 @@ const MERMAID_BASE = 13
  *  exhaust native layout. */
 const MAX_NESTING = 8
 
+/** A field added here is compared in mobile-markdown-drawn-blocks' `sameContext` too. */
 export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
@@ -87,6 +89,12 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
           ) : (
             // A GitHub task's read-only box, centred on the item's first line.
             <View
+              // ARIA props, which react-native-web reads too; a read-only box takes no keyboard stop.
+              accessible
+              focusable={false}
+              role="checkbox"
+              aria-checked={Boolean(item.checked)}
+              aria-disabled
               style={[styles.taskMarker, { height: styles.listText.lineHeight * ctx.textScale }]}
             >
               {item.checked ? (
@@ -289,9 +297,13 @@ function renderBlock(
           selectable
           style={[
             styles.heading,
-            node.depth <= 2 ? styles.headingLarge : null,
+            node.depth === 1 ? styles.headingTitle : node.depth === 2 ? styles.headingLarge : null,
             scaledMarkdownText(
-              node.depth <= 2 ? styles.headingLarge : styles.heading,
+              node.depth === 1
+                ? styles.headingTitle
+                : node.depth === 2
+                  ? styles.headingLarge
+                  : styles.heading,
               ctx.textScale
             ),
             ctx.tone.text
@@ -406,5 +418,9 @@ export function renderBlocks(
   text: ParagraphText,
   depth = 0
 ): ReactNode[] {
-  return nodes.map((node, index) => renderBlock(node, index, ctx, text, depth))
+  return nodes.map((node, index) =>
+    depth === 0
+      ? drawnBlock(node, ctx, text, () => renderBlock(node, index, ctx, text, 0))
+      : renderBlock(node, index, ctx, text, depth)
+  )
 }

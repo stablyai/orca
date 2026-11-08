@@ -1,6 +1,6 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, TicketCheck, X } from 'lucide-react'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { Button } from '@/components/ui/button'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
@@ -32,7 +32,7 @@ import {
   readLocalDismissed,
   type LinearAgentSkillPromptSettings
 } from './linear-agent-skill-runtime'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const LinearAgentSkillSetupDialog = lazyWithRetry(() => import('./LinearAgentSkillSetupDialog'), {
   reloadKey: 'linear-agent-skill-setup-dialog'
@@ -65,6 +65,7 @@ export function LinearAgentSkillSetupPrompt({
   currentPlatform = getCurrentPlatform(),
   className
 }: LinearAgentSkillSetupPromptProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [setupDialogOpen, setSetupDialogOpen] = useState(false)
   const [setupCheckResult, setSetupCheckResult] = useState<SetupCheckResult>('idle')
   const [activeSetupCheckIdentity, setActiveSetupCheckIdentity] = useState<string | null>(null)
@@ -150,16 +151,16 @@ export function LinearAgentSkillSetupPrompt({
   }
 
   const successDescription = remote
-    ? translate(
+    ? t(
         'auto.components.sidebar.LinearAgentSkillSetupPrompt.successDescriptionRemote',
         'Host agents can now use linked Linear tickets. Remote agent environments may still need their own setup.'
       )
     : agentRuntime.runtime === 'wsl'
-      ? translate(
+      ? t(
           'auto.components.sidebar.LinearAgentSkillSetupPrompt.successDescriptionWsl',
           'WSL agents can now use linked Linear tickets from this workspace.'
         )
-      : translate(
+      : t(
           'auto.components.sidebar.LinearAgentSkillSetupPrompt.successDescription',
           'Agents can now read and update linked Linear tickets from this workspace.'
         )
@@ -168,11 +169,11 @@ export function LinearAgentSkillSetupPrompt({
     setSetupDialogOpen(false)
   }
 
-  const missingLabel = getLinearAgentSkillSetupMissingLabel()
+  const missingLabel = getLinearAgentSkillSetupMissingLabel(t)
 
-  const toastTitle = getLinearAgentSkillSetupToastTitle()
+  const toastTitle = getLinearAgentSkillSetupToastTitle(t)
 
-  const toastDescription = getLinearAgentSkillSetupToastDescription(remote, agentRuntime)
+  const toastDescription = getLinearAgentSkillSetupToastDescription(remote, agentRuntime, t)
   const openSetupDialog = useCallback(() => setSetupDialogOpen(true), [])
 
   useLinearAgentSkillSetupReminderToast({
@@ -252,13 +253,13 @@ export function LinearAgentSkillSetupPrompt({
         <TicketCheck className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1 space-y-1">
           <div className="font-medium text-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.LinearAgentSkillSetupPrompt.title',
               'Set up Linear agent skill'
             )}
           </div>
           <p className="leading-snug">
-            {missingLabel} {getLinearAgentSkillSetupInlineRuntimeCopy(remote, agentRuntime)}
+            {missingLabel} {getLinearAgentSkillSetupInlineRuntimeCopy(remote, agentRuntime, t)}
           </p>
         </div>
         <Button
@@ -266,7 +267,7 @@ export function LinearAgentSkillSetupPrompt({
           variant="ghost"
           size="icon-xs"
           className="shrink-0"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.sidebar.LinearAgentSkillSetupPrompt.dismiss',
             'Dismiss Linear agent skill setup'
           )}
@@ -277,7 +278,7 @@ export function LinearAgentSkillSetupPrompt({
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <Button type="button" variant="outline" size="xs" onClick={() => setSetupDialogOpen(true)}>
-          {translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.setup', 'Set up')}
+          {t('auto.components.sidebar.LinearAgentSkillSetupPrompt.setup', 'Set up')}
         </Button>
         <Button
           type="button"
@@ -289,7 +290,7 @@ export function LinearAgentSkillSetupPrompt({
           }}
         >
           <RefreshCw className="size-3" />
-          {translate('auto.components.sidebar.LinearAgentSkillSetupPrompt.recheck', 'Re-check')}
+          {t('auto.components.sidebar.LinearAgentSkillSetupPrompt.recheck', 'Re-check')}
         </Button>
       </div>
       {setupDialog}

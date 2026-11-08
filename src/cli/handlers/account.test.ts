@@ -67,6 +67,7 @@ import type { HandlerContext } from '../dispatch'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
+  ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY,
   CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
   DATA_ACCOUNT_RUNTIME_CAPABILITY
 } from '../../shared/account-runtime-capabilities'
@@ -738,5 +739,98 @@ describe('account CLI handlers', () => {
       'Missing a value for --agent. Use `--agent claude`, `--agent codex`, `--agent opencode`, or `--agent devin`.'
     )
     expect(spawnMock).not.toHaveBeenCalled()
+  })
+
+  describe('select and rm by --account', () => {
+    const antigravityAccounts = {
+      accounts: [
+        { id: 'agy-1', email: 'me@gmail.example', subject: 'sub-1' },
+        { id: 'agy-2', email: null, subject: 'sub-2' }
+      ],
+      activeAccountId: 'agy-1'
+    }
+    const claudeAccounts = {
+      accounts: [
+        { id: 'claude-org-a', email: 'shared@example.com' },
+        { id: 'claude-org-b', email: 'shared@example.com' }
+      ],
+      activeAccountId: null
+    }
+
+    function selectionContext(agent: string, account: string): HandlerContext {
+      return {
+        client,
+        cwd: process.cwd(),
+        flags: new Map([
+          ['agent', agent],
+          ['account', account]
+        ]),
+        json: false,
+        rawArgs: []
+      }
+    }
+
+    function mutatingCalls(): string[] {
+      return callMock.mock.calls
+        .map(([method]) => String(method))
+        .filter((method) => /\.(select|remove|antigravitySelect|antigravityRemove)/.test(method))
+    }
+
+    beforeEach(() => {
+      callMock.mockImplementation((method: string) =>
+        Promise.resolve({
+          id: 'test',
+          ok: true,
+          result:
+            method === 'status.get'
+              ? { capabilities: [ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY] }
+              : method.startsWith('accounts.antigravity')
+                ? antigravityAccounts
+                : { claude: claudeAccounts, codex: { accounts: [], activeAccountId: null } },
+          _meta: { runtimeId: 'test-runtime' }
+        })
+      )
+    })
+
+    it('selects and removes Antigravity accounts by email or subject on the host', async () => {
+      await ACCOUNT_HANDLERS['account select'](selectionContext('antigravity', 'ME@gmail.example'))
+      await ACCOUNT_HANDLERS['account rm'](selectionContext('antigravity', 'sub-2'))
+
+      expect(callMock).toHaveBeenCalledWith('accounts.antigravitySelect', {
+        target: { runtime: 'host' },
+        accountId: 'agy-1'
+      })
+      expect(callMock).toHaveBeenCalledWith('accounts.antigravityRemove', {
+        target: { runtime: 'host' },
+        accountId: 'agy-2'
+      })
+    })
+
+    it('refuses an email shared by several accounts without switching or removing', async () => {
+      await expect(
+        ACCOUNT_HANDLERS['account select'](selectionContext('claude', 'shared@example.com'))
+      ).rejects.toThrow('claude-org-a, claude-org-b')
+      await expect(
+        ACCOUNT_HANDLERS['account rm'](selectionContext('claude', 'shared@example.com'))
+      ).rejects.toThrow('claude-org-a, claude-org-b')
+      expect(mutatingCalls()).toEqual([])
+    })
+
+    it('refuses the Antigravity system default, which its vault does not have', async () => {
+      await expect(
+        ACCOUNT_HANDLERS['account select'](selectionContext('antigravity', 'system'))
+      ).rejects.toThrow('Antigravity has no system default')
+      expect(mutatingCalls()).toEqual([])
+    })
+
+    it('refuses the Claude system default from WSL rather than resetting the Windows host', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      process.env.ORCA_CLI_WSL_DISTRO = 'Ubuntu'
+
+      await expect(
+        ACCOUNT_HANDLERS['account select'](selectionContext('claude', 'system'))
+      ).rejects.toThrow('Select the Claude system default for a WSL distro in Orca Settings')
+      expect(callMock).not.toHaveBeenCalled()
+    })
   })
 })

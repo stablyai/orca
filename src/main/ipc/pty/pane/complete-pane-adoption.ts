@@ -2,7 +2,7 @@ import { readTerminalStartFailure } from '../../../../shared/terminal/pty/lifecy
 import {
   isNativeWindowsLocalPtySpawn,
   markNativeWindowsConptyPty
-} from '../../../runtime/terminal-model-query-authority'
+} from '../../../runtime/terminal/output/terminal-model-query-authority'
 import { registerPty } from '../../../memory/pty-registry'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/workspace-session/terminal-session-state-save-failure'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -21,8 +21,8 @@ import {
 } from './agent-session-owners'
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 import { admitProviderReattachLaunchIdentity } from './launch-authority'
-import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
-import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-bridge-pty-presence'
+import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
+import { wslBridgePtyPresence } from '../../../agent-hooks/wsl-relay/wsl-bridge-pty-presence'
 import '../spawn-outcome'
 import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 import { ptySizes } from '../delivery/visibility-state'

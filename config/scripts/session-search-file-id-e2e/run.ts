@@ -89,7 +89,7 @@ await build({
         api.onLoad({ filter: /\.ts$/ }, async (args) => {
           let contents = await readFile(args.path, 'utf8')
           const path = args.path.replaceAll('\\', '/')
-          if (path.endsWith('/runtime/rpc/methods/index.ts')) {
+          if (path.endsWith('/runtime/rpc/methods/rpc-method-registry.ts')) {
             // DispatcherOptions explicitly supplies AI_VAULT_METHODS; don't load unrelated default methods.
             contents = 'export const ALL_RPC_METHODS = []'
           }

@@ -14,7 +14,7 @@ import type {
   NestedRepoScanResult,
   ProjectGroupImportResult
 } from '../../../../../../shared/project-group-types'
-import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
+import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import { completeNestedFolderOpen } from './complete-nested-folder-open'

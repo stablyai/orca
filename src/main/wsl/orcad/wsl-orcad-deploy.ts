@@ -1,14 +1,16 @@
+import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
+import type { WslOrcadLaunch, WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
 /** D1/D2b/D8 reuse SSH installation, activation journals/fences and admission over wsl.exe. C5 pairs through the reported loopback port. */
 import { getAppEnvironment } from '../../../shared/app-environment'
-import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
 import type { ServeReadiness } from '../../server/serve-readiness'
-import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
+
 import { recoverInterruptedOrcadActivation } from '../../managed-server/activation/orcad-activation-recovery'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
 import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
-import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../ssh/orcad-installed-activation'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
+import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../managed-server/activation/orcad-installed-activation'
 import { orcadBoundPort } from '../../managed-server/lifecycle/orcad-managed-bound-port'
 import {
   isForceableOrcadDeferral,
@@ -22,14 +24,17 @@ import type { OrcadActivationRecord } from '../../managed-server/activation/orca
 import { errorMessage } from '../../../shared/error-message'
 import { pruneWslOrcadVersionsUntilClean } from './wsl-orcad-version-gc-memo'
 import { pruneSupersededOrcadCandidates } from '../../managed-server/lifecycle/orcad-managed-version-gc'
-import { wakeAlreadyActiveOrcad } from '../../ssh/orcad-already-active-wake'
-import { OrcadActiveReadinessError } from '../../ssh/orcad-active-readiness'
+import { wakeAlreadyActiveOrcad } from '../../managed-server/lifecycle/orcad-already-active-wake'
+import { OrcadActiveReadinessError } from '../../managed-server/activation/orcad-active-readiness'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
-import { deployOrcad, type OrcadDeployOptions } from '../../ssh/orcad-remote-deploy'
+import {
+  deployOrcad,
+  type OrcadDeployOptions
+} from '../../managed-server/install/orcad-remote-deploy'
 import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
 import { readLocalFullVersion } from '../../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
-import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
+
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 import { readWslDistroRegistryIdShared } from '../discovery/wsl-distro-registry-id'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
@@ -50,48 +55,6 @@ import {
 } from './wsl-orcad-update-admission'
 import { withOwnBuildLaunchEnv } from './wsl-orcad-own-build-launch-env'
 import { WSL_NODE_RUNTIME_DOWNLOAD_BUDGET } from '../execution/wsl-node-runtime-download-budget'
-
-/** An update this app carries that the host may not take yet; the incumbent keeps serving. */
-export type WslOrcadDeferredUpdate = WslHostDeferredUpdate
-
-export type WslOrcadLaunch =
-  | {
-      outcome: 'ready'
-      distro: string
-      /** The Lxss registration GUID for the deployment record's `distroId`; null if unreadable. */
-      distroId: string | null
-      /** The loopback port orcad bound inside the distro (another one when the preferred was taken). */
-      port: number
-      fullVersion: string
-      pid: number | null
-      readiness: ServeReadiness
-      holder: 'adopted' | 'spawned' | 'unverifiable'
-      /** An orcad the record did not name (e.g. left by a failed Remove), now recorded. */
-      adoptedInstance?: { version: string; pid: number }
-      /** Set when `fullVersion` is the incumbent because the update must wait. */
-      deferredUpdate?: WslOrcadDeferredUpdate
-    }
-  | ({ outcome: 'deferred'; distro: string } & WslOrcadDeferredUpdate)
-
-export type WslOrcadDeployOptions = {
-  /** The WSL environment's id; keys host-scoped state (wake dedupe). Defaults per distro. */
-  environmentId?: string
-  label?: string
-  /** Defaults to a connect. */
-  intent?: OrcadUpdateIntent
-  signal?: AbortSignal
-  /** Defaults to one created over `userData`; the app should pass its shared instance. */
-  holder?: WslDistroHolder
-  createTransport?: (target: WslOrcadHostTarget) => OrcadHostTransport & { dispose?(): void }
-  readRegistryId?: (distro: string) => Promise<string | null>
-  readIncumbent?: typeof readWslOrcadIncumbent
-  /** This desktop's enrolled pairing, which the incumbent's terminal count authenticates with. */
-  pairedOffer?: PairingOffer | null
-  /** The orcad template to deploy from; defaults to the packaged one (the C10 lane swaps it). */
-  templateDir?: string
-  /** A no-boot connect's running check (E9), re-read before any further wake. */
-  requireRunning?: () => Promise<boolean>
-}
 
 /** Until the persisted deployment record (C7) assigns one, the environment is keyed per distro. */
 export function defaultWslOrcadEnvironmentId(distro: string): string {
@@ -242,7 +205,7 @@ async function launchOverTransport(
         return retried
       }
     }
-    const deferredUpdate: WslOrcadDeferredUpdate = {
+    const deferredUpdate: WslHostDeferredUpdate = {
       candidateVersion: deployed.fullVersion,
       code: await wslOrcadDeferralCode(slot, deployed, appVersion),
       reason: deployed.reason,

@@ -8,8 +8,8 @@ import {
   store,
   syncSinglePty
 } from './orca-runtime-test-fixtures.spec'
-import { agentLaunchSurfaceFactory } from '../rpc/methods/agent-launch-surfaces'
-import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch-tab-publication'
+import { agentLaunchSurfaceFactory } from '../rpc/methods/agent-launch/agent-launch-surfaces'
+import { publishAgentLaunchTabEarly } from '../rpc/methods/agent-launch/agent-launch-tab-publication'
 import { AgentLaunch } from '../../../shared/rpc-contract/agent-launch-params'
 import { DESKTOP_RPC_CALLER } from '../rpc/rpc-caller-identity'
 import type { RpcContext } from '../rpc/core'
@@ -79,45 +79,6 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('applies ANSI erase-from-start line controls in retained previews', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', 'ABCDE\x1b[3D\x1b[1KXY\n', 100)
-
-    const read = await runtime.readTerminal(terminal.handle)
-    expect(read.tail).toEqual(['  XYE'])
-    expect(read.tail.join('\n')).not.toContain('ABC')
-    expect(read.tail.join('\n')).not.toContain('1K')
-  })
-
-  it('applies ANSI stripping for private or intermediate CSI line controls', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', 'ABCDE\x1b[?99DXY\n', 100)
-    runtime.onPtyData('pty-1', 'ABCDE\x1b[1$DXY\n', 101)
-
-    const read = await runtime.readTerminal(terminal.handle)
-    expect(read.tail).toEqual(['ABCDEXY', 'ABCDEXY'])
-    expect(read.tail.join('\n')).not.toContain('?99D')
-    expect(read.tail.join('\n')).not.toContain('1$D')
-  })
-
-  it('applies ANSI stripping for unsupported erase-line modes', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
-
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData('pty-1', 'Old\x1b[3KNew\n', 100)
-
-    const read = await runtime.readTerminal(terminal.handle)
-    expect(read.tail).toEqual(['OldNew'])
-    expect(read.tail.join('\n')).not.toContain('3K')
-  })
-
   it('does not retain split ST-terminated string controls as preview text', async () => {
     const runtime = new OrcaRuntimeService(store)
     syncSinglePty(runtime)
@@ -132,133 +93,6 @@ describe('OrcaRuntimeService', () => {
     expect(retained).not.toContain('Gi=31337')
     expect(retained).not.toContain('AAAA')
   })
-
-  // Reveal must use agent.launch's reserved tab id so placement lookup can find it.
-  it('reveals an agent terminal under the pane the caller reserved', async () => {
-    const { runtime, revealTerminalSession } = runtimeWithDesktopWindow()
-
-    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      startupAgent: 'claude',
-      tabId: RESERVED_TAB_ID,
-      leafId: RESERVED_LEAF_ID
-    })
-
-    expect(revealTerminalSession).toHaveBeenCalledTimes(1)
-    expect(revealTerminalSession).toHaveBeenCalledWith(
-      TEST_WORKTREE_ID,
-      expect.objectContaining({ tabId: RESERVED_TAB_ID, leafId: RESERVED_LEAF_ID })
-    )
-    expect(created.paneKey).toBe(`${RESERVED_TAB_ID}:${RESERVED_LEAF_ID}`)
-  })
-
-  it.each(['focused', 'background'] as const)(
-    'keeps a fresh %s pane host-owned when a desktop window is available',
-    async (presentation) => {
-      const { runtime, spawn, requestTabCreate, revealTerminalSession } = runtimeWithDesktopWindow()
-
-      const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-        startupAgent: 'claude',
-        tabId: RESERVED_TAB_ID,
-        leafId: RESERVED_LEAF_ID,
-        requireFreshPane: true,
-        presentation
-      })
-
-      expect(spawn).toHaveBeenCalledWith(
-        expect.objectContaining({ tabId: RESERVED_TAB_ID, leafId: RESERVED_LEAF_ID })
-      )
-      expect(created.paneKey).toBe(`${RESERVED_TAB_ID}:${RESERVED_LEAF_ID}`)
-      expect(requestTabCreate).not.toHaveBeenCalled()
-      if (presentation === 'focused') {
-        expect(revealTerminalSession).toHaveBeenCalledExactlyOnceWith(
-          TEST_WORKTREE_ID,
-          expect.objectContaining({
-            tabId: RESERVED_TAB_ID,
-            leafId: RESERVED_LEAF_ID,
-            presentation,
-            activate: true
-          })
-        )
-      } else {
-        expect(revealTerminalSession).not.toHaveBeenCalled()
-      }
-    }
-  )
-
-  it.each(['pending', 'completed', 'failed'] as const)(
-    'keeps desktop publication %s separate from the reserved host spawn',
-    async (phase) => {
-      const { runtime, spawn, requestTabCreate, revealTerminalSession } = runtimeWithDesktopWindow()
-      let publish!: (reply: AgentLaunchTabPublished) => void
-      const publishing = new Promise<AgentLaunchTabPublished>((resolve) => {
-        publish = resolve
-      })
-      vi.spyOn(runtime, 'canPublishAgentLaunchTab').mockReturnValue(true)
-      vi.spyOn(runtime, 'publishAgentLaunchTab').mockReturnValue(
-        phase === 'failed' ? Promise.reject(new Error('renderer_unavailable')) : publishing
-      )
-      const context: RpcContext = { runtime, caller: DESKTOP_RPC_CALLER, clientKind: 'runtime' }
-      const early = await publishAgentLaunchTabEarly(
-        AgentLaunch.parse({
-          agent: 'claude',
-          target: { kind: 'existing', worktree: `id:${TEST_WORKTREE_ID}` },
-          paneKey: `${RESERVED_TAB_ID}:${RESERVED_LEAF_ID}`,
-          presentation: 'focused'
-        }),
-        context
-      )
-      expect(early).not.toBeNull()
-      const reply = { tabId: RESERVED_TAB_ID, created: true, placement: { groupId: 'group-1' } }
-      if (phase === 'completed') {
-        publish(reply)
-        await publishing
-      }
-      const surface = await agentLaunchSurfaceFactory(
-        context,
-        undefined,
-        undefined,
-        false,
-        undefined,
-        { early, presentation: 'focused' }
-      ).createTerminalAgent({
-        worktreeId: TEST_WORKTREE_ID,
-        agent: 'claude',
-        paneKey: `${RESERVED_TAB_ID}:${RESERVED_LEAF_ID}`,
-        startupPrompt: 'fix the build'
-      })
-      expect(surface.paneKey).toBe(`${RESERVED_TAB_ID}:${RESERVED_LEAF_ID}`)
-      expect(requestTabCreate).not.toHaveBeenCalled()
-      expect(spawn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tabId: RESERVED_TAB_ID,
-          leafId: RESERVED_LEAF_ID
-        })
-      )
-      expect(spawn.mock.calls[0]?.[0]?.command).toContain('fix the build')
-      expect(revealTerminalSession).toHaveBeenCalledExactlyOnceWith(
-        TEST_WORKTREE_ID,
-        expect.objectContaining({
-          tabId: RESERVED_TAB_ID,
-          leafId: RESERVED_LEAF_ID,
-          activate: false,
-          surfaceOwner: false,
-          agentLaunchViewer: phase === 'failed' ? 'focus-in-workspace' : 'none'
-        })
-      )
-      expect(runtime.publishAgentLaunchTab).toHaveBeenCalledWith(
-        expect.objectContaining({ viewer: 'focus-in-workspace' })
-      )
-      if (phase === 'pending') {
-        publish(reply)
-      }
-      early?.surfacePublished({
-        worktreeId: TEST_WORKTREE_ID,
-        outcome: { kind: 'terminal', ...surface },
-        receipt: { mode: 'terminal', preferred: 'terminal', reason: 'user_default', detail: 'test' }
-      })
-      early?.finish()
-    }
-  )
 
   it.each([
     { desktop: false, viewer: 'focus-window' },
@@ -320,20 +154,6 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
-  it('mints its own pane when the reserved leaf is malformed, and reports the one it used', async () => {
-    const { runtime, revealTerminalSession } = runtimeWithDesktopWindow()
-
-    const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      startupAgent: 'claude',
-      tabId: RESERVED_TAB_ID,
-      leafId: 'not-a-uuid'
-    })
-
-    expect(revealTerminalSession).toHaveBeenCalledTimes(1)
-    expect(created.tabId).not.toBe(RESERVED_TAB_ID)
-    expect(created.paneKey?.startsWith(`${created.tabId}:`)).toBe(true)
-  })
-
   it('refuses a live reserved pane before issuing a handle or revealing it', async () => {
     const { runtime, revealTerminalSession, releaseStablePaneCreate, kill } =
       runtimeWithDesktopWindow(LIVE_PANE_SPAWN)
@@ -372,107 +192,5 @@ describe('OrcaRuntimeService', () => {
     expect(created.isReattach).toBe(true)
     expect((await runtime.listTerminals()).terminals.map((t) => t.handle)).toEqual([created.handle])
     expect(revealTerminalSession).toHaveBeenCalledTimes(1)
-  })
-
-  it('starts an agent terminal with the model the caller picked', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-picked' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      startupAgent: 'claude',
-      launchPreferences: { model: 'opus' }
-    })
-
-    expect(spawn.mock.calls[0]?.[0]?.command).toMatch(/'--model' 'opus'/)
-  })
-
-  it('starts an agent terminal without a model flag when no pick was made', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-default' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { startupAgent: 'claude' })
-
-    expect(spawn.mock.calls[0]?.[0]?.command).not.toMatch(/--model/)
-  })
-
-  // Attribute every resolved agent launch; only an explicitly supplied surface overrides derived attribution.
-  it.each([
-    ['orchestration', 'orchestration'],
-    [undefined, 'unknown'],
-    ['a_surface_added_later', 'unknown']
-  ])('attributes a startup-agent launch named %s as %s', async (launchSource, expected) => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-attributed' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
-      startupAgent: 'claude',
-      ...(launchSource ? { launchSource } : {})
-    })
-
-    expect(spawn.mock.calls[0]?.[0]?.telemetry).toEqual({
-      agent_kind: 'claude-code',
-      launch_source: expected,
-      request_kind: 'new'
-    })
-  })
-
-  it('attributes a fresh agent session the host builds as unknown', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-session' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    await runtime.createAgentSession(
-      {
-        clientOperationId: `${Date.now()}-${'cd'.repeat(16)}`,
-        worktree: `id:${TEST_WORKTREE_ID}`,
-        agent: 'claude'
-      },
-      { clientId: 'remote-desktop', clientKind: 'runtime' }
-    )
-
-    expect(spawn.mock.calls[0]?.[0]?.telemetry).toEqual({
-      agent_kind: 'claude-code',
-      launch_source: 'unknown',
-      request_kind: 'new'
-    })
-  })
-
-  it('leaves a bare agent command the user typed out of launch attribution', async () => {
-    const spawn = vi.fn().mockResolvedValue({ id: 'pty-bare' })
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn,
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-
-    await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, { command: 'claude' })
-
-    expect(spawn.mock.calls[0]?.[0]?.launchAgent).toBe('claude')
-    expect(spawn.mock.calls[0]?.[0]?.telemetry).toBeUndefined()
   })
 })

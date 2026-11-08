@@ -6,7 +6,7 @@ import {
   isOrchestrationMutation,
   isTerminalPromptMutation,
   orchestrationMigrationData
-} from '../../shared/orchestration-rpc-contract'
+} from '../../shared/orchestration/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
@@ -30,13 +30,13 @@ import {
   attachUnverifiedTerminalPromptRecovery,
   didAnotherRuntimeHandleTerminalPrompt
 } from './terminal-prompt-mutation-recovery'
-import { markEnvironmentUsed } from './environments'
+import { recordRuntimeEnvironmentUsage } from '../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { createRuntimeSourceFence, type RuntimeSourceFence } from './runtime-source-fence'
 import { resolveRemoteConnection } from './runtime-remote-pairing'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
-} from '../../shared/protocol-version'
+} from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
 import {
   createAgentLaunchCallerEvidence,
@@ -47,7 +47,7 @@ import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartClientTimeoutMs,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../shared/orchestration-timing-budgets'
+} from '../../shared/orchestration/orchestration-timing-budgets'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import {
   buildOrchestrationRecoveryCommand,
@@ -176,7 +176,7 @@ export class RuntimeClient {
         throw recover(new RuntimeRpcFailureError(response), null)
       }
       if (this.environmentSelector) {
-        markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
+        recordRuntimeEnvironmentUsage(this.userDataPath, this.environmentSelector, {
           runtimeId: response._meta.runtimeId
         })
       }

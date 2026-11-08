@@ -1,6 +1,8 @@
-import { MAX_FILE_RANGE_READ_BYTES } from '../../shared/file-range-read'
-import type { RemoteFilePreviewAddress } from '../../shared/remote-file-preview-address'
-import type { RuntimeFileReadChunkResult } from '../../shared/runtime-file-contracts'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../shared/file-content/file-range-read'
+import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
+import { remoteFileRequest } from '../../shared/file-access/remote-file-locator'
+import { isRenewableTerminalFileGrantRefusal } from '../../shared/file-access/terminal-file-grant-refusal'
+import type { RuntimeFileReadChunkResult } from '../../shared/file-content/runtime-file-read'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 
@@ -14,6 +16,11 @@ export const REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE =
 /** The pairing that minted a grant is gone; the grant can never answer again. */
 export class RemotePreviewPairingChangedError extends Error {}
 
+/** The host refused a granted file's grant as lapsed; a fresh grant for its path can still read it. */
+export class RemotePreviewGrantLapsedError extends Error {}
+
+export type GrantedRemoteFilePreviewAddress = Extract<RemoteFilePreviewAddress, { grantId: string }>
+
 export type RemotePreviewFileSnapshot = { size: number; mtime: number; ctime?: number }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -22,17 +29,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 async function callRemote(
   address: RemoteFilePreviewAddress,
-  method: 'files.stat' | 'files.readChunk',
-  params: Record<string, unknown>,
+  operation: 'stat' | 'readChunk',
+  range: { offset: number; length: number } | null,
   timeoutMs: number,
   signal: AbortSignal
 ): Promise<unknown> {
+  const { method, params } = remoteFileRequest(address.worktree, address, operation)
   const response = await callRuntimeEnvironment(
     // The registry the pairing IPC writes; the canonical path can differ in casing.
     getRuntimeEnvironmentRegistryRoot(),
     address.environmentId,
     method,
-    params,
+    { ...params, ...range },
     timeoutMs,
     address.expectedEnvironmentPairingRevision,
     undefined,
@@ -42,7 +50,10 @@ async function callRemote(
     if (response.error.code === 'runtime_environment_changed') {
       throw new RemotePreviewPairingChangedError(response.error.message)
     }
-    // Why: a host without files.stat/readChunk can only be updated, never retried.
+    if (isRenewableTerminalFileGrantRefusal(response.error.message)) {
+      throw new RemotePreviewGrantLapsedError(response.error.message)
+    }
+    // Why: a host without these stat/readChunk methods can only be updated, never retried.
     throw new Error(
       response.error.code === 'method_not_found'
         ? REMOTE_PREVIEW_UPDATE_REQUIRED_MESSAGE
@@ -56,13 +67,7 @@ export async function statRemotePreviewFile(
   address: RemoteFilePreviewAddress,
   signal: AbortSignal
 ): Promise<RemotePreviewFileSnapshot> {
-  const result = await callRemote(
-    address,
-    'files.stat',
-    { worktree: address.worktree, relativePath: address.relativePath },
-    STAT_TIMEOUT_MS,
-    signal
-  )
+  const result = await callRemote(address, 'stat', null, STAT_TIMEOUT_MS, signal)
   if (
     !isRecord(result) ||
     typeof result.size !== 'number' ||
@@ -100,8 +105,8 @@ export async function readRemotePreviewChunk(
 ): Promise<Uint8Array> {
   const result = await callRemote(
     address,
-    'files.readChunk',
-    { worktree: address.worktree, relativePath: address.relativePath, offset, length },
+    'readChunk',
+    { offset, length },
     READ_CHUNK_TIMEOUT_MS,
     signal
   )
@@ -127,7 +132,8 @@ export async function assertRemoteChunkReadsSupported(
   signal: AbortSignal
 ): Promise<void> {
   const revision = address.expectedEnvironmentPairingRevision
-  const key = JSON.stringify([address.environmentId, revision])
+  // Why the kind: granted files page through their own method, which a host can lack.
+  const key = JSON.stringify([address.environmentId, revision, address.grantId !== undefined])
   if (revision !== undefined && chunkReadVerdicts.has(key)) {
     return
   }
@@ -170,4 +176,37 @@ export async function readRemotePreviewRange(
     read += chunk.byteLength
   }
   return range.subarray(0, read)
+}
+
+/** A fresh grant for a previewed host file, as the editor renews one; refused when the host binds the path elsewhere. */
+export async function renewRemotePreviewGrant(
+  address: GrantedRemoteFilePreviewAddress,
+  signal: AbortSignal
+): Promise<GrantedRemoteFilePreviewAddress> {
+  const response = await callRuntimeEnvironment(
+    getRuntimeEnvironmentRegistryRoot(),
+    address.environmentId,
+    'files.resolveTerminalPath',
+    { worktree: address.worktree, pathText: address.absolutePath },
+    STAT_TIMEOUT_MS,
+    address.expectedEnvironmentPairingRevision,
+    undefined,
+    { signal }
+  )
+  if (!response.ok && response.error.code === 'runtime_environment_changed') {
+    throw new RemotePreviewPairingChangedError(response.error.message)
+  }
+  const openTarget =
+    response.ok && isRecord(response.result) && isRecord(response.result.openTarget)
+      ? response.result.openTarget
+      : null
+  if (
+    openTarget?.kind !== 'absolute-file' ||
+    openTarget.absolutePath !== address.absolutePath ||
+    typeof openTarget.grantId !== 'string' ||
+    !openTarget.grantId
+  ) {
+    throw new Error(`The host no longer grants ${address.absolutePath}`)
+  }
+  return { ...address, grantId: openTarget.grantId }
 }

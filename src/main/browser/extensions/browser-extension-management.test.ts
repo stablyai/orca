@@ -23,7 +23,9 @@ vi.mock('../sessions/browser-session-registry', () => ({
     getProfile: () => ({ id: 'default' })
   }
 }))
-vi.mock('./api/runtime', () => ({ openBrowserExtensionOptionsPage: vi.fn() }))
+vi.mock('./tabs-and-windows/browser-extension-options-page', () => ({
+  openBrowserExtensionOptionsPage: vi.fn()
+}))
 vi.mock('./installation/browser-extension-install-store', () => ({
   getBrowserExtensionInstallStore: () => mocks.store
 }))

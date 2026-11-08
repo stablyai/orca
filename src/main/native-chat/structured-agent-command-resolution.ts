@@ -11,10 +11,11 @@ import {
   hasExplicitTuiLaunchCommand,
   structuredAgentCommandPlan
 } from '../../shared/agent-launch/startup/tui-agent-launch-command-override'
+import './agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionPreSpawnError,
   isAgentSessionPreSpawnError
-} from './agent-session-wire/structured-agent-session-adapter'
+} from './agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { guestNativePathEnv, resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
 
 export type StructuredAgentResolutionOperation = {

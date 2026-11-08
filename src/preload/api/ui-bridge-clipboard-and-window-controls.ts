@@ -11,6 +11,10 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import type { ClipboardImageThumbnail } from '../../shared/clipboard-image'
 import type { ReadClipboardTextOptions } from '../../shared/clipboard-text'
+import type {
+  AgentPaneActivityReply,
+  AgentPaneActivityRequest
+} from '../../shared/agent-status/presentation/agent-list-status'
 import type { PreloadApi } from '../api-types'
 
 export const uiClipboardAndWindowControlsApi = {
@@ -55,6 +59,15 @@ export const uiClipboardAndWindowControlsApi = {
   respondTerminalTabClose: (response) => {
     ipcRenderer.send('ui:terminalTabCloseResponse', response)
   },
+  onTerminalPaneMoveToNewTabRequest: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
+      callback(request)
+    ipcRenderer.on('ui:terminalPaneMoveToNewTabRequest', listener)
+    return () => ipcRenderer.removeListener('ui:terminalPaneMoveToNewTabRequest', listener)
+  },
+  replyTerminalPaneMoveToNewTab: (reply) => {
+    ipcRenderer.send('ui:terminalPaneMoveToNewTabReply', reply)
+  },
   onWorkspaceSleep: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, notice: Parameters<typeof callback>[0]) =>
       callback(notice)
@@ -75,6 +88,15 @@ export const uiClipboardAndWindowControlsApi = {
       callback(data)
     ipcRenderer.on('ui:resumeSleepingAgents', listener)
     return () => ipcRenderer.removeListener('ui:resumeSleepingAgents', listener)
+  },
+  onApplyAgentPaneActivity: (callback: (data: AgentPaneActivityRequest) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: AgentPaneActivityRequest) =>
+      callback(data)
+    ipcRenderer.on('ui:applyAgentPaneActivity', listener)
+    return () => ipcRenderer.removeListener('ui:applyAgentPaneActivity', listener)
+  },
+  replyAgentPaneActivity: (reply: AgentPaneActivityReply): void => {
+    ipcRenderer.send('ui:agentPaneActivityReply', reply)
   },
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
@@ -192,6 +214,12 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.on('window:maximize-changed', listener)
     return () => ipcRenderer.removeListener('window:maximize-changed', listener)
   },
+  isWindowActive: (): Promise<boolean> => ipcRenderer.invoke('window:isActive'),
+  onWindowActiveChanged: (callback: (active: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, active: boolean) => callback(active)
+    ipcRenderer.on('window:active-changed', listener)
+    return () => ipcRenderer.removeListener('window:active-changed', listener)
+  },
   requestClose: (): void => {
     ipcRenderer.send('window:request-close')
   },
@@ -212,6 +240,9 @@ export const uiClipboardAndWindowControlsApi = {
   },
   confirmWindowClose: (): void => {
     ipcRenderer.send('window:confirm-close')
+  },
+  cancelWindowClose: (): void => {
+    ipcRenderer.send('window:close-cancelled')
   },
   notifyWindowRevealed: (): void => {
     ipcRenderer.send('ui:window-revealed')

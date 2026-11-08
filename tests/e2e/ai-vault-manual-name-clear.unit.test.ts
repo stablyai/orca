@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import type * as StructuredSessionClient from '@/runtime/structured-agent-session-client'
+
+import type * as StructuredAgentSessionSubscriptions from '@/runtime/native-chat/requests/structured-agent-session-subscriptions'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,11 +30,11 @@ import { AgentSessionJournal } from '../../src/main/native-chat/agent-session-jo
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabases
-} from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
-import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+} from '../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { createStructuredChatNamingHandler } from '../../src/main/native-chat/structured-chat-naming'
 import { PI_RPC_AGENT } from '../../src/main/pi/rpc-agent-definition'
 import type { AgentSessionStatusEvent } from '../../src/shared/agent-session/agent-session-wire'
@@ -41,7 +42,7 @@ import { useAppStore } from '@/store'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
-} from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
   resetAiVaultForcedRescanThrottleForTest,
   useAiVaultSessionRefresh
@@ -51,13 +52,16 @@ import { useAiVaultSessionDisplayTitle } from '../../src/renderer/src/components
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn() }))
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
-vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof StructuredSessionClient>()),
-  subscribeStructuredAgentSessionStatus: mocks.subscribe
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof StructuredAgentSessionSubscriptions>()),
+    subscribeStructuredAgentSessionStatus: mocks.subscribe
+  })
+)
 
 const SESSION = 'native-pi-history-clear'
 const PROVIDER = '019fd622-3c4d-7e5f-a061-7c8d9e0f1a2b'

@@ -7,8 +7,8 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import type { OpenFile } from '../../store/slices/editor'
-import { translate } from '@/i18n/i18n'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
+import { useTranslate } from '@/i18n/use-translate'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {
   getRevealInFileManagerLabel,
@@ -78,6 +78,7 @@ export function EditorFileTabContextMenu({
   onCloseSplitPane,
   onOpenMarkdownPreview
 }: EditorFileTabContextMenuProps): React.JSX.Element {
+  const t = useTranslate()
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeAllShortcut = useOptionalShortcutLabel('tab.closeAll')
@@ -116,31 +117,28 @@ export function EditorFileTabContextMenu({
         }}
       >
         <Pencil className="size-3.5" />
-        {translate('auto.components.tab.bar.EditorFileTabContextMenu.68cc610e7f', 'Rename')}
+        {t('auto.components.tab.bar.EditorFileTabContextMenu.68cc610e7f', 'Rename')}
         {renameShortcut ? <ContextMenuShortcut>{renameShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={onTogglePin}>
         {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
         {isPinned
-          ? translate('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
-          : translate('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
+          ? t('auto.components.tab.bar.EditorFileTabContextMenu.8e9d603a09', 'Unpin Tab')
+          : t('auto.components.tab.bar.EditorFileTabContextMenu.fdd29eb669', 'Pin Tab')}
       </ContextMenuItem>
       <CopyTabIdMenuItem menuKind="context" unifiedTabId={unifiedTabId} />
       <ContextMenuSeparator />
       <ContextMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
         <X className="size-3.5" />
-        {translate('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}
+        {t('auto.components.tab.bar.EditorFileTabContextMenu.1ba8492c5b', 'Close')}
         {closeShortcut ? <ContextMenuShortcut>{closeShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
       <ContextMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
-        {translate('components.tab.bar.EditorFileTabContextMenu.closeOthers', 'Close Others')}
+        {t('components.tab.bar.EditorFileTabContextMenu.closeOthers', 'Close Others')}
       </ContextMenuItem>
       <ContextMenuItem inset onSelect={onCloseAll}>
-        {translate(
-          'auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24',
-          'Close All Editor Tabs'
-        )}
+        {t('auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24', 'Close All Editor Tabs')}
         {closeAllShortcut ? <ContextMenuShortcut>{closeAllShortcut}</ContextMenuShortcut> : null}
       </ContextMenuItem>
       <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
@@ -163,7 +161,7 @@ export function EditorFileTabContextMenu({
               )
             }}
           >
-            {translate(
+            {t(
               'auto.components.tab.bar.EditorFileTabContextMenu.bfd5797ef4',
               'Open Markdown Preview'
             )}
@@ -182,7 +180,7 @@ export function EditorFileTabContextMenu({
               )
             }}
           >
-            {translate('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
+            {t('auto.components.tab.bar.EditorFileTabContextMenu.5b85754786', 'Copy Path')}
           </ContextMenuItem>
           <ContextMenuItem
             inset
@@ -190,10 +188,7 @@ export function EditorFileTabContextMenu({
               void window.api.ui.writeClipboardText(file.relativePath)
             }}
           >
-            {translate(
-              'auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605',
-              'Copy Relative Path'
-            )}
+            {t('auto.components.tab.bar.EditorFileTabContextMenu.52ce4f4605', 'Copy Relative Path')}
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
@@ -201,7 +196,7 @@ export function EditorFileTabContextMenu({
             disabled={revealBlocked}
             onSelect={() => void revealInFileManager(file.filePath, revealOwner)}
           >
-            {getRevealInFileManagerLabel()}
+            {getRevealInFileManagerLabel(t)}
             {revealBlocked ? <LocalOnlyMenuHint /> : null}
           </ContextMenuItem>
         </>

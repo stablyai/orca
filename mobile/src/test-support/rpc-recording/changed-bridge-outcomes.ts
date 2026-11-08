@@ -155,7 +155,8 @@ export const MOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass>> = {
 // Producers the PR removed from the corpus, with their branch-base class.
 export const REMOVED_FROM_BASELINE: Readonly<Record<string, BaselineClass>> = {
   'matrix-tasks.item-detail-metadata-github.listassignableusers-1': 'result-absent-settlement',
-  'matrix-tasks.item-detail-metadata-github.listlabels-1': 'result-absent-settlement'
+  'matrix-tasks.item-detail-metadata-github.listlabels-1': 'result-absent-settlement',
+  'speech-desktop-start-recording-failed': 'identical'
 }
 
 export function expectedUnchangedTally(

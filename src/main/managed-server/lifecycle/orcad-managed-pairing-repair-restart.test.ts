@@ -15,7 +15,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import { DeviceRegistry } from '../../runtime/rpc/server/pairing/device-registry'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { OrcaRuntimeRpcServer } from '../../runtime/rpc/server/runtime-rpc'
-import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
+import { verifyRuntimePairingIdentity } from '../../runtime/hosts/identity/runtime-environment-identity-verification'
 import { buildServePairingReadiness } from '../../server/serve-pairing-readiness'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { ManagedOrcadPairingRepairs } from './orcad-managed-pairing-repair'
@@ -23,7 +23,7 @@ import {
   OrcadManagedIdentityError,
   verifyManagedOrcadTunnelIdentity
 } from './orcad-managed-tunnel-identity'
-import { unusedOrcadHostTransport } from '../../ssh/unused-host-transport.test-fixture'
+import { unusedOrcadHostTransport } from '../testing/managed-host-transport.test-fixture'
 
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = getWorktreeListingMocks()

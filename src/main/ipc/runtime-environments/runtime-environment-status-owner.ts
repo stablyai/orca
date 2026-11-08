@@ -1,4 +1,4 @@
-import { getRuntimeDesktopSurface } from '../../runtime/runtime-desktop-surface'
+import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -8,11 +8,12 @@ import {
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { managedOrcadRefusalNeedingUserCode } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import { recoverRefusedPairing } from './runtime-environment-pairing-refusal-registry'
-import { recordRuntimeEnvironmentUsage } from './runtime-environment-usage-record'
+import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
+  type RuntimeHostStatusSnapshot,
   runtimeHostStatusError,
   runtimeHostStatusFailure,
   type RuntimeHostStatusResponse
@@ -27,9 +28,11 @@ import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
 import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
 
-const statusListeners = new Set<() => void>()
+const statusListeners = new Set<(snapshot: RuntimeHostStatusSnapshot) => void>()
 
-export function onRuntimeEnvironmentStatusPublished(listener: () => void): () => void {
+export function onRuntimeEnvironmentStatusPublished(
+  listener: (snapshot: RuntimeHostStatusSnapshot) => void
+): () => void {
   statusListeners.add(listener)
   return () => statusListeners.delete(listener)
 }
@@ -144,7 +147,7 @@ export function createRuntimeEnvironmentStatusOwner(
     publish: (snapshot) => {
       getRuntimeDesktopSurface().sendToRenderers?.(RUNTIME_HOST_STATUS_CHANNEL, snapshot)
       for (const listener of statusListeners) {
-        listener()
+        listener(snapshot)
       }
     }
   })

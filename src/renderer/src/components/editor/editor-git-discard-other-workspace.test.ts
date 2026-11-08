@@ -12,7 +12,7 @@ import {
   withLoadedBaselines
 } from './autosave/editor-autosave-controller-test-fixture'
 import { registerPendingEditorFlush } from './save/flush/editor-pending-flush'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 const DISCARD_TARGET = { worktreeId: 'wt-1', worktreePath: '/repo', relativePath: 'a.ts' }
 

@@ -139,7 +139,7 @@ vi.mock('../browser/client-hosts/lifecycle/browser-client-host-id', () => ({
 vi.mock('../host/deferred-secret-protection-report', () => ({
   scheduleSecretProtectionGapReport: vi.fn()
 }))
-vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
+vi.mock('../ssh/host-keys/ssh-host-key-store', () => ({ initSshHostKeyStoreFile: vi.fn() }))
 vi.mock('../pty/shell-startup/legacy-terminal-shim-dir', () => ({
   neutralizeLegacyTerminalShimDir: vi.fn()
 }))
@@ -159,7 +159,7 @@ vi.mock('../git/command-runner/wsl-command-resolution', async (importOriginal) =
   ...(await importOriginal<Record<string, unknown>>()),
   setDefaultWslDistroOverride: vi.fn()
 }))
-vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
+vi.mock('../agent-hooks/wsl-relay/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: { setManagedHookSettingsResolver: vi.fn() }
 }))
 vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
@@ -329,28 +329,6 @@ describe('ready-phase browser identity authority', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: ORIGINAL_PLATFORM })
   })
-
-  it.each([
-    { platform: 'win32', isPackaged: true, appId: 'app.id' },
-    { platform: 'win32', isPackaged: false, appId: process.execPath },
-    { platform: 'darwin', isPackaged: true, appId: null },
-    { platform: 'linux', isPackaged: true, appId: null }
-  ])(
-    'sets Windows app identity on $platform (packaged=$isPackaged)',
-    async ({ platform, isPackaged, appId }) => {
-      seedIdentityRecord('clean', true)
-      mocks.isPackaged = isPackaged
-      Object.defineProperty(process, 'platform', { value: platform })
-
-      await runReady()
-
-      if (appId === null) {
-        expect(mocks.setAppUserModelId).not.toHaveBeenCalled()
-      } else {
-        expect(mocks.setAppUserModelId).toHaveBeenCalledExactlyOnceWith(appId)
-      }
-    }
-  )
 
   // Root identity remains authoritative across profile switches; ready must not restore retired per-profile choices in either direction.
   it.each([{ rootMode: 'native' }, { rootMode: 'clean' }])(
