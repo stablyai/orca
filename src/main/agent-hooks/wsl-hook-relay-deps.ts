@@ -1,5 +1,5 @@
 import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from '../claude/agent-view/agent-view-mod-source'
-import { bindRemoteClaudeInterruptReconciliation } from '../ssh/ssh-agent-hook-interrupt-reconciliation'
+import { bindRemoteClaudeInterruptReconciliation } from './ssh-agent-hook-interrupt-reconciliation'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 

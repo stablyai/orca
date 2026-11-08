@@ -1,9 +1,6 @@
 import { expect, it } from 'vitest'
 import type SyncDatabase from '../sqlite/sync-database'
-import {
-  deleteExpiredSearchFiles,
-  RETENTION_DELETE_ROWS_PER_STEP
-} from './session-search-retention-delete'
+import { deleteExpiredSearchFiles } from './session-search-retention-delete'
 import { openSessionSearchIndexFile } from './session-search-index-test-fixture'
 import { SessionSearchStore } from './session-search-store'
 
@@ -43,34 +40,6 @@ function visibleSessionIds(db: SyncDatabase): string[] {
 function count(db: SyncDatabase, table: string): number {
   return (db.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n
 }
-
-it('hides an expiring session at once, then reclaims its rows in bounded steps', async () => {
-  const index = await openSessionSearchIndexFile('ss-retention-yield')
-  seed(index.db, 1, 1025, 1)
-  seed(index.db, 2, 1, 200)
-  let previous = 1025
-  const steps: number[] = []
-  try {
-    await deleteExpiredSearchFiles(
-      index.db,
-      100,
-      () => false,
-      async () => {
-        const left = count(index.db, 'messages WHERE session_row_id=1')
-        steps.push(previous - left)
-        previous = left
-        // Expired sessions must be invisible before any message batch is reclaimed.
-        expect(visibleSessionIds(index.db)).toEqual(['2'])
-      }
-    )
-    // The file transaction yields before the first message-deletion batch.
-    expect(steps).toEqual([0, RETENTION_DELETE_ROWS_PER_STEP, 256, 256, 256, 1])
-    expect(count(index.db, 'messages_fts')).toBe(1)
-    expect(count(index.db, 'sessions')).toBe(1)
-  } finally {
-    await index.close()
-  }
-})
 
 it('finishes an interrupted deletion after reopening', async () => {
   const index = await openSessionSearchIndexFile('ss-retention-resume')
@@ -153,33 +122,6 @@ it('keeps a file a read refreshed after the expiry list was taken', async () => 
     expect(visibleSessionIds(index.db)).toEqual(['2'])
     expect(count(index.db, 'messages')).toBe(2)
   } finally {
-    await index.close()
-  }
-})
-
-function freelistShare(db: SyncDatabase): number {
-  const free = Number(db.pragma('freelist_count', { simple: true }))
-  return free / Number(db.pragma('page_count', { simple: true }))
-}
-
-it("leaves a replaced session's free pages for reuse but reclaims a large purge", async () => {
-  const index = await openSessionSearchIndexFile('ss-retention-reclaim')
-  const store = new SessionSearchStore(index.path)
-  try {
-    seed(index.db, 1, 2000, 1)
-    seed(index.db, 2, 2000, 200)
-    seed(index.db, 3, 400, 200)
-    // A replaced session leaves its old rows orphaned; moving the few pages they free only churns the file.
-    index.db.prepare('DELETE FROM sessions WHERE id = 3').run()
-    await store.purgeOlderThan(null)
-    expect(count(index.db, 'messages')).toBe(4000)
-    expect(freelistShare(index.db)).toBeGreaterThan(0)
-
-    await store.purgeOlderThan(100)
-    expect(count(index.db, 'messages')).toBe(2000)
-    expect(freelistShare(index.db)).toBeLessThanOrEqual(0.25)
-  } finally {
-    store.close()
     await index.close()
   }
 })

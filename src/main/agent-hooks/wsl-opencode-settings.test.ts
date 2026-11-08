@@ -6,7 +6,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { RelayDispatcher } from '../../wsl-guest/dispatcher'
 import { PluginOverlayManager } from '../../wsl-guest/plugin-overlay'
 import { createInstallPluginsHandler } from '../../wsl-guest/wsl-install-plugins-handler'
-import { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
 import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { requestGuestOpenCodeOverlayDir } from './wsl-guest-plugin-install'
 import {

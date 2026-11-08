@@ -9,7 +9,7 @@ import {
   WINDOWS_BREAKAWAY_STDERR_KEEP_PREVIOUS_FLAG,
   WINDOWS_BREAKAWAY_STDOUT_FLAG
 } from '../../../shared/windows-breakaway-launch'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   orcadWindowsNodeCommandLine,
   orcadWindowsSlotOpCommand,

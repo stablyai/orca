@@ -53,10 +53,10 @@ import {
   recordSshCredentialDeclined,
   recordSshSignInAwaited,
   resetSshCredentialDeclinesForTests
-} from '../ssh-credential-decline'
-import { isAuthError } from '../ssh-reconnect-error-classification'
-import '../ssh-session-start-failure'
-import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
+} from '../authentication/ssh-credential-decline'
+import { isAuthError } from './reconnect/ssh-reconnect-error-classification'
+import './ssh-session-start-failure'
+import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from './ssh-user-disconnect'
 
 const target = {
   id: 'target-1',
