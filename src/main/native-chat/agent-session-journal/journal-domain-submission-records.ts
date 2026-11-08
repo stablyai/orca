@@ -17,6 +17,7 @@ import type { UnreadAgentSessionFailureFact } from '../../../shared/agent-sessio
 import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import type { JournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
+import type { JournalMailCustody } from './journal-writer-host-facts'
 
 export type JournalDomainSubmissionTarget = { sessionId: string; epoch: string }
 
@@ -24,8 +25,7 @@ export type JournalDomainSubmissionFacts = {
   identity: AgentSessionJournalIdentity
   reopenFloor?: AgentJournalCursor | null
   owed?: QueuedMessageOwed
-  /** Finite external sender availability, sampled before admission to the writer. */
-  mail?: readonly (readonly [string, boolean])[]
+  mail?: JournalMailCustody
 }
 
 export type JournalDomainSubmissionAdmission = {

@@ -190,11 +190,41 @@ function writeTabIndex(
   db: Database.Database,
   index: { recorded: boolean; tabs: readonly PersistedAgentSessionTab[] }
 ): void {
-  db.prepare('DELETE FROM agent_session_tabs').run()
-  const insert = db.prepare(
-    'INSERT INTO agent_session_tabs (tab_id, session_id, position) VALUES (?, ?, ?)'
+  const saved = new Map(
+    db
+      .prepare('SELECT tab_id,session_id,position FROM agent_session_tabs')
+      .all()
+      .map(
+        (row) =>
+          [
+            String(row.tab_id),
+            { sessionId: String(row.session_id), position: Number(row.position) }
+          ] as const
+      )
   )
-  index.tabs.forEach(({ tabId, sessionId }, position) => insert.run(tabId, sessionId, position))
+  const nextIds = new Set(index.tabs.map((tab) => tab.tabId))
+  for (const tabId of saved.keys()) {
+    if (!nextIds.has(tabId)) {
+      db.prepare('DELETE FROM agent_session_tabs WHERE tab_id=?').run(tabId)
+    }
+  }
+  let tail = -1
+  for (const row of saved.values()) {
+    tail = Math.max(tail, row.position)
+  }
+  let previous = -1
+  const upsert = db.prepare(`INSERT INTO agent_session_tabs (tab_id,session_id,position)
+    VALUES (?,?,?) ON CONFLICT(tab_id) DO UPDATE
+    SET session_id=excluded.session_id,position=excluded.position`)
+  for (const { tabId, sessionId } of index.tabs) {
+    const row = saved.get(tabId)
+    if (row?.sessionId === sessionId && row.position > previous) {
+      previous = row.position
+    } else {
+      previous = ++tail
+      upsert.run(tabId, sessionId, previous)
+    }
+  }
   if (index.recorded) {
     db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
       SESSION_TABS_RECORDED,

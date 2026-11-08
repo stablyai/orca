@@ -16,6 +16,16 @@ export const JOURNAL_DOMAIN_MIGRATIONS: readonly {
       ) VIRTUAL;
       CREATE INDEX agent_session_operations_identity ON agent_session_operations(operation_id);
     `)
+  },
+  {
+    version: 3,
+    migrate: (db) =>
+      db.exec(`
+      ALTER TABLE agent_session_operations ADD COLUMN expires_at INTEGER GENERATED ALWAYS AS (
+        CASE WHEN json_valid(row_json) THEN json_extract(row_json, '$.expiresAt') END
+      ) VIRTUAL;
+      CREATE INDEX agent_session_operations_expiry ON agent_session_operations(expires_at,operation_key);
+    `)
   }
 ]
 

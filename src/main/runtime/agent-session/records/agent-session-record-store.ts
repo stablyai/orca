@@ -74,7 +74,7 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     private readonly journalDatabase: JournalSqlDatabase
   ) {
     super(transactions)
-    this.founding = createAgentSessionFoundingStore(transactions, this.firstRecordListeners)
+    this.founding = createAgentSessionFoundingStore(transactions)
     this.conversationReceipts = createAgentSessionConversationReceipts(transactions)
   }
 

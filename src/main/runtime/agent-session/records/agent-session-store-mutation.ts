@@ -70,7 +70,9 @@ export function agentSessionStoreMutationKeys(mutation: AgentSessionStoreMutatio
   operationId?: string
   operationKey?: string
   allCallers?: boolean
-  allRecords?: boolean
+  adoptedNativeId?: string
+  legacyRecordIds?: readonly string[]
+  missingPermission?: boolean
   tabs?: boolean
   pruneAt?: number
 } {

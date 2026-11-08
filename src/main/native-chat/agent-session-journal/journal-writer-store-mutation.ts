@@ -59,12 +59,36 @@ export function resolveJournalWriterStoreMutation(
   if (identity.tabs) {
     state.sessionTabs = loadAgentSessionStoreTabs(db)
   }
-  const recordIds = identity.allRecords
-    ? db
-        .prepare('SELECT session_id FROM agent_session_records ORDER BY rowid')
-        .all()
-        .map((row) => String(row.session_id))
-    : identity.recordIds
+  const recordIds = [
+    ...identity.recordIds,
+    ...(state.sessionTabs === null ? (identity.legacyRecordIds ?? []) : [])
+  ]
+  const extraPredicates: string[] = []
+  if (identity.adoptedNativeId !== undefined) {
+    extraPredicates.push(`CASE WHEN json_valid(record_json) THEN COALESCE(
+      json_extract(record_json,'$.providerHandleChain[#-1].handle.nativeId'),
+      json_extract(record_json,'$.providerHandleChain[#-1].handle.sessionId'),
+      json_extract(record_json,'$.providerHandleChain[#-1].handle.threadId')) END = ?`)
+  }
+  if (identity.missingPermission) {
+    extraPredicates.push(`CASE WHEN json_valid(record_json)
+      THEN json_type(record_json,'$.permissionMode') IS NULL ELSE 0 END`)
+  }
+  for (const row of db
+    .prepare(`SELECT session_id,record_json FROM agent_session_records
+      WHERE session_id IN (SELECT value FROM json_each(?))
+        ${extraPredicates.map((predicate) => `OR (${predicate})`).join(' ')} ORDER BY rowid`)
+    .all(
+      JSON.stringify(recordIds),
+      ...(identity.adoptedNativeId !== undefined ? [identity.adoptedNativeId] : [])
+    )) {
+    loadAgentSessionStoreRecordRow(
+      state,
+      String(row.session_id),
+      String(row.record_json),
+      mutation.kind === 'command' && mutation.command.kind === 'restart'
+    )
+  }
   const loadRecord = (id: string) => {
     const row = db
       .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
@@ -79,20 +103,21 @@ export function resolveJournalWriterStoreMutation(
       mutation.kind === 'command' && mutation.command.kind === 'restart'
     )
   }
-  for (const id of recordIds) {
-    loadRecord(id)
-  }
   if (identity.pruneAt !== undefined) {
     const expired = db
       .prepare(`SELECT operation_key,row_json FROM agent_session_operations
-      WHERE CASE WHEN json_valid(row_json) THEN json_extract(row_json,'$.expiresAt')<=? ELSE 0 END`)
+      WHERE expires_at<=? ORDER BY expires_at,operation_key LIMIT 128`)
       .all(identity.pruneAt)
-    for (const row of expired) {
+    const keys = expired.flatMap((row) => {
       const key = String(row.operation_key)
-      if (isReadableAgentSessionStoreOperation(key, JSON.parse(String(row.row_json)))) {
-        db.prepare('DELETE FROM agent_session_operations WHERE operation_key=?').run(key)
-        touched.operations.remove.push(key)
-      }
+      return isReadableAgentSessionStoreOperation(key, JSON.parse(String(row.row_json)))
+        ? [key]
+        : []
+    })
+    if (keys.length) {
+      db.prepare(`DELETE FROM agent_session_operations
+        WHERE operation_key IN (SELECT value FROM json_each(?))`).run(JSON.stringify(keys))
+      touched.operations.remove.push(...keys)
     }
   }
   const operationKeys =

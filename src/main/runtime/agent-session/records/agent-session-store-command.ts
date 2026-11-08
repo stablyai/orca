@@ -92,7 +92,9 @@ export type AgentSessionStoreCommandResult<C extends AgentSessionStoreCommand> =
 export function agentSessionStoreCommandSelection(command: AgentSessionStoreCommand): {
   recordIds: string[]
   operation?: { callerKey: string; operationId: string }
-  allRecords?: boolean
+  adoptedNativeId?: string
+  legacyRecordIds?: readonly string[]
+  missingPermission?: boolean
   allCallers?: boolean
   tabs?: boolean
   pruneAt?: number
@@ -103,10 +105,8 @@ export function agentSessionStoreCommandSelection(command: AgentSessionStoreComm
       return {
         recordIds: [command.request.sessionId],
         operation: command.request.operation,
-        allRecords:
-          !!command.request.adoptedHandleLink ||
-          command.kind === 'found' ||
-          command.request.surfaceTabId !== undefined,
+        adoptedNativeId: command.request.adoptedHandleLink?.handle.nativeId,
+        legacyRecordIds: command.legacyTabIds,
         tabs: true,
         pruneAt: command.request.now
       }
@@ -137,11 +137,17 @@ export function agentSessionStoreCommandSelection(command: AgentSessionStoreComm
         pruneAt: command.args.now
       }
     case 'tabs-initialize':
+      return { recordIds: [], legacyRecordIds: command.legacyTabIds, tabs: true }
     case 'tabs-show':
+      return {
+        recordIds: [...command.sessionIds],
+        legacyRecordIds: command.legacyTabIds,
+        tabs: true
+      }
     case 'tab-visibility':
-      return { recordIds: [], allRecords: true, tabs: true }
+      return { recordIds: [command.sessionId], legacyRecordIds: command.legacyTabIds, tabs: true }
     case 'permission-backfill':
-      return { recordIds: [], allRecords: true }
+      return { recordIds: [], missingPermission: true }
   }
 }
 

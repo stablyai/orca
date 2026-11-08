@@ -3,7 +3,6 @@ import {
   type AgentSessionStoreCommand,
   type AgentSessionStoreCommandResult
 } from './agent-session-store-command'
-import { isDeepStrictEqual } from 'node:util'
 import type { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
 import type { JournalWriterEffectResult } from '../../../native-chat/agent-session-journal/journal-writer-effects'
 import type {
@@ -31,19 +30,18 @@ import {
   agentSessionStoreRowChanges,
   type AgentSessionStoreRowWrites
 } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
-import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
 import type { AgentSessionStoreMutation } from './agent-session-store-mutation'
 import type {
   AgentSessionRecordCommand,
   AgentSessionRecordCommandResult
 } from './agent-session-record-command'
 import {
-  applyAgentSessionStoreCacheRows,
+  adoptAgentSessionStoreCachePatch,
   copyAgentSessionStoreCache,
+  prepareAgentSessionStoreCachePatch,
+  agentSessionStoreCacheChanges,
   notifyAgentSessionStoreCacheChanges
 } from './agent-session-store-cache'
-
-// The writer owns every transition; the host publishes acknowledged row changes only.
 
 function readOnlyStoreRefusal(): Error {
   return journalOpenRefusalError(
@@ -59,17 +57,17 @@ export class AgentSessionStoreTransactions {
   // Reads/reopens do not admit work; a count survives handle eviction without replaying history.
   private readonly admittedSends = new Map<string, number>()
   readonly acceptedSendListeners = new Set<(sessionId: string) => void>()
+  readonly deathEvidenceListeners = new Set<(sessionId: string) => void>()
+  readonly firstRecordListeners = new Set<() => void>()
   private published: AgentSessionStoreState
   /** Moves only when a commit changes what chat sender identity reads. */
   senderIdentityRevision = 0
-  /** Replaced only when a record joins or leaves, or a /clear links one conversation to the next:
-   *  lookups derived from every record's lineage stay valid across admission and lease writes. */
+  /** Lineage survives admission and lease writes; membership and committed clear invalidate it. */
   private lineage: object = {}
   private readonly receiptCommits = new WeakMap<
     JournalReceiptStage,
     { remaining: number; results: (readonly JournalWriterEffectResult[])[]; failed: boolean }
   >()
-  /** Loaded takeover evidence; immutable for this runtime. */
   readonly replacedRuntimes: ReadonlyMap<string, AgentSessionReplacedRuntime>
 
   constructor(
@@ -157,13 +155,8 @@ export class AgentSessionStoreTransactions {
           }
         }
       ])
-      if (!result || typeof result !== 'object' || !('kind' in result) || result.kind !== 'store') {
-        const error = new Error('the writer returned a different store result')
-        this.journalDatabase.fault(error)
-        throw error
-      }
-      this.publishResults([result])
-      return result.value as T
+      const [store] = this.publishResults([result])
+      return store.value as T
     })
     this.queue = run.catch(() => {})
     return run
@@ -239,7 +232,8 @@ export class AgentSessionStoreTransactions {
             settled = true
             adopt(results)
             if (results !== undefined && !group.failed && admitted) {
-              this.admitSend(admitted)
+              this.admittedSends.set(admitted, this.admittedSendCount(admitted) + 1)
+              this.acceptedSendListeners.forEach((listener) => listener(admitted))
             }
           }
         }
@@ -247,10 +241,9 @@ export class AgentSessionStoreTransactions {
     }
   }
 
-  private publishResults(results: readonly JournalWriterEffectResult[]): void {
+  private publishResults(results: readonly JournalWriterEffectResult[]) {
     try {
-      const next = copyAgentSessionStoreCache(this.published)
-      for (const result of results) {
+      const stores = results.map((result) => {
         if (
           !result ||
           typeof result !== 'object' ||
@@ -259,19 +252,19 @@ export class AgentSessionStoreTransactions {
         ) {
           throw new Error('the writer returned a different store result')
         }
-        applyAgentSessionStoreCacheRows(next, result.writes)
-      }
-      this.publish(next, this.published, agentSessionStoreRowChanges(this.published, next))
+        return result
+      })
+      const patch = prepareAgentSessionStoreCachePatch(
+        this.published,
+        stores.map((result) => result.writes)
+      )
+      this.publish(patch.next, patch.before, patch.writes, () => {
+        adoptAgentSessionStoreCachePatch(this.published, patch.next, patch.writes!)
+      })
+      return stores
     } catch (error) {
       this.journalDatabase.fault(error instanceof Error ? error : new Error(String(error)))
       throw error
-    }
-  }
-
-  private admitSend(sessionId: string): void {
-    this.admittedSends.set(sessionId, this.admittedSendCount(sessionId) + 1)
-    for (const listener of this.acceptedSendListeners) {
-      listener(sessionId)
     }
   }
 
@@ -292,26 +285,34 @@ export class AgentSessionStoreTransactions {
   private publish(
     draft: AgentSessionStoreState,
     published: AgentSessionStoreState,
-    writes: AgentSessionStoreRowWrites | null
+    writes: AgentSessionStoreRowWrites | null,
+    adopt?: () => void
   ): void {
     if (writes) {
-      if (changesAgentSenderIdentity(published, draft, writes)) {
+      const heldBefore =
+        this.published.records.size > 0 || this.published.unreadableRecords.size > 0
+      const changes = agentSessionStoreCacheChanges(published, draft, writes)
+      if (changes.senderIdentity) {
         this.senderIdentityRevision++
       }
-      this.published = draft
-      const lineageChanged =
-        writes.records.remove.length > 0 ||
-        writes.records.upsert.some(([id]) => {
-          const before = published.records.get(id)
-          return !isDeepStrictEqual(
-            before?.conversationCommand,
-            draft.records.get(id)?.conversationCommand
-          )
-        })
-      if (lineageChanged) {
+      if (changes.lineage) {
         this.lineage = {}
       }
+      if (adopt) {
+        adopt()
+      } else {
+        this.published = draft
+      }
       notifyAgentSessionStoreCacheChanges(published, draft, writes)
+      for (const id of changes.deaths) {
+        this.deathEvidenceListeners.forEach((listener) => listener(id))
+      }
+      if (
+        !heldBefore &&
+        (this.published.records.size > 0 || this.published.unreadableRecords.size > 0)
+      ) {
+        this.firstRecordListeners.forEach((listener) => listener())
+      }
     }
   }
 }

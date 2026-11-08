@@ -5,19 +5,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { foundAgentSessionRecord } from '../records/agent-session-record-founding'
 import {
   openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
+  seedTestAgentSessionRecordStore,
+  closeTestAgentSessionRecordStores,
+  withTestAgentSessionDatabase
 } from '../records/agent-session-record-store-test-harness'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 let root: string
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-permission-backfill-'))
 })
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -46,9 +44,10 @@ describe('existing chat permission backfill', () => {
   it('rolls back every row if saving fails, then succeeds on the next startup pass', async () => {
     await seedTestAgentSessionRecordStore(root, { records: [record('claude'), record('codex')] })
     const store = await openTestAgentSessionRecordStore(root)
-    const db = openTestJournalHostDatabase(root).db
-    db.exec(
-      "CREATE TRIGGER refuse_backfill_write BEFORE UPDATE ON agent_session_records WHEN NEW.session_id = 'session-codex' BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.exec(
+        "CREATE TRIGGER refuse_backfill_write BEFORE UPDATE ON agent_session_records WHEN NEW.session_id = 'session-codex' BEGIN SELECT RAISE(ABORT, 'disk full'); END"
+      )
     )
     await expect(store.backfillChatPermissionModes(() => true)).rejects.toThrow('disk full')
     expect(store.listRecords().every((row) => row.permissionMode === undefined)).toBe(true)
@@ -57,7 +56,7 @@ describe('existing chat permission backfill', () => {
         .listRecords()
         .every((row) => row.permissionMode === undefined)
     ).toBe(true)
-    db.exec('DROP TRIGGER refuse_backfill_write')
+    await withTestAgentSessionDatabase(root, (db) => db.exec('DROP TRIGGER refuse_backfill_write'))
     await store.backfillChatPermissionModes(() => true)
     expect(store.listRecords().every((row) => row.permissionMode === 'full-access')).toBe(true)
   })

@@ -1,4 +1,3 @@
-import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +10,8 @@ import {
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import {
   openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
+  seedTestAgentSessionRecordStore,
+  closeTestAgentSessionRecordStores
 } from './records/agent-session-record-store-test-harness'
 
 const SESSION = 'session-alpha-1'
@@ -41,7 +41,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -49,6 +49,8 @@ describe('death evidence on disk', () => {
   it('records the last renewal before the crash and reads it back after another restart', async () => {
     await seed(null)
     const crashed = await open()
+    const observed: (AgentSessionDeathEvidence | null | undefined)[] = []
+    crashed.onDeathEvidence((id) => observed.push(crashed.getRecord(id)?.lease.deathEvidence))
     await crashed.reconcileOnRestart({
       probe: async () => ({ outcome: 'pid-absent' }),
       now: 90_000
@@ -61,6 +63,7 @@ describe('death evidence on disk', () => {
       lastProvenAliveAt: LAST_RENEWED_AT
     }
     expect(crashed.getRecord(SESSION)?.lease.deathEvidence).toEqual(evidence)
+    expect(observed).toEqual([evidence])
     expect((await open()).getRecord(SESSION)?.lease.deathEvidence).toEqual(evidence)
   })
 })

@@ -4,6 +4,8 @@ import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
 import { AgentSessionTabTable } from '../agent-session-tab-table'
 import type { AgentSessionStoreRowWrites } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
 import type { AgentSessionStoreState } from './agent-session-store-state'
+import { agentSessionStoreRowChanges } from '../../../native-chat/agent-session-journal/journal-writer-store-row-changes'
+import { changesAgentSenderIdentity } from '../../agent-session-sender-identity-revision'
 import {
   isReadableAgentSessionStoreOperation,
   isReadableAgentSessionStoreRecord
@@ -57,6 +59,82 @@ export function copyAgentSessionStoreCache(state: AgentSessionStoreState): Agent
   }
 }
 
+/** Decode every acknowledgement before atomically adopting only its keys. */
+export function prepareAgentSessionStoreCachePatch(
+  published: AgentSessionStoreState,
+  acknowledgements: readonly AgentSessionStoreRowWrites[]
+) {
+  const recordIds = new Set<string>()
+  const operationKeys = new Set<string>()
+  for (const rows of acknowledgements) {
+    rows.records.upsert.forEach(([id]) => recordIds.add(id))
+    rows.records.remove.forEach((id) => recordIds.add(id))
+    rows.operations.upsert.forEach(([key]) => operationKeys.add(key))
+    rows.operations.remove.forEach((key) => operationKeys.add(key))
+  }
+  const before: AgentSessionStoreState = {
+    ...published,
+    records: new Map(
+      [...recordIds].flatMap((id) => {
+        const row = published.records.get(id)
+        return row ? [[id, row] as const] : []
+      })
+    ),
+    operations: new Map(
+      [...operationKeys].flatMap((key) => {
+        const row = published.operations.get(key)
+        return row ? [[key, row] as const] : []
+      })
+    )
+  }
+  const next = {
+    ...before,
+    records: new Map(before.records),
+    operations: new Map(before.operations)
+  }
+  for (const rows of acknowledgements) {
+    applyAgentSessionStoreCacheRows(next, rows)
+  }
+  for (const [id, row] of next.records) {
+    const prior = before.records.get(id)
+    if (prior && isDeepStrictEqual(prior, row)) {
+      next.records.set(id, prior)
+    }
+  }
+  for (const [key, row] of next.operations) {
+    const prior = before.operations.get(key)
+    if (prior && isDeepStrictEqual(prior, row)) {
+      next.operations.set(key, prior)
+    }
+  }
+  return { before, next, writes: agentSessionStoreRowChanges(before, next) }
+}
+
+export function adoptAgentSessionStoreCachePatch(
+  published: AgentSessionStoreState,
+  next: AgentSessionStoreState,
+  writes: AgentSessionStoreRowWrites
+): void {
+  for (const [id] of writes.records.upsert) {
+    published.records.set(id, next.records.get(id)!)
+  }
+  for (const id of writes.records.remove) {
+    published.records.delete(id)
+  }
+  for (const [key] of writes.operations.upsert) {
+    published.operations.set(key, next.operations.get(key)!)
+  }
+  for (const key of writes.operations.remove) {
+    published.operations.delete(key)
+  }
+  if (writes.sessionTabs !== null) {
+    published.sessionTabs = next.sessionTabs
+  }
+  if (writes.retiredClaimKeys !== null) {
+    published.retiredClaimKeys = next.retiredClaimKeys
+  }
+}
+
 export function notifyAgentSessionStoreCacheChanges(
   before: AgentSessionStoreState,
   after: AgentSessionStoreState,
@@ -86,5 +164,30 @@ export function notifyAgentSessionStoreCacheChanges(
     sessionCrewChanges.notify(new Set(['records']))
   } else if (renamed.length) {
     sessionCrewChanges.notify(Object.assign(new Set(['names'] as const), { recordIds: renamed }))
+  }
+}
+
+export function agentSessionStoreCacheChanges(
+  before: AgentSessionStoreState,
+  after: AgentSessionStoreState,
+  writes: AgentSessionStoreRowWrites
+) {
+  return {
+    senderIdentity: changesAgentSenderIdentity(before, after, writes),
+    lineage:
+      writes.records.remove.length > 0 ||
+      writes.records.upsert.some(
+        ([id]) =>
+          !isDeepStrictEqual(
+            before.records.get(id)?.conversationCommand,
+            after.records.get(id)?.conversationCommand
+          )
+      ),
+    deaths: writes.records.upsert.flatMap(([id]) => {
+      const death = after.records.get(id)?.lease.deathEvidence
+      return death && !isDeepStrictEqual(before.records.get(id)?.lease.deathEvidence, death)
+        ? [id]
+        : []
+    })
   }
 }
