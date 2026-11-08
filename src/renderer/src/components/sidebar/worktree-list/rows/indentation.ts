@@ -7,6 +7,8 @@ export const FLUSH_CARD_CONTENT_PULLBACK = 4
 export const NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK = 8
 // Why: keeps a zero-indent flush card off the sidebar edge.
 export const FLUSH_CARD_MIN_CONTENT_INSET = 2
+// Why: 2.0 nested cards have no indent, so their content needs its own breathing room off the card edge.
+export const SLOT_CARD_MIN_CONTENT_INSET = 6
 export const WORKTREE_CARD_SURFACE_MARGIN = 4
 // Why: level-1 lineage keeps the grouped-card anchor; deeper levels advance evenly, not cumulatively.
 export const LINEAGE_IMMEDIATE_PARENT_STEP =
@@ -134,14 +136,15 @@ export function getWorktreeCardSurfaceInset(args: {
 
 export function getFlushWorktreeCardPaddingLeft(
   contentIndent: number,
-  applyNewCardStyleStatusLaneOffset = false
+  applyNewCardStyleStatusLaneOffset = false,
+  minContentInset = FLUSH_CARD_MIN_CONTENT_INSET
 ): string {
   const pullback =
     FLUSH_CARD_CONTENT_PULLBACK +
     (applyNewCardStyleStatusLaneOffset ? NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK : 0)
   return contentIndent > 0
-    ? `max(${FLUSH_CARD_MIN_CONTENT_INSET}px, calc(${contentIndent}px - ${pullback}px))`
-    : `${FLUSH_CARD_MIN_CONTENT_INSET}px`
+    ? `max(${minContentInset}px, calc(${contentIndent}px - ${pullback}px))`
+    : `${minContentInset}px`
 }
 
 export function getNewCardStyleParentContentMarginLeft(contentIndent: number): number {

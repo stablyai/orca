@@ -44,7 +44,7 @@ export type WorktreeCardProps = {
   lineageDescendantIdentities?: WorktreeLineageSource
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties
-  onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onLineageToggle?: (event: React.MouseEvent<HTMLElement>) => void
   isLineageDropTarget?: boolean
   onActivate?: () => void
   onWorktreeCardClick?: () => void

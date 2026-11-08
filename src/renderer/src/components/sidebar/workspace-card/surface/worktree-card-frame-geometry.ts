@@ -8,14 +8,16 @@ import {
 export function getWorktreeCardFrameGeometry({
   flushSurface,
   contentIndent,
-  statusLane
+  statusLane,
+  minContentInset
 }: {
   flushSurface: boolean
   contentIndent: number
   statusLane: boolean
+  minContentInset?: number
 }): { cardStyle: React.CSSProperties | undefined; parentContentMarginLeft: number } {
   const cardPaddingLeft = flushSurface
-    ? getFlushWorktreeCardPaddingLeft(contentIndent, statusLane)
+    ? getFlushWorktreeCardPaddingLeft(contentIndent, statusLane, minContentInset)
     : contentIndent > 0
       ? `calc(0.125rem + ${contentIndent}px)`
       : null

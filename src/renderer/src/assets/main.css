@@ -1791,7 +1791,7 @@ html.native-shell .app-layout {
 
 /* 2.0 leading icon: the latest tab in front, older tabs peeking above it as narrower, dimmer cards.
    The box is the front tile only, so it centers on the title; layers overflow upward, staying
-   within the card's 6px top padding because the card surface clips. */
+   within the card's 8px top padding because the card surface clips. */
 .worktree-card-leading-icon {
   position: relative;
   display: inline-block;

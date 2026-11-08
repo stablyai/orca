@@ -12,6 +12,7 @@ import type { WorktreeCardController } from '../controller/use-worktree-card-con
 import { useWorktreeCardOpen } from './worktree-card-open-state'
 import {
   getLineageChildrenInlineStyle,
+  SLOT_CARD_MIN_CONTENT_INSET,
   SLOT_LINEAGE_TITLE_COLUMN_SHIFT
 } from '../../worktree-list/rows/indentation'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
@@ -66,7 +67,12 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   const isSleeping = useIsSleepingWorktree(worktree.id)
   const cardOpen = useWorktreeCardOpen(worktree, card.lineageDescendantIdentities, slotLayout)
   const geometryFor = (statusLane: boolean) =>
-    getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
+    getWorktreeCardFrameGeometry({
+      flushSurface,
+      contentIndent,
+      statusLane,
+      minContentInset: slotLayout ? SLOT_CARD_MIN_CONTENT_INSET : undefined
+    })
   const { content: templateContent, frame } = renderWorkspaceCardTemplate(
     card,
     DEFAULT_WORKSPACE_CARD_TEMPLATE,
@@ -95,7 +101,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
       className={cn(
         'relative flex cursor-pointer flex-col transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
         'pr-1.5',
-        titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
+        titleOnlyCard ? 'py-2' : slotLayout ? 'pt-2 pb-1.5' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'overflow-hidden rounded-lg',
         // Navigation updates the live attribute before React; it must own the complete active style.

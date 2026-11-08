@@ -233,7 +233,7 @@ export function WorktreeCardSlotContent({
     </>
   )
 
-  const toggleCard = (event: React.MouseEvent<HTMLButtonElement>): void => {
+  const toggleCard = (event: React.MouseEvent<HTMLElement>): void => {
     dispatchSuppressScrollAdjustment()
     // Opening a card shows everything it holds, its child workspaces included.
     if (!open && lineageCollapsed && onLineageToggle) {
@@ -257,6 +257,19 @@ export function WorktreeCardSlotContent({
         <div
           className="group/worktree-card flex min-w-0 flex-col"
           data-worktree-card-hover-trigger=""
+          // The chevron is a small target; a plain click anywhere on the header toggles too.
+          onClick={(event) => {
+            if (
+              canOpen &&
+              !pickingSendTarget &&
+              !event.defaultPrevented &&
+              event.detail <= 1 &&
+              !(event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) &&
+              !window.getSelection()?.toString()
+            ) {
+              toggleCard(event)
+            }
+          }}
         >
           <div
             className={cn(
