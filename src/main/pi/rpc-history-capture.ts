@@ -85,7 +85,10 @@ export class PiHistoryCapture {
       return
     }
     // Read before Pi's leaf: a row landing after this is not claimed.
-    const through = history.cursor()
+    const through = await history.reads.cursor()
+    if (moved() || sink?.journalHistory?.() !== history) {
+      return
+    }
     const answer = await readPiEntries(deps.connection, anchor.entry)
     const branch =
       anchor.entry === null ? piBranchInTree(answer, null) : piBranchSince(answer, anchor.entry)

@@ -51,7 +51,7 @@ export async function catchUpCodexThread(input: {
     timeoutMs: input.timeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
     ...(input.logger ? { logger: input.logger } : {}),
     readView: (history, signal) => readCodexHistoryJournalView(history, input.threadId, signal),
-    prepare: async ({ view: readView, history, journal, signal, deadline, check, yieldTurn }) => {
+    prepare: async ({ view: readView, history, signal, deadline, check, yieldTurn }) => {
       const view = await readView()
       const read = {
         connection: input.connection,
@@ -68,10 +68,11 @@ export async function catchUpCodexThread(input: {
         check()
         if (
           input.sink.journalHistory?.() !== history ||
-          history.physicalCursor().epoch !== view.epoch
+          (await history.reads.physicalCursor()).epoch !== view.epoch
         ) {
           throw new Error('stale-history')
         }
+        check()
         await waitForPromiseWithSignal(
           Promise.resolve(input.onReceipt?.(clientMessageId, providerIdentity)),
           signal
@@ -136,13 +137,15 @@ export async function catchUpCodexThread(input: {
         }
       }
       Object.assign(view, await readCodexHistoryJournalView(history, input.threadId, signal))
+      const expectedCursor = view.physicalCursor
       const missing = paginate
         ? await discoverCodexHistory(read, view)
         : { pages: [], order: [...seen], rewound: view.latest !== null && !seen.has(view.latest) }
       const staging = createCodexHistoryImportPlan({
         sessionId: input.sessionId,
         threadId: input.threadId,
-        journal,
+        epoch: history.epoch,
+        reads: history.reads,
         nativePromptKeys: view.nativePromptKeys,
         subagentExecutions: input.subagentExecutions,
         outsideNotice: view.hasRows ? continuedOutsideNotice(missing.rewound) : undefined,
@@ -163,32 +166,31 @@ export async function catchUpCodexThread(input: {
           .sort((a, b) => rank(a) - rank(b))
         let next = 0
         let groupId: unknown
-        const offer = (turn: Record<string, unknown>) => {
+        const offer = async (turn: Record<string, unknown>) => {
           if (groupId !== turn.id) {
             staging.completeTurn()
           }
           groupId = turn.id
-          staging.restore(turn)
+          await staging.restore(turn)
         }
         for await (const turn of loadCodexHistory(read, missing.pages, confirmReceipts)) {
           check()
           while (next < supplied.length && rank(supplied[next]!) <= rank(turn)) {
-            offer(supplied[next++]!)
+            await offer(supplied[next++]!)
             await yieldTurn()
           }
           if (selectCodexHistoryTurn(turn, view)) {
-            offer(turn)
+            await offer(turn)
           }
           await yieldTurn()
         }
         while (next < supplied.length) {
-          offer(supplied[next++]!)
+          await offer(supplied[next++]!)
           await yieldTurn()
         }
         const plan = staging.finish()
         restoreHelpers = staging.restoreHelpers
-        Object.assign(view, await readCodexHistoryJournalView(history, input.threadId, signal))
-        return plan
+        return plan ? { ...plan, expectedCursor } : null
       } finally {
         staging.dispose()
       }

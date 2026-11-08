@@ -69,7 +69,7 @@ export async function catchUpPiSession(input: {
     timeoutMs: input.timeoutMs ?? PI_HISTORY_CATCH_UP_TIMEOUT_MS,
     logger: input.logger,
     readView: (history) => readPiHistoryJournalView(history, input.lineage),
-    prepare: async ({ view: readView, journal, signal, deadline, check, warn }) => {
+    prepare: async ({ view: readView, history, signal, deadline, check, warn }) => {
       const view = await readView()
       const read = async (since: string | null) => {
         check()
@@ -106,7 +106,8 @@ export async function catchUpPiSession(input: {
       leaf = { entry: answer.leafId }
       return createPiHistoryImportPlan({
         sessionFile: input.sessionFile,
-        journal,
+        epoch: history.epoch,
+        reads: history.reads,
         path: branch.path.filter((entry) => !view.accounted.has(entry.id)),
         rewound: branch.rewound,
         divider: view.hasRows,

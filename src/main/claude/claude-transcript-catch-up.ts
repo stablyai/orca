@@ -10,6 +10,10 @@ import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { createClaudeTranscriptImportPlan } from './claude-transcript-import-plan'
 import { readClaudeTranscriptTail } from './claude-transcript-tail'
+import {
+  claudeTranscriptItemKeys,
+  createClaudeTranscriptItemReader
+} from './claude-transcript-item-reader'
 
 const DEFAULT_CLAUDE_CATCH_UP_TIMEOUT_MS = 30_000
 type ClaudeHistoryView = {
@@ -65,7 +69,7 @@ export async function catchUpClaudeTranscript(input: {
         )
         return { hasRows, newest }
       }),
-    prepare: async ({ view, journal, signal, check, yieldTurn, warn }) => {
+    prepare: async ({ view, history, signal, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
       // A moved project can leave its transcript outside the cwd's bucket; the resolver probes both.
       const filePath = await resolveSessionFilePath(
@@ -86,19 +90,33 @@ export async function catchUpClaudeTranscript(input: {
         return null
       }
       complete = true
+      const items = await createClaudeTranscriptItemReader(
+        history.reads,
+        input.sessionId,
+        tail.rows.flatMap((row) => {
+          const attachment = row.attachment
+          const source =
+            attachment && typeof attachment === 'object' && 'source_uuid' in attachment
+              ? attachment.source_uuid
+              : undefined
+          return [row.uuid, source].filter((uuid): uuid is string => typeof uuid === 'string')
+        }),
+        tail.rows.flatMap((row) => claudeTranscriptItemKeys(row, input.providerSessionId))
+      )
       const staging = createClaudeTranscriptImportPlan({
         sessionId: input.sessionId,
         providerSessionId: input.providerSessionId,
-        journal,
+        epoch: history.epoch,
+        items,
         rewound: planned.hasRows ? tail.rewound : null,
         check
       })
       try {
         for (const row of tail.rows) {
-          staging.restore(row)
+          await staging.restore(row)
           await yieldTurn()
         }
-        return staging.finish()
+        return await staging.finish()
       } finally {
         staging.dispose()
       }

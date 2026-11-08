@@ -100,6 +100,10 @@ export function journalSqlReads(
     canonicalItemId: async (itemId) => (await read({ kind: 'canonical-item-id', itemId })).itemId,
     canonicalItemIds: async (itemIds) =>
       (await read({ kind: 'canonical-item-ids', itemIds })).items,
+    historyItems: async (itemIds, options) =>
+      (await read({ kind: 'history-items', itemIds, options })).items,
+    claudeHistoryPrompts: async (sessionId, uuids) =>
+      (await read({ kind: 'claude-history-prompts', sessionId, uuids })).prompts,
     submission: async (clientMessageId) =>
       (await read({ kind: 'submission', clientMessageId })).submission,
     submissionBody: async (clientMessageId) =>

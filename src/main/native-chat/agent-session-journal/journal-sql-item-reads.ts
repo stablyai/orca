@@ -1,3 +1,11 @@
+import {
+  readJournalHistoryItems,
+  readClaudeHistoryPrompts,
+  type JournalHistoryItem,
+  type JournalHistoryReadOptions,
+  type JournalHistoryPrompt
+} from './journal-history-items'
+import { journalSqlHistoryOpeners, journalSqlUserItemIds } from './journal-sql-history-items'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -32,6 +40,9 @@ export type JournalSqlItemRead =
       afterOrdinal: number
       limit: number
     }
+  | { kind: 'history-items'; itemIds: readonly string[]; options?: JournalHistoryReadOptions }
+  | { kind: 'claude-history-prompts'; sessionId: string; uuids: readonly string[] }
+  | { kind: 'canonical-item-ids'; itemIds: readonly string[] }
   | { kind: 'context-floor' }
   | { kind: 'running-turn' }
   | { kind: 'context-usage' }
@@ -43,6 +54,9 @@ export type JournalSqlItemRead =
 
 export type JournalSqlItemReadResult =
   | { kind: 'items-by-kind'; items: AgentJournalRenderItem[]; nextOrdinal: number | null }
+  | { kind: 'history-items'; items: readonly JournalHistoryItem[] }
+  | { kind: 'claude-history-prompts'; prompts: readonly JournalHistoryPrompt[] }
+  | { kind: 'canonical-item-ids'; items: { itemId: string; canonicalItemId: string }[] }
   | { kind: 'context-floor'; floor: AgentJournalCursor | null }
   | { kind: 'running-turn'; running: { item: AgentJournalRenderItem; turnId: string } | null }
   | { kind: 'context-usage'; usage: AgentSessionContextUsage }
@@ -69,6 +83,46 @@ export function readJournalSqlItems(
 ): JournalSqlItemReadResult {
   const { scope } = context
   switch (operation.kind) {
+    case 'canonical-item-ids': {
+      const values = new JournalSqlReadValues(scope, () => {})
+      return {
+        kind: 'canonical-item-ids',
+        items: operation.itemIds.map((itemId) => ({
+          itemId,
+          canonicalItemId: values.get<string>('aliases', itemId) ?? itemId
+        }))
+      }
+    }
+    case 'history-items': {
+      const values = new JournalSqlReadValues(scope, () => {})
+      const canonical = (key: string) => values.get<string>('aliases', key) ?? key
+      return {
+        kind: 'history-items',
+        items: readJournalHistoryItems(
+          {
+            canonicalItemId: canonical,
+            item: (key) => (context.visible(key) ? (context.item(key) ?? null) : null),
+            presentationRemoved: (key) => {
+              const itemId = canonical(key)
+              return values.has('tombstones', itemId) || !context.visible(itemId)
+            },
+            ...(operation.options?.includeOpeners
+              ? { turnsOpenedBy: (key: string) => journalSqlHistoryOpeners(scope, key) }
+              : {})
+          },
+          operation.itemIds
+        )
+      }
+    }
+    case 'claude-history-prompts':
+      return {
+        kind: 'claude-history-prompts',
+        prompts: readClaudeHistoryPrompts(
+          journalSqlUserItemIds(scope, context.visible),
+          operation.sessionId,
+          operation.uuids
+        )
+      }
     case 'continuation-context':
       return { kind: 'continuation-context', context: readJournalSqlContinuationContext(scope) }
     case 'message-options': {

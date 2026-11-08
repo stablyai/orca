@@ -14,7 +14,6 @@ import type {
 } from '../journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionHistoryJournal } from '../journal-ingress/structured-agent-session-journal-views'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import type { StructuredAgentSessionTransitionJournal } from '../journal-ingress/structured-agent-session-transition'
 
 export const HISTORY_CATCH_UP_MAX_OPERATIONS = 1_024
 export const HISTORY_CATCH_UP_MAX_BYTES = 16 * 1024 * 1024
@@ -133,7 +132,6 @@ export type HistoryCatchUpContext<View> = {
   /** Read journal lazily so empty provider history needs no journal scan. */
   view: () => Promise<View>
   history: StructuredAgentSessionHistoryJournal
-  journal: StructuredAgentSessionTransitionJournal
   signal: AbortSignal
   deadline: number
   /** Enforce cancellation, deadline and current invocation before effects. */
@@ -192,8 +190,7 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
     )
     check()
     const history = sink.journalHistory?.()
-    const journal = sink.journalItems?.()
-    if (!history || !journal || !written.ok || !sink.tryAppendTransition) {
+    if (!history || !written.ok || !sink.tryAppendTransition) {
       return 'skipped'
     }
     let planned: Promise<View> | undefined
@@ -202,7 +199,6 @@ export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(
       input.prepare({
         view,
         history,
-        journal,
         signal: controller.signal,
         deadline,
         check,
