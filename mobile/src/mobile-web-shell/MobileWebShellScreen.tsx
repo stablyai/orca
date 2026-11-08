@@ -18,6 +18,7 @@ import { useMobileWebShellDroppedFrames } from './mobile-web-shell-dev-facts'
 import { ShellDevFacts } from './ShellDevFacts'
 import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
 import { playPageHaptic } from './page-haptics'
+import { useSpareShellDocumentRefill } from './use-spare-shell-document-refill'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
@@ -54,6 +55,9 @@ function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
       return "Couldn't download the latest app from this host. Showing the last version that worked."
   }
 }
+
+// A hidden parse on Android shares the shown page's renderer, so wait past its first paint.
+const SHELL_SPARE_DOCUMENT_DELAY_MS = 2000
 
 export type MobileWebShellScreenProps = {
   hostId: string
@@ -273,6 +277,8 @@ export function MobileWebShellScreen({
     parent: navigation.getParent()
   })
   useReportedShellOverlayLoad(onOverlayLoad, state, pageFrame, downloadProgress)
+  // A spare this screen claimed is gone; boot the next only once this page has painted and settled.
+  useSpareShellDocumentRefill(hostId, pageFrame === 'painted', SHELL_SPARE_DOCUMENT_DELAY_MS)
 
   // Profile failures preserve verified bundle bytes and retry the device store.
   useEffect(() => {

@@ -16,7 +16,9 @@ internal data class MobileWebShellAsset(val file: File, val contentType: String)
 
 /** Serve only a prebuilt manifest path map, never request-time path joins. TypeScript verifies bytes before activation; native uses an app-owned directory. */
 internal class MobileWebShellGeneration private constructor(
-  val entries: Map<String, MobileWebShellAsset>
+  val entries: Map<String, MobileWebShellAsset>,
+  /** Which build these bytes are; a spare booted from one host's copy may serve another host's. */
+  val buildId: String?
 ) {
   companion object {
     fun load(directoryPath: String): MobileWebShellGeneration? {
@@ -55,7 +57,7 @@ internal class MobileWebShellGeneration private constructor(
         File(directory, MOBILE_WEB_SHELL_MANIFEST_NAME),
         MOBILE_WEB_SHELL_MANIFEST_CONTENT_TYPE
       )
-      return MobileWebShellGeneration(entries)
+      return MobileWebShellGeneration(entries, root.opt("buildId") as? String)
     }
 
     /** Revalidate the schema across the TypeScript/native file boundary. */

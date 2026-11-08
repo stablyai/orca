@@ -279,6 +279,28 @@ describe('generation store', () => {
     expect(fs.paths()).toEqual([])
   })
 
+  it('lets a reader of a build let go before a commit or removal deletes it', async () => {
+    const fs = createFakeFileSystem()
+    const seen: { hostKey: string; buildOnDisk: boolean }[] = []
+    const store = createGenerationStore({
+      fileSystem: fs,
+      beforeHostFilesDeleted: async (hostKey) => {
+        seen.push({ hostKey, buildOnDisk: fs.paths().some((path) => path.includes(BUILD)) })
+      }
+    })
+    await activate(store, HOST)
+    expect(seen).toEqual([])
+
+    await activate(store, HOST, buildResult(SECOND))
+    await activate(store, HOST, buildResult(SECOND))
+    await store.deleteHostCache(HOST)
+
+    expect(seen).toEqual([
+      { hostKey: HOST, buildOnDisk: true },
+      { hostKey: HOST, buildOnDisk: false }
+    ])
+  })
+
   it('deletes one host tree without touching another', async () => {
     const fs = createFakeFileSystem()
     const other = deriveHostCacheKey('host-b')

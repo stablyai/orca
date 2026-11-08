@@ -11,6 +11,11 @@ import { parseGenerationManifest, readWaitingStage } from './generation-manifest
 import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
 import { stagingAssetsOf } from './generation-staging-assets'
 import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
+import {
+  GENERATIONS_DIRECTORY_NAME,
+  listActivatedGenerationHosts,
+  listGenerationHostDirectories
+} from './generation-host-directories'
 import { isHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
 import {
@@ -19,7 +24,6 @@ import {
   recordUpdateFailureIn
 } from './mobile-web-shell-update-failure-log'
 
-const GENERATIONS_DIRECTORY_NAME = 'generations'
 const STAGING_DIRECTORY_NAME = 'tmp'
 
 export const MAX_CACHED_HOSTS = 6
@@ -66,8 +70,11 @@ export type GenerationStore = {
 
 export function createGenerationStore(options: {
   fileSystem: GenerationFileSystem
+  // Runs before a host's built files are deleted, so nothing still reading them outlives them.
+  beforeHostFilesDeleted?: (hostKey: string) => Promise<void>
 }): GenerationStore {
   const fs = options.fileSystem
+  const beforeHostFilesDeleted = options.beforeHostFilesDeleted ?? (async () => undefined)
   const hostOrder = createGenerationHostOrder(fs)
   // Accept only handles minted here; structural lookalikes must not authorize renaming or deleting caller-selected directories.
   const issuedHandles = new WeakSet<StagedGeneration>()
@@ -87,31 +94,18 @@ export function createGenerationStore(options: {
   const stagingRoot = (hostKey: string): string =>
     joinUri(hostRoot(hostKey), STAGING_DIRECTORY_NAME)
 
-  async function listHostDirectories(): Promise<readonly GenerationDirectoryEntry[]> {
-    const entries = await fs.list(fs.rootUri)
-    return entries.filter((entry) => entry.isDirectory && isHostCacheKey(entry.name))
-  }
-
-  // Count/evict only hosts with generations; evicting staged-only hosts would delete a tree awaiting commit. Sweeps still visit them.
-  async function listActivatedHosts(): Promise<readonly string[]> {
-    const activated: string[] = []
-    for (const host of await listHostDirectories()) {
-      const generations = await fs.list(joinUri(fs.rootUri, host.name, GENERATIONS_DIRECTORY_NAME))
-      if (generations.some((entry) => entry.isDirectory)) {
-        activated.push(host.name)
-      }
-    }
-    return activated
-  }
+  const listHostDirectories = (): Promise<readonly GenerationDirectoryEntry[]> =>
+    listGenerationHostDirectories(fs)
 
   async function dropHostTree(hostKey: string): Promise<void> {
     activeMemo.delete(hostKey)
     deferred.drop(hostKey)
+    await beforeHostFilesDeleted(hostKey)
     await fs.delete(hostRoot(hostKey))
   }
 
   async function enforceHostLimit(order: readonly string[]): Promise<void> {
-    const hosts = await listActivatedHosts()
+    const hosts = await listActivatedGenerationHosts(fs)
     // Unlisted hosts sort first after index loss; keep the just-activated host last so it survives eviction.
     const evicted = new Set(
       [...hosts]
@@ -237,6 +231,9 @@ export function createGenerationStore(options: {
     // Verify the stage before deleting live data; aborted/swept handles must not destroy the activation.
     if (!(await fs.fileExists(joinUri(staged.directory, MANIFEST_FILE_NAME)))) {
       throw new Error(`staged generation ${staged.buildId} is no longer on disk`)
+    }
+    if (entries.length > 0) {
+      await beforeHostFilesDeleted(staged.hostKey)
     }
     // Delete old generations before rename: a crash then leaves no activation, whereas renaming first can leave two with no way to choose.
     for (const entry of entries) {

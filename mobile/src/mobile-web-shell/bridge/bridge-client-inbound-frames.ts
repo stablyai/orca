@@ -20,6 +20,7 @@ export type BridgeInboundFramePort = {
   acceptState: (connection: BridgeConnectionSnapshot) => void
   acceptConnectionPath: (connection: BridgeConnectionSnapshot) => void
   acceptBack: () => void
+  acceptParked: () => void
   acceptTerminalKey: (key: BridgeTerminalKeyId, inputOwner?: string) => void
 }
 
@@ -62,6 +63,9 @@ export function createBridgeInboundFrameReader(
         return
       case 'connectionPath':
         port.acceptConnectionPath(message.connection)
+        return
+      case 'parked':
+        port.acceptParked()
         return
       case 'back':
         port.acceptBack()

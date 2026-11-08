@@ -42,7 +42,12 @@ export function bootRoute(
   return { default: BootRoute }
 }
 
-// Every page route sits under every page layout, so all layouts load. Failed preloads boot through the lazy path.
+// Every page route sits under every page layout, so a document can load them before it knows its route.
+// A spare waiting for its screen evaluates them while parked; a failed preload boots through the lazy path.
+export function preloadBootLayouts(): Promise<unknown> {
+  return Promise.allSettled(layouts.map((preload) => preload()))
+}
+
 export async function preloadBootRoutes(pathname: string): Promise<void> {
   const matching = screens.filter(({ pattern }) => matchesRoutePattern(pathname, pattern))
   // Expo Router prefers a fixed route over a catch-all one.
@@ -50,7 +55,7 @@ export async function preloadBootRoutes(pathname: string): Promise<void> {
     ({ pattern }) => !pattern.split('/').some((segment) => segment.startsWith('[...'))
   )
   await Promise.allSettled([
-    ...layouts.map((preload) => preload()),
+    preloadBootLayouts(),
     ...(fixed.length > 0 ? fixed : matching).map(({ preload }) => preload())
   ])
 }

@@ -303,6 +303,7 @@ async function mount(
       runtime: {
         createStore: () => store,
         mintSessionId: () => `session-${++minted}`,
+        claimSpareSessionId: async () => null,
         now: () => 0,
         setForegroundTimer: setForegroundTimer ?? timers.setTimer
       }
@@ -621,6 +622,7 @@ describe('the wait for the page to speak', () => {
         runtime: {
           createStore: () => fake.store,
           mintSessionId: () => 'session-id',
+          claimSpareSessionId: async () => null,
           now: () => 0,
           setForegroundTimer: createTimerSeam().setTimer
         }

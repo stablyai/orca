@@ -8,7 +8,7 @@ import Foundation
 //     ios/MobileWebShellOrigin.swift ios/MobileWebShellGeneration.swift ios/MobileWebShellCsp.swift \
 //     ios/MobileWebShellLoadState.swift ios/MobileWebShellResponseHeaders.swift \
 //     ios/MobileWebShellBridge.swift ios/MobileWebShellAppliedProps.swift \
-//     ios/MobileWebShellNavigationPolicy.swift \
+//     ios/MobileWebShellNavigationPolicy.swift ios/MobileWebShellSpareSlots.swift \
 //     tests/MobileWebShellChecks.swift && /tmp/mobile-web-shell-checks
 @main struct MobileWebShellChecks {
   static let session = "sess-01JN_aZ9"
@@ -426,6 +426,44 @@ import Foundation
     precondition(decide(machine) == .cancel)
   }
 
+  final class SparePage: MobileWebShellSparePage {
+    var isUsable = true
+    var destroyed = false
+    func destroy() {
+      destroyed = true
+      isUsable = false
+    }
+  }
+
+  /// One spare app-wide, handed out once and only to a directory holding its build.
+  static func checkSpareHandout() {
+    let slots = MobileWebShellSpareSlots<SparePage>()
+    let first = SparePage()
+    slots.park(MobileWebShellSpareEntry(buildId: "b1", hostKey: "a", sessionId: "s1", page: first))
+    precondition(!slots.wants(buildId: "b1"))
+    precondition(!slots.wants(buildId: "b9", replace: false) && slots.wants(buildId: "b9"))
+    precondition(slots.take(buildId: "b2", directoryBuildId: "b2", hostKey: "c") == nil)
+    precondition(slots.take(buildId: "b1", directoryBuildId: "b2", hostKey: "c") == nil)
+    precondition(slots.take(buildId: "b1", directoryBuildId: nil, hostKey: "c") == nil)
+    precondition(slots.take(buildId: "b1", directoryBuildId: "b1", hostKey: "c")?.sessionId == "s1")
+    precondition(slots.take(buildId: "b1", directoryBuildId: "b1", hostKey: "c") == nil)
+    // The claim now reads host c's files: removing the booting host leaves it, removing c drops it.
+    slots.discard(hostKey: "a")
+    precondition(!first.destroyed)
+    slots.discard(hostKey: "c")
+    precondition(first.destroyed && slots.adopt(sessionId: "s1") == nil)
+    let replaced = SparePage()
+    slots.park(MobileWebShellSpareEntry(buildId: "b1", hostKey: "a", sessionId: "s2", page: replaced))
+    slots.park(MobileWebShellSpareEntry(buildId: "b2", hostKey: "a", sessionId: "s3", page: SparePage()))
+    precondition(replaced.destroyed)
+    // A claim whose page died before its view came is destroyed, not adopted.
+    let dying = SparePage()
+    slots.park(MobileWebShellSpareEntry(buildId: "b3", hostKey: "a", sessionId: "s4", page: dying))
+    precondition(slots.take(buildId: "b3", directoryBuildId: "b3", hostKey: "a") != nil)
+    dying.isUsable = false
+    precondition(slots.adopt(sessionId: "s4") == nil && dying.destroyed)
+  }
+
   static func main() {
     checkRequestResolution()
     checkGenerationMap()
@@ -435,6 +473,7 @@ import Foundation
     checkBridgeAcceptance()
     checkBridgePostTarget()
     checkBridgeByteCap()
+    checkSpareHandout()
     print("mobile web shell checks OK")
   }
 }

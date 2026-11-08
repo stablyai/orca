@@ -44,7 +44,7 @@ import { RpcClientProvider } from '../src/transport/client-context.web'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider.web'
 // Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
 import routeContext from './route-manifest'
-import { preloadBootRoutes } from './boot-route-preload'
+import { preloadBootLayouts, preloadBootRoutes } from './boot-route-preload'
 
 // The h/ tree omits the native root provider, so supply ExpoRoot’s wrapper after init gives us a client.
 // Router suspense handles pending chunks; rejected chunks belong to the outer fault boundary.
@@ -139,6 +139,8 @@ subscribeMobileUiLanguage(() => {
   target.lang = getUiIntlLocale()
 })
 stampPageMountState(target, 'started')
+// Evaluate the layouts before init arrives, so a parked spare has done that work by its claim.
+void preloadBootLayouts()
 
 bootstrapShellPage({
   target,

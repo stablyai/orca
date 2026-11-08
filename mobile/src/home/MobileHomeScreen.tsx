@@ -31,6 +31,7 @@ import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-l
 import { homeAgentNeedsYou, type HomeJumpBackInRow } from '../worktree/home-jump-back-in'
 import { isResumeTargetConfirmedMissing } from '../worktree/home-resume-card'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
+import { useSpareShellDocumentRefillOnFocus } from '../mobile-web-shell/use-spare-shell-document-refill'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
@@ -42,6 +43,9 @@ import { MobileHomeUsageTab } from './tabs/MobileHomeUsageTab'
 
 // The floating button's height plus its gap above the tab bar.
 const FAB_CLEARANCE = 56 + spacing.lg
+
+// Boot the next host page once Home has drawn and settled, not while its rows are still loading.
+const HOME_SPARE_DOCUMENT_DELAY_MS = 1000
 
 export function MobileHomeScreen() {
   const t = useMobileTranslation()
@@ -63,6 +67,11 @@ export function MobileHomeScreen() {
   const [visitedTabs, setVisitedTabs] = useState<ReadonlySet<HomeTabId>>(() => new Set(['feed']))
   const [automationsHostId, setAutomationsHostId] = useState<string | null>(null)
   const [tabBarHeight, setTabBarHeight] = useState(0)
+  // The most recently connected host is the likeliest next entry; any host on its build can claim it.
+  useSpareShellDocumentRefillOnFocus(
+    data.hostCatalogLoaded ? (data.sortedHosts[0]?.id ?? null) : null,
+    HOME_SPARE_DOCUMENT_DELAY_MS
+  )
 
   const selectTab = useCallback((next: HomeTabId) => {
     setTab(next)

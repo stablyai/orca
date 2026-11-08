@@ -20,6 +20,7 @@ import {
 import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
+import type { PageHostSnapshot } from './use-page-host-snapshot'
 
 const doubles = vi.hoisted((): { client: FakeRpcClient | null } => ({ client: null }))
 
@@ -115,6 +116,7 @@ function DeliverDuringCommit(props: {
 function Harness(props: {
   session: MobileWebShellSessionState
   sessionEstablished?: boolean
+  snapshot?: PageHostSnapshot | null
   posted: PostedFrame[]
   probe: Probe
   faults: BridgeErrorCapture[]
@@ -154,7 +156,7 @@ function Harness(props: {
       props.probe.backPops += 1
       return 'popped'
     },
-    snapshot: SNAPSHOT,
+    snapshot: props.snapshot === undefined ? SNAPSHOT : props.snapshot,
     readStorage: () => ({ storage: STORAGE, storageOversize: [] }),
     onStorageWrite: (key, value) => props.probe.storageWrites.push({ key, value }),
     // Use fresh callbacks each render; rebuilding for them would settle pending requests.
@@ -334,6 +336,45 @@ describe('the bridge channel', () => {
       })
     })
     expect(mounted.faults).toEqual([])
+  })
+})
+
+describe('a ready the page sent before its host existed', () => {
+  it('is answered with one init as soon as the host snapshot arrives', async () => {
+    const posted: PostedFrame[] = []
+    const probe = newProbe()
+    const readies: string[] = []
+    const render = (snapshot: PageHostSnapshot | null): ReactElement =>
+      createElement(Harness, {
+        session: readyState('session-one'),
+        snapshot,
+        posted,
+        probe,
+        faults: [],
+        readies
+      })
+    const rendered: { tree: ReactTestRenderer | null } = { tree: null }
+    await act(async () => {
+      rendered.tree = createTracked(render(null))
+    })
+    await act(async () => {
+      probe.view?.onBridgeMessage({ nativeEvent: { json: clientFrame({ type: 'ready' }) } })
+    })
+    expect(posted).toEqual([])
+    await act(async () => {
+      rendered.tree?.update(render(SNAPSHOT))
+    })
+    expect(posted.map((frame) => readBridgeHostMessage(frame.json))).toEqual([
+      {
+        ok: true,
+        message: expect.objectContaining({
+          type: 'init',
+          sessionId: 'session-one',
+          buildId: 'build-a'
+        })
+      }
+    ])
+    expect(readies).toEqual(['session-one'])
   })
 })
 

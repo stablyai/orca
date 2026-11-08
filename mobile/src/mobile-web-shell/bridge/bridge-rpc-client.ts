@@ -196,6 +196,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     acceptState: (connection) => acceptState(cache.apply(connection)),
     acceptConnectionPath: (connection) => acceptState(cache.applyPath(connection)),
     acceptBack: back.press,
+    acceptParked: () => handshake.stop(),
     acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
   })
 

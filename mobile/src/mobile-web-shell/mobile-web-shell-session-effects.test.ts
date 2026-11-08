@@ -23,7 +23,8 @@ import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-
 import { createGenerationStore, type GenerationStore } from './generation-store'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'
-import { download, stageUpdate } from './mobile-web-shell-session-effects'
+import { download, runShellEffect, stageUpdate } from './mobile-web-shell-session-effects'
+import { createShellPageDeadline } from './shell-page-deadline'
 
 const CLIENT: RpcClient = {
   sendRequest: async () => {
@@ -103,6 +104,7 @@ describe('a download that reuses the cached generation', () => {
       runtime: {
         createStore: () => store,
         mintSessionId: () => 's',
+        claimSpareSessionId: async () => null,
         now: () => 0,
         setForegroundTimer: () => () => {}
       },
@@ -304,5 +306,50 @@ describe('a download that reuses the cached generation', () => {
     } finally {
       fileSystem.moveDirectory = moveDirectory
     }
+  })
+})
+
+describe('opening a cached build', () => {
+  const HOST = deriveHostCacheKey('host-a')
+
+  async function open(spare: string | null) {
+    const claims: string[][] = []
+    const { events, send } = collect()
+    await runShellEffect(
+      { kind: 'open-generation', directory: '/gen/b1', buildId: 'b1', totalBytes: 4 },
+      {
+        store: createGenerationStore({ fileSystem: createFakeGenerationFileSystem() }),
+        client: null,
+        hostId: 'host-a',
+        hostKey: HOST,
+        runtime: {
+          createStore: () => {
+            throw new Error('unused')
+          },
+          mintSessionId: () => 'minted',
+          claimSpareSessionId: async (...args) => {
+            claims.push(args)
+            return spare
+          },
+          now: () => 0,
+          setForegroundTimer: () => () => {}
+        },
+        flow: 2,
+        startedAt: 0,
+        downloads: new Set(),
+        deadline: createShellPageDeadline(() => () => {}),
+        manifest: { current: null },
+        send
+      }
+    )
+    return { claims, sessionIds: events.map((event) => 'sessionId' in event && event.sessionId) }
+  }
+
+  it("mounts under a parked spare's session id when it holds the build, and mints one otherwise", async () => {
+    expect(await open('spare-id')).toEqual({
+      claims: [['b1', HOST, '/gen/b1']],
+      sessionIds: ['spare-id']
+    })
+    expect((await open(null)).sessionIds).toEqual(['minted'])
   })
 })

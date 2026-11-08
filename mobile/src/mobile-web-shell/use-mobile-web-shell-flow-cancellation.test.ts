@@ -180,6 +180,7 @@ it.each([8, 80])(
     const runtime = {
       createStore: () => store,
       mintSessionId: () => 'flow-session',
+      claimSpareSessionId: async () => null,
       now: () => 0,
       setForegroundTimer: () => () => {}
     }

@@ -236,6 +236,9 @@ const BridgeHostMessageSchema = z.union([
   }),
   // Back names no destination; only the native stack knows what screen lies beneath.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
+  // Native parked this booted document for a screen that has not opened yet: stop asking for init.
+  // The screen that claims it answers the ready native kept, so the page needs no timer while it waits.
+  z.object({ v: versionSchema, type: z.literal('parked') }),
   // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.
   z.object({
     v: versionSchema,

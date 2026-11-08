@@ -20,6 +20,8 @@ struct MobileWebShellGeneration {
   static let maxContentTypeLength = 128
 
   let entries: [String: MobileWebShellAsset]
+  /// Which build these bytes are; a spare booted from one host's copy may serve another host's.
+  let buildId: String?
 
   static func load(directoryPath: String) throws -> MobileWebShellGeneration {
     guard directoryPath.hasPrefix("/") else { throw MobileWebShellGenerationError.unreadable }
@@ -65,7 +67,7 @@ struct MobileWebShellGeneration {
       file: directory.appendingPathComponent(manifestName, isDirectory: false),
       contentType: manifestContentType
     )
-    return MobileWebShellGeneration(entries: entries)
+    return MobileWebShellGeneration(entries: entries, buildId: root["buildId"] as? String)
   }
 
   /// NSNumber bridges true and 1.0 to Int; check JSON’s written number type to require integer 1.
