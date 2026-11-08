@@ -339,7 +339,6 @@ it.each(cases)(
         })
         return prepareJournalOutcomeWrite(db, saved, rows, active.clock.now)
       },
-      false,
       (result) => {
         result.adopt()
       }
