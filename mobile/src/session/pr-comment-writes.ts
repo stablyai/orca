@@ -4,6 +4,8 @@ import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item
 import { defineHostMutation } from '../query/host-mutation'
 import { translate } from '../i18n/mobile-i18n'
 import { isLogicalClientCutoverError } from '../transport/logical-client-cutover-error'
+import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   fetchAddIssueComment,
@@ -66,7 +68,10 @@ export function prCommentTarget(queries: PrQueryScope | null): PrCommentTarget {
     : null
 }
 
-function sendWrite(client: RpcClient, vars: PrCommentWriteVars): Promise<GitHubPrMutationOutcome> {
+function sendWrite(
+  client: RpcOperationSender,
+  vars: PrCommentWriteVars
+): Promise<GitHubPrMutationOutcome> {
   const { worktreeId, prRepo, write } = vars
   switch (write.kind) {
     case 'reply':
@@ -159,6 +164,31 @@ function unconfirmed(): Error {
   )
 }
 
+// Whether the re-read comments show this write, or undefined when they can't tell.
+function writeLanded(comments: readonly PRComment[], write: PrCommentWrite): boolean | undefined {
+  switch (write.kind) {
+    case 'resolve': {
+      const thread = comments.filter((comment) => comment.threadId === write.params.threadId)
+      return thread.length > 0
+        ? thread.every((comment) => (comment.isResolved === true) === write.params.resolve)
+        : undefined
+    }
+    case 'edit': {
+      const edited = comments.find((comment) => comment.id === write.params.commentId)
+      return edited ? edited.body === write.params.body : undefined
+    }
+    case 'delete':
+      // An empty list may be a read whose every source failed.
+      return comments.length > 0
+        ? !comments.some((comment) => comment.id === write.params.commentId)
+        : undefined
+    case 'reply':
+    case 'root':
+    case 'line':
+      return undefined
+  }
+}
+
 type CommentsRead = { comments: PRComment[] | null; order: number }
 
 // Re-reads issued per details entry, and the latest one accepted: two writes' re-reads can land out of order.
@@ -192,18 +222,45 @@ function acceptCommentsRead(queryClient: QueryClient, key: QueryKey, read: Comme
 export const prCommentWrite = defineHostMutation({
   offline: 'draft',
   send: async (client: RpcClient, vars: PrCommentWriteVars): Promise<CommentsRead> => {
-    const outcome = await sendWrite(client, vars)
+    // The settle helpers report a dropped reply as a failure; keep its identity so a write the host may have
+    // applied is settled by `confirm` instead of being rolled back as refused.
+    let lost: Error | null = null
+    const outcome = await sendWrite(
+      {
+        sendRequest: (method, params, options) =>
+          client.sendRequest(method, params, options).catch((error: unknown) => {
+            if (
+              error instanceof Error &&
+              (isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error))
+            ) {
+              lost = error
+            }
+            throw error
+          })
+      },
+      vars
+    )
     if (!outcome.ok) {
-      // A path switch mid-send may or may not have delivered it: say so, and keep the typed text.
-      throw isLogicalClientCutoverError(new Error(outcome.error))
-        ? unconfirmed()
-        : new Error(outcome.error)
+      throw lost ?? new Error(outcome.error)
     }
     return readComments(client, vars).catch(() => ({ comments: null, order: 0 }))
   },
-  // The comments can't prove a lost write landed (a new comment has no id yet, and an empty list may be a
-  // failed read), so a lost reply is reported as unknown rather than success, and never posted again.
-  confirm: () => Promise.reject(unconfirmed()),
+  // A lost reply is settled by what the host's comments show, never by sending again. Resolve, edit and delete
+  // leave a mark that can be checked; a new comment has no id yet, so its outcome stays unknown and the text stays.
+  confirm: async (client: RpcClient, vars: PrCommentWriteVars): Promise<CommentsRead> => {
+    const read = await readComments(client, vars).catch(() => null)
+    const landed = read?.comments ? writeLanded(read.comments, vars.write) : undefined
+    if (landed === false) {
+      throw new Error(
+        translate('session.usePrCommentActions.actionFailed', 'Comment action failed')
+      )
+    }
+    if (landed === undefined || !read) {
+      // Still unknown: keep the optimistic state rather than roll back a write that may have landed.
+      throw markRpcDeliveryUnknown(unconfirmed())
+    }
+    return read
+  },
   optimistic: {
     keys: (_hostId, vars) => (vars.target ? [vars.target.key] : []),
     apply: (queryClient, _hostId, vars) => {
