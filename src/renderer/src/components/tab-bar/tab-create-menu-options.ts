@@ -2,10 +2,12 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
+import type { SystemMonitorDescriptor } from '../../../../shared/system-monitors'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
+  | 'launch-monitor'
   | 'new-browser'
   | 'new-markdown'
   | 'new-simulator'
@@ -32,6 +34,7 @@ export type TabCreateMenuOption = {
   label: string
   shell?: BuiltInWindowsTerminalShell
   pluginNewFile?: TabCreateMenuPluginNewFile
+  monitor?: SystemMonitorDescriptor
 }
 
 export type TabCreateMenuOptionsContext = {
@@ -42,6 +45,7 @@ export type TabCreateMenuOptionsContext = {
   simulatorIsGoTo: boolean
   terminalOnly: boolean
   windowsShellEntries?: readonly { label: string; shell: BuiltInWindowsTerminalShell }[]
+  systemMonitors?: readonly SystemMonitorDescriptor[]
 }
 
 export const TAB_CREATE_MENU_QUERY_MAX_BYTES = 2 * 1024
@@ -112,6 +116,27 @@ export function buildTabCreateMenuOptions(
         t('auto.components.tab.bar.tab.create.menu.options.4f23f4d01d', 'new shell')
       ]
     })
+  }
+
+  if (context.systemMonitors && context.systemMonitors.length > 0) {
+    for (const monitor of context.systemMonitors) {
+      const monitorPrefix = translate(
+        'auto.components.tab.bar.tab.create.menu.options.monitorPrefix',
+        'Monitor:'
+      )
+      options.push({
+        id: `launch-monitor:${monitor.id}`,
+        kind: 'launch-monitor',
+        label: `${monitorPrefix} ${monitor.label}`,
+        monitor,
+        keywords: [
+          monitor.label,
+          monitor.command,
+          monitor.categoryLabel,
+          ...monitor.keywords
+        ]
+      })
+    }
   }
 
   if (context.hasNewBrowser) {

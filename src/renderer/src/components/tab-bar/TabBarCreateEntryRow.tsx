@@ -2,6 +2,7 @@ import { tabAgentLaunchOptionDisabled } from './tab-agent-launch-options'
 import { terminalPendingLabel } from './new-tab-agent-menu-model'
 import React from 'react'
 import {
+  Activity,
   FilePlus,
   FileText,
   GitCompare,
@@ -198,6 +199,8 @@ function getActionPresentation(
         <FileText className="size-3.5 shrink-0" aria-hidden="true" />
       ) : option.option.kind === 'new-simulator' || option.option.kind === 'go-to-simulator' ? (
         <Smartphone className="size-3.5 shrink-0" aria-hidden="true" />
+      ) : option.option.kind === 'launch-monitor' ? (
+        <Activity className="size-3.5 shrink-0" aria-hidden="true" />
       ) : (
         <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
       )

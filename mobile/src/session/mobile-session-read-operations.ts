@@ -3,6 +3,7 @@ import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { terminalComposerDraftSchema } from '../terminal/terminal-reply-schema'
 import {
   detectedAgentsSchema,
+  detectedSystemMonitorsSchema,
   markdownTabDocumentSchema,
   refreshedAgentsSchema,
   runtimeRepoListSchema,
@@ -72,6 +73,16 @@ export const preflightDetectAgentsRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('detected-agents', detectedAgentsSchema)
+  })
+)
+
+export const preflightDetectMonitorsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'preflight.detect-monitors',
+    method: 'preflight.detectMonitors',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('detected-system-monitors', detectedSystemMonitorsSchema)
   })
 )
 

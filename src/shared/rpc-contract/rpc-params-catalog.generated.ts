@@ -1401,6 +1401,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.update': PluginUpdateParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
+  'preflight.detectMonitors': PreflightAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
   'preflight.detectRemoteWindowsTerminalCapabilities':
     PreflightDetectRemoteWindowsTerminalCapabilities,
