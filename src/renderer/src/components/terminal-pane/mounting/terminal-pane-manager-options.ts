@@ -25,7 +25,10 @@ import { handleTerminalWebLinkClick } from '../links/http/terminal-web-link-clic
 import { createTerminalPaneCreatedHandler } from './terminal-pane-created-handler'
 import { createTerminalPaneClosedHandler } from './terminal-pane-closed-handler'
 import { formatTerminalUrlTooltip } from '../links/terminal-url-tooltip'
-import { reportActiveRendererPtyForPane } from '../pty-transport/renderer-active-pty'
+import {
+  reportActiveRendererPtyForPane,
+  syncPaneOutputCadences
+} from '../pty-transport/renderer-active-pty'
 import { resolveTerminalLayoutActiveLeafId } from '../layout/ownership/terminal-layout-active-leaf'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
@@ -74,6 +77,7 @@ export function createTerminalPaneManagerOptions(
         context.deps.persistLayoutSnapshot()
       }
       reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
+      syncPaneOutputCadences(panePtyBindingsRef.current)
       const focusedBinding = panePtyBindingsRef.current.get(pane.id) as
         | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
         | undefined

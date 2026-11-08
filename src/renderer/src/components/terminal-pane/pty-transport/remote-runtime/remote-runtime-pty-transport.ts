@@ -1,3 +1,4 @@
+import type { TerminalOutputCadence } from '../../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { pairedAgentLaunchInputs } from '@/lib/paired-agent-launch-inputs'
@@ -300,6 +301,7 @@ export function createRemoteRuntimePtyTransport(
   let multiplexedStream: RemoteRuntimeMultiplexedTerminal | null = null
   let multiplexedStreamHandle: string | null = null
   let desiredOutputPaused = false
+  let desiredOutputCadence: TerminalOutputCadence = 'focused'
   let desiredViewport: { cols: number; rows: number } | null = null
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   const surfacedErrorMessages = new Set<string>()
@@ -3068,6 +3070,7 @@ export function createRemoteRuntimePtyTransport(
       viewport: subscribedViewport ?? undefined,
       inputSessionId: inputJournal.sessionId,
       reportsPaneVisibility: true,
+      outputCadence: desiredOutputCadence,
       callbacks: {
         onData: (data, meta) => {
           if (isCurrentSubscription()) {
@@ -3341,6 +3344,8 @@ export function createRemoteRuntimePtyTransport(
     multiplexedStream = nextStream
     multiplexedStreamHandle = subscribedHandle
     installedStream = nextStream
+    // Why: focus may have moved during the subscribe round-trip.
+    nextStream.setOutputCadence(desiredOutputCadence)
     setAttachmentReady(subscriptionAttached)
     if (subscriptionAttached) {
       resetRecoveryReplacementPolicy()
@@ -4174,6 +4179,13 @@ export function createRemoteRuntimePtyTransport(
         stream?.reportsPausedOutputDrops?.() === true
       )
       return supported
+    },
+
+    setOutputCadence(cadence: TerminalOutputCadence): void {
+      desiredOutputCadence = cadence
+      if (connected && handle) {
+        getCurrentMultiplexedStream(handle)?.setOutputCadence(cadence)
+      }
     },
 
     resize(cols: number, rows: number, meta): boolean {
