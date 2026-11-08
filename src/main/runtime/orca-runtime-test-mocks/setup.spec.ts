@@ -294,6 +294,12 @@ vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) =
   describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
 }))
 
+// Fire-and-forget reclaim runs real Git on fixture paths and warns after the file ends.
+vi.mock(
+  '../../workspaces/creation/preparation/worktree-create-preparation-project-removal',
+  () => ({ releaseWorktreeCreatePreparationsForRepo: vi.fn() })
+)
+
 const { getWorktreeOwnerMocks } = vi.hoisted(() => {
   function createWorktreeOwnerMocks() {
     return (() => ({
