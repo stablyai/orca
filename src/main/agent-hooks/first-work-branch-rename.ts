@@ -55,6 +55,8 @@ export type FirstWorkBranchRenameDeps = {
     Partial<Pick<GlobalSettings, 'autoRenameBranchFromWork'>>
   getRepo: (repoId: string) => Repo | undefined
   getAgentEnvResolvers: () => CommitMessageAgentEnvironmentResolvers | undefined
+  /** The WSL distro the workspace's agents run in and undefined means the host. */
+  getAgentWslDistro?: (worktreeId: string) => Promise<string | undefined>
   getCurrentDisplayName: (worktreeId: string) => string | undefined
   getFolderWorkspacePath?: (worktreeId: string) => string | undefined
   isFolderWorkspaceWslMoveBlocked?: (worktreeId: string) => boolean
@@ -230,7 +232,12 @@ async function runAutoRename(
   }
   const params = resolvedParams.params
 
-  const target = await resolveGenerationTarget(worktreePath, params.agentId, deps)
+  const target = await resolveGenerationTarget(
+    worktreePath,
+    params.agentId,
+    deps,
+    await deps.getAgentWslDistro?.(worktreeId)
+  )
   if (!target) {
     deps.setRenameError(worktreeId, 'Could not prepare the branch-name generation environment.')
     return retry('could not prepare generation environment')
