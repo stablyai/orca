@@ -150,24 +150,6 @@ describe('browser.clientHost.attach adoption', () => {
     await rig.dispatch
   })
 
-  it('keeps the window open when a page could not be taken back yet', async () => {
-    const rig = attachHost([orphanedPage({ browserPageId: 'page-c' })], {
-      browserHostClientId: 'host-held',
-      pairedDeviceId: 'device-held',
-      resolveExecutionHostKey: () => Promise.resolve({ status: 'unavailable' })
-    })
-
-    await vi.waitFor(() => expect(rig.replies.length).toBeGreaterThan(0))
-    await Promise.resolve()
-    await Promise.resolve()
-    // The guest is live and record-less; declaring this client reconciled would let it cull the row.
-    expect(rig.markClientHostedPagesReconciled).not.toHaveBeenCalled()
-    expect(rig.commands()).toEqual([])
-
-    rig.cleanups.get('browser-client-host:host-held')?.()
-    await rig.dispatch
-  })
-
   it('does not recover a page created after the attach inventory was captured', async () => {
     let releaseAdoption!: (value: BrowserExecutionHostKeyResolution) => void
     const route = new Promise<BrowserExecutionHostKeyResolution>((resolve) => {

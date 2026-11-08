@@ -8,17 +8,23 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import type { BrowserPageGrabToastState } from '../describe-page/browser-page-types'
+import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
+import type {
+  BrowserPageGrabAnnotations,
+  BrowserPageGrabToastState
+} from '../describe-page/browser-page-types'
 
 export function BrowserPageGrabToast({
   grabToast,
   grabToastTimerRef,
   dismissGrabToast,
+  copyGrabScreenshot,
   setGrabToast
 }: {
   grabToast: BrowserPageGrabToastState
   grabToastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
   dismissGrabToast: () => void
+  copyGrabScreenshot: BrowserPageGrabAnnotations['copyGrabScreenshot']
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
 }): React.JSX.Element {
   return (
@@ -74,17 +80,21 @@ export function BrowserPageGrabToast({
                 onSelect={() => {
                   const dataUrl = grabToast.payload?.screenshot?.dataUrl
                   if (dataUrl?.startsWith('data:image/png;base64,')) {
-                    void window.api.ui.writeClipboardImage(dataUrl)
-                    setGrabToast((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            message: translate(
-                              'auto.components.browser.pane.BrowserPane.f30d2d35a7',
-                              'Screenshotted'
-                            )
-                          }
-                        : null
+                    copyGrabScreenshot(dataUrl, (copied) =>
+                      setGrabToast((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              type: copied ? 'success' : 'error',
+                              message: copied
+                                ? translate(
+                                    'auto.components.browser.pane.BrowserPane.f30d2d35a7',
+                                    'Screenshotted'
+                                  )
+                                : imageCopyFailedMessage()
+                            }
+                          : null
+                      )
                     )
                   }
                 }}

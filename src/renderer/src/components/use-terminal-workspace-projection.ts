@@ -10,6 +10,11 @@ import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-
 import type { TerminalWorkspaceStoreController } from './use-terminal-workspace-store-bindings'
 import { useWorktreeFiles } from './terminal/use-worktree-files'
 
+// Read every render: the titlebar strip can mount after this host. A hook result is never memoized.
+function useTitlebarTabsTarget(): HTMLElement | null {
+  return document.getElementById('titlebar-tabs')
+}
+
 export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStoreController) {
   const {
     activeGroupIdByWorktree,
@@ -54,7 +59,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability(
     workspaceSessionReady && hydrationSucceeded
   )
-  const titlebarTabsTarget = document.getElementById('titlebar-tabs')
+  const titlebarTabsTarget = useTitlebarTabsTarget()
 
   useEffect(() => {
     if (!activeWorktreeId) {

@@ -515,11 +515,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
 
   private func emit(_ emission: MobileWebShellLoadEmission?) {
     guard let emission else { return }
-    var payload: [String: Any] = ["state": emission.state]
-    if let reason = emission.reason {
-      payload["reason"] = reason
-    }
-    onLoadState(payload)
+    onLoadState(emission.payload)
   }
 
   private func reportDocumentFailure() {
@@ -625,7 +621,9 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
   /// Report renderer death; memory pressure/provider updates look alike, so the caller owns retry policy.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
     clearBridgeTarget()
-    emit(loadState.failed(.renderProcessGone))
+    // Jetsam takes WebContent while Orca is backgrounded; the report can arrive as the app resumes, before it is active.
+    let background = window == nil || UIApplication.shared.applicationState != .active
+    emit(loadState.failed(.renderProcessGone, background: background))
   }
 
   func webView(

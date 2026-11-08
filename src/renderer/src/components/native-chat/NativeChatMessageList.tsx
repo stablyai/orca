@@ -4,12 +4,14 @@ import {
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
 } from './appearance/native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './viewport/scroll/NativeChatJumpToLatest'
+import { withoutPullRequestEventRows } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   nativeChatScrollsToLatestOnSend,
+  nativeChatShowsCiResultLines,
   nativeChatShowsTurnDiffSummary
 } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
@@ -117,6 +119,7 @@ export function NativeChatMessageList({
   stopping?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const receipts = useMemo(
     () =>
       journalItems ? desktopStructuredTranscript.transcript(journalItems).receipts : new Map(),
@@ -165,7 +168,13 @@ export function NativeChatMessageList({
     journalSubmissions,
     latestTurn
   )
-  const { messages: rows, turnKeys, liveTurnKey } = turnRows
+  const { liveTurnKey } = turnRows
+  const showCiResultLines = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
+  // Hidden lines leave the transcript entirely, so they reserve no row or gap.
+  const { messages: rows, turnKeys } = useMemo(
+    () => (showCiResultLines ? turnRows : withoutPullRequestEventRows(turnRows)),
+    [showCiResultLines, turnRows]
+  )
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turnDiffs = useNativeChatTurnDiffs(
     showTurnDiffs ? turnRows : null,
@@ -357,7 +366,7 @@ export function NativeChatMessageList({
               {...readerInput.scrollerProps}
               // Measurement finds this named scroll root independently of utility classes.
               data-native-chat-scroll
-              aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
+              aria-label={t('components.native-chat.transcriptLabel', 'Conversation')}
               // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
               className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
             >

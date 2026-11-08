@@ -6,6 +6,7 @@ import {
   type UnloadModelAfterMinutes
 } from '../../../../../shared/voice-model-unload'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatMinutesDuration } from '@/i18n/ui-intl-formatters'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
@@ -16,14 +17,18 @@ function choiceValue(minutes: UnloadModelAfterMinutes): string {
   return minutes === null ? NEVER_VALUE : String(minutes)
 }
 
-function choiceLabel(minutes: UnloadModelAfterMinutes): string {
+function choiceLabel(
+  minutes: UnloadModelAfterMinutes,
+  t: Translate = translate,
+  intlLocale?: string
+): string {
   if (minutes === null) {
-    return translate('components.settings.voice.modelUnload.never', 'Never')
+    return t('components.settings.voice.modelUnload.never', 'Never')
   }
   if (minutes === 0) {
-    return translate('components.settings.voice.modelUnload.immediately', 'Immediately')
+    return t('components.settings.voice.modelUnload.immediately', 'Immediately')
   }
-  return formatMinutesDuration(minutes)
+  return formatMinutesDuration(minutes, intlLocale)
 }
 
 type VoiceModelUnloadSettingProps = {
@@ -37,20 +42,22 @@ export function VoiceModelUnloadSetting({
   selectedModel,
   onUpdateVoiceSettings
 }: VoiceModelUnloadSettingProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const labelId = useId()
   const isCloudModel = selectedModel?.provider === 'openai'
   const current = unloadModelAfterMinutes(voiceSettings)
 
   return (
     <SettingsRow
-      label={translate('components.settings.voice.modelUnload.title', 'Unload Speech Model')}
+      label={t('components.settings.voice.modelUnload.title', 'Unload Speech Model')}
       description={
         isCloudModel
-          ? translate(
+          ? t(
               'components.settings.voice.modelUnload.cloud',
               'Cloud models run on the provider’s servers, so nothing stays loaded here.'
             )
-          : translate(
+          : t(
               'components.settings.voice.modelUnload.description',
               'How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.'
             )
@@ -73,7 +80,7 @@ export function VoiceModelUnloadSetting({
           <SelectContent>
             {UNLOAD_MODEL_AFTER_MINUTES_CHOICES.map((minutes) => (
               <SelectItem key={choiceValue(minutes)} value={choiceValue(minutes)}>
-                {choiceLabel(minutes)}
+                {choiceLabel(minutes, t, intlLocale)}
               </SelectItem>
             ))}
           </SelectContent>

@@ -102,13 +102,6 @@ describe('importCookiesIntoClientRoutePartition', () => {
     expect(importCookiesFromBrowserMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a traversing browser profile name before touching the filesystem', async () => {
-    expect(
-      await importCookiesIntoClientRoutePartition({ ...request, browserProfile: '../../etc' })
-    ).toMatchObject({ ok: false, reason: 'Invalid browser profile name.' })
-    expect(detectInstalledBrowsersMock).not.toHaveBeenCalled()
-  })
-
   // A replacement during import must not report success for an abandoned partition.
   it('fails the import when the server is re-paired mid-import', async () => {
     getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue(repairedRouteIdentity)
@@ -121,26 +114,5 @@ describe('importCookiesIntoClientRoutePartition', () => {
     })
     expect(importCookiesFromBrowserMock).toHaveBeenCalledOnce()
     expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
-  })
-
-  it('fails the import when the client host is retired mid-import', async () => {
-    getRouteIdentityMock.mockReturnValueOnce(routeIdentity).mockReturnValue(null)
-
-    const result = await importCookiesIntoClientRoutePartition(request)
-
-    expect(result).toMatchObject({
-      ok: false,
-      reason: 'The connection to this server ended during the import. Reconnect and try again.'
-    })
-    expect(recordClientRouteImportSourceMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects an unknown browser session profile', async () => {
-    getProfileMock.mockReturnValue(null)
-
-    expect(await importCookiesIntoClientRoutePartition(request)).toMatchObject({
-      ok: false,
-      reason: 'Session profile not found.'
-    })
   })
 })

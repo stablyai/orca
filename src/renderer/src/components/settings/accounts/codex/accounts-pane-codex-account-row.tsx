@@ -1,6 +1,7 @@
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import type { CodexRateLimitAccountsState } from '../../../../../../shared/managed-account-types'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getCodexAccountDisplayDetail } from '@/lib/codex-account-display-label'
 import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Badge } from '../../../ui/badge'
@@ -15,7 +16,9 @@ import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 
 export function renderCodexAccountRow(
   account: CodexRateLimitAccountsState['accounts'][number],
-  model: AccountsPaneSectionModel
+  model: AccountsPaneSectionModel,
+  t: Translate = translate,
+  intlLocale?: string
 ): React.JSX.Element {
   const {
     accountRuntime,
@@ -95,7 +98,7 @@ export function renderCodexAccountRow(
                 variant="outline"
                 className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
               >
-                {translate('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
+                {t('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
               </Badge>
             ) : null}
             {needsReauthentication ? (
@@ -103,7 +106,7 @@ export function renderCodexAccountRow(
                 variant="destructive"
                 className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
               >
-                {translate('auto.components.settings.AccountsPane.589eba1eee', 'Needs re-auth')}
+                {t('auto.components.settings.AccountsPane.589eba1eee', 'Needs re-auth')}
               </Badge>
             ) : null}
           </div>
@@ -120,14 +123,16 @@ export function renderCodexAccountRow(
             ) : null}
             {needsReauthentication ? (
               <span className="truncate">
-                {translate(
+                {t(
                   'auto.components.settings.AccountsPane.3d245ef7d9',
                   'Codex reported this sign-in is out of date'
                 )}
               </span>
             ) : null}
             {needsReauthentication ? <span className="shrink-0 opacity-50">•</span> : null}
-            <span className="shrink-0">{formatAccountTimestamp(account.lastAuthenticatedAt)}</span>
+            <span className="shrink-0">
+              {formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)}
+            </span>
           </div>
         </button>
 
@@ -155,7 +160,7 @@ export function renderCodexAccountRow(
             ) : (
               <RefreshCw className="size-3" />
             )}
-            {translate('auto.components.settings.AccountsPane.8a0f870153', 'Re-authenticate')}
+            {t('auto.components.settings.AccountsPane.8a0f870153', 'Re-authenticate')}
           </Button>
           <Button
             variant="ghost"
@@ -175,7 +180,7 @@ export function renderCodexAccountRow(
             ) : (
               <Trash2 className="size-3" />
             )}
-            {translate('auto.components.settings.AccountsPane.db209ee572', 'Remove')}
+            {t('auto.components.settings.AccountsPane.db209ee572', 'Remove')}
           </Button>
         </div>
       </div>

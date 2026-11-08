@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { usePublishedMachineName } from '@/components/machine-identity/use-published-machine-name'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import {
@@ -24,6 +24,7 @@ export function NativeChatComposerWorkspace({
   terminalTabId: string
   structuredTransport?: NativeChatComposerWorkspaceTarget
 }): React.JSX.Element {
+  const t = useTranslate()
   const { worktreeId, runtimeEnvironmentId } = structuredTransport ?? {}
   const hasTransport = structuredTransport !== undefined
   const selector = useMemo(
@@ -47,19 +48,17 @@ export function NativeChatComposerWorkspace({
     }
     try {
       await window.api.ui.writeClipboardText(value)
-      toast.success(translate('components.native-chat.copyMessage.copied', 'Copied'))
+      toast.success(t('components.native-chat.copyMessage.copied', 'Copied'))
     } catch {
-      toast.error(
-        translate('components.native-chat.composerWorkspace.copyFailed', 'Failed to copy')
-      )
+      toast.error(t('components.native-chat.composerWorkspace.copyFailed', 'Failed to copy'))
     }
   }
   const kindLabel =
     kind === 'folder'
-      ? translate('components.native-chat.composerWorkspace.folder', 'Folder')
+      ? t('components.native-chat.composerWorkspace.folder', 'Folder')
       : kind === 'main'
-        ? translate('components.native-chat.composerWorkspace.mainCheckout', 'Main checkout')
-        : translate('components.native-chat.composerWorkspace.worktree', 'Worktree')
+        ? t('components.native-chat.composerWorkspace.mainCheckout', 'Main checkout')
+        : t('components.native-chat.composerWorkspace.worktree', 'Worktree')
 
   return (
     <div className="@container mt-1 flex h-5.5 shrink-0 min-w-0 items-center gap-1.5 px-3 text-2xs text-chat-foreground-faint">
@@ -93,7 +92,7 @@ export function NativeChatComposerWorkspace({
                   ? 'hidden h-5.5 min-w-0 max-w-56 shrink justify-start @sm:flex'
                   : 'h-5.5 min-w-0 max-w-56 shrink justify-start'
               }
-              aria-label={translate(
+              aria-label={t(
                 'components.native-chat.composerWorkspace.copyIdentity',
                 'Copy {{value0}}',
                 { value0: checkout }
@@ -120,7 +119,7 @@ export function NativeChatComposerWorkspace({
               variant="ghost"
               size="xs"
               className="h-5.5 min-w-0 flex-1 justify-start"
-              aria-label={translate(
+              aria-label={t(
                 'components.native-chat.composerWorkspace.copyIdentity',
                 'Copy {{value0}}',
                 { value0: label }

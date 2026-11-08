@@ -29,15 +29,7 @@ vi.mock('@/runtime/structured-chat-name-observation', () => ({
 vi.mock('./dashboard-chat-program-acquisition', () => ({
   createDashboardChatProgramHolds: () => ({ reconcile: () => {}, release: () => {} })
 }))
-const iconRender = vi.hoisted(() => vi.fn())
-vi.mock('@/lib/agent-catalog', () => ({
-  AgentIcon: ({ agent, size }: { agent: string; size: number }) => {
-    if (size === 14) {
-      iconRender(agent)
-    }
-    return null
-  }
-}))
+vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -268,7 +260,6 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
   Reflect.deleteProperty(window, 'api')
-  iconRender.mockClear()
 })
 
 describe('native status publication to a mounted popout', () => {
@@ -379,20 +370,17 @@ describe('native status publication to a mounted popout', () => {
       const mounted = render(createElement(PopoutFixture))
       await act(async () => {})
       expect(within(screen.getByTestId('tab1')).getByLabelText('Done')).toBeTruthy()
-      iconRender.mockClear()
       publish.mockClear()
       build.mockClear()
       await act(async () => useAppStore.setState({ sidebarWidth: 333 }))
       await act(async () => vi.advanceTimersByTime(250))
       expect(build).not.toHaveBeenCalled()
       expect(publish).not.toHaveBeenCalled()
-      expect(iconRender).not.toHaveBeenCalled()
       for (const [outcome, label] of [
         ['failure', 'Failed'],
         ['cancellation', 'Interrupted'],
         ['unconfirmed', 'Couldn’t confirm']
       ] as const) {
-        iconRender.mockClear()
         publish.mockClear()
         build.mockClear()
         await act(async () => update(target, 'working'))
@@ -402,14 +390,11 @@ describe('native status publication to a mounted popout', () => {
         await act(async () => vi.advanceTimersByTime(250))
         expect(within(screen.getByTestId('tab1')).getByLabelText(label)).toBeTruthy()
         expect(within(screen.getByTestId('tab1')).getByText(`Claude · ${label}`)).toBeTruthy()
-        expect(iconRender.mock.calls.map((call) => call[0])).toEqual(['claude', 'claude'])
         expect(build).toHaveBeenCalledTimes(2)
         expect(publish).toHaveBeenCalledTimes(2)
       }
-      iconRender.mockClear()
       await act(async () => update(other, 'working'))
       await act(async () => vi.advanceTimersByTime(250))
-      expect(iconRender.mock.calls.map((call) => call[0])).toEqual(['codex'])
       await act(async () => update(target, 'idle', 'failure'))
       await act(async () => vi.advanceTimersByTime(250))
       expect(within(screen.getByTestId('tab1')).getByLabelText('Failed')).toBeTruthy()

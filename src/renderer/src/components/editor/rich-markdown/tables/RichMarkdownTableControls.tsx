@@ -21,7 +21,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getRichMarkdownTableControlLayout } from './rich-markdown-table-control-layout'
 import { useRichMarkdownTableContextMenu } from './use-rich-markdown-table-context-menu'
 import {
@@ -98,31 +98,20 @@ function TableActionMenu({
   onOpenChange: (open: boolean) => void
   style: React.CSSProperties
 }): React.JSX.Element {
+  const t = useTranslate()
   const isRow = axis === 'row'
   const label = isRow
-    ? translate('auto.components.editor.RichMarkdownTableControls.rowActions', 'Row actions')
-    : translate('auto.components.editor.RichMarkdownTableControls.columnActions', 'Column actions')
+    ? t('auto.components.editor.RichMarkdownTableControls.rowActions', 'Row actions')
+    : t('auto.components.editor.RichMarkdownTableControls.columnActions', 'Column actions')
   const beforeLabel = isRow
-    ? translate(
-        'auto.components.editor.RichMarkdownTableControls.insertRowAbove',
-        'Insert row above'
-      )
-    : translate(
-        'auto.components.editor.RichMarkdownTableControls.insertColumnLeft',
-        'Insert column left'
-      )
+    ? t('auto.components.editor.RichMarkdownTableControls.insertRowAbove', 'Insert row above')
+    : t('auto.components.editor.RichMarkdownTableControls.insertColumnLeft', 'Insert column left')
   const afterLabel = isRow
-    ? translate(
-        'auto.components.editor.RichMarkdownTableControls.insertRowBelow',
-        'Insert row below'
-      )
-    : translate(
-        'auto.components.editor.RichMarkdownTableControls.insertColumnRight',
-        'Insert column right'
-      )
+    ? t('auto.components.editor.RichMarkdownTableControls.insertRowBelow', 'Insert row below')
+    : t('auto.components.editor.RichMarkdownTableControls.insertColumnRight', 'Insert column right')
   const deleteLabel = isRow
-    ? translate('auto.components.editor.RichMarkdownTableControls.deleteRow', 'Delete row')
-    : translate('auto.components.editor.RichMarkdownTableControls.deleteColumn', 'Delete column')
+    ? t('auto.components.editor.RichMarkdownTableControls.deleteRow', 'Delete row')
+    : t('auto.components.editor.RichMarkdownTableControls.deleteColumn', 'Delete column')
   const run = (action: RichMarkdownTableAction): void => {
     runRichMarkdownTableAction(editor, action, { cellPosition })
   }
@@ -171,10 +160,7 @@ function TableActionMenu({
         </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => run('delete-table')}>
           <Trash2 />
-          {translate(
-            'auto.components.editor.RichMarkdownTableControls.deleteTable',
-            'Delete table'
-          )}
+          {t('auto.components.editor.RichMarkdownTableControls.deleteTable', 'Delete table')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -190,6 +176,7 @@ export function RichMarkdownTableControls({
   editor: Editor | null
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { active, hoveredAddAxis, hoveredAxis } = useRichMarkdownTableControlTarget(
     editor,
     scrollContainerRef
@@ -265,7 +252,7 @@ export function RichMarkdownTableControls({
     <div
       className="rich-markdown-table-controls"
       role="group"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.editor.RichMarkdownTableControls.tableActions',
         'Table actions'
       )}
@@ -295,10 +282,7 @@ export function RichMarkdownTableControls({
           axis="column"
           className="rich-markdown-table-add-control"
           icon={<Plus />}
-          label={translate(
-            'auto.components.editor.RichMarkdownTableControls.addColumn',
-            'Add column'
-          )}
+          label={t('auto.components.editor.RichMarkdownTableControls.addColumn', 'Add column')}
           style={{ ...style(layout.addColumn), height: visibleTableHeight }}
           onClick={() =>
             runRichMarkdownTableAction(editor, 'insert-column-right', {
@@ -312,7 +296,7 @@ export function RichMarkdownTableControls({
           axis="row"
           className="rich-markdown-table-add-control"
           icon={<Plus />}
-          label={translate('auto.components.editor.RichMarkdownTableControls.addRow', 'Add row')}
+          label={t('auto.components.editor.RichMarkdownTableControls.addRow', 'Add row')}
           style={{ ...style(layout.addRow), width: visibleTableWidth }}
           onClick={() =>
             runRichMarkdownTableAction(editor, 'insert-row-below', {

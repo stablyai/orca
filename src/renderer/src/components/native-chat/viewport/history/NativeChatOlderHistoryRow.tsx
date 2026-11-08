@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
 
 /** Pages that land quickly (local reads) should not flash a label. */
 const LOADING_LABEL_DELAY_MS = 200
 
 function DelayedLoadingLabel(): React.JSX.Element | null {
+  const t = useTranslate()
   const [visible, setVisible] = useState(false)
   useEffect(() => {
     const timer = window.setTimeout(() => setVisible(true), LOADING_LABEL_DELAY_MS)
     return () => window.clearTimeout(timer)
   }, [])
   return visible ? (
-    <>{translate('components.native-chat.loadingEarlierMessages', 'Loading earlier messages…')}</>
+    <>{t('components.native-chat.loadingEarlierMessages', 'Loading earlier messages…')}</>
   ) : null
 }
 
@@ -25,6 +26,7 @@ export function NativeChatOlderHistoryRow({
   olderHistory: NativeChatOlderHistoryAutoload
   loadingEarlier: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     // Stay out of flow so adding or removing the history row cannot shift the transcript.
     <div
@@ -43,8 +45,8 @@ export function NativeChatOlderHistoryRow({
           disabled={loadingEarlier}
         >
           {loadingEarlier
-            ? translate('components.native-chat.loadingEarlier', 'Loading…')
-            : translate('components.native-chat.loadEarlier', 'Load earlier messages')}
+            ? t('components.native-chat.loadingEarlier', 'Loading…')
+            : t('components.native-chat.loadEarlier', 'Load earlier messages')}
         </Button>
       )}
     </div>

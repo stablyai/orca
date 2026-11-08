@@ -249,6 +249,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         }
         void refresh({ force: true })
       },
+      slowWhileUnfocused: true,
       intervalMs: WORKSPACE_PORT_SCAN_INTERVAL_MS
     })
 

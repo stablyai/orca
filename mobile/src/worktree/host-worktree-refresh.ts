@@ -4,12 +4,6 @@ import {
 } from '../transport/shared-client-events'
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
-// Also the floor between change-driven reads, which arrive per agent step (Home throttles the same).
-const WORKTREE_REFRESH_MS = 3000
-
-type WorktreeRefreshOptions = { allowDuringModal?: boolean; queueIfInFlight?: boolean }
-type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
-
 // Keep lifecycle callers independent of RN types.
 type HostAppState = {
   currentState: string
@@ -18,8 +12,8 @@ type HostAppState = {
 
 type HostWorktreeRefreshArgs = {
   client: SharedClientEventsClient
-  fetchWorktrees: (options?: WorktreeRefreshOptions) => Promise<void>
-  fetchRepoMetadata: (options?: RepoRefreshOptions) => Promise<void>
+  /** Reads the worktree catalog again, after any read already out. */
+  refreshWorktrees: () => void
   /** Re-reads the Workspace options the phone shares with the desktop; `resend` retries unanswered changes. */
   syncViewSettings: (options?: { resend?: boolean }) => Promise<void>
   /** The host's sidebar feed, which replaces the poll: its notices say when anything changed. */
@@ -28,80 +22,33 @@ type HostWorktreeRefreshArgs = {
   appState: HostAppState
 }
 
+/**
+ * The host list's reads that are not query families: the shared Workspace options and the sidebar
+ * feed. The catalog, repos and server rows are queries the event router keeps fresh.
+ */
 export function startHostWorktreeRefresh({
   client,
-  fetchWorktrees,
-  fetchRepoMetadata,
+  refreshWorktrees,
   syncViewSettings,
   sidebarFeed,
   appState
 }: HostWorktreeRefreshArgs): () => void {
   let stale = false
   let eventStreamReady = false
-  // Set when a buried or backgrounded page skips notices; coming back then re-reads everything once.
+  // Set when a buried or backgrounded page skips a notice; coming back then re-reads the options once.
   let owed = false
-  let lastWorktreeReadAt = 0
-  let trailingRead: ReturnType<typeof setTimeout> | undefined
   const hidden = (): boolean => appState.currentState !== 'active'
 
-  const readWorktrees = (options?: WorktreeRefreshOptions): void => {
-    lastWorktreeReadAt = Date.now()
-    void fetchWorktrees(options)
-  }
-  const readEverything = (worktreeOptions?: WorktreeRefreshOptions): void => {
-    readWorktrees(worktreeOptions)
-    void fetchRepoMetadata({ force: true, queueIfInFlight: true })
-    void syncViewSettings({ resend: true })
-  }
-  const refreshWorktreesOnChange = (): void => {
-    if (trailingRead) {
-      return
-    }
-    const wait = lastWorktreeReadAt + WORKTREE_REFRESH_MS - Date.now()
-    if (wait <= 0) {
-      readWorktrees()
-      return
-    }
-    trailingRead = setTimeout(() => {
-      trailingRead = undefined
-      if (!hidden()) {
-        readWorktrees()
-      }
-    }, wait)
-  }
-
-  const refreshOnForeground = (): void => {
-    if (hidden()) {
+  const appStateSubscription = appState.addEventListener('change', (state) => {
+    if (state !== 'active' || hidden()) {
       return
     }
     sidebarFeed?.refresh()
-    clearTimeout(trailingRead)
-    trailingRead = undefined
     if (owed) {
       owed = false
-      // Queued: a read still in flight was sent before the notices this page skipped.
-      readEverything({ allowDuringModal: true, queueIfInFlight: true })
-      return
-    }
-    readWorktrees({ allowDuringModal: true })
-    void fetchRepoMetadata({ queueIfInFlight: true })
-  }
-
-  const appStateSubscription = appState.addEventListener('change', (state) => {
-    if (state === 'active') {
-      refreshOnForeground()
+      void syncViewSettings({ resend: true })
     }
   })
-  const interval = sidebarFeed
-    ? null
-    : setInterval(() => {
-        if (hidden()) {
-          return
-        }
-        void fetchWorktrees()
-        // Older hosts emit no reposChanged; retain foreground repo polling, self-throttled to once a minute.
-        void fetchRepoMetadata()
-      }, WORKTREE_REFRESH_MS)
   const unsubscribe = subscribeSharedClientEvents(client, (event) => {
     if (stale) {
       return
@@ -112,11 +59,11 @@ export function startHostWorktreeRefresh({
       const replayedAfterReconnect = eventStreamReady
       eventStreamReady = true
       if (replayedAfterReconnect) {
-        // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
+        // Why: client events are not queued while disconnected, so re-read after replay.
         if (hidden()) {
           owed = true
         } else {
-          readEverything()
+          void syncViewSettings({ resend: true })
         }
       }
       return
@@ -131,36 +78,19 @@ export function startHostWorktreeRefresh({
     }
     if (event.type === 'sidebarInputsChanged') {
       sidebarFeed?.changed(event)
-    } else if (event.type === 'reposChanged') {
-      // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
-      refreshWorktreesOnChange()
-      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
     } else if (event.type === 'workspaceViewChanged') {
       void syncViewSettings()
-    } else if (event.type === 'worktreesChanged') {
-      refreshWorktreesOnChange()
-    } else if (event.type === 'sshStateChanged') {
-      // Why: host badges carry SSH health, read with the labels from ssh.listTargetSummaries.
-      void fetchRepoMetadata({ force: true, queueIfInFlight: true })
     }
   })
 
   // A row's live content (agents, terminals) may follow any install; worktree.ps carries it.
-  const stopFollowingFeed = sidebarFeed?.onInstalled(
-    () => void fetchWorktrees({ queueIfInFlight: true })
-  )
+  const stopFollowingFeed = sidebarFeed?.onInstalled(refreshWorktrees)
   sidebarFeed?.refresh()
-  void fetchWorktrees()
-  void fetchRepoMetadata({ force: true, queueIfInFlight: true })
   // A lost write predates the new lifecycle’s replayed ready; explicitly resend it on reconnect.
   void syncViewSettings({ resend: true })
 
   return () => {
     stale = true
-    clearTimeout(trailingRead)
-    if (interval) {
-      clearInterval(interval)
-    }
     stopFollowingFeed?.()
     appStateSubscription.remove()
     unsubscribe()

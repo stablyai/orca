@@ -100,7 +100,8 @@ export function decodeTerminalStreamFrame(bytes: Uint8Array): TerminalStreamFram
     opcode,
     streamId: view.getUint32(4, true),
     seq: high * 0x100000000 + low,
-    payload: bytes.slice(HEADER_BYTES)
+    // Why a view: each message is a fresh buffer, and only the header is ever rewritten in place.
+    payload: bytes.subarray(HEADER_BYTES)
   }
 }
 

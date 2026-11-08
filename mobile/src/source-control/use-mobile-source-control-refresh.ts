@@ -33,14 +33,13 @@ export function useMobileSourceControlRefresh({
   }, [request, client, worktreeId])
   const refreshRepoProbe = prController.refreshPRSidebarRepoProbe
   return useCallback(() => {
-    void Promise.all([
-      loadStatus({ force: true, preserveReadyOnFailure: true, rereadSettings: true }),
-      refreshRepoProbe()
-    ]).then(([statusLoaded, hosted]) => {
-      if (statusLoaded && hosted) {
-        // Read the PR after React commits the refreshed branch and HEAD.
-        setRequest({ client, worktreeId })
+    void Promise.all([loadStatus({ force: true, rereadSettings: true }), refreshRepoProbe()]).then(
+      ([statusLoaded, hosted]) => {
+        if (statusLoaded && hosted) {
+          // Read the PR after React commits the refreshed branch and HEAD.
+          setRequest({ client, worktreeId })
+        }
       }
-    })
+    )
   }, [client, worktreeId, loadStatus, refreshRepoProbe])
 }

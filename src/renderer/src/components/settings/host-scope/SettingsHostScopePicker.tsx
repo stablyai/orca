@@ -5,7 +5,7 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
@@ -33,6 +33,7 @@ export function SettingsHostScopePicker({
   environments,
   onChoose
 }: SettingsHostScopePickerProps): React.JSX.Element {
+  const t = useTranslate()
   const scopeEnvironmentId = runtimeTargetEnvironmentId(scope.target)
   const value = scopeEnvironmentId
     ? `${ENVIRONMENT_VALUE_PREFIX}${scopeEnvironmentId}`
@@ -40,7 +41,7 @@ export function SettingsHostScopePicker({
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-8 py-2 text-xs">
       <span className="font-medium text-foreground">
-        {translate('auto.components.settings.SettingsHostScopePicker.label', 'Host')}
+        {t('auto.components.settings.SettingsHostScopePicker.label', 'Host')}
       </span>
       <Select
         value={value}
@@ -57,7 +58,7 @@ export function SettingsHostScopePicker({
       >
         <SelectTrigger
           size="sm"
-          aria-label={translate('auto.components.settings.SettingsHostScopePicker.label', 'Host')}
+          aria-label={t('auto.components.settings.SettingsHostScopePicker.label', 'Host')}
           className="min-w-44"
         >
           <SelectValue />
@@ -72,7 +73,7 @@ export function SettingsHostScopePicker({
           {scopeEnvironmentId && !scope.available ? (
             // Keep removed servers selected/unavailable instead of silently retargeting another host.
             <SelectItem value={value} disabled>
-              {translate(
+              {t(
                 'auto.components.settings.SettingsHostScopePicker.unavailable',
                 '{{value0}} (unavailable)',
                 { value0: scopeEnvironmentId }
@@ -82,7 +83,7 @@ export function SettingsHostScopePicker({
         </SelectContent>
       </Select>
       <span className="text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.SettingsHostScopePicker.description',
           'Accounts, detected agents and terminal options below are for this host.'
         )}
@@ -93,9 +94,10 @@ export function SettingsHostScopePicker({
 
 /** Shown in place of a host-owned pane whose chosen server is no longer saved. */
 export function SettingsHostScopeUnavailableNotice(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <p className="text-sm text-muted-foreground">
-      {translate(
+      {t(
         'auto.components.settings.SettingsHostScopePicker.unavailableNotice',
         'This server is no longer saved, so nothing can be shown for it. Choose another host at the top of Settings.'
       )}

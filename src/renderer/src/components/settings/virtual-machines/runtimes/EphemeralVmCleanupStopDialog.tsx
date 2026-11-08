@@ -1,6 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
@@ -24,6 +24,7 @@ export function EphemeralVmCleanupStopDialog({
   onCancel,
   onConfirm
 }: EphemeralVmCleanupStopDialogProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Dialog
       open={runtime !== null}
@@ -36,13 +37,10 @@ export function EphemeralVmCleanupStopDialog({
       <DialogContent className="max-w-md" showCloseButton={!isStopping}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate(
-              'auto.components.settings.EphemeralVmCleanupStopDialog.title',
-              'Stop cleanup?'
-            )}
+            {t('auto.components.settings.EphemeralVmCleanupStopDialog.title', 'Stop cleanup?')}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.settings.EphemeralVmCleanupStopDialog.description',
               'The VM may remain running and incur charges. You can retry cleanup later.'
             )}
@@ -55,22 +53,13 @@ export function EphemeralVmCleanupStopDialog({
         ) : null}
         <DialogFooter>
           <Button variant="outline" onClick={onCancel} disabled={isStopping}>
-            {translate(
-              'auto.components.settings.EphemeralVmCleanupStopDialog.cancel',
-              'Keep cleaning'
-            )}
+            {t('auto.components.settings.EphemeralVmCleanupStopDialog.cancel', 'Keep cleaning')}
           </Button>
           <Button onClick={onConfirm} disabled={isStopping}>
             {isStopping ? <Loader2 className="animate-spin" /> : null}
             {isStopping
-              ? translate(
-                  'auto.components.settings.EphemeralVmCleanupStopDialog.stopping',
-                  'Stopping…'
-                )
-              : translate(
-                  'auto.components.settings.EphemeralVmCleanupStopDialog.confirm',
-                  'Stop cleanup'
-                )}
+              ? t('auto.components.settings.EphemeralVmCleanupStopDialog.stopping', 'Stopping…')
+              : t('auto.components.settings.EphemeralVmCleanupStopDialog.confirm', 'Stop cleanup')}
           </Button>
         </DialogFooter>
       </DialogContent>

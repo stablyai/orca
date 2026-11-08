@@ -4,6 +4,7 @@ import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { useMemo } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import { toast } from 'sonner'
 import type {
   AgentLaunchSettings,
@@ -60,7 +61,7 @@ import {
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -93,6 +94,7 @@ export function AgentLaunchSettingsCatalog({
     updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   }
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     detectedIds: detected,
     detectionFailed,
@@ -100,7 +102,7 @@ export function AgentLaunchSettingsCatalog({
     refresh
   } = useDetectedAgents(detectionTarget, 'all')
   const detectedIds = useMemo(() => (detected ? new Set(detected) : null), [detected])
-  useHostStructuredAgentsVersion()
+  const hostAgentsVersion = useHostStructuredAgentsVersion()
   const installedHere = useAppStateValue(readNativeDetectedAgents)
   const workspace =
     detectionTarget.kind === 'runtime'
@@ -115,9 +117,13 @@ export function AgentLaunchSettingsCatalog({
       : false
   )
   // The chat-or-CLI choice is this computer's, so a paired host's page doesn't offer it.
-  const chatAgents = local ? chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined) : []
+  const chatAgents = local
+    ? recomputeOn([hostAgentsVersion], () => chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined))
+    : []
   const managedChatAgents = new Set(
-    readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+    recomputeOn([hostAgentsVersion], () =>
+      readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+    )
       ?.filter((row) => row.managedRuntime)
       .map((row) => row.agent)
   )
@@ -196,12 +202,12 @@ export function AgentLaunchSettingsCatalog({
       const values = { agent: label, mode: agentPermissionChoiceLabel(lifted.choice, label) }
       toast.success(
         chatSupported
-          ? translate(
+          ? t(
               'settings.agents.permissionFromArgs',
               '{{agent}} set to {{mode}} in terminals and new chats.',
               values
             )
-          : translate(
+          : t(
               'settings.agents.permissionFromArgsTerminals',
               '{{agent}} set to {{mode}} in terminals.',
               values
@@ -330,7 +336,7 @@ export function AgentLaunchSettingsCatalog({
           isTuiAgentEnabled(agent.id, settings.disabledTuiAgents)
         )}
         catalog={catalog}
-        description={translate(
+        description={t(
           'settings.agents.hostDefaults',
           'Defaults for new agents on the selected host.'
         )}

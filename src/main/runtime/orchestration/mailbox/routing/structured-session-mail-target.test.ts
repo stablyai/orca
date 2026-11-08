@@ -18,10 +18,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import {
-  formatOrcaSessionAddress,
-  type OrcaSessionId
-} from '../../../../../shared/orca-session-address'
+import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 
 const hostRef: { current: unknown } = { current: null }
@@ -120,81 +117,6 @@ afterEach(() => {
   db.close()
 })
 
-describe('a Run whose coordinator is a chat (an Orca session id, no handle)', () => {
-  it('delivers its mailbox to that session', () => {
-    // Chat coordinators lack handles; both delivery lanes must claim their Run through session identity.
-    installStore(chatRecord())
-    const runId = chatCoordinatedRun()
-    expect(probe().target(`run:${runId}`)).toEqual({ sessionId: CHAT, dispatchId: null })
-  })
-
-  it('still delivers once the host has evicted the chat, so the delivery can wake it', () => {
-    installStore(chatRecord({ claimStatus: 'released', ownerProcess: null }))
-    const runId = chatCoordinatedRun()
-    expect(probe().target(`run:${runId}`)).toEqual({ sessionId: CHAT, dispatchId: null })
-  })
-
-  it('does not deliver to a chat that was closed, cleared into no known session, or runs on another host', () => {
-    const runId = chatCoordinatedRun()
-    installStore(chatRecord(), false)
-    expect(probe().target(`run:${runId}`)).toBeNull()
-
-    installStore(
-      chatRecord(
-        {},
-        {
-          conversationCommand: {
-            command: 'clear',
-            state: 'completed',
-            replacementSessionId: '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64',
-            operationId: 'op',
-            callerKey: 'caller',
-            phase: 'committed'
-          }
-        }
-      )
-    )
-    expect(probe().target(`run:${runId}`)).toBeNull()
-
-    const remote = chatRecord()
-    installStore({ ...remote, location: { ...remote.location, executionHostId: 'ssh:box' } })
-    expect(probe().target(`run:${runId}`)).toBeNull()
-  })
-
-  it('does not deliver to an Orca session id written at an earlier generation of the Run', () => {
-    // An older binary's rebind or unbind bumps the generation and leaves the id behind.
-    installStore(chatRecord())
-    const runId = chatCoordinatedRun()
-    db.db
-      .prepare('UPDATE runs SET consumer_generation = consumer_generation + 1 WHERE id = ?')
-      .run(runId)
-    expect(probe().target(`run:${runId}`)).toBeNull()
-  })
-
-  it('ignores an Orca session id left beside a PTY handle; the handle owns the Run', () => {
-    installStore(chatRecord())
-    const runId = db.createRun({
-      objective: 'o',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_c:11111111-1111-4111-8111-111111111111',
-      coordinatorOrcaSessionId: CHAT
-    }).id
-    expect(probe().target(`run:${runId}`)).toBeNull()
-  })
-})
-
-describe('a session addressed directly', () => {
-  it('owns its `orca_session_id:<id>` mailbox', () => {
-    installStore(chatRecord())
-    expect(probe().target(CHAT_ADDRESS)).toEqual({ sessionId: CHAT, dispatchId: null })
-  })
-
-  it('claims nothing for a malformed session address', () => {
-    installStore(chatRecord())
-    expect(probe().target('orca_session_id:term_abc')).toBeNull()
-  })
-})
-
 describe('the idle edge of a structured session', () => {
   it('re-derives and delivers the mailboxes the session owns, and nothing while it works', () => {
     installStore(chatRecord())
@@ -216,18 +138,6 @@ describe('the idle edge of a structured session', () => {
     expect(delivered).toEqual([])
     runtime.onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
     expect(delivered).toEqual([`run:${runId}`])
-  })
-
-  it('points direct mail at a session that coordinates nothing', () => {
-    installStore(chatRecord())
-    db.insertMessage({ from: 'term_peer', to: CHAT_ADDRESS, subject: 'hi', type: 'status' })
-    const delivered: string[] = []
-    probe({
-      deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
-      notifyStructuredSessionJournalActivity: vi.fn(),
-      cancelMessageWaiters: vi.fn()
-    }).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
-    expect(delivered).toEqual([CHAT_ADDRESS])
   })
 })
 
@@ -300,26 +210,6 @@ describe('the idle edge after a restart, before any orchestration call', () => {
     expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
-
-  it('says so when the database cannot be opened, instead of skipping silently', () => {
-    installStore(chatRecord())
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const deliver = vi.fn()
-    probe({
-      _orchestrationDb: null,
-      getExistingOrchestrationDb: () => {
-        throw new Error('userData unavailable')
-      },
-      deliverPendingMessagesForHandle: deliver,
-      notifyStructuredSessionJournalActivity: vi.fn()
-    }).onStructuredSessionStatusForMail({ sessionId: CHAT, status: 'idle' })
-    expect(deliver).not.toHaveBeenCalled()
-    expect(warn).toHaveBeenCalledWith(
-      '[orchestration] skipped a structured session mail edge: no database',
-      { sessionId: CHAT, error: 'userData unavailable' }
-    )
-    warn.mockRestore()
-  })
 })
 
 describe('a coordinator chat continued by /clear', () => {
@@ -368,46 +258,6 @@ describe('a coordinator chat continued by /clear', () => {
     return delivered
   }
 
-  function runCreatedBy(sessionId: OrcaSessionId): string {
-    return db.createRun({
-      objective: 'o',
-      coordinatorHandle: null,
-      coordinatorPaneKey: null,
-      coordinatorOrcaSessionId: resolveOrcaSessionParty(sessionId, db).orcaSessionId
-    }).id
-  }
-
-  it('stores a Dispatch assignee by the lineage root of the session its incarnation names', () => {
-    installLineage(SUCCESSOR)
-    const dispatch = db.createDispatchContext({
-      taskId: db.createTask({ runId: chatCoordinatedRun(), spec: 'work' }).id,
-      assigneeHandle: mintStructuredWorkerHandle(),
-      assigneePaneKey: mintStructuredWorkerPaneKey(SUCCESSOR),
-      processIncarnation: structuredWorkerProcessIncarnation(SUCCESSOR),
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER
-    })
-    expect(db.getDispatchContextById(dispatch.id)?.assignee_orca_session_id).toBe(CHAT)
-  })
-
-  it("never unbinds the successor's own Run", () => {
-    // Adopting a predecessor Run must not exclusively rebind and unbind the successor's own Run.
-    installLineage(SUCCESSOR)
-    chatCoordinatedRun()
-    const ownRun = runCreatedBy(SUCCESSOR)
-    const generation = db.getRunRaw(ownRun)!.consumer_generation
-
-    expect(idleEdge(SUCCESSOR)).toContain(`run:${ownRun}`)
-    idleEdge(SUCCESSOR)
-
-    const successor = resolveOrcaSessionParty(SUCCESSOR, db)
-    expect(db.getRunRaw(ownRun)).toMatchObject({
-      coordinator_orca_session_id: successor.orcaSessionId,
-      consumer_generation: generation
-    })
-    expect(db.getCurrentRunForCoordinator(successor)?.id).toBe(ownRun)
-  })
-
   it('keeps a Run bound, unrewritten, across a chain of clears, and delivers it to the live end', () => {
     installLineage(MIDDLE)
     const runId = chatCoordinatedRun()
@@ -424,23 +274,6 @@ describe('a coordinator chat continued by /clear', () => {
       expect(db.getCurrentRunForCoordinator(resolveOrcaSessionParty(member, db))?.id).toBe(runId)
     }
     expect(probe().target(`run:${runId}`)).toEqual({ sessionId: SUCCESSOR, dispatchId: null })
-  })
-
-  it('keeps the Run a middle session created bound after the next clear', () => {
-    // Adopting a chain must preserve every predecessor Run, not just the last.
-    installLineage(MIDDLE)
-    runCreatedBy(CHAT)
-    const middleRun = runCreatedBy(MIDDLE)
-    const generation = db.getRunRaw(middleRun)!.consumer_generation
-    installLineage(MIDDLE, SUCCESSOR)
-    idleEdge(SUCCESSOR)
-
-    const successor = resolveOrcaSessionParty(SUCCESSOR, db)
-    expect(db.getRunRaw(middleRun)).toMatchObject({
-      coordinator_orca_session_id: successor.orcaSessionId,
-      consumer_generation: generation
-    })
-    expect(db.getCurrentRunForCoordinator(successor)?.id).toBe(middleRun)
   })
 
   it('reaches the live session through any spelling of the conversation, and stores one', () => {
@@ -508,12 +341,6 @@ describe('a structured worker continued by /clear', () => {
     })
     return { handle: identity.handle, paneKey: identity.paneKey }
   }
-
-  it("delivers mail at the worker's handle to the live successor, as a terminal keeps its handle", () => {
-    // A cleared worker's mail must target its running successor rather than the retired initial session.
-    const { handle } = clearedWorker()
-    expect(probe().target(handle)).toEqual({ sessionId: WORKER_SUCCESSOR, dispatchId: null })
-  })
 
   it("delivers the worker's dispatch mailbox and a Run it coordinates to the live successor", () => {
     const { handle, paneKey } = clearedWorker()

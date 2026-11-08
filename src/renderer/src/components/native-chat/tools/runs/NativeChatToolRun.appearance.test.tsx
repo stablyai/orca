@@ -19,6 +19,7 @@ import {
 } from '../../messages/disclosure/native-chat-disclosure-store'
 
 import { i18n } from '@/i18n/i18n'
+import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
 
 {
   const QUESTION = 'What would you like me to do next in this repo?'
@@ -328,7 +329,8 @@ import { i18n } from '@/i18n/i18n'
             }
           ]}
           expandSignal
-        />
+        />,
+        { wrapper: TranslationScopeProvider }
       )
       const header = runHeader(container)
       expect(header).toHaveTextContent('Ran 1 command and ran 1 agent · 1 failed')

@@ -9,7 +9,7 @@ import { getSparsePresetOperationErrorMessage } from './sparse-preset-operation-
 import { SparsePresetDraftEditor } from './sparse-preset-draft-editor'
 import type { SparsePresetDraft } from '../../../sparse/SparseCheckoutPresetDraftForm'
 import { SparsePresetSettingsRow } from './sparse-preset-settings-row'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type SparsePresetSettingsSectionProps = {
@@ -19,6 +19,7 @@ type SparsePresetSettingsSectionProps = {
 export function SparsePresetSettingsSection({
   repoId
 }: SparsePresetSettingsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const repo = useAppStore((s) => s.repos.find((entry) => entry.id === repoId))
   const presets = useAppStore((s) => s.sparsePresetsByRepo[repoId])
   const loadStatus = useAppStore((s) => s.sparsePresetsLoadStatusByRepo[repoId] ?? 'idle')
@@ -72,10 +73,10 @@ export function SparsePresetSettingsSection({
   }, [fetchSparsePresets, loadStatus, mountedRef, presets, repoId])
 
   const sortedPresets = presets ?? []
-  const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText) : null
+  const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText, t) : null
   const trimmedName = draft?.name.trim() ?? ''
   const nameError = draft
-    ? validateSparsePresetName(draft.name, sortedPresets, draft.presetId)
+    ? validateSparsePresetName(draft.name, sortedPresets, draft.presetId, t)
     : null
   const canSaveDraft =
     !!draft &&
@@ -205,11 +206,11 @@ export function SparsePresetSettingsSection({
   return (
     <section ref={sectionRef}>
       <SettingsGroup
-        title={translate(
+        title={t(
           'auto.components.settings.SparsePresetSettingsSection.388513be2d',
           'Sparse Checkout Presets'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.SparsePresetSettingsSection.17f8c4ce10',
           'Manage saved directory sets for sparse worktree creation.'
         )}
@@ -222,10 +223,7 @@ export function SparsePresetSettingsSection({
             disabled={!!draft || presets === undefined || deletingPresetId !== null}
           >
             <Plus className="size-3.5" />
-            {translate(
-              'auto.components.settings.SparsePresetSettingsSection.d7565029a9',
-              'New Preset'
-            )}
+            {t('auto.components.settings.SparsePresetSettingsSection.d7565029a9', 'New Preset')}
           </Button>
         }
       >
@@ -243,11 +241,11 @@ export function SparsePresetSettingsSection({
         {presets === undefined ? (
           <div className="py-4 text-sm text-muted-foreground">
             {loadError
-              ? translate(
+              ? t(
                   'auto.components.settings.SparsePresetSettingsSection.92c08ccae3',
                   'Sparse presets could not be loaded.'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.SparsePresetSettingsSection.8deb7024ab',
                   'Loading sparse presets...'
                 )}
@@ -273,14 +271,14 @@ export function SparsePresetSettingsSection({
                   }}
                 >
                   <RefreshCcw />
-                  {translate('sparsePreset.retryLoad', 'Retry loading presets')}
+                  {t('sparsePreset.retryLoad', 'Retry loading presets')}
                 </Button>
               </div>
             ) : null}
           </div>
         ) : sortedPresets.length === 0 && !draft ? (
           <div className="py-4 text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.SparsePresetSettingsSection.88bfbf1a9c',
               'No sparse presets saved for this repository.'
             )}

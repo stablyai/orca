@@ -5,6 +5,9 @@ import type { ForegroundNudgeReason } from './types'
 export class MobileEndpointNudgeRouter {
   // Undefined until read, so a join before the first read still counts as a change.
   private lastLocalNetwork: string | null | undefined
+  // Reads can settle out of order; a result older than the last applied one is stale.
+  private readsStarted = 0
+  private lastAppliedRead = 0
 
   constructor(
     private readonly args: {
@@ -20,7 +23,8 @@ export class MobileEndpointNudgeRouter {
   ) {
     void args.readLocalNetwork().then(
       (network) => {
-        if (this.lastLocalNetwork === undefined) {
+        // Once a nudge reads, this result may predate its network, so it can't be the baseline.
+        if (this.readsStarted === 0) {
           this.lastLocalNetwork = network
         }
       },
@@ -52,8 +56,22 @@ export class MobileEndpointNudgeRouter {
 
   // iOS repeats callbacks for an unchanged network; only a move onto a new Wi-Fi network is an arrival.
   private async routeNetworkChange(): Promise<void> {
-    const network = await this.args.readLocalNetwork().catch(() => null)
-    if (network === this.lastLocalNetwork || this.args.isStopped()) {
+    const read = ++this.readsStarted
+    let network: string | null
+    try {
+      network = await this.args.readLocalNetwork()
+    } catch {
+      // Keep the baseline: a failed read isn't a move.
+      if (!this.args.isStopped()) {
+        this.args.scheduleDirectProbe()
+      }
+      return
+    }
+    if (read < this.lastAppliedRead || this.args.isStopped()) {
+      return
+    }
+    this.lastAppliedRead = read
+    if (network === this.lastLocalNetwork) {
       return
     }
     this.lastLocalNetwork = network
