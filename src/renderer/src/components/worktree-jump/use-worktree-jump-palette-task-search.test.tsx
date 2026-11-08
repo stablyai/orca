@@ -60,8 +60,6 @@ it('publishes a fast source while a second is pending, then discards both after 
   expect(result.current.taskItems).toEqual([])
 })
 
-
-
 it('filters to open after pending edits apply: a pending reopen shows and a failure removes it', async () => {
   const repo: Repo = { id: 'repo', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 1 }
   const issue = (number: number, state: GitHubWorkItem['state']): GitHubWorkItem => ({
