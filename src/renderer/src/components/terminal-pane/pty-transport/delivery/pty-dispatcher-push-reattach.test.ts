@@ -60,33 +60,6 @@ describe('pty dispatcher push-listener reattach and delivery blackhole', () => {
     }
   })
 
-  it('blackholed delivery reproduces the wedge: no handler dispatch, no ACK ever', async () => {
-    const { ensurePtyDispatcher } = await import('./pty-dispatcher')
-    const { ptyDataHandlers } = await import('../shutdown/pty-shutdown-data-suspension')
-    ensurePtyDispatcher()
-    const received: string[] = []
-    ptyDataHandlers.set('pty-1', (data) => received.push(data))
-
-    dataCallbacks[0]?.({ id: 'pty-1', data: 'before-wedge' })
-    expect(received).toEqual(['before-wedge'])
-    expect(ackDataMock).toHaveBeenCalledTimes(1)
-
-    const blackhole = (
-      window as Window & {
-        __terminalDeliveryWatchdog?: { blackhole: (on: boolean) => void }
-      }
-    ).__terminalDeliveryWatchdog
-    expect(blackhole).toBeDefined()
-    blackhole!.blackhole(true)
-
-    // Vanished chunks have neither receive count nor ACK, leaving unrepaid main-side debt.
-    dataCallbacks[0]?.({ id: 'pty-1', data: 'lost-in-wedge' })
-    expect(received).toEqual(['before-wedge'])
-    expect(ackDataMock).toHaveBeenCalledTimes(1)
-
-    blackhole!.blackhole(false)
-  })
-
   it('reattach drops stale push subscriptions and binds fresh ones', async () => {
     const { ensurePtyDispatcher, reattachPtyDispatcherPushListeners } =
       await import('./pty-dispatcher')

@@ -18,7 +18,7 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal,
   store
 } from './orca-runtime-test-fixtures.spec'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 describe('OrcaRuntimeService', () => {
   describe('deliberately parked pane activation (STA-3465)', () => {

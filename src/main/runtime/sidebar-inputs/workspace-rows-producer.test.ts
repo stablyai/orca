@@ -1,18 +1,29 @@
 // Runs on plain Node, as orcad does: rows come from the runtime's own listing and store.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type { Repo } from '../../../shared/repo-types'
+
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+
 import { OrcaRuntimeService } from '../orca-runtime'
+
 import type { ResolvedWorktreeSnapshot } from '../workspaces/catalog/runtime-resolved-worktree-cache'
-import type { RuntimeStore } from '../runtime-store-contract'
+
+import type { RuntimeStore } from '../construction/runtime-store-contract'
+
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
+
 import { requireSwitchedOn } from './require-switched-on'
+
 import { TestPhone } from './sidebar-inputs-feed.test-fixture'
+
 import type {
   ResolvedWorktreeRepoScans,
   ResolvedWorktreeScanJoin
 } from '../workspaces/catalog/resolved-worktree-scan-join'
+
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))

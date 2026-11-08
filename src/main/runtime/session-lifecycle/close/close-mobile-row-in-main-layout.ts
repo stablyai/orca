@@ -1,9 +1,7 @@
 // In main-owned layouts, phone row closes use main's pane/tab close with or without a window.
 import { OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose } from './refuse-unattributed-mobile-session-tab-close'
-import type {
-  RuntimeMobileSessionTerminalTab,
-  RuntimeSessionTabCloseReason
-} from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeSessionTabCloseReason } from '../../../../shared/runtime-session-contracts'
 import { startedMainTerminalSurfaces } from '../../terminal/surface/main-terminal-surfaces'
 import {
   closeInMainLayout,

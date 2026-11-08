@@ -4,7 +4,7 @@ import { RpcDispatcher } from './dispatcher'
 import type { RuntimeTerminalDataMeta } from '../terminal/output/runtime-terminal-stream-consumers'
 import { TERMINAL_METHODS } from './methods/terminal/terminal'
 import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,

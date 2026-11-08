@@ -8,7 +8,6 @@ import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
@@ -41,22 +40,22 @@ export function DiffCommentPopover({
   left,
   lineHeight = 0,
   title,
-  placeholder = translate(
-    'auto.components.diff.comments.DiffCommentPopover.f6c449191e',
-    'Add note for the AI'
-  ),
-  submitLabel = translate(
-    'auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa',
-    'Add note'
-  ),
-  submittingLabel = translate(
-    'auto.components.diff.comments.DiffCommentCard.bb0a55f856',
-    'Saving…'
-  ),
+  placeholder: placeholderOverride,
+  submitLabel: submitLabelOverride,
+  submittingLabel: submittingLabelOverride,
   onCancel,
   onSubmit
 }: Props): React.JSX.Element {
   const t = useTranslate()
+  const placeholder =
+    placeholderOverride ??
+    t('auto.components.diff.comments.DiffCommentPopover.f6c449191e', 'Add note for the AI')
+  const submitLabel =
+    submitLabelOverride ??
+    t('auto.components.diff.comments.DiffCommentPopover.5fa4bfebaa', 'Add note')
+  const submittingLabel =
+    submittingLabelOverride ??
+    t('auto.components.diff.comments.DiffCommentCard.bb0a55f856', 'Saving…')
   const [body, setBody] = useState('')
   // Why: mirror the draft into a ref so the mousedown listener reads it fresh without re-registering each keystroke.
   const bodyRef = useRef(body)

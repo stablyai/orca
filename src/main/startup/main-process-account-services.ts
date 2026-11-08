@@ -79,7 +79,10 @@ export function initializeMainProcessAccountServices(): void {
     homePath: app.getPath('home'),
     getLegacyOverrides: () => store.getSettings().keybindings,
     legacyTabSwitchDefaults: store.getSettings().tabSwitchKeybindingSeed === 'legacy',
-    legacySearchDefaults: store.getSettings().searchKeybindingSeed === 'legacy'
+    legacySearchDefaults:
+      (process.platform === 'darwin'
+        ? store.getSettings().searchKeybindingSeed
+        : store.getSettings().nonMacSearchKeybindingSeed) === 'legacy'
   })
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
 }

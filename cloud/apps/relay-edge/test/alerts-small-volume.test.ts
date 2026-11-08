@@ -19,6 +19,10 @@ function stub(now: Partial<Row>, before: Partial<Row> = {}, edge: EdgeAnswer = 4
       posts.push(JSON.parse(String(init.body)).text)
       return new Response('ok')
     }
+    if (url === `${PROBE}/__health/object`) {
+      if (edge === 'network') { throw new TypeError('connection refused') }
+      return Response.json({ ok: true })
+    }
     if (url === `${PROBE}/v1/host/control`) {
       probes.push(init)
       if (edge === 'network') { throw new TypeError('connection refused') }
@@ -114,7 +118,8 @@ describe('edge probe', () => {
     })
     const fired = await evaluate({ ...env, EDGE_PROBE_URL: PROBE }, at17)
     expect(fired[0]).toContain('FIRING edge-probe')
-    expect(fired[1]).toContain('cannot read metrics')
+    expect(fired[1]).toContain('FIRING object-probe')
+    expect(fired[2]).toContain('cannot read metrics')
   })
 
   it('alerts after 5 s without an answer', async () => {

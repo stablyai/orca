@@ -10,7 +10,10 @@ import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/terminal
 import { OrcaRuntimeWithTerminalDrivers } from '../terminal/driver/terminal-driver-resources'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
-import { confirmRunTerminalShellAlone, readRunTerminalClientUse } from '../run-terminal-client-use'
+import {
+  confirmRunTerminalShellAlone,
+  readRunTerminalClientUse
+} from '../terminal/lifecycle/run-terminal-client-use'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../shared/execution-host'
 import { RuntimePreservedBranchCleanup } from '../repositories/runtime-preserved-branch-cleanup'
 import type { AgentSessionCreateOperation } from '../session-construction/agent-session/agent-session-create-operation'
@@ -19,8 +22,8 @@ import type * as CompatibilityAuthority from '../orchestration/terminal-authorit
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
-import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../runtime-legacy-worker-terminal-recovery-persistence'
-import { RuntimeLegacyWorkerTerminalRecoveryController } from '../runtime-legacy-worker-terminal-recovery-controller'
+import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
+import { RuntimeLegacyWorkerTerminalRecoveryController } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
 import { reconcileRequestedWorkerTerminalReleases } from '../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
 
 import { RuntimeAccountController } from '../agent-session/environment/runtime-account-controller'
@@ -37,8 +40,8 @@ import { RuntimeRepositoryRefQueries } from '../repositories/runtime-repository-
 import { RuntimeServerEnvironmentCommands } from '../files/server-browse/runtime-server-environment-commands'
 import { RuntimeRepositoryForkBackfill } from '../repositories/runtime-repository-fork-backfill'
 import { RuntimeWorkspaceSessionController } from '../workspaces/session-hosts/runtime-workspace-session-controller'
-import { RuntimeAiVaultCommands } from '../runtime-ai-vault-commands'
-import { ClaudeAgentTeamsService } from '../claude-agent-teams-service'
+import { RuntimeAiVaultCommands } from '../integrations/ai-vault/runtime-ai-vault-commands'
+import { ClaudeAgentTeamsService } from '../terminal/agent-teams/claude-agent-teams-service'
 import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-workspace-pty-teardown'
 import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
 

@@ -1,6 +1,6 @@
 import { normalizeRelativePath, splitPathSegments } from '../../cross-platform-path'
 import type { GitStagingArea, GitStatusEntry } from '../../git/status/git-status-types'
-import { compareFileNames } from '../../file-name-sort'
+import { compareFileNames } from '../../file-listing/file-name-sort'
 import { compareGitStatusEntries } from '../../git/status/git-status-sort'
 
 export type SourceControlTreeArea = Extract<GitStagingArea, 'unstaged' | 'staged' | 'untracked'>

@@ -4,7 +4,7 @@ import type {
   SearchFileResult,
   SearchMatch,
   SearchResult
-} from '../../../../../../shared/code-search-types'
+} from '../../../../../../shared/file-search/code-search-types'
 import type { SearchRow } from './search-rows'
 import { FileResultRow, MatchResultRow } from './SearchResultItems'
 import { translate } from '@/i18n/i18n'

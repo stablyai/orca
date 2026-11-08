@@ -15,18 +15,15 @@ import {
   writeWorktreeSortOrder,
   type WorktreeSortOrderRequest
 } from '../../../persistence/worktree-sort-order-write'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   isWslMoveSourceHost,
   isWslMoveWorkspaceBlocked,
   shouldDropWslMoveProjectUpdate,
   wslMoveProjectRefForWorkspace
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import {
-  RuntimeLineageError,
-  explicitParentError,
-  type ResolvedWorkspaceParent
-} from '../lineage/runtime-worktree-lineage-resolution'
+import { RuntimeLineageError, explicitParentError } from '../lineage/runtime-lineage-error'
+import type { ResolvedWorkspaceParent } from '../lineage/runtime-worktree-lineage-resolution'
 import { assertParentInAnotherStore } from '../lineage/cross-store-parent-store-check'
 import type { CrossStoreParentRef } from '../../../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'

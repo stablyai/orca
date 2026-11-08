@@ -52,10 +52,6 @@ function startHostEventRouter(
   hostId: string,
   client: RpcClient
 ): () => void {
-  let ready = false
-  let stopStream: (() => void) | null = null
-  // Bumped when the stream ends, so an opener whose wire ended synchronously keeps no stale stop.
-  let streamEpoch = 0
   // When the stream last said it was live; a replayed ready may have missed events since.
   let readyAt = 0
   const floorTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -77,8 +73,10 @@ function startHostEventRouter(
     if (!readsNow(query) || floorTimers.has(query.queryHash)) {
       return
     }
-    // Change events can come per agent step; keep reads `floorMs` apart, polls included.
-    const wait = query.state.dataUpdatedAt + (signalOf(query)?.floorMs ?? 0) - Date.now()
+    // Change events can come per agent step; keep reads `floorMs` apart, polls and reads in flight included.
+    const lastReadAt =
+      query.state.fetchStatus === 'fetching' ? Date.now() : query.state.dataUpdatedAt
+    const wait = lastReadAt + (signalOf(query)?.floorMs ?? 0) - Date.now()
     if (wait <= 0) {
       refetchHostQueryAfterInFlight(queryClient, query)
       return
@@ -112,20 +110,15 @@ function startHostEventRouter(
 
   const onEvent = (event: SharedClientEvent): void => {
     if (event.type === 'ready') {
-      // Events are not queued while disconnected, so a replayed ready may follow missed changes.
-      if (ready && !('joined' in event)) {
+      // Events are not queued while disconnected or between a stream's end and its reopen.
+      if ('replayed' in event) {
         onReplayedReady(readyAt)
       }
-      ready = true
       readyAt = Date.now()
       return
     }
     if (event.type === 'end' || event.type === 'error') {
-      // The shared stream is gone; the next connected edge opens a fresh one (the edge itself re-reads what was missed).
-      ready = false
-      streamEpoch += 1
-      stopStream?.()
-      stopStream = null
+      // The shared stream opens again by itself; its next ready re-reads what was missed.
       return
     }
     const eventType = event.type
@@ -134,30 +127,9 @@ function startHostEventRouter(
     }
   }
 
-  const openStream = (): void => {
-    const epoch = streamEpoch
-    try {
-      const stop = subscribeSharedClientEvents(client, onEvent)
-      if (streamEpoch === epoch) {
-        stopStream = stop
-      } else {
-        // The wire ended while opening; the next connected edge tries again.
-        stop()
-      }
-    } catch {
-      // A page that can't open a stream now gets another chance on the next connected edge.
-    }
-  }
-  openStream()
-  const stopWatchingConnection = client.onStateChange((state) => {
-    if (state === 'connected' && !stopStream) {
-      openStream()
-    }
-  })
+  const stopStream = subscribeSharedClientEvents(client, onEvent)
   return () => {
-    stopWatchingConnection()
-    stopStream?.()
-    stopStream = null
+    stopStream()
     for (const timer of floorTimers.values()) {
       clearTimeout(timer)
     }

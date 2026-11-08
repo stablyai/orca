@@ -3,10 +3,8 @@ import {
   selectMobileSessionTab
 } from './mobile-session-tab-selection'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type {
-  RuntimeMobileSessionAgentTab,
-  RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-types'
+import type { RuntimeMobileSessionAgentTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
 import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import type { StructuredSessionSurface } from '../agent-session/structured-agent-session-close'

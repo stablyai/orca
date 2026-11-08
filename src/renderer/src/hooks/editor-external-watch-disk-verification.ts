@@ -6,7 +6,7 @@ import {
   notifyEditorExternalFileChange
 } from '@/components/editor/autosave/editor-autosave'
 import { markFileChangedOnDisk } from '@/components/editor/external-changes/editor-changed-on-disk-mark'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
 import {
   clearSelfWrite,
   getRecentSelfWrite,

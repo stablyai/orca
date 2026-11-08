@@ -79,6 +79,9 @@ function mountOmniboxEntries(root: Root, launch: (...args: unknown[]) => void) {
 const configureButton = () =>
   document.querySelector<HTMLButtonElement>('button[aria-label="Configure Codex"]')
 
+const setupPanel = () =>
+  document.querySelector<HTMLElement>('[data-slot="dropdown-menu-sub-content"]')
+
 async function waitForConfigure() {
   await waitFor(() => expect(configureButton()).not.toBeNull())
   await waitFor(() => expect(configureButton()).toHaveProperty('disabled', false))
@@ -101,10 +104,10 @@ export async function verifyOmniboxSetupKeepsSearchFocus(
     fireEvent.pointerOver(configure, { pointerType: 'mouse' })
     expect(configure.getAttribute('aria-expanded')).toBe('false')
     fireEvent.pointerMove(configure, { pointerType: 'mouse' })
-    await waitFor(() => expect(document.querySelector('textarea')).not.toBeNull())
+    await waitFor(() => expect(setupPanel()).not.toBeNull())
     expect(document.activeElement).toBe(input)
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
-    await waitFor(() => expect(document.querySelector('textarea')).toBeNull())
+    await waitFor(() => expect(setupPanel()).toBeNull())
     expect(document.activeElement).toBe(input)
     expect(launch).not.toHaveBeenCalled()
   } finally {
@@ -119,34 +122,29 @@ export async function verifyOmniboxPresetIdentity(
   const { showEntries, restore } = mountOmniboxEntries(root, launch)
   const configure = async () => {
     fireEvent.click(await waitForConfigure())
-    await waitFor(() => expect(document.querySelector('textarea')).not.toBeNull())
+    await waitFor(() => expect(effort('Low')).not.toBeNull())
   }
-  const close = () => fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+  const close = () => fireEvent.keyDown(setupPanel()!, { key: 'Escape' })
+  const effort = (label: string) =>
+    getByRole(document.body, 'radio', { name: label }).getAttribute('data-state')
   try {
     await showEntries(false)
     await configure()
-    fireEvent.change(document.querySelector('textarea')!, {
-      target: { value: '--ordinary-pending' }
-    })
+    fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
     close()
     await showEntries(true)
     fireEvent.change(document.querySelector('input')!, { target: { value: 'Astra low' } })
     await configure()
-    expect(document.querySelector('textarea')).not.toHaveProperty('value', '--ordinary-pending')
-    fireEvent.change(document.querySelector('textarea')!, {
-      target: { value: '--model private/preset --preset-pending' }
-    })
-    fireEvent.click(getByRole(document.body, 'radio', { name: 'Low' }))
+    expect(effort('Low')).toBe('on')
     close()
     await showEntries(false)
     await configure()
-    expect(document.querySelector('textarea')).toHaveProperty('value', '--ordinary-pending')
+    expect(effort('High')).toBe('on')
     close()
     await showEntries(true)
     fireEvent.change(document.querySelector('input')!, { target: { value: 'Astra low' } })
     await configure()
-    expect(document.querySelector('textarea')).toHaveProperty('value', '--preset-pending')
-    expect(document.body.textContent).toContain('private/preset')
+    expect(effort('Low')).toBe('on')
     expect(launch).not.toHaveBeenCalled()
   } finally {
     restore()

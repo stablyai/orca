@@ -19,7 +19,7 @@ import {
   visibleProjectHostSetups,
   visibleRepos
 } from '../../../ssh/orcad-retained-source'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 type CatalogSource = Pick<
   RuntimeStore,

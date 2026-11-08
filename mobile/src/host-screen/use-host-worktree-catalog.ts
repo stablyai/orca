@@ -1,4 +1,5 @@
 import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
+import { WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/worktree-runtime-capabilities'
 import { readWorktreeFirstPage } from '../worktree/worktree-catalog-first-page'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -28,6 +29,7 @@ import { isHostNotConnectedError } from '../query/host-query-errors'
 import { refetchHostQueryAfterInFlight, useHostEventRouter } from '../query/host-event-router'
 import {
   isHostListQuery,
+  HOST_LIST_BACKSTOP_POLL_MS,
   HOST_LIST_POLL_MS,
   HOST_LIST_TARGET,
   hostServerWorkspacesQuery,
@@ -99,7 +101,7 @@ export function useHostWorktreeCatalog(args: {
 
   const host = { hostId: hostId ?? '', client }
   // The host's sidebar feed replaces the poll: its notices say when a row changed.
-  const refetchInterval = sidebarFeed ? false : HOST_LIST_POLL_MS
+  const pollMs = sidebarFeed ? false : HOST_LIST_POLL_MS
   const catalog = useHostQuery(
     hostWorktreeCatalogQuery,
     host,
@@ -108,7 +110,10 @@ export function useHostWorktreeCatalog(args: {
     {
       enabled: !!hostId,
       subscribed,
-      refetchInterval
+      refetchInterval:
+        pollMs && hostCapabilities.includes(WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY)
+          ? HOST_LIST_BACKSTOP_POLL_MS
+          : pollMs
     }
   )
   // An older desktop or shell lists no server rows, rather than rows that could not open.
@@ -118,7 +123,8 @@ export function useHostWorktreeCatalog(args: {
     host,
     HOST_LIST_TARGET,
     { deltas: hostCapabilities.includes(MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY) },
-    { enabled: !!hostId && relays, subscribed, refetchInterval }
+    // Execution hosts' notices are not relayed, so server rows keep the full poll.
+    { enabled: !!hostId && relays, subscribed, refetchInterval: pollMs }
   )
 
   // Set by a read the new-workspace sheet asked for; other reads wait for the sheet to close.
@@ -296,7 +302,9 @@ export function useHostWorktreeCatalog(args: {
     // The other host-list reads follow the catalog's visibility.
     subscribed,
     // The first read after the list painted from memory; polls and pull-to-refresh show nothing here.
-    revalidating: catalog.isRefetching && !catalog.isFetchedAfterMount
+    revalidating: catalog.isRefetching && !catalog.isFetchedAfterMount,
+    // When the shown rows were read, possibly at an earlier launch.
+    readAt: catalog.data ? catalog.dataUpdatedAt : null
   }
 }
 

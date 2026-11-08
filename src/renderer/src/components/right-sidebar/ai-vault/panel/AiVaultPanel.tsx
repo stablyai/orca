@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
@@ -90,7 +90,7 @@ export default function AiVaultPanel({
   const settings = useAppStore((s) => s.settings)
   const agentCmdOverrides = settings?.agentCmdOverrides
   const paneActions = useAiVaultOriginalPaneActions()
-  const [focusSearchRequestId, setFocusSearchRequestId] = useState(0)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const listKeyboardRef = useRef<AiVaultSessionListKeyboard>(null)
   const keyboardRows = onSessionOpened !== undefined
   // Why: scope depends on current workspace/project availability, so only stable view options persist.
@@ -254,7 +254,7 @@ export default function AiVaultPanel({
     query,
     setQuery,
     changeScope: handleScopeChange,
-    setFocusSearchRequestId
+    searchInputRef
   })
 
   const requestDelete = useAiVaultSessionDeleteAction({
@@ -282,7 +282,7 @@ export default function AiVaultPanel({
         hideEmptySessions={hideEmptySessions}
         sessionLimit={sessionLimit}
         adjustmentCount={viewAdjustmentCount}
-        focusSearchRequestId={focusSearchRequestId}
+        searchInputRef={searchInputRef}
         headerAction={headerAction}
         onSearchKeyDown={
           keyboardRows ? (event) => listKeyboardRef.current?.handleKeyDown(event) : undefined

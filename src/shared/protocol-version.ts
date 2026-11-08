@@ -1,3 +1,4 @@
+import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from './project-group-order-capability'
 import { EMULATOR_RUNTIME_CAPABILITIES } from './emulator-runtime-capabilities'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
@@ -16,7 +17,7 @@ import {
   E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY
 } from './remote-runtime/pairing/device-key-capability'
 import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES } from './remote-runtime/pairing/ticket-exchange-capability'
-import { FILES_RUNTIME_CAPABILITIES } from './files-runtime-capabilities'
+import { FILES_RUNTIME_CAPABILITIES } from './file-access/files-runtime-capabilities'
 import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
 import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
@@ -50,7 +51,7 @@ export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 // Why stars: importers keep reading every capability from here while each area owns its module.
 
 export * from './browser-runtime-capabilities'
-export * from './files-runtime-capabilities'
+
 export * from './host-runtime-capabilities'
 
 export * from './mobile-runtime-capabilities'
@@ -135,6 +136,7 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...SKILL_RUNTIME_CAPABILITIES,
     ...AUTOMATION_RUNTIME_CAPABILITIES,
     ...WORKTREE_RUNTIME_CAPABILITIES,
+    PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY,
     ...PREFLIGHT_RUNTIME_CAPABILITIES,
     ...WORKSPACE_PORTS_RUNTIME_CAPABILITIES,
     ...SESSION_TABS_RUNTIME_CAPABILITIES,

@@ -1392,6 +1392,13 @@
       "openFailed": "この PDF を開けませんでした",
       "opening": "PDF を開いています…",
       "updateRequired": "PDF を開くには Orca Mobile を更新してください。"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} の編集以降、デスクトップで変更されました",
+      "copyMyEdits": "自分の編集をコピー",
+      "discard": "破棄",
+      "restore": "復元",
+      "unsavedFrom": "{{time}} の未保存の編集"
     }
   },
   "home": {

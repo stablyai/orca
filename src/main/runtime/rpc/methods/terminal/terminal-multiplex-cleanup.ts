@@ -19,6 +19,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
     stream.ackPendingOutputBytes = 0
     releaseAckPendingHoldbackIfDrained(state, stream)
     stream.ackPendingOutputOverflowed = false
+    stream.ackOutputWaited = false
     stream.ackRecoverySnapshotInFlight = false
     stream.ackRecoveryHistoryOwed = false
     stream.unsubscribeData()

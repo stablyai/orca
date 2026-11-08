@@ -1,7 +1,7 @@
 import type {
   RuntimeFilePreviewResult,
   RuntimeFileReadChunkResult
-} from '../../../../../shared/runtime-file-contracts'
+} from '../../../../../shared/file-content/runtime-file-read'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeFileDownloadResult } from '../runtime-file-client-types'

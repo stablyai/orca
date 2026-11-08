@@ -12,6 +12,7 @@ import {
 import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import { moveTabToGroup } from '../tab-bar/tab-move-to-pane-column'
 
 type AppState = ReturnType<typeof useAppStore.getState>
 
@@ -145,32 +146,21 @@ export function commitTabDragDrop({
         })
       }
     } else {
-      const index = overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
-      if (
-        ORCA_LAYOUT_OWNER_IS_MAIN &&
-        dropTabThroughLayoutOwner(worktreeId, {
-          kind: 'move',
-          tabId: activeData.unifiedTabId,
+      const moved = moveTabToGroup(
+        {
+          worktreeId,
+          unifiedTabId: activeData.unifiedTabId,
           groupId: overData.groupId,
-          index
-        })
-      ) {
+          index: overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
+        },
+        dropUnifiedTab
+      )
+      if (moved === 'owner') {
         finishDrag(true)
         return
       }
-      const moved = dropUnifiedTab(activeData.unifiedTabId, {
-        groupId: overData.groupId,
-        index
-      })
       if (moved) {
         shouldRestorePreDragActivation = false
-        mirrorWebRuntimeTabMove({
-          kind: 'move-to-group',
-          worktreeId,
-          tabId: activeData.unifiedTabId,
-          targetGroupId: overData.groupId,
-          index
-        })
       }
     }
 
@@ -183,28 +173,20 @@ export function commitTabDragDrop({
 
   if (isPaneDropData(overData)) {
     if (activeData.groupId !== overData.groupId) {
-      if (
-        ORCA_LAYOUT_OWNER_IS_MAIN &&
-        dropTabThroughLayoutOwner(worktreeId, {
-          kind: 'move',
-          tabId: activeData.unifiedTabId,
+      const moved = moveTabToGroup(
+        {
+          worktreeId,
+          unifiedTabId: activeData.unifiedTabId,
           groupId: overData.groupId
-        })
-      ) {
+        },
+        dropUnifiedTab
+      )
+      if (moved === 'owner') {
         finishDrag(true)
         return
       }
-      const moved = dropUnifiedTab(activeData.unifiedTabId, {
-        groupId: overData.groupId
-      })
       if (moved) {
         shouldRestorePreDragActivation = false
-        mirrorWebRuntimeTabMove({
-          kind: 'move-to-group',
-          worktreeId,
-          tabId: activeData.unifiedTabId,
-          targetGroupId: overData.groupId
-        })
       }
     }
   }

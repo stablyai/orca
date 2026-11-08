@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
-import { FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY } from '../../../shared/file-write-disk-precondition'
+import { getDiskBaselineSignature } from '../../../shared/file-write/disk-baseline-signature'
+import { FILE_WRITE_DISK_PRECONDITION_RUNTIME_CAPABILITY } from '../../../shared/file-write/file-write-disk-precondition'
 import { createWebFileMutationMethods } from './web-file-mutation-methods'
 
 const precondition = { expectedSignature: getDiskBaselineSignature('original') }

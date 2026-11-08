@@ -1,4 +1,4 @@
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { artifactName, artifactTypeLabel } from './artifact-display-labels'
 import type { Translate } from '../../i18n/use-translate'

@@ -5,7 +5,7 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   SSH_OUTSIDE_WORKSPACE_UNSUPPORTED_MESSAGE,
   TERMINAL_ARTIFACT_IN_PLACE_MAX_BYTES
-} from '../../../../shared/runtime-file-contracts'
+} from '../../../../shared/terminal/runtime-terminal-file-path'
 
 const mocks = vi.hoisted(() => ({
   findWorkspaceFileRoute: vi.fn(),

@@ -30,7 +30,7 @@ export function NativeChatForkAction({
           aria-disabled={disabledReason !== null}
           onClick={() => {
             if (disabledReason === null) {
-              fork.request(itemId)
+              void fork.request(itemId)
             }
           }}
         >

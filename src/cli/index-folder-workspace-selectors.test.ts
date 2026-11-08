@@ -164,6 +164,15 @@ describe('path: selectors on folder workspaces', () => {
       expect.objectContaining({ parentWorktree: 'name:Hub', matchFolderWorkspaces: true })
     )
     const { error } = JSON.parse(String(log.mock.calls.at(-1)?.[0]))
-    expect(error).toMatchObject({ code: 'LINEAGE_PARENT_AMBIGUOUS', data: choices })
+    expect(error).toMatchObject({
+      code: 'LINEAGE_PARENT_AMBIGUOUS',
+      data: {
+        ...choices,
+        environment: 'local',
+        nextSteps: [
+          'Compare the choices with `orca worktree ps --environment local --json`, then pass one as --parent-worktree.'
+        ]
+      }
+    })
   })
 })

@@ -3,7 +3,7 @@ import { AlertCircle, Loader2 } from 'lucide-react'
 import type {
   DocPreviewFileFailure,
   DocPreviewFileFailureReason
-} from '../../../../../shared/doc-preview-scheme'
+} from '../../../../../shared/document-preview/doc-preview-scheme'
 import type { HtmlDocPreviewProps } from './html-doc-preview-props'
 import {
   advanceAcrossBrowserPageConversion,
