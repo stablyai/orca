@@ -6,6 +6,7 @@ import type { RelayDatabase, SqlRow } from './database/database.js'
 import { EdgeAdminUnavailableError, edgeLocationHint, type EdgeAdmin } from './edge-admin-client.js'
 import {
   DEVICE_COLUMNS,
+  EDGE_EXPORT_SKIP_AFTER_MS,
   EdgeMoveBusyError,
   EdgeMoveDeferredError,
   ExportedDeviceSchema,
@@ -18,6 +19,7 @@ import {
 } from './edge-relay-cohort.js'
 
 export {
+  EDGE_EXPORT_SKIP_AFTER_MS,
   EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
   EdgeMoveBusyError,
   EdgeMoveDeferredError,
@@ -35,6 +37,8 @@ export const EDGE_CELL_ID = 'edge'
 
 export class EdgeAssignments {
   private seeded = false
+  // When this director's exports started failing as unavailable; any usable answer clears it.
+  private exportFailingSince: number | undefined
 
   // With `admin` (the edge keeps host data in its objects) every move onto the edge pushes the
   // host's devices before the answer, and every move off exports them back first.
@@ -237,9 +241,17 @@ export class EdgeAssignments {
     try {
       exported = await this.admin.exportHost(identity.relayHostId)
     } catch (error) {
-      if (error instanceof EdgeAdminUnavailableError) { throw new EdgeMoveBusyError() }
-      throw error
+      if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
+      const now = this.now()
+      this.exportFailingSince ??= now
+      const failingForMs = now - this.exportFailingSince
+      if (failingForMs < (this.config.exportSkipAfterMs ?? EDGE_EXPORT_SKIP_AFTER_MS)) { throw new EdgeMoveBusyError() }
+      // The edge has been unreachable too long: place the host on its Postgres devices (changes
+      // made on the edge are lost) rather than refusing every ask until the edge is back.
+      console.warn(JSON.stringify({ event: 'orca_relay_edge_export_skipped', reason: error.message, failingForMs }))
+      return true
     }
+    this.exportFailingSince = undefined
     if (exported.outcome === 'busy') { throw new EdgeMoveBusyError() }
     // An object with no assignment never held this host's data (or was erased): keep Postgres.
     if (!exported.assignment) { return true }
@@ -273,7 +285,9 @@ export class EdgeAssignments {
   // that its phones see HOST_OFFLINE until the next move.
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
     if (!this.admin) { return true }
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    // An edge whose exports are failing gets one try, so a skipped export is not slowed further.
+    const attempts = this.exportFailingSince === undefined ? 3 : 1
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       try {
         const result = await this.admin.assign({ ...identity, cellId, assignmentEpoch })
         if (result.outcome !== 'conflict') { return true }

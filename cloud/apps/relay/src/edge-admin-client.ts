@@ -50,9 +50,14 @@ export type EdgeExportResult =
       devices: EdgeDeviceRow[]
     }
 
+// Drain: the edge closes the host's desktop control (DRAINING), so the desktop asks the director
+// again and leaves the edge on that ask.
+export type EdgeDrainResult = { outcome: 'drained'; controls: number } | { outcome: 'idle' }
+
 export type EdgeAdmin = {
   assign(body: EdgeAssignBody): Promise<EdgeAssignResult>
   exportHost(relayHostId: string): Promise<EdgeExportResult>
+  drain(relayHostId: string): Promise<EdgeDrainResult>
 }
 
 // The edge did not give a usable answer (network, timeout, 5xx, auth); the caller retries later.
@@ -75,7 +80,7 @@ export function createEdgeAdmin(options: {
   timeoutMs?: number
 }): EdgeAdmin {
   const send = options.fetch ?? fetch
-  const call = async (op: 'assign' | 'export', body: unknown): Promise<{ status: number; json: unknown }> => {
+  const call = async (op: 'assign' | 'export' | 'drain', body: unknown): Promise<{ status: number; json: unknown }> => {
     const raw = JSON.stringify(body)
     const token = await new SignJWT({
       purpose: EDGE_ADMIN_PURPOSE,
@@ -130,6 +135,15 @@ export function createEdgeAdmin(options: {
         throw new EdgeAdminUnavailableError('export_answer')
       }
       return result as EdgeExportResult
+    },
+    async drain(relayHostId) {
+      const { status, json } = await call('drain', { relayHostId })
+      const result = json as Partial<{ outcome: string; controls: unknown }>
+      if (status === 200 && result.outcome === 'idle') { return { outcome: 'idle' } }
+      if (status !== 200 || result.outcome !== 'drained' || !Number.isSafeInteger(result.controls)) {
+        throw new EdgeAdminUnavailableError('drain_answer')
+      }
+      return { outcome: 'drained', controls: result.controls as number }
     }
   }
 }
