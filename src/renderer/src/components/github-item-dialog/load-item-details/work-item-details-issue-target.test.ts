@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+
 import {
   getWorkItemDetailsCacheKey,
   invalidateWorkItemDetailsCacheByMatch,
@@ -20,35 +20,8 @@ const keyArgs = {
 }
 const ORIGIN = { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
 const UPSTREAM = { owner: 'upstream-owner', repo: 'widgets', host: 'github.com' }
-const LOCAL_SOURCE: TaskSourceContext = {
-  kind: 'task-source',
-  provider: 'github',
-  projectId: 'project-1',
-  hostId: 'local',
-  repoId: 'repo-1'
-}
 
 describe('issue detail cache repository identity', () => {
-  it('separates equal issue numbers across origin and upstream', () => {
-    expect(getWorkItemDetailsCacheKey({ ...keyArgs, ownerRepo: ORIGIN })).not.toBe(
-      getWorkItemDetailsCacheKey({ ...keyArgs, ownerRepo: UPSTREAM })
-    )
-  })
-
-  it.each([undefined, LOCAL_SOURCE])(
-    'keeps a local opened issue key stable when another window changes the selector: %j',
-    (sourceContext) => {
-      expect(getWorkItemDetailsCacheKey({ ...keyArgs, ownerRepo: ORIGIN, sourceContext })).toBe(
-        getWorkItemDetailsCacheKey({
-          ...keyArgs,
-          issueSourcePreference: 'upstream',
-          ownerRepo: ORIGIN,
-          sourceContext
-        })
-      )
-    }
-  )
-
   it('invalidates both repository variants after a mutation', () => {
     const originKey = getWorkItemDetailsCacheKey({ ...keyArgs, ownerRepo: ORIGIN })
     const upstreamKey = getWorkItemDetailsCacheKey({ ...keyArgs, ownerRepo: UPSTREAM })

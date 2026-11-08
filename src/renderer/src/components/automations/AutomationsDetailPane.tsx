@@ -2,13 +2,13 @@ import React from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type {
-  Automation,
   ExternalAutomationAction,
   ExternalAutomationJob,
-  ExternalAutomationManager,
-  AutomationRun
-} from '../../../../shared/automations-types'
+  ExternalAutomationManager
+} from '../../../../shared/automations/external/external-automation'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationRunHistory } from './AutomationRunHistory'

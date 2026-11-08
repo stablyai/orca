@@ -3,20 +3,22 @@
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationRunsPage
+} from '../../../../shared/automations/history/automation-run'
 import {
   automationOwnerConflictMessage,
   stripAutomationOwnerConflictCode,
   type AutomationOwnerConflictCode
-} from '../../../../shared/automation-owner-conflict'
+} from '../../../../shared/automations/ownership/automation-owner-conflict'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
-} from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
 import type {
   AutomationActionAvailability,
@@ -34,11 +36,11 @@ import {
   listScopedAutomations,
   listOrphanAutomationRuns,
   listOrphanAutomationRunsPage,
-  matchAutomationOwnerConflict,
   runAutomationNowForOwner,
   updateAutomationForOwner,
   updateOrphanAutomation
 } from './automation-scoped-list-client'
+import { matchAutomationOwnerConflict } from '../../../../shared/automations/ownership/automation-owner-conflict'
 
 export type AutomationOwnerConflict = {
   code: AutomationOwnerConflictCode | 'unsupported_host_scope'

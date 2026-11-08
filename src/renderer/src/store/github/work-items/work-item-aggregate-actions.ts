@@ -9,8 +9,8 @@ import {
   isGitHubWorkItemsSshRemoteRequiredError,
   sortWorkItemsByNumber,
   PER_REPO_FETCH_LIMIT
-} from '../../../../../shared/work-items'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/work-items'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../../shared/github/work-items-query-bounds'
 import { workItemsCacheKey, workItemsInflightRequestKey } from '../cache/cache-identity'
 import { isFresh, WORK_ITEMS_CACHE_TTL } from '../cache/cache-policy'

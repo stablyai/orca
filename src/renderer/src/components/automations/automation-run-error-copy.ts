@@ -2,8 +2,8 @@ import { translate } from '@/i18n/i18n'
 import {
   AUTOMATION_RUN_FAILURE_COPY as EN,
   type AutomationRunFailureCode
-} from '../../../../shared/automation-run-failure-copy'
-import type { AutomationRun } from '../../../../shared/automations-types'
+} from '../../../../shared/automations/history/automation-run-failure-copy'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 
 // One whole sentence per non-ready setup state; unknown states keep the stored English.
 const SETUP_STATE_COPY: Record<string, () => string> = {

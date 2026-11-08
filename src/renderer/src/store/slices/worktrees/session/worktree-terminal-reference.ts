@@ -24,7 +24,7 @@ import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { readHostedReviewForRepo } from '@/lib/hosted-review-repo-read'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
-import { buildTaskSourceContextFromRepo } from '../../../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
 import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
 
 function terminalReviewSourceKey(repo: Repo | null | undefined): string {

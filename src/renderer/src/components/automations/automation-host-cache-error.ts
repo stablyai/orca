@@ -4,12 +4,12 @@ import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-cod
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   stripAutomationOwnerConflictCode
-} from '../../../../shared/automation-owner-conflict'
+} from '../../../../shared/automations/ownership/automation-owner-conflict'
 import {
   AutomationHostScopeUnsupportedError,
-  AutomationListResponseError,
-  matchAutomationOwnerConflict
+  AutomationListResponseError
 } from './automation-scoped-list-client'
+import { matchAutomationOwnerConflict } from '../../../../shared/automations/ownership/automation-owner-conflict'
 import type {
   AutomationHostQueryError,
   AutomationHostQueryErrorCode

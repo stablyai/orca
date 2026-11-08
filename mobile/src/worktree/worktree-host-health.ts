@@ -3,7 +3,7 @@ import {
   getExecutionHostHealthLabel,
   getSshConnectionHealth,
   type ExecutionHostHealth
-} from '../../../src/shared/execution-host-health'
+} from '../../../src/shared/execution-host/execution-host-health'
 import { sshTargetSummaryHostId } from '../../../src/shared/worktree/host-context-labels'
 import { isSshConnectionStatus } from '../transport/ssh-connection-status-arms'
 

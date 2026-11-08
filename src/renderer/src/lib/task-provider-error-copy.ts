@@ -1,4 +1,4 @@
-import type { TaskProviderErrorCode } from '../../../shared/task-provider-failure'
+import type { TaskProviderErrorCode } from '../../../shared/work-items/task-provider-failure'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { displayIpcErrorMessage } from './ipc-error'

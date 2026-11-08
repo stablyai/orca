@@ -1,4 +1,4 @@
-import type { ExternalAutomationManager } from '../../../../shared/automations-types'
+import type { ExternalAutomationManager } from '../../../../shared/automations/external/external-automation'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { translate } from '@/i18n/i18n'

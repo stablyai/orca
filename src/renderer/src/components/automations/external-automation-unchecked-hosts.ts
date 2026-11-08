@@ -2,7 +2,7 @@
 
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { ownerKey } from '../../../../shared/automation-owner-key'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { ScopedExternalAutomationFailure } from './external-automation-scope-client'
 

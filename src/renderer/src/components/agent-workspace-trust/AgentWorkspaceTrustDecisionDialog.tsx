@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import type { AgentWorkspaceTrustDecision } from '../../../../shared/agent-workspace-trust-decision'
+import type { AgentWorkspaceTrustDecision } from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { agentWorkspaceTrustDecisionCopy as copy } from './agent-workspace-trust-decision-copy'
 import {
   answerAgentWorkspaceTrustDecision,

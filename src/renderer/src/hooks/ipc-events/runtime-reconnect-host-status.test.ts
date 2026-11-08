@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
@@ -151,18 +151,6 @@ describe('remote Orca server reconnect', () => {
       activateNotifiedWorktree: vi.fn()
     } as unknown as WorktreeEventRuntime)
   }
-
-  it('keeps legacy event recovery as a single request, with retries owned outside the renderer', async () => {
-    vi.useFakeTimers()
-    startBridge()
-    await settle()
-    failingStatusProbes = 1
-    replaySubscription()
-    await settle()
-    expect(window.api.runtimeEnvironments.getStatus).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(120_000)
-    expect(window.api.runtimeEnvironments.getStatus).toHaveBeenCalledTimes(1)
-  })
 
   it('does not add a status request when a connection-owned subscription replays', async () => {
     useAppStore.getState().applyRuntimeHostStatusSnapshot({

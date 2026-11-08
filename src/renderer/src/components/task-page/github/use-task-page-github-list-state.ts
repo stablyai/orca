@@ -6,7 +6,7 @@ import {
   PER_REPO_FETCH_LIMIT,
   CROSS_REPO_DISPLAY_LIMIT,
   getTaskPagePerRepoLimit
-} from '../../../../../shared/work-items'
+} from '../../../../../shared/work-items/work-items'
 import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-page-github-resume-cache'
 import { githubTaskBinding } from '@/lib/github-task-observation'
 import { useAppStore } from '@/store/index'

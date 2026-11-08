@@ -1,8 +1,8 @@
 import type {
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
-import { isRunnableAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
+} from '../../../../shared/automations/external/external-automation'
+import { isRunnableAutomationCronSchedule } from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

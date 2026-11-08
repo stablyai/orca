@@ -9,7 +9,8 @@ import {
   useLayoutEffect,
   useEffect
 } from './mobile-tasks-dependencies'
-import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
 import {
   linearComposerTeamListRead,
   linearTeamStateListRead

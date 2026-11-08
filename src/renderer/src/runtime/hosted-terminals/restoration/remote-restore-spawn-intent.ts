@@ -1,4 +1,4 @@
-import type { RestoreSpawnIntent } from '../../../../../shared/host-spawn-admission'
+import type { RestoreSpawnIntent } from '../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import '../../../../../shared/protocol-version'
 import { TERMINAL_SPAWN_INTENT_RUNTIME_CAPABILITY } from '../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'

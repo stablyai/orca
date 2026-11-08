@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
 import { storedHostDescriptor, type HostStoredDescriptor } from './host-stored-identity'
 import type { RpcClient } from '../transport/rpc-client'
 import type { HostProfile } from '../transport/types'

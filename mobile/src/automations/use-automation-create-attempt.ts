@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../src/shared/automation-runtime-capabilities'
+import { AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../src/shared/automations/automation-runtime-capabilities'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/types'

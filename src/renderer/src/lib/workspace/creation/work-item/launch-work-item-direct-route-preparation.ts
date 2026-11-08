@@ -3,7 +3,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import type { RepoHostFields } from '@/lib/agent-detection-target-inventory'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
 import {
   refineLocalLaunchPlatform,
   resolveRepoExecutionHostPlatform,
