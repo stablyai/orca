@@ -39,7 +39,11 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
     private readonly onInvalidated: () => void = () => undefined
   ) {
     super()
-    this.client = new SessionSearchWorkerClient((response) => this.update(response))
+    this.client = new SessionSearchWorkerClient(
+      (response) => this.update(response),
+      undefined,
+      true
+    )
   }
   get acceptingReads(): boolean {
     return !this.closed && this.initializedEpoch === this.client.epoch

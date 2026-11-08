@@ -7,7 +7,7 @@ import type { SessionSearchIndexStore } from './session-search-store'
 
 // Walk missing directories upward to seek a listing that proves which component disappeared.
 const MISSING_DIRECTORY = new Set(['ENOENT', 'ENOTDIR'])
-// Cached listings retire without awaiting; drain the worker queue before it fills.
+// Cached listings retire without awaiting; drain held removals so a huge sweep stays bounded.
 const REMOVALS_PER_FLUSH = 256
 
 export type SessionSearchRetirement = {
