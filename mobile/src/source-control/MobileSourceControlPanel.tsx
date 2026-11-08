@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useHostConnectionInputs } from '../transport/client-context-connection-metrics'
 import { View } from 'react-native'
 import { GitBranch, RefreshCw } from 'lucide-react-native'
@@ -157,9 +157,10 @@ export function MobileSourceControlPanel({
   )
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind
-  // Keep tab effects stable when the PR read changes with headSha.
-  const refetchPrRef = useRef(prController.refetchPRSidebar)
-  refetchPrRef.current = prController.refetchPRSidebar
+  // Keep the push effect stable when the PR read changes with headSha.
+  const rereadPrAfterPush = useEffectEvent((includeDetails: boolean) => {
+    void prController.refetchPRSidebar({ includeDetails })
+  })
 
   // A push leaves HEAD where it was, so reread the PR once it lands: its checks moved to the pushed head.
   const aheadOfUpstream = status?.upstreamStatus?.ahead ?? 0
@@ -168,7 +169,7 @@ export function MobileSourceControlPanel({
     const pushed = lastAheadRef.current > 0 && aheadOfUpstream === 0
     lastAheadRef.current = aheadOfUpstream
     if (pushed && isHostedRepo && prBranch && prSidebarKind === 'ready') {
-      void refetchPrRef.current({ includeDetails: activeTab === 'pr' })
+      rereadPrAfterPush(activeTab === 'pr')
     }
   }, [aheadOfUpstream, activeTab, isHostedRepo, prBranch, prSidebarKind])
 

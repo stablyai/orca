@@ -2,6 +2,8 @@ import { hookMount, performHookAction } from '../hook-mount'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { PrSidebarState } from '../../../session/mobile-pr-sidebar-state'
+import type { useMobilePrSidebarController as UseMobilePrSidebarController } from '../../../session/use-mobile-pr-sidebar-controller'
+import type { useMobilePrCommentActions as UseMobilePrCommentActions } from '../../../session/use-mobile-pr-comment-actions'
 import { legacyShellStatusFixture } from '../legacy-shell-status-fixture'
 
 const HOST = 'host-1'
@@ -41,12 +43,12 @@ export function prSidebarMountAdapters(
   return {
     'session.pr-sidebar': ({ client: suppliedClient }) => {
       const client = legacyShellStatusFixture(suppliedClient)
-      const useController = modules.load<
-        typeof import('../../../session/use-mobile-pr-sidebar-controller')
-      >('mobile/src/session/use-mobile-pr-sidebar-controller.ts').useMobilePrSidebarController
-      const useCommentActions = modules.load<
-        typeof import('../../../session/use-mobile-pr-comment-actions')
-      >('mobile/src/session/use-mobile-pr-comment-actions.ts').useMobilePrCommentActions
+      const useController = modules.load<{
+        useMobilePrSidebarController: typeof UseMobilePrSidebarController
+      }>('mobile/src/session/use-mobile-pr-sidebar-controller.ts').useMobilePrSidebarController
+      const useCommentActions = modules.load<{
+        useMobilePrCommentActions: typeof UseMobilePrCommentActions
+      }>('mobile/src/session/use-mobile-pr-comment-actions.ts').useMobilePrCommentActions
       let controller: ReturnType<typeof useController> | undefined
       let comments: ReturnType<typeof useCommentActions> | undefined
       const hook = hookMount(() => {
