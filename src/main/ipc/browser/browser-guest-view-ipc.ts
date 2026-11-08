@@ -1,5 +1,5 @@
 import { ipcMain, webContents, type IpcMainInvokeEvent } from 'electron'
-import { browserManager } from '../../browser/browser-manager'
+import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { browserSiteDisplayController } from '../../browser/site-settings/browser-site-display-controller'
 import { isBrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
 import { publishBrowserClientPageMetadata } from '../../browser/client-pages/renderer/browser-client-page-metadata-transport'

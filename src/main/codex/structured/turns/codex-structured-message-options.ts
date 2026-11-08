@@ -42,7 +42,7 @@ function compileCodexMessageOptions(
   choices: Readonly<Record<string, string | undefined>>
 ): Readonly<Record<string, string>> {
   const compiled: Record<string, string> = {}
-  for (const key of ['model', 'effort', 'personality', 'serviceTier'] as const) {
+  for (const key of ['model', 'effort', 'personality', 'serviceTier', 'interactionMode'] as const) {
     const value = choices[key]
     if (value !== undefined) {
       compiled[key] = value

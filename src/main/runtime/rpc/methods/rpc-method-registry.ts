@@ -7,6 +7,7 @@ import { AI_VAULT_METHODS } from './history/ai-vault'
 import { AUTOMATION_METHODS } from './automations/automations'
 import { REPO_METHODS } from './projects/repo'
 import { WORKTREE_METHODS } from './workspaces/worktree'
+import { AGENT_ACTIVITY_METHODS } from './workspaces/agent-activity-methods'
 import { REFERENCE_METHODS } from './reference/reference'
 import { TERMINAL_METHODS } from './terminal/terminal'
 import { TERMINAL_ORPHAN_METHODS } from './terminal/terminal-orphan'
@@ -50,6 +51,7 @@ import { PLUGIN_METHODS } from './plugins/plugins'
 import { PLUGIN_VIEW_METHODS } from './plugins/plugin-view'
 import { PLUGIN_DEV_EMIT_METHODS } from './plugins/plugin-dev-emit'
 import { PLUGIN_DEV_REQUEST_METHODS } from './plugins/plugin-dev-request'
+import { PLUGIN_INSTALL_METHODS } from './plugins/plugin-install-methods'
 import { SKILL_METHODS } from './skills/skills'
 import { CLIPBOARD_METHODS } from './clipboard/clipboard'
 import { HOST_CAPABILITY_METHODS } from './host-management/host-capabilities'
@@ -91,6 +93,7 @@ export const ALL_RPC_METHODS = [
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,
+  ...AGENT_ACTIVITY_METHODS,
   ...REFERENCE_METHODS,
   ...AGENT_SESSION_METHODS,
   ...STRUCTURED_AGENT_SESSION_METHODS,
@@ -143,6 +146,7 @@ export const ALL_RPC_METHODS = [
   ...PLUGIN_VIEW_METHODS,
   ...PLUGIN_DEV_EMIT_METHODS,
   ...PLUGIN_DEV_REQUEST_METHODS,
+  ...PLUGIN_INSTALL_METHODS,
   ...SKILL_METHODS,
   ...CLIPBOARD_METHODS,
   ...HOST_CAPABILITY_METHODS,

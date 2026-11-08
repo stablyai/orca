@@ -1,4 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { runWithRequestedPageUrl } from '../cdp/input/browser-expected-page-url'
+import { AgentBrowserBridge } from './agent-browser-bridge'
+import {
+  answerAgentBrowserCommands,
+  mockBrowserManager,
+  mockWebContents,
+  overrideBridgeWebContentsLookup,
+  resetAgentBrowserBridgeMocks
+} from './agent-browser-bridge-test-harness'
+import type { ExecFileCallback, MockWebContents } from './agent-browser-bridge-test-harness'
+import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
 
 const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, stdinWrites } =
   vi.hoisted(() => ({
@@ -36,19 +48,6 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 vi.mock('../cdp/transport/cdp-ws-proxy', () => ({ CdpWsProxy: CdpWsProxyMock }))
-import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { runWithRequestedPageUrl } from '../cdp/input/browser-expected-page-url'
-import { AgentBrowserBridge } from './agent-browser-bridge'
-import {
-  answerAgentBrowserCommands,
-  mockBrowserManager,
-  mockWebContents,
-  overrideBridgeWebContentsLookup,
-  resetAgentBrowserBridgeMocks,
-  type ExecFileCallback,
-  type MockWebContents
-} from './agent-browser-bridge-test-harness'
-import type { BrowserManager } from '../browser-manager'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
 

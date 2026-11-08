@@ -19,20 +19,20 @@ export type YieldedTerminalQuery = { seq: number; data: string; at: number; disc
 
 type ReplayedTerminalQuery = { seq: number; data: string }
 
-/** Record stateless queries main yielded solely to this stream at ingestion, so a later discard can hand them back. */
+/** Record stateless queries main yielded solely to this stream at ingestion, so a later discard can hand them back. Returns whether `data` carried any reply query this view answers. */
 export function recordYieldedTerminalQueries(
   runtime: TerminalMultiplexConnection['runtime'],
   stream: TerminalMultiplexStream,
   data: string,
   meta: RuntimeTerminalDataMeta | undefined
-): void {
+): boolean {
   if (
     stream.isMobile ||
     typeof meta?.seq !== 'number' ||
     !runtime.isSoleRemoteTerminalQueryOwner(stream.ptyId)
   ) {
     stream.yieldedQueryScan = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
-    return
+    return false
   }
   // Why: frames split large events with per-slice seqs, so settle by each query's own end seq; transformed text can't map offsets to seq.
   const mapsToSeq = (meta.rawLength ?? data.length) === data.length
@@ -51,6 +51,7 @@ export function recordYieldedTerminalQueries(
   if (stream.yieldedQueries.length > YIELDED_QUERY_MAX_ENTRIES) {
     stream.yieldedQueries.splice(0, stream.yieldedQueries.length - YIELDED_QUERY_MAX_ENTRIES)
   }
+  return queries.length > 0
 }
 
 export function settleDeliveredYieldedQueries(

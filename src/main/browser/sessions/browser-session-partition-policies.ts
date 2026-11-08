@@ -1,7 +1,7 @@
 import { session } from 'electron'
 import type { Session } from 'electron'
 import type { BrowserSessionProfile } from '../../../shared/browser-workspace-types'
-import { browserManager } from '../browser-manager'
+import { browserManager } from '../guest-lifecycle/manager/browser-manager'
 import { clearProxySessionCredentials } from '../../network/proxy-settings'
 import {
   applyProxyToBrowserSession,

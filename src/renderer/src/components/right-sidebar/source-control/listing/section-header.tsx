@@ -2,7 +2,7 @@ import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function SectionHeader({
   label,
@@ -22,6 +22,7 @@ export function SectionHeader({
   onToggle: () => void
   actions?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   // Share the rounded container so hover styling spans the whole row.
   return (
     <div className="pl-1 pr-3 pt-3 pb-1">
@@ -49,7 +50,7 @@ export function SectionHeader({
             </span>
             {conflictCount > 0 && (
               <span className="block truncate text-[11px] font-medium text-destructive/80">
-                {translate(
+                {t(
                   'auto.components.right.sidebar.SourceControl.conflictCount',
                   '{{count}} conflicts',
                   { count: conflictCount, defaultValue_one: '{{count}} conflict' }

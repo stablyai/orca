@@ -5,7 +5,7 @@ import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
 } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
+import { createAutomationOutputSnapshotBuffer } from './automation-launch'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 
 export function resolveChatAutomationRun(
@@ -65,7 +65,7 @@ function observationForResolvedRun(
   if (turn.state === 'running') {
     return null
   }
-  const buffer = createHeadlessAutomationOutputSnapshotBuffer()
+  const buffer = createAutomationOutputSnapshotBuffer()
   for (const item of snapshot.items) {
     if (
       item.agentId ||

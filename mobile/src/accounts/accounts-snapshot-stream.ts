@@ -1,6 +1,6 @@
 import { decodeAccountsSnapshot } from '../components/accounts-snapshot'
 import type { AccountsSnapshot } from '../components/AccountUsage'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 /** The desktop's `accounts.subscribe` stream, decoded: rate-limit polls and account switches as they happen. */
 export function subscribeAccountsSnapshots(

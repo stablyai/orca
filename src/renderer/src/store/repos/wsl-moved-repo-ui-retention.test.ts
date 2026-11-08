@@ -3,8 +3,8 @@ import '../../../../shared/constants'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
-import { createTestStore } from '../slices/store-test-helpers'
-import { createUIStore, makePersistedUI } from '../slices/ui-slice-test-harness'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { createUIStore, makePersistedUI } from '../slices/ui/ui-slice-test-harness'
 import './wsl-moved-repo-ui-retention'
 
 const moved: WslMovedProject = {

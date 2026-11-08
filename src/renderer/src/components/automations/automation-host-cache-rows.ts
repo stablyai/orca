@@ -1,17 +1,17 @@
 /** Scoped rows retain their captured owner for later fences. Legacy responses prove neither owner nor usage; never compensate with run-history downloads. */
 
-import type { Automation } from '../../../../shared/automations-types'
-import type { AutomationListItem } from '../../../../shared/automation-list-scope'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationListItem } from '../../../../shared/automations/ownership/automation-list-scope'
 import {
   partitionLegacyAutomationList,
   type LegacyAutomationPartitionContext,
   type LegacyAutomationSelector
-} from '../../../../shared/automation-legacy-list-partition'
+} from '../../../../shared/automations/ownership/automation-legacy-list-partition'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import type { ScopedAutomationList } from './automation-scoped-list-client'
 import type { AutomationHostRow } from './automation-host-cache-types'
 

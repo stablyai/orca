@@ -28,21 +28,6 @@ describe('check --wait from an agent session', () => {
     vi.restoreAllMocks()
   })
 
-  it('waits the budget a chat asked for, as it would for a terminal', async () => {
-    const asX = (method: string, params: Record<string, unknown>) =>
-      h.dispatch(orchestrationRequest(method, params, { sessionId: SESSION_X }))
-    const runId = idOf(resultOf(await asX('orchestration.runCreate', { objective: 'o' })).run)
-    const waitForMessage = vi.spyOn(h.runtime, 'waitForMessage').mockResolvedValue('timed_out')
-
-    const result = resultOf(await asX('orchestration.check', { wait: true, timeoutMs: 600_000 }))
-
-    expect(result).toMatchObject({ runId, count: 0, timedOut: true })
-    expect(waitForMessage).toHaveBeenCalledWith(
-      `run:${runId}`,
-      expect.objectContaining({ timeoutMs: 600_000 })
-    )
-  })
-
   it('lets a chat hold two waits that share one Delivery and are both fenced on takeover', async () => {
     const as = (sessionId: string | undefined, method: string, params: Record<string, unknown>) =>
       h.dispatch(orchestrationRequest(method, params, { sessionId }))

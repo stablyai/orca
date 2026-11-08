@@ -1,5 +1,5 @@
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
-import { getRuntimeDesktopSurface } from '../runtime/runtime-desktop-surface'
+import { getRuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
 
 export function isResourceWindowVisible(window: BrowserWindow | null): boolean {

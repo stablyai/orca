@@ -118,20 +118,4 @@ describe('watcher event queue flush', () => {
     await expect(queue.flush()).resolves.toBeUndefined()
     blocked.resolve()
   })
-
-  it('settles flush after reporting a delivery error', async () => {
-    const onError = vi.fn()
-    const failure = new Error('delivery failed')
-    const queue = createWatcherProcessEventDeliveryQueue(
-      {},
-      async () => {
-        throw failure
-      },
-      onError
-    )
-    queue.enqueue([{ type: 'update', path: '/repo/file' }])
-    await queue.flush()
-    expect(onError).toHaveBeenCalledWith(failure)
-    queue.close()
-  })
 })

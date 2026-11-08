@@ -1,7 +1,9 @@
 import '../../../../../shared/protocol-version'
-import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../../shared/automation-runtime-capabilities'
-import type { AutomationOwnerPrecondition } from '../../../../../shared/automation-owner-precondition'
+import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../../shared/automations/automation-runtime-capabilities'
+import type { AutomationOwnerPrecondition } from '../../../../../shared/automations/ownership/automation-owner-precondition'
+import { remoteRpcContentBudget } from '../../../../../shared/remote-rpc-content-budget'
 import { defineMethod, type RpcContext } from '../../core'
+import { previewAutomationRunsPage } from './automation-runs-preview-page'
 import {
   AutomationCreate,
   AutomationId,
@@ -90,7 +92,26 @@ export const AUTOMATION_METHODS = [
     name: 'automation.runs',
     permission: 'workspace',
     params: AutomationRuns,
-    handler: (params, { runtime }) => {
+    handler: (params, { runtime, requestId }) => {
+      if (params.runId !== undefined) {
+        if (!params.automationId) {
+          throw new Error('A run id requires an automation id.')
+        }
+        return {
+          run: runtime.showAutomationRun(params.automationId, params.runId, params.expectedOwner)
+        }
+      }
+      if (params.preview) {
+        return previewAutomationRunsPage(
+          runtime.listAutomationRunsPage(
+            params.automationId,
+            params.expectedOwner,
+            params.limit,
+            params.cursor
+          ),
+          remoteRpcContentBudget(requestId ?? '')
+        )
+      }
       if (params.limit !== undefined || params.cursor !== undefined) {
         return runtime.listAutomationRunsPage(
           params.automationId,

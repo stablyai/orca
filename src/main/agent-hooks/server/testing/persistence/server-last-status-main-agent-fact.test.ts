@@ -1,0 +1,230 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { AgentHookServer, _internals } from '../../agent-hook-server'
+import { buildBody, postHookEvent, recentTs, PANE } from '../server.test-fixtures'
+
+const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
+  getCohortAtEmitMock: vi.fn(),
+  trackMock: vi.fn()
+}))
+
+vi.mock('../../../../telemetry/client', () => ({ track: trackMock }))
+vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
+
+beforeEach(() => {
+  _internals.resetCachesForTests()
+  trackMock.mockReset()
+  getCohortAtEmitMock.mockReset()
+  getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('The main agent fact across a restart', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-main-agent-fact-'))
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  function lastStatusPath(): string {
+    return join(userDataPath, 'agent-hooks', 'last-status.json')
+  }
+
+  function writeEntry(entry: Record<string, unknown>): void {
+    mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
+    writeFileSync(
+      lastStatusPath(),
+      JSON.stringify({
+        version: 2,
+        entries: { [PANE]: { paneKey: PANE, tabId: 'tab-1', ...entry } }
+      })
+    )
+  }
+
+  // Captured Claude cancellation emits no hook; exercise the inferred Ctrl+C path.
+  it('round-trips an inferred cancel held open by a child through disk and back', async () => {
+    const firstServer = new AgentHookServer()
+    await firstServer.start({ env: 'production', userDataPath })
+    await postHookEvent(
+      firstServer,
+      buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'finish after child' })
+    )
+    await postHookEvent(
+      firstServer,
+      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'arestored-child' })
+    )
+    const baseline = firstServer.getStatusSnapshot()[0]
+    expect(
+      firstServer.inferInterrupt({
+        paneKey: PANE,
+        baselineUpdatedAt: baseline.receivedAt,
+        baselineStateStartedAt: baseline.stateStartedAt,
+        baselinePrompt: baseline.prompt,
+        baselineAgentType: 'claude',
+        intent: 'ctrl-c'
+      })
+    ).toBe(true)
+    const live = firstServer.getStatusSnapshot()[0]
+    expect(live).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done', outcome: 'cancellation' }
+    })
+    firstServer.flushStatusPersistSync()
+    firstServer.stop()
+
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'arestored-child' })
+      )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('maps the legacy child-only flag onto an absent main agent, dated by the turn end', async () => {
+    const receivedAt = recentTs()
+    writeEntry({
+      receivedAt,
+      stateStartedAt: receivedAt - 5_000,
+      claudeLeadBoundaryChildOnly: true,
+      payload: {
+        state: 'working',
+        prompt: 'legacy row',
+        agentType: 'claude',
+        turnCompletedAt: receivedAt - 1_000,
+        subagents: [{ id: 'arestored-child', state: 'working', startedAt: receivedAt - 4_000 }]
+      }
+    })
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        mainAgent: { state: 'done', stateStartedAt: receivedAt - 1_000 }
+      })
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'arestored-child' })
+      )
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'done',
+        mainAgent: { state: 'done' }
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it.each([
+    ['a child permission wait', 'waiting', ['PreToolUse', 'SubagentStop']],
+    ['a drained row', 'done', ['SubagentStart', 'SubagentStop']]
+  ] as const)(
+    'settles a legacy flagged row holding %s once its child finishes',
+    async (_heldRow, state, childEvents) => {
+      const receivedAt = recentTs()
+      writeEntry({
+        receivedAt,
+        stateStartedAt: receivedAt - 5_000,
+        claudeLeadBoundaryChildOnly: true,
+        payload: {
+          state,
+          prompt: 'legacy row',
+          agentType: 'claude',
+          ...(state === 'waiting'
+            ? {
+                toolName: 'Bash',
+                subagents: [{ id: 'achild', state: 'working', startedAt: receivedAt - 4_000 }]
+              }
+            : {})
+        }
+      })
+      const server = new AgentHookServer()
+      await server.start({ env: 'production', userDataPath })
+      try {
+        for (const hookEventName of childEvents) {
+          await postHookEvent(
+            server,
+            buildBody({
+              hook_event_name: hookEventName,
+              agent_id: 'achild',
+              ...(hookEventName === 'PreToolUse'
+                ? { tool_name: 'Bash', tool_use_id: 'toolu-approved' }
+                : {})
+            })
+          )
+        }
+        expect(server.getStatusSnapshot()[0]).toMatchObject({
+          state: 'done',
+          mainAgent: { state: 'done' }
+        })
+      } finally {
+        server.stop()
+      }
+    }
+  )
+
+  it('does not restore a settled main agent from a row that does not say whether a shell ran', async () => {
+    const receivedAt = recentTs()
+    writeEntry({
+      receivedAt,
+      stateStartedAt: receivedAt - 5_000,
+      payload: {
+        state: 'working',
+        prompt: 'unknown shell',
+        agentType: 'claude',
+        mainAgent: { state: 'done', stateStartedAt: receivedAt - 2_000 },
+        subagents: [{ id: 'achild', state: 'working', startedAt: receivedAt - 4_000 }]
+      }
+    })
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      await postHookEvent(
+        server,
+        buildBody({ hook_event_name: 'SubagentStop', agent_id: 'achild' })
+      )
+
+      expect(server.getStatusSnapshot()[0]).toMatchObject({
+        state: 'working',
+        restoredUnconfirmed: true
+      })
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('drops a malformed persisted main agent and keeps the row', async () => {
+    const receivedAt = recentTs()
+    writeEntry({
+      receivedAt,
+      stateStartedAt: receivedAt - 5_000,
+      payload: { state: 'done', prompt: 'survived', agentType: 'claude', mainAgent: 'done' }
+    })
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      const row = server.getStatusSnapshot()[0]
+      expect(row).toMatchObject({ state: 'done', prompt: 'survived' })
+      expect(row?.mainAgent).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+})

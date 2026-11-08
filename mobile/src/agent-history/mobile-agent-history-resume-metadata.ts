@@ -1,6 +1,6 @@
-import { optionalSettingsRead } from '../transport/settings-read-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
-import { rpcPayloadMember } from '../transport/rpc-reader-payload'
+import { optionalSettingsRead } from '../settings/mobile-settings-read-operations'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
 import { readAcceptedResumeList } from './resume-metadata-lists'
 import {
   resumeFolderWorkspaceListRead,
@@ -8,10 +8,10 @@ import {
   resumeRepoListRead,
   resumeWorktreeListRead
 } from './mobile-agent-history-operations'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { Worktree } from '../worktree/workspace-list-types'
 import type { AiVaultResumeLaunchSettings } from '../../../src/shared/ai-vault/resume/ai-vault-resume-startup'
-import { RESUME_RPC_TIMEOUT_MS } from '../session/ai-vault-resume-preparation'
+import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import type { MobileAiVaultResumeCatalog } from './agent-history-resume-target'
 
 type ResumeRepos = MobileAiVaultResumeCatalog['repos']

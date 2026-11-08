@@ -1,8 +1,8 @@
 import { X } from 'lucide-react'
 import type { ChangelogData } from '../../../../../shared/update-status-types'
 import { Button } from '../../ui/button'
-import { translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { useTranslate } from '@/i18n/use-translate'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function isAnimatedGif(url: string | undefined): boolean {
   return typeof url === 'string' && url.toLowerCase().endsWith('.gif')
@@ -10,9 +10,10 @@ function isAnimatedGif(url: string | undefined): boolean {
 
 /** A package manager owns this install: the release is real but Orca can never apply it here. */
 function ExternallyManagedNote(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <p className="text-xs leading-relaxed text-muted-foreground">
-      {translate(
+      {t(
         'auto.components.UpdateCard.7f1a4c9e02',
         'Your system package manager installed Orca, so update it from there — Orca cannot install this release itself.'
       )}
@@ -43,20 +44,21 @@ export function UpdateAvailableRichContent({
   onClose: () => void
   externallyManaged?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const showMedia =
     release.mediaUrl && !mediaFailed && !(prefersReducedMotion && isAnimatedGif(release.mediaUrl))
   return (
     <div className="flex flex-col gap-3 p-4">
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold">
-          {translate('auto.components.UpdateCard.f58b5c57a6', 'New:')} {release.title}
+          {t('auto.components.UpdateCard.f58b5c57a6', 'New:')} {release.title}
         </h3>
         <Button
           variant="ghost"
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label={translate('auto.components.UpdateCard.318d3b4bc7', 'Dismiss update')}
+          aria-label={t('auto.components.UpdateCard.318d3b4bc7', 'Dismiss update')}
         >
           <X className="size-3.5" />
         </Button>
@@ -89,7 +91,7 @@ export function UpdateAvailableRichContent({
               className="text-xs text-muted-foreground/70 underline hover:text-foreground inline"
               onClick={(event) => openAppHttpLink(release.releaseNotesUrl, { event })}
             >
-              {translate(
+              {t(
                 'auto.components.UpdateCard.moreSinceLastUpdate',
                 '+{{count}} more since your last update',
                 { count: releasesBehind - 1 }
@@ -103,13 +105,13 @@ export function UpdateAvailableRichContent({
         className="text-xs text-muted-foreground underline hover:text-foreground self-start"
         onClick={(event) => openAppHttpLink(release.releaseNotesUrl, { event })}
       >
-        {translate('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
+        {t('auto.components.UpdateCard.aad383aecc', 'Read the full release notes')}
       </button>
       {externallyManaged ? (
         <ExternallyManagedNote />
       ) : (
         <Button variant="default" size="sm" onClick={onUpdate} className="w-full cursor-pointer">
-          {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
+          {t('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
         </Button>
       )}
     </div>
@@ -129,24 +131,25 @@ export function UpdateAvailableSimpleContent({
   onClose: () => void
   externallyManaged?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-col gap-2.5 p-3.5">
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-semibold">
-          {translate('auto.components.UpdateCard.9abc59f814', 'Update Available')}
+          {t('auto.components.UpdateCard.9abc59f814', 'Update Available')}
         </h3>
         <Button
           variant="ghost"
           size="icon"
           className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
           onClick={onClose}
-          aria-label={translate('auto.components.UpdateCard.318d3b4bc7', 'Dismiss update')}
+          aria-label={t('auto.components.UpdateCard.318d3b4bc7', 'Dismiss update')}
         >
           <X className="size-3.5" />
         </Button>
       </div>
       <p className="text-sm text-muted-foreground">
-        {translate('auto.components.UpdateCard.05ad78a6d1', 'Orca v{{value0}} is ready.', {
+        {t('auto.components.UpdateCard.05ad78a6d1', 'Orca v{{value0}} is ready.', {
           value0: version
         })}
       </p>
@@ -154,7 +157,7 @@ export function UpdateAvailableSimpleContent({
         <ExternallyManagedNote />
       ) : (
         <p className="text-xs leading-relaxed text-muted-foreground">
-          {translate('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
+          {t('auto.components.UpdateCard.fdd4a364fa', "Sessions won't be interrupted.")}
         </p>
       )}
       {releaseUrl && (
@@ -163,7 +166,7 @@ export function UpdateAvailableSimpleContent({
           className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground self-start"
           onClick={(event) => openAppHttpLink(releaseUrl, { event })}
         >
-          {translate('auto.components.UpdateCard.44324ef542', 'Release notes')}
+          {t('auto.components.UpdateCard.44324ef542', 'Release notes')}
         </button>
       )}
       {!externallyManaged && (
@@ -173,7 +176,7 @@ export function UpdateAvailableSimpleContent({
           onClick={onUpdate}
           className="mt-0.5 w-full cursor-pointer"
         >
-          {translate('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
+          {t('auto.components.UpdateCard.ec8fe71cfc', 'Update')}
         </Button>
       )}
     </div>

@@ -21,7 +21,7 @@ import {
   generateConversationNameFromContext,
   resolveTextGenerationParams
 } from '../../../text-generation/commit-message-text-generation'
-import { resolveGenerationTarget } from '../../../agent-hooks/first-work-generation-target'
+import { resolveGenerationTarget } from '../../../agent-hooks/first-work/first-work-generation-target'
 
 type StructuredChatNamingRuntime = {
   resolveWorkspace: (

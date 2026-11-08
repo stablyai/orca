@@ -1,4 +1,8 @@
-import { selectSidebarLineageParentIdentities } from '@/store/cross-store-lineage-parents'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
@@ -7,8 +11,9 @@ import {
   getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { getProjectHostSetupProjectionFromState } from '@/store/project-host-setup-selector'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 import {
@@ -31,8 +36,7 @@ import {
   filterProjectGroupsForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-import { selectWorkspaceBoardStatuses } from '@/store/host-workspace-status-columns'
+import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
 
 const EMPTY_REPO_ID_SET: ReadonlySet<string> = Object.freeze(new Set<string>())
 const EMPTY_IMPORTED_BY_REPO: ReadonlyMap<string, ImportedWorktreesCardCandidate> = new Map()
@@ -68,7 +72,7 @@ export function computeRenderedSidebarRows(
     state.worktreeCardProperties
   )
 
-  const repoMap = getRepoMapFromState(state)
+  const repoMap = getIndexedRepoMap(state.repos)
   const rows = planSidebarRows({
     groupBy: state.groupBy,
     sortBy: state.sortBy,
@@ -80,7 +84,7 @@ export function computeRenderedSidebarRows(
     projectOrderBy: state.projectOrderBy,
     lineageById: state.worktreeLineageById,
     lineageParentIdentities: selectSidebarLineageParentIdentities(state),
-    worktreeMap: getWorktreeMapFromState(state),
+    worktreeMap: getIndexedWorktreeMap(selectWorktreesByRepo(state)),
     nestLineage: true,
     projectGroups: filterProjectGroupsForVisibleHosts(
       projectGroups,

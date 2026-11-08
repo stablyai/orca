@@ -4,7 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ClaudeAgentTeamsMode } from '../../../../shared/claude-agent-teams-tmux-compat'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
   executionRuntimePlatform,
   remoteExecutionPlatform

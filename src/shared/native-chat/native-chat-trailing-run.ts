@@ -22,5 +22,5 @@ export function nativeChatRowSpeaksOrActs(
 
 export function nativeChatRowRendersProse(message: NativeChatMessage): boolean {
   const content = deriveNativeChatRowContent(message.blocks)
-  return content.markdown.length > 0 || content.hasImages
+  return content.hasText || content.hasImages
 }

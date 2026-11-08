@@ -6,7 +6,7 @@ import type {
   PtySpawnHealthRequest,
   SystemResolverHealthRequest
 } from '../health/daemon-health-requests'
-import type { SpawnIntent } from '../../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { SessionInfo } from './daemon-session-info'
 import type {
   ConfirmForegroundProcessRequest,

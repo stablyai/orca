@@ -21,7 +21,7 @@ vi.mock('../../src/main/ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),
   sshConfigHostsToTargets: () => []
 }))
-vi.mock('../../src/main/agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../src/main/agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: hooks.apply
 }))
 vi.mock(

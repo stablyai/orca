@@ -44,6 +44,7 @@ export const RepoHooksCheck = RepoSelector.extend({
 })
 
 export const RepoSearchRefs = z.object({
+  namespace: z.literal('remote').optional(),
   repo: requiredString('Missing repo selector'),
   query: z
     .unknown()
@@ -70,6 +71,7 @@ export const ProjectGroupUpdate = z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
+    rootProjectOrder: z.number().finite().nullable().optional(),
     color: OptionalString.nullable().optional()
   })
 })

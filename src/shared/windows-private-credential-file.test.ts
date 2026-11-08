@@ -7,7 +7,7 @@ import {
   resetWindowsSecurityLoadForTests,
   setWindowsSecurityForTests
 } from './windows-security-addon'
-import { readPrivateWindowsFile } from './secure-path-windows-acl'
+import { readPrivateWindowsFile } from './secure-storage/secure-path-windows-acl'
 import { writeCredentialFileAtomic } from '../main/credentials/integration-credential-file'
 
 const roots: string[] = []

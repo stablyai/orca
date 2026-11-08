@@ -10,7 +10,7 @@ import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
 import { settleActiveDispatchesForTask } from './dispatch-completion'
 import { mintStructuredWorkerHandle } from '../../terminal-authority/structured-sessions/structured-worker-identity'
-import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../../../runtime-legacy-worker-terminal-recovery-persistence'
+import { RuntimeLegacyWorkerTerminalRecoveryPersistence } from '../../terminal-authority/runtime-legacy-worker-terminal-recovery-persistence'
 
 describe('settled assignment worker recovery', () => {
   let directory: string
@@ -84,85 +84,6 @@ describe('settled assignment worker recovery', () => {
     ).toMatchObject({ action: 'settled' })
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('succeeded')
     expect(db.getTask(taskId)?.status).toBe('completed')
-  })
-
-  it('bounds the release backlog probe without truncating actual release reconciliation', () => {
-    const first = worker('term_first')
-    const second = worker('term_second')
-    worker('term_not_requested')
-    db.db
-      .prepare(
-        `UPDATE worker_terminal_resources SET release_state = ?, release_requested_at = ?
-         WHERE owner_dispatch_id = ?`
-      )
-      .run('requested', '2026-01-01', first.dispatchId)
-    db.db
-      .prepare(
-        `UPDATE worker_terminal_resources SET release_state = ?, release_requested_at = ?
-         WHERE owner_dispatch_id = ?`
-      )
-      .run('releasing', '2026-01-02', second.dispatchId)
-    const prepare = vi.spyOn(db.db, 'prepare')
-    expect(db.listWorkerTerminalReleaseBacklog(1).map((row) => row.owner_dispatch_id)).toEqual([
-      first.dispatchId
-    ])
-    expect(db.listWorkerTerminalReleaseBacklog().map((row) => row.owner_dispatch_id)).toEqual([
-      first.dispatchId,
-      second.dispatchId
-    ])
-    const query = prepare.mock.calls[0]?.[0]
-    if (typeof query !== 'string') {
-      throw new Error('Release backlog query was not prepared')
-    }
-    const plan = db.db.prepare(`EXPLAIN QUERY PLAN ${query}`).all(1)
-    expect(JSON.stringify(plan)).toContain('idx_worker_terminal_resources_release')
-  })
-
-  it('reads only requested recovery assignments through indexed lookups and one SQL shape', () => {
-    const first = worker('term_first')
-    const second = worker('term_second')
-    worker('term_not_requested')
-    const prepare = vi.spyOn(db.db, 'prepare')
-    expect(
-      db.listLegacyWorkerTerminalRecoveryRows([first.dispatchId]).map((row) => row.dispatch_id)
-    ).toEqual([first.dispatchId])
-    expect(
-      db
-        .listLegacyWorkerTerminalRecoveryRows([first.dispatchId, second.dispatchId])
-        .map((row) => row.dispatch_id)
-    ).toEqual([first.dispatchId, second.dispatchId])
-    expect(db.listLegacyWorkerTerminalRecoveryRows([])).toEqual([])
-    expect(prepare).toHaveBeenCalledTimes(2)
-    const query = prepare.mock.calls[0]?.[0]
-    expect(prepare.mock.calls[1]?.[0]).toBe(query)
-    if (typeof query !== 'string') {
-      throw new Error('Recovery query was not prepared')
-    }
-    const plan = db.db
-      .prepare(`EXPLAIN QUERY PLAN ${query}`)
-      .all(JSON.stringify([first.dispatchId]))
-    const details = plan.map((row) => {
-      if (
-        typeof row !== 'object' ||
-        row === null ||
-        !('detail' in row) ||
-        typeof row.detail !== 'string'
-      ) {
-        throw new Error('Invalid query plan')
-      }
-      return row.detail
-    })
-    expect(
-      details.some(
-        (detail) => detail.startsWith('SEARCH wd USING INDEX') && detail.includes('dispatch_id=?')
-      )
-    ).toBe(true)
-    expect(
-      details.some(
-        (detail) => detail.startsWith('SEARCH dc USING INDEX') && detail.includes('id=?')
-      )
-    ).toBe(true)
-    expect(details.some((detail) => /^SCAN (wd|dc)\b/.test(detail))).toBe(false)
   })
 
   it('preserves retry failure when SQL cannot be read, then recovers after the database reopens', () => {

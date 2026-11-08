@@ -6,7 +6,7 @@ import {
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   hasExpandedCommitFailureDetails,
   summarizeCommitFailure
@@ -80,6 +80,7 @@ export function CommitArea({
   onPrimaryAction,
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
+  const t = useTranslate()
   // Cap rows so long messages scroll internally instead of pushing Commit offscreen.
   const rows = getCommitMessageTextareaRows(commitMessage)
   // Spin the primary only for its matching operation; Fetch uses the chevron and commits use isCommitting.
@@ -140,34 +141,34 @@ export function CommitArea({
   const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
   let generateTooltip: string | undefined
   if (isGenerating) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.cc5739bd1d',
       'Generating commit message…'
     )
   } else if (isCommitting) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.4cbd0cd9d2',
       'Commit in progress…'
     )
   } else if (stagedCount === 0) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.e7876a2bde',
       'Stage at least one file to generate a message.'
     )
   } else if (hasMessage) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.0904be2505',
       'Clear the message to regenerate.'
     )
   } else if (!aiAgentConfigured) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.1ea9ba37aa',
       'Pick an agent in Settings -> Git -> Source Control AI.'
     )
   }
   const isGenerateDisabled =
     isGenerating || isCommitting || stagedCount === 0 || hasMessage || hasUnresolvedConflicts
-  const moreCommitAndRemoteActionsLabel = translate(
+  const moreCommitAndRemoteActionsLabel = t(
     'auto.components.right.sidebar.SourceControl.cc199ccc5f',
     'More commit and remote actions'
   )

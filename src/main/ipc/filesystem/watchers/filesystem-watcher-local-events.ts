@@ -1,8 +1,11 @@
 import { stat } from 'node:fs/promises'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import type { FsChangeEvent, FsChangedPayload } from '../../../../shared/filesystem-entry-types'
-import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
-import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../../../shared/runtime-file-watch-limits'
+import type {
+  FsChangeEvent,
+  FsChangedPayload
+} from '../../../../shared/file-watch/filesystem-change-event'
+import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'
+import { RUNTIME_FILE_WATCH_CRAWL_TIMEOUT_MS } from '../../../../shared/file-watch/runtime-file-watch-limits'
 import { MAX_BATCHED_WATCHER_EVENTS, queueWatcherEvents } from './filesystem-watcher-event-batch'
 // Filter high-churn events at source; Explorer display filters only hide rows.
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'

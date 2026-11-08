@@ -1,22 +1,20 @@
 import type {
   AutomationCreateInput,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import {
   AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY,
-  AUTOMATION_SURFACE_RUNTIME_CAPABILITY
-} from '../../../../shared/automation-runtime-capabilities'
-import { getRuntimeEnvironmentStatus } from '@/runtime/runtime-rpc-client'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
-import {
+  AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
-  type RuntimeCapability
-} from '../../../../shared/protocol-version'
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
+} from '../../../../shared/automations/automation-runtime-capabilities'
+import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { RuntimeCapability } from '../../../../shared/protocol-version'
 import {
   EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
   hasExtraAgentArgs

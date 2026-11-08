@@ -6,6 +6,7 @@ import {
   thisComputerNodeMirrorRecovery
 } from '@/ssh/node-dist-mirror-recovery'
 import { Button } from '../../../ui/button'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function SshHostNodeMirrorAction({
   targetId,
@@ -16,6 +17,7 @@ export function SshHostNodeMirrorAction({
   status: SshManagedServerStatus | undefined
   ownerEnvironmentId?: string | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const configuredMirror = useAppStore((s) => s.settings?.nodeDistMirrorUrl)
   const recovery = thisComputerNodeMirrorRecovery(status, ownerEnvironmentId, configuredMirror)
   if (!recovery) {
@@ -28,7 +30,7 @@ export function SshHostNodeMirrorAction({
       variant="outline"
       onClick={() => openNodeMirrorRecovery(targetId, recovery)}
     >
-      {nodeMirrorRecoveryLabel(recovery)}
+      {nodeMirrorRecoveryLabel(recovery, t)}
     </Button>
   )
 }

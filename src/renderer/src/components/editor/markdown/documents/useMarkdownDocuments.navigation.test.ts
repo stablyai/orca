@@ -6,7 +6,8 @@ import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/ope
 import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 import { useAppStore } from '@/store/index'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const runtime = vi.hoisted(() => ({
   stat: vi.fn(),
@@ -30,7 +31,9 @@ vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionOwnerResolution>()
   return { ...actual, getConnectionIdFromState: () => runtimeConnectionId }
 })
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({ statRuntimePath: runtime.stat }))
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
+  statRuntimePath: runtime.stat
+}))
 vi.mock('@/lib/file-owner-runtime-target', () => {
   const getRuntimeTargetForFileOwner = (
     _state: unknown,

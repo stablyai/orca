@@ -34,7 +34,7 @@ describe('structured chat coverage', () => {
     'src/main/codex/codex-session.ts': 'export {}',
     'src/main/runtime/structured-agent-session-host.ts': 'export {}',
     'src/main/provider-process/provider-process-teardown.ts': 'export {}',
-    'src/main/acp/acp-structured-session-adapter.ts': 'export {}',
+    'src/main/acp/session/acp-structured-session-adapter.ts': 'export {}',
     'src/main/jsonl-rpc/peer.ts': 'export {}',
     'src/main/pi/rpc-launch.ts': 'export {}',
     'src/shared/agent-session-record.ts': 'export {}',

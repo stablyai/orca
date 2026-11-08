@@ -1,13 +1,13 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { CheckParams } from '../schemas'
+import { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'
 import { checkDirectMailbox } from './check-direct'
-import { checkedMailboxes } from './mailbox-message-receipt'
+import { checkedMailboxes, withReportFollowUps } from './mailbox-message-receipt'
 import { withRunCheckNext } from '../receipt-next'
-import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration-rpc-contract'
+import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { hasRunBindingKey } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import {
@@ -51,7 +51,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
         if (consumingCheck) {
           runtime.withdrawStaleChatMail(checkedMailboxes(result))
         }
-        return result
+        return withReportFollowUps(db, result)
       }
       if (params.run || boundRun) {
         const result = await checkRunMailbox({

@@ -8,6 +8,7 @@ import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'
 import { runWorktreeChangeInvalidators } from '../ipc/worktrees/listing/worktree-change-invalidators'
 import { requestAgentLaunchTabPublishFromRenderer } from './agent-launch-tab-publish-relay'
+import { requestAgentPaneActivityFromRenderer } from './agent-pane-activity-relay'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { registerRendererDocumentNavigation } from './renderer-document-navigation'
 import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
@@ -16,6 +17,8 @@ import { requestTerminalPaneMoveFromRenderer } from './terminal-pane-move-reques
 import { revealTerminalPaneInWindow } from './terminal-pane-reveal-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
+import type { AgentListPublication } from '../../shared/agent-status/presentation/agent-list-status'
+import { addFanoutListener } from '../runtime/events/event-listener-fanout'
 
 let runtimeNotifierTokenCounter = 0
 let activeRuntimeNotifierToken: number | null = null
@@ -219,6 +222,7 @@ export function registerRuntimeWindowLifecycle(
       requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     workspaceSleepChanged: (notice) => send('ui:workspaceSleep', notice),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
+    applyAgentPaneActivity: (change) => requestAgentPaneActivityFromRenderer(mainWindow, change),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
@@ -244,12 +248,28 @@ export function registerRuntimeWindowLifecycle(
         { consumesTerminalSideEffects: false }
       )
     : null
+  // Only this window's live document speaks for the Agents list; a gone one leaves no verdicts behind.
+  const releaseAgentListVerdicts = addFanoutListener(
+    ipcMain,
+    'agentStatus:listVerdicts',
+    (event: Electron.IpcMainEvent, publication: AgentListPublication | null) => {
+      if (event.sender === mainWebContents && event.senderFrame === mainWebContents.mainFrame) {
+        runtime.setAgentListPublication(publication)
+      }
+    }
+  )
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()
+    const agentListBeforeReload = runtime.readAgentListPublication()
+    runtime.setAgentListPublication(null)
     const fence = runtime.markRendererReloading(mainWindow.id)
     return () => {
       if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
         rendererNotifications.onMainFrameReloadCancelled()
+      }
+      // The surviving document only re-sends on change.
+      if (runtime.readAgentListPublication() === null) {
+        runtime.setAgentListPublication(agentListBeforeReload)
       }
     }
   })
@@ -258,9 +278,12 @@ export function registerRuntimeWindowLifecycle(
   })
   mainWebContents.on('render-process-gone', () => {
     rendererNotifications.onRendererProcessGone()
+    runtime.setAgentListPublication(null)
   })
   mainWindow.on('closed', () => {
     detachSidebarInputsNotices?.()
+    releaseAgentListVerdicts()
+    runtime.setAgentListPublication(null)
     rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {

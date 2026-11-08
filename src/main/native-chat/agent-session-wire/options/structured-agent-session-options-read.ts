@@ -1,4 +1,4 @@
-import { readAcpForkSupport } from '../../../acp/acp-fork-support'
+import { readAcpForkSupport } from '../../../acp/capabilities/acp-fork-support'
 import { supportsSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
 import { structuredAgentSessionCatalogScopeOwned } from './structured-agent-session-catalog-reads'
 import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-model-catalog-operation'
@@ -172,6 +172,12 @@ export async function readStructuredAgentSessionOptions(
     effort: saved.effort ?? options.current.effort,
     fastMode: selected.current.fastMode ?? options.current.fastMode,
     // The saved tier as the shared speed rule runs it under the saved model.
+    ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
+      ? {
+          interactionMode:
+            saved.interactionMode === 'plan' ? ('plan' as const) : ('default' as const)
+        }
+      : {}),
     serviceTier:
       saved.serviceTier !== undefined
         ? selected.current.serviceTier
@@ -186,7 +192,7 @@ export async function readStructuredAgentSessionOptions(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
   const acceptedInputSources: AgentSessionAcceptedInputSources = {}
-  for (const key of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
+  for (const key of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
     if (current[key] !== undefined && saved[key] !== undefined) {
       acceptedInputSources[key] = 'saved'
     }

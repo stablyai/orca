@@ -1,9 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { documentQueryClient } from '../hook-mount'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { MountAdapter, MountContext } from '../recording-scenario'
-import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
+import type { RpcClientContextValue } from '../../../transport/connection/rpc-client-context-contract'
 
 const HOST_ID = 'host-1'
 const WORKTREE_ID = 'worktree-1'
@@ -65,6 +66,8 @@ export function agentHistoryMountAdapters(
       let worktrees = WORKTREES
       let worktreesLoaded = true
       let renderer: ReactTestRenderer | undefined
+      // One page document: leaving keeps its query cache for the return.
+      const queries = documentQueryClient()
       function Harness() {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook and its scope derivation read only these three worktree fields.
         const params = {
@@ -77,14 +80,16 @@ export function agentHistoryMountAdapters(
         return null
       }
       const element = () =>
-        createElement(
-          RecordingHostClientContext.Provider,
-          { value: context },
-          createElement(Harness)
+        queries.wrap(
+          createElement(
+            RecordingHostClientContext.Provider,
+            { value: context },
+            createElement(Harness)
+          )
         )
       return {
         action(name, args) {
-          if (name === 'mount') {
+          if (name === 'mount' || name === 'return') {
             if (args.worktreesLoaded === false) {
               worktrees = UNLOADED_WORKTREES
               worktreesLoaded = false
@@ -100,13 +105,23 @@ export function agentHistoryMountAdapters(
             act(() => renderer?.update(element()))
             return
           }
+          if (name === 'leave') {
+            act(() => {
+              renderer?.unmount()
+              renderer = undefined
+            })
+            return
+          }
+          if (name === 'refresh') {
+            act(() => void observed.history!.onRefresh())
+            return
+          }
           throw new Error(`Unknown agent history action: ${name}`)
         },
         state: () => ({
           scope: observed.history!.scope,
           screenState: observed.history!.screenState,
           refreshing: observed.history!.refreshing,
-          hostStatusResult: observed.history!.hostStatusResult,
           activeWorktreePath: observed.history!.activeWorktreePath
         }),
         dispose() {
@@ -114,6 +129,7 @@ export function agentHistoryMountAdapters(
             renderer?.unmount()
             renderer = undefined
           })
+          return queries.end()
         }
       }
     }

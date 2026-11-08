@@ -24,8 +24,8 @@ const DESCRIPTIONS: Record<string, () => string> = {
     ),
   'zipformer-streaming-en-20m': () =>
     translate(
-      'settings.voice.modelDescriptions.zipformerStreamingEn',
-      'English only. Lightweight 20M-param model, good balance of speed and size.'
+      'settings.voice.modelDescriptions.zipformerStreamingEnRetired',
+      'No longer offered: it drops the start of sentences. Delete it to free up space.'
     ),
   'zipformer-streaming-zh-14m': () =>
     translate(

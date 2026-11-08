@@ -1,4 +1,4 @@
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
+import { assertJsonTextStructureWithinLimits } from './json-stream/json-text-structure-limit'
 
 const BROWSER_SCREENCAST_KIND = 0x62
 const BROWSER_SCREENCAST_VERSION = 1
@@ -111,6 +111,14 @@ export function encodeBrowserScreencastFrame(frame: BrowserScreencastFrame): Uin
   out.set(metadata, HEADER_BYTES)
   out.set(frame.image, HEADER_BYTES + metadata.byteLength)
   return out
+}
+
+/** The seq of an encoded frame, read from its header without decoding the metadata. */
+export function readBrowserScreencastFrameSeq(bytes: Uint8Array): number | null {
+  if (bytes.byteLength < HEADER_BYTES) {
+    return null
+  }
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(4, true)
 }
 
 export function decodeBrowserScreencastFrame(bytes: Uint8Array): BrowserScreencastFrame | null {
