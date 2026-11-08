@@ -4,7 +4,6 @@ import { runDeferredSessionReattachChoice } from './reattach/deferred-session-re
 import { connectUnservedSshPaneTarget } from './host-ownership/unserved-ssh-pane-connect'
 import { startDeferredSessionReattach } from './reattach/deferred-session-reattach-connect'
 import {
-  hasLegacyRelayBridgedPanesListing,
   isLegacyRelayBridgedTab,
   legacyRelayBridgedPanesListed
 } from '../pty-transport/legacy-relay/legacy-relay-bridge-panes'
@@ -19,7 +18,8 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
     connectUnservedSshPaneTarget(session, session.unservedSshTargetId)
     return
   }
-  if (session.runtimeEnvironmentId && !hasLegacyRelayBridgedPanesListing()) {
+  // The transport was chosen at install; a list that arrived since still has to be checked.
+  if (session.runtimeEnvironmentId && session.legacyRelayBridgeListedAtInstall === false) {
     void waitForLegacyRelayBridgedPanes(session)
     return
   }

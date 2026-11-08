@@ -256,6 +256,49 @@ describe('a runtime pane bridged to an older relay’s terminal', () => {
     expect(cb.onErrorCleared).toHaveBeenCalledTimes(1)
   })
 
+  it('starts afresh, not as an exit, when a terminal it never reached is proven gone (#37840)', async () => {
+    const goneBeforeAttach = vi.fn()
+    const transport = createTransport(PTY, innerTransport(), { goneBeforeAttach })
+    created.push(transport)
+    bridge.attach.mockResolvedValueOnce({ status: 'unverifiable' })
+    const cb = callbacks()
+    await transport.connect({ url: '', sessionId: PTY, callbacks: cb })
+
+    // The census later proves the relay no longer runs it.
+    bridge.exit.forEach((listener) => listener({ ptyId: PTY, code: -1 }))
+
+    expect(goneBeforeAttach).toHaveBeenCalledTimes(1)
+    expect(cb.onExit).not.toHaveBeenCalled()
+    expect(cb.onErrorCleared).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts afresh when a reattach finds a never-reached terminal gone (#37840)', async () => {
+    const goneBeforeAttach = vi.fn()
+    const transport = createTransport(PTY, innerTransport(), { goneBeforeAttach })
+    created.push(transport)
+    bridge.attach.mockResolvedValueOnce({ status: 'unverifiable' })
+    await transport.connect({ url: '', sessionId: PTY, callbacks: callbacks() })
+
+    bridge.attach.mockResolvedValueOnce({ status: 'exited' })
+    publishPanes([{ ptyId: PTY, targetId: 'ssh-box', tabId: 'tab-1', state: 'live' }])
+
+    await vi.waitFor(() => expect(goneBeforeAttach).toHaveBeenCalledTimes(1))
+  })
+
+  it('still exits a pane that had attached when its terminal ends', async () => {
+    const goneBeforeAttach = vi.fn()
+    const transport = createTransport(PTY, innerTransport(), { goneBeforeAttach })
+    created.push(transport)
+    bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN', acquisitionId: 1 })
+    const cb = callbacks()
+    await transport.connect({ url: '', sessionId: PTY, callbacks: cb })
+
+    bridge.exit.forEach((listener) => listener({ ptyId: PTY, code: 0 }))
+
+    expect(cb.onExit).toHaveBeenCalledWith(0)
+    expect(goneBeforeAttach).not.toHaveBeenCalled()
+  })
+
   it('reattaches after a disconnect hung the bridge up, so the pane is never left deaf', async () => {
     bridge.attach.mockResolvedValueOnce({ status: 'attached', replay: 'SCREEN', acquisitionId: 1 })
     const transport = createLegacyRelayBridgeTransport(PTY, innerTransport())

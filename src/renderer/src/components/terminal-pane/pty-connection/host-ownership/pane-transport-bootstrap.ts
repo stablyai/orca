@@ -8,12 +8,17 @@ import { recordTerminalTabParkedOnUnresolvedHost } from '@/lib/parked-terminal-h
 import { buildPaneTransportOptions } from '../pane-transport-options'
 import { createUnservedSshRowTransport } from './unserved-ssh-pane-connect'
 import { createLegacyRelayBridgeTransport } from '../../pty-transport/legacy-relay/legacy-relay-bridge-transport'
-import { legacyRelayBridgePtyIdForPane } from '../../pty-transport/legacy-relay/legacy-relay-bridge-panes'
+import {
+  hasLegacyRelayBridgedPanesListing,
+  legacyRelayBridgePtyIdForPane
+} from '../../pty-transport/legacy-relay/legacy-relay-bridge-panes'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 
 /** COMPAT(legacy-relay-bridge, revisit 2027-01-15): a pane an older Orca's relay still runs. */
 function withLegacyRelayBridge(session: ConnectPanePtySession, inner: PtyTransport): PtyTransport {
+  // Read with the choice below: a list arriving after it can't change this pane's transport.
+  session.legacyRelayBridgeListedAtInstall = hasLegacyRelayBridgedPanesListing()
   const leafId = session.deps.restoredLeafId ?? session.pane.leafId
   const ptyId = legacyRelayBridgePtyIdForPane({
     tabId: session.deps.tabId,
@@ -26,7 +31,16 @@ function withLegacyRelayBridge(session: ConnectPanePtySession, inner: PtyTranspo
         ?.ptyId
   })
   session.legacyRelayBridgePtyId = ptyId
-  return ptyId ? createLegacyRelayBridgeTransport(ptyId, inner) : inner
+  return ptyId
+    ? createLegacyRelayBridgeTransport(ptyId, inner, {
+        // Its old terminal ended before this pane reached it: remount, and the pane starts afresh.
+        goneBeforeAttach: () => {
+          if (!session.disposed) {
+            useAppStore.getState().remountTerminalTabForRecovery(session.deps.tabId)
+          }
+        }
+      })
+    : inner
 }
 
 export function installPaneTransport(session: ConnectPanePtySession): void {

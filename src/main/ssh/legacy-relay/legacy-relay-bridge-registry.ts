@@ -22,12 +22,11 @@ import { LegacyRelayHiddenOutput } from './legacy-relay-hidden-output'
 import { LegacyRelayPaneStops, type LegacyRelayStopProof } from './legacy-relay-pane-stops'
 import { reportDailyRelayActivity, watchDailyRelayActivity } from './legacy-relay-daily-activity'
 import {
-  bridgeableLeasesByRelayId,
   isBridgeableLease,
   listedAppPtyIds,
-  listedLeasesByRelayId,
-  withUnlistedLeasedPanes
+  listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
+import { LegacyRelayPaneList } from './legacy-relay-bridge-pane-list'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
 import { legacyRelayChannels } from './legacy-relay-bridge-connections'
 import {
@@ -44,7 +43,7 @@ type ReportPhase = EventProps<'ssh_host_server_legacy_relay_bridge'>['phase']
 
 export type LegacyRelayBridgeHost = {
   leases: (targetId: string) => SshRemotePtyLease[]
-  /** Every target with a stored lease, so panes are listed before their host connects. */
+  /** Every existing target with a stored lease, so panes are listed before their host connects. */
   leasedTargetIds: () => string[]
   /** Ends the lease and any stop recorded on it: on the relay's proof, or on a stop it can't be sent. */
   retireLease: (targetId: string, relayPtyId: string, evidence: PtyRetirementEvidence) => void
@@ -67,8 +66,7 @@ export type LegacyRelayBridgeHost = {
 let host: LegacyRelayBridgeHost | null = null
 let hiddenOutput: LegacyRelayHiddenOutput | null = null
 const bridges = new Map<string, LegacyRelayTargetBridge>()
-/** Hold disconnected panes unverifiable until their host answers or leases end; loss of contact never proves exit. */
-const heldPanes = new Map<string, LegacyRelayBridgedPane[]>()
+const paneList = new LegacyRelayPaneList()
 const paneStops = new Map<string, LegacyRelayPaneStops>()
 /** Each target's relay-id owners, which outlive a bridge: a reconnect must not forget them. */
 const paneOwners = new Map<string, LegacyRelayPaneOwners>()
@@ -79,7 +77,7 @@ export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): vo
   }
   bridges.clear()
   legacyRelayChannels.dispose()
-  heldPanes.clear()
+  paneList.clear()
   paneOwners.clear()
   paneStops.forEach((stops) => stops.dispose())
   paneStops.clear()
@@ -150,7 +148,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
     onPanesChanged: () => {
       // A running bridge's own listing answers for its target; a disposed one's does not.
       if (bridges.get(targetId) === bridge) {
-        heldPanes.delete(targetId)
+        paneList.answered(targetId)
         stopsFor(targetId).flush(bridge)
         reportDailyRelayActivity(targetId, bridge.livePaneCount(), installed.report)
       }
@@ -215,10 +213,7 @@ export async function startLegacyRelayBridge(targetId: string): Promise<void> {
 export function stopLegacyRelayBridge(targetId: string): void {
   const bridge = bridges.get(targetId)
   if (bridge) {
-    const held = bridge.snapshot().map((pane) => ({ ...pane, state: 'unverifiable' as const }))
-    if (held.length > 0) {
-      heldPanes.set(targetId, held)
-    }
+    paneList.hold(targetId, bridge.snapshot())
     bridges.delete(targetId)
     // Disposing publishes the list, now with the held panes instead of the bridge's.
     bridge.dispose()
@@ -229,29 +224,26 @@ export function stopLegacyRelayBridge(targetId: string): void {
 /** The target and its leases are gone, so nothing it served is held any longer. */
 export function forgetLegacyRelayTarget(targetId: string): void {
   stopLegacyRelayBridge(targetId)
-  releaseHeldPanes(targetId)
+  paneList.forget(targetId)
   paneStops.get(targetId)?.dispose()
   paneStops.delete(targetId)
   paneOwners.delete(targetId)
+  // Its leased panes may have been listed before any bridge ran.
+  publishPanes()
 }
 
 function releaseHeldPanes(targetId: string): void {
-  if (heldPanes.delete(targetId)) {
-    host?.onPanesChanged(legacyRelayBridgedPanes())
+  if (paneList.release(targetId)) {
+    publishPanes()
   }
 }
 
-export function legacyRelayBridgedPanes(): LegacyRelayBridgedPane[] {
-  // Not listed yet is never "none": a leased pane stays the bridge's until its relay answers.
-  return withUnlistedLeasedPanes(host, paneStops, [
-    ...[...bridges.values()].flatMap((bridge) => bridge.snapshot()),
-    ...[...heldPanes].flatMap(([targetId, panes]) => stillLeased(targetId, panes))
-  ])
+function publishPanes(): void {
+  host?.onPanesChanged(legacyRelayBridgedPanes())
 }
 
-function stillLeased(targetId: string, panes: LegacyRelayBridgedPane[]): LegacyRelayBridgedPane[] {
-  const leased = bridgeableLeasesByRelayId(host?.leases(targetId) ?? [])
-  return panes.filter((pane) => leased.has(parseAppSshPtyId(pane.ptyId)?.relayPtyId ?? ''))
+export function legacyRelayBridgedPanes(): LegacyRelayBridgedPane[] {
+  return paneList.list(host, paneStops, bridges)
 }
 
 export async function attachLegacyRelayPane(
@@ -337,7 +329,13 @@ export async function closeLegacyRelayPane(ptyId: string): Promise<LegacyRelayBr
     return { status: 'not-bridged' }
   }
   // Persist now; next host connect sends the owed stop.
-  return stopsFor(targetId).stop(ptyId, host.connection(targetId) ? bridgeFor(targetId) : null)
+  const connected = host.connection(targetId) !== null
+  const result = await stopsFor(targetId).stop(ptyId, connected ? bridgeFor(targetId) : null)
+  if (!connected) {
+    // No bridge answers while disconnected; the recorded stop takes the pane off the list.
+    publishPanes()
+  }
+  return result
 }
 
 /** A close that settles only on the relay's exit proof, by the deadline. */

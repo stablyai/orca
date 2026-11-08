@@ -142,15 +142,24 @@ describe('a hung-up legacy relay bridge (loss of contact is not exit)', () => {
 })
 
 describe('an app relaunch before the host connects (#37840)', () => {
+  let published: LegacyRelayBridgedPane[][]
+
   function relaunch(): void {
+    published = []
     // A relaunch keeps only the persisted leases: no bridge, nothing held.
     registry.installLegacyRelayBridge({
       leases: () => leases,
       leasedTargetIds: () => [...new Set(leases.map((row) => row.targetId))],
-      retireLease: vi.fn(),
-      recordStop: vi.fn(),
+      retireLease: (_target, relayPtyId) => {
+        leases = leases.map((row) =>
+          row.ptyId === relayPtyId ? { ...row, state: 'terminated' as const } : row
+        )
+      },
+      recordStop: (_target, relayPtyId, pendingKill) => {
+        leases = leases.map((row) => (row.ptyId === relayPtyId ? { ...row, pendingKill } : row))
+      },
       connection: () => null,
-      onPanesChanged: vi.fn(),
+      onPanesChanged: (panes) => void published.push(panes),
       onData: vi.fn(),
       onReplay: vi.fn(),
       onExit: vi.fn(),
@@ -183,6 +192,32 @@ describe('an app relaunch before the host connects (#37840)', () => {
     expect(registry.legacyRelayBridgedPanes()).toEqual([
       { ptyId: PTY, targetId: TARGET, tabId: 'tab-1', leafId: 'leaf-1', state: 'live' }
     ])
+  })
+
+  it("leaves a target to its bridge's own listing once the bridge has listed it", async () => {
+    relaunch()
+    await registry.startLegacyRelayBridge(TARGET)
+    // A lease the bridge's listing did not name is the bridge's call, not a pending pane.
+    leases = [...leases, { ...lease(), ptyId: 'pty-2', leafId: 'leaf-2' }]
+
+    expect(registry.legacyRelayBridgedPanes().map((pane) => pane.ptyId)).toEqual([PTY])
+  })
+
+  it('publishes the list without a pane closed while the host is disconnected', async () => {
+    relaunch()
+
+    await registry.closeLegacyRelayPane(PTY)
+
+    expect(published.at(-1)).toEqual([])
+  })
+
+  it('publishes the list without its panes when the target is removed', () => {
+    relaunch()
+    leases = []
+
+    registry.forgetLegacyRelayTarget(TARGET)
+
+    expect(published.at(-1)).toEqual([])
   })
 })
 

@@ -35,7 +35,10 @@ function ensureSubscribed(): void {
   api.onPanes(apply)
   firstListing = api
     .listPanes()
-    .then(apply, () => {})
+    .then(apply, (error: unknown) => {
+      // Panes then wait only for main's next push; until it comes, none reads as bridged.
+      console.warn('[legacy-relay] Could not list bridged panes:', error)
+    })
     .finally(() => {
       firstListingSettled = true
     })

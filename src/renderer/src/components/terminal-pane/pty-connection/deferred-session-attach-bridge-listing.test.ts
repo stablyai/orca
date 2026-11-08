@@ -40,10 +40,12 @@ const bridged: LegacyRelayBridgedPane = {
   state: 'unverifiable'
 }
 
-function runtimePane(): ConnectPanePtySession {
+/** `listedAtInstall`: whether main's list had arrived when the pane chose its transport. */
+function runtimePane(listedAtInstall = false): ConnectPanePtySession {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the attach choice reads only these fields.
   return {
     runtimeEnvironmentId: 'env-1',
+    legacyRelayBridgeListedAtInstall: listedAtInstall,
     legacyRelayBridgePtyId: null,
     unservedSshTargetId: null,
     pendingReplacedPtyId: null,
@@ -85,15 +87,24 @@ describe('a runtime pane that mounts before the bridged-pane list (#37840)', () 
     expect(mocks.remount).not.toHaveBeenCalled()
   })
 
-  it('does not wait once the list has arrived', async () => {
+  it('does not wait when the list had arrived before the pane chose its transport', async () => {
+    const { runDeferredSessionAttach } = await freshModules()
+
+    runDeferredSessionAttach(runtimePane(true))
+
+    expect(mocks.choice).toHaveBeenCalledTimes(1)
+  })
+
+  it('still remounts a bridged pane when the list arrived after its transport was chosen', async () => {
     const { runDeferredSessionAttach } = await freshModules()
     const { legacyRelayBridgedPanesListed } =
       await import('../pty-transport/legacy-relay/legacy-relay-bridge-panes')
-    mocks.listing?.([])
+    mocks.listing?.([bridged])
     await legacyRelayBridgedPanesListed()
 
-    runDeferredSessionAttach(runtimePane())
+    runDeferredSessionAttach(runtimePane(false))
 
-    expect(mocks.choice).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(mocks.remount).toHaveBeenCalledWith('web-terminal-tab-1'))
+    expect(mocks.choice).not.toHaveBeenCalled()
   })
 })
