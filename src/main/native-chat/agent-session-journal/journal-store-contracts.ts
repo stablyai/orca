@@ -52,6 +52,12 @@ export type JournalUnheldTurnsSettlementInput = {
   liveTurnId: string | null
 }
 
+export type JournalStartFailureSettlementInput = AgentJournalDispatchRejection & {
+  startKey: string
+  clientMessageId: string | null
+  fence: number
+}
+
 export type JournalPromptMutationInput = {
   itemId: string
   expectedRevision: number

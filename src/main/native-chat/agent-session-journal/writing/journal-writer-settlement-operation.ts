@@ -2,7 +2,8 @@ import type {
   JournalDeadGenerationSettlementInput,
   JournalStaleSettlementInput,
   JournalPromptMutationInput,
-  JournalUnheldTurnsSettlementInput
+  JournalUnheldTurnsSettlementInput,
+  JournalStartFailureSettlementInput
 } from '../journal-store-contracts'
 import type { JournalWriterSession } from '../journal-writer-session'
 import type { JournalOperationReceipt } from './journal-row-writer'
@@ -15,11 +16,13 @@ import { journalGenerationSettlementRead } from './journal-generation-settlement
 import { journalGenerationSettlementItems } from './journal-generation-settlement-items'
 import { JournalSqlScope } from '../journal-sql-scope'
 import { mutateJournalPrompt } from './journal-prompt-mutation'
+import { settleJournalStartFailure } from './journal-start-failure-settlement'
 
 export type JournalWriterSettlementOperation =
   | { kind: 'stale-settle'; input: JournalStaleSettlementInput }
   | { kind: 'dead-generation-settle'; input: JournalDeadGenerationSettlementInput }
   | { kind: 'unheld-turns-settle'; input: JournalUnheldTurnsSettlementInput }
+  | { kind: 'start-failure-settle'; input: JournalStartFailureSettlementInput }
   | { kind: 'prompt-mutate'; input: JournalPromptMutationInput }
 
 export function runJournalWriterSettlementOperation(
@@ -37,6 +40,13 @@ export function runJournalWriterSettlementOperation(
   }
   if (receipt) {
     throw new Error('journal generation settlements carry no receipt')
+  }
+  if (operation.kind === 'start-failure-settle') {
+    return settleJournalStartFailure(
+      () => session.state,
+      collaborators.lifecycleBatchAppender,
+      operation.input
+    )
   }
   if (operation.kind === 'unheld-turns-settle') {
     return settleJournalUnheldTurns(
