@@ -200,15 +200,36 @@ describe('saved Session History lists', () => {
     expect(await lists.readSavedAiVaultSessionList('workspace')).not.toBeNull()
   })
 
-  it('reads the saved list once startup has loaded the profile', async () => {
+  it('saves and reads once startup has loaded the profile', async () => {
     fakeIndexedDb()
     const lists = await loadModule()
-    await lists.saveAiVaultSessionList('workspace', 250, listOf([session('a')]))
+    store.state.activeOrcaProfileId = null
+    const save = lists.saveAiVaultSessionList('workspace', 250, listOf([session('a')]))
+    store.setProfile('profile-1')
+    await save
     store.state.activeOrcaProfileId = null
 
     const read = lists.readSavedAiVaultSessionList('workspace')
     store.setProfile('profile-1')
 
     expect((await read)?.result.sessions.map((row) => row.id)).toEqual(['a'])
+  })
+
+  it('keeps a list shown again without changes over lists last shown before it', async () => {
+    fakeIndexedDb()
+    const lists = await loadModule()
+    const result = listOf([session('a')])
+    await lists.saveAiVaultSessionList('workspace', 250, result)
+    for (let index = 0; index < 7; index++) {
+      vi.setSystemTime(Date.now() + 1)
+      await lists.saveAiVaultSessionList(`other-${index}`, 250, listOf([]))
+    }
+
+    await lists.saveAiVaultSessionList('workspace', 250, result)
+    vi.setSystemTime(Date.now() + 1)
+    await lists.saveAiVaultSessionList('newest', 250, listOf([]))
+
+    expect(await lists.readSavedAiVaultSessionList('workspace')).not.toBeNull()
+    expect(await lists.readSavedAiVaultSessionList('other-0')).toBeNull()
   })
 })

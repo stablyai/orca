@@ -49,7 +49,7 @@ function storageKey(
   return savedListsAvailable() && profileId ? JSON.stringify([profileId, key]) : null
 }
 
-// After a restart the panel can mount before startup has loaded the profile list.
+// After a restart the panel can mount, and even finish a scan, before startup has loaded the profile list.
 function loadedProfileId(): Promise<string | null> {
   const current = useAppStore.getState().activeOrcaProfileId
   if (current || !savedListsAvailable()) {
@@ -74,6 +74,9 @@ let connection: (() => Promise<IDBDatabase>) | null = null
 // What each stored key last wrote, so a rescan that changed nothing (every focus refresh) skips the
 // copy and the write. Only the saved rows are kept, never the whole list.
 const lastSaved = new Map<string, { limit: AiVaultSessionLimit; rows: readonly AiVaultSession[] }>()
+// Save order this run. A skipped save still counts as use, so eviction stays least recently shown.
+const lastUse = new Map<string, number>()
+let uses = 0
 
 function unchangedSinceSave(
   stored: string,
@@ -163,7 +166,7 @@ export async function saveAiVaultSessionList(
   limit: AiVaultSessionLimit,
   result: AiVaultListResult
 ): Promise<void> {
-  const stored = storageKey(key)
+  const stored = storageKey(key, await loadedProfileId())
   if (!stored) {
     return
   }
@@ -174,6 +177,7 @@ export async function saveAiVaultSessionList(
     result.sessions.length > MAX_SAVED_ROWS && (limit === 'unlimited' || limit > MAX_SAVED_ROWS)
       ? MAX_SAVED_ROWS
       : limit
+  lastUse.set(stored, ++uses)
   if (unchangedSinceSave(stored, savedLimit, rows)) {
     return
   }
@@ -188,14 +192,17 @@ export async function saveAiVaultSessionList(
     const done = committedTransaction(transaction)
     const lists = transaction.objectStore(LISTS)
     lists.put(list, stored)
-    // Oldest first: the index orders keys by save time.
+    // The index orders keys by write time; the stable sort then puts this run's uses last, in order.
     const keys = lists.index(SAVED_AT).getAllKeys()
     keys.onsuccess = () => {
-      const excess = Math.max(0, keys.result.length - MAX_SAVED_LISTS)
-      for (const oldest of keys.result.slice(0, excess)) {
+      const byUse = keys.result
+        .map(String)
+        .sort((a, b) => (lastUse.get(a) ?? 0) - (lastUse.get(b) ?? 0))
+      for (const oldest of byUse.slice(0, Math.max(0, byUse.length - MAX_SAVED_LISTS))) {
         lists.delete(oldest)
         // Evicted keys must write again, even when their rows haven't changed.
-        lastSaved.delete(String(oldest))
+        lastSaved.delete(oldest)
+        lastUse.delete(oldest)
       }
       transaction.commit?.()
     }
