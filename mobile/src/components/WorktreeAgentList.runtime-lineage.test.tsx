@@ -10,6 +10,7 @@ import { WorktreeAgentList } from './WorktreeAgentList'
 beforeEach(clearDisclosuresForTests)
 
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -39,7 +40,6 @@ it('renders production-built canonical assignments as nested rows and groups onl
       tree = create(
         createElement(WorktreeAgentList, {
           agents,
-          now: 1_800_000_000_000,
           unvisited: false,
           statusLive: true
         })
@@ -73,7 +73,6 @@ it('renders production-built canonical assignments as nested rows and groups onl
       tree?.update(
         createElement(WorktreeAgentList, {
           agents: [...agents, orphan],
-          now: 1_800_000_000_000,
           unvisited: false
         })
       )

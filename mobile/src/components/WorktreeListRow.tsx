@@ -27,7 +27,6 @@ type Props = {
   item: Worktree
   view: WorktreeRowView
   isReadOnly: boolean
-  now: number
   repoColor: string
   repoIcon?: MobileRenderableRepoIcon | null
   // Grouped repo header already identifies project; omit duplicate icon/name on each row.
@@ -49,7 +48,6 @@ function WorktreeListRowComponent({
   item,
   view,
   isReadOnly,
-  now,
   repoColor,
   repoIcon,
   hideRepo = false,
@@ -224,7 +222,6 @@ function WorktreeListRowComponent({
         {cardDetails.inlineAgents && item.agents && item.agents.length > 0 ? (
           <WorktreeAgentList
             agents={item.agents}
-            now={now}
             unvisited={item.unread}
             statusLive={statusLive}
             isReadOnly={isReadOnly}
