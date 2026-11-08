@@ -53,6 +53,7 @@ export async function readCommitPairScope(
 /** Reuse a successful answer for this exact commit pair; failures and aborts are never stored. */
 export async function rememberCommitPair<T>(
   scope: CommitPairScope | null,
+  rereadScope: () => Promise<CommitPairScope | null>,
   kind: CommitPairKind,
   baseOid: string,
   headOid: string,
@@ -69,6 +70,10 @@ export async function rememberCommitPair<T>(
     return cached
   }
   const value = await compute()
+  // A history rewrite during the walk would file its answer under the pre-rewrite scope.
+  if ((await rereadScope()) !== scope) {
+    return value
+  }
   entries.set(key, value)
   if (entries.size > MAX_ENTRIES) {
     const oldest = entries.keys().next()

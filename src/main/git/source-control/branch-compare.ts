@@ -88,10 +88,16 @@ export async function getBranchCompare(
 
   // Polls re-resolve only the refs; history walks rerun when a tip moves.
   const pairScope = await pairScopePromise
+  const rereadPairScope = () => readCommitPairScope(worktreePath, options)
   let mergeBase = ''
   try {
-    mergeBase = await rememberCommitPair(pairScope, 'merge-base', baseOid, headOid, () =>
-      resolveMergeBase(worktreePath, baseOid, headOid, options)
+    mergeBase = await rememberCommitPair(
+      pairScope,
+      rereadPairScope,
+      'merge-base',
+      baseOid,
+      headOid,
+      () => resolveMergeBase(worktreePath, baseOid, headOid, options)
     )
     summary.mergeBase = mergeBase
   } catch {
@@ -112,7 +118,7 @@ export async function getBranchCompare(
 
     const [entries, divergence] = await Promise.all([
       loadBranchChanges(worktreePath, mergeBase, headOid, options),
-      rememberCommitPair(pairScope, 'divergence', baseOid, headOid, () =>
+      rememberCommitPair(pairScope, rereadPairScope, 'divergence', baseOid, headOid, () =>
         countCompareDivergence(worktreePath, baseOid, headOid, options)
       )
     ])

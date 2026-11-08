@@ -19,7 +19,7 @@ export const DIFF_STAMP_RACY_WRITE_MARGIN_MS = 2_000
 const MISSING = '-'
 const ABSENT: StampComponent = { text: MISSING, mtimeMs: Number.NEGATIVE_INFINITY }
 
-export type StampComponent = { text: string; mtimeMs: number }
+type StampComponent = { text: string; mtimeMs: number }
 
 /** Refuse stamps within the mtime bucket; separately count future mtimes to expose host/guest clock skew. */
 export function canProveUnchangedByStamp(stamp: WorktreeDiffStamp): boolean {
