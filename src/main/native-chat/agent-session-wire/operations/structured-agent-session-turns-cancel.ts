@@ -84,7 +84,9 @@ export async function performCancel(
   }
   // An accepted chat Stop owns every turn its captured child ends, whatever its event names.
   const settle = input.opensSettle
-    ? await ctx.journal.stopMarks.beginSettle(Boolean(input.acceptedStop && input.endSession))
+    ? await Promise.resolve(
+        ctx.journal.stopMarks.beginSettle(Boolean(input.acceptedStop && input.endSession))
+      )
     : null
   const binding: StopSettleBinding = {}
   const close = (failedOn?: JournalStopFailedOn): void =>

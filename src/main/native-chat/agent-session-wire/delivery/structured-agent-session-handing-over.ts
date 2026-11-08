@@ -5,7 +5,7 @@ import type { UnsentSendHold } from '../../agent-session-journal/queued-messages
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 
 /** The chat's journal, which identifies the conversation for as long as it is held. */
-type HandoverJournal = object
+type HandoverJournal = Pick<AgentSessionJournal, 'identity'>
 
 type HandoverInput = {
   owner: () => void
@@ -83,7 +83,7 @@ export function continuingStructuredAgentSessionInput(
 }
 
 export function markStructuredAgentSessionInputUnadmitted(
-  journal: Pick<AgentSessionJournal, 'submissions' | 'submission'>,
+  journal: Pick<AgentSessionJournal, 'identity' | 'submissions' | 'submission'>,
   clientMessageId: string,
   owner: () => void,
   unadmitted: boolean,

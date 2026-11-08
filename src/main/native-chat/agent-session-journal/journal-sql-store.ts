@@ -87,6 +87,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       this.reopenFloor
     )
     // The open operation returns its physical position before ordinary recovery.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the open command returns the physical cursor captured before recovery.
     this.openedThrough = { ...(opened.value as AgentJournalCursor) }
     this.acknowledged = { ...opened.cursor }
   }
@@ -218,11 +219,13 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
 
   async prepareHandover(input: JournalHandoverInput): Promise<StoppedHistoryDelivery | null> {
     const { value } = await this.write({ kind: 'handover', input })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: handover returns only its stopped-history delivery result.
     return value as StoppedHistoryDelivery | null
   }
 
   async openCommand(input: JournalCommandOpenInput): Promise<JournalCommandOpenResult> {
     const { value } = await this.write({ kind: 'command-open', input })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command-open returns its typed settled result from the writer dispatcher.
     const result = value as JournalWriterSettled<JournalCommandOpenResult>
     if ('failure' in result) {
       throw restoreJournalSqlFailure(result.failure)
@@ -232,6 +235,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
 
   async settleCommand(input: JournalCommandSettlementInput): Promise<void> {
     const { value } = await this.write({ kind: 'command-settle', input })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: command-settle returns its typed settled result from the writer dispatcher.
     const result = value as JournalWriterSettled
     if ('failure' in result) {
       throw restoreJournalSqlFailure(result.failure)

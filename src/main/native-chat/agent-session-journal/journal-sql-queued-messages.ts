@@ -175,6 +175,7 @@ export function detachJournalSqlStop(stop: JournalLatestStop | null): JournalLat
 }
 
 function detachCard(card: QueuedMessageRow): QueuedMessageRow {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the storage row is already typed; JSON detaches its lazy value proxies.
   return JSON.parse(JSON.stringify(card)) as QueuedMessageRow
 }
 
@@ -282,10 +283,12 @@ export class SqlJournalQueuedMessages {
     input: Extract<JournalSqlQueueWrite, { kind: 'queue-insert' }>['input'],
     receipt?: JournalOperationReceipt
   ): Promise<QueuedMessageRow> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: queue-insert returns the card from its writer command.
     return this.port.write({ kind: 'queue-insert', input }, receipt) as Promise<QueuedMessageRow>
   }
 
   async update(input: QueuedMessageUpdate): Promise<AgentSessionQueuedMessageUpdateResult> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: queue-update returns its wire update result from the writer command.
     const result = (await this.port.write({
       kind: 'queue-update',
       input
@@ -308,6 +311,7 @@ export class SqlJournalQueuedMessages {
     if (messageIds.length === 0) {
       return []
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: queue-withdraw returns the cards its writer command withdrew.
     return (await this.port.write(
       { kind: 'queue-withdraw', messageIds },
       receipt
@@ -318,6 +322,7 @@ export class SqlJournalQueuedMessages {
     input: { messageId: string } & AgentSessionQueuedMessageMoveAnchor,
     receipt?: JournalOperationReceipt
   ): Promise<AgentSessionQueuedMessageMoveResult> {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: queue-move returns its wire move result from the writer command.
     return this.port.write(
       { kind: 'queue-move', input },
       receipt

@@ -107,7 +107,7 @@ export function sendQueuedStructuredAgentMessage(
       if (hold === 'prompt') {
         return invalid('Answer the pending request before sending this message.')
       }
-      const row = await ctx.journal.queuedMessages.get(messageId)
+      const row = await Promise.resolve(ctx.journal.queuedMessages.get(messageId))
       if (!row) {
         return invalid('No queued message by that id.')
       }
@@ -215,7 +215,7 @@ export function deleteQueuedStructuredAgentMessage(
             }
     },
     run: async (ctx): Promise<TurnOutcome<AgentSessionQueuedMessageDeleteResult>> => {
-      const row = await ctx.journal.queuedMessages.get(messageId)
+      const row = await Promise.resolve(ctx.journal.queuedMessages.get(messageId))
       if (!row) {
         return { ok: true, value: { deleted: false, messageId, disposition: 'missing' } }
       }

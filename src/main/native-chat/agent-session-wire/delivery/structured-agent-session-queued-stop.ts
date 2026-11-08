@@ -28,7 +28,7 @@ export async function stopReachesUnrecordedWork(
   if (structuredAgentSessionStopNamesEndedTurn(ctx.journal, work, namedTurnId)) {
     return 'late'
   }
-  const inForce = await ctx.journal.queuedMessages.userStopInForce()
+  const inForce = await Promise.resolve(ctx.journal.queuedMessages.userStopInForce())
   if (inForce === null) {
     return 'unrecorded'
   }
