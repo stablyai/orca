@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'

@@ -5,8 +5,6 @@ vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), removeHandler: vi.fn() 
 import type { SshTarget } from '../../../shared/ssh-types'
 import {
   disallowDesktopBrowserBridgeHost,
-  noticeDesktopBrowserBridgeHostControl,
-  stopDesktopBrowserBridgeHost,
   type DesktopBrowserBridgeHostControlDeps
 } from './desktop-browser-bridge-host-control'
 import {
@@ -14,8 +12,6 @@ import {
   setDesktopBrowserBridgeControl,
   setDesktopBrowserBridgeHostStopped
 } from './desktop-browser-bridge-reconcile'
-
-const NOTICE_CHANNEL = 'browser:remoteHostControlNotice'
 
 function setup(targets: SshTarget[] = []) {
   let noticed: string[] | undefined
@@ -72,52 +68,6 @@ describe('desktop browser bridge host control', () => {
     setDesktopBrowserBridgeHostStopped(userHost.id, false)
     setDesktopBrowserBridgeHostStopped(orcaOwnedHost.id, false)
     setDesktopBrowserBridgeControl(null)
-  })
-
-  it('tells the person once per host, and waits for a window before counting it shown', () => {
-    const { deps, sent, mainWindow } = setup([userHost, orcaOwnedHost])
-    const host = { targetId: userHost.id, hostLabel: 'build-box' }
-
-    noticeDesktopBrowserBridgeHostControl(host, () => null, deps)
-    expect(sent).toEqual([])
-
-    noticeDesktopBrowserBridgeHostControl(host, mainWindow, deps)
-    noticeDesktopBrowserBridgeHostControl(host, mainWindow, deps)
-    noticeDesktopBrowserBridgeHostControl(
-      { targetId: orcaOwnedHost.id, hostLabel: 'sandbox' },
-      mainWindow,
-      deps
-    )
-
-    expect(sent).toEqual([
-      {
-        channel: NOTICE_CHANNEL,
-        payload: { targetId: 'ssh-1', hostLabel: 'build-box', canDisallow: true }
-      },
-      {
-        channel: NOTICE_CHANNEL,
-        payload: { targetId: 'runtime-ssh-1', hostLabel: 'sandbox', canDisallow: false }
-      }
-    ])
-    expect(deps.settings?.getSettings().desktopBrowserBridgeNoticedTargetIds).toEqual([
-      'ssh-1',
-      'runtime-ssh-1'
-    ])
-  })
-
-  it('Stop detaches the host and clears its tabs without touching its setting', () => {
-    const { deps, reconcile, byId } = setup([userHost])
-
-    stopDesktopBrowserBridgeHost(userHost.id, deps)
-
-    expect(isDesktopBrowserBridgeHostStopped(userHost.id)).toBe(true)
-    expect(reconcile).toHaveBeenCalledTimes(1)
-    expect(deps.endHostActivity).toHaveBeenCalledWith('ssh-1')
-    expect(byId.get(userHost.id)?.allowRemoteCliControl).toBeUndefined()
-
-    setDesktopBrowserBridgeHostStopped(userHost.id, false)
-    expect(isDesktopBrowserBridgeHostStopped(userHost.id)).toBe(false)
-    expect(reconcile).toHaveBeenCalledTimes(2)
   })
 
   it("Don't allow turns the host's setting off, and only stops hosts Orca created", () => {

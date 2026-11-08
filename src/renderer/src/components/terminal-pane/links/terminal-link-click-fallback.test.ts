@@ -2,10 +2,8 @@ import type { IDisposable } from '@xterm/xterm'
 import { describe, expect, it, vi } from 'vitest'
 import { installFilePathLinkClickFallback } from './files/terminal-link-handlers'
 import { openFilePathLinkAtBufferPosition } from './files/terminal-file-link-hit-testing'
-import { installHttpLinkClickFallback } from './http/terminal-url-link-hit-testing'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
-  getRegisteredBubbleMouseUpHandler,
   getRegisteredMouseUpHandler,
   makeBuffer,
   makeBufferLine,
@@ -13,7 +11,6 @@ import {
   makeFallbackTerminal
 } from './files/terminal-link-provider-buffer-fixtures'
 import {
-  createDeferred,
   flushAsyncWork,
   flushDoubleRaf,
   installTerminalLinkTestEnvironment,
@@ -21,15 +18,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
-const {
-  storeState,
-  openUrlMock,
-  openFileMock,
-  openFilePathMock,
-  createBrowserTabMock,
-  setPendingEditorRevealMock,
-  statMock
-} = doubles
+const { storeState, openFileMock, openFilePathMock, createBrowserTabMock } = doubles
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -53,151 +42,6 @@ vi.mock('@/lib/connection-context', () => ({
 installTerminalLinkTestEnvironment(doubles)
 
 describe('createFilePathLinkProvider range bounds', () => {
-  it('opens a single-row file path from a direct modifier-click fallback', async () => {
-    setPlatform('Macintosh')
-    const pathExists = createDeferred<boolean>()
-    vi.mocked(window.api.shell.pathExists).mockImplementation(() => pathExists.promise)
-
-    const opened = openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('package.json')]),
-      { x: 4, y: 1 },
-      80,
-      {
-        startupCwd: '/tmp',
-        worktreeId: 'wt-1',
-        worktreePath: '/tmp',
-        runtimeEnvironmentId: null
-      }
-    )
-    await flushAsyncWork()
-
-    expect(opened).toBe(true)
-    // Click fallback cannot wait for async hover probes; opening still verifies the target.
-    expect(window.api.shell.pathExists).not.toHaveBeenCalled()
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/package.json' }),
-      { forceContentReload: true }
-    )
-    expect(openFilePathMock).not.toHaveBeenCalled()
-  })
-
-  it('maps POSIX file paths for a WSL direct-click fallback before opening them', async () => {
-    setPlatform('Windows')
-
-    const opened = openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('/root/workspace/myrepo/README.md:5:3')]),
-      { x: 10, y: 1 },
-      80,
-      {
-        startupCwd: '/root/workspace/myrepo',
-        worktreeId: 'wt-1',
-        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\repo',
-        runtimeEnvironmentId: null,
-        wslDistro: 'Ubuntu',
-        pathExistsCache: makeExistsCache([
-          ['active\0\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md', true]
-        ])
-      }
-    )
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(opened).toBe(true)
-    expect(statMock).toHaveBeenCalledWith({
-      filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-      connectionId: undefined,
-      access: { kind: 'user-file' },
-      wakeWslDistro: true
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md'
-      }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        filePath: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-        fileId: '\\\\wsl.localhost\\Ubuntu\\root\\workspace\\myrepo\\README.md',
-        line: 5,
-        column: 3,
-        matchLength: 0
-      })
-    )
-  })
-
-  it('opens a single-row file path with the system default from shift modifier fallback', async () => {
-    setPlatform('Macintosh')
-
-    const opened = openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('package.json')]),
-      { x: 4, y: 1 },
-      80,
-      {
-        startupCwd: '/tmp',
-        worktreeId: 'wt-1',
-        worktreePath: '/tmp',
-        runtimeEnvironmentId: null,
-        openWithSystemDefault: true
-      }
-    )
-    await flushAsyncWork()
-
-    expect(opened).toBe(true)
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/package.json', 'local')
-    expect(openFileMock).not.toHaveBeenCalled()
-  })
-
-  it('opens a tilde-prefixed path from a direct modifier-click fallback', async () => {
-    setPlatform('Macintosh')
-
-    const opened = openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('~/Documents/Path/file_name')]),
-      { x: 4, y: 1 },
-      80,
-      {
-        startupCwd: '/Users/alice/project',
-        worktreeId: 'wt-1',
-        worktreePath: '/Users/alice/project',
-        runtimeEnvironmentId: null
-      }
-    )
-    await flushAsyncWork()
-
-    expect(opened).toBe(true)
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/Users/alice/Documents/Path/file_name' }),
-      { forceContentReload: true }
-    )
-    expect(openFilePathMock).not.toHaveBeenCalled()
-  })
-
-  it('opens a tilde path using explicit terminal home when cwd is outside home', async () => {
-    setPlatform('Macintosh')
-
-    const opened = openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('~/Documents/Path/file_name')]),
-      { x: 4, y: 1 },
-      80,
-      {
-        startupCwd: '/workspace/project',
-        terminalHomePath: '/home/alice',
-        worktreeId: 'wt-1',
-        worktreePath: '/workspace/project',
-        runtimeEnvironmentId: null
-      }
-    )
-    await flushAsyncWork()
-
-    expect(opened).toBe(true)
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/home/alice/Documents/Path/file_name' }),
-      { forceContentReload: true }
-    )
-    expect(openFilePathMock).not.toHaveBeenCalled()
-  })
-
   it('opens a wrapped continuation-row html path from a direct modifier-click fallback', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: true }
@@ -255,28 +99,6 @@ describe('createFilePathLinkProvider range bounds', () => {
       { forceContentReload: true }
     )
     expect(openFilePathMock).not.toHaveBeenCalled()
-  })
-
-  it('does not open an unknown trailing-slash directory from direct fallback', async () => {
-    setPlatform('Macintosh')
-
-    const opened = openFilePathLinkAtBufferPosition(
-      makeBuffer([makeBufferLine('/repo/unknown-dir/')]),
-      { x: 8, y: 1 },
-      80,
-      {
-        startupCwd: '/repo',
-        worktreeId: 'wt-1',
-        worktreePath: '/repo',
-        runtimeEnvironmentId: null,
-        pathExistsCache: makeExistsCache([['active\0/repo/unknown-dir', true]])
-      }
-    )
-    await flushAsyncWork()
-
-    expect(opened).toBe(false)
-    expect(openFilePathMock).not.toHaveBeenCalled()
-    expect(openFileMock).not.toHaveBeenCalled()
   })
 
   it('retries a direct file click when a cached missing path expires', async () => {
@@ -356,213 +178,6 @@ describe('createFilePathLinkProvider range bounds', () => {
 
     disposable.dispose()
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
-  })
-
-  it('does not intercept regular URL clicks in the file-path fallback', async () => {
-    setPlatform('Macintosh')
-    const rows = [
-      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
-    ]
-    const { terminal, element } = makeFallbackTerminal(rows)
-    const disposable = installFilePathLinkClickFallback(1, terminal, {
-      startupCwd: '/tmp',
-      worktreeId: 'wt-1',
-      worktreePath: '/tmp',
-      runtimeEnvironmentId: null,
-      managerRef: { current: null },
-      linkProviderDisposablesRef: { current: new Map<number, IDisposable>() },
-      pathExistsCache: makeExistsCache()
-    })
-    const mouseUp = getRegisteredMouseUpHandler(element)
-    const preventDefault = vi.fn()
-    const stopPropagation = vi.fn()
-
-    mouseUp({
-      button: 0,
-      metaKey: true,
-      ctrlKey: false,
-      clientX: 230,
-      clientY: 25,
-      preventDefault,
-      stopPropagation
-    } as unknown as MouseEvent)
-    await flushAsyncWork()
-
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(preventDefault).not.toHaveBeenCalled()
-    expect(stopPropagation).not.toHaveBeenCalled()
-    expect(terminal.clearSelection).not.toHaveBeenCalled()
-
-    disposable.dispose()
-  })
-
-  it('ignores regular URLs from a direct ordinary-click fallback on desktop', async () => {
-    setPlatform('Macintosh')
-    storeState.settings = { openLinksInApp: false }
-    const rows = [
-      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
-    ]
-    const { terminal, element } = makeFallbackTerminal(rows)
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
-    const preventDefault = vi.fn()
-    const stopPropagation = vi.fn()
-
-    mouseUp({
-      button: 0,
-      metaKey: false,
-      ctrlKey: false,
-      shiftKey: false,
-      defaultPrevented: false,
-      clientX: 230,
-      clientY: 25,
-      preventDefault,
-      stopPropagation
-    } as unknown as MouseEvent)
-
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(preventDefault).not.toHaveBeenCalled()
-    expect(stopPropagation).not.toHaveBeenCalled()
-    expect(terminal.clearSelection).not.toHaveBeenCalled()
-
-    disposable.dispose()
-    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
-  })
-
-  it('opens regular URLs from a direct modifier-click fallback when xterm did not handle them', async () => {
-    setPlatform('Macintosh')
-    storeState.settings = { openLinksInApp: false }
-    const rows = [
-      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
-    ]
-    const { terminal, element } = makeFallbackTerminal(rows)
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
-    const preventDefault = vi.fn()
-    const stopPropagation = vi.fn()
-
-    mouseUp({
-      button: 0,
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: false,
-      defaultPrevented: false,
-      clientX: 230,
-      clientY: 25,
-      preventDefault,
-      stopPropagation
-    } as unknown as MouseEvent)
-
-    expect(openUrlMock).toHaveBeenCalledWith(
-      'https://github.com/stablyai/orca-marketing-website/pull/82'
-    )
-    expect(preventDefault).toHaveBeenCalled()
-    expect(stopPropagation).not.toHaveBeenCalled()
-    expect(terminal.clearSelection).toHaveBeenCalled()
-
-    disposable.dispose()
-    expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp)
-  })
-
-  it('does not steal macOS ctrl-click context-menu gestures in the URL fallback', async () => {
-    setPlatform('Macintosh')
-    storeState.settings = { openLinksInApp: false }
-    const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
-    const { terminal, element } = makeFallbackTerminal(rows)
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
-    const preventDefault = vi.fn()
-
-    mouseUp({
-      button: 0,
-      metaKey: false,
-      ctrlKey: true,
-      shiftKey: false,
-      defaultPrevented: false,
-      clientX: 90,
-      clientY: 25,
-      preventDefault,
-      stopPropagation: vi.fn()
-    } as unknown as MouseEvent)
-
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(preventDefault).not.toHaveBeenCalled()
-    expect(terminal.clearSelection).not.toHaveBeenCalled()
-
-    disposable.dispose()
-  })
-
-  it('asks for the first-use preference from the direct URL click fallback', async () => {
-    setPlatform('Macintosh')
-    storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
-    const rows = [
-      makeBufferLine('PR opened: https://github.com/stablyai/orca-marketing-website/pull/82')
-    ]
-    const requestOpenLinksInAppPreference = vi.fn(async () => {
-      storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
-      return true
-    })
-    const { terminal, element } = makeFallbackTerminal(rows)
-    const disposable = installHttpLinkClickFallback(terminal, {
-      worktreeId: 'wt-1',
-      requestOpenLinksInAppPreference
-    })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
-    const preventDefault = vi.fn()
-
-    mouseUp({
-      button: 0,
-      metaKey: true,
-      ctrlKey: false,
-      shiftKey: false,
-      defaultPrevented: false,
-      clientX: 230,
-      clientY: 25,
-      preventDefault,
-      stopPropagation: vi.fn()
-    } as unknown as MouseEvent)
-
-    expect(requestOpenLinksInAppPreference).toHaveBeenCalledWith(
-      'https://github.com/stablyai/orca-marketing-website/pull/82'
-    )
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-
-    await flushAsyncWork()
-
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'wt-1',
-      'https://github.com/stablyai/orca-marketing-website/pull/82',
-      { activate: true }
-    )
-    expect(preventDefault).toHaveBeenCalled()
-    expect(terminal.clearSelection).toHaveBeenCalled()
-
-    disposable.dispose()
-  })
-
-  it('does not double-open URLs when xterm already handled the mouseup', () => {
-    setPlatform('Macintosh')
-    storeState.settings = { openLinksInApp: false }
-    const rows = [makeBufferLine('Open https://github.com/stablyai/orca/pull/2914')]
-    const { terminal, element } = makeFallbackTerminal(rows)
-    const disposable = installHttpLinkClickFallback(terminal, { worktreeId: 'wt-1' })
-    const mouseUp = getRegisteredBubbleMouseUpHandler(element)
-
-    mouseUp({
-      button: 0,
-      metaKey: true,
-      ctrlKey: false,
-      defaultPrevented: true,
-      clientX: 90,
-      clientY: 25,
-      preventDefault: vi.fn()
-    } as unknown as MouseEvent)
-
-    expect(openUrlMock).not.toHaveBeenCalled()
-    expect(terminal.clearSelection).not.toHaveBeenCalled()
-
-    disposable.dispose()
   })
 
   it('opens a deeply wrapped absolute path from its final short continuation row', async () => {

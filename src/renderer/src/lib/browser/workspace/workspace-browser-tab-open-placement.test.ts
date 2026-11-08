@@ -6,7 +6,7 @@ import { resetWebSessionBrowserPlacementsForTests } from '../../../runtime/web-s
 import {
   resetWebSessionTabsSyncTestState,
   WT
-} from '../../../runtime/web-session-tabs-sync-test-harness'
+} from '../../../runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   G1,
   G2,

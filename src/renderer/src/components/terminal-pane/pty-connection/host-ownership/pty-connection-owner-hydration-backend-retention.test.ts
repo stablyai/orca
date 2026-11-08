@@ -1,5 +1,6 @@
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
-import { makeTab } from '@/store/slices/store-session-test-harness'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { createPaneManagerOptionsTestContext } from '../../mounting/terminal-pane-manager-options-test-context'
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
 import type * as React from 'react'
@@ -24,14 +25,12 @@ import {
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
   notifyCodexPaneBoundForStaleSweep
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
@@ -48,10 +47,6 @@ vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
 vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resetAndRefreshAllTerminalWebglAtlases
-}))
-
-vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
 }))
 
 vi.mock('@/store', () => ({

@@ -31,6 +31,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     connState,
     existingWorktreePaths,
     hostCapabilities,
+    hostDisplay,
     hostId,
     state
   } = controller
@@ -107,8 +108,11 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
             </View>
           ) : actionTarget && renameTarget === actionTarget ? (
             <WorkspaceRenameSheet
+              hostId={hostId ?? ''}
+              hostName={hostDisplay.title}
               row={actionTarget}
               rename={actions.renameWorktree}
+              blockedOffline={actions.workspaceRenameWrite.blockedOffline}
               onClose={closeActionSheet}
             />
           ) : (

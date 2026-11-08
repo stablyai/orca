@@ -76,8 +76,9 @@ function ToggleGroupItem({
         }),
         'w-auto min-w-0 shrink-0 px-3 focus:z-10 focus-visible:z-10 data-[size=xs]:px-2',
         'data-[spacing=0]:rounded-none data-[spacing=0]:shadow-none data-[spacing=0]:first:rounded-l-md data-[spacing=0]:last:rounded-r-md data-[spacing=0]:data-[variant=outline]:border-l-0 data-[spacing=0]:data-[variant=outline]:first:border-l',
+        // Why foreground-derived cues: themes often paint --card and --muted the same, hiding a card-only thumb.
         selectedVariant === 'segmented-card' &&
-          'h-7 rounded-sm border-0 bg-transparent shadow-none hover:bg-card/70 data-[state=on]:bg-card data-[state=on]:text-card-foreground data-[state=on]:shadow-xs',
+          'h-7 rounded-sm border-0 bg-transparent text-muted-foreground shadow-none hover:bg-card/70 hover:text-foreground data-[state=on]:bg-card data-[state=on]:text-card-foreground data-[state=on]:shadow-xs data-[state=on]:inset-ring-1 data-[state=on]:inset-ring-foreground/12',
         className
       )}
       {...props}

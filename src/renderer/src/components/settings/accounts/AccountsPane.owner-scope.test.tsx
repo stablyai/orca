@@ -78,12 +78,12 @@ vi.mock('@/store/index', () => ({
       fetchInactiveClaudeAccountUsage: fake.write
     })
 }))
-vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({
   callAntigravityAccounts: vi.fn(),
   callAntigravityChatSignIn: vi.fn(),
   subscribeAntigravityChatSignIn: vi.fn()
 }))
-vi.mock('@/runtime/runtime-provider-accounts-client', () => {
+vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-client', () => {
   const empty = () => ({
     accounts: [],
     activeAccountId: null,

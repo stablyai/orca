@@ -1,3 +1,4 @@
+import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import type {
   TerminalLayoutSnapshot,
@@ -77,6 +78,7 @@ export type TerminalState = {
       trustWorktreeId?: string
       /** The agent launch the pane's own spawn starts, instead of `command`. */
       agentLaunch?: AgentPaneLaunchRequest
+      freshAgentLaunch?: FreshWorkspaceAgentLaunch
       agentArgsOverride?: string | null
       draftPrompt?: string
       sessionOptions?: Record<string, SessionOptionValue>

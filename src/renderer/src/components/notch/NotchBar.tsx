@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { translate } from '../../i18n/i18n'
+import { useTranslate } from '../../i18n/use-translate'
 import type { NotchLane } from '../../../../shared/notch/notch-status-summary'
 import type { NotchSnapshot } from '../../../../shared/notch/notch-snapshot'
 
@@ -81,6 +82,7 @@ function Wing({
   spinnerFrame: string
   showsIdleMark: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="flex h-full shrink-0 items-center justify-center gap-1.5"
@@ -91,7 +93,7 @@ function Wing({
         <span
           className="text-[11px] leading-none text-muted-foreground/60"
           role="status"
-          aria-label={translate('notch.status.idle', 'No agents running')}
+          aria-label={t('notch.status.idle', 'No agents running')}
         >
           ◗
         </span>

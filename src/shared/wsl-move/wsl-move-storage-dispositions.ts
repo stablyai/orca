@@ -24,11 +24,11 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'
   },
-  'src/renderer/src/components/native-chat/native-chat-composer-draft-journal.ts':
+  'src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-journal.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/components/native-chat/native-chat-composer-draft-storage.ts':
+  'src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-storage.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/components/native-chat/structured-agent-session-legacy-outbox.ts':
+  'src/renderer/src/components/native-chat/session/structured/delivery/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/lib/wsl-move-renderer-store-rewrites.ts': notApplicableDisposition(
     62,
@@ -66,7 +66,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/jira-view-mode-storage.ts',
       'src/renderer/src/components/landing-preflight-dismissal.ts',
       'src/renderer/src/components/linear-issue-view-storage.ts',
-      'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',
+      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx',
       'src/renderer/src/components/onboarding/onboarding-feature-setup.ts',
       'src/renderer/src/components/pet/PetOverlay.tsx',
       'src/renderer/src/components/right-sidebar/ai-vault/scope/ai-vault-view-options-persistence.ts',

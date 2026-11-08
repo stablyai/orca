@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RuntimeRpcCallError } from '../../../../runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '../../../../runtime/rpc/calls/runtime-rpc-result'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import { withoutRefusedInferredParent } from './worktree-create-cross-store-parent'
 

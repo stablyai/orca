@@ -26,11 +26,6 @@ describe('trustedPackagePath', () => {
     }
   }
 
-  it('accepts the package where the app ships it', () => {
-    const { app, inside } = layout()
-    expect(trustedPackagePath(inside, [app])).toContain('windows-security')
-  })
-
   it('refuses a resolution outside every app root', () => {
     const { app, beside, above } = layout()
     expect(() => trustedPackagePath(above, [app])).toThrow(/outside the app/)

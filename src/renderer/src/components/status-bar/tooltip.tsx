@@ -6,6 +6,7 @@ import {
 import { AgentIcon } from '@/lib/agent-catalog'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   getProviderDisplayName,
   getUsageWindowSections,
@@ -32,19 +33,19 @@ export { clampUsedPercent }
 
 export { getProviderUsageErrorMessage, getProviderUsageStatusLabel } from './usage-error-copy'
 
-export function formatTimeAgo(ts: number): string {
+export function formatTimeAgo(ts: number, t: Translate = translate): string {
   const diff = Date.now() - ts
   if (diff < 60_000) {
-    return translate('auto.components.status.bar.tooltip.justNow', 'just now')
+    return t('auto.components.status.bar.tooltip.justNow', 'just now')
   }
   const mins = Math.floor(diff / 60_000)
   if (mins < 60) {
-    return translate('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
+    return t('auto.components.status.bar.tooltip.minutesAgo', '{{minutes}}m ago', {
       minutes: mins
     })
   }
   const hours = Math.floor(mins / 60)
-  return translate('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
+  return t('auto.components.status.bar.tooltip.hoursAgo', '{{hours}}h ago', { hours })
 }
 
 // Preserve tooltip imports while sharing countdown formatting with mobile.
@@ -52,7 +53,8 @@ export { formatResetCountdown }
 
 export function formatResetCreditExpiry(
   expiresAt: number | null | undefined,
-  count: number
+  count: number,
+  t: Translate = translate
 ): string | null {
   if (!expiresAt) {
     return null
@@ -60,14 +62,14 @@ export function formatResetCreditExpiry(
   const duration = formatResetDuration(expiresAt - Date.now())
   if (duration === 'now') {
     return count > 1
-      ? translate('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
-      : translate('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
+      ? t('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
+      : t('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
   }
   return count > 1
-    ? translate('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
+    ? t('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {
         value0: duration
       })
-    : translate('auto.components.status.bar.tooltip.20ad66aed1', 'Expires in {{value0}}', {
+    : t('auto.components.status.bar.tooltip.20ad66aed1', 'Expires in {{value0}}', {
         value0: duration
       })
 }

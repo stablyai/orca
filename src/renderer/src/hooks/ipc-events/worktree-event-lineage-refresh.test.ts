@@ -4,15 +4,13 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
   runtimeEnvironmentCall
-} from '../../store/slices/worktrees-slice-test-harness'
-import { makeDetectedResult } from '../../store/slices/worktrees-detected-listing-fixtures'
-import {
-  makeLineage,
-  makeWorktree,
-  TEST_REPO
-} from '../../store/slices/worktrees-slice-test-fixtures'
-import { replaceRuntimeEnvironmentRevisions } from '../../runtime/runtime-environment-revision'
-import { advanceRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status-connection-generation'
+} from '../../store/slices/worktrees/worktrees-slice-test-harness'
+import { makeDetectedResult } from '../../store/slices/worktrees/listing/worktrees-detected-listing-fixtures'
+import { makeLineage } from '../../store/slices/worktrees/metadata/workspace-lineage.test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../store/repos/repo.test-fixture'
+import { replaceRuntimeEnvironmentRevisions } from '../../runtime/rpc/environment-revisions/runtime-environment-revision'
+import { advanceRuntimeEnvironmentConnectionGeneration } from '../../store/slices/runtime-status/runtime-status-connection-generation'
 import { WORKTREE_SORT_ORDER_BATCH_WINDOW_MS } from './worktree-sort-order-publication-batch'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
@@ -36,7 +34,7 @@ vi.mock('../../store', () => ({
   }
 }))
 const sshStateGeneration = vi.hoisted(() => ({ value: 0 }))
-vi.mock('@/store/slices/runtime-environment-ssh', async (importOriginal) => ({
+vi.mock('@/store/slices/ssh/runtime-environment-ssh', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   getEnvironmentSshStateGeneration: () => sshStateGeneration.value
 }))

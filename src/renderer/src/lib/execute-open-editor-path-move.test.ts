@@ -9,7 +9,7 @@ vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importO
   const actual = await importOriginal<typeof RuntimeFileMutationClient>()
   return { ...actual, renameRuntimePath: mocks.renameRuntimePath }
 })
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -33,7 +33,7 @@ import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 let main: TabsDrawnFromMain
 

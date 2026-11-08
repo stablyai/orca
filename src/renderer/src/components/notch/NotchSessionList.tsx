@@ -1,4 +1,4 @@
-import { translate } from '../../i18n/i18n'
+import { useTranslate } from '../../i18n/use-translate'
 import {
   MAX_SESSION_LIST_HEIGHT,
   sessionListHeight
@@ -13,13 +13,14 @@ export function NotchSessionList({
   rows: NotchRow[]
   onActivate: (row: NotchRow) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       // Height matches what main sized the window to, so the card never clips or floats.
       style={{ height: sessionListHeight(rows.length), maxHeight: MAX_SESSION_LIST_HEIGHT }}
       className="scrollbar-sleek overflow-y-auto overflow-x-hidden px-2"
       role="list"
-      aria-label={translate('notch.sessionList', 'Agent sessions')}
+      aria-label={t('notch.sessionList', 'Agent sessions')}
     >
       {rows.map((row) => (
         <div key={row.paneKey} role="listitem">

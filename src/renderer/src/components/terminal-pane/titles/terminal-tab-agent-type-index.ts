@@ -2,7 +2,7 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { PaneForegroundAgentEntry } from '../../../store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '../../../store/slices/agent-status/pane-foreground-agent'
 
 export type TerminalTabAgentTypeState = Record<string, AgentStatusEntry>
 export type TerminalTabAgentTypesByLeaf = Readonly<Record<string, AgentType>>

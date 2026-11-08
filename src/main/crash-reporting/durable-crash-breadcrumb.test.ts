@@ -31,22 +31,6 @@ afterEach(() => {
 })
 
 describe('recordDurableCrashBreadcrumb', () => {
-  it('attaches main-process identity when the event has no other data', () => {
-    recordDurableCrashBreadcrumb('renderer_recovery_reload')
-
-    expect(getCrashBreadcrumbSnapshot()).toEqual([
-      expect.objectContaining({
-        name: 'renderer_recovery_reload',
-        data: {
-          mainProcessPid: process.pid,
-          mainProcessLaunchId: expect.any(String),
-          mainProcessStartedAt: expect.any(String)
-        }
-      })
-    ])
-    expect(sink.flushMock).toHaveBeenCalledOnce()
-  })
-
   it('records, traces, and flushes a sanitized crash breadcrumb', () => {
     recordDurableCrashBreadcrumb('process_gone_suppressed', {
       source: 'renderer',

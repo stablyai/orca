@@ -4,7 +4,7 @@ import {
   dispatchTerminalPaneSplitRequest,
   queueTerminalPaneSplitRequest
 } from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'

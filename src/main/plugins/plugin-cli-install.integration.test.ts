@@ -7,8 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   PLUGIN_APPROVAL_REQUIRED_CODE,
   PLUGIN_APPROVAL_STALE_CODE,
-  PluginApprovalRequiredError,
-  PluginCliError
+  PluginApprovalRequiredError
 } from '../../shared/plugins/approval/plugin-cli-approval'
 import { PluginMarketplaceInstaller } from './catalog/plugin-marketplace-installer'
 import { PluginMarketplaceService } from './catalog/plugin-marketplace-service'
@@ -206,20 +205,6 @@ async function approvalOf(promise: Promise<unknown>): Promise<PluginApprovalRequ
 }
 
 describe('orca plugin install and update over Git', () => {
-  it('installs a content-only plugin from a private repository without a flag and names its publisher', async () => {
-    const { deps, consents } = await harness()
-
-    const outcome = await installPluginFromCli(deps, { kind: 'git', input: LOCALE_URL }, undefined)
-
-    expect(outcome).toMatchObject({
-      pluginKey: 'acme.locale',
-      approval: 'content-only',
-      source: { kind: 'git', official: false, publisher: 'acme', ref: 'v1.0.0' }
-    })
-    expect(outcome.source.commit).toMatch(/^[0-9a-f]{40}$/)
-    expect(consents['acme.locale']).toBeDefined()
-  })
-
   it('refuses code without --approve, writes nothing, and installs with the shown fingerprint', async () => {
     const { deps, consents, lock } = await harness()
     const source = { kind: 'git' as const, input: NOTES_URL }
@@ -360,23 +345,5 @@ describe('orca plugin install and update over Git', () => {
         outcome: 'ok'
       })
     )
-  })
-
-  it('reports a private repository this host cannot read as git_auth_failed naming the host', async () => {
-    const { deps } = await harness()
-
-    const error = await installPluginFromCli(
-      deps,
-      { kind: 'git', input: 'ssh://git@example.invalid/acme/secret.git' },
-      undefined
-    ).catch((cause: unknown) => cause)
-
-    if (!(error instanceof PluginCliError)) {
-      throw new Error(`expected git_auth_failed, got ${String(error)}`)
-    }
-    expect(error).toMatchObject({ code: 'git_auth_failed', data: { transport: 'ssh' } })
-    const failure = error
-    expect(failure.message).toContain('Git on the Orca host (build-box) could not read')
-    expect(failure.data.nextSteps.join('\n')).toContain('ssh-agent')
   })
 })

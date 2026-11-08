@@ -28,7 +28,7 @@ import {
 
 import { LeftSidebarAppearanceSetting } from './LeftSidebarAppearanceSetting'
 
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
 
 type AppearanceWindowSidebarSectionProps = {
@@ -68,6 +68,7 @@ export function AppearanceWindowSidebarSection({
   updateSettings,
   forceVisiblePrimary = false
 }: AppearanceWindowSidebarSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const statusBarItems = useAppStore((state) => state.statusBarItems)
@@ -82,12 +83,9 @@ export function AppearanceWindowSidebarSection({
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
-  const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry()
-  const statusBarTitle = translate(
-    'auto.components.settings.AppearancePane.3e4175e5c6',
-    'Status Bar'
-  )
-  const statusBarDescription = translate(
+  const followSymlinkEntry = getFollowSymlinkedDirectoriesEntry(t)
+  const statusBarTitle = t('auto.components.settings.AppearancePane.3e4175e5c6', 'Status Bar')
+  const statusBarDescription = t(
     'auto.components.settings.AppearancePane.statusBarDescription',
     'Choose which indicators appear in the status bar.'
   )
@@ -154,14 +152,14 @@ export function AppearanceWindowSidebarSection({
                       options={[
                         {
                           value: 'used',
-                          label: translate(
+                          label: t(
                             'auto.components.settings.AppearanceWindowSidebarSection.usagePercentageDisplayUsed',
                             'Used'
                           )
                         },
                         {
                           value: 'remaining',
-                          label: translate(
+                          label: t(
                             'auto.components.settings.AppearanceWindowSidebarSection.usagePercentageDisplayRemaining',
                             'Remaining'
                           )
@@ -205,7 +203,7 @@ export function AppearanceWindowSidebarSection({
             {showSidebarAdvanced ? (
               <div className="space-y-3">
                 <SettingsSubsectionHeader
-                  title={translate('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
+                  title={t('auto.components.settings.AppearancePane.dc29f3cc0d', 'Sidebar')}
                 />
                 <div className="ml-4 divide-y divide-border/40">
                   <SearchableSetting
@@ -226,14 +224,14 @@ export function AppearanceWindowSidebarSection({
                           options={[
                             {
                               value: 'detailed',
-                              label: translate(
+                              label: t(
                                 'auto.components.sidebar.SidebarWorkspaceOptionsMenu.cc17bd443b',
                                 'Detailed'
                               )
                             },
                             {
                               value: 'compact',
-                              label: translate(
+                              label: t(
                                 'auto.components.sidebar.SidebarWorkspaceOptionsMenu.25105b28cb',
                                 'Compact'
                               )
@@ -245,7 +243,7 @@ export function AppearanceWindowSidebarSection({
                   </SearchableSetting>
 
                   <SearchableSetting
-                    title={translate(
+                    title={t(
                       'auto.components.settings.AppearancePane.cf81907069',
                       'Show Tasks Button'
                     )}
@@ -253,7 +251,7 @@ export function AppearanceWindowSidebarSection({
                     keywords={sidebarEntries[0]?.keywords ?? ['tasks', 'sidebar', 'button']}
                   >
                     <SettingsSwitchRow
-                      label={translate(
+                      label={t(
                         'auto.components.settings.AppearancePane.cf81907069',
                         'Show Tasks Button'
                       )}
@@ -265,7 +263,7 @@ export function AppearanceWindowSidebarSection({
                   </SearchableSetting>
 
                   <SearchableSetting
-                    title={translate(
+                    title={t(
                       'auto.components.settings.AppearancePane.511f270ebb',
                       'Show Automations Button'
                     )}
@@ -275,7 +273,7 @@ export function AppearanceWindowSidebarSection({
                     }
                   >
                     <SettingsSwitchRow
-                      label={translate(
+                      label={t(
                         'auto.components.settings.AppearancePane.511f270ebb',
                         'Show Automations Button'
                       )}
@@ -289,7 +287,7 @@ export function AppearanceWindowSidebarSection({
                   </SearchableSetting>
 
                   <SearchableSetting
-                    title={translate(
+                    title={t(
                       'auto.components.settings.AppearancePane.9da1020447',
                       'Show Orca Mobile Button'
                     )}
@@ -297,12 +295,12 @@ export function AppearanceWindowSidebarSection({
                     keywords={sidebarEntries[2]?.keywords ?? ['mobile', 'phone', 'sidebar']}
                   >
                     <SettingsSwitchRow
-                      label={translate(
+                      label={t(
                         'auto.components.settings.AppearancePane.9da1020447',
                         'Show Orca Mobile Button'
                       )}
                       // Explain the remaining Toolbox route so hiding the shortcut cannot imply feature removal.
-                      description={translate(
+                      description={t(
                         'auto.components.settings.AppearancePane.61d842eca0',
                         'Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.'
                       )}
@@ -319,12 +317,12 @@ export function AppearanceWindowSidebarSection({
                     keywords={getShowPinnedWorktreesInGroupsEntry().keywords}
                   >
                     <SettingsSwitchRow
-                      label={translate(
+                      label={t(
                         'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.title',
                         'Also show pinned worktrees in their original lists'
                       )}
                       // This opt-in duplicates pinned worktrees into natural groups while preserving Pinned.
-                      description={translate(
+                      description={t(
                         'auto.components.settings.AppearancePane.showPinnedWorktreesInGroups.description',
                         'Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR.'
                       )}
@@ -345,16 +343,13 @@ export function AppearanceWindowSidebarSection({
             {showFileExplorerAdvanced ? (
               <div className="space-y-3">
                 <SettingsSubsectionHeader
-                  title={translate(
-                    'auto.components.settings.AppearancePane.d496901cd0',
-                    'File Explorer'
-                  )}
+                  title={t('auto.components.settings.AppearancePane.d496901cd0', 'File Explorer')}
                 />
                 <div className="ml-4 divide-y divide-border/40">
                   <SearchableSetting
                     title={
                       layoutEntries[0]?.title ??
-                      translate(
+                      t(
                         'auto.components.settings.AppearancePane.0fafabcf35',
                         'Show Git-Ignored Files'
                       )
@@ -363,11 +358,11 @@ export function AppearanceWindowSidebarSection({
                     keywords={layoutEntries[0]?.keywords ?? ['git', 'gitignore', 'ignored']}
                   >
                     <SettingsSwitchRow
-                      label={translate(
+                      label={t(
                         'auto.components.settings.AppearancePane.0fafabcf35',
                         'Show Git-Ignored Files'
                       )}
-                      description={translate(
+                      description={t(
                         'auto.components.settings.AppearancePane.gitIgnoredGlossary',
                         'Files matched by .gitignore.'
                       )}

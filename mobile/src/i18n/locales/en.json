@@ -148,6 +148,20 @@
     },
     "agents": {
       "permissionOwnAll": "Agents' own settings"
+    },
+    "voiceTranscribeOn": {
+      "heading": "TRANSCRIBE ON",
+      "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
+      "automatic": "Automatic",
+      "phone": "This phone",
+      "computer": "Computer",
+      "phoneReady": "Ready on this phone",
+      "phoneNeedsDownload": "Needs a language download",
+      "phoneDownloading": "Downloading… {{progress}}%",
+      "phoneUnsupported": "Not available on this phone",
+      "download": "Download for this phone",
+      "downloadSize": "About {{size}} MB",
+      "phoneChecking": "Checking…"
     }
   },
   "common": {
@@ -608,7 +622,10 @@
       "microphoneInitFailed": "Failed to initialize microphone",
       "noSpeech": "No speech detected.",
       "microphoneInterrupted": "Voice dictation stopped because the microphone was interrupted. Try again.",
-      "inputClosed": "Voice dictation stopped because this session is no longer accepting input. Try again."
+      "inputClosed": "Voice dictation stopped because this session is no longer accepting input. Try again.",
+      "phoneUnavailable": "Dictation on this phone isn’t ready. Download it in Voice settings, or choose Automatic.",
+      "phoneFailed": "Dictation on this phone stopped working. Try again.",
+      "phoneBusy": "Dictation on this phone is still starting. Try again in a moment."
     }
   },
   "hostScreen": {
@@ -1295,7 +1312,8 @@
       "project": "Project {{repo}}",
       "child": "Child",
       "children_one": "{{count}} child",
-      "children_other": "{{count}} children"
+      "children_other": "{{count}} children",
+      "unsavedName": "Unsaved name: {{name}}"
     },
     "accountsSnapshot": {
       "invalidSnapshot": "Invalid accounts snapshot from host"
@@ -1408,6 +1426,11 @@
         "planMode": "Plan",
         "exitPlanMode": "Exit plan mode"
       }
+    },
+    "hostOfflineBanner": {
+      "offline": "{{host}} is offline",
+      "reconnecting": "Reconnecting to {{host}}…",
+      "asOf": "Showing what was here as of {{time}}"
     }
   },
   "pullRequest": {
@@ -1883,7 +1906,13 @@
       "openFolder": "Open folder {{name}}",
       "fileUnavailable": "{{name}} unavailable on mobile",
       "previewFile": "Preview file {{name}}",
-      "unavailable": "Unavailable on mobile"
+      "unavailable": "Unavailable on mobile",
+      "showMore": "Show {{rows}} more",
+      "loadedOfTotal": "{{loaded}} of {{total}}",
+      "searched": "Searched {{loaded}} of {{total}} in {{folder}}.",
+      "searching": "Searching {{folder}}… {{loaded}} of {{total}}",
+      "searchAll": "Search all",
+      "searchAllIn": "Search all of {{folder}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",
@@ -2872,6 +2901,13 @@
       "queuedState": "Queued",
       "editMessage": "Edit message"
     },
+    "offlineQueue": {
+      "failed": "Couldn't send — tap Send to retry",
+      "waitingFor": "Sends when {{host}} is back",
+      "waiting": "Sends when the desktop is back",
+      "behind": "Waiting — a message ahead needs attention",
+      "closed": "Not sent before Orca closed"
+    },
     "sessionOptionPickers": {
       "workingAnnouncement": "Agent is working. Model settings unlock when this turn finishes.",
       "modelFullAccessLabel": "Model, {{value}}, full access",
@@ -2883,6 +2919,8 @@
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
       "permissions": "Permissions",
       "applying": "Applying…",
+      "onAttach": "Applies when the chat attaches",
+      "heldPickRefused": "{{picked}} isn't available in this chat. Kept {{kept}}.",
       "optionsSection": "Options"
     },
     "sessionOptionRows": {
@@ -3141,7 +3179,6 @@
       "statusWontContinue": "Orca won't continue automatically"
     },
     "composerPlaceholder": {
-      "reconnecting": "Reconnecting…",
       "waitingForTerminal": "Waiting for terminal…",
       "prompt": "Ask anything, @ to mention files, / for commands"
     },
@@ -4696,5 +4733,11 @@
         }
       }
     }
+  },
+  "hostMutation": {
+    "renameOffline": "{{host}} is offline. Your text stays here until you can save.",
+    "renameUnconfirmed": "Not confirmed yet. Orca checks the name when {{host}} is back.",
+    "saving": "Saving",
+    "serverUnreachable": "Its server can't be reached."
   }
 }

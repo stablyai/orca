@@ -7,7 +7,7 @@ import { resetRendererOwnedAgentStatusPanesForTests } from '../components/termin
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
 import type { WebSessionTabsSyncState } from './web-session-tabs-sync/state'
 
-import './mounted-terminal-tab-registry'
+import './hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
 import {
   ENV,
@@ -19,7 +19,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
 

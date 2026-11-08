@@ -2,7 +2,7 @@
 import type { JSX, Ref } from 'react'
 import { LoaderCircle, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
 import { deleteWorkspacesCountLabel } from '../context-menu/workspace-batch-action-labels'
@@ -34,23 +34,18 @@ export function DeleteWorktreeDialogFooter({
   onDelete: () => void
   confirmButtonRef: Ref<HTMLButtonElement>
 }): JSX.Element {
+  const t = useTranslate()
   const label = isDeleting
     ? canForceDelete
-      ? translate(
-          'auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting',
-          'Force Deleting...'
-        )
-      : translate('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
+      ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting', 'Force Deleting...')
+      : t('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
     : isBatchDelete
-      ? deleteWorkspacesCountLabel(worktreeCount)
+      ? deleteWorkspacesCountLabel(worktreeCount, t)
       : canDeleteAllLineage
-        ? deleteWorkspacesCountLabel(lineageDeleteTargetCount)
+        ? deleteWorkspacesCountLabel(lineageDeleteTargetCount, t)
         : canForceDelete
-          ? translate(
-              'auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete',
-              'Force Delete'
-            )
-          : translate(
+          ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete', 'Force Delete')
+          : t(
               'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
               'Delete Workspace'
             )
@@ -59,8 +54,8 @@ export function DeleteWorktreeDialogFooter({
     <>
       <Button variant="outline" onClick={onCancel} disabled={isDeleting}>
         {isMainWorktree
-          ? translate('auto.components.sidebar.DeleteWorktreeDialogFooter.cf95e3b5bb', 'Close')
-          : translate('auto.components.sidebar.DeleteWorktreeDialogFooter.c0e972d726', 'Cancel')}
+          ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.cf95e3b5bb', 'Close')
+          : t('auto.components.sidebar.DeleteWorktreeDialogFooter.c0e972d726', 'Cancel')}
       </Button>
       {!isMainWorktree && canForceDelete ? (
         <WorktreeForceDeleteButton

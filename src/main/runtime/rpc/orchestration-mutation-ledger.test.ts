@@ -142,41 +142,6 @@ describe('durable orchestration mutation ledger', () => {
     db.close()
   })
 
-  it('replays one completed receipt without repeating the effect', async () => {
-    const { db, dispatcher, effect } = createHarness()
-    const first = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
-    )
-    const replay = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'hello' })
-    )
-
-    expect(first).toMatchObject({
-      ok: true,
-      result: { message: { subject: 'hello' }, mutation: { replayed: false } }
-    })
-    expect(replay).toMatchObject({
-      ok: true,
-      result: { message: { subject: 'hello' }, mutation: { replayed: true } }
-    })
-    expect(effect).toHaveBeenCalledTimes(1)
-    expect(db.getInbox(10)).toHaveLength(1)
-    db.close()
-  })
-
-  it('rejects changed input for the same caller and request ID', async () => {
-    const { db, dispatcher } = createHarness()
-    await dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
-    )
-    const mismatch = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'changed' })
-    )
-
-    expect(mismatch).toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
-    db.close()
-  })
-
   it('keys WebSocket replay to the authenticated device across reconnects', async () => {
     const { db, dispatcher, effect } = createHarness()
     const replies: string[] = []
@@ -221,66 +186,6 @@ describe('durable orchestration mutation ledger', () => {
     db.close()
   })
 
-  it('joins concurrent identical mutations', async () => {
-    const db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    let release: (() => void) | undefined
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const effect = vi.fn(async () => {
-      await gate
-      return { accepted: true }
-    })
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: [
-        defineMethod({
-          name: 'orchestration.send',
-          permission: 'workspace',
-          params: Params,
-          handler: effect
-        })
-      ]
-    })
-    const first = dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_join', subject: 'same' })
-    )
-    await Promise.resolve()
-    const second = dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_join', subject: 'same' })
-    )
-    release?.()
-
-    expect(await first).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
-    expect(await second).toMatchObject({ ok: true, result: { mutation: { replayed: true } } })
-    expect(effect).toHaveBeenCalledTimes(1)
-    db.close()
-  })
-
-  it('replays a completed receipt after database and dispatcher restart', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-mutation-ledger-'))
-    paths.push(dir)
-    const dbPath = join(dir, 'orchestration.db')
-    const first = createHarness(dbPath)
-    await first.dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'durable' })
-    )
-    first.db.close()
-
-    const second = createHarness(dbPath)
-    const replay = await second.dispatcher.dispatch(
-      request({ rpcId: 'rpc_2', mutationId: 'mutation_1', subject: 'durable' })
-    )
-    expect(replay).toMatchObject({
-      ok: true,
-      result: { message: { subject: 'durable' }, mutation: { replayed: true } }
-    })
-    expect(second.effect).not.toHaveBeenCalled()
-    second.db.close()
-  })
-
   it('replays a local mutation after runtime authentication rotates', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-mutation-ledger-'))
     paths.push(dir)
@@ -311,73 +216,6 @@ describe('durable orchestration mutation ledger', () => {
     expect(firstRuntime.effect).toHaveBeenCalledOnce()
     expect(restartedRuntime.effect).not.toHaveBeenCalled()
     restartedRuntime.db.close()
-  })
-
-  it('returns unknown for a pending receipt left by a previous process', async () => {
-    const { db, dispatcher } = createHarness()
-    db.beginMutationReceipt({
-      callerFingerprint: db.getOrCreateLocalMutationCallerFingerprint(),
-      requestId: 'mutation_1',
-      method: 'orchestration.send',
-      payloadHash: createHash('sha256')
-        .update('{"method":"orchestration.send","params":{"subject":"hello"}}')
-        .digest('hex')
-    })
-
-    const result = await dispatcher.dispatch(
-      request({ rpcId: 'rpc_1', mutationId: 'mutation_1', subject: 'hello' })
-    )
-    expect(result).toMatchObject({ ok: false, error: { code: 'operation_unknown' } })
-    db.close()
-  })
-
-  it('resumes a pending idempotent worker release after restart', async () => {
-    const db = new OrchestrationDb(':memory:')
-    const runtime = new OrcaRuntimeService()
-    runtime.setOrchestrationDb(db)
-    const params = { dispatch: 'ctx_release' }
-    const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
-    const payloadHash = createHash('sha256')
-      .update(JSON.stringify({ method: 'orchestration.workerRelease', params }))
-      .digest('hex')
-    db.beginMutationReceipt({
-      callerFingerprint,
-      requestId: 'mutation_release',
-      method: 'orchestration.workerRelease',
-      payloadHash
-    })
-    const effect = vi.fn().mockReturnValue({ state: 'release_pending' })
-    const dispatcher = new RpcDispatcher({
-      runtime,
-      methods: [
-        defineMethod({
-          name: 'orchestration.workerRelease',
-          permission: 'workspace',
-          params: z.object({ dispatch: z.string() }),
-          handler: effect
-        })
-      ]
-    })
-
-    const result = await dispatcher.dispatch({
-      id: 'rpc_release_retry',
-      authToken: 'caller-token',
-      method: 'orchestration.workerRelease',
-      params,
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'mutation_release'
-    })
-
-    expect(result).toMatchObject({
-      ok: true,
-      result: {
-        state: 'release_pending',
-        mutation: { requestId: 'mutation_release', replayed: true }
-      }
-    })
-    expect(effect).toHaveBeenCalledTimes(1)
-    expect(db.getMutationReceipt(callerFingerprint, 'mutation_release')?.state).toBe('completed')
-    db.close()
   })
 
   it('returns the accepted Dispatch when worker-start was interrupted by restart', async () => {

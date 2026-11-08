@@ -4,6 +4,7 @@ import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-d
 import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-render-pause-release'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 
 import { FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS } from './foreground-output-budgets'
 import { scanSynchronizedOutput } from '../../../../../../shared/terminal/protocol/escape/terminal-synchronized-output-scan'
@@ -18,6 +19,9 @@ import {
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void {
+  const shouldRefreshForegroundSynchronously = (): boolean =>
+    CLIENT_PLATFORM === 'win32' && session.shouldRefreshForegroundSynchronously()
+
   session.writePtyOutputToXterm = function (
     data: string,
     foreground: boolean,
@@ -124,8 +128,8 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
           nativeWindowsCursorRestore ||
           foregroundRenderRefreshNeeded),
       followupForegroundRefresh: nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
-      // Why: xterm already queued a WebGL frame parsing this chunk; merge the repair into it instead of rendering the grid twice.
-      shouldRefreshForegroundSynchronously: session.shouldRefreshForegroundSynchronously,
+      // Merge repairs into xterm's queued frame except for Windows DOM compatibility.
+      shouldRefreshForegroundSynchronously,
       stripTransientCursorShows: session.shouldProtectNativeWindowsSynchronizedOutput && foreground,
       coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
       holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive

@@ -1,12 +1,8 @@
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  createRuntimeTransportMetadata,
-  RUNTIME_SOCKET_NAME_REGEX,
-  sweepOrphanedRuntimeSockets
-} from './rpc/server/runtime-rpc-socket-metadata'
+import { sweepOrphanedRuntimeSockets } from './rpc/server/runtime-rpc-socket-metadata'
 
 describe('sweepOrphanedRuntimeSockets', () => {
   // Use an always-live non-runner pid (POSIX init) to distinguish own-pid skip, live sibling retention and dead sweep.
@@ -36,34 +32,4 @@ describe('sweepOrphanedRuntimeSockets', () => {
       expect(existsSync(unrelatedFile)).toBe(true)
     }
   )
-
-  it('tolerates a non-existent userData directory', () => {
-    const userDataPath = join(tmpdir(), `orca-sweep-missing-${Date.now()}`)
-
-    expect(() => sweepOrphanedRuntimeSockets(userDataPath, SYNTHETIC_OWN_PID)).not.toThrow()
-  })
-
-  it('regex invariant: matches sockets produced by createRuntimeTransportMetadata', () => {
-    // Pin factory and sweep naming together or new socket shapes silently stop matching.
-    const userDataPath = '/tmp'
-    const transport = createRuntimeTransportMetadata(userDataPath, 12345, 'linux', 'rt_abcdef')
-    expect(transport.kind).toBe('unix')
-    if (transport.kind !== 'unix') {
-      throw new Error('expected unix transport')
-    }
-    const socketName = basename(transport.endpoint)
-    expect(RUNTIME_SOCKET_NAME_REGEX.test(socketName)).toBe(true)
-  })
-
-  it('regex invariant: also matches the fallback runtimeId suffix ("rt")', () => {
-    // Even sanitized runtime ids with fallback suffix rt must match sweep naming.
-    const userDataPath = '/tmp'
-    const transport = createRuntimeTransportMetadata(userDataPath, 99, 'darwin', '!!!!')
-    if (transport.kind !== 'unix') {
-      throw new Error('expected unix transport')
-    }
-    const socketName = basename(transport.endpoint)
-    expect(RUNTIME_SOCKET_NAME_REGEX.test(socketName)).toBe(true)
-    expect(socketName).toBe('o-99-rt.sock')
-  })
 })

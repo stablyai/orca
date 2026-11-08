@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect } from 'react'
 import { isWindowVisible } from '@/lib/window-visibility-interval'
 import {
@@ -101,7 +101,9 @@ export function useGitStatusPushSignalRefresh({
       fetchStatus
     }
     observers.add(observer)
-    disposeSignals ??= subscribeSignals()
+    if (disposeSignals == null) {
+      disposeSignals = subscribeSignals()
+    }
     return () => {
       observers.delete(observer)
       if (observers.size === 0) {

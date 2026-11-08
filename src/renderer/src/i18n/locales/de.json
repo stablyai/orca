@@ -514,10 +514,7 @@
         "searchAgents": "Agenten",
         "searchCli": "CLI",
         "searchTerminal": "Terminal",
-        "antigravityDescription": "Antigravity-Chats nutzen einen Server, den Orca auf diesen Host herunterlädt, unabhängig von der agy-CLI.",
-        "antigravityNotSignedIn": "Nicht angemeldet. Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto.",
-        "antigravityAccount": "Konto",
-        "antigravitySignInNeeded": "Chats erfordern eine separate Antigravity-Anmeldung, unabhängig vom agy-Terminal-Konto."
+        "antigravityAccount": "Konto"
       },
       "permissionsDescriptionOwnAgents": "Neue Chats verwenden die jeweilige Agentenberechtigung unter Einstellungen → Agenten.",
       "launch": {
@@ -8361,7 +8358,8 @@
           "diagnosticsCopyFailed": "Diagnosedaten konnten nicht kopiert werden",
           "5e2c7a1f84": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ oder „Alle wiederherstellen“ im Banner lässt sich die Größe jederzeit manuell anpassen.",
           "codeRefreshesAutomatically": "Der Code wird automatisch erneuert. Ein kopierter Code funktioniert bis zu 10 Minuten.",
-          "legacyEncryption": "Verwendet ältere Verschlüsselung. Aktualisiere die Orca-App auf diesem Gerät."
+          "legacyEncryption": "Verwendet ältere Verschlüsselung. Aktualisiere die Orca-App auf diesem Gerät.",
+          "olderPairingMethod": "Verwendet eine ältere Kopplungsmethode. Aktualisiere die Orca-App auf diesem Telefon."
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8768,6 +8766,7 @@
           "6f6d5188ed": "Zugriff für {{value0}} widerrufen",
           "434e4a6af6": "Aktueller Link",
           "df142657a5": "Noch nicht verwendet",
+          "olderPairingMethod": "Verwendet eine ältere Kopplungsmethode. Aktualisiere Orca auf dem Gerät, das diesen Link verwendet.",
           "b18d1764ef": "Zuletzt verwendet: {{value0}}",
           "linkName": "Link · {{value0}}",
           "activeLinks": "Aktive Links",
@@ -19954,7 +19953,6 @@
       "visualLoading": "Visualisierung wird geladen",
       "visualOpenInNewTab": "In neuem Tab öffnen",
       "queuedMessages": {
-        "behindReturnedHold": "Warten — eine vorherige Nachricht erfordert Aufmerksamkeit",
         "steer": "Steuern",
         "send": "Senden",
         "steerHint": "Ohne Unterbrechung des Modells übermitteln",
@@ -21653,7 +21651,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity-Chats",
-      "chatDescription": "Chats verwenden eine eigene Antigravity-Anmeldung, unabhängig vom obigen agy-Konto. Einmalig auf diesem Gerät anmelden.",
       "chatSignIn": "Anmelden",
       "chatChangeAccount": "Konto wechseln",
       "chatRetry": "Anmeldung erneut versuchen",
@@ -21666,14 +21663,11 @@
       "chatVerifying": "Anmeldung wird abgeschlossen…",
       "chatPasteHelp": "Falls die letzte Seite nach der Anmeldung nicht geladen wird, ihre vollständige Adresse aus dem Browser kopieren und hier einfügen.",
       "chatContinue": "Fortfahren",
-      "chatSignedInOn": "Auf {{host}} angemeldet.",
       "chatCancelled": "Anmeldung abgebrochen.",
       "chatExpired": "Zeitüberschreitung bei der Anmeldung. Erneut versuchen.",
       "chatFailed": "Anmeldung fehlgeschlagen. Erneut versuchen.",
-      "chatNotSignedIn": "Auf {{host}} nicht angemeldet.",
       "chatOtherClient": "In einem anderen Client läuft bereits eine Anmeldung.",
       "chatReadFailed": "Die Anmeldung auf {{host}} konnte nicht überprüft werden.",
-      "scope": "Das native agy-Konto auf {{host}} verwalten.",
       "signIn": "agy auf diesem Host starten und die Anmeldung im Browser abschließen, dann das aktuelle Konto speichern. Um ein anderes Konto hinzuzufügen, /logout in agy ausführen und erneut anmelden.",
       "docs": "Anmeldeanleitung",
       "retry": "Erneut versuchen",
@@ -21704,11 +21698,9 @@
       "personal": "Google-Konto",
       "gcpProject": "Google-Cloud-Projekt",
       "gcpLocation": "Google-Cloud-Standort",
-      "signInAgainWith": "Melde dich erneut an, um {{method}} zu verwenden.",
       "settingsIncomplete": "Wähle einen Antigravity-Kontotyp und gib dessen Google-Cloud-Projekt und -Standort ein.",
       "settingsLoadFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht laden. Versuche es erneut.",
       "settingsSaveFailed": "Orca konnte deine Antigravity-Anmeldeeinstellungen nicht speichern. Versuche es erneut.",
-      "signInWith": "Meldet sich mit {{method}} auf {{host}} an.",
       "lastReading": "{{reading}} · Ausgelesen {{time}}",
       "noReading": "Nutzung unbekannt: noch nicht ausgelesen"
     },

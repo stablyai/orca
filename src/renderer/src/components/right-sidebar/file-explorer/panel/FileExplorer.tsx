@@ -3,7 +3,8 @@ import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
 import { getRouteForLocalPathOpenOwner } from '@/lib/local-path-open-guard'
-import { useActiveWorktree, useRepoById } from '@/store/selectors'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import {
   getExplorerDisplayRootOptions,
   resolveExplorerDisplayRootChoice,
@@ -65,7 +66,9 @@ function FileExplorerFiles(): React.JSX.Element {
       runtimeEnvironmentId
     })
   )
-  const expandedDirs = useAppStore((s) => s.expandedDirs)
+  const activeExpandedDirs = useAppStore((s) =>
+    activeWorktreeId ? s.expandedDirs[activeWorktreeId] : undefined
+  )
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
   const activeFileId = useAppStore((s) => s.activeFileId)
   const openFiles = useAppStore((s) => s.openFiles)
@@ -93,11 +96,7 @@ function FileExplorerFiles(): React.JSX.Element {
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
-  const expanded = useMemo(
-    () =>
-      activeWorktreeId ? (expandedDirs[activeWorktreeId] ?? new Set<string>()) : new Set<string>(),
-    [activeWorktreeId, expandedDirs]
-  )
+  const expanded = useMemo(() => activeExpandedDirs ?? new Set<string>(), [activeExpandedDirs])
 
   const effectiveExpanded = useMemo(
     () =>

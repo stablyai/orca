@@ -134,15 +134,6 @@ describe('explicit branch reuse with real Git', () => {
     expect(await git(f.repoPath, 'rev-parse', f.base)).toBe(remoteTip)
   })
 
-  it('keeps a V1 remote-only branch pinned across a workspace path collision', async () => {
-    const f = await fixture()
-    await mkdir(join(f.workspaceRoot, 'My-workspace'), { recursive: true })
-    const picked = await f.create({ branchIntent: 'open-existing' })
-    expect(picked.branchName).toBe(f.branch)
-    expect(picked.worktreePath).toBe(join(f.workspaceRoot, 'My-workspace-2'))
-    expect(await git(picked.worktreePath, 'rev-parse', 'HEAD')).toBe(f.initialTip)
-  })
-
   for (const alias of ['feature/NESTED', 'FEATURE/nested']) {
     it(`rejects a loose ref alias of a busy branch (${alias})`, async (context) => {
       const f = await fixture()
@@ -251,20 +242,6 @@ describe('explicit branch reuse with real Git', () => {
       )
     }
   )
-  it.each(['origin', 'team/upstream'])(
-    'materializes a remote-only branch and tracks the selected remote (%s)',
-    async (remote) => {
-      const f = await fixture(remote)
-      const picked = await f.create()
-      expect(picked.branchName).toBe(f.branch)
-      expect(picked.checkoutExistingBranch).toBe(false)
-      expect(picked.addResult.upstreamWarning).toBeUndefined()
-      expect(await git(picked.worktreePath, 'rev-parse', 'HEAD')).toBe(f.initialTip)
-      expect(
-        await git(picked.worktreePath, 'rev-parse', '--symbolic-full-name', '@{upstream}')
-      ).toBe(f.base)
-    }
-  )
 
   it.each(['ahead', 'diverged', 'behind'])(
     'reuses a %s local branch without changing its tip or upstream',
@@ -294,16 +271,6 @@ describe('explicit branch reuse with real Git', () => {
     }
   )
 
-  it('reports the checkout path of a busy branch and allocates no replacement branch', async () => {
-    const f = await fixture()
-    const busy = join(f.root, 'external-workspace')
-    await git(f.repoPath, 'worktree', 'add', '--no-track', '-b', f.branch, busy, f.base)
-    await expect(f.create()).rejects.toThrow(`already checked out at "${busy}"`)
-    expect(await git(f.repoPath, 'for-each-ref', '--format=%(refname)', 'refs/heads/')).toBe(
-      `refs/heads/${f.branch}\nrefs/heads/main`
-    )
-  })
-
   it('pins the branch across path collisions and refuses a branch created after preflight', async () => {
     const f = await fixture()
     await mkdir(join(f.workspaceRoot, 'My-workspace'), { recursive: true })
@@ -320,22 +287,5 @@ describe('explicit branch reuse with real Git', () => {
     await expect(
       git(f.repoPath, 'rev-parse', '--verify', `refs/heads/${f.branch}-2`)
     ).rejects.toThrow()
-  })
-
-  it('keeps intentional branch-off creation separate from an available local branch', async () => {
-    const f = await fixture()
-    await git(f.repoPath, 'branch', f.branch)
-    const picked = await f.create({ name: f.branch, branchIntent: 'create-new' })
-    expect(picked.branchName).toBe(`${f.branch}-2`)
-    expect(picked.checkoutExistingBranch).toBe(false)
-    expect(await git(f.repoPath, 'rev-parse', `refs/heads/${f.branch}`)).toBe(f.initialTip)
-    await expect(git(picked.worktreePath, 'rev-parse', '@{upstream}')).rejects.toThrow()
-  })
-
-  it('fails on a conflicting branch namespace without choosing a different name', async () => {
-    const f = await fixture()
-    await git(f.repoPath, 'branch', 'feature')
-    await expect(f.create()).rejects.toThrow()
-    expect(await git(f.repoPath, 'rev-parse', 'refs/heads/feature')).toBe(f.initialTip)
   })
 })

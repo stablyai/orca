@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => {
   return { plan: vi.fn(), execute: vi.fn(), target: localTarget() }
 })
 
-vi.mock('@/runtime/runtime-bundled-skills-client', () => ({
+vi.mock('@/runtime/skills/bundled/runtime-bundled-skills-client', () => ({
   planBundledSkillsOnTarget: mocks.plan,
   executeBundledSkillsOnTarget: mocks.execute
 }))

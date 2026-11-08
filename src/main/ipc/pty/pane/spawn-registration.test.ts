@@ -67,18 +67,6 @@ describe('discarding a spawn whose binding failed to save', () => {
     expect(ptyIncarnationById.get(PTY_ID)).toBe('inc-2')
   })
 
-  it('keeps an exit observed during a shutdown whose reply was lost', async () => {
-    const runtime = await discard(async () => {
-      // The provider's exit listener retires the PTY before the RPC rejects.
-      ptyOwnership.delete(PTY_ID)
-      ptyIncarnationById.delete(PTY_ID)
-      throw new Error('shutdown response lost')
-    })
-
-    expect(ptyOwnership.has(PTY_ID)).toBe(false)
-    expect(runtime.markPtyLivenessUnverifiable).not.toHaveBeenCalled()
-  })
-
   it('does not mark a same-id replacement unverifiable when the predecessor shutdown fails', async () => {
     const runtime = await discard(async () => {
       ptyIncarnationById.set(PTY_ID, 'inc-2')

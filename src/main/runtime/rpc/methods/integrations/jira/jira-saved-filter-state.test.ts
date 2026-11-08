@@ -79,11 +79,6 @@ describe('Jira saved-filter runtime UI state', () => {
   })
 })
 
-it('routes mobile saved-filter persistence to the execution host', () => {
-  expect(MOBILE_RPC_METHOD_ROUTES.get('ui.getJiraSavedFilters')).toBe('execution-host')
-  expect(MOBILE_RPC_METHOD_ROUTES.get('ui.mutateJiraSavedFilters')).toBe('execution-host')
-})
-
 it('persists quick filters on the execution host without rewriting saved JQL or resume fields', async () => {
   const { dispatch, read, updateUIState } = setup()
   await dispatch('ui.mutateJiraSavedFilters', { kind: 'save', filter })

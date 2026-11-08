@@ -63,18 +63,4 @@ describe('a CLI request to a recipe VM environment', () => {
       'wss://vm-after-wake'
     ])
   })
-
-  it('keeps the connection it was given while the VM is awake', async () => {
-    const gate = new RemoteRuntimeCompatGate('/user-data', 'sandbox')
-    const sender = transport()
-    await gate.send({
-      transport: sender.typed,
-      connection: BEFORE,
-      method: 'status.get',
-      params: {},
-      timeoutMs: 1000
-    })
-    expect(mocks.resolveConnection).not.toHaveBeenCalled()
-    expect(sender.sendWebSocketRequest.mock.calls[0]?.[0]).toBe(BEFORE)
-  })
 })

@@ -1,7 +1,7 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getNotchStatusEntries } from './appearance-system-presence-search'
 
 export function NotchStatusSetting({
@@ -11,8 +11,9 @@ export function NotchStatusSetting({
   enabled: boolean
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const entry = getNotchStatusEntries({ showNotchStatus: true })[0]
-  const title = translate('settings.appearance.notchStatus.title', 'Show Agent Status at the Notch')
+  const title = t('settings.appearance.notchStatus.title', 'Show Agent Status at the Notch')
   return (
     <SearchableSetting
       title={title}

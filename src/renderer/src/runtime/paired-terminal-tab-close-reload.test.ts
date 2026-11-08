@@ -3,7 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { parseWorkspaceSession } from '../../../shared/workspace-session/workspace-session-schema'
 import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite
@@ -12,8 +13,8 @@ import { closeWebRuntimeSessionTab } from './web-runtime-session-tab-lifecycle'
 import { resetWebSessionCloseReplaysForTests } from './web-session-close-replay'
 import { recordReceivedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -23,7 +24,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()

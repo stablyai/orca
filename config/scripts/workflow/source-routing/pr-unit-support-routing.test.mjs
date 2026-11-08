@@ -9,21 +9,22 @@ import {
   discoverUnitFiles
 } from '../../ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 
-const harness = 'src/renderer/src/runtime/web-session-tabs-sync-test-harness.ts'
+const harness =
+  'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts'
 const structuredSessionHarness =
-  'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
 
 const unitHarnesses = [
   harness,
   structuredSessionHarness,
   'src/renderer/src/store/slices/editor/editor-slice-test-harness.ts',
   'src/renderer/src/store/slices/browser/browser-slice-test-harness.ts',
-  'src/renderer/src/runtime/web-runtime-session-test-harness.ts',
+  'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts',
   'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts'
 ]
 const supportBridges = new Set([
   // Launch request suites' store rig; it takes the terminal harness's workspace layout.
-  'src/renderer/src/runtime/web-runtime-agent-launch-options.test-fixture.ts',
+  'src/renderer/src/runtime/hosted-terminals/creation/agent-launch/web-runtime-agent-launch-options.test-fixture.ts',
   'src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts',
   'src/renderer/src/components/editor/model-lifetime/retention/editor-model-lifetime-fixture.ts',
   // Autosave suites' store rig; it takes the editor harness's tab-layout maps.
@@ -61,10 +62,10 @@ describe('unit support import ownership', () => {
   })
 
   it.each([
-    "import '@/runtime/web-session-tabs-sync-test-harness'",
-    "export * from '@/runtime/web-session-tabs-sync-test-harness'",
-    "import('@/runtime/web-session-tabs-sync-test-harness')",
-    "import type { Fixture } from '@/runtime/web-session-tabs-sync-test-harness'"
+    "import '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'",
+    "export * from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'",
+    "import('@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture')",
+    "import type { Fixture } from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'"
   ])('detects a product importer using %s', (source) => {
     const importer = 'src/renderer/src/runtime/product.ts'
     const test = 'src/renderer/src/runtime/ownership.test.ts'
@@ -72,7 +73,7 @@ describe('unit support import ownership', () => {
       new Map([
         [harness, 'export const value = 1'],
         [importer, source],
-        [test, "import './web-session-tabs-sync-test-harness'"]
+        [test, "import './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'"]
       ])
     )
     expect(productConsumers(harness, synthetic, new Set([test]))).toEqual([importer])
@@ -85,7 +86,10 @@ describe('unit support import ownership', () => {
     const synthetic = buildUnitDependencyGraph(
       new Map([
         [harness, 'export const value = 1'],
-        [bridge, "import '@/runtime/web-session-tabs-sync-test-harness'"],
+        [
+          bridge,
+          "import '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'"
+        ],
         [importer, "import './model-lifetime/retention/editor-model-lifetime-fixture'"]
       ])
     )

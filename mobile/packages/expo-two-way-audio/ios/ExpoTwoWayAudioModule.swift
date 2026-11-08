@@ -8,10 +8,13 @@ let ON_AUDIO_INTERRUPTION_EVENT_NAME = "onAudioInterruption"
 
 public class ExpoTwoWayAudioModule: Module {
     private var audioEngine: AudioEngine?
+    // OnDeviceSpeechController on iOS 26 and later; nil before, where every speech function answers unsupported.
+    private var speech: AnyObject?
     public func definition() -> ModuleDefinition {
         Name("ExpoTwoWayAudio")
 
-        OnCreate {
+        OnCreate { [weak self] in
+            guard let self else { return }
             let permissionsManager = self.appContext?.permissions
             EXPermissionsMethodsDelegate.register(
                 [
@@ -19,7 +22,17 @@ public class ExpoTwoWayAudioModule: Module {
                 ],
                 withPermissionsManager: permissionsManager
             )
+            if #available(iOS 26.0, *) {
+                self.speech = OnDeviceSpeechController { [weak self] name, body in
+                    self?.sendEvent(name, body)
+                }
+            }
 
+        }
+
+        OnDestroy {
+            guard #available(iOS 26.0, *) else { return }
+            self.onDeviceSpeech()?.cancel()
         }
 
         AsyncFunction("initialize") { () -> Bool in
@@ -127,12 +140,58 @@ public class ExpoTwoWayAudioModule: Module {
             )
         }
 
+        AsyncFunction("speechAvailability") { (locale: String) async -> [String: Any] in
+            guard #available(iOS 26.0, *) else {
+                return ["status": "unsupported", "locale": NSNull()]
+            }
+            return await OnDeviceSpeechController.availability(locale: locale)
+        }
+
+        AsyncFunction("speechDownload") { (locale: String) async -> Bool in
+            guard #available(iOS 26.0, *), let speech = self.onDeviceSpeech() else {
+                return false
+            }
+            return await speech.download(locale: locale)
+        }
+
+        AsyncFunction("speechStart") { (locale: String, sampleRate: Double) async -> [String: Any] in
+            guard #available(iOS 26.0, *), let speech = self.onDeviceSpeech() else {
+                return ["started": false, "reason": "unsupported"]
+            }
+            return await speech.start(locale: locale, sampleRate: sampleRate)
+        }
+
+        Function("speechFeed") { (pcm: Data) in
+            guard #available(iOS 26.0, *) else { return }
+            self.onDeviceSpeech()?.feed(pcm)
+        }
+
+        AsyncFunction("speechFinish") { () async throws -> String in
+            guard #available(iOS 26.0, *), let speech = self.onDeviceSpeech() else {
+                throw Exception(name: "OnDeviceSpeechException", description: "On-device speech needs iOS 26")
+            }
+            return try await speech.finish()
+        }
+
+        Function("speechCancel") {
+            guard #available(iOS 26.0, *) else { return }
+            self.onDeviceSpeech()?.cancel()
+        }
+
         Events([
             ON_MIC_DATA_EVENT_NAME,
             ON_INPUT_VOLUME_LEVEL_EVENT_NAME,
             ON_RECORDING_CHANGE_EVENT_NAME,
             ON_AUDIO_INTERRUPTION_EVENT_NAME,
+            ON_SPEECH_TEXT_EVENT_NAME,
+            ON_SPEECH_ERROR_EVENT_NAME,
+            ON_SPEECH_DOWNLOAD_PROGRESS_EVENT_NAME,
         ])
+    }
+
+    @available(iOS 26.0, *)
+    private func onDeviceSpeech() -> OnDeviceSpeechController? {
+        speech as? OnDeviceSpeechController
     }
 
     private func setupMicrophoneCallback() {

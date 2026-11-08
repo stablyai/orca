@@ -159,7 +159,8 @@ const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 // Keep typed route-manifest file for TS/Metro resolution; replace only its body for web.
 // Routes import the entry's imports first, so esbuild keeps those modules in one chunk instead of one per route subset.
-function routeManifestPlugin(manifestSource, routes) {
+// Routes also import every module in sharedModules, which esbuild then puts in one chunk all routes load.
+function routeManifestPlugin(manifestSource, routes, sharedModules) {
   let anchors
   return {
     name: ROUTE_MANIFEST_PLUGIN_NAME,
@@ -182,8 +183,9 @@ function routeManifestPlugin(manifestSource, routes) {
       )
       build.onLoad({ filter: /.*/, namespace: ROUTE_ENTRY_NAMESPACE }, async (args) => {
         anchors ??= entryImportAnchors()
+        const shared = sharedModules.map((module) => `import ${JSON.stringify(module)}\n`).join('')
         return {
-          contents: `${await anchors}export { default } from ${JSON.stringify(args.path)}\n`,
+          contents: `${await anchors}${shared}export { default } from ${JSON.stringify(args.path)}\n`,
           loader: 'js',
           resolveDir: dirname(entryPoint)
         }
@@ -232,7 +234,7 @@ const hairlineDevicePixelPlugin = {
 }
 
 /** Split out so a test can read the options MOBILE_WEB_APP_SHIMS claims, without a build. */
-export function mobileWebAppBuildOptions(routes) {
+export function mobileWebAppBuildOptions(routes, sharedModules = []) {
   return {
     // Fixed so no absolute path of this checkout can reach the output.
     absWorkingDir: mobileDir,
@@ -265,7 +267,7 @@ export function mobileWebAppBuildOptions(routes) {
       zod: MOBILE_ZOD_PACKAGE
     },
     plugins: [
-      routeManifestPlugin(renderMobileWebAppRouteManifest(routes), routes),
+      routeManifestPlugin(renderMobileWebAppRouteManifest(routes), routes, sharedModules),
       lucideBarrelPlugin,
       hairlineDevicePixelPlugin
     ],
@@ -321,6 +323,52 @@ export function entryStaticClosure(metafile, entryOutputPath) {
     }
   }
   return reached
+}
+
+// esbuild cuts a chunk per set of routes sharing a module; one this small costs more as a request than as code every route loads.
+const MERGED_SHARED_CHUNK_MAX_BYTES = 16 * 1024
+
+// Small route-shared chunks whose static imports already load at boot or merge too, so merging adds only their own bytes.
+// ESM only: a bare import runs a CommonJS module's body at route load, not where its importer first needs it.
+function sharedModulesToMerge(metafile, entryOutputPath) {
+  const { inputs, outputs } = metafile
+  const boot = entryStaticClosure(metafile, entryOutputPath)
+  const routeReached = new Set(
+    Object.entries(outputs)
+      .filter(([, output]) => output.entryPoint?.startsWith(`${ROUTE_ENTRY_NAMESPACE}:`))
+      .flatMap(([path]) => [...entryStaticClosure(metafile, path)])
+  )
+  const merged = new Set(
+    Object.entries(outputs)
+      .filter(
+        ([path, output]) =>
+          isScriptOutput(path) &&
+          !output.entryPoint &&
+          !boot.has(path) &&
+          routeReached.has(path) &&
+          output.bytes <= MERGED_SHARED_CHUNK_MAX_BYTES &&
+          Object.keys(output.inputs).every((input) => inputs[input]?.format === 'esm')
+      )
+      .map(([path]) => path)
+  )
+  const importsUnmerged = (path) =>
+    outputs[path].imports.some(
+      ({ kind, path: imported }) =>
+        kind === 'import-statement' && !boot.has(imported) && !merged.has(imported)
+    )
+  for (let dropped = true; dropped;) {
+    dropped = false
+    for (const path of merged) {
+      if (importsUnmerged(path)) {
+        merged.delete(path)
+        dropped = true
+      }
+    }
+  }
+  return [...merged]
+    .flatMap((path) => Object.keys(outputs[path].inputs))
+    .sort()
+    .map((input) => resolve(mobileDir, input))
 }
 
 // Hash final output bytes leaf-first, rewriting dependency names before hashing importers.
@@ -444,6 +492,14 @@ function localeCatalogOutputs(metafile) {
   )
 }
 
+// The entry and its chunks, without locale catalogs: what the chunk fence and its sweep table count.
+export function pageScriptCount(metafile) {
+  const catalogs = localeCatalogOutputs(metafile)
+  return Object.keys(metafile.outputs).filter(
+    (output) => isScriptOutput(output) && !catalogs.has(basename(output))
+  ).length
+}
+
 // esbuild keeps a whole namespace used as a value: `import { z }` or `z.core` ships ~200 KB of zod locale tables.
 const ZOD_LOCALE_TABLE_INPUT = /\/zod\/v4\/locales\/(?!en\.js$)[^/]+$/
 
@@ -463,17 +519,31 @@ function assertNoZodLocaleTables(metafile) {
   }
 }
 
+function entryOutput(metafile) {
+  const path = Object.keys(metafile.outputs).find(
+    (output) => basename(output) === `${ENTRY_CHUNK_NAME}.js`
+  )
+  if (!path) {
+    throw new Error('[build-mobile-web-app-bundle] esbuild emitted no entry script')
+  }
+  return path
+}
+
+// The page's scripts as shipped: a first build finds the small shared chunks, a second merges them.
+export async function buildMobileWebAppScripts(routes) {
+  const split = await esbuild.build(mobileWebAppBuildOptions(routes))
+  const sharedModules = sharedModulesToMerge(split.metafile, entryOutput(split.metafile))
+  return sharedModules.length === 0
+    ? split
+    : esbuild.build(mobileWebAppBuildOptions(routes, sharedModules))
+}
+
 export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
   const routes = await collectMobileWebAppRoutes(appDir)
   await assertRoutesCarryNoSynchronousExports(routes)
-  const result = await esbuild.build(mobileWebAppBuildOptions(routes))
+  const result = await buildMobileWebAppScripts(routes)
   assertNoZodLocaleTables(result.metafile)
-  const entryOutputPath = Object.keys(result.metafile.outputs).find(
-    (path) => basename(path) === `${ENTRY_CHUNK_NAME}.js`
-  )
-  if (!entryOutputPath) {
-    throw new Error('[build-mobile-web-app-bundle] esbuild emitted no entry script')
-  }
+  const entryOutputPath = entryOutput(result.metafile)
   const renamed = renameOutputsByContent(result.metafile, result.outputFiles)
   const entry = renamed.get(basename(entryOutputPath))
   const byName = (left, right) => (left.name < right.name ? -1 : 1)
@@ -496,6 +566,7 @@ export async function bundleMobileWebApp({ appDir = defaultAppDir } = {}) {
       (total, path) => total + (renamed.get(basename(path))?.bytes.byteLength ?? 0),
       0
     ),
+    chunkCount: pageScriptCount(result.metafile),
     routeKeys: routes.map((route) => route.key),
     routeChunks: routeChunkNames(result.metafile, routes, renamed)
   }
@@ -533,7 +604,7 @@ export async function buildMobileWebAppBundle({
   const [
     desktopVersion,
     protocolWindow,
-    { script, chunks, images, catalogChunks, entryStaticBytes, routeChunks, routeKeys },
+    { script, chunks, images, catalogChunks, entryStaticBytes, chunkCount, routeChunks, routeKeys },
     scrollbarStyle
   ] = await Promise.all([
     readDesktopVersion(),
@@ -582,9 +653,7 @@ export async function buildMobileWebAppBundle({
     routeChunks,
     routeKeys,
     entryStaticBytes,
-    // The entry counts: it is a chunk the browser fetches, and the budget is about how many.
-    // Locale catalogs are counted separately against their own allowance.
-    chunkCount: chunks.length - catalogChunks.length + 1,
+    chunkCount,
     // Everything the routes import that is not a script, which is the rest of the asset budget.
     imageCount: images.length,
     catalogChunkCount: catalogChunks.length,

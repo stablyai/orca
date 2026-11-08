@@ -38,8 +38,6 @@ type AutomationEditorSettingsSidebarProps = {
   draft: AutomationDraft
   visibleAgents: AgentCatalogEntry[]
   pickerTriggerClassName: string
-  segmentedGroupClassName: string
-  segmentedItemClassName: string
   onProjectChange: (projectId: string) => void
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
   allowAddProject?: boolean
@@ -63,8 +61,6 @@ export function AutomationEditorSettingsSidebar({
   draft,
   visibleAgents,
   pickerTriggerClassName,
-  segmentedGroupClassName,
-  segmentedItemClassName,
   onProjectChange,
   getRepoHostLabel,
   allowAddProject,
@@ -136,18 +132,11 @@ export function AutomationEditorSettingsSidebar({
             worktrees={worktrees}
             repoMap={repoMap}
             pickerTriggerClassName={pickerTriggerClassName}
-            segmentedGroupClassName={segmentedGroupClassName}
-            segmentedItemClassName={segmentedItemClassName}
             onDraftChange={onDraftChange}
           />
         </div>
         <div className="mb-4">
-          <AutomationSessionField
-            draft={draft}
-            toggleGroupClassName={segmentedGroupClassName}
-            toggleItemClassName={segmentedItemClassName}
-            onDraftChange={onDraftChange}
-          />
+          <AutomationSessionField draft={draft} onDraftChange={onDraftChange} />
         </div>
         <Field
           className="mb-4"

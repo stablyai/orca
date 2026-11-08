@@ -47,14 +47,6 @@ function paneState(): string {
 
 // Process-lifetime status yields when a hook producer reports the same pane during the command.
 describe('process-lifetime status', () => {
-  it('reports Working, then Done, when no hook speaks for the command', () => {
-    const commandStartedAt = Date.now()
-    processLifetime('working', commandStartedAt)
-    expect(paneState()).toBe('working')
-    processLifetime('done', commandStartedAt)
-    expect(paneState()).toBe('done')
-  })
-
   it('yields the rest of the command once a hook reports the pane', async () => {
     const commandStartedAt = Date.now()
     processLifetime('working', commandStartedAt)

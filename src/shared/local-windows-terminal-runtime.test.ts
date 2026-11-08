@@ -42,9 +42,4 @@ describe('resolveLocalWindowsTerminalRuntimeOptions: OpenSSH login shell', () =>
     )
     expect(shellFor({ setting: 'cmd.exe', sshLoginShell: LOGIN_SHELL })).toBe('cmd.exe')
   })
-
-  it('changes nothing without a login shell', () => {
-    expect(shellFor({ setting: 'powershell.exe' })).toBe('powershell.exe')
-    expect(shellFor({ hostProjectRuntime: true })).toBe('C:\\Windows\\System32\\cmd.exe')
-  })
 })

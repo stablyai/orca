@@ -12,8 +12,8 @@ const OPT_OUT_DIRECTIVES = new Set(['use no memo', 'use no forget'])
 export const HAZARD_FIXES = {
   'void-read': [
     'React Compiler drops a bare `void x;` read, so it neither invalidates a memo nor forces layout.',
-    'Make the value a real input instead (pass it to the code that needs it, or wrap the read in a',
-    'helper call), and flush layout with a function call that returns the measured value.'
+    'Memo invalidator: `useMemo(() => recomputeOn([tick], () => compute()), [tick])` from',
+    '@/lib/recompute-on. Layout flush: `forceLayoutReflow(el)` from @/lib/force-layout-reflow.'
   ],
   'member-postfix-value': [
     'oxc React Compiler 0.152 compiles a member postfix update used as a value (`a[q.head++]`) as',
@@ -21,6 +21,15 @@ export const HAZARD_FIXES = {
   ],
   'opt-out-directive': [
     '"use no memo" silently opts the function out of React Compiler. Fix the pattern it hides.'
+  ],
+  'discarded-subscription': [
+    'A discarded useSyncExternalStore result only forces a re-render; React Compiler still serves',
+    'reads after it from cache. Keep the snapshot: `const version = useSyncExternalStore(...)` and',
+    'read through `recomputeOn([version], () => read())` from @/lib/recompute-on, or return it.'
+  ],
+  'store-read-in-memo-block': [
+    'React Compiler caches this render-time `store.getState()` snapshot on unrelated inputs, so it',
+    'goes stale. Read it in the event handler or effect that uses it, or select it with a hook.'
   ],
   'hook-in-memo-block': [
     'React Compiler memoizes this hook call inside a cached block, so it runs only when the block',
@@ -132,7 +141,7 @@ function bodyDirectives(fn) {
 /** Hazards in a module's source: `{ kind, fn, line, text }`, one per occurrence. */
 export function findSourceHazards(fileName, text) {
   // Every hazard needs one of these tokens; skipping the parse keeps the full scan fast.
-  if (!/\bvoid\b|\+\+|--|use no (?:memo|forget)/.test(text)) {
+  if (!/\bvoid\b|\+\+|--|use no (?:memo|forget)|useSyncExternalStore/.test(text)) {
     return []
   }
   const sourceFile = parseModule(fileName, text)
@@ -160,6 +169,13 @@ export function findSourceHazards(fileName, text) {
       }
     }
     const visit = (child) => {
+      if (
+        ts.isExpressionStatement(child) &&
+        ts.isCallExpression(child.expression) &&
+        calleeName(child.expression.expression) === 'useSyncExternalStore'
+      ) {
+        report('discarded-subscription', name, child)
+      }
       if (ts.isExpressionStatement(child) && ts.isVoidExpression(child.expression)) {
         const operand = unwrap(child.expression.expression)
         if (
@@ -222,8 +238,25 @@ function readsCache(expression, caches) {
   return found
 }
 
-/** Hook calls the compiler placed inside a memo-cache guarded block: `{ fn, hook }`. */
-export function findMemoizedHookCalls(fileName, compiledCode) {
+function isStoreRead(node) {
+  return (
+    ts.isCallExpression(node) &&
+    node.arguments.length === 0 &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    node.expression.name.text === 'getState'
+  )
+}
+
+function memoizedCallKind(node) {
+  if (isStoreRead(node)) {
+    return { kind: 'store-read', name: 'getState' }
+  }
+  const hook = calleeName(node.expression)
+  return hook && HOOK_NAME.test(hook) ? { kind: 'hook', name: hook } : null
+}
+
+/** Hook calls and `getState()` reads the compiler placed inside a memo-cache guarded block. */
+export function findMemoizedCalls(fileName, compiledCode) {
   if (!compiledCode.includes('compiler-runtime')) {
     return []
   }
@@ -234,18 +267,16 @@ export function findMemoizedHookCalls(fileName, compiledCode) {
   }
   const found = new Map()
   const caches = new Set()
-  const collectHooks = (fn, node) => {
+  const collect = (fn, node) => {
     if (isFunctionNode(node)) {
       return
     }
-    if (ts.isCallExpression(node)) {
-      const hook = calleeName(node.expression)
-      // Nested guarded blocks are walked once per enclosing block; keying by node dedupes them.
-      if (hook && HOOK_NAME.test(hook)) {
-        found.set(node, { fn, hook })
-      }
+    const call = ts.isCallExpression(node) ? memoizedCallKind(node) : null
+    // Nested guarded blocks are walked once per enclosing block; keying by node dedupes them.
+    if (call) {
+      found.set(node, { fn, ...call })
     }
-    ts.forEachChild(node, (child) => collectHooks(fn, child))
+    ts.forEachChild(node, (child) => collect(fn, child))
   }
   const visit = (fn, node) => {
     if (
@@ -259,13 +290,49 @@ export function findMemoizedHookCalls(fileName, compiledCode) {
       caches.add(node.name.text)
     }
     if (ts.isIfStatement(node) && readsCache(node.expression, caches)) {
-      collectHooks(fn, node.thenStatement)
+      collect(fn, node.thenStatement)
     }
     const next = isFunctionNode(node) ? (reactFunctionName(node) ?? fn) : fn
     ts.forEachChild(node, (child) => visit(next, child))
   }
   visit('(module)', sourceFile)
   return [...found.values()]
+}
+
+/** Hook calls the compiler placed inside a memo-cache guarded block: `{ fn, hook }`. */
+export function findMemoizedHookCalls(fileName, compiledCode) {
+  return findMemoizedCalls(fileName, compiledCode)
+    .filter(({ kind }) => kind === 'hook')
+    .map(({ fn, name }) => ({ fn, hook: name }))
+}
+
+/** `getState()` calls the compiler placed inside a memo-cache guarded block: `{ fn }`. */
+export function findMemoizedStoreReads(fileName, compiledCode) {
+  return findMemoizedCalls(fileName, compiledCode)
+    .filter(({ kind }) => kind === 'store-read')
+    .map(({ fn }) => ({ fn }))
+}
+
+/** Source lines of render-time `getState()` calls in `fnName`; a useMemo/callback read is excluded. */
+export function renderStoreReadLines(fileName, text, fnName) {
+  const sourceFile = parseModule(fileName, text)
+  const lines = new Set()
+  for (const { name, node: root } of listReactFunctions(sourceFile)) {
+    if (name !== fnName) {
+      continue
+    }
+    const visit = (node) => {
+      if (node !== root && isFunctionNode(node)) {
+        return
+      }
+      if (isStoreRead(node)) {
+        lines.add(lineOf(sourceFile, node))
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(root)
+  }
+  return [...lines].sort((a, b) => a - b)
 }
 
 /** Source lines of `hook` calls in `fnName` that sit inside a larger expression. */

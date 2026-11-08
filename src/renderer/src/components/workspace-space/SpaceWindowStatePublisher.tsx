@@ -41,11 +41,13 @@ export function SpaceWindowStatePublisher(): null {
     }
     const offRequest = api.onWindowStateRequested(() => {
       windowOpen = true
-      offStore ??= useAppStore.subscribe((next, previous) => {
-        if (spaceWindowStateChanged(previous, next)) {
-          queuePublish()
-        }
-      })
+      if (offStore == null) {
+        offStore = useAppStore.subscribe((next, previous) => {
+          if (spaceWindowStateChanged(previous, next)) {
+            queuePublish()
+          }
+        })
+      }
       publish(true)
     })
     const offClose = api.onWindowClosed?.(() => {

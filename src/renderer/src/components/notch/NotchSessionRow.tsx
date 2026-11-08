@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { translate } from '../../i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatNotchElapsedSince } from '../../../../shared/notch/notch-duration-format'
@@ -43,10 +43,11 @@ export function NotchSessionRow({
   row: NotchRow
   onActivate: (row: NotchRow) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const elapsed = useElapsedLabel(row.stateStartedAt)
   // A row with no pane to route to still lists, but must not look actionable.
   const actionable = row.worktreeId !== null && row.tabId !== null
-  const state = translate(`notch.rowState.${row.lane}`, LANE_STATE_FALLBACK[row.lane])
+  const state = t(`notch.rowState.${row.lane}`, LANE_STATE_FALLBACK[row.lane])
 
   return (
     <button

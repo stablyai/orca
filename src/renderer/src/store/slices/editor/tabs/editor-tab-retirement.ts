@@ -2,10 +2,8 @@ import { closedEditorTabOrder } from '../closing/recently-closed-editor-tabs'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AppState } from '../../../types'
 import type { EditorSet, EditorGet } from '../types/editor-set-get'
-import {
-  createRecentlyClosedTabPositionIndex,
-  pushRecentlyClosedTabKind
-} from '../../recently-closed-tabs'
+import { createRecentlyClosedTabPositionIndex } from '../../tabs/recently-closed-tab-position'
+import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
 import { MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
 import {

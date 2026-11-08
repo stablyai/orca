@@ -92,10 +92,12 @@ export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel)
       intent: 'user'
     })
       .then((response) => {
+        // A route reset or another attempt replaced this one; its tabs belong to that older route.
+        if (pendingTerminalActivationAttemptRef.current !== activationKey) {
+          return
+        }
         if (!response.ok) {
-          if (pendingTerminalActivationAttemptRef.current === activationKey) {
-            pendingTerminalActivationAttemptRef.current = null
-          }
+          pendingTerminalActivationAttemptRef.current = null
           return
         }
         applySessionTabs((response as RpcSuccess).result as SessionTabsResult)

@@ -89,11 +89,6 @@ export function useMobileStructuredAgentSession(
     ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {})
   })
 
-  const optionStamp = useMobileStructuredSessionOptionStamp({
-    client,
-    sessionId,
-    enabled: enabled && connected && hostSupport?.statusFeed === true
-  })
   const turnId = runningStructuredAgentSessionTurnId(state)
   const options = useMobileStructuredAgentOptions({
     agent,
@@ -103,7 +98,12 @@ export function useMobileStructuredAgentSession(
     enabled,
     fence: state.fence,
     mutate,
-    optionStamp,
+    onOptionError: onSendError,
+    optionStamp: useMobileStructuredSessionOptionStamp({
+      client,
+      sessionId,
+      enabled: enabled && connected && hostSupport?.statusFeed === true
+    }),
     turnId,
     hasTurn: state.latestTurn != null || state.submissions.length > 0,
     unloadedTurnRevisions: state.unloadedTurnRevisions,
@@ -120,7 +120,7 @@ export function useMobileStructuredAgentSession(
   })
 
   const sends = useMobileStructuredSends({
-    sessionKey,
+    ...stateArgs,
     cursor: state.cursor,
     submissions: state.submissions,
     queuedMessages,
@@ -186,9 +186,7 @@ export function useMobileStructuredAgentSession(
     commandsWait,
     stateRef,
     stopping: turnIndicator.stopping,
-    accept: sends.accept,
-    acknowledge: sends.acknowledge,
-    reject: sends.reject,
+    ...sends,
     commandPending: commandPendingRef,
     sendsOut,
     controller: goal.commands,

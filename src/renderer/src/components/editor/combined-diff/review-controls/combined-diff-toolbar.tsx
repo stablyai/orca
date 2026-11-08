@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
 import { DiffNotesPreviewPopover } from './combined-diff-notes-popover'
 

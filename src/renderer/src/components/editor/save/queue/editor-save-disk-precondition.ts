@@ -13,11 +13,11 @@ import type { FileWriteResult } from '../../../../../../shared/file-write-disk-p
 import type { LocalFileAccess } from '../../../../../../shared/local-file-access'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
-import { writeRuntimeTerminalArtifactFile } from '@/runtime/runtime-terminal-artifact-write'
+import { writeRuntimeTerminalArtifactFile } from '@/runtime/files/grants/runtime-terminal-artifact-write'
 import { getRelativePathInsideWorktree } from '@/runtime/files/runtime-file-routing'
 import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
 import { grantRestoredHostFile } from '../../restored-host-file-grant'
-import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 /** Only overwrite grants disk-conflict consent; convert grants non-UTF-8 conversion consent. Other explicit saves remain guarded. */
 export type EditorSaveTrigger = 'autosave' | 'user' | 'convert' | 'restart' | 'overwrite'

@@ -60,8 +60,8 @@ export async function loadMobileDiffReviewBranchCompare(
   compare?: MobileBranchCompareTarget,
   options?: {
     worktreeShow?: Promise<RpcResponse>
-    // Read once the base ref is known, so the compare base never waits on status.
-    head?: () => Promise<string | undefined>
+    // Read once the base ref is known, so the compare base never waits on status. Null: no git status, so no compare.
+    head?: () => Promise<string | undefined | null>
     cache?: MobileBranchCompareCache
   }
 ): Promise<BranchCompareLoadResult> {
@@ -76,6 +76,9 @@ export async function loadMobileDiffReviewBranchCompare(
       return { result: null }
     }
     const head = await options?.head?.()
+    if (head === null) {
+      return { result: null }
+    }
     const read = () => readBranchCompare(client, worktreeId, baseRef)
     return head && options?.cache ? await options.cache({ baseRef, head }, read) : await read()
   } catch (err) {

@@ -28,7 +28,7 @@ import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-re
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
-import { useFileListWorktree } from '@/store/selectors'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { isQuickOpenQueryTooLarge } from '../quick-open-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import { useNetworkSafeTabEntrySelection } from './tab-create-entry-network-selection'

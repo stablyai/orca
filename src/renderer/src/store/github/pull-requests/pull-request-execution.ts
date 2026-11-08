@@ -21,7 +21,7 @@ import {
   githubPRTransportFailureOutcome
 } from '../../../../../shared/github/pull-request-for-branch-outcome'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { callRuntimeRpc } from '../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
 import { getRuntimeRepoTarget } from '../repositories/repository-routing'
 import { isWslHostOffForForge, withForgeHostOffSkip } from '../repositories/wsl-host-off-forge'

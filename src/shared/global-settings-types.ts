@@ -9,7 +9,6 @@ import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
 import type { TaskProvider } from './task-providers'
-import type { KeybindingOverrides, TerminalShortcutPolicy } from './keybindings'
 import type { AppIconId } from './app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
@@ -263,8 +262,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   showPinnedWorktreesInGroups?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
-  /** Orca-first keeps app shortcuts from TUIs; terminal-first is opt-in to let shell/TUI bindings win. */
-  terminalShortcutPolicy?: TerminalShortcutPolicy
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
@@ -289,8 +286,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalCwdMigratedToAppWorkspace?: boolean
   /** Where the Floating Workspace toggle is shown; defaults to the floating button for discoverability. */
   floatingTerminalTriggerLocation: FloatingTerminalTriggerLocation
-  /** Legacy keyboard-shortcut overrides; new writes go to ~/.orca/keybindings.json, migrated once when present. */
-  keybindings?: KeybindingOverrides
   diffDefaultView: 'inline' | 'side-by-side'
   diffWordWrap: boolean
   diffShowWhitespace: boolean
@@ -490,9 +485,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   gitlabProjects?: GitLabProjectSettings
   /** Anonymous telemetry consent, identity, frozen experiments, and daily usage limits; optional before migration. */
   telemetry?: TelemetrySettings
-  /** One-shot cohort marker for the tab-switch keybinding swap. 'pending' =
-   *  pre-existing install (seed pins old chords, then flips to 'done'); 'done' = fresh install. */
-  tabSwitchKeybindingSeed?: 'pending' | 'done'
   /** Voice/dictation settings; persistence merge hydrates getDefaultSettings() values for older profiles. */
   voice?: VoiceSettings
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */

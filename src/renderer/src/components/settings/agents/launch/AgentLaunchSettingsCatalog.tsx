@@ -1,9 +1,10 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { AgentLaunchChoiceEditor } from '../../../agent/launch-settings/AgentLaunchChoiceEditor'
 import { agentChatPermissionModes } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-support'
 import { savedChatPermissionMode } from '../../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { useMemo } from 'react'
+import { recomputeOn } from '@/lib/recompute-on'
 import { toast } from 'sonner'
 import type {
   AgentLaunchSettings,
@@ -45,7 +46,7 @@ import {
   readChatProgram,
   resolveChatProgramContext
 } from '@/lib/host-chat-program'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
@@ -60,7 +61,7 @@ import {
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
 
@@ -93,6 +94,7 @@ export function AgentLaunchSettingsCatalog({
     updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   }
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     detectedIds: detected,
     detectionFailed,
@@ -100,7 +102,7 @@ export function AgentLaunchSettingsCatalog({
     refresh
   } = useDetectedAgents(detectionTarget, 'all')
   const detectedIds = useMemo(() => (detected ? new Set(detected) : null), [detected])
-  useHostStructuredAgentsVersion()
+  const hostAgentsVersion = useHostStructuredAgentsVersion()
   const installedHere = useAppStateValue(readNativeDetectedAgents)
   const workspace =
     detectionTarget.kind === 'runtime'
@@ -115,9 +117,13 @@ export function AgentLaunchSettingsCatalog({
       : false
   )
   // The chat-or-CLI choice is this computer's, so a paired host's page doesn't offer it.
-  const chatAgents = local ? chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined) : []
+  const chatAgents = local
+    ? recomputeOn([hostAgentsVersion], () => chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined))
+    : []
   const managedChatAgents = new Set(
-    readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+    recomputeOn([hostAgentsVersion], () =>
+      readHostStructuredAgents(LOCAL_EXECUTION_HOST_ID, undefined)
+    )
       ?.filter((row) => row.managedRuntime)
       .map((row) => row.agent)
   )
@@ -196,12 +202,12 @@ export function AgentLaunchSettingsCatalog({
       const values = { agent: label, mode: agentPermissionChoiceLabel(lifted.choice, label) }
       toast.success(
         chatSupported
-          ? translate(
+          ? t(
               'settings.agents.permissionFromArgs',
               '{{agent}} set to {{mode}} in terminals and new chats.',
               values
             )
-          : translate(
+          : t(
               'settings.agents.permissionFromArgsTerminals',
               '{{agent}} set to {{mode}} in terminals.',
               values
@@ -330,39 +336,42 @@ export function AgentLaunchSettingsCatalog({
           isTuiAgentEnabled(agent.id, settings.disabledTuiAgents)
         )}
         catalog={catalog}
-        description={translate(
+        description={t(
           'settings.agents.hostDefaults',
           'Defaults for new agents on the selected host.'
         )}
         onSetDefault={(agent) => save({ type: 'default', agent })}
         defaultOpensAsChat={defaultOpensAsChat}
+        permissions={
+          permissionSettings ? (
+            <AllAgentsPermissionSetting
+              chatOwnSupported={chatOwnSupported}
+              choice={permissionSettings.agentPermissionDefault ?? 'own'}
+              withoutAutoChoice={sharedChoice(
+                PERMISSION_CHOICE_AGENTS.filter(
+                  (agent) => !agentPermissionChoices(agent).includes('auto')
+                ).map((agent) => resolveAgentPermission(agent, permissionSettings).choice)
+              )}
+              onChange={(choice) => save({ type: 'permission', choice })}
+              onChangeWithoutAuto={(choice) =>
+                save({ type: 'permission', choice, withoutAuto: true })
+              }
+            />
+          ) : (
+            renderPermissions({
+              mode: permissions.globalMode,
+              nonAutoMode: settings.nonAutoPermissionMode,
+              majorityMode: permissions.majorityMode,
+              autoAgentLabels: catalog
+                .filter((agent) => agent.id in AUTO_TUI_AGENT_ARGS)
+                .map((agent) => agent.label),
+              onChange: (mode) => save({ type: 'permissions', mode }),
+              onChangeNonAuto: (mode) => save({ type: 'permissions', mode, exceptAuto: true }),
+              autoSupported
+            })
+          )
+        }
       />
-      {permissionSettings ? (
-        <AllAgentsPermissionSetting
-          chatOwnSupported={chatOwnSupported}
-          choice={permissionSettings.agentPermissionDefault ?? 'own'}
-          withoutAutoChoice={sharedChoice(
-            PERMISSION_CHOICE_AGENTS.filter(
-              (agent) => !agentPermissionChoices(agent).includes('auto')
-            ).map((agent) => resolveAgentPermission(agent, permissionSettings).choice)
-          )}
-          onChange={(choice) => save({ type: 'permission', choice })}
-          onChangeWithoutAuto={(choice) => save({ type: 'permission', choice, withoutAuto: true })}
-        />
-      ) : null}
-      {permissionSettings
-        ? null
-        : renderPermissions({
-            mode: permissions.globalMode,
-            nonAutoMode: settings.nonAutoPermissionMode,
-            majorityMode: permissions.majorityMode,
-            autoAgentLabels: catalog
-              .filter((agent) => agent.id in AUTO_TUI_AGENT_ARGS)
-              .map((agent) => agent.label),
-            onChange: (mode) => save({ type: 'permissions', mode }),
-            onChangeNonAuto: (mode) => save({ type: 'permissions', mode, exceptAuto: true }),
-            autoSupported
-          })}
       <AgentDetectionCatalog
         detectedAgents={installedAgents}
         undetectedAgents={undetectedAgents}
