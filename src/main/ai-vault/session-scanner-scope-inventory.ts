@@ -66,7 +66,7 @@ export async function inventoryCwdBucketFiles(
   const prefixes = cwdBucketScopePrefixes(layout, args.scopePaths)
   const inScope = createAiVaultScopeCwdMatcher(args.scopePaths)
   let index = 0
-  for (const rootDir of args.rootDirs) {
+  for (const rootDir of args.rootDirs.flatMap(layout.bucketDirs ?? ((dir) => [dir]))) {
     throwIfAiVaultScanCancelled(args.signal)
     let close: () => void = () => undefined
     try {
