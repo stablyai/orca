@@ -6,6 +6,7 @@ import type {
   StructuredAgentSessionSinkAdmission
 } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionStep } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type { JournalStepOutcome } from '../agent-session-journal/writing/journal-writer-step'
 
 export type ProviderTimelineSink = Required<
   Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>
@@ -21,10 +22,24 @@ const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 export class ProviderTimelinePlan {
   private readonly steps: StructuredAgentSessionTransitionStep[] = []
   private readonly admitted: (() => void)[] = []
+  private readonly resolved: ((outcomes: readonly JournalStepOutcome[]) => void)[] = []
   private lifecycle = false
 
-  item(step: Omit<ItemStep, 'kind'>, lifecycle = false): void {
+  item(
+    step: StepInput<ItemStep>,
+    lifecycle = false,
+    onResolved?: (outcome: JournalStepOutcome) => void
+  ): void {
+    const index = this.steps.length
     this.steps.push({ kind: 'item', ...step })
+    if (onResolved) {
+      this.resolved.push((outcomes) => {
+        const outcome = outcomes[index]
+        if (outcome) {
+          onResolved(outcome)
+        }
+      })
+    }
     this.lifecycle ||= lifecycle
   }
 
@@ -46,6 +61,7 @@ export class ProviderTimelinePlan {
         steps: this.steps,
         lifecycle: this.lifecycle,
         publish: true,
+        onResolved: (outcomes) => this.resolved.forEach((change) => change(outcomes)),
         ...(onPublished ? { onPublished } : {})
       })
       if (!admission.accepted) {

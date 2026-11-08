@@ -46,7 +46,10 @@ export function failedTool(id: AgentJournalItemIdentity): JournalLifecycleMutati
 }
 
 export function itemStep(
-  resolve: Extract<StructuredAgentSessionTransitionStep, { kind: 'item' }>['resolve'],
+  resolve: Extract<
+    StructuredAgentSessionTransitionStep,
+    { kind: 'item'; resolve: unknown }
+  >['resolve'],
   reservedBytes = 4096
 ): StructuredAgentSessionTransitionStep {
   return {

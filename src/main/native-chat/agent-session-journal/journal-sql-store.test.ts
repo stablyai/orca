@@ -15,6 +15,7 @@ import { SqlAgentSessionJournal } from './journal-sql-store'
 import type { JournalSqlStoreOperation } from './journal-sql-store'
 import { JournalHostFactsNeededError } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { CommandReceiptExistsError } from './writing/command-receipt-transaction'
 import {
   journalSqlReaderPath,
@@ -502,4 +503,58 @@ it('drops a revoked history invocation after worker dispatch and preserves dedup
     outcomes: [{ kind: 'committed', wrote: false }]
   })
   expect((await journal.reads.item('orca:history'))?.revision).toBe(1)
+})
+
+it('resolves a text snapshot against its persisted turn after an earlier step settles it', async () => {
+  const { journal } = await fixture()
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'turn' },
+    agentJournalTurnBody({ turnId: 'turn', state: 'running', userItemId: 'orca:turn' }),
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'answer' },
+    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Before Stop' }] },
+    { fence: 1, turnScope: { kind: 'turn', turnItemId: 'orca:turn' } }
+  )
+  expect(
+    await journal.appendSteps([
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: 'turn' },
+        body: agentJournalTurnBody({
+          turnId: 'turn',
+          state: 'interrupted',
+          userItemId: 'orca:turn',
+          completedAt: 200
+        }),
+        options: { fence: 1, turnScope: { kind: 'thread' } },
+        reservedBytes: 4096
+      },
+      {
+        kind: 'resolved-item',
+        resolution: {
+          kind: 'text-snapshot',
+          identity: { provider: 'orca', clientMessageId: 'answer' },
+          body: {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [{ type: 'text', text: 'Trailing text after Stop' }]
+          }
+        },
+        options: { fence: 1, turnScope: { kind: 'thread' } },
+        reservedBytes: 4096
+      }
+    ])
+  ).toEqual({
+    outcomes: [
+      { kind: 'committed', wrote: true },
+      { kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' }
+    ]
+  })
+  expect(await journal.reads.item('orca:answer')).toMatchObject({
+    revision: 1,
+    body: { kind: 'message', blocks: [{ type: 'text', text: 'Before Stop' }] },
+    turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
+  })
 })

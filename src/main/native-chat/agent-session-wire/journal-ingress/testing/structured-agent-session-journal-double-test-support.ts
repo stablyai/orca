@@ -5,12 +5,15 @@ import type { AgentJournalItemIdentity } from '../../../../../shared/agent-sessi
 import type { JournalStep } from '../../../agent-session-journal/writing/journal-step-writer'
 import type { JournalStepsResult } from '../../../agent-session-journal/writing/journal-writer-step'
 import { journalSqlFailure } from '../../../agent-session-journal/journal-sql-failure'
+import { resolveJournalTimelineItem } from '../../../agent-session-journal/writing/journal-timeline-resolution'
+import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import type {
   JournalItemAppendOptions,
   JournalLifecycleBatchInput
 } from '../../../agent-session-journal/journal-store-contracts'
 
 type AppendingDouble = {
+  item?: AgentSessionJournal['item']
   appendItem: (
     identity: AgentJournalItemIdentity,
     body: AgentJournalItemBody,
@@ -55,6 +58,25 @@ export function withJournalQueueMembers<T extends AppendingDouble>(
       for (const step of steps) {
         try {
           if (step.kind === 'command') {
+            if (step.step.kind === 'resolved-item') {
+              const command = step.step
+              const resolved = resolveJournalTimelineItem(
+                (itemId) => journal.item?.(itemId) ?? null,
+                command.resolution,
+                command.options.turnScope
+              )
+              if (resolved.kind === 'dropped') {
+                result.outcomes.push(resolved)
+              } else {
+                await journal.appendItem(
+                  resolved.item.identity,
+                  resolved.item.body,
+                  command.options
+                )
+                result.outcomes.push({ kind: 'committed', wrote: true })
+              }
+              continue
+            }
             throw new Error('journal command steps require a real journal')
           }
           if (step.kind === 'item') {

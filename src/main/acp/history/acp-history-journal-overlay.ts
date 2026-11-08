@@ -8,6 +8,8 @@ import {
 } from '../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type { ProviderTimelineSink } from '../../native-chat/agent-session-timeline/provider-timeline-plan'
 import type { StructuredAgentSessionTransitionJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import { resolveJournalTimelineItem } from '../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
+import type { JournalStepOutcome } from '../../native-chat/agent-session-journal/writing/journal-writer-step'
 
 /** Pure per-turn scratch: held durable rows never affect replay translation. */
 export type AcpHistoryItem = Extract<JournalLifecycleIdentityMutationInput, { kind: 'item' }>
@@ -40,21 +42,34 @@ export class AcpHistoryJournalOverlay {
     this.sink = {
       journalItems: () => this.journal,
       tryAppendTransition: (transition) => {
+        const outcomes: JournalStepOutcome[] = []
         for (const step of transition.steps) {
           if (step.kind === 'settlement') {
             if ('resolution' in step) {
               throw new Error('history catch-up cannot settle a per-turn translation overlay')
             }
-            step.resolve(this.journal).forEach((mutation) => this.write(mutation))
+            const mutations = step.resolve(this.journal)
+            mutations.forEach((mutation) => this.write(mutation))
+            outcomes.push({ kind: 'committed', wrote: mutations.length > 0 })
           } else {
-            const resolved = step.resolve(this.journal)
+            const result =
+              'resolution' in step
+                ? resolveJournalTimelineItem(item, step.resolution, step.options.turnScope)
+                : null
+            if (result?.kind === 'dropped') {
+              outcomes.push(result)
+              continue
+            }
+            const resolved = 'resolve' in step ? step.resolve(this.journal) : result?.item
             if (resolved) {
               this.write(
                 journalLifecycleItemMutation(step.options, resolved.identity, resolved.body)
               )
             }
+            outcomes.push(resolved ? { kind: 'committed', wrote: true } : { kind: 'dropped' })
           }
         }
+        transition.onResolved?.(outcomes)
         return { accepted: true }
       }
     }

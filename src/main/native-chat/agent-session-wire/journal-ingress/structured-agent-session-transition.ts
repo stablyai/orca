@@ -3,6 +3,7 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { JournalStep } from '../../agent-session-journal/writing/journal-step-writer'
+import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type {
   JournalHistoryResolution,
   JournalStepOutcome
@@ -30,6 +31,12 @@ export type StructuredAgentSessionTransitionJournal = Pick<
 >
 
 export type StructuredAgentSessionTransitionStep =
+  | {
+      kind: 'item'
+      reservedBytes: number
+      resolution: JournalTimelineItemResolution
+      options: StructuredAgentSessionItemAppendOptions
+    }
   | {
       kind: 'item'
       /** Exceeding the reservation fails the sink. */
@@ -100,21 +107,31 @@ function transitionAppend(
         const result = await journal.appendSteps(
           transition.steps.map((step): JournalStep =>
             step.kind === 'item'
-              ? {
-                  kind: 'item',
-                  resolve: () => {
-                    const resolved = step.resolve(journal)
-                    if (
-                      resolved &&
-                      estimateStructuredAgentSessionItemBytes(resolved.identity, resolved.body) >
-                        step.reservedBytes
-                    ) {
-                      throw new Error(STEP_OVERFLOW)
+              ? 'resolution' in step
+                ? {
+                    kind: 'command',
+                    step: {
+                      kind: 'resolved-item',
+                      reservedBytes: step.reservedBytes,
+                      resolution: step.resolution,
+                      options: structuredAgentSessionJournalAppendOptions(fence, step.options)
                     }
-                    return resolved
-                  },
-                  options: structuredAgentSessionJournalAppendOptions(fence, step.options)
-                }
+                  }
+                : {
+                    kind: 'item',
+                    resolve: () => {
+                      const resolved = step.resolve(journal)
+                      if (
+                        resolved &&
+                        estimateStructuredAgentSessionItemBytes(resolved.identity, resolved.body) >
+                          step.reservedBytes
+                      ) {
+                        throw new Error(STEP_OVERFLOW)
+                      }
+                      return resolved
+                    },
+                    options: structuredAgentSessionJournalAppendOptions(fence, step.options)
+                  }
               : 'resolution' in step
                 ? {
                     kind: 'command',

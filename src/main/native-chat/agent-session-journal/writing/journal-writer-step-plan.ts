@@ -5,13 +5,31 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import { journalItemRowBuilder } from './journal-row-builders'
-import type { JournalWriterStep } from './journal-writer-step'
+import type { JournalStepOutcome, JournalWriterStep } from './journal-writer-step'
+import { resolveJournalTimelineItem } from './journal-timeline-resolution'
 
 /** null is stale; an empty plan is a valid no-op, including a deduplicated settlement. */
 export function planJournalWriterStep(
   state: JournalReducerState,
-  step: JournalWriterStep
+  step: JournalWriterStep,
+  onResolved: (outcome: JournalStepOutcome) => void
 ): ((seq: number, ts: number) => JournalRow)[] | null {
+  if (step.kind === 'resolved-item') {
+    const resolved = resolveJournalTimelineItem(
+      (itemId) => readJournalInputItem(state, itemId),
+      step.resolution,
+      step.options.turnScope
+    )
+    if (resolved.kind === 'dropped') {
+      onResolved(resolved)
+      return null
+    }
+    return planJournalWriterStep(
+      state,
+      { kind: 'item', ...resolved.item, options: step.options, reservedBytes: step.reservedBytes },
+      onResolved
+    )
+  }
   if (step.kind === 'item') {
     if (
       Buffer.byteLength(JSON.stringify({ identity: step.identity, body: step.body }), 'utf8') +

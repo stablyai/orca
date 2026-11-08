@@ -2,10 +2,9 @@
 // Flush text at event barriers or coalescing windows. Recheck turn settlement on every write,
 // retaining stopped keys until their boundary so trailing deltas cannot escape into thread messages.
 
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalProducerLinkage
+import type {
+  AgentJournalMessageItem,
+  AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import {
@@ -13,12 +12,10 @@ import {
   type AgentSessionDeltaCoalescerDeps
 } from '../agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   providerTimelinePlacement,
   type ProviderTimelineContext
 } from './provider-timeline-context'
-import type { ProviderTimelineResolvedWrite } from './provider-timeline-decision'
 import type {
   ProviderTimelineJoin,
   ProviderTimelineTextChannel,
@@ -26,12 +23,7 @@ import type {
 } from './provider-timeline-event'
 import { providerTimelineKeyPart } from './provider-timeline-identity'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
-import {
-  providerKey,
-  providerTimelineTurnRowState,
-  turnOf,
-  type ProviderTimelineRowId
-} from './provider-timeline-rows'
+import { providerKey, turnOf, type ProviderTimelineRowId } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
 
 export type ProviderTimelineStream = {
@@ -236,44 +228,30 @@ export class ProviderTimelineTextStreams {
       return
     }
     const body = this.message(stream, text)
-    plan.item({
-      reservedBytes: estimateStructuredAgentSessionItemBytes(stream.row.identity, body),
-      resolve: (journal) => this.resolveText(stream, body, journal),
-      options: { ...stream.producer, turnScope: stream.scope }
-    })
+    plan.item(
+      {
+        reservedBytes: estimateStructuredAgentSessionItemBytes(stream.row.identity, body),
+        resolution: { kind: 'text-snapshot', identity: stream.row.identity, body },
+        options: { ...stream.producer, turnScope: stream.scope }
+      },
+      false,
+      (outcome) => {
+        if (
+          outcome.kind === 'dropped' &&
+          outcome.turnItemId &&
+          this.streams.get(stream.key) === stream
+        ) {
+          this.stop(stream, outcome.turnItemId)
+        }
+      }
+    )
     plan.onAdmitted(() => {
       stream.written = true
       this.coalescer.markFlushed(stream.id)
     })
   }
 
-  /** Recheck every write so no stream appends after any writer settles its turn. */
-  private resolveText(
-    stream: ProviderTimelineStream,
-    body: AgentJournalItemBody,
-    journal: StructuredAgentSessionTransitionJournal
-  ): ProviderTimelineResolvedWrite | null {
-    if (stream.stoppedIn !== null) {
-      return null
-    }
-    const turn = this.rowTurn(stream, journal)
-    if (turn !== null && providerTimelineTurnRowState(journal, turn) === 'settled') {
-      stream.stoppedIn = turn
-      return null
-    }
-    return { identity: stream.row.identity, body }
-  }
-
-  /** Prefer the persisted scope, otherwise the pending row’s placement. */
-  private rowTurn(
-    stream: ProviderTimelineStream,
-    journal: StructuredAgentSessionTransitionJournal
-  ): string | null {
-    const held = journal.item(stream.row.itemId)
-    return turnOf(held ? (held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE) : stream.scope)
-  }
-
-  private message(stream: ProviderTimelineStream, text: string): AgentJournalItemBody {
+  private message(stream: ProviderTimelineStream, text: string): AgentJournalMessageItem {
     return {
       kind: 'message',
       role: stream.channel === 'assistant' ? 'assistant' : 'reasoning',

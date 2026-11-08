@@ -70,24 +70,19 @@ describe('ACP recovered history boundaries', () => {
     await fixture.feed([prompt])
     const failure = new Error('controlled answer resolver failure')
     const append = fixture.rig.journal.appendSteps
-    const reject = vi.spyOn(fixture.rig.journal, 'appendSteps').mockImplementation((steps) =>
-      append(
-        steps.map((step) =>
-          step.kind !== 'item'
-            ? step
-            : {
-                ...step,
-                resolve: () => {
-                  const item = step.resolve()
-                  if (item?.body.kind === 'message' && item.body.role === 'assistant') {
-                    throw failure
-                  }
-                  return item
-                }
-              }
+    const reject = vi.spyOn(fixture.rig.journal, 'appendSteps').mockImplementation((steps) => {
+      if (
+        steps.some(
+          (step) =>
+            step.kind === 'command' &&
+            step.step.kind === 'resolved-item' &&
+            step.step.resolution.body.role === 'assistant'
         )
-      )
-    )
+      ) {
+        return Promise.reject(failure)
+      }
+      return append(steps)
+    })
     const answer = frames.find((frame) =>
       JSON.stringify(frame.message.params ?? {}).includes('"agent_message_chunk"')
     )!
