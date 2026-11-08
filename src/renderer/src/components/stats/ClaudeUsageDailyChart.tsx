@@ -2,14 +2,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 import type { ClaudeUsageDailyPoint } from '../../../../shared/claude-usage-types'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 
-function formatTokens(value: number): string {
+function formatTokens(value: number, intlLocale: string = getIntlLocale()): string {
   if (value >= 1_000_000) {
     return `${(value / 1_000_000).toFixed(1)}M`
   }
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString(getIntlLocale())
+  return value.toLocaleString(intlLocale)
 }
 
 function getDailyTotal(entry: ClaudeUsageDailyPoint): number {
