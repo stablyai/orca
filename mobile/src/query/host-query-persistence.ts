@@ -48,6 +48,8 @@ function hostQueryPersistOf(query: Query): HostQueryPersist<unknown> | undefined
 
 // Per world, the keys whose data came from the store and no read has replaced yet.
 const restoredKeys = new WeakMap<QueryClient, Set<string>>()
+// Per world, its store; absent in a document that keeps queries in memory only.
+const persistences = new WeakMap<QueryClient, HostQueryPersistence>()
 
 /**
  * Whether a key still holds what an earlier launch stored: shown, but possibly days old and unconfirmed by
@@ -64,6 +66,17 @@ function familyPrefix(family: string, persist: HostQueryPersist<unknown>): strin
 
 // Stored data of any age paints (silently while online); this only bounds what a forgotten host leaves.
 const STORED_FOR_MS = 14 * 24 * 60 * 60 * 1000
+
+/**
+ * Restores stored keys a screen reads without observing them (its inputs come from its own state).
+ * Resolves once each is applied or missed; at once where nothing is stored.
+ */
+export function restoreStoredHostQueries(
+  queryClient: QueryClient,
+  keys: readonly PersistedHostQueryKey[]
+): Promise<void> {
+  return persistences.get(queryClient)?.restore(keys) ?? Promise.resolve()
+}
 
 export type HostQueryPersistence = {
   // Restores keys that hold no data yet, from one store read; resolves once each is applied or missed.
@@ -117,8 +130,9 @@ export function createHostQueryPersistence(
   const settledAt = new Map<string, number>()
   // The last data written per key and what it was stored as, so unchanged data keeps one stored object.
   const lastStored = new Map<string, { readonly source: unknown; readonly stored: unknown }>()
-  const restoring = new Set<string>()
-  // Keys the boot read just found empty: the screen's first observer doesn't read them again.
+  // One store read per key at a time; a second caller waits on the first.
+  const restoring = new Map<string, Promise<void>>()
+  // Keys a restore found empty: neither the screen's first observer nor a later restore reads them again.
   const missedAtBoot = new Set<string>()
   const triedOnMiss = new WeakSet<Query>()
   const restored = new Set<string>()
@@ -177,11 +191,14 @@ export function createHostQueryPersistence(
   function restoreOne(queryKey: readonly unknown[], persist: HostQueryPersist<unknown>) {
     const family = familyOf(queryKey)
     const queryHash = hashKey(queryKey)
-    if (family === null || restoring.has(queryHash)) {
+    if (family === null) {
       return Promise.resolve()
     }
-    restoring.add(queryHash)
-    return new Promise<void>((settle) => {
+    const pending = restoring.get(queryHash)
+    if (pending) {
+      return pending
+    }
+    const restore = new Promise<void>((settle) => {
       void persisterFor(family, persist)
         .retrieveQuery(queryHash, (record) => {
           if (queryClient.getQueryData(queryKey) === undefined) {
@@ -202,6 +219,8 @@ export function createHostQueryPersistence(
           () => settle()
         )
     }).finally(() => restoring.delete(queryHash))
+    restoring.set(queryHash, restore)
+    return restore
   }
 
   queryClient.getQueryCache().subscribe((event) => {
@@ -243,17 +262,22 @@ export function createHostQueryPersistence(
     void persisterFor(family, persist).persistQuery(query)
   })
 
-  return {
+  const persistence: HostQueryPersistence = {
     async restore(keys) {
       const empty = keys.flatMap((key) => {
         const family = familyOf(key.queryKey)
-        return family !== null && queryClient.getQueryData(key.queryKey) === undefined
+        return family !== null &&
+          queryClient.getQueryData(key.queryKey) === undefined &&
+          !missedAtBoot.has(hashKey(key.queryKey))
           ? [{ ...key, family }]
           : []
       })
+      // A key already being read joins that read below instead of reading again.
       await primer.prime(
-        empty.map(({ queryKey, persist, family }) =>
-          orcaQueryStoreKey(`${familyPrefix(family, persist)}-${hashKey(queryKey)}`)
+        empty.flatMap(({ queryKey, persist, family }) =>
+          restoring.has(hashKey(queryKey))
+            ? []
+            : [orcaQueryStoreKey(`${familyPrefix(family, persist)}-${hashKey(queryKey)}`)]
         )
       )
       await Promise.all(
@@ -267,4 +291,6 @@ export function createHostQueryPersistence(
     },
     flush: () => storage.flush()
   }
+  persistences.set(queryClient, persistence)
+  return persistence
 }
