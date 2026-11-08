@@ -409,4 +409,19 @@ it('refuses a journal fork on store failure, preserves cancellation, and never r
     throw cancelled
   })
   await expect(test.copy(copying.mock.calls[0]![0], stop.signal)).rejects.toBe(cancelled)
+  const budget = new AbortController()
+  const expired = new DOMException('Copy budget expired', 'TimeoutError')
+  vi.spyOn(AbortSignal, 'timeout').mockReturnValue(budget.signal)
+  read.mockImplementation(async () => {
+    budget.abort(expired)
+    throw expired
+  })
+  await expect(
+    test.copy(copying.mock.calls[0]![0], new AbortController().signal)
+  ).rejects.toMatchObject({
+    refusal: {
+      code: 'agent_session_identity_required',
+      details: { reason: 'transcriptUnreadable' }
+    }
+  })
 })

@@ -134,7 +134,7 @@ export async function copyAcpConversation(
         )
         return { ...result, coverage: { unit: 'acp-user-message', ids } }
       } catch (error) {
-        signal.throwIfAborted()
+        options.signal?.throwIfAborted()
         deps.logger?.warn('OpenCode fork coverage read failed', {
           scope: 'acp-conversation-copy',
           sessionId: result.sessionId,
