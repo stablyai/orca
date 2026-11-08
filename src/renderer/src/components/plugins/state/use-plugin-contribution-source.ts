@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
+import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import {
   ensurePluginLanguagePacksLoaded,
   usePluginLanguagePackStore
-} from '@/store/plugin-language-packs'
+} from '@/store/plugins/localization/plugin-language-packs'
 import {
   pluginSyntaxRevisionKey,
   usePluginSyntaxFailureStore
-} from '@/store/plugin-syntax-failures'
-import { usePluginSyntaxes } from '@/store/plugin-syntax-packs'
-import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugin-themes'
+} from '@/store/plugins/syntax/plugin-syntax-failures'
+import { usePluginSyntaxes } from '@/store/plugins/syntax/plugin-syntax-packs'
+import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import {
   EMPTY_CONTRIBUTION_SOURCE,
   manifestContributionSource,

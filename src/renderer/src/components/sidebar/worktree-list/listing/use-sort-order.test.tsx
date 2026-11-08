@@ -14,7 +14,7 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
-import { makeTerminalTab } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { makeTerminalTab } from '../../../../store/terminals/terminal-row.test-fixture'
 
 // The sort ranks each card by host identity; these rows carry no host.
 const key = (id: string): string => composeWorktreeHostIdentity(undefined, id)

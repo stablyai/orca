@@ -21,10 +21,13 @@ import {
 } from '@/lib/workspace-file-browser-open-target'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { findSiblingGroupId } from '@/store/slices/tabs'
+import { findSiblingGroupId } from '../../../shared/workspace-layout/tab-group-layout-tree'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { findWorkspaceShowingDoc } from './file-preview-page-conversion'
 
 export { convertBrowserPageToWorkspaceDoc } from './file-preview-page-conversion'

@@ -2,8 +2,8 @@ import { normalizeGhAccountBinding } from '../../../shared/github/account-bindin
 import { githubTaskBinding } from './github-task-observation'
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../shared/work-items/task-source-context'
 import { parseGitHubIssueOrPRLink } from '../../../shared/github/links'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
@@ -11,7 +11,10 @@ import { parseHostAuthorityKey } from '../../../shared/host-authority'
 import type { AppState } from '@/store/types'
 import { getWorkItemRepo } from './work-item-repo-row'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
-import { captureHostIdentityFence, type HostIdentityFence } from '@/store/host-catalog-fencing'
+import {
+  captureHostIdentityFence,
+  type HostIdentityFence
+} from '@/runtime/rpc/environment-revisions/host-identity-fence'
 
 export function githubTaskIdentity(item: Pick<GitHubWorkItem, 'url'>): string {
   const link = parseGitHubIssueOrPRLink(item.url)

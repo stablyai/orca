@@ -13,7 +13,13 @@ import {
   readMobileNativeChatPickedSkills,
   restoreMobileNativeChatPickedSkills
 } from './native-chat/composer/mobile-native-chat-draft-store'
+import {
+  beginMobileNativeChatInFlightSend,
+  settleMobileNativeChatInFlightSend
+} from './native-chat/composer/mobile-native-chat-in-flight-sends'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
+import { structuredSessionOperationId } from './structured-session-operation-id'
+import { isSlashCommandDraft } from '../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './native-chat/use-mobile-native-chat-unconfirmed-sends'
 
 export function useMobileStructuredNativeChatSendBridge(args: {
@@ -29,7 +35,11 @@ export function useMobileStructuredNativeChatSendBridge(args: {
   ) => Promise<MobileNativeChatSendOutcome>
   captureSendOrigin: (text: string) => MobileNativeChatSendOrigin | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  restoreRejectedDraft: (
+    origin: MobileNativeChatSendOrigin,
+    text: string,
+    options?: { preserveConversationCommands?: boolean }
+  ) => void
   holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
   onSendError: (message: string) => void
 }): {
@@ -67,29 +77,58 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         onSendError('Message not sent (disconnected)')
         return 'rejected'
       }
-      const skills = readMobileNativeChatPickedSkills(origin.draftKey)
-      clearDraftForSend(origin, text)
+      // A queued message never sat in the composer, so its send leaves the composer alone.
+      const queued = intent?.queued
+      const skills = queued ? [...queued.skills] : readMobileNativeChatPickedSkills(origin.draftKey)
+      if (!queued) {
+        clearDraftForSend(origin, text)
+      }
+      // Saved, journal id included, in the same write as the clear, so a kill mid-send can be checked against the journal.
+      const clientMessageId = structuredSessionOperationId()
+      const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', text, {
+        clientMessageId,
+        command: intent?.goal === true || isSlashCommandDraft(text),
+        intent
+      })
       const created: { clientMessageId?: string } = {}
       const outcome = await sendStructured(text, images, deadline, attachments, skills, {
         ...intent,
+        clientMessageId,
         onCreated: (id) => {
           created.clientMessageId = id
           intent?.onCreated?.(id)
         }
       })
       const handBack = () => {
+        if (queued) {
+          return
+        }
         restoreRejectedDraft(origin, text)
         restoreMobileNativeChatPickedSkills(origin.draftDestination, skills)
       }
-      if (outcome === 'rejected') {
-        handBack()
-      } else if (outcome === 'unknown' && created.clientMessageId) {
+      if (outcome === 'unknown' && created.clientMessageId) {
         // Uncertain input stays an ordinary bubble until the journal records its id, else it returns to the composer.
         holdUnconfirmed(created.clientMessageId, () => {
           handBack()
           intent?.onHandBack?.()
           onSendError(UNCONFIRMED_SEND_RESTORED_MESSAGE)
+          settleMobileNativeChatInFlightSend(inFlightId)
         })
+        return outcome
+      }
+      if (outcome === 'unknown') {
+        // A host command whose reply was lost minted no journal id; its text returns now, as a terminal chat's does.
+        settleMobileNativeChatInFlightSend(inFlightId)
+        if (queued) {
+          intent?.onHandBack?.()
+        } else {
+          restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
+        }
+        return outcome
+      }
+      settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')
+      if (outcome === 'rejected') {
+        handBack()
       }
       return outcome
     },

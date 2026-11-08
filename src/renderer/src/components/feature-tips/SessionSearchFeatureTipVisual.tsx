@@ -5,6 +5,7 @@ import {
   getSessionSearchDemoRecentRows,
   getSessionSearchDemoScenes
 } from './session-search-feature-tip-demo'
+import { useTranslate } from '@/i18n/use-translate'
 
 type DemoPhase = 'idle' | 'typing' | 'searching' | 'results' | 'focused' | 'erasing'
 type DemoState = { scene: number; phase: DemoPhase; chars: number }
@@ -40,9 +41,10 @@ function nextDemoState(state: DemoState, queryLength: number, sceneCount: number
 }
 
 export function SessionSearchFeatureTipVisual(): JSX.Element {
+  const t = useTranslate()
   const reducedMotion = usePrefersReducedMotion()
-  const scenes = getSessionSearchDemoScenes()
-  const recentRows = getSessionSearchDemoRecentRows()
+  const scenes = getSessionSearchDemoScenes(t)
+  const recentRows = getSessionSearchDemoRecentRows(t)
   const [state, setState] = useState<DemoState>({ scene: 0, phase: 'idle', chars: 0 })
   const shown: DemoState = reducedMotion
     ? { scene: 0, phase: 'results', chars: scenes[0].query.length }

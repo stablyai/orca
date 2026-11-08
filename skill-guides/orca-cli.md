@@ -91,7 +91,7 @@ A native folder parent with an explicit Git destination:
 ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
 ```
 
-A worktree created with `--repo` from a folder workspace (or with `--parent-worktree folder:<folderId>`) is attached to that folder workspace and listed in its Attached worktrees panel. To attach an existing worktree, use `worktree set --parent-worktree folder:<folderId>`.
+A worktree created with `--repo` from a folder workspace (or with `--parent-worktree folder:<folderId>`) is attached to that folder workspace and shown in its Source Control and Attached worktrees panels. To attach an existing worktree, use `worktree set --parent-worktree folder:<folderId>`.
 
 Other common commands:
 
@@ -130,10 +130,16 @@ Per-worktree visibility rules still apply.
 
 Selectors:
 
-- `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`, `identity:<identityKey>`
+- `folder:<folderId>` names a folder workspace, for commands that take one (`worktree activate` doesn't yet). On a folder workspace, `worktree set` changes `--display-name`, `--comment`, `--workspace-status` and `--unread`/`--read` (links go through `reference add`), and `worktree rm` makes Orca forget it while the folder stays on disk. `path:` and `name:` also match folder workspaces, so `--worktree path:<folderPath>` reaches the folder; `branch:`, `issue:` and `identity:` match worktrees only. `ORCA worktree ps --json` lists folder workspaces; `worktree list` does not.
+- Older Orca versions match `path:` and `name:` against worktrees only, and may pick a worktree at the folder's path. If a folder is meant, pass `folder:<folderId>`.
+- When several workspaces match, the error usually lists each choice's kind, host, path and exact selector; pass one of those. If it lists none, find the row with `ORCA worktree ps --json` (if `truncated`, repeat with `--limit <totalCount>`) and pass `identity:<identity.key>`, `folder:<folderId>`, or `id:<worktreeId>` when no other row has that id. A folder id that two folder workspaces share can't be selected; the error says how to repair it.
+- For a workspace in another environment, add `--environment <id>` to the command, as with any other selector.
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
-- `active` / `current` for the enclosing Orca-managed worktree from the shell cwd; when targeting a paired server with `--environment` or `--pairing-code`, use an explicit selector from that server instead.
-- For `worktree create --parent-worktree`, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`. `worktree set --parent-worktree` also takes the folder keys, `folder:<folderId>` or `id:folder:<folderId>`.
+- `active` / `current` for the Orca workspace enclosing the shell cwd, worktree or folder workspace: the innermost one wins, so a worktree nested inside a folder workspace is picked over the folder; at equal depth this terminal's own workspace wins, otherwise the error lists the choices. Pass `folder:<folderId>` to get the folder itself. `worktree rm` refuses `current`/`active` and needs an explicit selector; its error prints the one `current` resolves to. `current` resolves on this machine's Orca, so it is refused with `--environment <id>` or `--pairing-code`; use an explicit selector from that environment instead (`--environment local` keeps it on this machine even when `ORCA_ENVIRONMENT` is set).
+- `--environment` selects which Orca receives the command (`local` is this machine's own Orca); `host` is that Orca's stored location metadata. Never derive an environment from `host`.
+- `worktree ps` and `worktree show` give each workspace an `address` (text: an `address:` line). Copy `address.line` as is, keeping its `--environment`, or pass `address.environment` and `address.worktree` as `--environment` and `--worktree`. If `address` is null, follow `addressUnavailable` (`one-off-connection`, `unverifiable-row` or `duplicate-folder-id`) and never construct a route yourself. `parent` names the parent's environment when it is known; with `state: unknown-environment` there is no route to it from here.
+- For `worktree create --parent-worktree`, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`. `worktree set --parent-worktree` also takes the folder keys, `folder:<folderId>` or `id:folder:<folderId>`. On both, `path:` and `name:` record a folder workspace parent when they match one.
 
 Lineage rules:
 
@@ -142,6 +148,8 @@ Lineage rules:
 - Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<repoId>::<worktreePath>` when a folder or worktree parent context should be explicit.
 - Use `--no-parent` only when the new work is independent.
 - A parent can be in a different project from its child, such as `worktree create --repo id:<otherRepoId> --name related-task --parent-worktree id:<parentRepoId>::<parentPath>`. A worktree parent and child must use the same execution host (local machine, SSH target, or paired server).
+- `--parent-worktree` is looked up in the child's environment. For a parent in another environment, add `--parent-environment <local|environment-id>`: to reuse a workspace from `ps`/`show` as a parent, pass its `address.environment` as `--parent-environment` and its `address.worktree` as `--parent-worktree`. Orca never searches other environments; a parent missing there is an error. `active`/`current` always mean this machine's own workspace, so they take only `--parent-environment local`.
+- An address with `--environment local` means the Orca that printed it, because `local` is always the machine running the command; don't hand an address to another machine to run. To link workspaces across environments, run the command from the Orca that has both paired, such as `--environment <server> --worktree <selector> --parent-worktree current`.
 - To move an existing worktree under a different parent, or make it top-level, use `worktree set` with `--parent-worktree <selector>` or `--no-parent`.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
 

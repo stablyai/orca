@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { writeRuntimeFileBytes } from '@/runtime/files/mutations/runtime-file-bytes-write'
 import { createEditorSaveQueue } from './editor-save-queue'
 import type { EditorSaveQueue } from './editor-save-queue-contract'

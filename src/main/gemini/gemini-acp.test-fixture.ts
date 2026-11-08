@@ -1,6 +1,6 @@
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import type { AcpScriptedAgent } from '../acp/acp-scripted-agent.test-support'
-import { PROVIDER_SESSION } from '../acp/acp-structured-adapter.test-support'
+import type { AcpScriptedAgent } from '../acp/process/testing/acp-scripted-agent.test-support'
+import { PROVIDER_SESSION } from '../acp/session/testing/acp-structured-adapter.test-support'
 
 // Initialize capability subset captured from original @google/gemini-cli@0.65.0 with an empty home.
 export const GEMINI_ACP_INITIALIZE = {

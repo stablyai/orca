@@ -37,7 +37,7 @@ describe('a mounted screen', () => {
     ).toEqual([
       {
         name: 'files.readDir#1',
-        params: { relativePath: '', worktree: 'id:wt-files' },
+        params: { relativePath: '', worktree: 'id:wt-files', limit: 500 },
         options: { failWhenDisconnected: true }
       },
       {

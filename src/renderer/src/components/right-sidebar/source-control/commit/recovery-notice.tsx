@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type {
@@ -84,43 +84,44 @@ function useRecoveryCopy(recoveryKind: SourceControlRecoveryKind): {
   launchDialogTitle: string
   dialogDescription: string
 } {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   return useMemo(() => {
     if (recoveryKind === 'push') {
       return {
-        inlineFixLabel: translate(
+        inlineFixLabel: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.60bd988f0b',
           'AI Fix'
         ),
-        dialogFixLabel: translate(
+        dialogFixLabel: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.834cb3f23d',
           'Fix with AI'
         ),
-        defaultAgentTitle: translate(
+        defaultAgentTitle: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.4b37ae99b0',
           'Start the default AI agent to fix this push failure'
         ),
-        fixAriaLabel: translate(
+        fixAriaLabel: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.30b8d4f181',
           'Fix push failure with AI'
         ),
-        chooseAgentTitle: translate(
+        chooseAgentTitle: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.dd43c47089',
           'Choose an agent for this push failure'
         ),
-        chooseAgentAriaLabel: translate(
+        chooseAgentAriaLabel: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.ec7bfced55',
           'Choose agent to fix push failure'
         ),
-        contextUnavailable: translate(
+        contextUnavailable: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.9e5ccd00aa',
           'Push failure context unavailable'
         ),
-        launchDialogTitle: translate(
+        launchDialogTitle: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.054ead86b1',
           'Fix Push Failure With AI'
         ),
-        dialogDescription: translate(
+        dialogDescription: t(
           'auto.components.right.sidebar.SourceControl.pushRecovery.15b7f210d7',
           'Choose the agent and edit the full command input before launch.'
         )
@@ -128,42 +129,39 @@ function useRecoveryCopy(recoveryKind: SourceControlRecoveryKind): {
     }
 
     return {
-      inlineFixLabel: translate('auto.components.right.sidebar.SourceControl.60bd988f0b', 'AI Fix'),
-      dialogFixLabel: translate(
-        'auto.components.right.sidebar.SourceControl.834cb3f23d',
-        'Fix with AI'
-      ),
-      defaultAgentTitle: translate(
+      inlineFixLabel: t('auto.components.right.sidebar.SourceControl.60bd988f0b', 'AI Fix'),
+      dialogFixLabel: t('auto.components.right.sidebar.SourceControl.834cb3f23d', 'Fix with AI'),
+      defaultAgentTitle: t(
         'auto.components.right.sidebar.SourceControl.4b37ae99b0',
         'Start the default AI agent to fix this commit failure'
       ),
-      fixAriaLabel: translate(
+      fixAriaLabel: t(
         'auto.components.right.sidebar.SourceControl.30b8d4f181',
         'Fix commit failure with AI'
       ),
-      chooseAgentTitle: translate(
+      chooseAgentTitle: t(
         'auto.components.right.sidebar.SourceControl.dd43c47089',
         'Choose an agent for this commit failure'
       ),
-      chooseAgentAriaLabel: translate(
+      chooseAgentAriaLabel: t(
         'auto.components.right.sidebar.SourceControl.ec7bfced55',
         'Choose agent to fix commit failure'
       ),
-      contextUnavailable: translate(
+      contextUnavailable: t(
         'auto.components.right.sidebar.SourceControl.9e5ccd00aa',
         'Commit failure context unavailable'
       ),
-      launchDialogTitle: translate(
+      launchDialogTitle: t(
         'auto.components.right.sidebar.SourceControl.054ead86b1',
         'Fix Commit Failure With AI'
       ),
-      dialogDescription: translate(
+      dialogDescription: t(
         'auto.components.right.sidebar.SourceControl.15b7f210d7',
         'Choose the agent and edit the full command input before launch.'
       )
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [recoveryKind, languageRevision])
+  }, [recoveryKind, languageRevision, t])
 }
 
 export function SourceControlRecoveryNotice({
@@ -188,6 +186,7 @@ export function SourceControlRecoveryNotice({
   onOpenSourceControlAiSettings,
   onFixWithAI
 }: SourceControlRecoveryNoticeProps): React.JSX.Element {
+  const t = useTranslate()
   const worktreeKey = getRecoveryDialogKey(recoveryKind, worktreeId)
   const [dialogState, setDialogState] = useState<RecoveryDialogState>({
     worktreeKey,
@@ -292,7 +291,7 @@ export function SourceControlRecoveryNotice({
                 className="h-6 shrink-0 border-foreground/25 px-2 text-[11px] font-semibold"
                 onClick={() => setDialogOpen(true)}
               >
-                {translate(
+                {t(
                   'auto.components.right.sidebar.SourceControl.pushRecovery.03d238218c',
                   'Details'
                 )}
@@ -325,7 +324,7 @@ export function SourceControlRecoveryNotice({
               ) : null}
               <DialogClose asChild>
                 <Button type="button" variant="outline" size="sm">
-                  {translate(
+                  {t(
                     'auto.components.right.sidebar.SourceControl.pushRecovery.783a808870',
                     'Close'
                   )}

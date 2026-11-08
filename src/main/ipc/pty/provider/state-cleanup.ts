@@ -5,7 +5,7 @@ import { openCodeHookService } from '../../../opencode/hook-service'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { clearMigrationUnsupportedPty } from '../../../agent-hooks/migration-unsupported-pty-state'
-import { clearNativeWindowsConptyPty } from '../../../runtime/terminal-model-query-authority'
+import { clearNativeWindowsConptyPty } from '../../../runtime/terminal/output/terminal-model-query-authority'
 import {
   clearHiddenRendererPtyDeliveryState,
   isHiddenRendererPty

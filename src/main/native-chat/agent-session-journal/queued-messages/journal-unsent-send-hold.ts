@@ -1,3 +1,11 @@
+import type Database from '../../../sqlite/sync-database'
+import { readCommandReceipt } from '../writing/command-receipt-table'
+import { journalSubmissionIsPersonal } from '../submissions/journal-submission-fold'
+import {
+  orchestrationMailNotice,
+  USER_MESSAGE_SOURCE
+} from '../../../../shared/agent-session/agent-session-message-source'
+import { legacyQueuePositions } from './legacy-queue-positions'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type {
   AgentJournalItemBody,
@@ -6,7 +14,6 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
-import { USER_MESSAGE_SOURCE } from '../../../../shared/agent-session/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionJournal } from '../journal-store'
@@ -14,10 +21,7 @@ import type { JournalQueueCardChange } from './journal-queue-events'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { ResolveDispatchInput } from '../journal-store-contracts'
 import type { JournalQueuePlan } from './journal-queued-messages'
-// Keep provably unhanded personal text as queued cards on restart/close; reject the submission
-// atomically to prevent duplicate handover. Other senders regenerate work or require explicit retry.
-
-type QueuedMessagePositionMove = { messageId: string; position: number }
+// Keep provably unhanded input under its own row; host-derived work is re-derived by its owner.
 
 export type UnsentSendHold =
   /** Accepted by an earlier process. */
@@ -25,17 +29,12 @@ export type UnsentSendHold =
   /** Restrict settlement when only part of a close completed. */
   | { cause: 'chatClosed'; which?: (submission: AgentJournalSubmission) => boolean }
 
-/** The body an unsent send is kept with, or null when it is rejected instead:
- *  - a card's own hand-off: its rejection already returns the card (`queuedHandOffOutcome`);
- *  - `/compact` and other commands: a command in flight is not resumed, the person re-runs it;
- *  - a send not from a person: orchestration mail (the mailbox re-sends it), a dispatch preamble
- *    or a restart continuation (their owners re-derive them), a kind this build does not know, and
- *    a row with no source that is not a person's (it could be either). */
+/** A linked attempt returns its own row; host-derived work is not replayed after restart. */
 export function unsentSendKeptAsCard(
   submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>,
   body: AgentJournalItemBody | null
 ): AgentJournalMessageItem | null {
-  if (submission.queuedMessageId !== undefined || body?.kind !== 'message' || body.command) {
+  if (submission.queuedMessageId !== undefined || body?.kind !== 'message') {
     return null
   }
   const { source } = submission
@@ -44,7 +43,21 @@ export function unsentSendKeptAsCard(
     source?.kind === USER_MESSAGE_SOURCE.kind ||
     // Before source existed, client origin identified personal sends.
     (source === undefined && submission.origin === 'client')
-  return persons ? body : null
+  return persons || body.command || orchestrationMailNotice(body.from) ? body : null
+}
+
+/** A refused initialization returns only direct personal text; custody and commands own their failures. */
+function failedStartSendKeptAsCard(
+  submission: Pick<AgentJournalSubmission, 'queuedMessageId' | 'source' | 'origin'>,
+  body: AgentJournalItemBody | null
+): AgentJournalMessageItem | null {
+  if (submission.queuedMessageId !== undefined || body?.kind !== 'message' || body.command) {
+    return null
+  }
+  return submission.source?.kind === USER_MESSAGE_SOURCE.kind ||
+    (submission.source === undefined && submission.origin === 'client')
+    ? body
+    : null
 }
 
 /** Failed initialization proves unanswered handed-over sends never ran. */
@@ -95,7 +108,9 @@ export async function holdUnsentSends(
       journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
     )
   }))
-  const positions = headOfQueuePositions(journal, kept, Boolean(input.unrun))
+  const positions = journal.inputOrder.legacy
+    ? legacyQueuePositions(journal, kept, Boolean(input.unrun))
+    : currentQueuePositions(journal, kept)
   const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
     surface: 'rejection'
   })
@@ -127,6 +142,12 @@ export async function holdUnsentSends(
                 body: card.body,
                 position: card.position,
                 queuedAt,
+                ...(journal.inputOrder.queueFormat() === 3
+                  ? {
+                      deliveryMode: 'queue' as const,
+                      unattended: !journal.inputOrder.personalSubmission(submission)
+                    }
+                  : {}),
                 ...(submission.options ? { options: submission.options } : {})
               }
               changes.push({ messageId: clientMessageId, change })
@@ -155,124 +176,13 @@ export async function holdUnsentSends(
         failures.push(error)
         continue
       }
-      // Failed card recovery falls back to rejection; never leave the send stranded for impossible handover.
-      console.warn('[journal-hold] keeping an unsent send failed:', {
-        sessionId: journal.queuedMessages.sessionId,
-        clientMessageId,
-        cause: hold.cause,
-        error: error instanceof Error ? error.message : String(error)
-      })
-      await journal.resolveDispatch(reject).catch((fallback: unknown) => failures.push(fallback))
+      failures.push(error)
     }
   }
   if (failures.length > 0) {
     throw new AggregateError(failures, 'settling unsent sends failed')
   }
   return unsent.at(-1)?.acceptedSequence ?? 0
-}
-
-/** Merge logical places once, then materialize finite ranks with the first successful keep. */
-function headOfQueuePositions(
-  journal: AgentSessionJournal,
-  batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[],
-  unrun: boolean
-): { placed: Map<string, number>; moves: QueuedMessagePositionMove[] } {
-  const cards = journal.queuedMessages.list()
-  const kept = (id: string) => journal.inputOrder.keptCard(id)
-  const { epoch } = journal.physicalCursor()
-  const state = journal.queuedMessages.displayState()
-  const forcedBatch = batch.some(({ submission }) =>
-    journal.inputOrder.forced(submission.clientMessageId)
-  )
-  const earlier: string[] = []
-  const rest: (typeof cards)[number][] = []
-  const cardsById = new Map(cards.map((card) => [card.messageId, card]))
-  const explicitHeads = new Map(
-    batch.flatMap(({ submission }) => {
-      const id = submission.origin === 'client' ? submission.queuedMessageId : undefined
-      const card = id ? journal.queuedMessages.get(id) : null
-      if (id && card?.consumedAs === submission.clientMessageId) {
-        cardsById.set(id, card)
-        return [[submission.clientMessageId, id] as const]
-      }
-      return []
-    })
-  )
-  const explicit = new Set(explicitHeads.values())
-  for (const card of cards) {
-    if (explicit.has(card.messageId)) {
-      continue
-    }
-    if (
-      card.state === 'waiting' &&
-      ((unrun && kept(card.messageId)) ||
-        (!forcedBatch && card.queuedAt && card.queuedAt.epoch !== epoch))
-    ) {
-      earlier.push(card.messageId)
-    } else {
-      rest.push(card)
-    }
-  }
-  const at = new Map<number, string[]>()
-  const head: string[] = []
-  const firstCut = batch
-    .flatMap(
-      ({ submission }) => journal.inputOrder.place(submission.clientMessageId)?.context.cut ?? []
-    )
-    .reduce((a, b) => Math.min(a, b), Infinity)
-  let previousBoundary = 0
-  for (let i = 0; i < rest.length; i++) {
-    if (
-      rest[i].state === 'waiting' &&
-      kept(rest[i].messageId) &&
-      (journal.inputOrder.lineage.cards.get(rest[i].messageId)?.introduced ?? -Infinity) < firstCut
-    ) {
-      previousBoundary = i + 1
-    }
-  }
-  for (const { submission, body } of batch) {
-    const id = body ? submission.clientMessageId : explicitHeads.get(submission.clientMessageId)
-    if (!id || (body && kept(id))) {
-      continue
-    }
-    if (!body && previousBoundary > 0) {
-      head.push(id)
-      continue
-    }
-    const after = journal.inputOrder.forced(submission.clientMessageId)
-      ? journal.inputOrder.predecessors(state, submission.clientMessageId).position
-      : -Infinity
-    let low = 0,
-      high = rest.length
-    while (low < high) {
-      const mid = (low + high) >>> 1
-      if (rest[mid].position <= after) {
-        low = mid + 1
-      } else {
-        high = mid
-      }
-    }
-    const boundary = Math.max(previousBoundary, low)
-    previousBoundary = boundary
-    const bucket = at.get(boundary) ?? []
-    bucket.push(id)
-    at.set(boundary, bucket)
-  }
-  const order = [...earlier, ...head]
-  for (let i = 0; i <= rest.length; i++) {
-    order.push(...(at.get(i) ?? []))
-    if (i < rest.length) {
-      order.push(rest[i].messageId)
-    }
-  }
-  const placed = new Map(order.map((id, index) => [id, index]))
-  return {
-    placed,
-    moves: [...cardsById.values()].flatMap((card) => {
-      const position = placed.get(card.messageId)!
-      return position === card.position ? [] : [{ messageId: card.messageId, position }]
-    })
-  }
 }
 
 /** Failed starts return the person's direct input in the rejection's own transaction. */
@@ -288,7 +198,7 @@ export function keepFailedStartSends(
       const send = state.submissions.get(dispatch.clientMessageId)
       const body =
         send &&
-        unsentSendKeptAsCard(
+        failedStartSendKeptAsCard(
           send,
           state.items.get(agentJournalSubmissionKey(send.clientMessageId))?.body ?? null
         )
@@ -306,6 +216,12 @@ export function keepFailedStartSends(
           body,
           position: position++,
           queuedAt: { epoch: state.epoch, sequence: send?.acceptedSequence ?? 0 },
+          ...(journalInputOrder(state).queueFormat() === 3 && send
+            ? {
+                deliveryMode: 'queue' as const,
+                unattended: !journalSubmissionIsPersonal(state, send)
+              }
+            : {}),
           ...(send?.options ? { options: send.options } : {}),
           returned: { reason: dispatch.reason, rejection: dispatch.rejection }
         }
@@ -313,4 +229,44 @@ export function keepFailedStartSends(
       return { ...dispatch, keptAsQueuedMessageId: dispatch.clientMessageId }
     })
   }
+}
+
+/** A new writer owns one current input; linked hand-offs retain their row's reserved slot. */
+function currentQueuePositions(
+  journal: AgentSessionJournal,
+  batch: readonly { submission: AgentJournalSubmission; body: AgentJournalMessageItem | null }[]
+): { placed: Map<string, number>; moves: { messageId: string; position: number }[] } {
+  const cards = journal.queuedMessages.list()
+  let position = cards.reduce((first, card) => Math.min(first, card.position), 0) - batch.length
+  return {
+    placed: new Map(
+      batch
+        .filter((entry) => entry.body)
+        .map(({ submission }) => [submission.clientMessageId, position++])
+    ),
+    moves: []
+  }
+}
+
+/** Finish old-order conversion before any new runtime admission can stamp format 3. */
+export async function recoverJournalQueue(
+  journal: AgentSessionJournal,
+  db: Database.Database
+): Promise<void> {
+  await holdUnsentSends(journal, {
+    fence: journal.queuedMessages.inputState().highestFence,
+    hold: { cause: 'hostRestarted' }
+  })
+  const withdrawn = journal.queuedMessages.list().filter((row) => {
+    if (row.body.from?.orchestration?.message === 'task' && row.deliveryMode === 'steer') {
+      return true
+    }
+    const receipt = readCommandReceipt(db, { kind: 'global' }, row.messageId)
+    return (
+      receipt.verdict === 'readable' &&
+      receipt.receipt.callerKey === 'trusted-local:restart-continuation'
+    )
+  })
+  await journal.queuedMessages.withdraw(withdrawn.map((row) => row.messageId))
+  journal.inputOrder.legacy = undefined
 }

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import {
   selectWorkspaceByHostTarget,
   type WorkspaceRecordState
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/selection/workspace-host-target'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'

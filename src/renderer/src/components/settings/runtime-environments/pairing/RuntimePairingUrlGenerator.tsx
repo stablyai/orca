@@ -5,6 +5,7 @@ import type { RuntimeAccessGrant } from '../../../../../../shared/runtime-access
 import { Label } from '../../../ui/label'
 import { RuntimeAccessGrantList } from './RuntimeAccessGrantList'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { RuntimePairingGeneratorForm } from './RuntimePairingGeneratorForm'
 import {
   RUNTIME_PAIRING_LOOPBACK_ADDRESS,
@@ -24,6 +25,7 @@ export function RuntimePairingUrlGenerator({
   showHeader = true,
   showGeneratorForm = true
 }: RuntimePairingUrlGeneratorProps): React.JSX.Element {
+  const t = useTranslate()
   const [networkInterfaces, setNetworkInterfaces] = useState<{ name: string; address: string }[]>(
     []
   )
@@ -182,7 +184,7 @@ export function RuntimePairingUrlGenerator({
           // Prefer specific exposure guidance after widening failure, with generic fallback for other unavailable cases (STA-2370).
           toast.error(
             result.guidance ??
-              translate(
+              t(
                 'auto.components.settings.RuntimePairingUrlGenerator.2752126f3e',
                 'Runtime pairing is unavailable.'
               )
@@ -208,11 +210,11 @@ export function RuntimePairingUrlGenerator({
       if (mountedRef.current) {
         toast.success(
           result.webClientUrl
-            ? translate(
+            ? t(
                 'auto.components.settings.RuntimePairingUrlGenerator.6dd594a507',
                 'Generated web client URL.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.RuntimePairingUrlGenerator.11d5248e62',
                 'Generated pairing URL.'
               )
@@ -223,7 +225,7 @@ export function RuntimePairingUrlGenerator({
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.RuntimePairingUrlGenerator.2ed55c841a',
                 'Failed to generate pairing URL.'
               )
@@ -243,7 +245,7 @@ export function RuntimePairingUrlGenerator({
       if (!result.revoked) {
         if (mountedRef.current) {
           toast.error(
-            translate(
+            t(
               'auto.components.settings.RuntimePairingUrlGenerator.d797f516b1',
               'Shared access was already revoked.'
             )
@@ -262,7 +264,7 @@ export function RuntimePairingUrlGenerator({
       }
       if (mountedRef.current) {
         toast.success(
-          translate(
+          t(
             'auto.components.settings.RuntimePairingUrlGenerator.9f8e037c4a',
             'Shared access revoked.'
           )
@@ -273,7 +275,7 @@ export function RuntimePairingUrlGenerator({
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.RuntimePairingUrlGenerator.e8d83f2b0f',
                 'Failed to revoke shared access.'
               )
@@ -329,13 +331,13 @@ export function RuntimePairingUrlGenerator({
       {showHeader ? (
         <div className="space-y-1">
           <Label id="runtime-share-server-label">
-            {translate(
+            {t(
               'auto.components.settings.RuntimePairingUrlGenerator.f8500e134a',
               'Share this Orca server'
             )}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RuntimePairingUrlGenerator.ff80904fc4',
               'Create a revocable access grant for browser or desktop clients.'
             )}

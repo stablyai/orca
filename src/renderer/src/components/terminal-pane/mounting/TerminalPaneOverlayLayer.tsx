@@ -3,14 +3,14 @@ import { useShallow } from 'zustand/react/shallow'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../../store/index'
-import { useThemeBackgroundStore } from '@/store/theme-background'
+import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
 } from '../../activity/activity-terminal-portal'
 import type { HiddenTerminalPrewarm } from '../controller/terminal-pane-types'
 import { shouldMountBackgroundWorktreeTab } from '../../terminal/background-terminal-worktree-mount'
-import { useNativeChatToggleShortcut } from '../../native-chat/use-native-chat-toggle-shortcut'
+import { useNativeChatToggleShortcut } from '../../native-chat/pane/routing/use-native-chat-toggle-shortcut'
 import { RetainedPaneHost } from '../../tab-group/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 import { captureWorkspaceEmptiedReaction } from '../../tab-group/workspace-emptied-reaction'

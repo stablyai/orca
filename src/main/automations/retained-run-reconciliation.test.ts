@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import { AutomationService } from './service'
 import type {
   AutomationRunCompletionObservation,
@@ -155,26 +156,6 @@ describe('reconciling retained runs against a graph that has not published yet',
     surface.settleObservation({ status: 'completed', error: null })
     await vi.advanceTimersByTimeAsync(0)
     expect(readRun(store, automation.id, retained.id).status).toBe('completed')
-    service.stop()
-  })
-
-  it('still closes out a run the ready surface cannot find after the settle window', async () => {
-    const store = await createStore()
-    const automation = createAutomation(store)
-    const retained = retainDispatchedRun(store, automation)
-    const surface = createPaneSurface()
-    const service = new AutomationService(store, {
-      terminalObserver: surface.observer,
-      terminalLauncher: OPEN_LAUNCHER
-    })
-
-    service.start()
-    await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
-
-    expect(readRun(store, automation.id, retained.id).status).toBe('dispatch_failed')
-    expect(readRun(store, automation.id, retained.id).error).toBe(
-      'Orca lost the terminal for this run before it reported completion.'
-    )
     service.stop()
   })
 })

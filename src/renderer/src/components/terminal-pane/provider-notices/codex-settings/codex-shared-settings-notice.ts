@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
-import { whenCodexTerminalAppears } from '../codex-presence/codex-terminal-presence'
+import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
 
 /** Whether to show the one-time "Codex now uses ~/.codex" card this session, and its dismiss. */
 export function useCodexSharedSettingsNotice(): { visible: boolean; dismiss: () => void } {
@@ -14,7 +14,7 @@ export function useCodexSharedSettingsNotice(): { visible: boolean; dismiss: () 
     if (seen || !isLocalWindowsDesktopClient()) {
       return
     }
-    return whenCodexTerminalAppears(() => {
+    return whenAgentTerminalAppears('codex', () => {
       // Why mark before showing: seen means shown, so a quit or reload never repeats it.
       useAppStore.getState().markCodexSharedSettingsNoticeSeen()
       setVisible(true)

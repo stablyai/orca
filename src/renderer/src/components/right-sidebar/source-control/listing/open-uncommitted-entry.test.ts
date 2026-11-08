@@ -4,7 +4,7 @@ import type { GitStatusEntry } from '../../../../../../shared/git/status/git-sta
 import { openUncommittedEntry } from './open-uncommitted-entry'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: vi.fn()
 }))
 

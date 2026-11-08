@@ -1,4 +1,4 @@
-import type { LocalFileAccess } from '../../../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'
 

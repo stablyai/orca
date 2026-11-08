@@ -9,7 +9,7 @@ import type {
   BundledSkillPlanSkillSummary,
   BundledSkillPlanState
 } from '../../../../shared/bundled-skill-summary'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SkillUpdateRow, type SkillReplaceToggle, type SkillRowPhase } from './SkillUpdateRow'
@@ -37,6 +37,7 @@ function UpToDateLine({
 }: {
   skills: readonly BundledSkillPlanSkillSummary[]
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const upToDate = skills.filter((skill) => skill.upToDate)
   if (upToDate.length === 0) {
     return null
@@ -44,12 +45,12 @@ function UpToDateLine({
   return (
     <p className="text-xs text-muted-foreground">
       {upToDate.length === 1
-        ? translate(
+        ? t(
             'auto.components.skills.SkillFreshnessUpdateDialog.upToDateOne',
             '{{value0}} is up to date.',
             { value0: upToDate[0].name }
           )
-        : translate(
+        : t(
             'auto.components.skills.SkillFreshnessUpdateDialog.upToDate',
             '{{count}} skills are up to date.',
             { count: upToDate.length, defaultValue_one: '{{count}} skill is up to date.' }
@@ -77,6 +78,7 @@ export function SkillUpdateRows({
   showLocations: boolean
   onToggleLocations: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const unforcedStates = new Map(
     unforcedPlan?.skills.map((entry) => [entry.name, bundledSkillPlanState(entry)])
   )
@@ -134,14 +136,8 @@ export function SkillUpdateRows({
             onClick={onToggleLocations}
           >
             {showLocations
-              ? translate(
-                  'auto.components.skills.SkillFreshnessUpdateDialog.hideFolders',
-                  'Hide folders'
-                )
-              : translate(
-                  'auto.components.skills.SkillFreshnessUpdateDialog.showFolders',
-                  'Show folders'
-                )}
+              ? t('auto.components.skills.SkillFreshnessUpdateDialog.hideFolders', 'Hide folders')
+              : t('auto.components.skills.SkillFreshnessUpdateDialog.showFolders', 'Show folders')}
             {showLocations ? <ChevronUp /> : <ChevronDown />}
           </Button>
         </div>

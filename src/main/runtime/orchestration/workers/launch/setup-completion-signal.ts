@@ -3,7 +3,7 @@ import {
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
-} from '../../../../../shared/setup-runner-command'
+} from '../../../../../shared/agent-launch/startup/setup-runner-command'
 
 const SETUP_COMPLETION_PREFIX = '__ORCA_SETUP_COMPLETE__:'
 const SETUP_COMPLETION_CARRY_LENGTH = SETUP_COMPLETION_PREFIX.length + 96

@@ -2,6 +2,7 @@ import { AlertCircle, Clock, X } from 'lucide-react'
 import { Button } from './ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   resumeFailureGuidance,
   type ResumeFailureAction
@@ -10,12 +11,12 @@ import type { ResumeFailure } from './native-chat-resume-on-restart-grouping'
 
 /** Keep unconfirmed outcomes distinct from refusals; offer Retry only where it can succeed. */
 
-function actionLabel(action: ResumeFailureAction): string {
+function actionLabel(action: ResumeFailureAction, t: Translate = translate): string {
   return action === 'open'
-    ? translate('auto.components.NativeChatResumeOutcomeRow.openChat', 'Open chat')
+    ? t('auto.components.NativeChatResumeOutcomeRow.openChat', 'Open chat')
     : action === 'retry'
-      ? translate('auto.components.NativeChatResumeOutcomeRow.retry', 'Retry')
-      : translate('auto.components.NativeChatResumeOutcomeRow.dismiss', 'Dismiss')
+      ? t('auto.components.NativeChatResumeOutcomeRow.retry', 'Retry')
+      : t('auto.components.NativeChatResumeOutcomeRow.dismiss', 'Dismiss')
 }
 
 export function ResumeFailureStatus({
@@ -31,14 +32,15 @@ export function ResumeFailureStatus({
   disabled: boolean
   onAction: (action: ResumeFailureAction) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const canDismiss = failure.executionHostId === undefined || failure.executionHostId === 'local'
   const status =
     failure.outcome === 'unconfirmed'
-      ? translate(
+      ? t(
           'auto.components.NativeChatResumeOutcomeRow.unconfirmed',
           'Couldn’t confirm the chat was resumed'
         )
-      : translate('auto.components.NativeChatResumeOutcomeRow.failed', 'Couldn’t resume')
+      : t('auto.components.NativeChatResumeOutcomeRow.failed', 'Couldn’t resume')
   return (
     <>
       <Tooltip>
@@ -47,7 +49,7 @@ export function ResumeFailureStatus({
           <span
             tabIndex={0}
             role="img"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.NativeChatResumeOutcomeRow.statusFor',
               '{{value0}}: {{value1}}',
               { value0: title, value1: status }
@@ -72,7 +74,7 @@ export function ResumeFailureStatus({
           variant="ghost"
           size="icon-xs"
           disabled={disabled}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.NativeChatResumeOutcomeRow.dismissChat',
             'Dismiss "{{value0}}" in {{value1}}',
             { value0: title, value1: workspaceName }
@@ -95,17 +97,18 @@ export function ResumeFailureGuidanceLine({
   disabled: boolean
   onAction: (action: ResumeFailureAction) => void
 }): React.JSX.Element {
-  const guidance = resumeFailureGuidance(failure)
+  const t = useTranslate()
+  const guidance = resumeFailureGuidance(failure, t)
   return (
     <div className="mb-1 flex items-center gap-2 rounded-md border border-status-warning-border bg-status-warning-background px-2 py-1.5 text-[11px]">
       <span className="min-w-0 flex-1">
         <span className="font-semibold">
-          {translate('auto.components.NativeChatResumeOutcomeRow.toResume', 'To resume:')}
+          {t('auto.components.NativeChatResumeOutcomeRow.toResume', 'To resume:')}
         </span>{' '}
         {guidance.text}
       </span>
       <Button size="xs" disabled={disabled} onClick={() => onAction(guidance.primary)}>
-        {actionLabel(guidance.primary)}
+        {actionLabel(guidance.primary, t)}
       </Button>
       {guidance.secondary &&
         (guidance.secondary !== 'dismiss' ||
@@ -117,7 +120,7 @@ export function ResumeFailureGuidanceLine({
             disabled={disabled}
             onClick={() => onAction(guidance.secondary!)}
           >
-            {actionLabel(guidance.secondary)}
+            {actionLabel(guidance.secondary, t)}
           </Button>
         )}
     </div>

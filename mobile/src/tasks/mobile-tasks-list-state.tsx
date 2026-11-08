@@ -5,7 +5,7 @@ import {
   MobileOfflineState,
   MobileStateView
 } from '../components/MobileStateView'
-import { useForceReconnect } from '../transport/host-client-hooks'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
 import { translate } from '../i18n/mobile-i18n'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { clearMobileTasksSearch } from './mobile-tasks-search-control'

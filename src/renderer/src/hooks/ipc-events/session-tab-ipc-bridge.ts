@@ -1,5 +1,5 @@
-import { isLocalSessionTabCloseOwned } from '@/runtime/local-session-tab-close-owner'
-import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
+import { isLocalSessionTabCloseOwned } from '@/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
+import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 import {
   SESSION_TAB_CLOSE_CANCELED_ERROR,
   SESSION_TAB_CLOSE_FAILED_ERROR,
@@ -10,7 +10,7 @@ import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
   resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
+} from '../../store/slices/tabs/closing/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-session-contracts'

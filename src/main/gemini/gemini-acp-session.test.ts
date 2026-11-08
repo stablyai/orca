@@ -6,13 +6,13 @@ import {
   messageText,
   SESSION
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
+import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
   sendHello,
   waitFor
-} from '../acp/acp-structured-adapter.test-support'
+} from '../acp/session/testing/acp-structured-adapter.test-support'
 import { GEMINI_ACP_INITIALIZE, scriptGeminiAcpSession } from './gemini-acp.test-fixture'
 
 afterEach(closeProviderTimelineRigs)

@@ -10,13 +10,13 @@ import {
 import { failedAcquisitionSettlement } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-failed-create-refusal'
 import { structuredAgentSessionStartFailure } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
-import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
+import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import {
   openAcpAdapterRig,
   PROVIDER_SESSION,
   sendHello,
   waitFor
-} from '../acp/acp-structured-adapter.test-support'
+} from '../acp/session/testing/acp-structured-adapter.test-support'
 import {
   GEMINI_ACP_INITIALIZE,
   GEMINI_ACP_SESSION,

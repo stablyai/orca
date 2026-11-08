@@ -1,8 +1,8 @@
 import { memo, Suspense, useCallback, useRef } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { usePluginViewCaptureStore } from '@/store/plugin-view-capture'
+import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { pendingCreationOpensNativeChat } from '@/lib/workspace/creation/pending-worktree-creation'
 import Sidebar from '../components/Sidebar'
 import RightSidebar from '../components/right-sidebar'
@@ -47,19 +47,20 @@ function WorktreeSidebar({
   layout: AppChromeLayout
   scrollRefs: WorktreeSidebarScrollRefs
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="sidebar.worktrees"
       surface="sidebar"
       resetKey={layout.activeView}
-      title={translate('auto.App.1468601e7b', 'The workspace list hit an error.')}
+      title={t('auto.App.1468601e7b', 'The workspace list hit an error.')}
       description={
         layout.leftTitlebarChromeLayout.shouldMount
-          ? translate(
+          ? t(
               'auto.App.bdc71dddc9',
               'The active workspace remains open. Retry the list or switch views.'
             )
-          : translate(
+          : t(
               'auto.App.cba0fafda5',
               'The active page remains open. Retry the list or switch views.'
             )
@@ -114,6 +115,7 @@ export function AppWorkspaceShell(props: {
   layout: AppChromeLayout
   floatingWorkspace: FloatingWorkspacePanelState
 }): React.JSX.Element {
+  const t = useTranslate()
   const { layout, floatingWorkspace } = props
   const titlebarLeftControls = <TitlebarLeftControls layout={layout} />
   const titlebarMainStrip = <TitlebarMainStrip layout={layout} />
@@ -135,8 +137,8 @@ export function AppWorkspaceShell(props: {
       boundaryId="app.workspace-shell"
       surface="workspace-shell"
       resetKey={layout.activeView}
-      title={translate('auto.App.df1d56bf87', 'The workspace shell hit an error.')}
-      description={translate(
+      title={t('auto.App.df1d56bf87', 'The workspace shell hit an error.')}
+      description={t(
         'auto.App.8504ddf267',
         'The app is still running. Retry the shell or use the menu to report the crash details.'
       )}
@@ -214,11 +216,8 @@ export function AppWorkspaceShell(props: {
                           boundaryId="terminal.workbench"
                           surface="terminal-workbench"
                           resetKey="terminal"
-                          title={translate(
-                            'auto.App.5a9519aef0',
-                            'The workspace workbench hit an error.'
-                          )}
-                          description={translate(
+                          title={t('auto.App.5a9519aef0', 'The workspace workbench hit an error.')}
+                          description={t(
                             'auto.App.98d4ea2823',
                             'Terminal, browser, or editor rendering failed in this workspace. Retry to remount it.'
                           )}
@@ -233,8 +232,8 @@ export function AppWorkspaceShell(props: {
                       boundaryId={`page.${layout.activeView}`}
                       surface="page"
                       resetKey={layout.activeView}
-                      title={translate('auto.App.b7a714db1e', 'This page hit an error.')}
-                      description={translate(
+                      title={t('auto.App.b7a714db1e', 'This page hit an error.')}
+                      description={t(
                         'auto.App.03a14f6b5b',
                         'Retry the page or navigate to another Orca surface.'
                       )}
@@ -263,8 +262,8 @@ export function AppWorkspaceShell(props: {
                 ? `${layout.rightSidebarTab}:${layout.rightSidebarExplorerView}`
                 : layout.rightSidebarTab
             }
-            title={translate('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
-            description={translate(
+            title={t('auto.App.ed6b168d00', 'The right sidebar hit an error.')}
+            description={t(
               'auto.App.8d1e160ed1',
               'Retry the sidebar or switch tabs to reload this surface.'
             )}

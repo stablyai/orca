@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/repo-types'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type RepoMultiComboboxProps = {
   repos: readonly Repo[]
@@ -29,19 +30,20 @@ type RepoMultiComboboxProps = {
 
 function renderTriggerLabel(
   repos: readonly Repo[],
-  selected: ReadonlySet<string>
+  selected: ReadonlySet<string>,
+  t: Translate = translate
 ): React.JSX.Element {
   if (repos.length === 0) {
     return (
       <span className="text-muted-foreground">
-        {translate('auto.components.ui.repo.multi.combobox.65a3dae41d', 'No projects')}
+        {t('auto.components.ui.repo.multi.combobox.65a3dae41d', 'No projects')}
       </span>
     )
   }
   if (selected.size === repos.length) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
-        {translate('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}
+        {t('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}
       </span>
     )
   }
@@ -75,6 +77,7 @@ export default function RepoMultiCombobox({
   getRepoHostLabel,
   triggerClassName
 }: RepoMultiComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
@@ -129,7 +132,7 @@ export default function RepoMultiCombobox({
           aria-expanded={open}
           className={cn('h-8 w-full justify-between px-3 text-xs font-normal', triggerClassName)}
         >
-          {renderTriggerLabel(repos, selected)}
+          {renderTriggerLabel(repos, selected, t)}
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -141,7 +144,7 @@ export default function RepoMultiCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder={translate(
+            placeholder={t(
               'auto.components.ui.repo.multi.combobox.a58a0cd100',
               'Search projects...'
             )}
@@ -167,14 +170,12 @@ export default function RepoMultiCombobox({
                   allSelected ? 'opacity-70' : 'opacity-0'
                 )}
               />
-              <span>
-                {translate('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}
-              </span>
+              <span>{t('auto.components.ui.repo.multi.combobox.bfd8ce21c6', 'All projects')}</span>
             </button>
           </div>
           <CommandList>
             <CommandEmpty>
-              {translate(
+              {t(
                 'auto.components.ui.repo.multi.combobox.4471d4a1c0',
                 'No projects match your search.'
               )}

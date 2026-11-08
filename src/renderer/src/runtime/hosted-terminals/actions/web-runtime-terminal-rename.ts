@@ -5,7 +5,7 @@ import type {
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { isWebRuntimeSessionActive } from '../../web-runtime-session-environment'
+import { isWebRuntimeSessionActive } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { setWebRuntimeTabProps } from './web-runtime-tab-properties'
 
 // Push remote names to their owner so CLI, phones and other desktops agree (#29975).

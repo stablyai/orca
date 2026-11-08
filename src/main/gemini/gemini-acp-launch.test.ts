@@ -1,11 +1,15 @@
+import { providerStartupFailureFact } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { decideAgentLaunchMode } from '../agent-launch/agent-launch-mode'
-import { acpLaunchSpecFor } from '../acp/acp-launch-specs'
-import { createAcpModelCatalogProbe } from '../acp/acp-model-catalog-probe'
+import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
+import { createAcpModelCatalogProbe } from '../acp/discovery/acp-model-catalog-probe'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { structuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
@@ -173,4 +177,22 @@ describe('original Gemini CLI ACP launch', () => {
       )
     ).toBeNull()
   })
+})
+
+it.each([
+  [withProviderSpawnAbsence(new Error('missing program'), 'executable'), { kind: 'cliMissing' }],
+  [
+    withProviderSpawnAbsence(new Error('missing folder'), 'launchFolder'),
+    { kind: 'launchFolderMissing' }
+  ],
+  [
+    new StructuredAgentArgumentsError('Claude', '--resume', 'unsupportedOption'),
+    { kind: 'startFailed', argumentProblem: { agent: 'Claude', option: '--resume' } }
+  ]
+])('preserves the original failure fact through a generic pre-spawn wrapper: %j', (cause, fact) => {
+  expect(
+    providerStartupFailureFact(
+      new AgentSessionPreSpawnError(cause, { reason: 'launchPreparationFailed' })
+    )
+  ).toMatchObject(fact)
 })

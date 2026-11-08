@@ -1,7 +1,7 @@
-import type { RuntimeFileOpenPosition } from '../../../../shared/runtime-file-contracts'
+import type { RuntimeFileOpenPosition } from '../../../../shared/file-access/runtime-editor-file-open'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
-import { selectFloatingWorkspacePanelVisible } from '@/store/floating-workspace-panel-selector'
+import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import {
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused

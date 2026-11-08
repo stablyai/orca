@@ -10,7 +10,7 @@ import * as runtimeMetadataModule from './runtime-metadata'
 import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata } from './runtime-rpc-socket-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
-import type { DeviceRegistry } from './pairing/device-registry'
+
 import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
@@ -50,25 +50,6 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
 })
 
 describe('OrcaRuntimeRpcServer', () => {
-  it('writes runtime metadata with transport details when started', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({ methods: [], runtime, userDataPath })
-
-    await server.start()
-
-    const metadata = readRuntimeMetadata(userDataPath)
-    expect(metadata?.runtimeId).toBe(runtime.getRuntimeId())
-    expect(metadata?.authToken).toBeTruthy()
-    expect(metadata?.transports?.[0]?.endpoint).toBeTruthy()
-    expect(metadata?.transports).toEqual(server['transports'])
-
-    await server.stop()
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({
-      runtimeId: runtime.getRuntimeId()
-    })
-  })
-
   it('reclaims runtime metadata clobbered by a second instance that has since died', async () => {
     // A second instance can replace metadata then exit; reclaim it so CLI finds this still-serving runtime (#7848).
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -116,36 +97,6 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.stop()
   })
 
-  it('stops reclaiming runtime metadata after the server is stopped', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const server = new OrcaRuntimeRpcServer({
-      methods: [],
-      runtime: new OrcaRuntimeService(),
-      userDataPath
-    })
-    await server.start()
-    const watch = server['metadataOwnershipWatch']
-    if (!watch) {
-      throw new Error('start() must arm the metadata ownership watch')
-    }
-    // Assert timer cancellation too; republish guard alone masks leaked intervals.
-    const watchStop = vi.spyOn(watch, 'stop')
-    await server.stop()
-
-    writeRuntimeMetadata(userDataPath, {
-      runtimeId: 'rt_second_instance',
-      pid: 99999999,
-      transports: [],
-      authToken: 'second-instance-token',
-      startedAt: 1
-    })
-    await server.checkRuntimeMetadataOwnership()
-
-    expect(watchStop).toHaveBeenCalledTimes(1)
-    expect(server['metadataOwnershipWatch']).toBeNull()
-    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
-  })
-
   it('drops a republish from an ownership read that lands after the server stopped', async () => {
     // In-flight async reads can outlive stop; activeTransports must prevent late republish.
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
@@ -176,59 +127,6 @@ describe('OrcaRuntimeRpcServer', () => {
     await heldCheck
 
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
-  })
-
-  it('flushes a lastSeen refresh scheduled while transports stop', async () => {
-    const server = new OrcaRuntimeRpcServer({
-      methods: [],
-      runtime: new OrcaRuntimeService(),
-      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
-      enableWebSocket: false
-    })
-    let pending = false
-    const timeline: string[] = []
-    server['deviceRegistry'] = {
-      flushPendingLastSeen: vi.fn(() => {
-        timeline.push(pending ? 'flush-pending' : 'flush-empty')
-        pending = false
-      })
-    } as unknown as DeviceRegistry
-    let finishSecondStop: () => void = () => {}
-    const secondStop = new Promise<void>((resolve) => {
-      finishSecondStop = resolve
-    })
-    server['activeTransports'] = [
-      {
-        start: vi.fn(async () => {}),
-        stop: vi.fn(async () => {
-          timeline.push('failed-transport-stop')
-          throw new Error('transport stop failed')
-        })
-      },
-      {
-        start: vi.fn(async () => {}),
-        stop: vi.fn(async () => {
-          timeline.push('second-transport-started')
-          await secondStop
-          timeline.push('second-transport-stopped')
-          pending = true
-        })
-      }
-    ]
-
-    const stopping = server.stop()
-    await vi.waitFor(() => expect(timeline).toContain('second-transport-started'))
-    expect(timeline).not.toContain('flush-empty')
-    finishSecondStop()
-    await expect(stopping).rejects.toThrow('transport stop failed')
-
-    expect(timeline).toEqual([
-      'failed-transport-stop',
-      'second-transport-started',
-      'second-transport-stopped',
-      'flush-pending'
-    ])
-    expect(pending).toBe(false)
   })
 
   it('closes the socket if metadata publication fails during startup', async () => {

@@ -15,7 +15,8 @@ import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-co
 import { displayNameUpdatePinsLabel } from '../../../../../../shared/worktree/display-name-provenance'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
-import { type WorktreeSlice, getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   findKnownWorktreeById,
   getFolderWorkspaceMetaUpdates

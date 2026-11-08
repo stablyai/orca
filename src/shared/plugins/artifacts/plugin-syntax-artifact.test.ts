@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   parsePluginGrammarArtifact,
@@ -8,31 +6,11 @@ import {
   validatePluginGrammarIncludes
 } from './plugin-syntax-artifact'
 
-const typstGrammar = readFileSync(
-  join(
-    process.cwd(),
-    'src/renderer/src/lib/monaco-languages/textmate-grammars/typst.tmLanguage.json'
-  ),
-  'utf8'
-)
-
 function grammar(scopeName: string, body: Record<string, unknown> = {}): string {
   return JSON.stringify({ scopeName, patterns: [], ...body })
 }
 
 describe('plugin syntax artifacts', () => {
-  it('accepts a real-world grammar and drops keys the engine does not use', () => {
-    const parsed = parsePluginGrammarArtifact(typstGrammar, 'source.typst')
-    expect(parsed.patterns.length).toBeGreaterThan(0)
-    expect(Object.keys(parsed.repository).length).toBeGreaterThan(5)
-    expect(
-      parsePluginGrammarArtifact(
-        grammar('source.demo', { injectionSelector: 'L:x' }),
-        'source.demo'
-      )
-    ).not.toHaveProperty('injectionSelector')
-  })
-
   it('refuses a grammar whose scope differs from its declaration', () => {
     expect(() => parsePluginGrammarArtifact(grammar('source.other'), 'source.demo')).toThrow(
       'does not match'

@@ -31,9 +31,9 @@ const mockApi = {
 // @ts-expect-error -- minimal window.api stub for the store under test
 globalThis.window = { api: mockApi }
 
-import { createTestStore, seedStore } from '../../store-test-helpers'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
-import { makeOpenFile } from '../../store-session-test-harness'
+import { createTestStore, seedStore } from '../../../testing/app-store-test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { makeOpenFile } from '../types/open-file.test-fixture'
 
 const WT = 'repo1::/path/wt1'
 const FILE_A = '/path/wt1/a.ts'

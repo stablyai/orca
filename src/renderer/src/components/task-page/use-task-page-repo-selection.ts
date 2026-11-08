@@ -13,7 +13,7 @@ import {
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider,
   type TaskProvider
-} from '../../../../shared/task-providers'
+} from '../../../../shared/work-items/task-providers'
 import {
   getSourceOptions,
   getGitHubModeButtons,

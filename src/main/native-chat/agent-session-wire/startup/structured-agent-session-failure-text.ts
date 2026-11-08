@@ -133,17 +133,16 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
     })
   }
   const typed = typedStartRefusal(
-    cause instanceof AgentSessionAcquisitionRefusal || isAgentSessionPreSpawnError(cause)
+    cause instanceof AgentSessionAcquisitionRefusal
       ? cause.reason
-      : undefined
+      : isAgentSessionPreSpawnError(cause) && cause.reason === 'providerResumeUnavailable'
+        ? cause.reason
+        : undefined
   )
   if (typed) {
     return agentSessionFailureFact(typed, {
       ...(cause instanceof AgentSessionAcquisitionRefusal ? { account: cause.account } : {}),
-      detail:
-        typed === 'launchPreparationFailed'
-          ? (launchPreparationDiagnosticOf(cause) ?? providerDiagnosticOf(cause))
-          : providerDiagnosticOf(cause)
+      detail: providerDiagnosticOf(cause)
     })
   }
   if (providerExecutableMissing(cause)) {

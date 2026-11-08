@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { automationActionAvailability } from './automation-captured-owner'
 import { readFullAutomationRun } from './automation-scoped-list-client'
 import type { SelectedAutomationRunHistoryOutcome } from './use-selected-automation-run-history'
+import { useTranslate } from '../../i18n/use-translate'
 
 export type FullAutomationRun = {
   run: AutomationRun
@@ -16,8 +17,9 @@ export function useFullAutomationRun(
   run: AutomationRun,
   history: SelectedAutomationRunHistoryOutcome
 ): FullAutomationRun {
+  const t = useTranslate()
   const captured = history.capturedOwner
-  const availability = captured ? automationActionAvailability(captured, 'history') : null
+  const availability = captured ? automationActionAvailability(captured, 'history', t) : null
   const authority =
     availability?.kind === 'owned'
       ? availability.owner.authority

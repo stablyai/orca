@@ -9,9 +9,9 @@ import {
 import type { StructuredSessionOpenSource } from '../../../src/shared/open-structured-agent-session'
 import { mobileStructuredSessionOpenMessage } from './mobile-structured-session-open-message'
 import { isStructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { MobileSessionTab } from './mobile-session-route-types'
-import type { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
-import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
+import type { useMobileSessionTabSwitching } from './tabs/use-mobile-session-tab-switching'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
 
 export function useMobileStructuredSessionOpening(
   scope: Pick<

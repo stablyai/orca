@@ -1,12 +1,13 @@
 import { expect, it, vi } from 'vitest'
 import { createCheckRunDetailsRequestId } from '@/components/editor/check-details/actions/check-run-details-tab'
 import { createEditorTabsStore } from '../editor-slice-test-harness'
-import { makeWorktree, TEST_REPO } from '../../worktrees-slice-test-fixtures'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { publishedLayoutsOf } from '@/runtime/main-loaded-layout-frames.test-fixture'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../repos/repo.test-fixture'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { publishedLayoutsOf } from '@/runtime/workspace-layout/testing/main-loaded-layout-frames.test-fixture'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import { buildLayoutFrameSlices } from '../../../workspace-layout-frame-slices'
+import { buildLayoutFrameSlices } from '../../../workspace-layout/frames/workspace-layout-frame-slices'
 import { loadWorkspaceLayoutWithoutReport } from '../../../../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../../../../shared/workspace-layout/workspace-layout-minted-ids'
 import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
@@ -15,12 +16,12 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

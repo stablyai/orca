@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { forgeOwnerHostIdForWorkspace } from '@/runtime/forge-credential-target'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { toast } from 'sonner'
 import { mergePRCommentIntoList } from '@/store/github/comments/pr-comment-cache'
 import { githubProjectHost } from '../../../../../../shared/github/project-identity'
