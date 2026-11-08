@@ -24,7 +24,6 @@ export function MobileNativeChatImageAttachment({
   const { openImage, imageSource } = useContext(MobileNativeChatRowOverlaysContext)
   const client = imageSource?.client
   const worktreeId = imageSource?.worktreeId
-  const generation = client?.getGeneration?.() ?? 0
   const path = block.path
   const directUri = isRenderableImageUri(block.url)
     ? block.url
@@ -35,8 +34,8 @@ export function MobileNativeChatImageAttachment({
   const [round, setRound] = useState(0)
   const [showSpinner, setShowSpinner] = useState(false)
   const source = useMemo(
-    () => ({ client, worktreeId, generation, path, directUri }),
-    [client, worktreeId, generation, path, directUri]
+    () => ({ client, worktreeId, path, directUri }),
+    [client, worktreeId, path, directUri]
   )
   const [failedDirectSource, setFailedDirectSource] = useState<typeof source | null>(null)
   const usableDirectUri = failedDirectSource === source ? null : directUri
@@ -60,6 +59,7 @@ export function MobileNativeChatImageAttachment({
     if (usableDirectUri || !client || !imageSource || !path || !readable) {
       return
     }
+    const generation = client.getGeneration?.() ?? 0
     const unmounted = new AbortController()
     setShowSpinner(false)
     const timer = setTimeout(() => {
@@ -69,18 +69,19 @@ export function MobileNativeChatImageAttachment({
     }, 200)
     void readHostChatImage(imageSource, path, unmounted.signal).then((uri) => {
       clearTimeout(timer)
-      if (!unmounted.signal.aborted && (client.getGeneration?.() ?? 0) === generation) {
-        setPreview({ owner, uri })
+      if (!unmounted.signal.aborted) {
+        setPreview({ owner, uri: (client.getGeneration?.() ?? 0) === generation ? uri : null })
       }
     })
     return () => {
       unmounted.abort()
       clearTimeout(timer)
     }
-  }, [client, generation, path, usableDirectUri, owner, readable, imageSource])
+  }, [client, path, usableDirectUri, owner, readable, imageSource])
 
   const uri = usableDirectUri ?? current?.uri
-  const label = block.alt ?? t('chat.nativeChatProse.attachedImage', 'Attached image')
+  const label =
+    block.alt?.trim() || path || t('chat.nativeChatProse.attachedImage', 'Attached image')
   if (uri && failedOwner !== owner) {
     return (
       <Pressable
@@ -97,7 +98,7 @@ export function MobileNativeChatImageAttachment({
           style={[styles.imageThumb, compact && styles.imageCompactThumb]}
           resizeMode={compact ? 'cover' : 'contain'}
           onError={() => {
-            if (activeOwner.current !== owner || (client?.getGeneration?.() ?? 0) !== generation) {
+            if (activeOwner.current !== owner) {
               return
             }
             if (usableDirectUri && readable) {
@@ -123,16 +124,30 @@ export function MobileNativeChatImageAttachment({
   if (readable || directUri) {
     return (
       <Pressable
+        style={({ pressed }) => [
+          compact && styles.imageThumb,
+          compact && styles.imageCompactThumb,
+          compact && styles.imageLoading,
+          pressed && pressedStyle
+        ]}
         accessibilityRole="button"
-        accessibilityLabel={t('chat.nativeChatProse.imageUnavailable', 'Image unavailable')}
+        accessibilityLabel={`${label}. ${t('chat.nativeChatProse.imageUnavailable', 'Image unavailable')}`}
         accessibilityHint={t('chat.nativeChatProse.retryImageHint', 'Tries to load it again')}
         onLongPress={onLongPress}
         onPress={() => {
           setRound((value) => value + 1)
         }}
       >
-        <Text style={[styles.imageRef, { fontSize: TEXT_SIZE * fontScale }]}>
-          {t('chat.nativeChatProse.retryImage', 'Image unavailable — tap to retry')}
+        <Text
+          style={[
+            styles.imageRef,
+            compact ? styles.imageRetryText : { fontSize: TEXT_SIZE * fontScale }
+          ]}
+          numberOfLines={compact ? 1 : undefined}
+        >
+          {compact
+            ? t('common.retry', 'Retry')
+            : `${label}\n${t('chat.nativeChatProse.retryImage', 'Image unavailable — tap to retry')}`}
         </Text>
       </Pressable>
     )

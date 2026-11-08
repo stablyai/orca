@@ -120,6 +120,9 @@ export const styles = themedStyleSheet(() => ({
     height: 58,
     borderRadius: radii.control
   },
+  imageRetryText: {
+    fontSize: typography.metaSize
+  },
   imageLoading: {
     alignItems: 'center',
     justifyContent: 'center'

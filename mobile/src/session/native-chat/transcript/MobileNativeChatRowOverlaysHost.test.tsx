@@ -61,8 +61,9 @@ afterEach(() => {
   renderer = null
 })
 
-it('closes a host image when its owning client changes and never reopens it on return', () => {
-  const first = { client: stubRpcClient(), worktreeId: 'w1' }
+it('keeps an image across reconnect but closes it on workspace or client replacement', () => {
+  let generation = 0
+  const first = { client: stubRpcClient({ getGeneration: () => generation }), worktreeId: 'w1' }
   const second = { client: stubRpcClient(), worktreeId: 'w1' }
   const render = (imageSource: typeof first) => (
     <MobileNativeChatRowOverlaysHost
@@ -77,6 +78,15 @@ it('closes a host image when its owning client changes and never reopens it on r
   })
   act(() => overlays?.openImage({ uri: 'data:image/png;base64,AA==', label: 'Host image' }))
   const images = () => renderer!.root.findAll((node) => String(node.type) === 'Modal')
+  expect(images()).toHaveLength(1)
+  generation++
+  act(() => renderer!.update(render(first)))
+  expect(images()).toHaveLength(1)
+  act(() => renderer!.update(render({ ...first, worktreeId: 'w2' })))
+  expect(images()).toHaveLength(0)
+  act(() => renderer!.update(render(first)))
+  expect(images()).toHaveLength(0)
+  act(() => overlays?.openImage({ uri: 'data:image/png;base64,AA==', label: 'Host image' }))
   expect(images()).toHaveLength(1)
   act(() => renderer!.update(render(second)))
   expect(images()).toHaveLength(0)

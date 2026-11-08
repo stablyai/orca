@@ -15,7 +15,6 @@ import {
   useMobileNativeChatConversationState,
   type MobileNativeChatConversation
 } from '../use-mobile-native-chat-conversation-state'
-import type { RpcClient } from '../../../transport/rpc-client'
 import type { MobileNativeChatImageSource } from '../visual/mobile-native-chat-image-preview'
 import { MobileNativeChatRewindContext } from './mobile-native-chat-rewind-context'
 import { useMobileNativeChatRewindDialog } from './use-mobile-native-chat-rewind-dialog'
@@ -40,15 +39,15 @@ export function MobileNativeChatRowOverlaysHost({
   // Keep pressed message text with its conversation so streaming cannot rewrite an open sheet.
   const [shown, setShown] = useMobileNativeChatConversationState<{
     image?: MobileNativeChatViewedImage
-    imageOwner?: { client: RpcClient; generation: number }
+    imageOwner?: MobileNativeChatImageSource
     actionsFor?: NativeChatMessage
     link?: string
   }>(conversation)
   const client = imageSource?.client
-  const generation = client?.getGeneration?.() ?? 0
+  const worktreeId = imageSource?.worktreeId
   const ownsImage =
     !shown?.imageOwner ||
-    (shown.imageOwner.client === client && shown.imageOwner.generation === generation)
+    (shown.imageOwner.client === client && shown.imageOwner.worktreeId === worktreeId)
   useEffect(() => {
     if (!ownsImage) {
       setShown(null)
@@ -60,7 +59,7 @@ export function MobileNativeChatRowOverlaysHost({
       openImage: (image: MobileNativeChatViewedImage) =>
         setShown({
           image,
-          ...(client ? { imageOwner: { client, generation } } : {})
+          ...(imageSource ? { imageOwner: imageSource } : {})
         }),
       openActions: (actionsFor: NativeChatMessage) => {
         triggerMediumImpact()
@@ -68,7 +67,7 @@ export function MobileNativeChatRowOverlaysHost({
       },
       openRewind
     }),
-    [setShown, openRewind, imageSource, client, generation]
+    [setShown, openRewind, imageSource]
   )
   const openLink = useCallback((link: string) => setShown({ link }), [setShown])
   // Memoize overlay callbacks so streamed words cannot rebuild them.

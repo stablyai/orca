@@ -257,11 +257,7 @@
     "nativeChatProse": {
       "attachedImage": "Прикреплённое изображение",
       "image": "изображение",
-      "openImageHint": "Открывает изображение в полном размере",
-      "loadingImage": "Загрузка изображения",
-      "imageUnavailable": "Изображение недоступно",
-      "retryImageHint": "Загрузить изображение ещё раз",
-      "retryImage": "Изображение недоступно — нажмите, чтобы повторить"
+      "openImageHint": "Открывает изображение в полном размере"
     },
     "nativeChatToolLine": {
       "added": "Добавлено",
