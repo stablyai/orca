@@ -39,6 +39,12 @@ import {
   type JournalStatusIndicatorRead,
   type JournalStatusIndicators
 } from './journal-status-indicators'
+import {
+  foldedJournalLifecycleReads,
+  type JournalOutgrownChild,
+  type JournalOutgrownChildRead,
+  type JournalRestartProgress
+} from './journal-lifecycle-reads'
 
 /** Which items a visit decodes; a database serves only the named kinds, in sequence order. */
 export type JournalItemFilter = {
@@ -102,6 +108,10 @@ export type AgentSessionJournalReads = {
   namedTurn(turnId: string): Promise<JournalNamedTurn>
   messageOptions(clientMessageId: string): Promise<JournalMessageOptions>
   continuationContext(): Promise<JournalContinuationContext>
+  /** The newest presented root user prompt, excluding commands, as restart offers preview it. */
+  latestPrompt(): Promise<string>
+  restartProgress(cursor: AgentJournalCursor): Promise<JournalRestartProgress>
+  outgrownChild(input: JournalOutgrownChildRead): Promise<JournalOutgrownChild>
   threadGoalSource(): Promise<JournalThreadGoalSource>
   /** Saved Claude aliases, attempts, roster and goal, read per acquisition and epoch replacement. */
   claudeSnapshot(): Promise<ClaudeJournalSnapshot>
@@ -122,6 +132,9 @@ type FoldedJournalReads = {
       | 'namedTurn'
       | 'messageOptions'
       | 'continuationContext'
+      | 'latestPrompt'
+      | 'restartProgress'
+      | 'outgrownChild'
       | 'contextFloor'
       | 'input'
       | 'usageLimitCut'
@@ -135,6 +148,7 @@ type FoldedJournalReads = {
   ) => Awaited<ReturnType<AgentSessionJournalReads[K]>>
 } & {
   snapshot(): AgentJournalSnapshot
+  itemsRead(): { items: readonly AgentJournalRenderItem[] }
   visitItemsWithLinkage(visit: JournalItemLinkageVisitor): void
   // Builder B: context metadata stays fold-backed until the database reader replaces it.
   context: { floor(): AgentJournalCursor | null }
@@ -154,6 +168,7 @@ export function foldedJournalReads(
         return Promise.reject(error)
       }
     }
+  const lifecycle = foldedJournalLifecycleReads(journal, state)
   return {
     statusIndicators: now((input: JournalStatusIndicatorRead) =>
       readJournalStatusIndicators(state(), input)
@@ -265,6 +280,9 @@ export function foldedJournalReads(
         submissions
       }
     }),
+    latestPrompt: now(lifecycle.latestPrompt),
+    restartProgress: now(lifecycle.restartProgress),
+    outgrownChild: now(lifecycle.outgrownChild),
     threadGoalSource: now(journal.threadGoalSource),
     claudeSnapshot: now(() => readClaudeJournalSnapshot(journal)),
     contextUsage: now(journal.contextUsage),

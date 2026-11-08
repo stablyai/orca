@@ -31,6 +31,11 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
 import type { ClaudeJournalSnapshot } from '../../claude/claude-subagent-journaled-identities'
 import { readJournalSqlClaudeIdentities } from './journal-sql-claude-identities'
+import {
+  readJournalSqlLifecycle,
+  type JournalSqlLifecycleRead,
+  type JournalSqlLifecycleReadResult
+} from './journal-sql-lifecycle-reads'
 
 /** Item reads by type and position; each names the rows it decodes, as projection reads do. */
 export type JournalSqlItemRead =
@@ -51,6 +56,7 @@ export type JournalSqlItemRead =
   | { kind: 'named-turn'; turnId: string }
   | { kind: 'message-options'; clientMessageId: string }
   | { kind: 'continuation-context' }
+  | JournalSqlLifecycleRead
 
 export type JournalSqlItemReadResult =
   | { kind: 'items-by-kind'; items: AgentJournalRenderItem[]; nextOrdinal: number | null }
@@ -65,6 +71,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
   | { kind: 'continuation-context'; context: JournalContinuationContext }
+  | JournalSqlLifecycleReadResult
 
 export type JournalSqlItemReadContext = {
   scope: JournalSqlScope
@@ -222,6 +229,10 @@ export function readJournalSqlItems(
       }
     case 'thread-goal-source':
       return { kind: 'thread-goal-source', source: readThreadGoal(context) }
+    case 'latest-prompt':
+    case 'restart-progress':
+    case 'outgrown-child':
+      return readJournalSqlLifecycle(context, operation)
   }
 }
 
