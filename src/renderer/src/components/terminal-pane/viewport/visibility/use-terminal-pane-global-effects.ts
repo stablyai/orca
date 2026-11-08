@@ -186,7 +186,6 @@ export function useTerminalPaneGlobalEffects({
     withSuppressedScrollTracking
   ])
 
-  // Why after the visibility effect: it publishes isActiveRef, which the cadence sync reads.
   useEffect(() => {
     if (panePtyBindingsRef) {
       syncPaneOutputCadences(panePtyBindingsRef.current)

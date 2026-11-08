@@ -78,7 +78,8 @@ describe('createRemoteRuntimePtyTransport', () => {
         paneVisibility: 1,
         writeUnavailable: 1,
         endpointLossNotice: 1,
-        inputAck: 1
+        inputAck: 1,
+        outputCadence: 1
       })
     )
     expect(runtimeSubscribe).toHaveBeenCalledWith(
