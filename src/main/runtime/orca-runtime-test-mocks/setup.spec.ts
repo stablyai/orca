@@ -1,5 +1,5 @@
-export * from './github-hosted-review-mocks'
-export * from './gitlab-mocks'
+export * from './github-hosted-review-test-harness'
+export * from './gitlab-test-harness'
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
 import { vi, type Mock } from 'vitest'
 
