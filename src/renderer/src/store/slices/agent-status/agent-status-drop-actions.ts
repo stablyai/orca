@@ -42,14 +42,16 @@ export function createAgentStatusDropActions(
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        const scopedSuppression =
+          typeof opts?.suppressRetention === 'object' ? opts.suppressRetention : undefined
         const needsSuppressor =
-          (hasLive || opts?.suppressRetention === true) &&
-          !(paneKey in s.retentionSuppressedPaneKeys)
+          (hasLive || Boolean(opts?.suppressRetention)) &&
+          (scopedSuppression !== undefined || !(paneKey in s.retentionSuppressedPaneKeys))
         const suppressionPatch = needsSuppressor
           ? {
               retentionSuppressedPaneKeys: {
                 ...s.retentionSuppressedPaneKeys,
-                [paneKey]: true as const
+                [paneKey]: scopedSuppression ?? (true as const)
               }
             }
           : {}

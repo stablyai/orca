@@ -368,8 +368,13 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           shellForeground: false
         }
         mockStoreState.agentStatusByPaneKey[cacheKey] = {
+          paneKey: cacheKey,
           state: 'working',
-          agentType: 'pi'
+          agentType: 'pi',
+          prompt: '',
+          updatedAt: 1000,
+          stateStartedAt: 1000,
+          stateHistory: []
         }
         vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('cmd.exe')
 

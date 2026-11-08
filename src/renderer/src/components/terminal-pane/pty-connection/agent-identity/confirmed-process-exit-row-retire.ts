@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { isRetainedProgramResult } from '@/lib/program-status/row'
+import { agentEntrySessionStartedAt } from '../../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import type { RecognizedAgentProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
@@ -14,21 +15,26 @@ export function retireConfirmedShellAgent(paneKey: string): void {
   if (entry && isRetainedProgramResult(entry)) {
     return
   }
+  const suppression = entry
+    ? {
+        run: {
+          entry,
+          agentType: entry.agentType ?? 'unknown',
+          startedAt: agentEntrySessionStartedAt(entry)
+        }
+      }
+    : {}
   if (live) {
-    state.updateAgentStatusState((current) =>
-      paneKey in current.retentionSuppressedPaneKeys
-        ? current
-        : {
-            retentionSuppressedPaneKeys: {
-              ...current.retentionSuppressedPaneKeys,
-              [paneKey]: true
-            }
-          }
-    )
+    state.updateAgentStatusState((current) => ({
+      retentionSuppressedPaneKeys: {
+        ...current.retentionSuppressedPaneKeys,
+        [paneKey]: suppression
+      }
+    }))
     return
   }
   // A pending retention sync can still hold the vanished live row.
-  state.dropAgentStatus(paneKey, { suppressRetention: true, rendererOnly: true })
+  state.dropAgentStatus(paneKey, { suppressRetention: suppression, rendererOnly: true })
 }
 
 /** Retire confirmed process exits even without OSC command marks, as in cmd.exe/Git Bash, which cannot arm a 133;D drop. */
