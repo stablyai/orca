@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { readSavedStatus, hasSavedStatus } from '../persistence/last-status.test-fixtures'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -80,10 +81,10 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
         })
       ])
       server.flushStatusPersistSync()
-      expect(existsSync(lastStatusPath())).toBe(true)
-      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8')) as {
+      expect(hasSavedStatus(lastStatusPath())).toBe(true)
+      const file: {
         entries: Record<string, { payload: { state: string } }>
-      }
+      } = JSON.parse(readSavedStatus(lastStatusPath()))
       expect(file.entries[PANE]?.payload.state).toBe('done')
       expect(file.entries[REMINTED]).toBeUndefined()
     } finally {

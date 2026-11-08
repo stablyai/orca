@@ -345,6 +345,8 @@ module.exports = {
     'out/main/antigravity/**',
     'out/main/claude/**',
     'out/main/codex/**',
+    // The CLI loads the socket-dir check; tsc-emitted output also needs its mode constants beside it.
+    'out/main/daemon/endpoint/publication/daemon-{socket-endpoint-path,private-file-modes}.js',
     'out/main/copilot/**',
     'out/main/cursor/**',
     'out/main/droid/**',

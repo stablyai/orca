@@ -121,6 +121,7 @@ async function writeSharedRootTranscripts(sessionsDir: string): Promise<void> {
 }
 
 describe('scanAiVaultSessions with overlapping Pi and OMP roots', () => {
+  const sameFolder = (sessionsDir: string): string => sessionsDir
   const parentFolder = (sessionsDir: string): string => join(sessionsDir, '..')
   it.each([
     // PI_CODING_AGENT_DIR=<dir>: Pi walks <dir>, OMP walks <dir>/sessions.
@@ -130,6 +131,17 @@ describe('scanAiVaultSessions with overlapping Pi and OMP roots', () => {
       layout: 'a parent folder for a workspace',
       piRoot: parentFolder,
       scope: { scopePaths: ['/repo/app'], limit: 1 }
+    },
+    // Workspace and Project skip the recency pass for cwd-bucket agents.
+    {
+      layout: 'the same folder for a scope-only workspace',
+      piRoot: sameFolder,
+      scope: { scopePaths: ['/repo/app'], scopeOnly: true }
+    },
+    {
+      layout: 'a parent folder for a scope-only workspace',
+      piRoot: parentFolder,
+      scope: { scopePaths: ['/repo/app'], scopeOnly: true }
     }
   ])('lists each transcript once under its writer when Pi scans $layout', async (testCase) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-pi-omp-shared-'))
