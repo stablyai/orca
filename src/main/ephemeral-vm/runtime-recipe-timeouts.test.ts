@@ -97,6 +97,12 @@ describe('recipe timeoutSeconds and persisted runtimes', () => {
       timeoutSeconds: { destroy: 60 }
     })
 
+    // A different recipe that later took the same id does not impose its limits.
+    hooks.recipes = [{ ...recipe, create: './other-create.sh', timeoutSeconds: { destroy: 5 } }]
+    expect(
+      getRuntimeRecipeContext(store, userDataPath, provisioned.runtime.id).recipe
+    ).not.toHaveProperty('timeoutSeconds')
+
     hooks.recipes = []
     expect(
       getRuntimeRecipeContext(store, userDataPath, provisioned.runtime.id).recipe

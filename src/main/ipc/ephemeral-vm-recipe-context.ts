@@ -114,13 +114,14 @@ export function getRuntimeRecipeContext(
     (entry) => entry.id === runtime.recipeId
   )
   // Legacy runtimes lack snapshots; never substitute a newer same-ID plugin recipe for their repo-owned recipe.
-  // Snapshots never persist timeoutSeconds, so take the repo's current limits (lifecycle commands stay snapshotted).
-  const recipe = runtime.recipe
-    ? {
-        ...runtime.recipe,
-        ...(repoRecipe?.timeoutSeconds ? { timeoutSeconds: repoRecipe.timeoutSeconds } : {})
-      }
-    : repoRecipe
+  // Snapshots never persist timeoutSeconds, so take the repo's current limits (lifecycle commands stay
+  // snapshotted). Only when the repo recipe has the same create command, so a different recipe that
+  // later took this id (e.g. a repo recipe shadowing a plugin one) cannot impose its limits.
+  const limits =
+    repoRecipe?.timeoutSeconds && repoRecipe.create === runtime.recipe?.create
+      ? { timeoutSeconds: repoRecipe.timeoutSeconds }
+      : {}
+  const recipe = runtime.recipe ? { ...runtime.recipe, ...limits } : repoRecipe
   if (!recipe) {
     throw new EphemeralVmFailureError(
       ephemeralVmFailure('recipeNotFound', { recipeId: runtime.recipeId })
