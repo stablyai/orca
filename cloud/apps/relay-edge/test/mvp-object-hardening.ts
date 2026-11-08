@@ -1,8 +1,11 @@
-// mvp-object.ts checks (local only) for control liveness on any inbound frame and the director's
-// signed `drain` op.
+// mvp-object.ts checks (local only) for control liveness on any inbound frame, the director's
+// signed `drain` op, and the object health route.
 import { randomBytes } from 'node:crypto'
+import { readdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { DatabaseSync } from 'node:sqlite'
 import type { KeyLike } from 'jose'
-import { EPOCH, adminCall, assign, control, mint, newHost, record, sleep, waitFor } from './harness-mvp-object'
+import { EPOCH, ORIGIN, adminCall, assign, control, mint, newHost, record, sleep, waitFor } from './harness-mvp-object'
 
 // Local timing (mvp-object.ts): ping every 3 s, silence timeout 9 s.
 const SILENCE_MS = 9_000
@@ -58,6 +61,9 @@ export async function drainCheck(key: KeyLike): Promise<void> {
   const live = control(host, await mint(key, id))
   await live.client.connect()
   const drained = await adminCall('drain', { relayHostId: id })
+  // Straight after the drain: the closing control must not make the export answer busy.
+  const exported = await adminCall('export', { relayHostId: id })
+  record('F5 export right after a drain: exported, not busy', exported.json?.outcome === 'exported', `${exported.status}:${JSON.stringify(exported.json?.outcome)}`)
   await waitFor(() => live.events.closes.length > 0, 3_000)
   const frame = live.events.drains[0]
   record(
@@ -68,4 +74,32 @@ export async function drainCheck(key: KeyLike): Promise<void> {
   )
   const after = await adminCall('drain', { relayHostId: id })
   record('F5 drain again after the control left: idle', after.json?.outcome === 'idle', JSON.stringify(after.json))
+}
+
+// H1: GET /__health/object reads the canary object's storage and answers 200 {ok:true}; it writes
+// nothing, only GET is served, and it is limited per source like the other unauthenticated routes.
+export async function objectHealthCheck(stateDir: string): Promise<void> {
+  const list = () => readdirSync(stateDir, { recursive: true }).map(String).filter((f) => f.endsWith('.sqlite'))
+  const beforeList = new Set(list())
+  const first = await fetch(`${ORIGIN}/__health/object`)
+  const body = (await first.json().catch(() => null)) as { ok?: unknown } | null
+  const post = (await fetch(`${ORIGIN}/__health/object`, { method: 'POST' })).status
+  const tables = list()
+    .filter((f) => !beforeList.has(f))
+    .flatMap((f) => {
+      const db = new DatabaseSync(join(stateDir, f), { readOnly: true })
+      try {
+        return db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map((r) => String(r.name)).filter((name) => !name.startsWith('__'))
+      } finally {
+        db.close()
+      }
+    })
+  record(
+    'H1 object health: 200 {ok:true}, POST 405, nothing written to object storage',
+    first.status === 200 && body?.ok === true && post === 405 && tables.length === 0,
+    `status=${first.status} body=${JSON.stringify(body)} post=${post} tables=${tables.join(',') || 'none'}`
+  )
+  const statuses: number[] = []
+  for (let i = 0; i < 70; i++) { statuses.push((await fetch(`${ORIGIN}/__health/object`)).status) }
+  record('H1 object health past the per-source limit: 429', statuses.at(-1) === 429, `limitedFrom=${statuses.indexOf(429)}`)
 }
