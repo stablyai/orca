@@ -161,6 +161,27 @@ describe('scanAiVaultSessions scopeOnly', () => {
       cwd: '/elsewhere',
       iso: '2026-06-02T00:00:00.000Z'
     })
+    // Codex has no cwd buckets, so it still goes through the recency pass.
+    const codexDir = join(isolatedScanRoots(root).codexSessionsDir, '2026', '06', '03')
+    await mkdir(codexDir, { recursive: true })
+    const codexId = '019e9693-64fc-7370-9c18-7e625c595d0f'
+    await writeFile(
+      join(codexDir, `rollout-2026-06-03T00-00-00-${codexId}.jsonl`),
+      [
+        {
+          timestamp: '2026-06-03T00:00:00.000Z',
+          type: 'session_meta',
+          payload: { id: codexId, cwd: '/elsewhere' }
+        },
+        {
+          timestamp: '2026-06-03T00:00:01.000Z',
+          type: 'response_item',
+          payload: { type: 'message', role: 'user', content: [{ type: 'text', text: 'hi' }] }
+        }
+      ]
+        .map((record) => JSON.stringify(record))
+        .join('\n')
+    )
 
     const result = await scanAiVaultSessions({
       ...isolatedScanRoots(root),
