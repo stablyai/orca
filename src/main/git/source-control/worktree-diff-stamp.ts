@@ -2,7 +2,7 @@ import { readFile, stat } from 'node:fs/promises'
 import * as path from 'node:path'
 import { resolveWorktreeHostPath } from '../../../shared/git/metadata/git-metadata-path'
 import type { GitRuntimeOptions } from '../git-runtime-options'
-import { resolveGitDir } from './resolve-git-dir'
+import { resolveGitCommonDir, resolveGitDir } from './resolve-git-dir'
 
 /** Stamp HEAD, index, routing metadata and working-file inputs without Git; null forbids caching. */
 export type WorktreeDiffStamp = {
@@ -19,7 +19,7 @@ export const DIFF_STAMP_RACY_WRITE_MARGIN_MS = 2_000
 const MISSING = '-'
 const ABSENT: StampComponent = { text: MISSING, mtimeMs: Number.NEGATIVE_INFINITY }
 
-type StampComponent = { text: string; mtimeMs: number }
+export type StampComponent = { text: string; mtimeMs: number }
 
 /** Refuse stamps within the mtime bucket; separately count future mtimes to expose host/guest clock skew. */
 export function canProveUnchangedByStamp(stamp: WorktreeDiffStamp): boolean {
@@ -77,14 +77,13 @@ export async function readWorktreeDiffStamp(
 
 /** Read loose ref content to detect commits without HEAD changes; packed/reftable/unborn tips use file stamps. */
 async function readHeadComponent(gitDir: string): Promise<StampComponent | null> {
-  const [head, commonDirEntry] = await Promise.all([
+  const [head, commonDir] = await Promise.all([
     readTrimmedFile(path.join(gitDir, 'HEAD')),
-    readTrimmedFile(path.join(gitDir, 'commondir'))
+    resolveGitCommonDir(gitDir)
   ])
   if (!head) {
     return null
   }
-  const commonDir = commonDirEntry ? path.resolve(gitDir, commonDirEntry) : gitDir
   const refName = head.match(/^ref:\s*(.+?)\s*$/)?.[1]
   if (!refName || !isSafeRefName(refName)) {
     // Detached HEAD already holds the object id; an unrecognized HEAD is covered by its own text.
@@ -136,7 +135,7 @@ async function readTrimmedFile(filePath: string): Promise<string | null> {
   }
 }
 
-async function readFileStampComponent(filePath: string): Promise<StampComponent> {
+export async function readFileStampComponent(filePath: string): Promise<StampComponent> {
   try {
     const stats = await stat(filePath)
     return { text: `${requireMtimeMs(stats.mtimeMs)}:${stats.size}`, mtimeMs: stats.mtimeMs }
