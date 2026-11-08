@@ -16,6 +16,11 @@ describe('planOpenCodeRootModelRewrite', () => {
     ],
     ['opencode --standalone --model a/b --model c/d', 'opencode --standalone', 'c/d'],
     [
+      "opencode --model a/b --prompt 'it'\"'\"'s broken; fix it'",
+      "opencode --standalone --prompt 'it'\"'\"'s broken; fix it'",
+      'a/b'
+    ],
+    [
       "opencode --model a/b --prompt '-make the build pass'",
       "opencode --standalone --prompt '-make the build pass'",
       'a/b'
@@ -43,6 +48,7 @@ describe('planOpenCodeRootModelRewrite', () => {
     "opencode --model a/b --prompt '--standalone'",
     'opencode --model a/b\n--model c/d',
     'opencode --model a/b --auto; --model c/d',
+    "opencode '--auto'&&echo --model a/b",
     'opencode --model --prompt hi',
     'claude --model opus'
   ])('leaves %s unchanged', (command) => {

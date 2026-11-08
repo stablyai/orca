@@ -14,6 +14,23 @@ const PROBE_NEUTRAL_FLAGS = new Set(['--auto', '--standalone'])
 const LITERAL_MODEL = /^[A-Za-z0-9._/:@#+-]+$/
 const SHELL_OPERATOR = /[;|&<>]/
 
+function hasUnquotedOperator(raw: string): boolean {
+  let quote: string | null = null
+  for (let index = 0; index < raw.length; index += 1) {
+    const char = raw[index]
+    if (quote) {
+      quote = char === quote ? null : quote
+    } else if (char === '\\') {
+      index += 1
+    } else if (char === "'" || char === '"') {
+      quote = char
+    } else if (SHELL_OPERATOR.test(char)) {
+      return true
+    }
+  }
+  return false
+}
+
 export type OpenCodeRootModelRewrite = {
   /** The command without its root model option, with `--standalone` so a private server reads the overlay. */
   command: string
@@ -43,10 +60,10 @@ export function planOpenCodeRootModelRewrite(
   if (
     gaps.some((gap, index) => !(index ? /^[ \t]+$/ : /^[ \t]*$/).test(gap)) ||
     !/^[ \t]*$/.test(command.slice(spans.at(-1)?.end ?? 0)) ||
-    spans.some((span, index) => {
-      const raw = command.slice(span.start, span.end)
-      return index !== executable - 1 && !/^['"]/.test(raw) && SHELL_OPERATOR.test(raw)
-    })
+    spans.some(
+      (span, index) =>
+        index !== executable - 1 && hasUnquotedOperator(command.slice(span.start, span.end))
+    )
   ) {
     return null
   }
