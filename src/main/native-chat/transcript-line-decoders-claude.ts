@@ -80,7 +80,8 @@ export function decodeClaudeTranscriptLine(
   if (!parsed) {
     return null
   }
-  const record = claudeMessageWithoutSyntheticText(claudeQueuedPromptAsUserRecord(parsed) ?? parsed)
+  const queuedPrompt = claudeQueuedPromptAsUserRecord(parsed)
+  const record = claudeMessageWithoutSyntheticText(queuedPrompt ?? parsed)
   if (!record) {
     return null
   }
@@ -106,7 +107,8 @@ export function decodeClaudeTranscriptLine(
   }
   const message = asRecord(record.message)
   const editPatch = claudeEditPatch(record)
-  const contentBlocks = claudeContentBlocks(message?.content)
+  // Absorbed queued prompts have embedded images but no image-source companion rows.
+  const contentBlocks = claudeContentBlocks(message?.content, queuedPrompt !== null)
   const decodedBlocks = editPatch ? withEditPatch(contentBlocks, editPatch) : contentBlocks
   if (decodedBlocks.length === 0) {
     return null

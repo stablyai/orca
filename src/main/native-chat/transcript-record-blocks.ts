@@ -10,6 +10,7 @@ import {
   claudeToolResultText,
   claudeToolResultFailed
 } from '../../shared/claude-tool-content'
+import { isKnownRasterImageMimeType } from '../../shared/file-preview/raster-image-preview-limits'
 
 export function toolResultOutput(value: unknown): string {
   if (typeof value === 'string') {
@@ -40,7 +41,10 @@ export function toolResultOutput(value: unknown): string {
   return parts.join('\n')
 }
 
-export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
+export function claudeContentBlocks(
+  content: unknown,
+  retainEmbeddedImages = false
+): NativeChatBlock[] {
   if (typeof content === 'string') {
     const text = content.trim()
     return text ? [{ type: 'text', text: content }] : []
@@ -60,7 +64,7 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
     if (!record) {
       continue
     }
-    const block = claudeContentBlock(record)
+    const block = claudeContentBlock(record, retainEmbeddedImages)
     if (block) {
       blocks.push(block)
     }
@@ -68,7 +72,10 @@ export function claudeContentBlocks(content: unknown): NativeChatBlock[] {
   return blocks
 }
 
-function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | null {
+function claudeContentBlock(
+  record: Record<string, unknown>,
+  retainEmbeddedImages: boolean
+): NativeChatBlock | null {
   switch (record.type) {
     case 'text': {
       const text = extractString(record.text)
@@ -87,7 +94,7 @@ function claudeContentBlock(record: Record<string, unknown>): NativeChatBlock | 
     case 'tool_result':
       return toolResultBlock(record)
     case 'image':
-      return imageRefBlock(record)
+      return imageRefBlock(record, retainEmbeddedImages)
     default: {
       if (isClaudeToolUseContent(record)) {
         return {
@@ -120,11 +127,27 @@ function toolResultBlock(record: Record<string, unknown>): NativeChatToolResultB
   }
 }
 
-function imageRefBlock(record: Record<string, unknown>): NativeChatImageRefBlock | null {
+function imageRefBlock(
+  record: Record<string, unknown>,
+  retainEmbeddedImages: boolean
+): NativeChatImageRefBlock | null {
   const source = asRecord(record.source)
-  const url = extractString(source?.url) ?? extractString(record.url)
+  let url = extractString(source?.url) ?? extractString(record.url)
   const path = extractString(record.path)
   const alt = extractString(record.alt) ?? undefined
+  const data = extractString(source?.data)
+  const mediaType = extractString(source?.media_type)
+  if (
+    retainEmbeddedImages &&
+    !url &&
+    !path &&
+    source?.type === 'base64' &&
+    data &&
+    mediaType &&
+    isKnownRasterImageMimeType(mediaType)
+  ) {
+    url = `data:${mediaType};base64,${data}`
+  }
   if (!url && !path) {
     return null
   }

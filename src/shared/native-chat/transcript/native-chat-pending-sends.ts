@@ -1,3 +1,7 @@
+import {
+  findNativeChatPendingImageMatch,
+  retainNativeChatPendingImageClaims
+} from './native-chat-pending-images'
 import { nativeChatContinuationSendText } from './native-chat-continuation-send'
 import type { NativeChatMessage } from '../native-chat-types'
 import {
@@ -40,6 +44,8 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  /** Rows already used by earlier image echoes. */
+  imageMatchExcludedMessageIds?: readonly string[]
 }
 
 function messagesAfterPendingBoundary(
@@ -141,6 +147,10 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     return pending
   }
   const consumed = new Map<string, number>()
+  const consumedImages = new Set(
+    pending.flatMap((entry) => entry.imageMatchExcludedMessageIds ?? [])
+  )
+  const matchedImages = new Map<T, NativeChatMessage>()
   const exactKeep = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
@@ -152,7 +162,19 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
-    return occurrence > available
+    if (occurrence <= available) {
+      return false
+    }
+    const imageMatch = findNativeChatPendingImageMatch(
+      entry,
+      messagesAfterPendingBoundary(messages, entry),
+      consumedImages
+    )
+    if (imageMatch?.advanced) {
+      matchedImages.set(entry, imageMatch.message)
+      return false
+    }
+    return true
   })
   // Lost Enter can glue sends into one transcript row; retire them after the assistant advances.
   const stillOpen = pending.filter((_, index) => exactKeep[index])
@@ -167,7 +189,9 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     const openIndex = stillOpen.indexOf(entry)
     return openIndex === -1 || !gluedRepresented.has(openIndex)
   })
-  return next.length === pending.length ? pending : next
+  return next.length === pending.length
+    ? pending
+    : retainNativeChatPendingImageClaims(pending, next, matchedImages)
 }
 
 /** Sends whose transcript row has not landed yet; exact and glued matches both hide an echo. */
@@ -179,6 +203,9 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
     return pending
   }
   const consumed = new Map<string, number>()
+  const consumedImages = new Set(
+    pending.flatMap((entry) => entry.imageMatchExcludedMessageIds ?? [])
+  )
   const exactVisible = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
@@ -190,7 +217,14 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
-    return occurrence > represented
+    return (
+      occurrence > represented &&
+      !findNativeChatPendingImageMatch(
+        entry,
+        messagesAfterPendingBoundary(existingMessages, entry),
+        consumedImages
+      )
+    )
   })
   // Hide glued echoes once their user row exists, before assistant advancement permits pruning.
   const stillVisible = pending.filter((_, index) => exactVisible[index])

@@ -23,6 +23,117 @@ function message(
 }
 
 describe('pending send occurrence reconciliation', () => {
+  it('retires pathless queued images once each, preserving the next send across pruning', () => {
+    const first = {
+      id: 'image-1',
+      text: '',
+      imagePaths: ['/tmp/a.png'],
+      sentAt: 100,
+      afterMessageId: 'boundary'
+    }
+    const second = assignNativeChatPendingOccurrence([first], {
+      id: 'image-2',
+      text: '',
+      imagePaths: ['/tmp/b.png'],
+      sentAt: 130,
+      afterMessageId: 'intermediate'
+    })
+    const older: NativeChatMessage[] = [
+      {
+        id: 'old-image',
+        role: 'user',
+        timestamp: 80,
+        source: 'transcript',
+        blocks: [{ type: 'image-ref', url: 'data:image/png;base64,AAAA' }]
+      },
+      message('boundary', 'assistant', 'working', 90),
+      message('intermediate', 'assistant', 'still working', 120)
+    ]
+    expect(pendingSendsAsMessages([first, second], older).map((row) => row.id)).toEqual([
+      'pending:image-1',
+      'pending:image-2'
+    ])
+    const history: NativeChatMessage[] = [
+      ...older,
+      {
+        id: 'queued-image',
+        role: 'user',
+        timestamp: 150,
+        source: 'transcript',
+        blocks: [{ type: 'image-ref', url: 'data:image/png;base64,AAAA' }]
+      }
+    ]
+
+    expect(pendingSendsAsMessages([first, second], history).map((row) => row.id)).toEqual([
+      'pending:image-2'
+    ])
+    const advanced = [...history, message('reply', 'assistant', 'received', 160)]
+    const remaining = prunePendingSends([first, second], advanced)
+    expect(remaining.map((entry) => entry.id)).toEqual(['image-2'])
+    expect(pendingSendsAsMessages(remaining, advanced).map((row) => row.id)).toEqual([
+      'pending:image-2'
+    ])
+    const completed: NativeChatMessage[] = [
+      ...advanced,
+      {
+        id: 'queued-image-2',
+        role: 'user',
+        timestamp: 250,
+        source: 'transcript',
+        blocks: [{ type: 'image-ref', url: 'data:image/png;base64,BBBB' }]
+      },
+      message('reply-2', 'assistant', 'received again', 260)
+    ]
+    expect(prunePendingSends(remaining, completed)).toEqual([])
+  })
+
+  it('keeps uncertain image sends while retiring a later delivered image after cancellation or failure', () => {
+    const first: NativeChatPendingSend = {
+      id: 'image-1',
+      text: '',
+      imagePaths: ['/tmp/a.png'],
+      sentAt: 100,
+      afterMessageId: 'boundary'
+    }
+    const second = assignNativeChatPendingOccurrence([first], {
+      id: 'image-2',
+      text: '',
+      imagePaths: ['/tmp/b.png'],
+      sentAt: 110,
+      afterMessageId: 'boundary'
+    })
+    const history: NativeChatMessage[] = [
+      message('boundary', 'assistant', 'working', 90),
+      {
+        id: 'delivered-image',
+        role: 'user',
+        timestamp: 150,
+        source: 'transcript',
+        blocks: [{ type: 'image-ref', url: 'data:image/png;base64,AAAA' }]
+      },
+      message('reply', 'assistant', 'received', 160)
+    ]
+
+    const rejected = [{ ...first, delivery: 'rejected' as const }, second]
+    expect(prunePendingSends(rejected, history).map((entry) => entry.id)).toEqual(['image-1'])
+    expect(pendingSendsAsMessages(rejected, history).map((row) => row.id)).toEqual([
+      'pending:image-1'
+    ])
+    expect(prunePendingSends([second], history)).toEqual([])
+    expect(pendingSendsAsMessages([second], history)).toEqual([])
+
+    const unconfirmed = [{ ...first, delivery: 'unconfirmed' as const }, second]
+    expect(prunePendingSends(unconfirmed, history).map((entry) => entry.id)).toEqual(['image-1'])
+    expect(pendingSendsAsMessages(unconfirmed, history).map((row) => row.id)).toEqual([
+      'pending:image-1'
+    ])
+    const held = { ...first, writeUnconfirmedAt: 120 }
+    expect(prunePendingSends([held, second], history).map((entry) => entry.id)).toEqual(['image-1'])
+    expect(pendingSendsAsMessages([held], history).map((row) => row.id)).toEqual([
+      'pending:image-1'
+    ])
+  })
+
   it('keeps the next identical echo after pruning an earlier occurrence', () => {
     const first = assignNativeChatPendingOccurrence<NativeChatPendingSend>([], {
       id: 'p1',

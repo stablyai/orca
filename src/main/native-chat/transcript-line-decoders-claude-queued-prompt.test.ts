@@ -21,6 +21,23 @@ function queuedCommand(attachment: Record<string, unknown>): string {
 }
 
 describe('Claude queued_command attachment', () => {
+  it('keeps embedded images from an image-only prompt absorbed mid-turn', () => {
+    const line = queuedCommand({
+      prompt: [
+        { type: 'text', text: '[Image #8] ' },
+        { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } }
+      ],
+      imagePasteIds: [8],
+      commandMode: 'prompt',
+      origin: { kind: 'human' }
+    })
+
+    expect(decodeClaudeTranscriptLine(line, 'fallback')?.blocks).toEqual([
+      { type: 'text', text: '[Image #8]' },
+      { type: 'image-ref', url: 'data:image/png;base64,AAAA' }
+    ])
+  })
+
   it('decodes a prompt absorbed mid-turn as the user row Claude never writes', () => {
     const line = queuedCommand({
       prompt: 'or you know what, use fable as orchestrator',
