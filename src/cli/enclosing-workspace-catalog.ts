@@ -1,4 +1,4 @@
-import { createCwdContainment } from './caller-cwd-containment'
+import { createCwdContainment, isOnCallerFilesystem } from './caller-cwd-containment'
 import { getCallerExecutionHostId } from './caller-host-worktree-selection'
 import { resolveQualifiedFolderWorkspaceResult } from '../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../shared/folder-workspaces/folder-workspace-types'
@@ -36,20 +36,17 @@ export async function readEnclosingWorkspaceCatalog(
     readOptional(client.call<{ folderWorkspaces: FolderWorkspace[] }>('folderWorkspace.list'))
   ])
   const rows: CatalogRow[] = worktrees.result.worktrees
-  // A folder's host isn't derived yet; the selection rule applies host scope afterwards.
-  const contains = createCwdContainment(cwd, getCallerExecutionHostId())
-  const enclosing = (folders?.result.folderWorkspaces ?? []).filter(
-    (folder) => contains(folder.folderPath) !== null
-  )
-  if (enclosing.length === 0) {
+  const allFolders = folders?.result.folderWorkspaces ?? []
+  if (allFolders.length === 0) {
     return rows
   }
-  // Host derivation needs groups and repos; read them only when a folder can own cwd.
+  // Hosts come first: only a folder on the caller's own filesystem may be resolved locally.
   const [groups, repos] = await Promise.all([
     readOptional(client.call<{ groups: ProjectGroup[] }>('projectGroup.list')),
     readOptional(client.call<{ repos: Repo[] }>('repo.list'))
   ])
-  const folderRows = enclosing.map((folder): CatalogRow => {
+  const contains = createCwdContainment(cwd, getCallerExecutionHostId())
+  const folderRows = allFolders.flatMap((folder): CatalogRow[] => {
     const host =
       groups && repos
         ? resolveQualifiedFolderWorkspaceResult(
@@ -61,10 +58,12 @@ export async function readEnclosingWorkspaceCatalog(
             folder.id
           )
         : null
-    const row = { id: folderWorkspaceKey(folder.id), path: folder.folderPath }
-    return host?.kind === 'selected'
-      ? { ...row, hostId: host.value.hostId }
-      : { ...row, hostUnresolved: true }
+    const base = { id: folderWorkspaceKey(folder.id), path: folder.folderPath }
+    const row: CatalogRow =
+      host?.kind === 'selected'
+        ? { ...base, hostId: host.value.hostId }
+        : { ...base, hostUnresolved: true }
+    return contains(row.path, isOnCallerFilesystem(row)) === null ? [] : [row]
   })
   return [...rows, ...folderRows]
 }

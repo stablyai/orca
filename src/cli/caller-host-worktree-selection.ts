@@ -14,7 +14,7 @@ import type { RuntimeWorktreeListResult } from '../shared/runtime-types'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { refuseUnresolvedOwner, type CatalogRow } from './workspace-catalog-row'
-import { createCwdContainment } from './caller-cwd-containment'
+import { createCwdContainment, isOnCallerFilesystem } from './caller-cwd-containment'
 
 export type { CatalogRow }
 
@@ -64,7 +64,7 @@ function enclosingCandidatesOnHost<Row extends CatalogRow>(
       continue
     }
     // WSL comparison keys are not raw paths; only use them for rank and equivalence.
-    const comparisonPath = contains(row.path, row.hostId)
+    const comparisonPath = contains(row.path, isOnCallerFilesystem(row))
     if (comparisonPath !== null) {
       candidates.push({ row, comparisonPath })
     }

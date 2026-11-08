@@ -120,6 +120,24 @@ describe.skipIf(process.platform === 'win32')('symlink aliases on the caller fil
     }
   )
 
+  it.each(['folder', 'worktree'] as const)(
+    'picks a %s registered through a differently named link, from cwd via a second link',
+    (kind) => {
+      const workspaceLink = join(root, `workspace-link-${kind}`)
+      const cwdLink = join(root, `cwd-link-${kind}`)
+      symlinkSync(join(real, 'hub', 'app'), workspaceLink)
+      symlinkSync(join(real, 'hub', 'app'), cwdLink)
+      const registered =
+        kind === 'folder'
+          ? { id: 'folder:inner', path: workspaceLink, hostId: 'local' as const }
+          : { id: 'repo::inner', repoId: 'repo', path: workspaceLink, hostId: 'local' as const }
+      const expected = kind === 'folder' ? 'folder:inner' : 'id:repo::inner'
+      for (const cwd of [join(real, 'hub', 'app', 'src'), join(cwdLink, 'src')]) {
+        expect(select([outer(real), registered], cwd)).toBe(expected)
+      }
+    }
+  )
+
   it('keeps an aliased folder in the catalog prefilter', async () => {
     const client = clientAnswering((method) =>
       method === 'worktree.list'

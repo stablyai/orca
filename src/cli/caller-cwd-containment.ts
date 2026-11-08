@@ -1,4 +1,4 @@
-import { basename, dirname, resolve as resolvePath } from 'node:path'
+import { resolve as resolvePath } from 'node:path'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -6,45 +6,44 @@ import {
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
 import { resolveRealPathSync } from '../shared/real-path-sync'
 
-function ancestorNames(path: string): Set<string> {
-  const names = new Set<string>()
-  for (let current = path; dirname(current) !== current; current = dirname(current)) {
-    names.add(basename(current))
+// One CLI process is one command, so the folder prefilter and ranking share each resolution.
+const realPaths = new Map<string, string>()
+
+/** A local path with symlinks resolved; a path that no longer exists keeps its lexical spelling. */
+function realPathOf(lexical: string): string {
+  let real = realPaths.get(lexical)
+  if (real === undefined) {
+    real = resolveRealPathSync(lexical) ?? lexical
+    realPaths.set(lexical, real)
   }
-  return names
+  return real
 }
 
 /**
- * Whether a workspace path contains cwd, and its comparison key for ranking. On the caller's own
- * filesystem paths compare by filesystem identity, so /tmp and /private/tmp aliases match; another
- * host's paths are never resolved here.
+ * Whether a workspace path contains cwd, and its comparison key for ranking. Paths on the caller's
+ * own filesystem compare by filesystem identity, so any symlink alias matches; a path on another
+ * host, or whose host is unknown, is never resolved here and compares as written.
  */
 export function createCwdContainment(
   cwd: string,
   callerHostId: ExecutionHostId
-): (path: string, hostId?: string | null) => string | null {
+): (path: string, onCallerFilesystem: boolean) => string | null {
   const lexicalCwd = resolvePath(cwd)
-  if (callerHostId !== LOCAL_EXECUTION_HOST_ID) {
-    return (path) =>
-      isPathInsideOrEqual(resolvePath(path), lexicalCwd)
-        ? normalizeRuntimePathForComparison(resolvePath(path))
-        : null
-  }
-  const realCwd = resolveRealPathSync(lexicalCwd) ?? lexicalCwd
-  // An alias of an ancestor ends in an ancestor's name; only those rows pay for a realpath.
-  const names = new Set([...ancestorNames(lexicalCwd), ...ancestorNames(realCwd)])
-  return (path, hostId) => {
+  const local = callerHostId === LOCAL_EXECUTION_HOST_ID
+  const realCwd = local ? realPathOf(lexicalCwd) : lexicalCwd
+  return (path, onCallerFilesystem) => {
     const lexical = resolvePath(path)
-    const onThisFilesystem = !hostId || hostId === LOCAL_EXECUTION_HOST_ID
-    if (!onThisFilesystem || !names.has(basename(lexical))) {
-      return isPathInsideOrEqual(lexical, lexicalCwd)
-        ? normalizeRuntimePathForComparison(lexical)
-        : null
-    }
-    // A path that no longer exists keeps its lexical spelling.
-    const real = resolveRealPathSync(lexical) ?? lexical
+    const real = local && onCallerFilesystem ? realPathOf(lexical) : lexical
     return isPathInsideOrEqual(real, realCwd) || isPathInsideOrEqual(lexical, lexicalCwd)
       ? normalizeRuntimePathForComparison(real)
       : null
   }
+}
+
+/** Unstamped rows belong to the answering Orca, as the caller-host rule treats them. */
+export function isOnCallerFilesystem(row: {
+  hostId?: string | null
+  hostUnresolved?: true
+}): boolean {
+  return !row.hostUnresolved && (!row.hostId || row.hostId === LOCAL_EXECUTION_HOST_ID)
 }
