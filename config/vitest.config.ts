@@ -15,6 +15,7 @@ import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-
 import { readRunFilters } from './scripts/test-runtime/execution-policy/vitest-run-filters.mjs'
 import { createWorkspaceSourceResolver } from './scripts/workspace/source-exports/workspace-source-exports.mjs'
 import { moduleCacheResolutionKey } from './scripts/test-runtime/module-cache/vitest-module-cache-resolution-key'
+import { vitestReactCompiler } from './vitest-react-compiler-plugin'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
@@ -44,6 +45,7 @@ const transforms = {
       }
     } satisfies Plugin,
     ...(moduleCachePath ? [moduleCacheResolutionKey()] : []),
+    ...vitestReactCompiler(),
     {
       // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
       name: 'locale-catalog-test-assets',
