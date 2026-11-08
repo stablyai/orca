@@ -1,7 +1,7 @@
 import type Database from '../../sqlite/sync-database'
 
 export type JournalDomainMaintenance =
-  | { kind: 'domain-retired-prune' }
+  | { kind: 'domain-retired-prune'; sessionId: string; epoch: string }
   | { kind: 'page-reclaim' }
   | { kind: 'compaction-state' }
   | { kind: 'compaction-complete'; now: number }
@@ -14,6 +14,7 @@ export type JournalDomainMaintenanceResult =
 // Only a ready head naming another epoch proves retirement; an interrupted import has no head.
 const RETIRED_TABLES = [
   { name: 'journal_items', key: 'item_id' },
+  { name: 'journal_item_subagent_names', key: 'subagent_id,item_id' },
   { name: 'journal_item_tombstones', key: 'item_id' },
   { name: 'journal_item_aliases', key: 'provider_item_id' },
   { name: 'journal_submission_attempts', key: 'message_id,attempt_sequence,attempt_index' },
@@ -25,24 +26,26 @@ const RETIRED_TABLES = [
 ] as const
 
 export function pruneJournalDomainRetiredPage(
-  db: Database.Database
+  db: Database.Database,
+  target: { sessionId: string; epoch: string }
 ): JournalDomainMaintenanceResult {
+  const head = db
+    .prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?')
+    .get(target.sessionId)
+  if (head?.epoch !== target.epoch) {
+    return { kind: 'domain-retired', deleted: 0, more: false }
+  }
   let remaining = 50
   for (const { name, key } of RETIRED_TABLES) {
-    const columns = key
-      .split(',')
-      .map((column) => `retired.${column}`)
-      .join(',')
     // Separate ranges seek past the current epoch rather than scanning its live rows.
     for (const comparison of ['<', '>']) {
       const result = db
         .prepare(`DELETE FROM ${name} WHERE (session_id,epoch,${key}) IN (
-        SELECT retired.session_id,retired.epoch,${columns}
-        FROM journal_chat_state AS ready CROSS JOIN ${name} AS retired
-        WHERE retired.session_id=ready.session_id AND retired.epoch${comparison}ready.epoch
+        SELECT session_id,epoch,${key} FROM ${name}
+        WHERE session_id=? AND epoch${comparison}?
         LIMIT ?
       )`)
-        .run(remaining)
+        .run(target.sessionId, target.epoch, remaining)
       remaining -= Number(result.changes)
       if (remaining === 0) {
         return { kind: 'domain-retired', deleted: 50, more: true }

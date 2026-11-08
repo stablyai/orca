@@ -8,7 +8,7 @@ import type { JournalSqlMaintenance } from './journal-sql-maintenance'
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
 
-/** Conversion and retired epochs wait for idle; periodic pruning shares this owner without starvation. */
+/** Idle conversion and periodic pruning share one owner; activity never blocks retired cleanup. */
 export class JournalSqlBackgroundMaintenance {
   private readonly stopped = new AbortController()
   private running: Promise<void> | undefined
@@ -16,6 +16,9 @@ export class JournalSqlBackgroundMaintenance {
   private sweep = false
   private periodic = false
   private reclaim = 0
+  private retiredAfter: string | null = null
+  private retiredThrough: string | null = null
+  private work = 0
   private wake = new AbortController()
   private timer: NodeJS.Timeout | undefined
 
@@ -101,20 +104,13 @@ export class JournalSqlBackgroundMaintenance {
           this.report(error)
         }
       }
-      if (this.sweep) {
-        this.sweep = false
-        try {
-          await this.pages({ kind: 'domain-retired-prune' }, Infinity, true)
-        } catch (error) {
-          this.report(error)
-        }
-      }
     }
   }
 
   private async runOrdinaryWork(): Promise<void> {
     if (this.periodic && !this.stopped.signal.aborted) {
       this.periodic = false
+      this.sweep = true
       try {
         const state = await this.writer.maintain({ kind: 'compaction-state' })
         if (
@@ -130,12 +126,51 @@ export class JournalSqlBackgroundMaintenance {
           await this.pages({ kind: 'event-tail-prune', now })
           if (!this.stopped.signal.aborted) {
             await this.writer.maintain({ kind: 'compaction-complete', now: Date.now() })
-            this.sweep = true
           }
         }
         await this.pages({ kind: 'page-reclaim' }, this.reclaim)
       } catch (error) {
         this.report(error)
+      }
+    }
+    if (this.sweep && !this.stopped.signal.aborted) {
+      this.sweep = false
+      try {
+        await this.retiredPages()
+      } catch (error) {
+        this.report(error)
+      }
+    }
+  }
+
+  private async retiredPages(): Promise<void> {
+    while (!this.stopped.signal.aborted) {
+      await setImmediate()
+      if (this.stopped.signal.aborted) {
+        return
+      }
+      const started = performance.now()
+      const page = await this.readers.database({
+        kind: 'retired-heads',
+        after: this.retiredAfter,
+        through: this.retiredThrough
+      })
+      await this.rest(started)
+      if (page.kind !== 'retired-heads') {
+        throw new Error('journal reader returned no retired heads')
+      }
+      this.retiredThrough = page.through
+      if (page.heads.length === 0) {
+        this.retiredAfter = null
+        this.retiredThrough = null
+        return
+      }
+      for (const target of page.heads) {
+        await this.pages({ kind: 'domain-retired-prune', ...target })
+        if (this.stopped.signal.aborted) {
+          return
+        }
+        this.retiredAfter = target.sessionId
       }
     }
   }
@@ -145,16 +180,11 @@ export class JournalSqlBackgroundMaintenance {
       JournalSqlMaintenance,
       { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' }
     >,
-    limit = Infinity,
-    idle = false
+    limit = Infinity
   ): Promise<void> {
-    let work = 0
     for (let unit = 0; unit < limit && !this.stopped.signal.aborted; unit++) {
       if (operation.kind !== 'page-reclaim' && this.reclaim > 0) {
         await this.pages({ kind: 'page-reclaim' }, 1)
-      }
-      if (idle && !(await this.boundary())) {
-        return
       }
       await setImmediate()
       if (this.stopped.signal.aborted) {
@@ -162,26 +192,30 @@ export class JournalSqlBackgroundMaintenance {
       }
       const started = performance.now()
       const result = await this.writer.maintain(operation)
-      work += performance.now() - started
       if (!result || typeof result !== 'object' || !('more' in result)) {
         throw new Error('journal writer returned no maintenance page')
       }
       if (operation.kind === 'page-reclaim') {
         this.reclaim = result.more ? Math.max(0, this.reclaim - 1) : 0
       }
-      if (work >= 25) {
-        try {
-          await delay(work * 9, undefined, { signal: this.stopped.signal, ref: false })
-        } catch (error) {
-          if (!this.stopped.signal.aborted) {
-            throw error
-          }
-        }
-        work = 0
-      }
+      await this.rest(started)
       if (!result.more) {
         return
       }
+    }
+  }
+
+  private async rest(started: number): Promise<void> {
+    this.work += performance.now() - started
+    if (this.work >= 25) {
+      try {
+        await delay(this.work * 9, undefined, { signal: this.stopped.signal, ref: false })
+      } catch (error) {
+        if (!this.stopped.signal.aborted) {
+          throw error
+        }
+      }
+      this.work = 0
     }
   }
 
@@ -200,12 +234,42 @@ export class JournalSqlBackgroundMaintenance {
           return
         }
         try {
-          await this.conversions.ensure(sessionId, false)
+          await this.convertSavedChat(sessionId)
         } catch (error) {
           this.report(error, sessionId)
         }
       }
       after = page.sessionIds.at(-1)!
+    }
+  }
+
+  private async convertSavedChat(sessionId: string): Promise<void> {
+    let complete = false
+    const conversion = this.conversions.ensure(sessionId, false).then(
+      () => {
+        complete = true
+      },
+      (error) => {
+        complete = true
+        this.report(error, sessionId)
+      }
+    )
+    while (!complete && !this.stopped.signal.aborted) {
+      await this.runOrdinaryWork()
+      const signal = AbortSignal.any([this.stopped.signal, this.wake.signal])
+      if (complete || signal.aborted) {
+        continue
+      }
+      let ready = () => {}
+      const wake = new Promise<void>((resolve) => {
+        ready = resolve
+        signal.addEventListener('abort', ready, { once: true })
+      })
+      try {
+        await Promise.race([conversion, wake])
+      } finally {
+        signal.removeEventListener('abort', ready)
+      }
     }
   }
 
