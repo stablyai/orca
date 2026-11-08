@@ -1,3 +1,4 @@
+import type { CursorSavedAccountsState } from '../../shared/cursor-account-types'
 import type {
   ClaudeAccountSelectionChange,
   ClaudeRateLimitAccountsState,
@@ -72,6 +73,10 @@ export type GrokAccountsApi = {
 
 export type CursorAccountsApi = {
   getStatus: () => Promise<CursorAccountStatus>
+  list: () => Promise<CursorSavedAccountsState>
+  addCurrent: () => Promise<CursorSavedAccountsState>
+  select: (id: string) => Promise<CursorSavedAccountsState>
+  remove: (id: string) => Promise<CursorSavedAccountsState>
 }
 
 export type MinimaxCredentialsApi = {
