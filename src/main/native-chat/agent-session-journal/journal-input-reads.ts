@@ -5,6 +5,8 @@ import type {
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalInputOrder, type JournalInputOrder } from './input-order/journal-input-order'
+import { memoryJournalMap } from './journal-memory-collections'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 /** One named input-evidence population; each answer is a plain record of the same kind. */
 export type JournalInputSingleRead =
@@ -13,6 +15,9 @@ export type JournalInputSingleRead =
   | { kind: 'sending-submissions' }
   | { kind: 'recoverable-submissions' }
   | { kind: 'pending-submissions' }
+  | { kind: 'accepted-submissions' }
+  | { kind: 'capture-keys'; present: readonly string[] }
+  | { kind: 'unsettled-submissions' }
   | { kind: 'recovered-unknown-ids' }
   | { kind: 'linked-to'; messageId: string }
   | { kind: 'latest-accepted-handover' }
@@ -37,6 +42,7 @@ type SubmissionsKind =
   | 'sending-submissions'
   | 'recoverable-submissions'
   | 'pending-submissions'
+  | 'unsettled-submissions'
   | 'linked-to'
   | 'accepted-inputs-after'
   | 'stopped-history-inputs'
@@ -47,7 +53,14 @@ export type JournalInputSingleReadResult =
       submission: AgentJournalSubmission | undefined
     }
   | { kind: SubmissionsKind; submissions: AgentJournalSubmission[] }
+  | {
+      kind: 'accepted-submissions'
+      submissions: AgentJournalSubmission[]
+      latestReceiptSequence: number
+    }
   | { kind: 'recovered-unknown-ids'; ids: string[] }
+  /** Exact input-key membership at this read, including supplied rendered prompt keys. */
+  | { kind: 'capture-keys'; keys: string[] }
   | { kind: 'latest-accepted-handover'; sequence: number }
   /** Infinity for an input this chat never recorded, as the ordinal index answers. */
   | { kind: 'input-ordinal'; ordinal: number }
@@ -83,27 +96,31 @@ export function readJournalInput(
   state: JournalReducerState,
   operation: JournalInputRead
 ): JournalInputReadResult {
-  return answerJournalInput(journalInputOrder(state), operation)
+  return answerJournalInput(journalInputOrder(state), operation, () =>
+    Array.from(memoryJournalMap(state.submissions).keys(), agentJournalSubmissionKey)
+  )
 }
 
 /** Read-only calls on the input owner's indexes; nothing here refreshes, ensures or writes. */
 export function answerJournalInput(
   order: JournalInputOrder,
   operation: JournalInputRead,
+  inputKeys: () => Iterable<string>,
   plain: JournalInputPlain = (value) => value
 ): JournalInputReadResult {
   if (operation.kind === 'batch') {
     return {
       kind: 'batch',
-      results: operation.reads.map((read) => answerSingle(order, read, plain))
+      results: operation.reads.map((read) => answerSingle(order, read, inputKeys, plain))
     }
   }
-  return answerSingle(order, operation, plain)
+  return answerSingle(order, operation, inputKeys, plain)
 }
 
 function answerSingle(
   order: JournalInputOrder,
   operation: JournalInputSingleRead,
+  inputKeys: () => Iterable<string>,
   plain: JournalInputPlain
 ): JournalInputSingleReadResult {
   const list = (submissions: Iterable<AgentJournalSubmission>) =>
@@ -117,6 +134,19 @@ function answerSingle(
       return { kind: operation.kind, submissions: list(order.sendingSubmissions()) }
     case 'recoverable-submissions':
       return { kind: operation.kind, submissions: list(order.recoverableSubmissions()) }
+    case 'accepted-submissions':
+      return {
+        kind: operation.kind,
+        submissions: list(order.acceptedInputsAfter(-Infinity)),
+        latestReceiptSequence: order.latestReceiptSequence()
+      }
+    case 'capture-keys':
+      return {
+        kind: operation.kind,
+        keys: [...new Set([...operation.present, ...inputKeys()])].sort()
+      }
+    case 'unsettled-submissions':
+      return { kind: operation.kind, submissions: list(order.unsettledSubmissions()) }
     case 'pending-submissions':
       return {
         kind: operation.kind,

@@ -29,6 +29,8 @@ export type StructuredAgentSessionHistoryJournal = Pick<
   | 'currentRead'
   | 'inputOrder'
   | 'historyOrigin'
+  | 'reads'
+  | 'readInOrder'
 >
 
 export type StructuredAgentSessionLinkageJournal = Pick<

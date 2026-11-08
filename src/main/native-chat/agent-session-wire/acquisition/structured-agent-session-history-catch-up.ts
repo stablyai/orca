@@ -6,6 +6,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import { agentSessionHostStatusBody } from '../../../../shared/agent-session/view/agent-session-host-status-rows'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type {
   StructuredAgentSessionEventSink,
@@ -39,6 +40,25 @@ export type HistoryCatchUpPlan = {
   keys: string[]
   reservedBytes: number
   expectedItems?: readonly ExpectedHistoryItem[]
+  expectedCursor?: AgentJournalCursor
+}
+
+export type HistoryCatchUpJournalView = { physicalCursor: AgentJournalCursor }
+
+/** A view certifies every named answer against physical progress, including context cuts. */
+export async function captureHistoryCatchUpView<View>(
+  history: StructuredAgentSessionHistoryJournal,
+  read: (physicalCursor: AgentJournalCursor) => Promise<View>
+): Promise<View & HistoryCatchUpJournalView> {
+  return await history.readInOrder(async () => {
+    const physicalCursor = await history.reads.physicalCursor()
+    const view = await read(physicalCursor)
+    const after = await history.reads.physicalCursor()
+    if (physicalCursor.epoch !== after.epoch || physicalCursor.sequence !== after.sequence) {
+      throw new Error('stale-history')
+    }
+    return { ...view, physicalCursor }
+  })
 }
 
 /** Stage the whole bounded plan before any sink admission. */
@@ -111,7 +131,7 @@ export function createHistoryCatchUpBatch() {
 
 export type HistoryCatchUpContext<View> = {
   /** Read journal lazily so empty provider history needs no journal scan. */
-  view: () => View
+  view: () => Promise<View>
   history: StructuredAgentSessionHistoryJournal
   journal: StructuredAgentSessionTransitionJournal
   signal: AbortSignal
@@ -126,7 +146,7 @@ export type HistoryCatchUpContext<View> = {
 export type HistoryCatchUpOutcome = 'committed' | 'checked' | 'nothing' | 'skipped'
 
 /** Optional reconciliation never gates provider open; an abandoned invocation cannot later write. */
-export async function runHistoryCatchUp<View>(input: {
+export async function runHistoryCatchUp<View extends HistoryCatchUpJournalView>(input: {
   agentName: string
   scope: string
   sessionId: string
@@ -135,9 +155,7 @@ export async function runHistoryCatchUp<View>(input: {
   assertCurrent?: () => void
   timeoutMs: number
   logger?: StructuredAgentSessionLogger
-  readView: (history: StructuredAgentSessionHistoryJournal, signal: AbortSignal) => View
-  /** Reject commits if saved facts changed since planning. */
-  sameView: (planned: View, current: View) => boolean
+  readView: (history: StructuredAgentSessionHistoryJournal, signal: AbortSignal) => Promise<View>
   prepare: (context: HistoryCatchUpContext<View>) => Promise<HistoryCatchUpPlan | null>
 }): Promise<HistoryCatchUpOutcome> {
   const controller = new AbortController()
@@ -174,9 +192,8 @@ export async function runHistoryCatchUp<View>(input: {
     if (!history || !journal || !written.ok || !sink.tryAppendTransition) {
       return 'skipped'
     }
-    const epoch = history.epoch
-    let planned: { view: View } | undefined
-    const view = (): View => (planned ??= { view: input.readView(history, controller.signal) }).view
+    let planned: Promise<View> | undefined
+    const view = (): Promise<View> => (planned ??= input.readView(history, controller.signal))
     const plan = await waitForPromiseWithSignal(
       input.prepare({
         view,
@@ -194,52 +211,37 @@ export async function runHistoryCatchUp<View>(input: {
     if (!plan) {
       return 'nothing'
     }
+    const expectedCursor =
+      plan.expectedCursor ??
+      (await waitForPromiseWithSignal(view(), controller.signal)).physicalCursor
+    check()
     let resolved = false
     const admission = sink.tryAppendTransition({
       lifecycle: true,
       publish: true,
+      beforeRun: () => {
+        try {
+          check()
+          return sink.journalHistory?.() === history
+        } catch {
+          return false
+        }
+      },
+      onResolved: (
+        outcomes: readonly ({ kind: 'committed'; wrote: boolean } | { kind: 'dropped' })[]
+      ) => {
+        resolved = outcomes[0]?.kind === 'committed'
+      },
       steps: [
         {
           kind: 'settlement',
           settlementId: plan.settlementId,
           reservedBytes: plan.reservedBytes,
-          resolve: (current) => {
-            try {
-              check()
-            } catch {
-              return []
-            }
-            if (
-              current.epoch !== epoch ||
-              sink.journalHistory?.() !== history ||
-              !input.sameView(view(), input.readView(history, controller.signal))
-            ) {
-              return []
-            }
-            const verified = new Set<string>()
-            for (const expected of plan.expectedItems ?? []) {
-              const canonical = current.canonicalItemId(expected.key)
-              if (
-                verified.has(expected.key) ||
-                canonical !== expected.canonicalItemId ||
-                current.item(canonical)?.revision !== expected.revision
-              ) {
-                return []
-              }
-              verified.add(expected.key)
-            }
-            // Submission aliases can make otherwise distinct canonical keys collide.
-            const seen = new Set<string>()
-            for (const mutation of plan.mutations) {
-              const key = agentJournalItemKey(mutation.identity)
-              const canonical = current.canonicalItemId(key)
-              if (seen.has(canonical) || (!verified.has(key) && current.item(canonical) !== null)) {
-                return []
-              }
-              seen.add(canonical)
-            }
-            resolved = true
-            return plan.mutations
+          resolution: {
+            kind: 'history-catch-up',
+            expectedCursor,
+            expectedItems: plan.expectedItems ?? [],
+            mutations: plan.mutations
           }
         }
       ]
