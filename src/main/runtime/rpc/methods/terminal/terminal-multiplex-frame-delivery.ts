@@ -133,7 +133,12 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     }
     if (stream.ackOutput) {
       if (state.linkEstimate.enabled) {
-        noteAckGatedSend(state, stream, chunk.bytes.byteLength, fromBacklog)
+        noteAckGatedSend(
+          state,
+          stream,
+          chunk.bytes.byteLength,
+          fromBacklog || stream.ackOutputWaited
+        )
       }
       chargeAckWindow(state, stream, chunk.bytes.byteLength)
     }
@@ -155,6 +160,7 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       stream.ackPendingOutput.length > 0 ||
       !state.canSendAckGatedOutput(stream, chunk.bytes.byteLength)
     ) {
+      stream.ackOutputWaited = true
       markYieldedQueriesDiscardedInFrames(
         stream,
         appendAckPendingOutput(stream, chunk, ackPendingOutputBudgetBytes(state, stream))
