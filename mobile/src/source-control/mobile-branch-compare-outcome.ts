@@ -1,6 +1,5 @@
 import { translate } from '../i18n/mobile-i18n'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import type { RequestCurrency } from '../transport/generation-scoped-request-owner'
 import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
 import {
   resolveMobileBranchBaseRefs,
@@ -22,22 +21,17 @@ export type BranchCompareAttempt = BranchCompareOutcome & {
   readonly effectiveBaseRef: string | null
 }
 
-// Return failures because callers void this load; null means superseded and publishes nothing.
+// Return failures because callers void this load.
 export async function readBranchCompareOutcome(
   client: RpcOperationSender,
   worktreeId: string,
-  currency: RequestCurrency,
   compare?: MobileBranchCompareTarget
-): Promise<BranchCompareAttempt | null> {
+): Promise<BranchCompareAttempt> {
   let baseRefs: MobileBranchBaseRefs
   try {
     baseRefs = await resolveMobileBranchBaseRefs(client, worktreeId, compare)
   } catch (err) {
     return { ...failedCompare(err), effectiveBaseRef: null }
-  }
-  // Base resolution can outlive its scope; stop before sending a superseded compare request.
-  if (!currency.isCurrent()) {
-    return null
   }
   const [outcome, effectiveBaseRef] = await Promise.all([
     readCompare(client, worktreeId, baseRefs.compareBaseRef),

@@ -69,7 +69,7 @@
       "ordinal": 15,
       "json": "{\"id\":\"frame-7\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
     },
-    "587de4c7f7fc": {
+    "680d7579d052": {
       "name": "repo.list#1",
       "ordinal": 6,
       "args": [
@@ -80,13 +80,13 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -95,7 +95,7 @@
         "startedAt": 0
       }
     },
-    "6c86cac2adf2": {
+    "6f512ea2abb3": {
       "name": "worktree.show#2",
       "ordinal": 13,
       "args": [
@@ -112,39 +112,13 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
         "status": "pending",
         "startedAt": 3001
-      }
-    },
-    "6d220bb7b42a": {
-      "name": "worktree.show#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
       }
     },
     "8329dee32b1b": {
@@ -164,6 +138,32 @@
           "name": "params",
           "value": {
             "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8ac3c8b29916": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
           }
         },
         {
@@ -250,32 +250,6 @@
         }
       }
     },
-    "abdabad58014": {
-      "name": "repo.list#2",
-      "ordinal": 14,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 3001
-      }
-    },
     "afafd4479aaf": {
       "name": "git.status#2",
       "ordinal": 10,
@@ -300,6 +274,32 @@
             "admissionTier": "background",
             "reuseLineStats": true,
             "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 3001
+      }
+    },
+    "c95a7c93e7cd": {
+      "name": "repo.list#2",
+      "ordinal": 14,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
           }
         },
         {
@@ -451,12 +451,12 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "6d220bb7b42a",
-            "587de4c7f7fc",
+            "8ac3c8b29916",
+            "680d7579d052",
             "b5e0097ad800",
             "e86a19054cce",
-            "6c86cac2adf2",
-            "abdabad58014"
+            "6f512ea2abb3",
+            "c95a7c93e7cd"
           ],
           "payloads": [
             "f648b042d810",
@@ -484,12 +484,12 @@
           "sender": [
             "891438a18444",
             "9cb2ba41c834",
-            "6d220bb7b42a",
-            "587de4c7f7fc",
+            "8ac3c8b29916",
+            "680d7579d052",
             "d43019a946a2",
             "e86a19054cce",
-            "6c86cac2adf2",
-            "abdabad58014"
+            "6f512ea2abb3",
+            "c95a7c93e7cd"
           ],
           "payloads": [
             "f648b042d810",

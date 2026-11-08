@@ -29,6 +29,7 @@ export type HostQuery<TInput extends HostQueryParams, TData> = {
   family: string
   // Calls the domain's loader. `previous` is the cached data a revalidation may build on; live reads pass none.
   // Absent for a family only its screen can read (its inputs live in the screen); that screen passes `read`.
+  // `read.live` marks an action's read (readHostQueryLive), which must not be served from a host-side cache.
   fetch?: HostQueryFetch<TInput, TData>
   staleTime?: StaleTimeFunction<TData, Error, TData, HostQueryKey>
   gcTime?: number
@@ -51,7 +52,8 @@ type HostQueryFetch<TInput extends HostQueryParams, TData> = (
   client: RpcClient,
   target: HostQueryTarget,
   input: TInput,
-  previous: TData | undefined
+  previous: TData | undefined,
+  read: { live: boolean }
 ) => Promise<TData>
 
 export function defineHostQuery<TInput extends HostQueryParams, TData>(
@@ -81,7 +83,9 @@ function hostQueryOptions<TInput extends HostQueryParams, TData>(
     // No abort signal: the host has no cancel, and a screen that unmounts still wants the answer cached.
     queryFn: fetch
       ? ({ client: queryClient }) =>
-          fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey))
+          fetch(hostReadClient(client), target, input, queryClient.getQueryData<TData>(queryKey), {
+            live: false
+          })
       : skipToken,
     meta: { streamBacked, signal }
   })
@@ -105,7 +109,7 @@ export async function readHostQueryLive<TInput extends HostQueryParams, TData>(
   }
   const { fetch } = query
   const { read } = options
-  const live = fetch && (() => fetch(hostReadClient(client), target, input, undefined))
+  const live = fetch && (() => fetch(hostReadClient(client), target, input, undefined, { live: true }))
   if (!read && !live) {
     throw new Error(`${query.family} is read by its screen`)
   }

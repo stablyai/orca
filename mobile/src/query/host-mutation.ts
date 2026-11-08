@@ -24,6 +24,8 @@ export type HostMutation<TVars, TResult> = {
     keys: (hostId: string, vars: TVars) => QueryKey[]
     apply: (queryClient: QueryClient, hostId: string, vars: TVars) => void
   }
+  /** Writes what the host confirmed (e.g. a re-read slice) into the cache. */
+  accept?: (queryClient: QueryClient, hostId: string, vars: TVars, result: TResult) => void
   /** Only the slices the write changed. */
   invalidates?: (hostId: string, vars: TVars) => QueryKey[]
 }
@@ -100,8 +102,8 @@ async function applyOptimistic<TVars>(
   }
 }
 
-function invalidate<TVars>(
-  mutation: HostMutation<TVars, unknown>,
+function invalidate<TVars, TResult>(
+  mutation: HostMutation<TVars, TResult>,
   context: HostMutationContext,
   vars: TVars
 ): void {
@@ -134,6 +136,7 @@ export async function runHostMutation<TVars, TResult>(
       onPhase('unconfirmed')
       result = await confirmOnceConnected(mutation, context, vars, rollback)
     }
+    mutation.accept?.(context.queryClient, context.hostId, vars, result)
     invalidate(mutation, context, vars)
     return result
   } finally {

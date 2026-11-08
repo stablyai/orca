@@ -1,14 +1,12 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { QueryKey } from '@tanstack/react-query'
 import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import {
-  fetchUpdatePRBody,
-  fetchUpdatePRTitle,
-  type GitHubPrMutationOutcome
-} from './github-pr-mutations'
+import { defineHostMutation, useHostMutation } from '../query/host-mutation'
+import { hostQueryKey } from '../query/host-query-key'
+import { fetchUpdatePRBody, fetchUpdatePRTitle } from './github-pr-mutations'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -16,61 +14,107 @@ import {
   buildUpdatePRTitleParams,
   createPrTextEditOwnership
 } from './pr-title-edit'
+import {
+  patchPrDetails,
+  patchPrSummary,
+  prBranchReviewQuery,
+  prDetailsQuery,
+  type PrQueryScope
+} from './mobile-pr-queries'
 
 export type PrTextField = 'title' | 'body'
 
-export type PrTextMutations = {
-  updateTitle: (args: {
-    prNumber: number
-    title: string
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  updateBody: (args: {
-    prNumber: number
-    body: string
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-}
-
 export type PrTextActionInput = {
+  hostId: string
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
   prNumber: number
   prRepo?: GitHubPrRepoSlug | null
-  refetch: () => void | Promise<void>
-  mutations?: PrTextMutations
+  /** The shown PR's reads, which the saved text is written into. */
+  queries: PrQueryScope | null
 }
 
-function realMutations(client: RpcOperationSender, worktreeId: string): PrTextMutations {
-  return {
-    updateTitle: (args) => fetchUpdatePRTitle(client, worktreeId, args),
-    updateBody: (args) => fetchUpdatePRBody(client, worktreeId, args)
+type PrTextWriteVars = {
+  worktreeId: string
+  prNumber: number
+  prRepo: GitHubPrRepoSlug | null
+  field: PrTextField
+  text: string
+  summaryKey: QueryKey | null
+  detailsKey: QueryKey | null
+}
+
+async function sendTextWrite(client: RpcClient, vars: PrTextWriteVars): Promise<void> {
+  const { worktreeId, prNumber, prRepo, text } = vars
+  const outcome =
+    vars.field === 'title'
+      ? await fetchUpdatePRTitle(client, worktreeId, { prNumber, title: text, prRepo })
+      : await fetchUpdatePRBody(client, worktreeId, { prNumber, body: text, prRepo })
+  if (!outcome.ok) {
+    throw new Error(outcome.error)
   }
 }
+
+// The saved text is the whole change, so a confirmed write needs no re-read; a refusal puts the old text back.
+const prTextWrite = defineHostMutation({
+  offline: 'draft',
+  send: sendTextWrite,
+  // Setting the same text again is harmless, so a lost reply is settled by sending it again.
+  confirm: sendTextWrite,
+  optimistic: {
+    keys: (_hostId, vars: PrTextWriteVars) =>
+      [vars.summaryKey, vars.detailsKey].filter((key): key is QueryKey => key !== null),
+    apply: (queryClient, _hostId, vars) => {
+      const { text } = vars
+      if (vars.field === 'title') {
+        if (vars.summaryKey) {
+          patchPrSummary(queryClient, vars.summaryKey, (pr) => ({ ...pr, title: text }))
+        }
+        if (vars.detailsKey) {
+          patchPrDetails(queryClient, vars.detailsKey, (details) => ({
+            ...details,
+            item: { ...details.item, title: text }
+          }))
+        }
+      } else if (vars.detailsKey) {
+        patchPrDetails(queryClient, vars.detailsKey, (details) => ({ ...details, body: text }))
+      }
+    }
+  }
+})
 
 // Title and description edits share one in-flight lock: both rewrite the same PR.
 export function useMobilePrTextAction(input: PrTextActionInput) {
   const t = useMobileTranslation()
-  const { client, connState, worktreeId, prNumber, prRepo, refetch } = input
+  const { hostId, client, connState, worktreeId, prNumber, prRepo, queries } = input
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | { kind: 'disconnected' | 'updateFailed' } | null>(
     null
   )
   const inFlightRef = useRef(false)
   const [ownership] = useState(createPrTextEditOwnership)
-  // A write that settles after the view moved to another PR must not show its error there or reread for it.
+  // A write that settles after the view moved to another PR must not show its error there.
   const identity = `${prNumber}:${prRepo ? githubRepoIdentityKey(prRepo) : ''}`
   const identityRef = useRef(identity)
   useLayoutEffect(() => {
     identityRef.current = identity
   })
-
-  const mutations = useMemo(
-    () => input.mutations ?? (client ? realMutations(client, worktreeId) : null),
-    [input.mutations, client, worktreeId]
+  const { mutate, blockedOffline } = useHostMutation(prTextWrite, { hostId, client })
+  const ready = client !== null && connState === 'connected' && !blockedOffline
+  const keys = useMemo(
+    () => ({
+      summaryKey:
+        queries?.branchInput != null
+          ? hostQueryKey(hostId, prBranchReviewQuery.family, queries.target, queries.branchInput)
+          : null,
+      detailsKey:
+        queries?.detailsInput != null
+          ? hostQueryKey(hostId, prDetailsQuery.family, queries.target, queries.detailsInput)
+          : null
+    }),
+    [hostId, queries]
   )
-  const ready = mutations !== null && (input.mutations !== undefined || connState === 'connected')
 
   const write = useCallback(
     async (field: PrTextField, draft: string, current: string): Promise<boolean> => {
@@ -85,7 +129,7 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
         return false
       }
       // Offline Save must explain failure and leave the editor open rather than silently do nothing.
-      if (!ready || !mutations) {
+      if (!ready) {
         setError({ kind: 'disconnected' })
         return false
       }
@@ -94,21 +138,17 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
       setError(null)
       const isCurrent = (): boolean => identityRef.current === identity
       try {
-        const outcome =
-          'title' in params
-            ? await mutations.updateTitle({ ...params, prRepo })
-            : await mutations.updateBody({ ...params, prRepo })
-        if (outcome.ok) {
-          triggerSuccess()
-          return true
-        }
-        triggerError()
-        if (isCurrent()) {
-          setError(outcome.error)
-        }
-        return false
+        await mutate({
+          worktreeId,
+          prNumber,
+          prRepo: prRepo ?? null,
+          field,
+          text: 'title' in params ? params.title : params.body,
+          ...keys
+        })
+        triggerSuccess()
+        return true
       } catch (err) {
-        // Contain fire-and-forget save rejection and return false with feedback.
         triggerError()
         if (isCurrent()) {
           setError(err instanceof Error ? err.message : { kind: 'updateFailed' })
@@ -117,18 +157,9 @@ export function useMobilePrTextAction(input: PrTextActionInput) {
       } finally {
         inFlightRef.current = false
         setSaving(false)
-        // A failed response doesn't prove the host kept the old text, so every attempted write rereads.
-        // The write decides Save's result; a failed reread is contained and keeps the shown PR.
-        if (isCurrent()) {
-          try {
-            await refetch()
-          } catch {
-            // Keep the write's outcome.
-          }
-        }
       }
     },
-    [ready, mutations, prNumber, prRepo, refetch, identity]
+    [identity, keys, mutate, prNumber, prRepo, ready, worktreeId]
   )
   const save = useCallback(
     (field: PrTextField, draft: string, current: string): Promise<boolean> =>
