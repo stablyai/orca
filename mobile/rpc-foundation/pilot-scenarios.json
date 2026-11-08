@@ -12221,6 +12221,7 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
+            "markViewerComments": true,
             "projectRef": {
               "host": "gitlab.com",
               "path": "group/project"
@@ -12267,6 +12268,7 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
+            "markViewerComments": true,
             "projectRef": {
               "host": "gitlab.com",
               "path": "group/project"
