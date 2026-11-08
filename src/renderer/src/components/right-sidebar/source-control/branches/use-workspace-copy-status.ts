@@ -53,6 +53,16 @@ export function useWorkspaceCopyStatus({
     owner ? state.gitStatusByWorktree[worktreeId] : undefined
   )
   const [read, setRead] = useState<PrivateRead | null>(null)
+  // Selecting a copy doesn't clear the slots, so on becoming owner they may still hold the twin's
+  // status; distrust them until they change or this copy's own refresh lands.
+  const [wasOwner, setWasOwner] = useState(owner)
+  const [inherited, setInherited] = useState<{ head?: string; entries?: GitStatusEntry[] } | null>(
+    null
+  )
+  if (owner !== wasOwner) {
+    setWasOwner(owner)
+    setInherited(owner ? { head, entries: slotEntries } : null)
+  }
   const key = `${hostId}\u0000${worktreeId}\u0000${worktreePath}`
   useEffect(() => {
     if (!open) {
@@ -60,7 +70,7 @@ export function useWorkspaceCopyStatus({
     }
     if (owner) {
       if (refreshOnOpen) {
-        refreshWorktreeCopyStatus(worktreeId, hostId, worktreePath)
+        refreshWorktreeCopyStatus(worktreeId, hostId, worktreePath, () => setInherited(null))
       }
       return
     }
@@ -97,7 +107,9 @@ export function useWorkspaceCopyStatus({
       stale = true
     }
   }, [open, owner, refreshOnOpen, worktreeId, hostId, worktreePath, key])
-  if (owner) {
+  const slotTrusted =
+    owner && !(inherited && inherited.head === head && inherited.entries === slotEntries)
+  if (slotTrusted) {
     return {
       statusKnown: head !== undefined,
       statusReadError: slotReadError,
@@ -108,7 +120,8 @@ export function useWorkspaceCopyStatus({
   const own = read?.key === key ? read : null
   return {
     statusKnown: own?.status !== undefined,
-    statusReadError: own?.error,
+    // A failed status can come back as a result carrying readError rather than a rejection.
+    statusReadError: own?.error ?? own?.status?.readError,
     conflictOperation: own?.status?.conflictOperation ?? 'unknown',
     entries: own?.status?.entries ?? NO_ENTRIES
   }

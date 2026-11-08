@@ -15,7 +15,6 @@ export type BranchPickerProps = BranchPickerOptions & {
   dirtyOnlyBlocker?: boolean
   /** Replaces the header trigger; it must forward a ref and props to a button. */
   trigger?: ReactNode
-  onOpenChange?: (open: boolean) => void
   /** Adds a copy button to the current branch's row. */
   onCopyBranch?: () => void
 }
@@ -24,7 +23,6 @@ export function BranchPicker({
   blocker,
   dirtyOnlyBlocker = false,
   trigger,
-  onOpenChange,
   onCopyBranch,
   ...options
 }: BranchPickerProps) {
@@ -33,13 +31,7 @@ export function BranchPicker({
   const picker = useBranchPicker(options)
   const disabled = blocker !== null || picker.pending
   return (
-    <Popover
-      open={picker.open}
-      onOpenChange={(next) => {
-        onOpenChange?.(next)
-        picker.setOpen(next)
-      }}
-    >
+    <Popover open={picker.open} onOpenChange={picker.setOpen}>
       <PopoverTrigger asChild>
         {trigger ?? (
           <button

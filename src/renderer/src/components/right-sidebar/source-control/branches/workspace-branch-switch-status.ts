@@ -25,7 +25,8 @@ export function copyOwnsStatusSlot(
 export function refreshWorktreeCopyStatus(
   worktreeId: string,
   hostId: ExecutionHostId,
-  worktreePath: string
+  worktreePath: string,
+  onApplied?: () => void
 ): void {
   const state = useAppStore.getState()
   const copy = resolveWorktreeGitCopyNow(worktreeId, hostId)
@@ -44,7 +45,8 @@ export function refreshWorktreeCopyStatus(
       admissionTier: 'interactive',
       reuseLineStats: true,
       // The user can select a twin while this read is in flight.
-      shouldApply: () => copyOwnsStatusSlot(useAppStore.getState(), worktreeId, hostId)
+      shouldApply: () => copyOwnsStatusSlot(useAppStore.getState(), worktreeId, hostId),
+      onStatusAccepted: onApplied
     }
   }).catch((error: unknown) => console.warn('[BranchPicker] git status refresh failed', error))
 }
