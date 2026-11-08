@@ -275,6 +275,7 @@ export function beginHostAdmittedStructuredLaunch(args: {
       void (admitted.promptDeliveryResult ?? Promise.resolve(DELIVERED)).then(resolveDelivery, () =>
         resolveDelivery(NOT_DELIVERED)
       )
+      // oxlint-disable-next-line typescript/return-await -- the hold covers opening the admitted surface, not its settlement
       return admitted.settlement
     } finally {
       releaseHold()

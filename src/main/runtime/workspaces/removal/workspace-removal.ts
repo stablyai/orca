@@ -295,9 +295,11 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
       if (!accepted.removing) {
         emitRemoved()
       }
-      return options.waitForBackgroundRemoval
-        ? finishAcceptedWorktreeRemoval(accepted, removalTarget.id, cleanupHostId)
-        : accepted
+      if (!options.waitForBackgroundRemoval) {
+        return accepted
+      }
+      // oxlint-disable-next-line typescript/return-await -- the in-flight entry covers acceptance only, not the background wait
+      return finishAcceptedWorktreeRemoval(accepted, removalTarget.id, cleanupHostId)
     } finally {
       this.removeManagedWorktreeInFlight.release(cleanupScopeKey, removal)
     }

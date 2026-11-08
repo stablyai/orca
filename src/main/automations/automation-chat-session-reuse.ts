@@ -99,6 +99,7 @@ export async function reuseAutomationChat(
       ) {
         return null
       }
+      // oxlint-disable-next-line typescript/return-await -- this is the failure resolution; its throw must not re-enter the catch
       return automationRunAcceptedTarget(
         runtime,
         run,

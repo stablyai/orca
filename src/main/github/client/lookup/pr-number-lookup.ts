@@ -131,7 +131,7 @@ export async function getPRByNumber(
       { ...ghOptions, ...githubHostExecOptions(ownerRepo) }
     )
     const exactData = JSON.parse(stdout) as PullRequestLookupData
-    return hydratePullRequestLookupData(
+    return await hydratePullRequestLookupData(
       ownerRepo,
       {
         ...knownPullRequestData,
@@ -153,7 +153,7 @@ export async function getPRByNumber(
           ? await getRestPRByNumber(ownerRepo, number, ghOptions)
           : knownPullRequestData
       return restData
-        ? hydratePullRequestLookupData(
+        ? await hydratePullRequestLookupData(
             ownerRepo,
             { ...restData, checksUnavailable: true },
             ghOptions,
