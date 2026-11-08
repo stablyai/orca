@@ -12,7 +12,15 @@ import {
   type EdgeAssignResult
 } from './edge-admin-client.js'
 import { EDGE_EVACUATION_BUSY_INTERVAL_MS, EdgeEvacuation } from './edge-relay-evacuation.js'
-import { EDGE_FENCE_MAX_ATTEMPTS, EDGE_FENCE_RETRY_BASE_MS, edgeFenceRetryDelayMs, retryPendingFences } from './edge-relay-fence.js'
+import {
+  EDGE_FENCE_MAX_ATTEMPTS,
+  EDGE_FENCE_RETRY_BASE_MS,
+  EDGE_FENCE_RETRY_BATCH,
+  EDGE_FENCE_RETRY_MAX_MS,
+  edgeFenceRetryDelayMs,
+  recordPendingFence,
+  retryPendingFences
+} from './edge-relay-fence.js'
 import {
   EDGE_CELL_ID,
   EDGE_LOCKED_CALLS_MAX,
@@ -49,6 +57,10 @@ class ScriptedEdge implements EdgeAdmin {
     if (answer === 'hang') { await new Promise<void>((resolve) => this.waiting.push(resolve)) }
     const outcome = answer === 'hang' ? 'applied' : answer
     return { outcome, assignmentEpoch: outcome === 'stale' ? body.assignmentEpoch + 5 : body.assignmentEpoch }
+  }
+
+  get hanging(): number {
+    return this.waiting.length
   }
 
   release(): void {
@@ -229,10 +241,54 @@ describe('relay edge pending fence retries', () => {
       retry: true
     })
     expect(logged(error, 'orca_relay_edge_fence_abandoned')).toEqual([
-      { event: 'orca_relay_edge_fence_abandoned', attempts: EDGE_FENCE_MAX_ATTEMPTS }
+      {
+        event: 'orca_relay_edge_fence_abandoned',
+        outcome: 'stale',
+        cellId: 'us-c1',
+        assignmentEpoch: 9,
+        attempts: EDGE_FENCE_MAX_ATTEMPTS
+      }
     ])
     expect(edgeFenceRetryDelayMs(1)).toBe(60_000)
     expect(edgeFenceRetryDelayMs(EDGE_FENCE_MAX_ATTEMPTS)).toBe(30 * 60_000)
+  })
+
+  it('keeps retrying a fence through more than a day of edge outage', () => {
+    // Recorded at 0, first retry one base delay later, then each attempt's backoff.
+    let lastAttemptAt = EDGE_FENCE_RETRY_BASE_MS
+    for (let attempt = 1; attempt < EDGE_FENCE_MAX_ATTEMPTS; attempt += 1) {
+      lastAttemptAt += edgeFenceRetryDelayMs(attempt)
+    }
+    expect(lastAttemptAt).toBeGreaterThanOrEqual(24 * 60 * 60_000)
+    // Never slower than the cap, so the edge is not left claiming hosts long after it is back.
+    expect(edgeFenceRetryDelayMs(EDGE_FENCE_MAX_ATTEMPTS)).toBe(EDGE_FENCE_RETRY_MAX_MS)
+  })
+
+  it(`retries up to ${EDGE_FENCE_RETRY_BATCH} due fences per pass, 10 in flight at once`, async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = await harness()
+    const hosts = Array.from({ length: EDGE_FENCE_RETRY_BATCH + 10 }, (_, index) => `fencehost${String(index).padStart(7, '0')}`)
+    for (const host of hosts) {
+      await h.placeRow('us-c1', 9, host)
+      await recordPendingFence(h.database, { userId: USER, relayHostId: host }, 'us-c1', 9, h.clock.now)
+    }
+    h.clock.now += EDGE_FENCE_RETRY_BASE_MS
+    h.edge.answers = hosts.map(() => 'hang')
+    let settled = false
+    const pass = h.retry().then((left) => {
+      settled = true
+      return left
+    })
+    let maxInFlight = 0
+    while (!settled) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      maxInFlight = Math.max(maxInFlight, h.edge.hanging)
+      h.edge.release()
+    }
+    expect(await pass).toBe(true)
+    expect(h.edge.calls).toHaveLength(EDGE_FENCE_RETRY_BATCH)
+    expect(maxInFlight).toBe(10)
+    expect(await h.pending()).toHaveLength(10)
   })
 
   it('lets only one director claim an attempt', async () => {

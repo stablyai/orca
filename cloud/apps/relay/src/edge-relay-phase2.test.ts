@@ -8,6 +8,7 @@ import {
   type EdgeDeviceRow
 } from './edge-admin-client.js'
 import { EDGE_CELL_ID, EDGE_EXPORT_SKIP_AFTER_MS, EdgeAssignments, type EdgeRelayConfig } from './edge-relay.js'
+import type { EdgeControlFlags } from './edge-relay-control.js'
 
 const fakes = vi.hoisted(() => ({
   verifyRelayToken: vi.fn(async (token: string) => ({ sub: 'user-1', relayHostId: token }))
@@ -276,13 +277,14 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     const response = await h.assign()
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
-    // Postgres keeps what it had: the edge's revoke is lost, nothing is written back.
-    expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
+    // The edge's revoke is unknown here: the host's Postgres devices are removed, never resurrected.
+    expect(await h.postgresDevices()).toEqual([])
     expect(skipped()).toHaveLength(1)
     expect(JSON.parse(String(skipped()[0]![0]))).toEqual({
       event: 'orca_relay_edge_export_skipped',
       reason: 'relay_edge_admin_unavailable:network',
-      failingForMs: EDGE_EXPORT_SKIP_AFTER_MS
+      failingForMs: EDGE_EXPORT_SKIP_AFTER_MS,
+      devicesRemoved: 1
     })
   })
 
@@ -337,7 +339,7 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     const response = await h.assign()
     expect(response.status).toBe(200)
     expect(exportCalls).toBe(1)
-    expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: null }])
+    expect(await h.postgresDevices()).toEqual([])
     expect(h.fake.assignment).toMatchObject({ cellId: 'us-c1', assignmentEpoch: 9 })
   })
 
@@ -368,6 +370,57 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     const response = await h.assign()
     expect(await response.json()).toMatchObject({ cellUrl: EDGE_URL })
     expect(h.fake.pushes[0]).toMatchObject({ userId: USER, relayHostId: HOST })
+  })
+
+  it('with mode off or down, sends no new host to the edge', async () => {
+    for (const mode of ['off', 'down'] as const) {
+      const h = await harness('host', { control: () => ({ mode }) })
+      expect(await (await h.assign()).json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
+      expect(h.fake.pushes).toHaveLength(0)
+      expect(await h.row()).toBeUndefined()
+    }
+  })
+
+  it('with mode off, moves hosts on the edge off normally: export, place, fence', async () => {
+    const flags: EdgeControlFlags = { mode: 'on' }
+    const h = await harness('host', { control: () => flags })
+    await h.insertDevice(device('phone-a'))
+    expect(await (await h.assign()).json()).toMatchObject({ cellUrl: EDGE_URL })
+    h.fake.devices = [device('phone-a', { revoked_at: 1_800_000_000_000 })]
+    flags.mode = 'off'
+    expect(await (await h.assign()).json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test' })
+    // The edge's revoke carries over.
+    expect(h.fake.exports).toBe(1)
+    expect(await h.postgresDevices()).toEqual([{ id: 'phone-a', revoked: 1_800_000_000_000 }])
+    expect(h.fake.assignment).toMatchObject({ cellId: 'us-c1', assignmentEpoch: 9 })
+  })
+
+  it('with mode down, skips the export at once, removes the Postgres devices, and fences once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const flags: EdgeControlFlags = { mode: 'on' }
+    const h = await harness('host', { control: () => flags })
+    await h.insertDevice(device('phone-a'))
+    await h.insertDevice(device('phone-b'))
+    await h.assign()
+    // phone-a was revoked on the edge, which then died; Postgres still holds it live.
+    h.fake.devices = [device('phone-a', { revoked_at: 1_800_000_000_000 })]
+    h.fake.down = true
+    flags.mode = 'down'
+    const assign = vi.spyOn(h.fake, 'assign')
+    const response = await h.assign()
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ cellUrl: 'https://us-c1.relay.example.test', assignmentEpoch: 9 })
+    expect(h.fake.exports).toBe(0)
+    expect(await h.postgresDevices()).toEqual([])
+    const skipped = warn.mock.calls
+      .map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
+      .filter((line) => line.event === 'orca_relay_edge_export_skipped')
+    expect(skipped).toEqual([{ event: 'orca_relay_edge_export_skipped', reason: 'mode_down', devicesRemoved: 2 }])
+    // One fence try, recorded for the sweep to retry.
+    expect(assign).toHaveBeenCalledTimes(1)
+    const pending = await h.database.query(`SELECT cell_id, assignment_epoch FROM relay_edge_fence_pending`)
+    expect(pending.map((row) => [String(row.cell_id), Number(row.assignment_epoch)])).toEqual([['us-c1', 9]])
   })
 
   it('does not touch the edge for hosts that were never on it', async () => {

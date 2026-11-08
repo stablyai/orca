@@ -7,7 +7,7 @@ import { RELAY_DEFAULT_REGION, RelayRegionSchema } from '@orca-cloud/relay-contr
 import type { RelayDatabase, SqlRow } from './database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
 import { inEdgeCohort, type EdgeRelayConfig } from './edge-relay.js'
-import { retryPendingFences } from './edge-relay-fence.js'
+import { forEachBounded, retryPendingFences } from './edge-relay-fence.js'
 
 type Identity = { userId: string; relayHostId: string }
 
@@ -17,25 +17,36 @@ function text(row: SqlRow, field: string): string {
   return value
 }
 
-// The cohort only changes when a new revision starts, so a pass soon after start and then a slow
-// background pass are enough; each pass reads the edge rows (cell_id has no index).
+// A cohort change (director/edge.json, or a new revision) re-arms the sweep (controlChanged), so a
+// soon pass and then a slow background pass are enough; each pass reads the edge rows (cell_id has
+// no index).
 export const EDGE_EVACUATION_INTERVAL_MS = 10 * 60_000
 // First pass after start, and the next pass while more leaving hosts are queued.
 export const EDGE_EVACUATION_BUSY_INTERVAL_MS = 60_000
-// Drains sent per tick (per director), so a cohort cut moves desktops back gradually.
-export const EDGE_EVACUATION_BATCH = 20
-// Edge rows read per tick; the cursor walks the table across ticks.
+// Longest wait for a pass after the runtime control changes, so a rollback starts at once.
+export const EDGE_EVACUATION_CONTROL_DELAY_MS = 5_000
+// Drains sent per tick (per director): a full rollback of ~19k hosts over 5 directors takes ~40 min.
+export const EDGE_EVACUATION_BATCH = 100
+// Drains in flight at once per director.
+export const EDGE_EVACUATION_CONCURRENCY = 10
+// Edge rows read per page; the cursor walks the table across ticks.
 const EDGE_EVACUATION_PAGE = 500
 // A host this director drained is not drained again for this long (a desktop that is offline
 // answers idle, and asks the director on its own when it comes back).
 const EDGE_EVACUATION_COOLDOWN_MS = 10 * 60_000
+// A pass starts at a random point of the key space and wraps around to it, so directors sweeping
+// at once mostly drain different hosts.
+type Pass = { origin: Identity; cursor: Identity; wrapped: boolean }
 
 export class EdgeEvacuation {
-  private cursor: Identity | undefined
+  // Undefined between passes.
+  private pass: Pass | undefined
   private readonly drainedAt = new Map<string, number>()
   private timer: ReturnType<typeof setTimeout> | undefined
   private stopped = true
   private busy = true
+  private sweeping = false
+  private controlChangedWhileSweeping = false
 
   constructor(
     private readonly database: RelayDatabase,
@@ -57,6 +68,19 @@ export class EdgeEvacuation {
     this.timer = undefined
   }
 
+  // The runtime control changed (e.g. mode off for a rollback): the next pass runs within
+  // EDGE_EVACUATION_CONTROL_DELAY_MS instead of waiting out the idle interval.
+  controlChanged(): void {
+    this.busy = true
+    if (this.stopped) { return }
+    if (this.sweeping) {
+      this.controlChangedWhileSweeping = true
+      return
+    }
+    clearTimeout(this.timer)
+    this.schedule(EDGE_EVACUATION_CONTROL_DELAY_MS * this.random())
+  }
+
   // One tick: returns how many drains the edge answered.
   async sweep(): Promise<number> {
     const now = this.now()
@@ -64,12 +88,12 @@ export class EdgeEvacuation {
       if (now - sentAt >= EDGE_EVACUATION_COOLDOWN_MS) { this.drainedAt.delete(key) }
     }
     const leaving = await this.leavingHosts()
-    this.busy = leaving.length >= EDGE_EVACUATION_BATCH || this.cursor !== undefined
+    this.busy = leaving.length >= EDGE_EVACUATION_BATCH || this.pass !== undefined
     let answered = 0
-    for (const identity of leaving) {
+    await forEachBounded(leaving, EDGE_EVACUATION_CONCURRENCY, async (identity) => {
       try {
         const result = await this.admin.drain(identity.relayHostId)
-        this.drainedAt.set(`${identity.userId}\n${identity.relayHostId}`, this.now())
+        this.drainedAt.set(drainKey(identity), this.now())
         answered += 1
         console.warn(
           JSON.stringify({
@@ -82,51 +106,85 @@ export class EdgeEvacuation {
         if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
         console.warn(JSON.stringify({ event: 'orca_relay_edge_drain_failed', reason: error.message }))
       }
-    }
+    })
     // Pending fences keep the busy cadence, so their backoff (from 60 s) is honoured.
     if (await retryPendingFences(this.database, this.admin, this.edgeCellId, this.now)) { this.busy = true }
     return answered
   }
 
-  // Edge rows (one page after the cursor) whose host left the cohort, skipping recent drains.
+  // Edge rows (a page after the cursor; a second when the first ends the pass's first half) whose
+  // host left the cohort, skipping recent drains. An idle pass reads each edge row once.
   private async leavingHosts(): Promise<Identity[]> {
-    const cursor = this.cursor ?? { userId: '', relayHostId: '' }
-    const rows = await this.database.query(
-      `SELECT a.user_id, a.relay_host_id, p.preferred_region
-       FROM relay_assignments a
-       LEFT JOIN relay_assignment_region_preferences p
-         ON p.user_id = a.user_id AND p.relay_host_id = a.relay_host_id
-       WHERE a.cell_id = ? AND (a.user_id > ? OR (a.user_id = ? AND a.relay_host_id > ?))
-       ORDER BY a.user_id, a.relay_host_id
-       LIMIT ?`,
-      [this.edgeCellId, cursor.userId, cursor.userId, cursor.relayHostId, EDGE_EVACUATION_PAGE]
-    )
-    // A short page reached the end: the next tick starts over.
-    this.cursor = undefined
     const leaving: Identity[] = []
-    for (const [index, row] of rows.entries()) {
-      const identity = { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') }
-      if (rows.length === EDGE_EVACUATION_PAGE && index === rows.length - 1) { this.cursor = identity }
-      const stored = RelayRegionSchema.safeParse(row.preferred_region)
-      const region = stored.success ? stored.data : RELAY_DEFAULT_REGION
-      if (inEdgeCohort(this.config, identity.relayHostId, region, identity.userId)) { continue }
-      if (this.drainedAt.has(`${identity.userId}\n${identity.relayHostId}`)) { continue }
-      leaving.push(identity)
-      if (leaving.length === EDGE_EVACUATION_BATCH) {
+    this.pass ??= this.newPass()
+    for (let pages = 0; pages < 2 && this.pass !== undefined; pages += 1) {
+      const pass: Pass = this.pass
+      const rows = await this.readPage(pass)
+      let filled = false
+      for (const row of rows) {
+        const identity = { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') }
+        pass.cursor = identity
+        const stored = RelayRegionSchema.safeParse(row.preferred_region)
+        const region = stored.success ? stored.data : RELAY_DEFAULT_REGION
+        if (inEdgeCohort(this.config, identity.relayHostId, region, identity.userId)) { continue }
+        if (this.drainedAt.has(drainKey(identity))) { continue }
+        leaving.push(identity)
         // Resume after the last host taken, so the rest of the page is read next tick.
-        this.cursor = identity
-        break
+        if (leaving.length === EDGE_EVACUATION_BATCH) {
+          filled = true
+          break
+        }
+      }
+      if (filled || rows.length === EDGE_EVACUATION_PAGE) { break }
+      // A short page ends this half: wrap to the start of the keys, or end the pass.
+      if (pass.wrapped) {
+        this.pass = undefined
+      } else {
+        pass.wrapped = true
+        pass.cursor = { userId: '', relayHostId: '' }
       }
     }
     return leaving
   }
 
-  private schedule(): void {
+  // Keys after the cursor; once wrapped, only up to the pass's origin.
+  private async readPage(pass: Pass) {
+    const { cursor, origin, wrapped } = pass
+    return await this.database.query(
+      `SELECT a.user_id, a.relay_host_id, p.preferred_region
+       FROM relay_assignments a
+       LEFT JOIN relay_assignment_region_preferences p
+         ON p.user_id = a.user_id AND p.relay_host_id = a.relay_host_id
+       WHERE a.cell_id = ? AND (a.user_id > ? OR (a.user_id = ? AND a.relay_host_id > ?))
+         ${wrapped ? 'AND (a.user_id < ? OR (a.user_id = ? AND a.relay_host_id <= ?))' : ''}
+       ORDER BY a.user_id, a.relay_host_id
+       LIMIT ?`,
+      [
+        this.edgeCellId,
+        cursor.userId,
+        cursor.userId,
+        cursor.relayHostId,
+        ...(wrapped ? [origin.userId, origin.userId, origin.relayHostId] : []),
+        EDGE_EVACUATION_PAGE
+      ]
+    )
+  }
+
+  // Account ids are UUIDs, so a random hex prefix lands anywhere in the key space; ids of another
+  // shape are still all swept, from a less spread origin.
+  private newPass(): Pass {
+    const prefix = Math.floor(this.random() * 0x1_0000_0000).toString(16).padStart(8, '0')
+    const origin = { userId: prefix, relayHostId: '' }
+    return { origin, cursor: origin, wrapped: false }
+  }
+
+  private schedule(delayMs?: number): void {
     if (this.stopped) { return }
     // Jittered (±25%), so directors do not sweep together.
     const interval = this.busy ? EDGE_EVACUATION_BUSY_INTERVAL_MS : EDGE_EVACUATION_INTERVAL_MS
-    const delay = interval * (0.75 + this.random() / 2)
+    const delay = delayMs ?? interval * (0.75 + this.random() / 2)
     this.timer = setTimeout(() => {
+      this.sweeping = true
       void this.sweep()
         .catch((error: unknown) =>
           console.warn(
@@ -136,8 +194,17 @@ export class EdgeEvacuation {
             })
           )
         )
-        .finally(() => this.schedule())
+        .finally(() => {
+          this.sweeping = false
+          const changed = this.controlChangedWhileSweeping
+          this.controlChangedWhileSweeping = false
+          this.schedule(changed ? EDGE_EVACUATION_CONTROL_DELAY_MS * this.random() : undefined)
+        })
     }, delay)
     this.timer.unref?.()
   }
+}
+
+function drainKey(identity: Identity): string {
+  return `${identity.userId}\n${identity.relayHostId}`
 }

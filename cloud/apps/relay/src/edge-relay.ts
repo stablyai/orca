@@ -15,6 +15,7 @@ import {
   type EdgeAssignResult,
   type EdgeDeviceRow
 } from './edge-admin-client.js'
+import { EDGE_CONTROL_DEFAULTS, edgeRolloutPermille, type EdgeControlFlags } from './edge-relay-control.js'
 
 // Hosts the director has moved to the relay edge carry this cell id on their assignment row. The
 // relay_cells row exists only so cells resolve the row (a phone of a moved host gets WRONG_CELL,
@@ -26,8 +27,11 @@ export type EdgeRelayConfig = {
   cellUrl: string
   // Present: phase 2 (host data in the edge's objects); director → edge admin calls use it.
   adminSigningKey?: Uint8Array
-  // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100.
+  // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100: the boot default, which a
+  // runtime rolloutPermille replaces.
   rolloutPercent: number
+  // Runtime control (director/edge.json), read on every call; absent means the defaults.
+  control?: () => EdgeControlFlags
   allowHosts: ReadonlySet<string>
   // Accounts (relay token `sub`) whose hosts all join, e.g. the team's own accounts.
   allowUsers?: ReadonlySet<string>
@@ -45,22 +49,37 @@ export const EDGE_EXPORT_SKIP_AFTER_MS = 120_000
 // Export failures further apart than this are not one outage (see EdgeAssignments.leaveEdge).
 export const EDGE_EXPORT_FAILURE_GAP_MS = 30_000
 
-export function edgeCohortBucket(relayHostId: string): number {
-  return createHash('sha256').update(`edge-cohort:${relayHostId}`).digest().readUInt32BE(0) % 100
+function edgeCohortHash(relayHostId: string): number {
+  return createHash('sha256').update(`edge-cohort:${relayHostId}`).digest().readUInt32BE(0)
 }
 
-// Deny wins, then host allow, then region scope; within the region, account allow or rollout share.
+export function edgeCohortBucket(relayHostId: string): number {
+  return edgeCohortHash(relayHostId) % 100
+}
+
+// The percent bucket times ten plus a digit from the hash's higher part, so for every percent P a
+// host is under P × 10 permille exactly when it is under P percent: no host moves when the env
+// percent becomes the equal permille.
+export function edgeCohortBucketPermille(relayHostId: string): number {
+  const hash = edgeCohortHash(relayHostId)
+  return (hash % 100) * 10 + (Math.floor(hash / 100) % 10)
+}
+
+// Mode off or down empties the cohort. Otherwise deny wins, then host allow, then region scope;
+// within the region, account allow or the rollout share.
 export function inEdgeCohort(
   config: EdgeRelayConfig,
   relayHostId: string,
   region: RelayRegion | undefined,
   userId?: string
 ): boolean {
+  const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
+  if (flags.mode !== 'on') return false
   if (config.denyHosts.has(relayHostId)) return false
   if (config.allowHosts.has(relayHostId)) return true
   if (!config.regions.has(region ?? RELAY_DEFAULT_REGION)) return false
   if (userId !== undefined && config.allowUsers?.has(userId)) return true
-  return edgeCohortBucket(relayHostId) < config.rolloutPercent
+  return edgeCohortBucketPermille(relayHostId) < edgeRolloutPermille(config.rolloutPercent, flags)
 }
 
 // Another director holds the host's row, or the host is on the edge and cannot leave yet (its
@@ -362,6 +381,8 @@ export class EdgeAssignments {
       )
     )[0]
     if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) return false
+    // The edge is known dead (director/edge.json): no export to wait for.
+    if (this.config.control?.().mode === 'down') return await this.skipExport(identity, 'mode_down')
     let exported
     try {
       exported = await this.admin.exportHost(identity.relayHostId)
@@ -376,10 +397,9 @@ export class EdgeAssignments {
       this.exportLastFailureAt = now
       const failingForMs = now - (this.exportFailingSince ?? now)
       if (failingForMs < (this.config.exportSkipAfterMs ?? EDGE_EXPORT_SKIP_AFTER_MS)) throw new EdgeMoveBusyError()
-      // The edge has been unreachable too long: place the host on its Postgres devices (changes
-      // made on the edge are lost) rather than refusing every ask until the edge is back.
-      console.warn(JSON.stringify({ event: 'orca_relay_edge_export_skipped', reason: error.message, failingForMs }))
-      return true
+      // The edge has been unreachable too long: place the host anyway rather than refusing every
+      // ask until the edge is back.
+      return await this.skipExport(identity, error.message, failingForMs)
     }
     this.exportFailingSince = undefined
     this.exportLastFailureAt = undefined
@@ -411,13 +431,34 @@ export class EdgeAssignments {
     return true
   }
 
+  // The host leaves without the edge's copy of its devices. The edge was their source of truth and
+  // revokes made there are unknown, so the Postgres rows are removed rather than resurrected: its
+  // phones pair again. Logs a count only.
+  private async skipExport(identity: Identity, reason: string, failingForMs?: number): Promise<true> {
+    const removed = await this.database.query(
+      `DELETE FROM relay_devices WHERE user_id = ? AND relay_host_id = ? RETURNING relay_device_id`,
+      [identity.userId, identity.relayHostId]
+    )
+    console.warn(
+      JSON.stringify({
+        event: 'orca_relay_edge_export_skipped',
+        reason,
+        ...(failingForMs === undefined ? {} : { failingForMs }),
+        devicesRemoved: removed.length
+      })
+    )
+    return true
+  }
+
   // After the host left: tell the edge where it went, so its phones get WRONG_CELL (re-resolve)
   // rather than HOST_OFFLINE. Until it lands the edge's freeze does the same; one that does not land
   // is recorded for the evacuation sweep to retry (edge-relay-fence.ts).
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
     if (!this.admin) return true
-    // An edge whose exports are failing gets one try, so a skipped export is not slowed further.
-    const attempts = this.exportFailingSince === undefined ? 3 : 1
+    // An edge whose exports are failing (or that is marked down) gets one try, so a skipped export
+    // is not slowed further.
+    const down = this.exportFailingSince !== undefined || this.config.control?.().mode === 'down'
+    const attempts = down ? 1 : 3
     return await fenceEdge(this.database, this.admin, { ...identity, cellId, assignmentEpoch }, attempts, this.now())
   }
 
