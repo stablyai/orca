@@ -10,14 +10,13 @@ import { crossStoreCreateLineage } from './runtime-worktree-lineage-recording'
 import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
-import { WorktreeIdRequiresFullPathError } from './worktree-id-requires-full-path-error'
 import {
   LINEAGE_PARENT_AMBIGUOUS,
   RuntimeLineageError,
-  explicitParentAmbiguousError
+  explicitParentError
 } from './runtime-lineage-error'
 
-export { LINEAGE_PARENT_AMBIGUOUS, RuntimeLineageError, explicitParentAmbiguousError }
+export { LINEAGE_PARENT_AMBIGUOUS, RuntimeLineageError, explicitParentError }
 
 export type WorktreeLineageInput = NonNullable<RuntimeManagedWorktreeCreateArgs['lineage']>
 
@@ -78,19 +77,6 @@ export async function resolveRuntimeWorktreeCreateLineage(
   input: WorktreeLineageInput | undefined,
   deps: LineageResolutionDependencies
 ): Promise<WorktreeLineageResolution> {
-  const nextSteps = [
-    'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, name:<display-name>, or active/current.',
-    'Retry with --no-parent to create without lineage.'
-  ]
-  const explicitParentError = (error: unknown): RuntimeLineageError =>
-    explicitParentAmbiguousError(error) ??
-    new RuntimeLineageError(
-      'LINEAGE_PARENT_NOT_FOUND',
-      error instanceof WorktreeIdRequiresFullPathError
-        ? error.message
-        : 'Parent selector was not found.',
-      { nextSteps }
-    )
   if (!input) {
     return { kind: 'none', warnings: [] }
   }

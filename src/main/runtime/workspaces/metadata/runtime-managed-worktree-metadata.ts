@@ -24,7 +24,7 @@ import {
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 import {
   RuntimeLineageError,
-  explicitParentAmbiguousError,
+  explicitParentError,
   type ResolvedWorkspaceParent
 } from '../lineage/runtime-worktree-lineage-resolution'
 import { assertParentInAnotherStore } from '../lineage/cross-store-parent-store-check'
@@ -143,7 +143,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         matchFolders: lineage.matchFolderWorkspaces === true
       })
       .catch((error: unknown) => {
-        throw explicitParentAmbiguousError(error) ?? error
+        throw explicitParentError(error)
       })
     const recorded =
       parent.type === 'folder'

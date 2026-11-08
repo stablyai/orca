@@ -1,4 +1,5 @@
 import { WorkspaceSelectorAmbiguousError } from '../catalog/workspace-selector-candidates'
+import { WorktreeIdRequiresFullPathError } from './worktree-id-requires-full-path-error'
 
 export class RuntimeLineageError extends Error {
   constructor(
@@ -12,8 +13,13 @@ export class RuntimeLineageError extends Error {
 
 export const LINEAGE_PARENT_AMBIGUOUS = 'LINEAGE_PARENT_AMBIGUOUS'
 
-/** An explicit parent selector that matched several workspaces, with its choices when known. */
-export function explicitParentAmbiguousError(error: unknown): RuntimeLineageError | undefined {
+const PARENT_NOT_FOUND_NEXT_STEPS = [
+  'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, name:<display-name>, or active/current.',
+  'Retry with --no-parent for no parent.'
+]
+
+/** Why an explicit --parent-worktree failed, the same for create and set: several matches, or none. */
+export function explicitParentError(error: unknown): RuntimeLineageError {
   if (error instanceof WorkspaceSelectorAmbiguousError) {
     return new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, error.message, error.data)
   }
@@ -24,5 +30,11 @@ export function explicitParentAmbiguousError(error: unknown): RuntimeLineageErro
       { nextSteps: ['Run `orca worktree ps --json` and pass the parent by identity:<key>.'] }
     )
   }
-  return undefined
+  return new RuntimeLineageError(
+    'LINEAGE_PARENT_NOT_FOUND',
+    error instanceof WorktreeIdRequiresFullPathError
+      ? error.message
+      : 'Parent selector was not found.',
+    { nextSteps: PARENT_NOT_FOUND_NEXT_STEPS }
+  )
 }
