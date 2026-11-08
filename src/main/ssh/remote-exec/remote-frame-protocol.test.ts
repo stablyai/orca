@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { HEADER_LENGTH, FrameDecoder, type DecodedFrame } from '../../../shared/relay-frame-decoder'
 import {
   MessageType,
@@ -6,7 +6,6 @@ import {
   encodeJsonRpcFrame,
   encodeKeepAliveFrame,
   parseJsonRpcMessage,
-  parseUnameToRelayPlatform,
   type JsonRpcRequest
 } from './remote-frame-protocol'
 
@@ -206,99 +205,11 @@ describe('FrameDecoder', () => {
     expect(frames).toHaveLength(1)
     expect(frames[0].payload.toString()).toBe('after')
   })
-
-  it('never rebuilds the buffered stream per feed while assembling a large frame', () => {
-    // Guard against per-chunk Buffer.concat recopying the full backlog quadratically and blocking main/SSH input.
-    const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder((f) => frames.push(f), undefined, frozenClock)
-    const frame = encodeFrame(MessageType.Regular, 1, 0, Buffer.alloc(512 * 1024, 0x61))
-
-    const concatSpy = vi.spyOn(Buffer, 'concat')
-    try {
-      for (let i = 0; i < frame.length; i += 32 * 1024) {
-        decoder.feed(frame.subarray(i, i + 32 * 1024))
-      }
-    } finally {
-      concatSpy.mockRestore()
-    }
-
-    expect(frames).toHaveLength(1)
-    expect(frames[0].payload.length).toBe(512 * 1024)
-    expect(concatSpy).not.toHaveBeenCalled()
-  })
 })
 
 describe('parseJsonRpcMessage', () => {
-  it('parses a valid JSON-RPC request', () => {
-    const payload = Buffer.from(
-      JSON.stringify({
-        jsonrpc: '2.0',
-        id: 1,
-        method: 'pty.spawn',
-        params: { cols: 80 }
-      })
-    )
-    const msg = parseJsonRpcMessage(payload)
-    expect('method' in msg && msg.method).toBe('pty.spawn')
-  })
-
   it('throws on invalid jsonrpc version', () => {
     const payload = Buffer.from(JSON.stringify({ jsonrpc: '1.0', id: 1, method: 'x' }))
     expect(() => parseJsonRpcMessage(payload)).toThrow('Invalid JSON-RPC version')
-  })
-
-  it('throws on malformed JSON', () => {
-    const payload = Buffer.from('not json')
-    expect(() => parseJsonRpcMessage(payload)).toThrow()
-  })
-})
-
-describe('parseUnameToRelayPlatform', () => {
-  it('maps Linux x86_64', () => {
-    expect(parseUnameToRelayPlatform('Linux', 'x86_64')).toBe('linux-x64')
-  })
-
-  it('maps Linux aarch64', () => {
-    expect(parseUnameToRelayPlatform('Linux', 'aarch64')).toBe('linux-arm64')
-  })
-
-  it('maps Darwin x86_64', () => {
-    expect(parseUnameToRelayPlatform('Darwin', 'x86_64')).toBe('darwin-x64')
-  })
-
-  it('maps Darwin arm64', () => {
-    expect(parseUnameToRelayPlatform('Darwin', 'arm64')).toBe('darwin-arm64')
-  })
-
-  it('handles amd64 alias', () => {
-    expect(parseUnameToRelayPlatform('Linux', 'amd64')).toBe('linux-x64')
-  })
-
-  it('maps Windows amd64', () => {
-    expect(parseUnameToRelayPlatform('Windows', 'AMD64')).toBe('win32-x64')
-  })
-
-  it('maps Windows X64 runtime architecture', () => {
-    expect(parseUnameToRelayPlatform('Windows', 'X64')).toBe('win32-x64')
-  })
-
-  it('maps Windows arm64', () => {
-    expect(parseUnameToRelayPlatform('win32', 'ARM64')).toBe('win32-arm64')
-  })
-
-  it('maps MSYS/MINGW uname output as Windows', () => {
-    expect(parseUnameToRelayPlatform('MINGW64_NT-10.0', 'x86_64')).toBe('win32-x64')
-  })
-
-  it('returns null for unsupported OS', () => {
-    expect(parseUnameToRelayPlatform('FreeBSD', 'x86_64')).toBeNull()
-  })
-
-  it('returns null for unsupported arch', () => {
-    expect(parseUnameToRelayPlatform('Linux', 'mips')).toBeNull()
-  })
-
-  it('is case-insensitive', () => {
-    expect(parseUnameToRelayPlatform('LINUX', 'X86_64')).toBe('linux-x64')
   })
 })

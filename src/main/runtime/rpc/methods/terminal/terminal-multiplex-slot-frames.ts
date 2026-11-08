@@ -19,6 +19,7 @@ import {
 } from './terminal-snapshot-publication'
 import { chainPassiveDesktopResize, updateViewportForClient } from './terminal-viewport-update'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
+import { releaseAckPendingHoldbackIfDrained } from './terminal-multiplex-ack-window'
 import {
   answerUndeliveredYieldedQueries,
   discardPendingMultiplexOutput,
@@ -96,10 +97,18 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false
+        releaseAckPendingHoldbackIfDrained(state, stream)
         answerUndeliveredYieldedQueries(runtime, stream)
         if (discardsQueuedOutput) {
           notePausedOutputDropped(state, stream)
         }
+      }
+      return
+    }
+    if (frame.opcode === TerminalStreamOpcode.SetOutputCadence && stream.supportsOutputCadence) {
+      const payload = decodeTerminalStreamJson<{ cadence?: unknown }>(frame.payload)
+      if (payload?.cadence === 'focused' || payload?.cadence === 'background') {
+        stream.outputBatcher.setCadence(payload.cadence)
       }
       return
     }

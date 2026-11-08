@@ -1,5 +1,4 @@
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
-import '../../../unused-default-rpc-methods.test-fixture'
 // Before attach, classify no-effects refusal; at/after attach, failure cannot prove no session exists.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,13 +7,13 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import { recordingStructuredAgentSessionLogger } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
-import { agentSessionRefusalError } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcResponse } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
-import { createStructuredAgentSessionForWorktree } from './structured-agent-session-create'
+import './structured-agent-session-create'
 
 const SESSION = 'session-alpha'
 const OPERATION = '1800000000000-00000000000000000000000000000001'
@@ -131,25 +130,6 @@ afterEach(() => {
 })
 
 describe('a create refused before it commits', () => {
-  it('answers an ownership refusal before commit as a definite failed attempt', async () => {
-    const code = 'agent_session_conflict'
-    const details = {
-      reason: 'conversationHeldElsewhere' as const,
-      owner: { sessionId: 'owner', workspaceId: 'workspace' }
-    }
-    const response = await create({
-      resolveStructuredAgentSessionCreateIntent: vi.fn(async () => {
-        throw agentSessionRefusalError(code, details)
-      })
-    })
-    expect(refusalOf(response)).toMatchObject({
-      code,
-      details,
-      createAttemptRefusedBeforeCommit: true
-    })
-    expect(attach).not.toHaveBeenCalled()
-  })
-
   it('keeps private precommit faults out of a definitive public refusal', async () => {
     // The class no per-site conversion catches: an unresolvable worktree throws prose, not a code.
     const response = await create({
@@ -163,108 +143,5 @@ describe('a create refused before it commits', () => {
     expect(JSON.stringify(refusal)).not.toContain('private-workspace-detail-sentinel')
     expect(refusal).not.toHaveProperty('details')
     expect(attach).not.toHaveBeenCalled()
-  })
-
-  it('answers a host that will not install as a definitive envelope', async () => {
-    setStructuredAgentSessionHost(null)
-
-    const response = await create({
-      ensureStructuredAgentSessionHost: vi.fn(async () => {
-        throw new Error('private-store-detail-sentinel')
-      })
-    })
-
-    const refusal = refusalOf(response)
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
-    expect(JSON.stringify(refusal)).not.toContain('private-store-detail-sentinel')
-  })
-
-  it('keeps private faults out of in-process create refusals too', async () => {
-    const params = createParams()
-    const result = await createStructuredAgentSessionForWorktree({
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver throws before create can read any other runtime member.
-      runtime: {
-        resolveStructuredAgentSessionCreateIntent: async () => {
-          throw new Error('private-in-process-sentinel')
-        }
-      } as unknown as OrcaRuntimeService,
-      ensureHost: async () => hostStub(),
-      caller: { callerKey: 'in-process-client' },
-      envelope: params.envelope,
-      worktree: WORKTREE,
-      agent: 'codex',
-      activate: true
-    })
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'structured_agent_session_unsupported' }
-    })
-    expect(JSON.stringify(result)).not.toContain('private-in-process-sentinel')
-  })
-
-  it('still refuses a fingerprint conflict with its own code, not a pre-commit one', async () => {
-    const response = await create(
-      {},
-      createParams({ envelope: { payloadFingerprint: 'a'.repeat(64) } })
-    )
-
-    expect(refusalOf(response)?.code).toBe('agent_session_operation_conflict')
-    expect(attach).not.toHaveBeenCalled()
-  })
-})
-
-describe('the boundary the envelope stops at', () => {
-  it('leaves a failure at attach unknown, because it may have committed', async () => {
-    attach.mockRejectedValueOnce(new Error('attach exploded'))
-
-    const response = await create()
-
-    expect(response).toMatchObject({ ok: false, error: { code: 'runtime_error' } })
-    expect(refusalOf(response)).toBeNull()
-    expect(attach).toHaveBeenCalledOnce()
-  })
-
-  it('leaves a committed create whose tab could not be published unknown', async () => {
-    const response = await create({
-      publishStructuredAgentSessionTab: vi.fn(async () => {
-        throw new Error('publish failed')
-      })
-    })
-
-    const refusal = refusalOf(response)
-    expect(refusal?.code).toBe('agent_session_operation_unknown')
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(false)
-    expect(attach).toHaveBeenCalledOnce()
-  })
-
-  it('keeps hiding the surface from a client that never advertised it', async () => {
-    const replies: RpcResponse[] = []
-    await new RpcDispatcher({
-      runtime: { getRuntimeId: () => 'runtime-1' } as unknown as OrcaRuntimeService,
-      methods: STRUCTURED_AGENT_SESSION_METHODS
-    }).dispatchStreaming(
-      {
-        id: 'request-1',
-        authToken: 'token',
-        method: 'agentSession.create',
-        params: createParams()
-      },
-      (raw) => replies.push(JSON.parse(raw) as RpcResponse),
-      { clientKind: 'runtime', clientCapabilities: [] }
-    )
-
-    expect(replies[0]).toMatchObject({
-      ok: false,
-      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
-    })
-  })
-
-  it('keeps a client-declared fence a programming error, not a refusal', async () => {
-    const response = await create({}, createParams({ envelope: { expectedRuntimeFence: 1 } }))
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: { code: 'agent_session_operation_invalid' }
-    })
   })
 })

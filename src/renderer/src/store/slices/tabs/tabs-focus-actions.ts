@@ -1,11 +1,7 @@
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import {
-  findTabAndWorktree,
-  findTabByEntityInGroup,
-  pushRecentTabId,
-  sanitizeRecentTabIds,
-  selectActiveTabForWorktree
-} from '../tab-group-state'
+import { findTabAndWorktree, findTabByEntityInGroup } from './tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
+import { selectActiveTabForWorktree } from './active-tab-selection'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'

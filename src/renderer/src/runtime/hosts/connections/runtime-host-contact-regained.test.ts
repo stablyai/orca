@@ -7,7 +7,8 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/store/index', async () => {
   const { create } = await import('zustand')
-  const { createRuntimeStatusSlice } = await import('@/store/slices/runtime-status')
+  const { createRuntimeStatusSlice } =
+    await import('@/store/slices/runtime-status/create-runtime-status-slice')
   type Slice = ReturnType<typeof createRuntimeStatusSlice>
   return {
     useAppStore: create<Slice>()((...a) =>
@@ -18,7 +19,7 @@ vi.mock('@/store/index', async () => {
 })
 
 import { useAppStore } from '@/store/index'
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
+import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { subscribeRuntimeHostContactRegained } from './runtime-host-contact-regained'
 import {
   forgetStructuredSessionSelection,

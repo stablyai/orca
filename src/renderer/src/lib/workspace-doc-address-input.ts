@@ -8,7 +8,7 @@ import { htmlFilePathFromUrl } from '../../../shared/html-file-url'
 import { authorityKey } from '../../../shared/host-authority'
 import { resolveOwner } from './resolve-owner'
 import { translate } from '@/i18n/i18n'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 function workspaceHostKey(state: AppState, workspaceId: string): string | null {
   const match = resolveOwner(state, { workspaceId })

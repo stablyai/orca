@@ -1,5 +1,5 @@
 import { structuralValuesEqualIgnoringUndefined } from '../../../../../../shared/structural-value-equality'
-import { catalogRowsEqual } from '../../../catalog-row-reconciliation'
+import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 
 export function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {

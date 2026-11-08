@@ -10,7 +10,6 @@ import {
 } from '../../../../../../shared/attachment-text-source'
 import { AttachmentTextViewport } from '../../../../../../shared/attachment-text-viewport'
 
-import '../../../unused-default-rpc-methods.test-fixture'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

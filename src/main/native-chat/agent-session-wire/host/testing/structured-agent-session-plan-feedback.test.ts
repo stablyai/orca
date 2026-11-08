@@ -49,9 +49,20 @@ it.each(['selected-plan', 'absent'] as const)(
     const cli = fakeClaude({
       initSessionId: THREAD,
       initPermissionMode: 'acceptEdits',
-      replayUuids: ['feedback-1', 'feedback-2', 'feedback-3']
+      replayUuid: null
     })
-    let native = adapterFor(cli, { providerSessionId: THREAD })
+    const makeNative = () =>
+      adapterFor(
+        cli,
+        { providerSessionId: THREAD },
+        [],
+        [],
+        undefined,
+        undefined,
+        undefined,
+        (settlement) => host.settleLateDispatch(settlement)
+      )
+    let native = makeNative()
     const startNative = async () =>
       native.acquire({
         identity: identityFor(SESSION),
@@ -123,6 +134,13 @@ it.each(['selected-plan', 'absent'] as const)(
       ).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(dispatch.mock.calls.length).toBe(before + 1))
       await dispatch.mock.results[before]!.value
+      claudeFrame(connection, { ...connection.sent.at(-1)!, parent_tool_use_id: null })
+      const id = dispatch.mock.calls[before]![0].clientMessageId
+      await vi.waitFor(() =>
+        expect(
+          host.collaboratorsForTests().sessions.get(SESSION)!.journal.submission(id)?.dispatchState
+        ).toBe('accepted')
+      )
       await host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
       claudeFrame(connection, {
         session_id: THREAD,
@@ -174,7 +192,7 @@ it.each(['selected-plan', 'absent'] as const)(
         )
       ).toMatchObject({ ok: true })
       subscribe()
-      native = adapterFor(cli, { providerSessionId: THREAD })
+      native = makeNative()
       await startNative()
       connection = cli.connections.at(-1)!
       await send('More planning feedback after restart')

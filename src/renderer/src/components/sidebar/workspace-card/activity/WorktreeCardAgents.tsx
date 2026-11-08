@@ -19,7 +19,7 @@ import { CompactAgentRow } from './worktree-card-compact-agent-row'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { agentSendDisabledReasonLabel } from '@/lib/agent-send-disabled-reason-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { activateRetainedAgentRow } from './activate-retained-agent-row'
@@ -71,6 +71,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   agents,
   className
 }: BodyProps) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const { agentActivityDisplayMode, showAgentModels } = useWorktreeAgentDisplay()
   const dropAgentStatus = useAppStore((s) => s.dropAgentStatus)
@@ -119,7 +120,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
             agentSendPopoverTargetMode.sendingPaneKey === target.paneKey
               ? {
                   status: 'sending' as const,
-                  disabledReason: translate(
+                  disabledReason: t(
                     'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
                     'Sending...'
                   )
@@ -141,7 +142,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       agentSendPopoverTargetMode?.status,
       isAgentSendTargetModeActive,
       sendTargetInputs,
-      worktreeId
+      worktreeId,
+      t
     ]
   )
 
@@ -210,7 +212,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     isAgentSendTargetModeActive
       ? (sendTargetsByPaneKey.get(paneKey) ?? {
           status: 'disabled' as const,
-          disabledReason: translate(
+          disabledReason: t(
             'auto.components.sidebar.WorktreeCardAgents.agentUnavailable',
             'Agent is not available'
           )
@@ -330,10 +332,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           now={now}
           parentConversationDescription={
             opensClaudeParentConversation(agent)
-              ? translate(
-                  'auto.lib.claudeAgentRowView.openParentConversation',
-                  'Open parent conversation'
-                )
+              ? t('auto.lib.claudeAgentRowView.openParentConversation', 'Open parent conversation')
               : undefined
           }
           isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
@@ -375,7 +374,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     const summaryAgents = hasLineage ? rootAgents : agents
     // Collapse compact multi-agent lists except when their rows are the send-target picker.
     const shouldUseSummaryRow = summaryAgents.length > 1 && !isAgentSendTargetModeActive
-    const subjectLabel = translate('sidebar.agentSummary.agentCount', '{{count}} agents', {
+    const subjectLabel = t('sidebar.agentSummary.agentCount', '{{count}} agents', {
       count: hasLineage ? rootAgents.length : agents.length,
       defaultValue_one: '{{count}} agent'
     })
@@ -389,7 +388,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         onMouseDown={stopBubble}
         onPointerDown={stopBubble}
         role={hasLineage ? 'tree' : 'group'}
-        aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
+        aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
         data-compact-agent-list="true"
       >
         {agents.length === 0 ? null : shouldUseSummaryRow ? (
@@ -430,7 +429,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
       onMouseDown={stopBubble}
       onPointerDown={stopBubble}
       role={hasLineage ? 'tree' : 'group'}
-      aria-label={translate('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
+      aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
     >
       {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
     </div>

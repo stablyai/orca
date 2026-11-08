@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import { selectDiffCommentView, type DiffCommentOwner } from '../../diff-comment-owner'
+import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -105,7 +105,7 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 const REPO = 'repo1'
 const WT = 'repo1::/path/wt'

@@ -1,7 +1,7 @@
 import React, { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SidebarHeaderActions } from './sidebar-header-actions'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
@@ -22,6 +22,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   activityOptionsTarget,
   projectsCollapseTarget
 }: SidebarHeaderProps) {
+  const t = useTranslate()
   // Subscribe this memoized header to locale changes before using translate().
   useTranslation()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
@@ -33,10 +34,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const activityBadgeId = useId()
   const activityCount = counts.attention || counts.working
   const activityStatusLabel = counts.attention
-    ? translate('dashboardPopout.bucket.attention', 'Needs You')
+    ? t('dashboardPopout.bucket.attention', 'Needs You')
     : counts.working
-      ? translate('dashboardPopout.bucket.working', 'Working')
-      : translate('dashboardPopout.bucket.idle', 'Idle')
+      ? t('dashboardPopout.bucket.working', 'Working')
+      : t('dashboardPopout.bucket.idle', 'Idle')
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
     (s) => s.settings?.agentsSidebarMigratedFromExperimental === true
@@ -50,9 +51,9 @@ const SidebarHeader = React.memo(function SidebarHeader({
   }, [updateSettings])
   const sidebarTitle =
     groupBy === 'repo'
-      ? translate('dashboard.sidebar.projects', 'Projects')
-      : translate('dashboard.sidebar.workspaces', 'Workspaces')
-  const activityLabel = translate(
+      ? t('dashboard.sidebar.projects', 'Projects')
+      : t('dashboard.sidebar.workspaces', 'Workspaces')
+  const activityLabel = t(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
   )
@@ -154,18 +155,18 @@ const SidebarHeader = React.memo(function SidebarHeader({
               <div className="flex items-center gap-1.5">
                 <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
                 <h3 id={introTitleId} className="text-sm font-semibold text-foreground">
-                  {translate('agentsSidebarIntro.migrated.title', 'Agents are easier to find')}
+                  {t('agentsSidebarIntro.migrated.title', 'Agents are easier to find')}
                 </h3>
               </div>
               <p id={introDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
-                {translate(
+                {t(
                   'agentsSidebarIntro.migrated.description',
                   'Your Agents view is now a dedicated sidebar tab. Your activity and filters are preserved.'
                 )}
               </p>
               <div className="flex justify-end pt-0.5">
                 <Button size="sm" onClick={acknowledgeIntro}>
-                  {translate('agentsSidebarIntro.migrated.dismiss', 'Got it')}
+                  {t('agentsSidebarIntro.migrated.dismiss', 'Got it')}
                 </Button>
               </div>
             </div>

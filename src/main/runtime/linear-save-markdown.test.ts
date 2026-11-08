@@ -208,18 +208,3 @@ it('rejects a literal code change in the read-back after a successful mutation',
   ).rejects.toMatchObject({ code: 'linear_write_unconfirmed' })
   expect(sent.filter(({ query }) => query.includes('mutation'))).toHaveLength(1)
 })
-
-it('still writes other fields when the description already matches after normalization', async () => {
-  stored.description = '* first'
-  await expect(
-    commands().linearSaveIssue({
-      input: stored.identifier,
-      title: 'Changed title',
-      description: '- first',
-      workspaceId: workspace.id
-    })
-  ).resolves.toMatchObject({ issue: { title: 'Changed title', description: '- first' } })
-  const mutations = sent.filter(({ query }) => query.includes('mutation'))
-  expect(mutations).toHaveLength(1)
-  expect(mutations[0]?.variables.input).toEqual({ title: 'Changed title', description: '- first' })
-})

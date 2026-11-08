@@ -10,10 +10,10 @@ import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
 } from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
-import { closeStructuredAgentSession } from '../structured-agent-session-close'
+import { closeStructuredAgentSession } from '../native-chat/requests/structured-agent-session-close'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../rpc/targets/runtime-worktree-selector'
 
 type StructuredSessionInventoryResponse = {
   snapshots?: RuntimeMobileSessionTabsResult[]

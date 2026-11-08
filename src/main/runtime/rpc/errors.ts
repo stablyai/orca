@@ -1,3 +1,4 @@
+import { BranchSwitchCollisionError } from '../../git/branch-switch-target'
 import {
   RECIPE_VM_REFUSAL_CODES,
   RecipeVmWakeUnavailableError
@@ -119,6 +120,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   WORKTREE_CREATE_COLLISION_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
+  // A workspace selector's choices ride in data; a plain Error('selector_ambiguous') keeps the bare code.
+  'selector_ambiguous',
   'run_not_found',
   'run_home_unreachable',
   'run_required',
@@ -201,6 +204,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     return errorResponse(id, meta, error.code, message)
   }
   if (
+    error instanceof BranchSwitchCollisionError ||
     error instanceof TerminalSplitOutcomeError ||
     error instanceof WslHostWindowsDriveRefusalError
   ) {
@@ -214,7 +218,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code, message))
+    return errorResponse(id, meta, code, message, computerUseErrorRecoveryData(code, message))
   }
   if (
     error instanceof Error &&
@@ -302,8 +306,6 @@ function agentSessionRefusalErrorResponse(
     { refusal: agentSessionRefusalReference(error.refusal) }
   )
 }
-
-export const computerErrorData = computerUseErrorRecoveryData
 
 // EmulatorError.code likewise uses its own namespace rather than generic runtime_error.
 export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {

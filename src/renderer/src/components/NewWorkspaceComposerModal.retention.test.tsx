@@ -13,7 +13,7 @@ import type { NewWorkspaceComposerCardProps } from './new-workspace/new-workspac
 import type * as SetupButtonModule from './agent/AgentLaunchSetupButton'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentPickerDraft } from '../../../shared/agent-launch/picker/agent-launch-picker'
-import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const evidence = vi.hoisted(() => {
   const trace: {
@@ -23,8 +23,9 @@ const evidence = vi.hoisted(() => {
     authority?: string
     initial?: AgentPickerDraft
   }[] = []
-  return { phase: '', trace, submit: vi.fn() }
+  return { phase: '', trace, submit: vi.fn(), toast: vi.fn() }
 })
+vi.mock('sonner', () => ({ toast: { error: evidence.toast } }))
 vi.mock('@/components/agent/AgentLaunchSetupButton', async (importOriginal) => {
   const original = await importOriginal<typeof SetupButtonModule>()
   return {
@@ -43,7 +44,7 @@ vi.mock('@/components/agent/AgentLaunchSetupButton', async (importOriginal) => {
     }
   }
 })
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: async (
     _target: unknown,
     method: string,
@@ -80,7 +81,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
     ]
   })
 }))
-vi.mock('@/runtime/use-host-structured-agent-availability', () => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/use-host-structured-agent-availability', () => ({
   useHostStructuredAgentAvailability: () => ({
     state: 'received',
     byAgent: new Map([
@@ -135,8 +136,9 @@ const projects = [
   }
 ]
 vi.mock('@/hooks/useComposerState', () => ({
-  useComposerState: () => {
+  useComposerState: (options: { initialNote?: string; initialName?: string }) => {
     const [project, setProject] = useState('project:w1')
+    const [note, setNote] = useState(options.initialNote ?? 'Investigate the failing check')
     const folder = project === 'project:w2'
     const repoId = folder ? 'w2' : 'w1'
     // The same prospective target shape as resolveComposerAgentRows for local repos.
@@ -161,7 +163,7 @@ vi.mock('@/hooks/useComposerState', () => ({
         detectionTarget: { kind: 'local' }
       },
       primaryActionLabel: 'Create',
-      name: '',
+      name: options.initialName ?? 'repair-check',
       onNameValueChange: noOp,
       onSmartGitHubItemSelect: noOp,
       onSmartGitLabItemSelect: noOp,
@@ -181,8 +183,8 @@ vi.mock('@/hooks/useComposerState', () => ({
       projectError: null,
       creating: false,
       onCreate: noOp,
-      note: '',
-      onNoteChange: noOp,
+      note,
+      onNoteChange: setNote,
       setupConfig: null,
       requiresExplicitSetupChoice: false,
       setupDecision: null,
@@ -380,4 +382,40 @@ it('pr35802 retains authored Args through same-target Settings acquisition refre
   expect(last('claude').authority).not.toBe(before.authority)
   expect(textarea().value).toBe('--verbose')
   expect(evidence.submit).not.toHaveBeenCalled()
+})
+
+it('offers Reopen with the submitted target and picker and does not replace a newer modal', async () => {
+  useAppStore.setState({ modalData: { prefilledName: 'repair-check' } })
+  render(
+    <TooltipProvider>
+      <NewWorkspaceComposerModal />
+    </TooltipProvider>
+  )
+  await open('Claude')
+  fireEvent.change(textarea(), { target: { value: '--verbose' } })
+  fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
+  await useDraft()
+  const create = await screen.findByRole('button', { name: 'Create worktree' })
+  await waitFor(() => expect(create.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(create)
+  await waitFor(() => expect(evidence.submit).toHaveBeenCalledOnce())
+  const recovery = evidence.submit.mock.calls[0]?.[1].onLegacyPreparationFailure
+  act(() => useAppStore.getState().closeModal())
+  act(() => recovery(new Error('Invalid Arguments')))
+  const reopen = evidence.toast.mock.calls.at(-1)?.[1].action.onClick
+  act(() => useAppStore.getState().openModal('agent-session-history'))
+  act(reopen)
+  expect(useAppStore.getState().activeModal).toBe('agent-session-history')
+  act(() => useAppStore.getState().closeModal())
+  act(reopen)
+  expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
+  expect(useAppStore.getState().modalData).toMatchObject({
+    prefilledName: 'repair-check',
+    initialRepoId: 'w1',
+    initialWorkspaceTarget: { projectId: 'project:w1' },
+    recovery: { agent: 'claude', note: 'Investigate the failing check' }
+  })
+  await open('Claude')
+  expect(textarea().value).toBe('--verbose')
+  expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
 })

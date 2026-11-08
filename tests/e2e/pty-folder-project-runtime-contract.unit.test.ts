@@ -30,8 +30,8 @@ import type {
   IpcPtyTransportOptions,
   PtyTransport
 } from '../../src/renderer/src/components/terminal-pane/pty-transport/pty-transport-types'
-import { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
-import { makeTab } from '../../src/renderer/src/store/slices/store-session-test-harness'
+import { createTestStore } from '../../src/renderer/src/store/testing/app-store-test-fixture'
+import { makeTab } from '../../src/renderer/src/store/terminals/terminal-tab.test-fixture'
 import {
   existsSyncMock,
   wslUncDirectoryExistsAsyncMock
@@ -54,7 +54,9 @@ vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock(
   '@/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
   async (importOriginal) => ({

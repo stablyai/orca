@@ -29,7 +29,8 @@ import {
   type CappedLocalListing
 } from '@/components/quick-open-capped-local-listing'
 import { useAppStore } from '@/store'
-import { useFileListWorktree, useWorktreesForRepo } from '@/store/selectors'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
 import {
   getFileExplorerOwnerUnresolvedMessage,

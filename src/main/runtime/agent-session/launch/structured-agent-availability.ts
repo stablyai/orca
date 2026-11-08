@@ -7,7 +7,7 @@ import type { AgentSessionExecutionLocation } from '../../../../shared/agent-ses
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-runtime-installation'
-import { onAgentsRefreshedOnHost } from '../../../preflight/workspace-agent-detection'
+import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-host'
 import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment,

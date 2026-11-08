@@ -65,6 +65,7 @@ export function installBrowserLinkMaterializationProbe() {
       primarySelectionMiddleClickPaste: false,
       primarySelectionDefaultedForLinux: false,
       terminalFontFamily: 'monospace',
+      terminalFontWeight: 500,
       terminalInactivePaneOpacity: 1,
       terminalRightClickToPaste: false,
       notifications: {

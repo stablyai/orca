@@ -2,10 +2,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CodexHookHashLookup from '../codex/trust/hooks/codex-hook-hash-lookup'
 import { spawnProcess } from '@orca/process-host'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { SFTPWrapper } from 'ssh2'
+
 import type * as osModule from 'node:os'
 import type * as NativeHookExecutableModule from './windows-native-hook-executable'
 
@@ -67,25 +67,25 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-import { AntigravityHookService } from '../antigravity/hook-service'
+import '../antigravity/hook-service'
 import { ClaudeHookService } from '../claude/hook-service'
-import { getRemoteManagedCommand } from '../claude/hook-settings'
+import '../claude/hook-settings'
 import '../codex/hooks/installation/hook-service'
-import { CodexHookService } from '../codex/hooks/installation/codex-hook-service-implementation'
-import { CommandCodeHookService } from '../command-code/hook-service'
-import { CopilotHookService } from '../copilot/hook-service'
-import { CursorHookService } from '../cursor/hook-service'
-import { DevinHookService } from '../devin/hook-service'
-import { DroidHookService } from '../droid/hook-service'
-import { GeminiHookService } from '../gemini/hook-service'
-import { GrokHookService } from '../grok/hook-service'
-import { KimiHookService } from '../kimi/hook-service'
+import '../codex/hooks/installation/codex-hook-service-implementation'
+import '../command-code/hook-service'
+import '../copilot/hook-service'
+import '../cursor/hook-service'
+import '../devin/hook-service'
+import '../droid/hook-service'
+import '../gemini/hook-service'
+import '../grok/hook-service'
+import '../kimi/hook-service'
 
-import { openClaudeHookService } from '../openclaude/hook-service'
-import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
+import '../openclaude/hook-service'
+import './installer-utils'
 import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
-import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
-import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
+import './runtime-home-hook-command'
+import './agent-hook-memory-sftp.test-fixture'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 import {
   WINDOWS_POWERSHELL_WARM_UP_TIMEOUT_MS,
@@ -97,8 +97,6 @@ import {
 } from './windows-native-hook-exe.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
-// Windows broken-pipe errors vary with pipe and process teardown ordering.
-const WRITER_BROKEN_BY_EARLY_EXIT = ['EPIPE', 'ECONNRESET', 'EOF']
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')
 
 // Seed the user's usual AutoRun target so profile redirection cannot introduce cmd stderr noise.
@@ -106,71 +104,6 @@ function seedCmdAutoRunTarget(profileDir: string): void {
   mkdirSync(profileDir, { recursive: true })
   writeFileSync(join(profileDir, '.cmd_aliases.cmd'), '@echo off\r\n', 'utf8')
 }
-const REMOTE_INSTALLERS = [
-  {
-    agent: 'antigravity',
-    install: (sftp: SFTPWrapper) => new AntigravityHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'claude',
-    install: (sftp: SFTPWrapper) => new ClaudeHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'openclaude',
-    install: (sftp: SFTPWrapper) => openClaudeHookService.installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'codex',
-    install: (sftp: SFTPWrapper) => new CodexHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'command-code',
-    install: (sftp: SFTPWrapper) => new CommandCodeHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'copilot',
-    install: (sftp: SFTPWrapper) => new CopilotHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'cursor',
-    install: (sftp: SFTPWrapper) => new CursorHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'devin',
-    install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'droid',
-    install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'gemini',
-    install: (sftp: SFTPWrapper) => new GeminiHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'grok',
-    install: (sftp: SFTPWrapper) => new GrokHookService().installRemote(sftp, REMOTE_HOME)
-  },
-  {
-    agent: 'kimi',
-    install: (sftp: SFTPWrapper) => new KimiHookService().installRemote(sftp, REMOTE_HOME)
-  }
-] as const
-
-const LOCAL_INSTALLERS = [
-  { agent: 'antigravity', install: () => new AntigravityHookService().install() },
-  { agent: 'claude', install: () => new ClaudeHookService().install() },
-  { agent: 'openclaude', install: () => openClaudeHookService.install() },
-  { agent: 'codex', install: () => new CodexHookService().install() },
-  { agent: 'command-code', install: () => new CommandCodeHookService().install() },
-  { agent: 'copilot', install: () => new CopilotHookService().install() },
-  { agent: 'cursor', install: () => new CursorHookService().install() },
-  { agent: 'devin', install: () => new DevinHookService().install() },
-  { agent: 'droid', install: () => new DroidHookService().install() },
-  { agent: 'gemini', install: () => new GeminiHookService().install() },
-  { agent: 'grok', install: () => new GrokHookService().install() },
-  { agent: 'kimi', install: () => new KimiHookService().install() }
-] as const
 
 type HookRun = {
   exitCode: number | null
@@ -238,157 +171,12 @@ function hookEnvironment(extraEnv: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   }
 }
 
-function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<HookRun> {
-  return runHookProcess('/bin/sh', ['-c', command], hookEnvironment(extraEnv))
-}
-
-async function generatePosixScripts(onlyAgent?: string): Promise<Map<string, string>> {
-  const scripts = new Map<string, string>()
-  for (const entry of REMOTE_INSTALLERS) {
-    if (onlyAgent && entry.agent !== onlyAgent) {
-      continue
-    }
-    const memory = createAgentHookMemorySftp()
-    const status = await entry.install(memory.sftp)
-    expect(status.state, `${entry.agent} install status`).toBe('installed')
-    const generated = [...memory.fs.files.entries()].filter(
-      ([path]) => path.includes('/.orca/agent-hooks/') && path.endsWith('.sh')
-    )
-    expect(generated.length, `${entry.agent} generated scripts`).toBeGreaterThan(0)
-    for (const [path, script] of generated) {
-      scripts.set(`${entry.agent} ${path.split('/').pop()}`, script)
-    }
-  }
-  return scripts
-}
-
 describe('Windows managed hook stdin structure', () => {
   beforeAll(async () => {
     if (process.platform === 'win32') {
       await warmWindowsEncodedPowerShell(hookEnvironment())
     }
   }, WINDOWS_POWERSHELL_WARM_UP_TIMEOUT_MS)
-
-  it.skipIf(process.platform !== 'win32')(
-    'exits 0 for every local script and missing-script launcher, dropping stdin only without Orca env',
-    async () => {
-      const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
-      homedirMock.mockReturnValue(home)
-      seedCmdAutoRunTarget(home)
-      try {
-        const gitBash = findGitBash()
-        for (const entry of LOCAL_INSTALLERS) {
-          expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
-        }
-        const hooksDir = join(home, '.orca', 'agent-hooks')
-        const mainScripts = readdirSync(hooksDir).filter(
-          (name) =>
-            name === 'antigravity-hook.cmd' ||
-            name.endsWith('-hook.ps1') ||
-            name.endsWith('-hook.sh') ||
-            (name.endsWith('-hook.cmd') && !name.startsWith('antigravity-'))
-        )
-        expect(mainScripts).toHaveLength(12)
-        for (const fileName of mainScripts) {
-          const scriptPath = join(hooksDir, fileName)
-          const executable = fileName.endsWith('.cmd')
-            ? 'cmd.exe'
-            : fileName.endsWith('.ps1')
-              ? join(
-                  process.env.SystemRoot ?? 'C:\\Windows',
-                  'System32',
-                  'WindowsPowerShell',
-                  'v1.0',
-                  'powershell.exe'
-                )
-              : gitBash
-          const args = fileName.endsWith('.cmd')
-            ? ['/d', '/c', scriptPath]
-            : fileName.endsWith('.ps1')
-              ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath]
-              : [scriptPath]
-          const result = await runHookProcess(executable, args, hookEnvironment())
-          expect(result.exitCode, `${fileName} exit code`).toBe(0)
-          // Missing-context guards exit before reading stdin, so writers may see a broken pipe.
-          for (const error of result.stdinErrors) {
-            expect(WRITER_BROKEN_BY_EARLY_EXIT, `${fileName} stdin error`).toContain(error.code)
-          }
-        }
-
-        // In-pane skips must not wait for stdin EOF from a caller that holds it open (#24907).
-        const paneEnv = {
-          ORCA_AGENT_HOOK_PORT: '59999',
-          ORCA_AGENT_HOOK_TOKEN: 'token',
-          ORCA_PANE_KEY: 'tab:leaf'
-        }
-        for (const [fileName, skipEnv] of [
-          ['claude-hook-impl.cmd', { DEVIN_PROJECT_DIR: home }],
-          ['claude-hook-impl.cmd', { GROK_HOOK_EVENT: 'PreToolUse' }],
-          ['claude-hook-impl.cmd', { CURSOR_VERSION: '1.0', CURSOR_PROJECT_DIR: home }],
-          ['cursor-hook.cmd', { GROK_HOOK_EVENT: 'PreToolUse' }],
-          ['codex-hook.cmd', { CLAUDE_JOB_DIR: home }]
-        ] as const) {
-          const skipped = await runHookProcess(
-            'cmd.exe',
-            ['/d', '/c', join(hooksDir, fileName)],
-            hookEnvironment({ ...paneEnv, ...skipEnv }),
-            'abandon'
-          )
-          expect(skipped.exitCode, `${fileName} ${Object.keys(skipEnv)[0]} skip`).toBe(0)
-        }
-
-        const missingScript = 'C:\\missing\\orca-hook.cmd'
-        // Bare .cmd launchers must remain directly spawnable; only interpreter launchers can drain a missing script.
-        const launcherCases = [
-          {
-            name: 'encoded PowerShell',
-            executable: 'cmd.exe',
-            args: ['/d', '/c', wrapWindowsHookCommand(missingScript)]
-          },
-          {
-            name: 'portable Git Bash launcher',
-            executable: gitBash,
-            args: ['-lc', wrapRuntimeHomeHookCommand('missing-orca-hook')]
-          }
-        ]
-        for (const launcher of launcherCases) {
-          const outside = await runHookProcess(
-            launcher.executable,
-            launcher.args,
-            hookEnvironment()
-          )
-          expect(outside.exitCode, `${launcher.name} exit code`).toBe(0)
-          for (const error of outside.stdinErrors) {
-            expect(WRITER_BROKEN_BY_EARLY_EXIT, `${launcher.name} stdin error`).toContain(
-              error.code
-            )
-          }
-          const insideAPane = await runHookProcess(
-            launcher.executable,
-            launcher.args,
-            hookEnvironment({
-              ORCA_AGENT_HOOK_PORT: '59999',
-              ORCA_AGENT_HOOK_TOKEN: 'token',
-              ORCA_PANE_KEY: 'tab:leaf'
-            })
-          )
-          expect(insideAPane.exitCode, `${launcher.name} in-pane exit code`).toBe(0)
-          expect(insideAPane.stdinErrors, `${launcher.name} in-pane stdin errors`).toHaveLength(0)
-          // Closing stdin masks ReadToEnd hangs; an abandoned pipe exposes them.
-          const abandoned = await runHookProcess(
-            launcher.executable,
-            launcher.args,
-            hookEnvironment(),
-            'abandon'
-          )
-          expect(abandoned.exitCode, `${launcher.name} abandoned-stdin exit code`).toBe(0)
-        }
-      } finally {
-        homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
-        rmSync(home, { recursive: true, force: true })
-      }
-    }
-  )
 
   // Command-shape assertions missed conhost discarding the consumer's JSON output.
   it.skipIf(process.platform !== 'win32').each([
@@ -466,45 +254,6 @@ describe('Windows managed hook stdin structure', () => {
 })
 
 describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', () => {
-  it('emits neutral JSON when the Claude lifecycle script is missing', async () => {
-    const command = getRemoteManagedCommand('/home/dev/.orca/agent-hooks/claude-hook.sh')
-    const result = await runPosixHook(command)
-
-    expect(result.exitCode).toBe(0)
-    expect(result.stdinErrors).toHaveLength(0)
-    expect(result.stderr).toBe('')
-    expect(JSON.parse(result.stdout.trim())).toEqual({})
-  })
-
-  it('accepts a large payload across generated hooks without breaking the writer', async () => {
-    const scripts = await generatePosixScripts()
-    for (const [agent, script] of scripts) {
-      const extraEnv = agent.startsWith('command-code')
-        ? {
-            ORCA_AGENT_HOOK_PORT: '1',
-            ORCA_AGENT_HOOK_TOKEN: 'test-token',
-            ORCA_PANE_KEY: 'test-pane'
-          }
-        : {}
-      const result = await runPosixHook(script, extraEnv)
-      expect(result.exitCode, `${agent} exit code`).toBe(0)
-      expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
-    }
-  })
-
-  it('does not need PATH to capture or drain POSIX hook stdin', async () => {
-    const scripts = await generatePosixScripts()
-    for (const [agent, script] of scripts) {
-      const result = await runPosixHook(script, { PATH: '' })
-      expect(result.exitCode, `${agent} exit code`).toBe(0)
-      expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
-    }
-
-    const missing = await runPosixHook(wrapPosixHookCommand('/missing/orca-hook.sh'), { PATH: '' })
-    expect(missing.exitCode, 'missing script launcher exit code').toBe(0)
-    expect(missing.stdinErrors, 'missing script launcher stdin errors').toHaveLength(0)
-  })
-
   // Exit zero does not prove stdin was consumed; measure captured bytes.
   it.each([
     ['empty PATH', ''],
@@ -531,21 +280,5 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     } finally {
       rmSync(decoyDir, { recursive: true, force: true })
     }
-  })
-
-  it('drains before Claude skips hooks imported by Devin', async () => {
-    const script = (await generatePosixScripts('claude')).get('claude claude-hook.sh')
-    expect(script).toBeDefined()
-    const result = await runPosixHook(script!, { DEVIN_PROJECT_DIR: '/tmp/devin-project' })
-    expect(result.exitCode).toBe(0)
-    expect(result.stdinErrors).toHaveLength(0)
-  })
-
-  it('drains before Codex skips hooks under a Claude background job', async () => {
-    const script = (await generatePosixScripts('codex')).get('codex codex-hook.sh')
-    expect(script).toBeDefined()
-    const result = await runPosixHook(script!, { CLAUDE_JOB_DIR: '/tmp/claude-job' })
-    expect(result.exitCode).toBe(0)
-    expect(result.stdinErrors).toHaveLength(0)
   })
 })

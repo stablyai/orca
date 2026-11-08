@@ -14,7 +14,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 function visibleReviewWorkspacesForState(state: AppState) {
   const ids = new Set(state.visibleReviewCardWorktreeIds ?? [])

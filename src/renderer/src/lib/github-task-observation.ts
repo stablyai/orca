@@ -16,7 +16,7 @@ import { parseHostAuthorityKey } from '../../../shared/host-authority'
 
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 
-import { captureHostIdentityFence } from '@/store/host-catalog-fencing'
+import { captureHostIdentityFence } from '@/runtime/rpc/environment-revisions/host-identity-fence'
 
 export function githubTaskBinding(repo: Repo): string {
   return JSON.stringify([

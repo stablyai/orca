@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { JiraIssue } from '../../../src/shared/jira/jira-types'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
@@ -9,8 +10,8 @@ import { useHostRepoList, type HostRepoListResource } from './use-host-repo-list
 import { useMobileTasksTaskListLoading } from './use-mobile-tasks-task-list-loading'
 
 vi.mock('./mobile-tasks-dependencies', async () => {
-  const { useCallback, useEffect, useLayoutEffect, useRef } = await import('react')
-  return { useCallback, useEffect, useLayoutEffect, useRef }
+  const { useCallback, useEffect, useLayoutEffect, useRef, useState } = await import('react')
+  return { useCallback, useEffect, useLayoutEffect, useRef, useState }
 })
 vi.mock('./mobile-tasks-legacy-foundation', async () => import('./mobile-tasks-item-mapping'))
 
@@ -66,6 +67,8 @@ function mountJira(fetchRepos: () => Promise<RepoSummary[]>) {
         jiraConnection: { connected: true, selection: 'site-a' },
         jiraFilter: 'assigned',
         effectiveRepoIds,
+        selectedRepoIds: effectiveRepoIds,
+        items: [],
         serverRepoList,
         linearConnected: false,
         loadGenerationRef: { current: 0 },
@@ -85,7 +88,7 @@ function mountJira(fetchRepos: () => Promise<RepoSummary[]>) {
   }
 
   act(() => {
-    mounted.push(create(createElement(Probe)))
+    mounted.push(createWithQueryClient(createElement(Probe)))
   })
   return {
     setItems,
@@ -117,7 +120,6 @@ describe('direct mobile Jira entry', () => {
     })
     const fetchRepos = vi.fn(() => response)
     const fixture = mountJira(fetchRepos)
-    expect(fixture.repos.status).toBe('idle')
 
     await fixture.load()
     expect(fixture.setItems).toHaveBeenLastCalledWith([

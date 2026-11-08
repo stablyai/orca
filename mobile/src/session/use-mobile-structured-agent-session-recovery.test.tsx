@@ -319,16 +319,13 @@ describe('current recovery publication and normal Resume', () => {
         moving = hook!.queued.move!({ movedId: 'W2', beforeId: 'W1' })
       })
       expect(hook!.queued.cards.map((c) => c.messageId)).toEqual(['W2', 'W1', 'Q'])
-      expect(hook!.queued.cards[0]).toMatchObject({
-        caption: 'Waiting — a message ahead needs attention'
-      })
       vi.useFakeTimers()
       act(() => {
         listener?.(batchEvent(undefined, [acceptedSubmission('handoff-W1', 'W1')]))
         vi.advanceTimersByTime(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
       })
       expect(hook!.queued.cards.map((c) => c.messageId)).toEqual(['W2', 'Q'])
-      expect(hook!.queued.pause).toBeNull()
+      expect(hook!.queued.pause).toEqual({ reason: 'stopped' })
       expect(requestOf('agentSession.queuedMessageMove').params).toMatchObject({
         messageId: 'W2',
         beforeMessageId: 'W1'

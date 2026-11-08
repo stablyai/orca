@@ -3,9 +3,13 @@ import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
-function routerFixture() {
+function routerFixture(firstRead?: Promise<string | null>) {
   let foreground = false
   let localNetwork: string | null = null
+  const readLocalNetwork = vi.fn(async () => localNetwork)
+  if (firstRead) {
+    readLocalNetwork.mockReturnValueOnce(firstRead)
+  }
   const logical = {
     getActivePath: vi.fn(() => 'relay'),
     getState: vi.fn(() => 'connected'),
@@ -25,7 +29,7 @@ function routerFixture() {
     isForeground: () => foreground,
     setForeground,
     scheduleDirectProbe,
-    readLocalNetwork: async () => localNetwork,
+    readLocalNetwork,
     onLocalNetworkArrival
   })
   const join = (network: string | null) => {
@@ -36,11 +40,22 @@ function routerFixture() {
     join,
     logical,
     onLocalNetworkArrival,
+    readLocalNetwork,
     router,
     scheduleDirectProbe,
     setForeground
   }
 }
+
+function deferredRead() {
+  let settle: (network: string | null) => void = () => {}
+  const promise = new Promise<string | null>((resolve) => {
+    settle = resolve
+  })
+  return { promise, settle }
+}
+
+const settleReads = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 describe('MobileEndpointNudgeRouter', () => {
   it('processes a focus nudge after restoring lagging foreground state', () => {
@@ -80,5 +95,53 @@ describe('MobileEndpointNudgeRouter', () => {
     fixture.router.nudge('network-change')
     await vi.waitFor(() => expect(fixture.onLocalNetworkArrival).toHaveBeenCalledTimes(2))
     expect(fixture.handleActiveNudge).toHaveBeenCalledTimes(6)
+  })
+
+  it('counts a join seen while the startup read is still pending as an arrival', async () => {
+    const startupRead = deferredRead()
+    const fixture = routerFixture(startupRead.promise)
+    fixture.readLocalNetwork.mockReturnValueOnce(startupRead.promise)
+    fixture.router.nudge('focus')
+
+    fixture.router.nudge('network-change')
+    startupRead.settle('WIFI:192.168.1')
+
+    await vi.waitFor(() => expect(fixture.onLocalNetworkArrival).toHaveBeenCalledOnce())
+  })
+
+  it('keeps the last network across a failed read', async () => {
+    const fixture = routerFixture()
+    fixture.router.nudge('focus')
+    fixture.join('WIFI:192.168.1')
+    fixture.router.nudge('network-change')
+    await settleReads()
+
+    fixture.readLocalNetwork.mockRejectedValueOnce(new Error('network read failed'))
+    fixture.router.nudge('network-change')
+    await settleReads()
+    fixture.router.nudge('network-change')
+    await settleReads()
+
+    expect(fixture.onLocalNetworkArrival).toHaveBeenCalledOnce()
+  })
+
+  it('ignores a read that settles after a newer one', async () => {
+    const fixture = routerFixture()
+    fixture.router.nudge('focus')
+    const older = deferredRead()
+    const newer = deferredRead()
+    fixture.readLocalNetwork.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
+    fixture.router.nudge('network-change')
+    fixture.router.nudge('network-change')
+
+    newer.settle('WIFI:192.168.1')
+    await settleReads()
+    older.settle(null)
+    await settleReads()
+    fixture.join('WIFI:192.168.1')
+    fixture.router.nudge('network-change')
+    await settleReads()
+
+    expect(fixture.onLocalNetworkArrival).toHaveBeenCalledOnce()
   })
 })

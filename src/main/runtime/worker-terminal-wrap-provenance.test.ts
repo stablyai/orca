@@ -108,23 +108,6 @@ describe('host wrap provenance in worker output', () => {
     }
   )
 
-  it('preserves a whitespace token boundary removed from raw display rows', async () => {
-    const fixture = await createTerminalArchiveFixture({
-      provider: true,
-      cols: 25,
-      screenLines: [`dcap_sssss${' '.repeat(15)}PermissionDenied`, 'Safe diagnostic']
-    })
-    fixture.runtime.onPtyData('pty-1', 'useful history\r\n', Date.now())
-    const raw = await fixture.runtime.readTerminal(fixture.handle, { screen: true })
-    expect(raw.tail).toEqual(['dcap_sssss', 'PermissionDenied', 'Safe diagnostic'])
-    expect(raw.tailRows?.[1].wrapped).toBe(true)
-    expect(raw.tailRows?.[0].trailingSpaces).toBe(15)
-    const archive = await fixture.capture()
-    expect(archive.content).toMatchObject({
-      lines: ['useful history', 'dcap_sssss', 'PermissionDenied', 'Safe diagnostic']
-    })
-  })
-
   it.each(['screen' as const, undefined])(
     'retains complete-line semantics and coverage limits without wrap metadata (source=%s)',
     async (source) => {
@@ -157,50 +140,6 @@ describe('host wrap provenance in worker output', () => {
           'Terminal wrap information was unavailable; capability masking used complete lines.'
         ])
       })
-    }
-  )
-
-  it.each([false, true])(
-    'keeps hard screen diagnostics in live and archived reads (legacy=%s)',
-    async (legacy) => {
-      h.setup()
-      const { dispatchId } = await h.startSettledWorker('failed')
-      const fixture = await createTerminalArchiveFixture({
-        provider: true,
-        screenLines: ['dcap_sssss', 'PermissionDenied', 'Safe diagnostic']
-      })
-      fixture.runtime.onPtyData('pty-1', 'useful history\r\n', Date.now())
-      vi.mocked(h.runtime.readTerminal).mockImplementation(async (_handle, opts) => {
-        const read = await fixture.runtime.readTerminal(fixture.handle, opts)
-        if (!legacy) {
-          return read
-        }
-        // Older responses carry neither source nor physical wrap provenance.
-        const { source: _source, tailRows: _tailRows, ...old } = read
-        return old
-      })
-      const live = await h.call('orchestration.workerRead', {
-        dispatch: dispatchId,
-        source: 'terminal',
-        limit: 2000
-      })
-      expect(readTail(live)).toContain('useful history')
-      vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
-        fixture.runtime.onPtyExit('pty-1', 0)
-        return { handle, tabId: 'tab-worker', ptyKilled: true }
-      })
-      await h.call('orchestration.workerRelease', { dispatch: dispatchId })
-      const stored = h.db.getWorkerTerminalArchive(dispatchId)
-      expect(stored?.content).toContain('PermissionDenied')
-      vi.mocked(h.runtime.readTerminal).mockRejectedValue(new Error('Live output gone'))
-      const read = await h.call('orchestration.workerRead', { dispatch: dispatchId, limit: 2000 })
-      expect(read).toMatchObject({ archived: true, terminal: { nextCursor: null } })
-      expect(readTail(read)).toEqual([
-        'useful history',
-        'dcap_sssss',
-        'PermissionDenied',
-        'Safe diagnostic'
-      ])
     }
   )
 

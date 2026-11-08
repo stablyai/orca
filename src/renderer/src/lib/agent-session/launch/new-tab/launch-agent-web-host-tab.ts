@@ -16,21 +16,25 @@ import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-p
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { pairedAgentLaunchInputs } from '../../../paired-agent-launch-inputs'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
-import { webTerminalPlacementParentTabId } from '@/runtime/hosted-terminals/placement/web-session-terminal-placement'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
+import { completeWebHostAgentLaunch } from '@/lib/web-host-agent-launch-completion'
 import { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
-import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import type { CreateWebRuntimeSessionTerminalOnHostArgs } from '@/runtime/hosted-terminals/creation/terminal-create-contracts'
-import { planLaunchAgentStartupPrompt } from '../prompt/launch-agent-startup-prompt-plan'
+import {
+  planLaunchAgentStartupPrompt,
+  planHostedAgentPrompt,
+  hostedAgentPromptHostFacts,
+  hostedAgentPromptDelivery,
+  hostedAgentPromptRequest
+} from '../prompt/launch-agent-startup-prompt-plan'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
+import type { LaunchAgentStartupPromptPlan } from '../prompt/launch-agent-startup-prompt-plan'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
-import { toWebTerminalSurfaceTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
-import type { AgentTerminalLaunchCompletion } from '../structured-agent-session-launch-admission'
+import type { AgentTerminalLaunchCompletion } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 
 /** Paired web tabs are host-owned; never create a local tab, and return tabId:null. */
 export async function launchAgentInWebHostTab(args: {
@@ -49,10 +53,13 @@ export async function launchAgentInWebHostTab(args: {
   actionAgentArgs?: string
   launchPlatform?: NodeJS.Platform
   launchShell?: AgentStartupShell
+  submitFollowup?: boolean
   viewMode?: Tab['viewMode']
   /** False opens the host's tab without selecting it. */
   activate?: boolean
   onPromptDelivered?: () => void
+  selectWorktree?: boolean
+  isCancelled?: () => boolean
 }): Promise<{ delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion> {
   const {
     agent,
@@ -101,18 +108,16 @@ export async function launchAgentInWebHostTab(args: {
       throw new DOMException('Agent launch cancelled', 'AbortError')
     }
     // Why: prompt delivery is client-owned; the host supplies launch settings.
-    startup = planLaunchAgentStartupPrompt({
-      base: {
-        agent,
-        cmdOverrides: {},
-        agentArgs: null,
-        platform: args.launchPlatform ?? 'linux',
-        shell: args.launchShell,
-        isRemote: true
-      },
-      prompt,
-      promptDelivery,
-      isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
+    const hostStatus = environmentId
+      ? lastVerifiedRuntimeStatus(
+          useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+        )
+      : undefined
+    const platform = args.launchPlatform ?? hostStatus?.hostPlatform
+    startup = planHostedAgentPrompt(agent, prompt, promptDelivery, {
+      ...hostedAgentPromptHostFacts(platform, hostStatus?.terminalWindowsShell),
+      ...(args.launchShell ? { shell: args.launchShell } : {}),
+      submitFollowup: args.submitFollowup
     })
     launch = {
       worktreeId,
@@ -121,6 +126,7 @@ export async function launchAgentInWebHostTab(args: {
       targetGroupId: groupId,
       activate: args.activate !== false,
       ...(args.activate === false ? { selectWorktree: false } : {}),
+      ...(args.selectWorktree !== undefined ? { selectWorktree: args.selectWorktree } : {}),
       ...(cwd?.trim() ? { cwd } : {}),
       ...(viewMode ? { viewMode } : {}),
       agentSessionKind: 'fresh',
@@ -130,11 +136,7 @@ export async function launchAgentInWebHostTab(args: {
       ...(complete
         ? { agentSessionCreateCapability: AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY }
         : {}),
-      ...(hasPrompt && startup.pasteDraftAfterLaunch === null ? { prompt } : {}),
-      ...((hasPrompt && startup.pasteDraftAfterLaunch === null) ||
-      promptDelivery === 'submit-after-ready'
-        ? { promptDelivery: promptDelivery === 'draft' ? 'draft' : 'auto-submit' }
-        : {}),
+      ...hostedAgentPromptRequest(startup, prompt, promptDelivery),
       legacyAgentLaunch: async () => {
         if (
           !Object.keys(args.sessionOptions ?? {}).length &&
@@ -159,6 +161,9 @@ export async function launchAgentInWebHostTab(args: {
                 useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
               )
             : undefined
+          if (args.isCancelled?.()) {
+            throw new DOMException('Agent launch cancelled', 'AbortError')
+          }
           if (
             environmentId &&
             (getRuntimeEnvironmentRevision(environmentId) !== pairingRevision ||
@@ -202,6 +207,7 @@ export async function launchAgentInWebHostTab(args: {
               }),
               prompt,
               promptDelivery,
+              submitFollowup: args.submitFollowup,
               isFollowupPath: TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
             })
           } else {
@@ -215,6 +221,10 @@ export async function launchAgentInWebHostTab(args: {
         } catch (error) {
           legacyPreparationCancelled = error instanceof Error && error.name === 'AbortError'
           throw error
+        }
+        if (args.isCancelled?.()) {
+          legacyPreparationCancelled = true
+          throw new DOMException('Agent launch cancelled', 'AbortError')
         }
         const plan = startup.startupPlan
         if (!plan) {
@@ -240,66 +250,33 @@ export async function launchAgentInWebHostTab(args: {
     }
   }
 
-  const handleCreation = ({
-    outcome,
-    promptDelivered,
-    hostTabId
-  }: {
-    outcome: Awaited<ReturnType<typeof createWebRuntimeSessionTerminal>>
-    promptDelivered: boolean
-    hostTabId?: string
-  }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion => {
-    if (outcome.status === 'failed') {
-      if (legacyPreparationCancelled) {
-        return {
-          delivered: false,
-          failureNotified: true,
-          outcome: { status: 'failed', message: '' }
-        }
-      }
-      toast.error(failureMessage)
-      return { delivered: false, failureNotified: true, outcome }
-    }
-    if (args.activate !== false) {
-      useAppStore.getState().setActiveTabType('terminal', worktreeId)
-    }
-    if (hasPrompt && promptDelivered) {
-      onPromptDelivered?.()
-    }
-    const failureNotified = hasPrompt && !promptDelivered
-    if (failureNotified) {
-      toast.error(
-        translate(
-          'agentLaunch.terminalPromptFailed',
-          'Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.',
-          { value0: structuredAgentLabel(agent) }
-        )
-      )
-    }
-    return {
-      delivered: promptDelivered,
-      failureNotified,
-      outcome,
-      ...(hostTabId
-        ? { tabId: toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(hostTabId)) }
-        : {})
-    }
+  if (args.isCancelled?.()) {
+    return { delivered: false, failureNotified: false, outcome: { status: 'failed', message: '' } }
   }
-
   const created = await createWebRuntimeSessionTerminalResult(launch)
+  if (args.isCancelled?.()) {
+    return { delivered: false, failureNotified: false, outcome: created.outcome }
+  }
   const promptDelivered =
     hasPrompt &&
+    !args.isCancelled?.() &&
     (await deliverCreatedWebRuntimeAgentSessionPrompt(created, {
       agent,
-      ...(startup.pasteDraftAfterLaunch !== null
-        ? {
-            promptAfterReady: startup.pasteDraftAfterLaunch,
-            submitPrompt: startup.submitPastedPrompt,
-            forcePromptPaste: true
-          }
-        : promptDelivery === 'draft'
-          ? { launchDraft: prompt }
-          : {})
+      beforePaste: () => !args.isCancelled?.(),
+      ...hostedAgentPromptDelivery(startup, prompt, promptDelivery)
     }))
-  return handleCreation({ ...created, promptDelivered })
+  if (args.isCancelled?.()) {
+    return { delivered: false, failureNotified: false, outcome: created.outcome }
+  }
+  return completeWebHostAgentLaunch({
+    ...args,
+    ...created,
+    agent,
+    worktreeId,
+    prompt,
+    onPromptDelivered,
+    promptDelivered,
+    failureMessage,
+    legacyPreparationCancelled
+  })
 }

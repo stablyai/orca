@@ -49,7 +49,7 @@ import {
   resolveAgentArgsPlaceholderAgent
 } from './repository-source-control-ai-labels'
 import { getRepositorySourceControlAiActionRecipeSectionId } from '../repository-settings-targets'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SourceControlActionOptionField } from '../../../agent/launch-settings/AgentChoiceOptionField'
 import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -95,6 +95,7 @@ const SelectedRepositoryActionRows = memo(
     agentDefaultSurface: NativeChatDefaultSettings['agentDefaultSurface']
     nativeChatProviders: NativeChatDefaultSettings['nativeChatProviders']
   }): JSX.Element {
+    const t = useTranslate()
     useUiLanguageRevision()
     const selections = useMemo(
       () =>
@@ -118,9 +119,9 @@ const SelectedRepositoryActionRows = memo(
       [selections]
     )
     return (
-      <div className="space-y-3">
+      <div data-settings-row="" className="space-y-3 py-3">
         <Label className="text-xs font-medium">
-          {translate(
+          {t(
             'auto.components.settings.RepositorySourceControlAiActionRows.f0aa2cfaea',
             'Action recipes'
           )}
@@ -179,8 +180,12 @@ const SelectedRepositoryActionRows = memo(
                         defaultTuiAgent
                       )
                     ))
-          const agentWarningText = getSourceControlActionAgentWarningText(actionId, effectiveAgent)
-          const agentSupportText = getSourceControlActionAgentSupportText(actionId)
+          const agentWarningText = getSourceControlActionAgentWarningText(
+            actionId,
+            effectiveAgent,
+            t
+          )
+          const agentSupportText = getSourceControlActionAgentSupportText(actionId, t)
           const actionDirty = actionDirtyById[actionId]
           const isSavingAction = savingActionIds[actionId] === true
           const sectionId = getRepositorySourceControlAiActionRecipeSectionId(repoId, actionId)
@@ -222,13 +227,13 @@ const SelectedRepositoryActionRows = memo(
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ACTION_MODE_INHERIT}>
-                      {translate(
+                      {t(
                         'auto.components.settings.RepositorySourceControlAiActionRows.403876bb48',
                         'Use global'
                       )}
                     </SelectItem>
                     <SelectItem value={ACTION_MODE_OVERRIDE}>
-                      {translate(
+                      {t(
                         'auto.components.settings.RepositorySourceControlAiActionRows.1cd88d470a',
                         'Customize'
                       )}
@@ -239,7 +244,7 @@ const SelectedRepositoryActionRows = memo(
               <div className="grid min-w-0 grid-cols-1 items-start gap-3">
                 <div className="space-y-2">
                   <Label className="text-[11px] text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.settings.RepositorySourceControlAiActionRows.f4310cf63f',
                       'Agent'
                     )}
@@ -302,10 +307,7 @@ const SelectedRepositoryActionRows = memo(
                 <div className="flex min-w-0 flex-wrap items-start gap-3">
                   {!isLaunchAction ? (
                     <SourceControlActionOptionField
-                      label={translate(
-                        'auto.components.settings.AgentsPane.cfb3f35775',
-                        'Arguments'
-                      )}
+                      label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
                     >
                       <Input
                         value={agentArgsValue}
@@ -320,7 +322,7 @@ const SelectedRepositoryActionRows = memo(
                 </div>
                 <div className="space-y-2">
                   <Label className="text-[11px] text-muted-foreground">
-                    {translate(
+                    {t(
                       'auto.components.settings.RepositorySourceControlAiActionRows.548a6e1281',
                       'Command template'
                     )}

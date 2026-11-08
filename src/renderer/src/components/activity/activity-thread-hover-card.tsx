@@ -2,7 +2,7 @@ import React, { useCallback } from 'react'
 import { Pencil, StickyNote } from 'lucide-react'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
 import {
   DetailHeader,
@@ -99,6 +99,7 @@ function ActivityThreadHoverCardContent({
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
   canJumpToWorkspace?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { worktree, repo } = thread
   const foundation = useWorktreeCardFoundation({ worktree, repo: repo ?? undefined })
   const review = useWorktreeCardReviewDetails({
@@ -260,13 +261,10 @@ function ActivityThreadHoverCardContent({
           <WorktreeCardDetailSection>
             <DetailHeader
               icon={<StickyNote className="size-3 text-muted-foreground" />}
-              label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
+              label={t('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
               actions={
                 <MetadataActionIcon
-                  label={translate(
-                    'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
-                    'Edit notes'
-                  )}
+                  label={t('auto.components.sidebar.WorktreeCardMeta.c7fa72ead0', 'Edit notes')}
                   onClick={foundation.handleEditComment}
                 >
                   <Pencil className="size-3" />

@@ -101,7 +101,7 @@ export function useMobileSourceControlRunners(params: Params) {
           setCommitMessage('')
         }
         triggerSuccess()
-        await loadStatus({ preserveReadyOnFailure: true, force: true })
+        await loadStatus({ force: true })
         return true
       } catch (err) {
         if (!mountedRef.current) {
@@ -113,7 +113,6 @@ export function useMobileSourceControlRunners(params: Params) {
         if (options?.refreshOnError) {
           // Keep the reason visible: a successful reload clears the action error by default.
           await loadStatus({
-            preserveReadyOnFailure: true,
             force: true,
             clearActionErrorOnSuccess: false
           })

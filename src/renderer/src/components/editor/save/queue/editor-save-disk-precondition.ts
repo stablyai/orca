@@ -15,7 +15,7 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { writeRuntimeTerminalArtifactFile } from '@/runtime/files/grants/runtime-terminal-artifact-write'
 import { getRelativePathInsideWorktree } from '@/runtime/files/runtime-file-routing'
-import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import { chatScratchFileAddress } from '@/runtime/files/addressing/runtime-chat-scratch-file-address'
 import { grantRestoredHostFile } from '../../restored-host-file-grant'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 

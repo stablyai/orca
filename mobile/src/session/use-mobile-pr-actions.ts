@@ -24,7 +24,7 @@ export type PrActionsInput = {
   prNumber: number
   headSha?: string | null
   prRepo?: GitHubPrRepoSlug | null
-  refetch: () => void | Promise<void>
+  refetch: (action: PrActionBusyKey) => void | Promise<void>
   mutations?: PrActionMutations
 }
 

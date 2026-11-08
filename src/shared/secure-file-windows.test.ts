@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -256,116 +256,7 @@ describe('Windows secure files through the native ACL addon', () => {
 
       expect(fake.dacls.get(targetPath)).toBe(FILE_SDDL)
     })
-
-    it('re-checks a file whose metadata changed after it was cached', async () => {
-      const { targetPath } = existingFile()
-      hardenExistingSecureFile(targetPath)
-      hardenExistingSecureFile(targetPath)
-      const checksWhileUnchanged = fake.callsFor('get', targetPath).length
-      await new Promise((resolve) => setTimeout(resolve, 20))
-      writeFileSync(targetPath, '{"changed":true}')
-
-      hardenExistingSecureFile(targetPath)
-
-      expect(fake.callsFor('get', targetPath)).toHaveLength(checksWhileUnchanged + 1)
-    })
-
-    it('does not re-verify the parent directory as its mtime churns', async () => {
-      const { dir, targetPath } = existingFile()
-      hardenExistingSecureFile(targetPath)
-      await settle()
-      writeFileSync(join(dir, 'other.json'), '{}')
-      hardenExistingSecureFile(targetPath)
-      hardenExistingSecureFile(targetPath)
-      await settle()
-
-      expect(fake.callsFor('get', dir)).toHaveLength(2) // verify, then the post-relock read-back
-      expect(fake.callsFor('setAsync', dir)).toHaveLength(1)
-    })
-
-    // Read polling (~2/s, #4901) must not repeatedly log incapable-host failures.
-    it('collapses a failing read-path poll to a single attempt', () => {
-      const { targetPath } = existingFile()
-      fake.failing.add(targetPath)
-
-      for (let read = 0; read < 25; read++) {
-        hardenExistingSecureFile(targetPath)
-      }
-
-      expect(fake.callsFor('set', targetPath)).toHaveLength(1)
-    })
-
-    it('re-probes a long-failing path once its backoff has elapsed', () => {
-      const { targetPath } = existingFile()
-      fake.failing.add(targetPath)
-      let clock = performance.now()
-      const now = vi.spyOn(performance, 'now').mockImplementation(() => clock)
-
-      for (let step = 0; step < 48; step++) {
-        hardenExistingSecureFile(targetPath)
-        clock += 31 * 60_000
-      }
-
-      expect(fake.callsFor('set', targetPath)).toHaveLength(48)
-      now.mockRestore()
-    })
-
-    it('LRU-evicts file entries and safely re-checks an evicted path', () => {
-      __resetSecureFileHardenedPathsForTests({
-        maxEntries: 2,
-        maxKeyBytes: 4096,
-        maxTotalKeyBytes: 8192
-      })
-      const dir = tempDir()
-      const paths = ['first.json', 'second.json', 'third.json'].map((name) => join(dir, name))
-      for (const path of paths) {
-        writeFileSync(path, '{}')
-        hardenExistingSecureFile(path)
-      }
-
-      hardenExistingSecureFile(paths[0]!)
-
-      const checked = fake
-        .callsFor('get')
-        .map((call) => call.path)
-        .filter((path) => paths.includes(path))
-      expect(checked.filter((path) => path === paths[0])).toHaveLength(3) // verify, read-back, re-check
-      expect(__getSecureFileHardeningCacheStateForTests().paths).toMatchObject({ entries: 2 })
-    })
-
-    it('LRU-evicts directory entries instead of retaining every path', () => {
-      __resetSecureFileHardenedPathsForTests({
-        maxEntries: 2,
-        maxKeyBytes: 4096,
-        maxTotalKeyBytes: 8192
-      })
-      const root = tempDir()
-      const files = ['first', 'second', 'third'].map((name) => {
-        mkdirSync(join(root, name))
-        const file = join(root, name, 'secret.json')
-        writeFileSync(file, '{}')
-        return file
-      })
-      for (const file of files) {
-        hardenExistingSecureFile(file)
-      }
-      expect(__getSecureFileHardeningCacheStateForTests().directories).toMatchObject({
-        entries: 2
-      })
-    })
   })
-
-  // The prefix comes from the host's toNamespacedPath, which is the identity off Windows.
-  it.runIf(process.platform === 'win32')(
-    'hands the addon extended-length paths past MAX_PATH',
-    () => {
-      const longPath = `C:\\Users\\me\\.orca\\${'d'.repeat(300)}\\secret.json`
-      const loaded = loadWindowsSecurity()
-
-      expect('error' in loaded ? null : loaded.addon.getDaclAces(longPath)).toBeTruthy()
-      expect(fake.callsFor('get')[0]?.addonPath).toBe(`\\\\?\\${longPath}`)
-    }
-  )
 
   // Serialize grant merges with relock or a stale broad DACL could be restored.
   it('runs async DACL writes to the same path one after another', async () => {

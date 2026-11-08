@@ -80,6 +80,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   writes.mockReset()
   imageWrites.mockReset()
+  imageWrites.mockResolvedValue(undefined)
   extract.mockReset()
   capture.mockReset()
   state.recordFeatureInteraction.mockReset()
@@ -185,6 +186,41 @@ describe('browser grab toast owner', () => {
       expect(state.recordFeatureInteraction.mock.calls).toEqual([['browser-grab']])
       expect(bounds).not.toHaveBeenCalled()
       expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+  it.each(['cancel', 'newer copy'] as const)(
+    'drops a screenshot result that settles after a %s',
+    async (replacement) => {
+      const write = deferred<void>()
+      imageWrites.mockReturnValueOnce(write.promise)
+      const first = makePayload()
+      const newer = makePayload()
+      extract.mockResolvedValueOnce({ ok: true, payload: first })
+      extract.mockResolvedValueOnce({ ok: true, payload: newer })
+      capture.mockResolvedValue({ ok: true, screenshot })
+      const { view } = mount()
+      await act(async () => {
+        view.result.current.handleGrabActionShortcut('s')
+        await Promise.resolve()
+      })
+      expect(imageWrites.mock.calls).toEqual([[screenshot.dataUrl]])
+      await act(async () => {
+        if (replacement === 'cancel') {
+          view.result.current.cancelPendingBrowserCapture()
+        } else {
+          view.result.current.handleGrabActionShortcut('c')
+          await Promise.resolve()
+        }
+      })
+      await act(async () => {
+        write.fail(new Error('Clipboard image is too large'))
+        await Promise.resolve()
+      })
+      expect(view.result.current.grabToast).toEqual(
+        replacement === 'cancel'
+          ? null
+          : expect.objectContaining({ message: 'Copied', type: 'success', payload: newer })
+      )
     }
   )
   it.each(['miss', 'reject', 'screenshot-reject'] as const)(

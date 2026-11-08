@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 import CloseTerminalDialog from './CloseTerminalDialog'
 
 /** Store-driven running-process confirmation lets tab/group/floating closes share the pane keyboard guard outside React context. */

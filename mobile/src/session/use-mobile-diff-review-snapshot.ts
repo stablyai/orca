@@ -240,7 +240,7 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
     }
   }, [compareAgainstUpstream])
 
-  // A diff that failed is read again; a branch or commit diff's key would not change on its own.
+  // A diff that failed (or fell back to `deleted`) is read again; a branch or commit diff's key would not change on its own.
   const retryFailedDiff = useCallback(() => {
     void queryClient.refetchQueries({
       queryKey: ['orca', hostId, 'git.diff', target],
@@ -248,8 +248,11 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
       // A worktree diff is re-keyed by the rebuild's status read instead.
       predicate: (query) => {
         const params = query.queryKey[4]
+        const data: unknown = query.state.data
+        const standIn =
+          typeof data === 'object' && data !== null && 'kind' in data && data.kind === 'deleted'
         return (
-          query.state.status === 'error' &&
+          (query.state.status === 'error' || standIn) &&
           typeof params === 'object' &&
           params !== null &&
           'statusRevision' in params &&

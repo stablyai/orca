@@ -3,7 +3,7 @@ import {
   getWorktreePaletteSelectionItemIds,
   CREATE_WORKTREE_ITEM_ID
 } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   appendPaletteListEntries,
@@ -36,6 +36,7 @@ export function useWorktreeJumpPaletteListEntries({
   middleLeadsSections,
   taskItems
 }: WorktreeJumpPaletteListEntriesInput) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const listEntries = useMemo<PaletteListEntry[]>(() => {
     const entries: PaletteListEntry[] = []
@@ -65,7 +66,7 @@ export function useWorktreeJumpPaletteListEntries({
         entries.push({
           id: '__header_tasks__',
           type: 'section-header',
-          label: translate('worktreeJumpPalette.tasksHeader', 'Tasks')
+          label: t('worktreeJumpPalette.tasksHeader', 'Tasks')
         })
         appendPaletteListEntries(entries, taskItems)
       }
@@ -75,7 +76,7 @@ export function useWorktreeJumpPaletteListEntries({
         entries.push({
           id,
           type: 'hint',
-          label: translate('worktreeJumpPalette.renderCapOverflow', '{{value0}} more', {
+          label: t('worktreeJumpPalette.renderCapOverflow', '{{value0}} more', {
             value0: overflowCount
           }),
           onSeeMore
@@ -94,8 +95,8 @@ export function useWorktreeJumpPaletteListEntries({
         id: `__header_open_tabs__${idSuffix}`,
         type: 'section-header',
         label: hasQuery
-          ? translate('auto.components.WorktreeJumpPalette.50a1d11d5b', 'Open Tabs')
-          : translate(
+          ? t('auto.components.WorktreeJumpPalette.50a1d11d5b', 'Open Tabs')
+          : t(
               'auto.components.WorktreeJumpPalette.recentChatsTerminalsHeader',
               'Recent Chats & Terminals'
             )
@@ -109,11 +110,8 @@ export function useWorktreeJumpPaletteListEntries({
         id: `__header_worktrees__${idSuffix}`,
         type: 'section-header',
         label: hasQuery
-          ? translate('auto.components.WorktreeJumpPalette.worktreesHeader', 'Workspaces')
-          : translate(
-              'auto.components.WorktreeJumpPalette.recentWorktreesHeader',
-              'Recent Workspaces'
-            )
+          ? t('auto.components.WorktreeJumpPalette.worktreesHeader', 'Workspaces')
+          : t('auto.components.WorktreeJumpPalette.recentWorktreesHeader', 'Recent Workspaces')
       })
     }
     const pushWorktreeSection = (): void => {
@@ -142,7 +140,7 @@ export function useWorktreeJumpPaletteListEntries({
           entries.push({
             id: '__header_projects_groups__',
             type: 'section-header',
-            label: translate(
+            label: t(
               'auto.components.WorktreeJumpPalette.projectsGroupsHeader',
               'Projects & Groups'
             )
@@ -158,7 +156,7 @@ export function useWorktreeJumpPaletteListEntries({
           entries.push({
             id: '__header_actions_settings__',
             type: 'section-header',
-            label: translate('auto.components.WorktreeJumpPalette.088d66d980', 'Actions & Settings')
+            label: t('auto.components.WorktreeJumpPalette.088d66d980', 'Actions & Settings')
           })
         }
         appendPaletteListEntries(entries, visibleMiddleItems)
@@ -270,7 +268,8 @@ export function useWorktreeJumpPaletteListEntries({
     showCreateAction,
     taskSourceUrl,
     taskItems,
-    languageRevision
+    languageRevision,
+    t
   ])
   const selectableItems = useMemo<PaletteItem[]>(
     () =>

@@ -1,4 +1,3 @@
-import '../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeOs from 'node:os'
 

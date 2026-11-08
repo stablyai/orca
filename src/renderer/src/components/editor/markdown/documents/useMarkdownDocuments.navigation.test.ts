@@ -6,7 +6,8 @@ import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/ope
 import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
 import { useAppStore } from '@/store/index'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 const runtime = vi.hoisted(() => ({
   stat: vi.fn(),

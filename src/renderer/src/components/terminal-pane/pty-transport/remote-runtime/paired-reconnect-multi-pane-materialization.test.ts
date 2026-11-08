@@ -83,7 +83,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
     vi.doUnmock(
       '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
     )
-    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
+    vi.doMock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
     }))
     vi.clearAllMocks()

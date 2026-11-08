@@ -2,8 +2,8 @@ import type { AppState } from '../../../types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { findRepoForHost } from '../../../repos/repo-host-identity'
-import { reuseEqualCatalogRows } from '../../../catalog-row-reconciliation'
-import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { reuseEqualCatalogRows } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -18,7 +18,7 @@ import type { WorktreeHostMatchOptions, RepoHostSummary } from './worktree-slice
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 
 export function withRepoHostOwnership<
   T extends {

@@ -11,7 +11,7 @@ import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routi
 import { userNamedFileAccess } from '@/lib/local-file-access'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId

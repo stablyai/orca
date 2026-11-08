@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -67,6 +67,7 @@ export function ClaudeOldTerminalBanner({
   tabId: string
   leafId: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const paneKey = makePaneKey(tabId, leafId)
   const [dismissed, setDismissed] = useState(() => dismissedPtyIds.has(ptyId))
   const selectionKey = useAppStore(selectedClaudeAccountKey)
@@ -91,7 +92,7 @@ export function ClaudeOldTerminalBanner({
     <>
       {openedBefore ? (
         <PaneTopWarningBanner
-          title={translate(
+          title={t(
             'terminal.claudeOldTerminalBanner.title',
             "This terminal was opened before Orca's Claude account update, so claude here uses System default's login."
           )}
@@ -110,7 +111,7 @@ export function ClaudeOldTerminalBanner({
               size="xs"
               onClick={() => openTerminalBesideTab(tabId)}
             >
-              {translate('terminal.paneTopBanner.openNewTerminal', 'Open new terminal')}
+              {t('terminal.paneTopBanner.openNewTerminal', 'Open new terminal')}
             </Button>
           }
           onDismiss={() => {
@@ -121,15 +122,15 @@ export function ClaudeOldTerminalBanner({
       ) : null}
       <OldTerminalDialog
         open={dialogOpen}
-        title={translate(
+        title={t(
           'terminal.claudeOldTerminalBanner.dialogTitle',
           "Why claude here doesn't use the selected account"
         )}
-        description={translate(
+        description={t(
           'terminal.claudeOldTerminalBanner.dialogDescription',
           'Orca now keeps each Claude account in its own folder, and claude in a new terminal follows the account you select.'
         )}
-        cause={translate(
+        cause={t(
           'terminal.claudeOldTerminalBanner.dialogCause',
           "Terminals opened before this update don't, so claude here signs in with System default's login. Open a new terminal to use the selected account."
         )}
