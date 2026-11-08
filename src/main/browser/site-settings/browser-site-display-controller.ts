@@ -3,7 +3,7 @@ import {
   type ElectronDebuggerLease
 } from '../cdp/debugger/electron-debugger-lease'
 import { getBrowserSiteDisplay, updateBrowserSiteDisplay } from './browser-site-display-store'
-import { browserPageFitWidthScript } from './browser-page-fit-width-script'
+import { fitGuestPageWidth, watchGuestPdfViewerFit } from './browser-page-fit-width-script'
 import {
   browserSiteDisplayKey,
   type BrowserPageSiteDisplay,
@@ -68,10 +68,17 @@ export class BrowserSiteDisplayController {
       }
     }
     guest.on('dom-ready', onDomReady)
+    const stopWatchingPdfFit = watchGuestPdfViewerFit(
+      guest,
+      () => this.getPageDisplay(guest.id)?.fitWidth === true
+    )
     this.guests.set(guest.id, {
       guest,
       profileId: previous?.fallbackColorScheme ? previous.profileId : (profileId ?? 'default'),
-      stopWatchingDomReady: () => guest.off('dom-ready', onDomReady),
+      stopWatchingDomReady: () => {
+        guest.off('dom-ready', onDomReady)
+        stopWatchingPdfFit()
+      },
       colorScheme: previous?.colorScheme ?? null,
       fallbackColorScheme: previous?.fallbackColorScheme
     })
@@ -211,18 +218,9 @@ export class BrowserSiteDisplayController {
 
   private applyFitWidth(guestId: number, fitWidth: boolean): void {
     const guest = this.guests.get(guestId)?.guest
-    if (!guest || guest.isDestroyed()) {
-      return
+    if (guest && !guest.isDestroyed()) {
+      fitGuestPageWidth(guest, fitWidth)
     }
-    // Why: WebContents.executeJavaScript waits for loading to stop, so a page with a stuck request never refits.
-    guest.mainFrame
-      .executeJavaScript(browserPageFitWidthScript(fitWidth))
-      .catch((error: unknown) => {
-        console.warn('[browser-site-display] failed to fit the page width', {
-          guestWebContentsId: guestId,
-          error: errorMessage(error)
-        })
-      })
   }
 
   private forEachSiteGuest(

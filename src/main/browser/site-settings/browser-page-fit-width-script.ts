@@ -1,3 +1,6 @@
+import { webFrameMain } from 'electron'
+import { errorMessage } from '../../../shared/error-message'
+
 // Page-side zoom that makes the laid-out content span the viewport width; read with the page unzoomed.
 const MEASURE_FIT_ZOOM = `() => {
     const root = document.documentElement
@@ -90,4 +93,67 @@ export async function measureBrowserPageFitLevel(
   } catch {
     return null
   }
+}
+
+// Chromium's built-in PDF viewer draws in its own extension frame, out of reach of the page's CSS zoom.
+const PDF_VIEWER_ORIGIN = 'chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/'
+
+function pdfViewerFitWidthScript(enabled: boolean): string {
+  return `(() => {
+  let tries = 0
+  // Why: the viewer sets up its viewport and document size after the frame loads.
+  const apply = () => {
+    const viewport = document.querySelector('pdf-viewer')?.viewport_
+    if (!viewport?.documentDimensions_) {
+      if (++tries < 50) setTimeout(apply, 100)
+      return
+    }
+    if (${enabled}) {
+      viewport.setFittingType('fit-to-width')
+    } else if (viewport.fittingType === 'fit-to-width') {
+      viewport.fitToNone()
+    }
+  }
+  apply()
+})()`
+}
+
+function runFitScript(guestId: number, frame: Electron.WebFrameMain, script: string): void {
+  // Why: WebContents.executeJavaScript waits for loading to stop, so a page with a stuck request never refits.
+  frame.executeJavaScript(script).catch((error: unknown) => {
+    console.warn('[browser-site-display] failed to fit the page width', {
+      guestWebContentsId: guestId,
+      error: errorMessage(error)
+    })
+  })
+}
+
+/** Fits the page, or the PDF in Chromium's viewer, to the guest's width; false undoes it. */
+export function fitGuestPageWidth(guest: Electron.WebContents, enabled: boolean): void {
+  runFitScript(guest.id, guest.mainFrame, browserPageFitWidthScript(enabled))
+  for (const frame of guest.mainFrame.framesInSubtree) {
+    if (frame.url.startsWith(PDF_VIEWER_ORIGIN)) {
+      runFitScript(guest.id, frame, pdfViewerFitWidthScript(enabled))
+    }
+  }
+}
+
+/** The PDF viewer frame finishes loading after dom-ready, so it is fitted then. */
+export function watchGuestPdfViewerFit(
+  guest: Electron.WebContents,
+  isFitWidth: () => boolean
+): () => void {
+  const onFrameLoad = (
+    _event: Electron.Event,
+    isMainFrame: boolean,
+    processId: number,
+    routingId: number
+  ): void => {
+    const frame = isMainFrame ? null : webFrameMain.fromId(processId, routingId)
+    if (frame?.url.startsWith(PDF_VIEWER_ORIGIN) && isFitWidth()) {
+      runFitScript(guest.id, frame, pdfViewerFitWidthScript(true))
+    }
+  }
+  guest.on('did-frame-finish-load', onFrameLoad)
+  return () => guest.off('did-frame-finish-load', onFrameLoad)
 }
