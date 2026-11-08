@@ -2,7 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionFailureSentence } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
 import { retireOutgrownStructuredAgentSessionChild } from '../structured-agent-session-outgrown-child'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
@@ -31,10 +32,9 @@ async function session(variable: string, signedOut = false) {
       { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
       {
         kind: 'status',
-        text: agentSessionFailureSentence({ kind: 'notSignedIn' }, 'row', { agentName: 'Codex' }),
-        failure: { kind: 'notSignedIn' }
+        ...agentSessionFailureWords({ kind: 'notSignedIn' }, { surface: 'row', agentName: 'Codex' })
       },
-      { fence: 1 }
+      { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
   return {
