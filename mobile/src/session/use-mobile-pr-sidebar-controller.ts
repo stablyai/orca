@@ -145,10 +145,14 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       // A details read after the summary already answered for this updatedAt; never loop on a host that disagrees.
       detailsReadAt < reviewReadAt
     ) {
-      void queryClient.invalidateQueries({
-        queryKey: hostQueryKey(hostId, prDetailsQuery.family, target, detailsInput),
-        exact: true
-      })
+      // A read already out (a Refresh's live one) answers for the new updatedAt; join it rather than restart it.
+      void queryClient.invalidateQueries(
+        {
+          queryKey: hostQueryKey(hostId, prDetailsQuery.family, target, detailsInput),
+          exact: true
+        },
+        { cancelRefetch: false }
+      )
     }
   }, [
     detailsInput,

@@ -10,6 +10,7 @@ import { useHostQuery } from '../../query/host-query'
 import {
   prBranchReviewQuery,
   prChecksQuery,
+  prDetailsQuery,
   type PrQueryScope
 } from '../../session/mobile-pr-queries'
 import { prSidebarResourceKey, type PrSidebarState } from '../../session/mobile-pr-sidebar-state'
@@ -40,6 +41,7 @@ const NO_BRANCH = { branch: '', head: null }
 const NO_HOST = { hostId: '', client: null }
 const NO_TARGET = { exec: 'local' as const }
 const NO_CHECKS = { owner: null, name: null, host: null, number: 0, head: null }
+const NO_DETAILS = { owner: null, name: null, host: null, number: 0 }
 
 function freshCadence(resource: string | null): Cadence {
   return {
@@ -96,7 +98,7 @@ function pollDelayMs(cadence: Cadence, pr: PRInfo): number | null {
 // Desktop's checks-panel cadence (shared policy): 1 min while open, backing off to 2 min when nothing
 // changes and up to 15 min on failures, stopping once a merged PR's checks settle. It runs only while
 // the PR is on screen, its route is focused, the host is connected and the app is in the foreground
-// (TanStack's focus manager pauses intervals in the background). Details follow the PR's updatedAt.
+// (TanStack's focus manager pauses intervals in the background). Elsewhere details follow the PR's updatedAt.
 export function useMobilePrPolling({ queries, state, live, connected }: Input): {
   /** Polling is running for an open PR, so the screen can say "Live" instead of offering Refresh. */
   polling: boolean
@@ -126,6 +128,12 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
   const checksRead = useHostQuery(prChecksQuery, host, target, queries?.checksInput ?? NO_CHECKS, {
     enabled: running && queries?.checksInput != null,
     refetchInterval
+  })
+  // Thread resolution and comment edits leave the PR's updatedAt alone, so open Comments polls its details too.
+  const pollDetails = running && live === 'details' && queries?.detailsInput != null
+  useHostQuery(prDetailsQuery, host, target, queries?.detailsInput ?? NO_DETAILS, {
+    enabled: pollDetails,
+    refetchInterval: pollDetails ? refetchInterval : false
   })
   const next = stepCadence(current, {
     data: checksRead.data,

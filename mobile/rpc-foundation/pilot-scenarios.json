@@ -8516,14 +8516,7 @@
           }
         },
         {
-          "bind": "details-status",
-          "request": "status.get#2",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
-          "complete": "details-status",
+          "complete": "status.get#1",
           "params": {
             "$undefined": true
           },
@@ -8690,14 +8683,7 @@
           }
         },
         {
-          "bind": "details-status",
-          "request": "status.get#2",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
-          "complete": "details-status",
+          "complete": "status.get#1",
           "params": {
             "$undefined": true
           },
@@ -8870,14 +8856,7 @@
           }
         },
         {
-          "bind": "details-status",
-          "request": "status.get#2",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
-          "complete": "details-status",
+          "complete": "status.get#1",
           "params": {
             "$undefined": true
           },
@@ -9076,14 +9055,7 @@
           }
         },
         {
-          "bind": "details-status",
-          "request": "status.get#2",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
-          "complete": "details-status",
+          "complete": "status.get#1",
           "params": {
             "$undefined": true
           },

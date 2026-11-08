@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { QueryClient, QueryKey } from '@tanstack/react-query'
+import { hashKey, type QueryClient, type QueryKey } from '@tanstack/react-query'
+import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -14,6 +15,7 @@ import {
   buildUpdatePRTitleParams,
   createPrTextEditOwnership
 } from './pr-title-edit'
+import type { PrBranchReview } from './mobile-pr-sidebar-state'
 import {
   patchPrDetails,
   patchPrSummary,
@@ -56,21 +58,48 @@ async function sendTextWrite(client: RpcClient, vars: PrTextWriteVars): Promise<
   }
 }
 
-function applyText(queryClient: QueryClient, vars: PrTextWriteVars): void {
-  const { text } = vars
-  if (vars.field === 'title') {
-    if (vars.summaryKey) {
-      patchPrSummary(queryClient, vars.summaryKey, (pr) => ({ ...pr, title: text }))
+// Writes `text` (or, on a refusal, the text the snapshot had) into this PR's own entries only: a branch key
+// whose PR changed meanwhile, or an unrelated field, is left alone.
+function writeText(
+  queryClient: QueryClient,
+  vars: PrTextWriteVars,
+  textFor: (key: QueryKey) => string | undefined
+): void {
+  const ours = (number: number) => number === vars.prNumber
+  if (vars.field === 'title' && vars.summaryKey) {
+    const text = textFor(vars.summaryKey)
+    if (text !== undefined) {
+      patchPrSummary(queryClient, vars.summaryKey, (pr) =>
+        ours(pr.number) ? { ...pr, title: text } : pr
+      )
     }
-    if (vars.detailsKey) {
-      patchPrDetails(queryClient, vars.detailsKey, (details) => ({
-        ...details,
-        item: { ...details.item, title: text }
-      }))
-    }
-  } else if (vars.detailsKey) {
-    patchPrDetails(queryClient, vars.detailsKey, (details) => ({ ...details, body: text }))
   }
+  if (vars.detailsKey) {
+    const text = textFor(vars.detailsKey)
+    if (text !== undefined) {
+      patchPrDetails(queryClient, vars.detailsKey, (details) =>
+        !ours(details.item.number)
+          ? details
+          : vars.field === 'title'
+            ? { ...details, item: { ...details.item, title: text } }
+            : { ...details, body: text }
+      )
+    }
+  }
+}
+
+function snapshotText(vars: PrTextWriteVars, data: unknown): string | undefined {
+  if (!data || typeof data !== 'object') {
+    return undefined
+  }
+  if ('kind' in data) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the summary key's snapshot is a PrBranchReview.
+    const review = data as PrBranchReview
+    return review.kind === 'found' ? review.pr.title : undefined
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the details key's snapshot is the PR's details.
+  const details = data as GitHubWorkItemDetails
+  return vars.field === 'title' ? details.item.title : details.body
 }
 
 // The saved text is the whole change, so a confirmed write needs no re-read; a refusal puts the old text back.
@@ -82,10 +111,18 @@ const prTextWrite = defineHostMutation({
   optimistic: {
     keys: (_hostId, vars: PrTextWriteVars) =>
       [vars.summaryKey, vars.detailsKey].filter((key): key is QueryKey => key !== null),
-    apply: (queryClient, _hostId, vars) => applyText(queryClient, vars)
+    apply: (queryClient, _hostId, vars) => writeText(queryClient, vars, () => vars.text),
+    // A refusal puts back only this field, so writes that settled meanwhile keep their results.
+    revert: (queryClient, vars, snapshot) =>
+      writeText(queryClient, vars, (key) =>
+        snapshotText(
+          vars,
+          snapshot.find(([snapshotKey]) => hashKey(snapshotKey) === hashKey(key))?.[1]
+        )
+      )
   },
   // A poll that started before the host applied the text may have landed the old one meanwhile.
-  accept: (queryClient, _hostId, vars) => applyText(queryClient, vars)
+  accept: (queryClient, _hostId, vars) => writeText(queryClient, vars, () => vars.text)
 })
 
 // Title and description edits share one in-flight lock: both rewrite the same PR.

@@ -87,6 +87,19 @@ export type PrQueryScope = {
   detailsInput: PrDetailsInput | null
 }
 
+// A LAN/relay switch during a GitHub read's account or source check sent nothing, and the connected edge never
+// fires for it, so the read starts once more on the new path.
+async function againIfConnectionChanged<T>(read: () => Promise<T>): Promise<T> {
+  try {
+    return await read()
+  } catch (error) {
+    if (error instanceof Error && error.message === GITHUB_CONNECTION_CHANGED) {
+      return read()
+    }
+    throw error
+  }
+}
+
 /** Whether the workspace's repo has a GitHub remote, which gates the PR tab. */
 export const githubRepoSlugQuery = defineHostQuery({
   family: 'github.repoSlug',
@@ -127,21 +140,23 @@ export const prBranchReviewQuery = defineHostQuery({
   refetchOnWindowFocus: true,
   fetch: async (client, target, input: PrBranchInput, previous: PrBranchReview | undefined, read) =>
     keepCheckObservation(
-      await loadPrBranchReview(
-        {
-          fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
-          fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
-          clearWorktreeReviewLink: (wt, shouldApply) =>
-            clearMobileWorktreeReviewLink(client, wt, shouldApply),
-          fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args)
-        },
-        {
-          worktreeId: target.worktree ?? '',
-          branch: input.branch,
-          headSha: input.head,
-          // Only an action's read re-learns host status; revalidations reuse what this connection knows.
-          refresh: read.live
-        }
+      await againIfConnectionChanged(() =>
+        loadPrBranchReview(
+          {
+            fetchForBranch: (wt, args) => fetchHostedReviewForBranch(client, wt, args),
+            fetchWorktreeGitHubPRLink: (wt) => fetchWorktreeGitHubPRLink(client, wt),
+            clearWorktreeReviewLink: (wt, shouldApply) =>
+              clearMobileWorktreeReviewLink(client, wt, shouldApply),
+            fetchPRForBranch: (wt, args) => fetchPRForBranch(client, wt, args)
+          },
+          {
+            worktreeId: target.worktree ?? '',
+            branch: input.branch,
+            headSha: input.head,
+            // Only an action's read re-learns host status; revalidations reuse what this connection knows.
+            refresh: read.live
+          }
+        )
       ),
       previous
     )
@@ -181,14 +196,18 @@ export const prDetailsQuery = defineHostQuery({
     if (!repository) {
       throw new Error('Unable to identify this pull request. Open it again.')
     }
-    const outcome = await fetchWorkItemDetails(client, target.worktree ?? '', {
-      prNumber: input.number,
-      prRepo: repository,
-      refresh: read.live
-    })
-    if (!outcome.ok) {
-      throw new Error(outcome.error)
+    const fetchDetails = async () => {
+      const outcome = await fetchWorkItemDetails(client, target.worktree ?? '', {
+        prNumber: input.number,
+        prRepo: repository,
+        refresh: read.live
+      })
+      if (!outcome.ok) {
+        throw new Error(outcome.error)
+      }
+      return outcome
     }
+    const outcome = await againIfConnectionChanged(fetchDetails)
     if (
       !matchesGitHubWorkItemTarget(outcome.result?.item, {
         repository,
@@ -209,15 +228,13 @@ export const prAssignableUsersQuery = defineHostQuery({
   staleTime: 10 * 60_000,
   fetch: async (client, target, input: PrRepoParams): Promise<GitHubAssignableUser[]> => {
     const repo = prRepoSlug(input)
-    let outcome = await fetchAssignableUsers(client, target.worktree ?? '', repo)
-    // A LAN/relay switch during the account check sent nothing, so the read starts again on the new path.
-    if (!outcome.ok && outcome.error === GITHUB_CONNECTION_CHANGED) {
-      outcome = await fetchAssignableUsers(client, target.worktree ?? '', repo)
-    }
-    if (!outcome.ok) {
-      throw new Error(outcome.error)
-    }
-    return outcome.result
+    return againIfConnectionChanged(async () => {
+      const outcome = await fetchAssignableUsers(client, target.worktree ?? '', repo)
+      if (!outcome.ok) {
+        throw new Error(outcome.error)
+      }
+      return outcome.result
+    })
   }
 })
 

@@ -1,4 +1,4 @@
-import type { QueryKey } from '@tanstack/react-query'
+import { hashKey, type QueryClient, type QueryKey } from '@tanstack/react-query'
 import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import { defineHostMutation } from '../query/host-mutation'
@@ -156,21 +156,44 @@ function revertWrite(
   }
 }
 
-function readComments(client: RpcClient, vars: PrCommentWriteVars): Promise<PRComment[] | null> {
-  return vars.target
-    ? readPrComments(client, vars.worktreeId, vars.target.input)
-    : Promise.resolve(null)
+type CommentsRead = { comments: PRComment[] | null; order: number }
+
+// Re-reads issued per details entry, and the latest one accepted: two writes' re-reads can land out of order.
+const commentReads = new Map<string, { issued: number; accepted: number }>()
+
+async function readComments(client: RpcClient, vars: PrCommentWriteVars): Promise<CommentsRead> {
+  if (!vars.target) {
+    return { comments: null, order: 0 }
+  }
+  const slot = hashKey(vars.target.key)
+  const reads = commentReads.get(slot) ?? { issued: 0, accepted: 0 }
+  commentReads.set(slot, reads)
+  reads.issued += 1
+  const order = reads.issued
+  return { comments: await readPrComments(client, vars.worktreeId, vars.target.input), order }
+}
+
+// An older re-read than one already shown says nothing newer, so it is dropped.
+function acceptCommentsRead(queryClient: QueryClient, key: QueryKey, read: CommentsRead): void {
+  const reads = commentReads.get(hashKey(key))
+  if (reads && read.order > 0 && read.order < reads.accepted) {
+    return
+  }
+  if (reads && read.order > reads.accepted) {
+    reads.accepted = read.order
+  }
+  acceptPrComments(queryClient, key, read.comments)
 }
 
 // A comment write re-reads only the comments: one host GitHub call instead of the whole PR.
 export const prCommentWrite = defineHostMutation({
   offline: 'draft',
-  send: async (client: RpcClient, vars: PrCommentWriteVars): Promise<PRComment[] | null> => {
+  send: async (client: RpcClient, vars: PrCommentWriteVars): Promise<CommentsRead> => {
     const outcome = await sendWrite(client, vars)
     if (!outcome.ok) {
       throw new Error(outcome.error)
     }
-    return readComments(client, vars).catch(() => null)
+    return readComments(client, vars).catch(() => ({ comments: null, order: 0 }))
   },
   // A lost reply is settled by what the host's comments show, never by posting again.
   confirm: readComments,
@@ -192,9 +215,9 @@ export const prCommentWrite = defineHostMutation({
       }
     }
   },
-  accept: (queryClient, _hostId, vars, comments) => {
+  accept: (queryClient, _hostId, vars, read) => {
     if (vars.target) {
-      acceptPrComments(queryClient, vars.target.key, comments)
+      acceptCommentsRead(queryClient, vars.target.key, read)
     }
   }
 })
