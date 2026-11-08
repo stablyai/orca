@@ -119,7 +119,7 @@ function savedRow(session: AiVaultSession): AiVaultSession {
     ...row
   } = session
   const latest = latestSessionConversationTurn(session)
-  // Truncated so first-prompt readers never take the latest turn for the opening ask.
+  // Marked truncated, as the row contract asks, because the opening ask is no longer in the window.
   return latest
     ? { ...row, previewMessages: [latest], previewMessagesTruncated: true }
     : { ...row, previewMessages: [] }
