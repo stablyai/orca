@@ -7,6 +7,7 @@
     "dev": "wrangler dev --port 8787 --ip 127.0.0.1",
     "typecheck": "tsc --noEmit",
     "spike": "tsx spike/run-all.ts",
+    "test": "vitest run",
     "test:schema": "tsx test/apply-schema.ts",
     "test:mvp": "tsx test/mvp.ts"
   },
