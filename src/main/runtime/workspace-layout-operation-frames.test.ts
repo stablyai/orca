@@ -16,9 +16,7 @@ import {
   openTopologyStore
 } from '../persistence/terminal-topology/terminal-topology-profile-fixture'
 import { applyWindowLayoutCommand } from './terminal/layout/runtime-layout-apply'
-import './workspace-layout-frame-model-check'
 import { installLayoutFrameModelCheck } from './workspace-layout-frame-model-check.test-fixture'
-import './workspace-layout-frame-observer'
 import {
   WorkspaceLayoutStream,
   type LayoutOperationCommit
