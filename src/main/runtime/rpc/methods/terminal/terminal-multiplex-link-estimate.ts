@@ -4,6 +4,11 @@ const ESTIMATE_WINDOW_MS = 10_000
 // Rate is ACK-measured, so it covers client parse speed too; below ~32 Mbit/s a 2MB window queues >0.5s ahead of echo.
 const PACED_LINK_MAX_BYTES_PER_MS = 4 * 1024
 const PACED_WINDOW_MIN_BYTES = 64 * 1024
+// LAN/local base RTT (network + parse + 4ms ACK flush) stays well under this; a busy renderer raises samples, not the minimum.
+const PACED_LINK_MIN_BASE_RTT_MS = 40
+const PACED_MIN_BACKLOGGED_SAMPLES = 16
+// Without fresh window-limited samples the estimate may describe an old link state, so fall back to legacy windows.
+const PACED_ESTIMATE_STALE_MS = 15_000
 const MAX_SEND_RECORDS_PER_STREAM = 1024
 
 type SendRecord = {
@@ -58,7 +63,8 @@ export class TerminalMultiplexLinkEstimate {
   private delivered = 0
   private deliveredAt = 0
   // Only a send that waited on the window measures the link; idle-trickle samples are lower bounds.
-  private sawBackloggedSample = false
+  private backloggedSamples = 0
+  private lastBackloggedSampleAt = Number.NEGATIVE_INFINITY
 
   constructor(
     readonly now: () => number = () => performance.now(),
@@ -135,22 +141,25 @@ export class TerminalMultiplexLinkEstimate {
     }
     const rate = (this.delivered - acked.delivered) / interval
     if (acked.backlogged) {
-      this.sawBackloggedSample = true
+      this.backloggedSamples = this.isStale(now) ? 1 : this.backloggedSamples + 1
+      this.lastBackloggedSampleAt = now
       this.deliveryRate.add(rate, now)
     } else if (rate > (this.deliveryRate.value() ?? 0)) {
       this.deliveryRate.add(rate, now)
     }
   }
 
-  /** In-flight bytes a slow link needs to stay busy; null when unmeasured, disabled, or fast. */
+  /** In-flight bytes a slow link needs to stay busy; null when unmeasured, stale, disabled, local, or fast. */
   pacedWindowBytes(): number | null {
     const rate = this.deliveryRate.value()
     const rtt = this.minRttMs
     if (
       !this.enabled ||
-      !this.sawBackloggedSample ||
+      this.backloggedSamples < PACED_MIN_BACKLOGGED_SAMPLES ||
+      this.isStale(this.now()) ||
       rate === null ||
       rtt === null ||
+      rtt < PACED_LINK_MIN_BASE_RTT_MS ||
       rate >= PACED_LINK_MAX_BYTES_PER_MS
     ) {
       return null
@@ -160,6 +169,10 @@ export class TerminalMultiplexLinkEstimate {
       PACED_WINDOW_MIN_BYTES,
       Math.ceil(2 * rate * rtt + (this.ackBurst.value() ?? 0))
     )
+  }
+
+  private isStale(now: number): boolean {
+    return now - this.lastBackloggedSampleAt > PACED_ESTIMATE_STALE_MS
   }
 
   deliveryBytesPerMs(): number | null {

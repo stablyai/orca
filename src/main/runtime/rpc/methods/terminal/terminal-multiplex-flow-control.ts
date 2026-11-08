@@ -22,6 +22,26 @@ import {
 } from './terminal-multiplex-yielded-queries'
 
 const SUPERSEDE_UNAVAILABLE_BACKOFF_MS = 10_000
+// Alternate-screen enter/exit (?1049, ?1047, ?47); a loose digit match only forgoes superseding.
+const SCREEN_MODE_SWITCH_MARKERS = ['1049', '1047', '?47']
+
+// Queued frames are rechecked on every ACK, so scan each frame once.
+const switchesScreenModeByFrame = new WeakMap<TerminalOutputFrameChunk, boolean>()
+
+function switchesScreenMode(chunk: TerminalOutputFrameChunk): boolean {
+  let switches = switchesScreenModeByFrame.get(chunk)
+  if (switches === undefined) {
+    const bytes = Buffer.from(chunk.bytes.buffer, chunk.bytes.byteOffset, chunk.bytes.byteLength)
+    switches = SCREEN_MODE_SWITCH_MARKERS.some((marker) => bytes.includes(marker))
+    switchesScreenModeByFrame.set(chunk, switches)
+  }
+  return switches
+}
+
+// A screen-only snapshot repaints alt without touching client history only if the replaced frames never left alt.
+function framesStayOnAlternateScreen(chunks: readonly TerminalOutputFrameChunk[]): boolean {
+  return !chunks.some(switchesScreenMode)
+}
 
 export function installMultiplexFlowControl(state: TerminalMultiplexConnection): void {
   const { runtime, streams, linkEstimate } = state
@@ -33,7 +53,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     return (
       paced !== null &&
       stream.ackPendingOutputBytes > paced &&
-      linkEstimate.now() >= stream.ackSupersedeSnapshotNotBefore
+      linkEstimate.now() >= stream.ackSupersedeSnapshotNotBefore &&
+      framesStayOnAlternateScreen(stream.ackPendingOutput)
     )
   }
   state.sendAckRecoverySnapshot = async (
@@ -50,7 +71,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
     stream.ackRecoverySnapshotInFlight = true
     try {
       // Replace client history after dropped output; its retained history no longer reaches this screen.
-      const carriesHistory = linkHasRoomForHistory(stream)
+      const carriesHistory = cause === 'overflow' && linkHasRoomForHistory(stream)
       const serialized = await serializeBudgetedRequestedSnapshot(
         runtime,
         stream.ptyId,
@@ -69,6 +90,21 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       }
       // Overflow still queues, so batched covered output reaches the cutoff below instead of settling queries the viewer drops.
       stream.outputBatcher.flush()
+      const isCovered = (chunk: TerminalOutputFrameChunk): boolean =>
+        typeof serialized.seq === 'number' &&
+        typeof chunk.seq === 'number' &&
+        chunk.seq <= serialized.seq
+      // An overflow while serializing already dropped output, so this recovery owes history like any overflow.
+      const supersedesCleanly = cause === 'superseded' && !stream.ackPendingOutputOverflowed
+      if (
+        supersedesCleanly &&
+        (serialized.alternateScreen !== true ||
+          typeof serialized.seq !== 'number' ||
+          !framesStayOnAlternateScreen(stream.ackPendingOutput.filter(isCovered)))
+      ) {
+        // The screen mode changed while serializing; drain rather than risk the client's normal history.
+        return
+      }
       const displayMode = runtime.getMobileDisplayMode(stream.ptyId)
       const publication = sendSnapshotFrames(
         (opcode, payload) =>
@@ -102,9 +138,6 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
       stream.ackSupersedeSnapshotNotBefore =
         rate === null ? 0 : linkEstimate.now() + (2 * publication.bytes) / rate
       if (typeof serialized.seq === 'number') {
-        const snapshotSeq = serialized.seq
-        const isCovered = (chunk: TerminalOutputFrameChunk): boolean =>
-          typeof chunk.seq === 'number' && chunk.seq <= snapshotSeq
         markYieldedQueriesDiscardedInFrames(stream, stream.ackPendingOutput.filter(isCovered))
         const retained = stream.ackPendingOutput.filter((chunk) => !isCovered(chunk))
         stream.ackPendingOutput = retained
@@ -113,8 +146,11 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
           0
         )
       }
+      // A clean supersede repaints alt only and leaves client history as-is.
+      if (!supersedesCleanly) {
+        stream.ackRecoveryHistoryOwed = !carriesHistory
+      }
       stream.ackPendingOutputOverflowed = false
-      stream.ackRecoveryHistoryOwed = !carriesHistory
       replaySnapshotCoveredStatelessQueries(state, stream, [], serialized.seq)
     } catch (error) {
       if (!isMultiplexStreamAttached(state, stream)) {

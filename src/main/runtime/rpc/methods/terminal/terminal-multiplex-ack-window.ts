@@ -1,5 +1,6 @@
 import {
   TERMINAL_MULTIPLEX_ACK_BATCH_BYTES,
+  TERMINAL_MULTIPLEX_PENDING_MAX_BYTES,
   TERMINAL_MULTIPLEX_ACK_STREAM_MAX_WINDOW_BYTES,
   TERMINAL_MULTIPLEX_ACK_TOTAL_MAX_WINDOW_BYTES
 } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
@@ -18,6 +19,18 @@ export function pacedAckWindowBytes(
 ): number | null {
   const paced = connection.linkEstimate.pacedWindowBytes()
   return paced !== null && connection.runtime.isTerminalAlternateScreen(stream.ptyId) ? paced : null
+}
+
+// Bytes pacing keeps off the wire wait here instead, so overflow recovery fires no earlier than on legacy windows.
+export function ackPendingOutputBudgetBytes(
+  connection: AckWindowConnection,
+  stream: TerminalMultiplexStream
+): number {
+  const paced = pacedAckWindowBytes(connection, stream)
+  return (
+    TERMINAL_MULTIPLEX_PENDING_MAX_BYTES +
+    (paced === null ? 0 : Math.max(0, stream.ackWindowBytes - paced))
+  )
 }
 
 export function ackWindowAdmits(

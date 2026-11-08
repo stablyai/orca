@@ -19,7 +19,11 @@ import {
 import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
 import type { TerminalStreamInputOutcome } from './terminal-input-delivery'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
-import { ackWindowAdmits, chargeAckWindow } from './terminal-multiplex-ack-window'
+import {
+  ackPendingOutputBudgetBytes,
+  ackWindowAdmits,
+  chargeAckWindow
+} from './terminal-multiplex-ack-window'
 import type { RpcBinarySendResult } from '../../rpc-binary-sender'
 
 export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection): void {
@@ -151,7 +155,10 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       stream.ackPendingOutput.length > 0 ||
       !state.canSendAckGatedOutput(stream, chunk.bytes.byteLength)
     ) {
-      markYieldedQueriesDiscardedInFrames(stream, appendAckPendingOutput(stream, chunk))
+      markYieldedQueriesDiscardedInFrames(
+        stream,
+        appendAckPendingOutput(stream, chunk, ackPendingOutputBudgetBytes(state, stream))
+      )
       return
     }
     state.sendAckGatedOutput(stream, chunk)

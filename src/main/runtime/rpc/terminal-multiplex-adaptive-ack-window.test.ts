@@ -13,16 +13,22 @@ import {
 
 const STREAM_ID = 7
 const STEP_MS = 10
-// 1 Mbit/s with a 50 ms return path; the flooding TUI writes 640 KB/s.
-const LINK_BYTES_PER_MS = 125
-const ACK_RETURN_MS = 50
+// The flooding TUI writes 640 KB/s.
 const FLOOD_CHUNK = 64 * 1024
 const FLOOD_EVERY_MS = 100
 const ECHO_AT_MS = 40_000
 
+// 1 Mbit/s with a 50 ms return path.
+const SLOW_LINK = { bytesPerMs: 125, ackReturnMs: 50 }
+// A LAN whose renderer parses only 500 KB/s.
+const LAN_WITH_SLOW_CLIENT = { bytesPerMs: 500, ackReturnMs: 1 }
+
 type InFlight = { remaining: number; payloadBytes: number; ackable: boolean; carriesEcho: boolean }
 
-async function measureEchoLatencyMs(alternateScreen: boolean): Promise<number> {
+async function measureEchoLatencyMs(
+  alternateScreen: boolean,
+  link: { bytesPerMs: number; ackReturnMs: number } = SLOW_LINK
+): Promise<number> {
   let clock = 0
   vi.spyOn(performance, 'now').mockImplementation(() => clock)
   let seq = 0
@@ -36,7 +42,8 @@ async function measureEchoLatencyMs(alternateScreen: boolean): Promise<number> {
         data: `${'S'.repeat(8000)}${screen}`,
         cols: 120,
         rows: 40,
-        seq
+        seq,
+        alternateScreen
       })),
       subscribeToTerminalData: vi.fn((_: string, next: typeof listener.current) => {
         listener.current = next
@@ -52,7 +59,11 @@ async function measureEchoLatencyMs(alternateScreen: boolean): Promise<number> {
   )
   binaryFrames.splice(0)
 
-  const link: InFlight[] = []
+  // A shell prompt before the TUI gives the link its base RTT.
+  seq += 2
+  listener.current?.('$ ', { seq, rawLength: 2 })
+  await vi.waitFor(() => expect(binaryFrames.length).toBeGreaterThan(0))
+  const wire: InFlight[] = []
   const acks: { at: number; bytes: number }[] = []
   let echoSeenAt: number | null = null
   const decoder = new TextDecoder()
@@ -67,28 +78,28 @@ async function measureEchoLatencyMs(alternateScreen: boolean): Promise<number> {
     }
     for (const bytes of binaryFrames.splice(0)) {
       const frame = decodeTerminalStreamFrame(bytes)!
-      link.push({
+      wire.push({
         remaining: bytes.byteLength,
         payloadBytes: frame.payload.byteLength,
         ackable: frame.opcode === TerminalStreamOpcode.Output,
         carriesEcho: clock >= ECHO_AT_MS && decoder.decode(frame.payload).includes('ECHO')
       })
     }
-    let budget = LINK_BYTES_PER_MS * STEP_MS
-    while (budget > 0 && link.length > 0) {
-      const head = link[0]!
+    let budget = link.bytesPerMs * STEP_MS
+    while (budget > 0 && wire.length > 0) {
+      const head = wire[0]!
       const sent = Math.min(budget, head.remaining)
       head.remaining -= sent
       budget -= sent
       if (head.remaining > 0) {
         break
       }
-      link.shift()
+      wire.shift()
       if (head.carriesEcho) {
         echoSeenAt = clock
       }
       if (head.ackable) {
-        acks.push({ at: clock + ACK_RETURN_MS, bytes: head.payloadBytes })
+        acks.push({ at: clock + link.ackReturnMs, bytes: head.payloadBytes })
       }
     }
     while (acks.length > 0 && acks[0]!.at <= clock) {
@@ -125,6 +136,12 @@ describe('terminal multiplex adaptive ACK window', () => {
     const latency = await measureEchoLatencyMs(false)
     expect(latency).toBeGreaterThan(12_000)
     expect(latency).toBeLessThan(25_000)
+  })
+
+  it('never paces a low-RTT link, even when its client is slow', async () => {
+    const paced = await measureEchoLatencyMs(true, LAN_WITH_SLOW_CLIENT)
+    vi.stubEnv('ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW', '0')
+    expect(paced).toBe(await measureEchoLatencyMs(true, LAN_WITH_SLOW_CLIENT))
   })
 
   it('restores the legacy window when the kill switch is set', async () => {
