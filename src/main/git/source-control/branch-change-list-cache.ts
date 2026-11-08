@@ -3,6 +3,7 @@ import { gitChangeListArgs } from '../../../shared/git/diff/git-change-list'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { loadBranchChanges } from './branch-change-entries'
 import type { CommitPairScope } from './commit-pair-cache'
+import { readStampWithinDeadline, type StampProbes } from './deadline-bounded-stamp'
 import { addGitattributesStampPaths } from './gitattributes-stamp-paths'
 import { SettledDiffCache, type SettledDiffCacheLimits } from './settled-diff-cache'
 import { readStampedGitConfig } from './stamped-git-config'
@@ -18,8 +19,8 @@ type CachedBranchChanges = {
 // The system gitattributes file has no known path to stamp; bound how long an edit to it can go unseen.
 const MAX_REUSE_AGE_MS = 5 * 60_000
 
-// Statting more attribute files than this approaches the cost of the diff it would skip.
-const MAX_ATTRIBUTE_STAMP_PATHS = 8192
+// One stat per distinct directory; a 9.6k-file vscode branch spans ~2.9k, and more approaches the diff's cost.
+const MAX_ATTRIBUTE_STAMP_PATHS = 4096
 
 const BRANCH_CHANGE_LIST_CACHE_LIMITS: SettledDiffCacheLimits<CachedBranchChanges> = {
   maxEntries: 16,
@@ -37,6 +38,8 @@ const BRANCH_CHANGE_LIST_CACHE_LIMITS: SettledDiffCacheLimits<CachedBranchChange
     return characters
   }
 }
+
+const attributeStampProbes: StampProbes = new Map()
 
 export const settledBranchChangeListCache = new SettledDiffCache(BRANCH_CHANGE_LIST_CACHE_LIMITS)
 
@@ -78,9 +81,12 @@ export async function loadBranchChangesThroughCache(
     return compute()
   }
   const settingsFiles = [...config.files, ...config.attributeFiles]
-  const stampAttributes = (attributePaths: readonly string[]) =>
-    readWorktreePathsDiffStamp(worktreePath, attributePaths, options, settingsFiles)
   const key = JSON.stringify([pairScope, worktreePath, gitChangeListArgs(mergeBase, headOid)])
+  const stampAttributes = (attributePaths: readonly string[]) =>
+    // Keyed by the path list too: a lookup and a store may stamp different paths at once.
+    readStampWithinDeadline(attributeStampProbes, JSON.stringify([key, attributePaths]), () =>
+      readWorktreePathsDiffStamp(worktreePath, attributePaths, options, settingsFiles)
+    )
 
   const cached = settledBranchChangeListCache.peek(key)
   if (cached && performance.now() - cached.storedAtMs < MAX_REUSE_AGE_MS) {
