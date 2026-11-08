@@ -317,7 +317,7 @@ export default function EditorFileTab({
               openRenameInput()
             }}
           >
-            {getEditorDisplayLabel(file)}
+            {getEditorDisplayLabel(file, undefined, t)}
             {placedElsewhere && repo ? ` · ${repo.displayName}` : ''}
           </span>
         )}
@@ -365,7 +365,7 @@ export default function EditorFileTab({
             tabRoot
           ) : (
             <TabHoverCard
-              title={`${getEditorDisplayLabel(file)}${placedElsewhere && repo ? ` · ${repo.displayName}` : ''}`}
+              title={`${getEditorDisplayLabel(file, undefined, t)}${placedElsewhere && repo ? ` · ${repo.displayName}` : ''}`}
               programName={customEditor?.title ?? t('tabHoverCard.editor', 'Editor')}
               icon={tabIcon('size-4')}
               description={file.relativePath}
