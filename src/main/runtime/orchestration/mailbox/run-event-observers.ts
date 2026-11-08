@@ -52,7 +52,10 @@ export class RunEventObservers {
   private readonly listeners = new Set<() => void>()
   private stateSequence = 0
   private readonly journal: (RunWorkerStateEvent & { sequence: number })[] = []
-  private readonly paneStates = new Map<string, AgentStatusIpcPayload['state']>()
+  private readonly paneStates = new Map<
+    string,
+    { dispatchId: string; state: AgentStatusIpcPayload['state'] }
+  >()
 
   get wakeCount(): number {
     return this.wakes
@@ -102,17 +105,19 @@ export class RunEventObservers {
       this.paneStates.delete(paneKey)
       return
     }
-    if (this.paneStates.get(paneKey) === row.state) {
-      return
-    }
-    this.paneStates.delete(paneKey)
-    this.paneStates.set(paneKey, row.state)
-    if (this.paneStates.size > TRACKED_PANE_LIMIT) {
-      this.paneStates.delete(this.paneStates.keys().next().value!)
-    }
+    // Resolve first: a state seen before the Dispatch binds the pane must still be sent once it does.
     const context = readContext()
     if (!context?.orchestrationRunId) {
       return
+    }
+    const known = this.paneStates.get(paneKey)
+    if (known?.dispatchId === context.dispatchId && known.state === row.state) {
+      return
+    }
+    this.paneStates.delete(paneKey)
+    this.paneStates.set(paneKey, { dispatchId: context.dispatchId, state: row.state })
+    if (this.paneStates.size > TRACKED_PANE_LIMIT) {
+      this.paneStates.delete(this.paneStates.keys().next().value!)
     }
     this.journal.push({
       ...runWorkerStateEvent(context.orchestrationRunId, context, row),

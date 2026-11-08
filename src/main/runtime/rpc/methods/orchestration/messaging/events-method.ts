@@ -2,6 +2,7 @@ import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { EventsParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../../../../../shared/orchestration/mailbox/orchestration-message-wait-timeout'
+import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
 import { exposeUtcTimestamp } from '../../../../orchestration/db/utc-timestamp'
 import {
   runWorkerStateEvent,
@@ -11,7 +12,7 @@ import { resolveRunScope } from '../runs/run-scope'
 import { callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 
 type RunEvent =
-  | RunWorkerStateEvent
+  | (RunWorkerStateEvent & { cursor: string })
   | {
       type: 'message'
       cursor: string
@@ -112,6 +113,8 @@ export const ORCHESTRATION_EVENTS_METHODS = [
       let messageSequence = since && !lost ? since.message : latestSequence
       let stateSequence = since?.epoch === observers.epoch ? since.state : -1
 
+      // Every message and worker_state event carries the cursor that resumes right after it.
+      const cursorFor = (message: number, state: number) => `${message}.${observers.epoch}.${state}`
       // State has no replay: a reader the journal cannot vouch for gets current states instead.
       const collectStates = (): void => {
         const changes = stateSequence >= 0 ? observers.statesSince(stateSequence) : undefined
@@ -121,12 +124,12 @@ export const ORCHESTRATION_EVENTS_METHODS = [
           return
         }
         if (changes) {
-          for (const { sequence: _sequence, ...change } of changes) {
+          for (const { sequence, ...change } of changes) {
             if (
               change.runId === run.id &&
               (!workerDispatchId || change.dispatchId === workerDispatchId)
             ) {
-              events.push(change)
+              events.push({ ...change, cursor: cursorFor(messageSequence, sequence) })
             }
           }
         } else {
@@ -139,14 +142,14 @@ export const ORCHESTRATION_EVENTS_METHODS = [
                   { dispatchId: dispatch.id, taskId: dispatch.task_id },
                   row
                 ),
-                snapshot: true
+                snapshot: true,
+                cursor: cursorFor(messageSequence, cursor)
               })
             }
           }
         }
         stateSequence = cursor
       }
-      const cursorAt = (message: number) => `${message}.${observers.epoch}.${stateSequence}`
       const collectMessages = (): void => {
         if (workerDispatchId || !wants('message')) {
           return
@@ -155,7 +158,7 @@ export const ORCHESTRATION_EVENTS_METHODS = [
           messageSequence = row.sequence
           events.push({
             type: 'message',
-            cursor: cursorAt(row.sequence),
+            cursor: cursorFor(row.sequence, stateSequence),
             runId: run.id,
             message: {
               id: row.id,
@@ -168,26 +171,35 @@ export const ORCHESTRATION_EVENTS_METHODS = [
         }
       }
 
-      const deadline =
-        Date.now() + (params.timeoutMs ?? ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS)
+      // Ask's ceiling: past 2^31 ms setTimeout fires at once and the reader would spin.
+      const timeoutMs = Math.min(
+        Math.max(params.timeoutMs ?? ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS, 0),
+        ORCHESTRATION_ASK_MAX_TIMEOUT_MS
+      )
+      const deadline = Date.now() + timeoutMs
       let seen = observers.wakeCount
       collectStates()
       collectMessages()
       // The first call returns at once so the reader holds a cursor before anything happens.
       while (since && events.length === 0) {
-        if (!(await observers.waitAfter(seen, deadline - Date.now(), signal))) {
+        const woke = await observers.waitAfter(seen, deadline - Date.now(), signal)
+        if (signal?.aborted) {
           break
         }
         seen = observers.wakeCount
+        // Fencing need not wake anyone, so a timeout re-checks it too.
         const reason = endReason()
         if (reason) {
           events.push({ type: 'end', reason })
           break
         }
+        if (!woke) {
+          break
+        }
         collectStates()
         collectMessages()
       }
-      return { cursor: cursorAt(messageSequence), events }
+      return { cursor: cursorFor(messageSequence, stateSequence), events }
     }
   })
 ]
