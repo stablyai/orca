@@ -128,9 +128,13 @@ describe('terminal multiplex adaptive ACK window', () => {
     vi.unstubAllEnvs()
   })
 
-  it('keeps alternate-screen echo near the link delay while a TUI floods a slow link', async () => {
+  it('lets overflow recovery reach alternate-screen echo quickly while a TUI floods a slow link', async () => {
+    expect(await measureEchoLatencyMs(true)).toBeLessThan(4_000)
+  })
+
+  it('keeps echo near the link delay when backlog superseding is enabled', async () => {
     vi.stubEnv('ORCA_TERMINAL_SUPERSEDE_ALT_BACKLOG', '1')
-    expect(await measureEchoLatencyMs(true)).toBeLessThan(2_000)
+    expect(await measureEchoLatencyMs(true)).toBeLessThan(1_000)
   })
 
   it('leaves normal-screen output on the legacy window', async () => {
