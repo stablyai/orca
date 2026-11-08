@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -75,6 +75,44 @@ function checkpoints(producer: ClaudeSubagentLinkageSource = unconsultedProducer
 }
 
 describe('claude streamed text checkpoints', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('saves streamed text within a bounded delay for short and long replies', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    const saved = new Map<string, string>()
+    const store = createClaudeStreamedTextCheckpoints({
+      producer: unconsultedProducer,
+      persist: (identity, text) => {
+        saved.set('uuid' in identity ? identity.uuid : '', text)
+      }
+    })
+
+    store.append(identityOf('short'), 'Hello')
+    vi.advanceTimersByTime(100)
+    store.append(identityOf('short'), ' world')
+    vi.advanceTimersByTime(1_000)
+    expect(saved.get('short')).toBe('Hello world')
+
+    const long = identityOf('long')
+    let streamed = 'x'.repeat(50_000)
+    store.append(long, streamed)
+    let streamedOneSecondAgo = streamed
+    for (let tick = 1; tick <= 60; tick += 1) {
+      vi.advanceTimersByTime(50)
+      store.append(long, 'y'.repeat(100))
+      streamed += 'y'.repeat(100)
+      if (tick === 40) {
+        streamedOneSecondAgo = streamed
+      }
+    }
+    expect(saved.get('long')?.length).toBeGreaterThanOrEqual(streamedOneSecondAgo.length)
+
+    vi.advanceTimersByTime(1_000)
+    expect(saved.get('long')).toBe(streamed)
+  })
+
   it('rewrites a block row with the full text accumulated so far', () => {
     const { store, rows, runWindow } = checkpoints()
 
@@ -98,7 +136,7 @@ describe('claude streamed text checkpoints', () => {
     expect(rows).toEqual([{ uuid: 'block-1', text: 'partial answer' }])
   })
 
-  it('flushes text the widening checkpoint interval has not written yet', () => {
+  it('flushes text the checkpoint interval has not written yet', () => {
     const { store, rows } = checkpoints()
 
     store.append(identityOf('block-1'), 'x')

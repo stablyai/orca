@@ -8,6 +8,25 @@ import {
 } from '../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import type { ClaudeSubagentLinkageSource } from './claude-subagent-linkage'
 
+// Every checkpoint rewrites the whole text, so the gap between saves of one block is
+// max(400 ms, length / 256 Ki chars per second): replies under ~100K chars save every
+// 400 ms and longer ones rewrite at most 256 Ki chars per second per block.
+export const CLAUDE_TEXT_CHECKPOINT_MIN_MS = 400
+export const CLAUDE_TEXT_CHECKPOINT_MAX_CHARS_PER_SECOND = 256 * 1024
+
+function checkpointIntervalMs(textLength: number): number {
+  return Math.max(
+    CLAUDE_TEXT_CHECKPOINT_MIN_MS,
+    (textLength / CLAUDE_TEXT_CHECKPOINT_MAX_CHARS_PER_SECOND) * 1000
+  )
+}
+
+function defaultSchedule(run: () => void, ms: number): () => void {
+  const timer = setTimeout(run, ms)
+  timer.unref?.()
+  return () => clearTimeout(timer)
+}
+
 export type ClaudeStreamedTextCheckpointDeps = {
   /** Rewrite accumulated text; ended marks the last write when no final frame will arrive. */
   persist: (
@@ -25,7 +44,7 @@ export type ClaudeStreamedTextCheckpointDeps = {
 export type ClaudeStreamedBlockEnd = { completedAt?: number }
 
 export type ClaudeStreamedTextCheckpoints = {
-  /** Coalesce deltas and widen checkpoint intervals to avoid per-token journal rewrites. */
+  /** Coalesce deltas and space checkpoints by time to bound journal rewrites. */
   append: (
     identity: AgentJournalItemIdentity,
     text: string,
@@ -67,6 +86,15 @@ export function createClaudeStreamedTextCheckpoints(
   const writtenLinkage = new Map<string, StructuredAgentSessionAppendOptions>()
   const latestText = new Map<string, string>()
   const checkpointLengths = new Map<string, number>()
+  const checkpointAt = new Map<string, number>()
+  /** A skipped checkpoint still lands once due, even if the stream goes quiet. */
+  const trailing = new Map<string, () => void>()
+  const schedule = deps.schedule ?? defaultSchedule
+
+  const cancelTrailing = (key: string): void => {
+    trailing.get(key)?.()
+    trailing.delete(key)
+  }
 
   /** Resolve each checkpoint afresh; later announcements revise provisional producers on the same row. */
   const producerOptions = (key: string): StructuredAgentSessionAppendOptions => {
@@ -79,17 +107,32 @@ export function createClaudeStreamedTextCheckpoints(
 
   const persist = (key: string, text: string, force: boolean): void => {
     latestText.set(key, text)
-    const checkpointLength = checkpointLengths.get(key) ?? 0
-    const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
-    if (!force && checkpointLength > 0 && text.length < nextLength) {
-      return
-    }
     const identity = identities.get(key)
     if (!identity) {
       return
     }
+    const savedAt = checkpointAt.get(key)
+    const wait =
+      savedAt === undefined ? 0 : savedAt + checkpointIntervalMs(text.length) - performance.now()
+    if (!force && wait > 0) {
+      if (!trailing.has(key)) {
+        trailing.set(
+          key,
+          schedule(() => {
+            trailing.delete(key)
+            const latest = latestText.get(key)
+            if (latest !== undefined && latest.length !== checkpointLengths.get(key)) {
+              persist(key, latest, false)
+            }
+          }, wait)
+        )
+      }
+      return
+    }
+    cancelTrailing(key)
     const options = producerOptions(key)
     checkpointLengths.set(key, text.length)
+    checkpointAt.set(key, performance.now())
     writtenLinkage.set(key, options)
     deps.persist(identity, text, options)
   }
@@ -107,6 +150,8 @@ export function createClaudeStreamedTextCheckpoints(
     writtenLinkage.delete(key)
     latestText.delete(key)
     checkpointLengths.delete(key)
+    checkpointAt.delete(key)
+    cancelTrailing(key)
   }
 
   return {
@@ -169,6 +214,11 @@ export function createClaudeStreamedTextCheckpoints(
       writtenLinkage.clear()
       latestText.clear()
       checkpointLengths.clear()
+      checkpointAt.clear()
+      for (const cancel of trailing.values()) {
+        cancel()
+      }
+      trailing.clear()
     }
   }
 }
