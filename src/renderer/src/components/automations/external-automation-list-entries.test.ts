@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExternalAutomationManager } from '../../../../shared/automations-types'
+import type { ExternalAutomationManager } from '../../../../shared/automations/external/external-automation'
 import { buildExternalAutomationListEntries } from './external-automation-list-entries'
 import type { ScopedExternalAutomationManager } from './external-automation-scope-client'
 

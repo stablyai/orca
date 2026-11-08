@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { prCount, prFlag, prText } from '../session/github-pr-entity-reply-schema'
+import { prCount, prFlag, prText } from '../source-control/review/github-pr-entity-reply-schema'
 import {
   detailCheckListSchema,
   taskMutationEnvelopeSchema
@@ -40,7 +40,7 @@ export const githubPullRequestFileContentsSchema = z.looseObject({
 })
 
 // Only true confirms viewed-state writes; preserve false for the caller’s failure copy.
-export { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } from '../session/github-pr-mutation-reply-schema'
+export { githubPrMutationConfirmationSchema as taskMutationConfirmationSchema } from '../source-control/review/github-pr-mutation-reply-schema'
 
 // Preserve existing behavior: Linear’s in-band failure payload is unread here; only outer refusal raises an error.
 export const linearIssueUpdatedSchema = z.unknown()

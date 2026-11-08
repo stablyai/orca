@@ -9,8 +9,8 @@ import {
   type HostQueryTarget,
   hostScopeKey
 } from '../query/host-query-key'
-import type { RpcClient } from '../transport/rpc-client'
-import { settingsRead } from '../transport/settings-read-operations'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { settingsRead } from '../settings/mobile-settings-read-operations'
 import { readJiraConnectionProbeReply, type MobileJiraConnection } from './jira-mobile-connection'
 import { jiraConnectionStatusProbe } from './mobile-jira-operations'
 import {

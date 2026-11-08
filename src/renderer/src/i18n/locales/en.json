@@ -20760,6 +20760,7 @@
         "copyIdentity": "Copy {{value0}}",
         "folder": "Folder",
         "mainCheckout": "Main checkout",
+        "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
         "worktree": "Worktree"
       },
       "creationChatNotOpened": "Your worktree is ready, but the chat could not open. Retry to open it with your message.",
@@ -22012,6 +22013,7 @@
       "switch": "Switch branch: {{branch}}",
       "search": "Search branches",
       "recover": "Switch to {{branch}}",
+      "copy": "Copy branch name",
       "create": "Create branch {{name}} from {{branch}}",
       "open": "Open workspace",
       "occupied": "Checked out in {{path}}",

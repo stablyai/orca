@@ -10,7 +10,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { JiraIssue, JiraIssueUpdate, JiraUser } from '../../../shared/jira/jira-types'
 

@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export type AutomationSourceDisplay = {
   label: string

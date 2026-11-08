@@ -263,7 +263,7 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/main/runtime/rpc/orchestration-session-caller.ts',
   'src/main/runtime/rpc/orchestration-legacy-compatibility.ts',
   'src/main/runtime/rpc/orchestration-mutation-executor.ts',
-  'src/shared/orchestration-rpc-contract.ts',
+  'src/shared/orchestration/orchestration-rpc-contract.ts',
   'src/main/runtime/rpc/methods/agent-launch/agent-launch',
   'src/main/runtime/rpc/methods/history/ai-vault.ts',
   'src/shared/rpc-contract/browser-tab-create-params',

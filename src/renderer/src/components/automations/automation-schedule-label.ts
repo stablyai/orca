@@ -2,7 +2,7 @@ import {
   describeAutomationSchedule,
   formatAutomationScheduleTime,
   type AutomationScheduleDescriptor
-} from '../../../../shared/automation-schedules'
+} from '../../../../shared/automations/scheduling/automation-schedules'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'

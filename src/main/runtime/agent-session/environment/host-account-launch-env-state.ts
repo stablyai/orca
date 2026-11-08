@@ -4,7 +4,7 @@ import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-gener
 import {
   hostAccountLaunchEnvFor,
   type HostAccountLaunchEnv
-} from '../../../../shared/host-account-launch-env'
+} from '../../../../shared/agent-launch/startup/host-account-launch-env'
 import {
   refreshSelectedClaudeProfile,
   type HostClaudeProfileRefresh

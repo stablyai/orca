@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 export type AutomationRunWorkspaceDisplay = {

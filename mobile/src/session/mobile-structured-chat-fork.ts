@@ -12,9 +12,9 @@ import {
   launchedSelection,
   withLaunchReply,
   withoutUnansweredLaunch
-} from './pending-session-selection'
-import { releaseTerminalCreateLock } from './terminal-create-lock'
-import type { MobileSessionAttachmentsModel } from './use-mobile-session-attachments'
+} from './tabs/pending-session-selection'
+import { releaseTerminalCreateLock } from '../terminal/session/terminal-create-lock'
+import type { MobileSessionAttachmentsModel } from '../files/attachments/use-mobile-session-attachments'
 
 type ForkScope = Pick<
   MobileSessionAttachmentsModel,

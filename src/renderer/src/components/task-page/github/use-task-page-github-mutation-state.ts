@@ -1,7 +1,7 @@
 import type { TaskPageLinearCreationStateModel } from '../linear/use-task-page-linear-creation-state'
-import { getGitHubTaskKind } from '../../../../../shared/task-github-search'
+import { getGitHubTaskKind } from '../../../../../shared/work-items/task-github-search'
 import { useMemo, useLayoutEffect, useEffect, useCallback, useRef } from 'react'
-import { parseTaskQuery } from '../../../../../shared/task-query'
+import { parseTaskQuery } from '../../../../../shared/work-items/task-query'
 import {
   setTaskPageGitHubMutationQueryKey,
   getTaskPageGitHubConfirmedAuthorityItemKeys

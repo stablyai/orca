@@ -8,7 +8,7 @@ import type {
   NativeChatSubagentState
 } from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
-import type { AcpAgentError } from '../acp-errors'
+import type { AcpAgentError } from '../transport/acp-errors'
 import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
 import type {
   AvailableCommand,

@@ -14,7 +14,7 @@ import { buildFixBrokenChecksPrompt } from '../../../../../shared/source-control
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
 

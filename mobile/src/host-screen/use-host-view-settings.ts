@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { getMobileWorkspaceLineageGroupKey } from '../worktree/mobile-workspace-lineage'
 import {
   applyDesktopViewSettings,
@@ -18,7 +18,7 @@ import {
   hostViewSettingsRead,
   hostViewSettingsWrite
 } from './host-screen-operations'
-import { hostListSettingsRead } from '../transport/settings-read-operations'
+import { hostListSettingsRead } from './host-list-settings-operations'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,

@@ -5,7 +5,7 @@ import type {
   PtyFencedTerminationOutcome
 } from '../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
-import type { SpawnIntent } from '../../shared/host-spawn-admission'
+import type { SpawnIntent } from '../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   SavedResumeDecision,
   TerminalLaunchResult,
@@ -18,7 +18,7 @@ import type {
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
 } from '../../shared/workspace-layout/terminal-leaf-move'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type {
   PtyListedSession,
   PtySessionListScope,

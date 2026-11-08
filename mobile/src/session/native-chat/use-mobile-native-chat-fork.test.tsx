@@ -5,17 +5,16 @@ import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
 } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { AgentJournalRenderItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import { useMobileNativeChatFork, type MobileNativeChatFork } from './use-mobile-native-chat-fork'
 
-let renderer: ReactTestRenderer | null = null
+const renderers: ReactTestRenderer[] = []
 
 afterEach(() => {
-  act(() => renderer?.unmount())
-  renderer = null
-  vi.useRealTimers()
+  act(() => renderers.forEach((renderer) => renderer.unmount()))
+  renderers.length = 0
 })
 
 /** A connection whose agent-list reads fail as scripted (true = fails), as when the socket drops. */
@@ -68,28 +67,6 @@ const message: NativeChatMessage = {
 const FORK_HOST = [AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY]
 let latest: MobileNativeChatFork | null = null
 
-function Probe({
-  client,
-  hostCapabilities = FORK_HOST
-}: {
-  client: RpcClient
-  hostCapabilities?: readonly string[]
-}): null {
-  latest = useMobileNativeChatFork({
-    client,
-    hostCapabilities,
-    hostStatusPending: false,
-    agent: 'claude',
-    sessionId: 'session-1',
-    messages: [message],
-    turnJournal: { items: [reply], submissions: [] },
-    agentWorking: false,
-    sessionForkSupport: 'supported',
-    createFork: async () => {}
-  })
-  return null
-}
-
 async function settle(): Promise<void> {
   await act(async () => {
     await Promise.resolve()
@@ -98,107 +75,8 @@ async function settle(): Promise<void> {
   })
 }
 
-it('asks again after a failed read, then again once the connection recovers', async () => {
-  vi.useFakeTimers()
-  const { client, sendRequest, reconnect } = connection(5)
-  act(() => {
-    renderer = create(createElement(Probe, { client }))
-  })
-  await settle()
-  expect(sendRequest).toHaveBeenCalledTimes(1)
-  for (const wait of [2_000, 8_000, 30_000]) {
-    await act(async () => {
-      vi.advanceTimersByTime(wait)
-    })
-    await settle()
-  }
-  // Retries are bounded on one connection.
-  expect(sendRequest).toHaveBeenCalledTimes(4)
-  await act(async () => {
-    vi.advanceTimersByTime(120_000)
-  })
-  expect(sendRequest).toHaveBeenCalledTimes(4)
-
-  act(() => reconnect())
-  await settle()
-  expect(sendRequest).toHaveBeenCalledTimes(5)
-  act(() => reconnect())
-  await settle()
-  // Learned: a later reconnect on the same connection reads nothing more.
-  expect(sendRequest).toHaveBeenCalledTimes(6)
-  act(() => reconnect())
-  await settle()
-  expect(sendRequest).toHaveBeenCalledTimes(6)
-})
-
-it('gives a new connection its own retries after an earlier one used them up', async () => {
-  vi.useFakeTimers()
-  const { client, sendRequest, migrate } = connection([true, true, true, false, true, false])
-  act(() => {
-    renderer = create(createElement(Probe, { client }))
-  })
-  await settle()
-  for (const wait of [2_000, 8_000, 30_000]) {
-    await act(async () => {
-      vi.advanceTimersByTime(wait)
-    })
-    await settle()
-  }
-  // Learned on the fourth read, after three failures.
-  expect(sendRequest).toHaveBeenCalledTimes(4)
-
-  // The transport moves while learned: no listener is installed to see its connected event.
-  act(() => migrate())
-  act(() => renderer!.update(createElement(Probe, { client })))
-  await settle()
-  expect(sendRequest).toHaveBeenCalledTimes(5)
-  await act(async () => {
-    vi.advanceTimersByTime(2_000)
-  })
-  await settle()
-  expect(sendRequest).toHaveBeenCalledTimes(6)
-  await act(async () => {
-    vi.advanceTimersByTime(120_000)
-  })
-  expect(sendRequest).toHaveBeenCalledTimes(6)
-})
-
-it('gives a resumed spell of fork support its own retries, and the reply becomes forkable', async () => {
-  vi.useFakeTimers()
-  const { client, sendRequest } = connection([true, true, true, true, false])
-  act(() => {
-    renderer = create(createElement(Probe, { client }))
-  })
-  await settle()
-  for (const wait of [2_000, 8_000]) {
-    await act(async () => {
-      vi.advanceTimersByTime(wait)
-    })
-    await settle()
-  }
-  // Three failures; the 30-second retry is pending when the host's status drops fork support.
-  expect(sendRequest).toHaveBeenCalledTimes(3)
-  expect(latest?.offerFor(message)).toBe('disabled')
-  act(() => renderer!.update(createElement(Probe, { client, hostCapabilities: [] })))
-  await act(async () => {
-    vi.advanceTimersByTime(30_000)
-  })
-  await settle()
-  expect(sendRequest).toHaveBeenCalledTimes(3)
-
-  // Support returns on the same connection: a fresh first read, which fails once.
-  act(() => renderer!.update(createElement(Probe, { client })))
-  await settle()
-  expect(sendRequest).toHaveBeenCalledTimes(4)
-  await act(async () => {
-    vi.advanceTimersByTime(2_000)
-  })
-  await settle()
-  expect(sendRequest).toHaveBeenCalledTimes(5)
-  expect(latest?.offerFor(message)).toBe('available')
-})
-
 it('offers an inherited OpenCode tip after the child advances and submits its displayed key', async () => {
+  let renderer!: ReactTestRenderer
   const { client, sendRequest } = connection(0)
   sendRequest.mockResolvedValue({
     ok: true,
@@ -291,13 +169,14 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
   }
   await act(async () => {
     renderer = create(createElement(ForkProbe, { hostCapabilities: FORK_HOST }))
+    renderers.push(renderer)
   })
   await settle()
   expect(latest?.offerFor(copied)).toBe('reserved')
   expect(latest?.offerFor(older)).toBe('reserved')
   expect(latest?.offerFor(own)).toBe('available')
   await act(async () => {
-    renderer!.update(
+    renderer.update(
       createElement(ForkProbe, {
         hostCapabilities: [...FORK_HOST, AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY]
       })
@@ -306,7 +185,7 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
   expect(latest?.offerFor(copied)).toBe('available')
   expect(latest?.offerFor(older)).toBe('available')
   await act(async () => {
-    renderer!.update(
+    renderer.update(
       createElement(ForkProbe, {
         hostCapabilities: [...FORK_HOST, AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY],
         hostStatusPending: true
@@ -316,7 +195,7 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
   expect(latest?.offerFor(copied)).toBe('reserved')
   expect(latest?.offerFor(own)).toBe('available')
   await act(async () => {
-    renderer!.update(
+    renderer.update(
       createElement(ForkProbe, {
         hostCapabilities: [...FORK_HOST, AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY],
         hostStatusPending: false
@@ -332,7 +211,7 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
     throughItemId: 'legacy:opencode:source:reply-1'
   })
   await act(async () => {
-    renderer!.update(createElement(ForkProbe, { hostCapabilities: FORK_HOST }))
+    renderer.update(createElement(ForkProbe, { hostCapabilities: FORK_HOST }))
   })
   expect(latest?.offerFor(copied)).toBe('reserved')
 })

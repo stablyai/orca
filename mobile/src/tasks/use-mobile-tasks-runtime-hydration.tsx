@@ -10,14 +10,12 @@ import {
   taskHydrationWrites,
   type TaskHydration
 } from './task-queries'
+import { MOBILE_TASKS_CAPABILITY, useEffect, useLayoutEffect } from './mobile-tasks-dependencies'
 import {
-  MOBILE_TASKS_CAPABILITY,
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
-  resolveVisibleTaskProvider,
-  useEffect,
-  useLayoutEffect
-} from './mobile-tasks-dependencies'
+  resolveVisibleTaskProvider
+} from '../../../src/shared/work-items/task-providers'
 import { useState } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import { EMPTY_GITHUB_PROJECT_SETTINGS } from './mobile-tasks-legacy-foundation'

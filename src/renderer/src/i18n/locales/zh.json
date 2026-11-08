@@ -19426,6 +19426,7 @@
         "copyIdentity": "复制 {{value0}}",
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
+        "turnWorking": "此聊天的代理正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
       },
       "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开。",
@@ -21012,6 +21013,7 @@
       "switch": "切换分支：{{branch}}",
       "search": "搜索分支",
       "recover": "切换到 {{branch}}",
+      "copy": "复制分支名称",
       "create": "从 {{branch}} 创建分支 {{name}}",
       "open": "打开工作区",
       "occupied": "已在 {{path}} 中检出",

@@ -311,6 +311,11 @@
       "signInHint": "Abre una terminal en el ordenador que ejecuta este chat",
       "forkedFrom": "Rama creada desde"
     },
+    "ciResultLine": {
+      "failingLead": "CI fallando en",
+      "greenLead": "CI en verde en",
+      "at": "en"
+    },
     "orcaStop": {
       "canContinue": "Puedes continuar en esta conversación.",
       "crash": "Orca en {{machine}} se detuvo inesperadamente mientras esta respuesta estaba en curso.",

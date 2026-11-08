@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import type { DiffSection } from '@/components/editor/diff/sections/diff-section-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export async function addPullRequestLineComment(args: {

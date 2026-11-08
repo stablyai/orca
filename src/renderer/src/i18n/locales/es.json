@@ -19994,6 +19994,7 @@
         "copyIdentity": "Copiar {{value0}}",
         "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
+        "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "El chat de este agente aún no está disponible en Windows. Ábralo en una terminal.",
@@ -22107,6 +22108,7 @@
       "switch": "Cambiar de rama: {{branch}}",
       "search": "Buscar ramas",
       "recover": "Cambiar a {{branch}}",
+      "copy": "Copiar nombre de la rama",
       "create": "Crear la rama {{name}} desde {{branch}}",
       "open": "Abrir espacio de trabajo",
       "occupied": "Activa en {{path}}",

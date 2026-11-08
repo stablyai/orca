@@ -1,6 +1,6 @@
 /** Link same-host-path checkouts to existing server rows without overwriting their newer state; retain desktop source copies. Re-journal under the same id only after proving the prior manifest absent, preventing duplicate imports. */
-import { getAutomationRunRepoId } from '../../shared/automation-run-identity'
-import type { Automation } from '../../shared/automations-types'
+import { getAutomationRunRepoId } from '../../shared/automations/history/automation-run-identity'
+import type { Automation } from '../../shared/automations/automation-definition'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { isRepoOnCatalogHost } from '../../shared/execution-host'

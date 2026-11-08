@@ -1,5 +1,5 @@
 import { deleteAutomationForTarget, updateAutomationForTarget } from './automation-host-client'
-import type { AutomationUpdateInput } from '../../../../shared/automations-types'
+import type { AutomationUpdateInput } from '../../../../shared/automations/automation-definition'
 import {
   dispatchAutomationDelete,
   dispatchAutomationUpdate

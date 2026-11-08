@@ -19485,6 +19485,7 @@
         "copyIdentity": "{{value0}} をコピー",
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
+        "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
         "worktree": "ワークツリー"
       },
       "explicitChatWindows": "この Agent のチャットはまだ Windows では利用できません。ターミナルで開いてください。",
@@ -21012,6 +21013,7 @@
       "switch": "ブランチを切り替え: {{branch}}",
       "search": "ブランチを検索",
       "recover": "{{branch}} に切り替え",
+      "copy": "ブランチ名をコピー",
       "create": "{{branch}} からブランチ {{name}} を作成",
       "open": "ワークスペースを開く",
       "occupied": "{{path}} でチェックアウト済み",
