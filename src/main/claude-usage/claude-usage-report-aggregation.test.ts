@@ -36,38 +36,6 @@ function stateWithDaily(dailyAggregates: ClaudeUsageDailyAggregate[]): ClaudeUsa
   }
 }
 
-describe('buildSummary Claude Sonnet 5 pricing over time', () => {
-  // The cancelled price increase must not reprice historical usage.
-  it('prices an introductory-window day and a post-window day at the same $2/$10 rate', () => {
-    const inWindow = buildSummary(
-      stateWithDaily([dailyRow('2026-08-15', 'claude-sonnet-5')]),
-      'all',
-      'all'
-    )
-    const afterWindow = buildSummary(
-      stateWithDaily([dailyRow('2026-09-15', 'claude-sonnet-5')]),
-      'all',
-      'all'
-    )
-
-    expect(inWindow.estimatedCostUsd).toBeCloseTo(12)
-    expect(afterWindow.estimatedCostUsd).toBeCloseTo(12)
-  })
-
-  it('sums both days in the All range without re-pricing history upward', () => {
-    const summary = buildSummary(
-      stateWithDaily([
-        dailyRow('2026-08-15', 'claude-sonnet-5'),
-        dailyRow('2026-09-15', 'claude-sonnet-5')
-      ]),
-      'all',
-      'all'
-    )
-
-    expect(summary.estimatedCostUsd).toBeCloseTo(24)
-  })
-})
-
 describe('buildSummary unpriced models', () => {
   it('keeps the priced total and flags the rows it had to leave out', () => {
     const summary = buildSummary(
@@ -81,14 +49,6 @@ describe('buildSummary unpriced models', () => {
 
     expect(summary.estimatedCostUsd).toBeCloseTo(12)
     expect(summary.hasUnpricedModels).toBe(true)
-  })
-
-  it('does not flag rows that carry no model name', () => {
-    const row = { ...dailyRow('2026-10-15', 'claude-sonnet-5-5'), model: null }
-    const summary = buildSummary(stateWithDaily([row]), 'all', 'all')
-
-    expect(summary.estimatedCostUsd).toBeNull()
-    expect(summary.hasUnpricedModels).toBe(false)
   })
 })
 

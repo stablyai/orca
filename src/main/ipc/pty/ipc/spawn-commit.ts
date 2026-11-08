@@ -1,18 +1,21 @@
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import '../spawn-outcome'
+import type { PtySpawnOutcome } from '../spawn-outcome'
+import { provenSpawnResponse } from '../../../../shared/terminal/pty/lifecycle/terminal-spawn-response'
 import { admitRendererAgentLaunchAuthority } from '../pane/launch-authority'
+import { resolveLaunchedAgent } from '../../../runtime/terminal/launch/runtime-agent-launch-resolution'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { commitPtySpawn } from '../spawn-commit-assembly'
 import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
-import { parseTerminalPanePlacement } from '../../../../shared/terminal-pane-placement'
+import { parseTerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
 import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
 import { resumeSpawnRefusal, savedResumeResult } from '../host-env/saved-resume-admission'
 
-export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
+export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnOutcome> {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {
     const args = ctx.args
-    // Bound untrusted IPC identity strings before they enter runtime registration maps.
+    // IPC workspace identity is untrusted; the actual provider result supplies memory identity.
     const worktreeId =
       typeof args.worktreeId === 'string' &&
       args.worktreeId.length > 0 &&
@@ -20,7 +23,8 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         ? args.worktreeId
         : null
     const response = ipcSpawnResponse(ctx)
-    return commitPtySpawn<PtySpawnResult>({
+    const freshSpawn = ctx.result.isReattach !== true && ctx.stablePaneOwner === null
+    return commitPtySpawn({
       state: ctx,
       nativeWindowsConptySpawn: ctx.nativeWindowsConptySpawn,
       seedPaneKey: ctx.validatedPaneKey,
@@ -37,7 +41,8 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
           isReattach: ctx.result.isReattach === true,
           hasStablePaneOwner: ctx.stablePaneOwner !== null,
           incarnationId: ctx.result.incarnationId
-        })
+        }),
+        launchedAgent: freshSpawn ? resolveLaunchedAgent(args.command, args.launchAgent) : null
       },
       preAllocatedHandle: ctx.preAllocatedHandle,
       spawnTiming: ctx.spawnTiming,
@@ -47,18 +52,11 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         migrationUnsupportedPaneKey: ctx.migrationUnsupportedPaneKey,
         opaqueRemintedSpawnPaneKey: ctx.opaqueRemintedSpawnPaneKey
       },
-      memorySessionId:
-        typeof args.sessionId === 'string' &&
-        args.sessionId.length > 0 &&
-        args.sessionId.length <= 256
-          ? args.sessionId
-          : null,
       resumeArgvDropped: ctx.codexResumeLaunch.droppedResumeArgv,
       codexLaunchEnv: ctx.baseEnv,
       initiallyHidden: ctx.initiallyHidden,
       hiddenDelivery: 'renderer-scoped',
-      earlyExit: 'drain',
-      joinPayload: { reservation: response, reply: response }
+      response
     })
   })
 }
@@ -102,7 +100,7 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
   const { startupCwdSource: _startupCwdSource, ...providerResult } = ctx.result
   const startupCwdFallback = startupCwdFallbackOutcome(ctx.startupCwdFallback, ctx.result)
   return {
-    ...providerResult,
+    ...provenSpawnResponse(providerResult, ctx.provedSnapshotSeq),
     ...(!ctx.result.isReattach && !resumeSpawnRefusal(ctx.resumeAdmission)
       ? {
           launchAgent: args.launchAgent,
@@ -112,13 +110,6 @@ function ipcSpawnResponse(ctx: PtyIpcSpawnState) {
             : args.resumeProviderSession
         }
       : {}),
-    // Why both or neither: a pane can only adopt proven kitty flags together
-    // with the sequence boundary they describe.
-    ...(typeof ctx.result.snapshotKittyKeyboardFlags === 'number' &&
-    ctx.reconciledSnapshotSeq !== null &&
-    ctx.snapshotKittyFlagsCoverReconciledSeq
-      ? { snapshotSeq: ctx.reconciledSnapshotSeq }
-      : { snapshotKittyKeyboardFlags: undefined }),
     ...(!ctx.result.isReattach && ctx.effectiveLaunchConfig
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),

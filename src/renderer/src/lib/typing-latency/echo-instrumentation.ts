@@ -1,6 +1,6 @@
 /** Measure input → onData dispatch → first onWriteParsed → onRender paint per pane. Overlapping inputs remain an ambiguous burst; opaque terminal output cannot be apportioned across them. */
 import { getUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
-import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
+import { subscribeToTerminalUserInput } from '@/components/terminal-pane/input/terminal-user-input-signal'
 import type { Terminal } from '@xterm/xterm'
 import {
   clearEchoDispatchSelection,
@@ -65,10 +65,10 @@ export function recordKeystroke(
   entry: InstrumentedPane,
   now: number,
   source: KeystrokeSource,
-  text: string = ''
+  eventAt: number | null = null
 ): RecordedKeystroke {
   const dropped = drainTimedOutEchoCandidates(entry, now)
-  const candidate = createEchoCandidate(now, source, text)
+  const candidate = createEchoCandidate(now, source, eventAt)
   if (entry.pendingCount >= MAX_PENDING_ECHO_CANDIDATES) {
     trackIgnoredEchoDispatch(entry, candidate, now)
     return { candidate, unmatched: dropped + 1 }
@@ -110,6 +110,13 @@ export function discardUndispatchedKeystroke(
   return 'pending'
 }
 
+/** Stamps dispatched inputs with the first output the scheduler received after them, before any queueing. */
+export function noteEchoOutputArrival(entry: InstrumentedPane, now: number): void {
+  for (const candidate of entry.awaitingEcho) {
+    candidate.arrivedAt ??= now
+  }
+}
+
 function updateEchoBatch(entry: InstrumentedPane): EchoBatch | null {
   if (!entry.parsingBatch && entry.awaitingEcho.length === 0 && !entry.attributionGap) {
     return null
@@ -119,6 +126,7 @@ function updateEchoBatch(entry: InstrumentedPane): EchoBatch | null {
     hasAttributionGap: false,
     outputBytes: 0,
     outputWrites: 0,
+    firstWriteAt: null,
     parsedAt: null
   }
   if (entry.awaitingEcho.length > 0) {
@@ -162,6 +170,7 @@ export function instrumentPaneEcho(
     const wrapped = (data: string | Uint8Array, callback?: () => void): void => {
       const batch = updateEchoBatch(entry)
       if (batch) {
+        batch.firstWriteAt ??= performance.now()
         batch.outputBytes += typeof data === 'string' ? getUtf8ByteLength(data) : data.byteLength
         batch.outputWrites += 1
       }

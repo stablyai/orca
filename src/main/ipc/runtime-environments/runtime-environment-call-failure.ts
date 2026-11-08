@@ -1,8 +1,8 @@
-import type { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import type { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { RuntimeRpcCallQueueOverloadError } from '../../../shared/runtime-rpc-call-queue'
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { RUNTIME_MANUALLY_DISCONNECTED_MESSAGE } from './runtime-environment-manual-disconnect'
+import { runtimeEnvironmentManualDisconnectReason } from './runtime-environment-manual-disconnect'
 
 export function manuallyDisconnectedResponse(
   environment: ReturnType<typeof resolveEnvironment>
@@ -12,7 +12,7 @@ export function manuallyDisconnectedResponse(
     ok: false,
     error: {
       code: 'runtime_manually_disconnected',
-      message: RUNTIME_MANUALLY_DISCONNECTED_MESSAGE
+      message: runtimeEnvironmentManualDisconnectReason(environment.id)
     },
     _meta: { runtimeId: environment.runtimeId }
   }

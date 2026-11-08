@@ -12,12 +12,16 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { installAutomationHostDiagnostic } from './components/automations/automation-host-diagnostics'
-import { applyDocumentTheme } from './lib/document-theme'
+import {
+  applyCachedPluginAppTheme,
+  applyDocumentTheme,
+  readCachedPluginAppTheme
+} from './lib/document-theme'
 import { installTypingLatencyDiagnostic } from './lib/typing-latency/diagnostic'
 import { installAppKeyboardRouter } from './lib/app-keyboard-router'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
 import { I18nProvider } from './i18n/I18nProvider'
-import { translate } from './i18n/i18n'
+import { useTranslate } from './i18n/use-translate'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { primeTerminalWebglAddon } from './lib/pane-manager/pane-webgl-renderer'
 import { SkillWarningPreviewLauncher } from './components/skills/SkillWarningPreviewLauncher'
@@ -25,9 +29,13 @@ import { installBrowserClientPageRenderer } from './components/browser-pane/brow
 import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
 import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
+import { applyWindowMaterialToDocument } from './lib/window-material-runtime'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
 import.meta.hot?.dispose(disposeOsFileDropGuard)
+const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
+import.meta.hot?.dispose(disposeBodyOverlayAttributes)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
@@ -45,7 +53,12 @@ if (
   void import('react-grab/styles.css')
 }
 
-applyDocumentTheme('system', { disableTransitions: false })
+applyWindowMaterialToDocument()
+const cachedPluginTheme = readCachedPluginAppTheme()
+applyDocumentTheme(cachedPluginTheme?.base ?? 'system', { disableTransitions: false })
+if (cachedPluginTheme) {
+  applyCachedPluginAppTheme(cachedPluginTheme)
+}
 registerBrowserClientPageGuestMessageHandler(handleGuestWindowCloseMessage)
 const browserClientPageRenderer = installBrowserClientPageRenderer()
 import.meta.hot?.dispose(() => browserClientPageRenderer?.dispose())
@@ -57,13 +70,14 @@ if (!rootElement) {
 }
 
 function RendererRoot(): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="app.root"
       surface="app-root"
-      title={translate('app.recoverableError.rootTitle', 'Orca hit a renderer error.')}
-      description={translate(
+      title={t('app.recoverableError.rootTitle', 'Orca hit a renderer error.')}
+      description={t(
         'app.recoverableError.rootDescription',
         'The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.'
       )}

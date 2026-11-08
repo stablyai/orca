@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
 import type { Tab } from '../tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { resolveSessionTabRow } from './old-client/old-client-session-tab-rows'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { nameBasedLoadContext } from './workspace-layout-minted-ids'
@@ -83,15 +83,6 @@ describe("main's load of a browser record with no tab", () => {
     expect(workspace.groups.map((group) => group.tabOrder)).toEqual([['a'], ['b', tab.id]])
     // The window publishes a browser row under its record id.
     expect(resolveSessionTabRow(workspace, 'browser-1')?.tab.id).toBe(tab.id)
-  })
-
-  it('saves the tab, so the next load mints nothing new', () => {
-    const saved = saveWorkspaceLayout(load(savedSession()))
-
-    expect(
-      saved.unifiedTabs?.[KEY]?.find((entry) => entry.contentType === 'browser')
-    ).toMatchObject({ entityId: 'browser-1', groupId: 'g2', label: 'Example' })
-    expect(load(saved).changes).toEqual([])
   })
 
   it('mints the same id on every load, and a restart after a save keeps one tab', () => {

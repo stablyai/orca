@@ -1,15 +1,15 @@
 import React from 'react'
 import { AlertTriangle, Loader2, RotateCcw } from 'lucide-react'
 import { useAppStore } from '@/store'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { retryBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
+import { retryBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import {
   getCreationProgressLabel,
   getVisibleCheckoutProgress
-} from '@/lib/pending-worktree-creation'
+} from '@/lib/workspace/creation/pending-worktree-creation'
 import { Progress } from '@/components/ui/progress'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
+import { formatElapsedTime, useWorktreeCreationClock } from './worktree-creation-clock'
 
 /** Debounced in-frame creation placeholder: tab strip names the workspace while body shows status, enabling same-frame handoff without duplicating labels. */
 export default function WorktreeCreationPanel({
@@ -19,18 +19,11 @@ export default function WorktreeCreationPanel({
   creationId: string
   reserveCollapsedSidebarHeaderSpace?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
-  const [now, setNow] = React.useState(() => Date.now())
   const progressLabelId = React.useId()
   // Depend on primitive status so stderr’s fresh entry objects cannot continuously reset the interval.
-  const entryStatus = entry?.status
-  React.useEffect(() => {
-    if (entryStatus !== 'creating') {
-      return
-    }
-    // Pause the clock while hidden to avoid unseen panel rerenders.
-    return installWindowVisibilityInterval({ run: () => setNow(Date.now()), intervalMs: 1000 })
-  }, [entryStatus])
+  const now = useWorktreeCreationClock(entry?.status === 'creating')
   if (!entry) {
     return null
   }
@@ -61,7 +54,7 @@ export default function WorktreeCreationPanel({
             error={
               isError
                 ? (entry.error ??
-                  translate(
+                  t(
                     'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
                     'Something went wrong while creating the worktree.'
                   ))
@@ -74,14 +67,14 @@ export default function WorktreeCreationPanel({
         ) : isError ? (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <span className="font-medium text-destructive">
-              {translate(
+              {t(
                 'auto.components.worktree.creation.WorktreeCreationPanel.ed2a664f8b',
                 'Couldn’t create worktree'
               )}
             </span>
             <span className="text-muted-foreground">
               {entry.error ??
-                translate(
+                t(
                   'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
                   'Something went wrong while creating the worktree.'
                 )}
@@ -92,20 +85,14 @@ export default function WorktreeCreationPanel({
               className="inline-flex items-center gap-1 text-foreground hover:underline"
             >
               <RotateCcw className="size-3" />
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
-                'Retry'
-              )}
+              {t('auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b', 'Retry')}
             </button>
             <button
               type="button"
               onClick={dismiss}
               className="text-muted-foreground hover:text-foreground hover:underline"
             >
-              {translate(
-                'auto.components.worktree.creation.WorktreeCreationPanel.dabd226118',
-                'Dismiss'
-              )}
+              {t('auto.components.worktree.creation.WorktreeCreationPanel.dabd226118', 'Dismiss')}
             </button>
           </div>
         ) : (
@@ -113,7 +100,7 @@ export default function WorktreeCreationPanel({
             <div className="flex items-center gap-2">
               <Loader2 className="size-3.5 shrink-0 animate-spin" />
               <span id={progressLabelId} className="tabular-nums">
-                {getCreationProgressLabel(entry)}
+                {getCreationProgressLabel(entry, t)}
               </span>
               <span className="text-muted-foreground/70">{elapsedLabel}</span>
             </div>
@@ -146,6 +133,7 @@ function VmProvisioningStatus({
   onRetry?: () => void
   onDismiss?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const isError = error !== undefined && error !== null
   return (
     <div className="flex min-h-full justify-center pt-12">
@@ -156,7 +144,7 @@ function VmProvisioningStatus({
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-sm font-medium">
                 <AlertTriangle className="size-4 shrink-0 text-destructive" />
                 <span className="text-destructive">
-                  {translate(
+                  {t(
                     'auto.components.worktree.creation.WorktreeCreationPanel.ed2a664f8b',
                     'Couldn’t create worktree'
                   )}
@@ -170,17 +158,14 @@ function VmProvisioningStatus({
                   className="inline-flex items-center gap-1 text-foreground hover:underline"
                 >
                   <RotateCcw className="size-3" />
-                  {translate(
-                    'auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b',
-                    'Retry'
-                  )}
+                  {t('auto.components.worktree.creation.WorktreeCreationPanel.34dd5ee38b', 'Retry')}
                 </button>
                 <button
                   type="button"
                   onClick={onDismiss}
                   className="text-muted-foreground hover:text-foreground hover:underline"
                 >
-                  {translate(
+                  {t(
                     'auto.components.worktree.creation.WorktreeCreationPanel.dabd226118',
                     'Dismiss'
                   )}
@@ -192,7 +177,7 @@ function VmProvisioningStatus({
               <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                 <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
                 <span>
-                  {translate(
+                  {t(
                     'auto.components.worktree.creation.WorktreeCreationPanel.vmProvisioningTitle',
                     'Provisioning VM'
                   )}
@@ -204,7 +189,7 @@ function VmProvisioningStatus({
                 onClick={onCancel}
                 className="text-xs text-muted-foreground hover:text-foreground hover:underline"
               >
-                {translate(
+                {t(
                   'auto.components.worktree.creation.WorktreeCreationPanel.cancelProvisioning',
                   'Cancel'
                 )}
@@ -214,7 +199,7 @@ function VmProvisioningStatus({
         </div>
         <RecipeOutputLog
           log={log}
-          emptyLabel={translate(
+          emptyLabel={t(
             'auto.components.worktree.creation.WorktreeCreationPanel.vmProvisioningLogEmpty',
             'Waiting for recipe output…'
           )}
@@ -257,14 +242,4 @@ function RecipeOutputLog({
       {log || <span className="text-muted-foreground/60">{emptyLabel}</span>}
     </pre>
   )
-}
-
-function formatElapsedTime(elapsedMs: number): string {
-  const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000))
-  const minutes = Math.floor(totalSeconds / 60)
-  const seconds = totalSeconds % 60
-  if (minutes === 0) {
-    return `${seconds}s`
-  }
-  return `${minutes}m ${seconds.toString().padStart(2, '0')}s`
 }

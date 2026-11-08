@@ -28,7 +28,8 @@ export type PRRefreshOutcome =
       retryDisabledUntil?: number
     }
 
-export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr'
+/** `watch` is host-only: a background read for a chat's CI lines, never sent by a client. */
+export type GitHubPRRefreshReason = 'visible' | 'active' | 'post-push' | 'manual' | 'swr' | 'watch'
 
 export type GitHubPRRefreshEnqueueResult =
   | { kind: 'queued' }
@@ -77,6 +78,8 @@ export type GitHubPRRefreshSkippedReason =
   | 'bare'
   | 'archived'
   | 'disconnected'
+  /** The workspace's WSL host is off; a poll never starts its distro. */
+  | 'host-off'
   | 'remote'
   | 'rate-limit'
   | 'capacity'

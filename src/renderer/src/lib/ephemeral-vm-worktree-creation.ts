@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { prepareEphemeralVmWorkspaceTarget } from '@/lib/ephemeral-vm-workspace-target'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
@@ -177,7 +177,8 @@ export async function cleanupEphemeralVmRuntimeForFailedCreate(
   request: WorktreeCreationRequest
 ): Promise<void> {
   await cleanupFailedEphemeralVmWorkspace(request, {
-    deleteProjectHostSetup: (setupId) => useAppStore.getState().deleteProjectHostSetup({ setupId }),
+    deleteProjectHostSetup: (setupId, hostId) =>
+      useAppStore.getState().deleteProjectHostSetup({ setupId, hostId }),
     cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
     reportSetupError: (error) =>
       console.error('Failed to remove provisioned-root project setup:', error),

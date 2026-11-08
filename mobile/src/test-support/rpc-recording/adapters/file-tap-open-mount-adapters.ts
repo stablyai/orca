@@ -1,3 +1,4 @@
+import type * as MobileFileTapOpenModule from '../../../files/session-documents/mobile-file-tap-open'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -12,8 +13,8 @@ export function fileTapOpenMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'files.terminal-path-tap': ({ client, effect }) => {
-      const open = modules.load<typeof import('../../../session/mobile-file-tap-open')>(
-        'mobile/src/session/mobile-file-tap-open.ts'
+      const open = modules.load<typeof MobileFileTapOpenModule>(
+        'mobile/src/files/session-documents/mobile-file-tap-open.ts'
       ).openMobileFileTap
       type Tab = { id: string; relativePath?: string }
       const timers: ReturnType<typeof setTimeout>[] = []
@@ -37,10 +38,14 @@ export function fileTapOpenMountAdapters(
               worktreeId: WORKSPACE,
               worktreeName: 'workspace',
               terminalHandle: TERMINAL,
-              pathText: String(args.pathText ?? 'src/app.ts'),
               cwd: '/repo',
-              line: args.line === undefined ? null : Number(args.line),
-              column: null,
+              candidates: [
+                {
+                  pathText: String(args.pathText ?? 'src/app.ts'),
+                  line: args.line === undefined ? null : Number(args.line),
+                  column: null
+                }
+              ],
               pushPreviewRoute: (href) => effect('push-preview-route', href),
               openBrowser: (url: string) => effect('open-browser', { url }),
               triggerOpenFeedback: () => effect('open-feedback', {}),

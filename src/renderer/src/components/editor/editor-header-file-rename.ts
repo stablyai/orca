@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { RefCallback } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
-import { useWorktreeById } from '@/store/selectors'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import { basename } from '@/lib/path'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
@@ -39,6 +39,8 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
     !activeFile.diffSource &&
     !activeFile.conflict &&
     !activeFile.readOnly &&
+    // Why: a host grant reads and writes one path; the host has no route to rename it.
+    !activeFile.terminalArtifactGrantId &&
     !isRenaming
 
   const openRenameInput = (): void => {

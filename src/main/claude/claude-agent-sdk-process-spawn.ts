@@ -28,20 +28,42 @@ function definedEnv(env: Record<string, string | undefined>): Record<string, str
   return next
 }
 
+/** Subscribes alongside the SDK's reader: an earlier listener would drain output it never sees. */
+function observeStdoutWithReader(
+  stdout: PipedChildProcess['stdout'],
+  onStdout: (chunk: Buffer | string) => void
+): void {
+  const onSubscribe = (event: string | symbol): void => {
+    if (event !== 'data' && event !== 'readable') {
+      return
+    }
+    stdout.removeListener('newListener', onSubscribe)
+    // Same tick as the reader, so no chunk can be emitted to one and not the other.
+    stdout.on('data', onStdout)
+  }
+  stdout.on('newListener', onSubscribe)
+}
+
 // Orca owns the child for PID-based exit proof and Windows .cmd quoting.
 // POSIX supervisors stop Claude if Orca dies; Windows spawns Claude directly.
 export function createClaudeCodeProcessSpawn(
   spawnImpl: PipedProcessSpawner = spawnProcess,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  launch?: { pathToClaudeCodeExecutable: string; prefixArgs?: readonly string[] },
+  onStdout?: (chunk: Buffer | string) => void
 ): ClaudeCodeProcessSpawn {
   let managed: ManagedProviderProcess | null = null
   return {
     spawn: (options) => {
+      const args = [...options.args]
+      // The SDK runs script programs through a runtime, keeping the script at argv[0].
+      const script = launch && /\.(?:js|mjs|ts|tsx|jsx)$/.test(launch.pathToClaudeCodeExecutable)
+      args.splice(script ? 1 : 0, 0, ...(launch?.prefixArgs ?? []))
       // SDK abort would kill the child outside Orca's ladder, losing observed exit proof.
       managed = spawnManagedProviderProcess(
         {
           command: options.command,
-          args: [...options.args],
+          args,
           ...(options.cwd === undefined ? {} : { cwd: options.cwd })
         },
         {
@@ -53,6 +75,9 @@ export function createClaudeCodeProcessSpawn(
           acceptClose: claudeChildCloseProven
         }
       )
+      if (onStdout) {
+        observeStdoutWithReader(managed.child.stdout, onStdout)
+      }
       // The SDK drains stderr only for its own local spawn; the managed process drains it here.
       return managed.child
     },

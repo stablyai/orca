@@ -1,11 +1,11 @@
 import { extname, join } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from '../../shared/ai-vault/contracts/ai-vault-types'
 import { wslGatedReaddir } from '../native-chat/wsl-transcript-fs-access'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { openAiVaultScanSource } from './ai-vault-scan-progress'
 import { SCAN_ISSUE_LIMIT, recordSessionScanIssue } from './session-scan-issues'
-import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault-scope-cwd-match'
+import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type { CwdBucketLayout } from './session-cwd-bucket-layouts'
 import type { FileWithMtime } from './session-scanner-types'
 import {
@@ -66,7 +66,7 @@ export async function inventoryCwdBucketFiles(
   const prefixes = cwdBucketScopePrefixes(layout, args.scopePaths)
   const inScope = createAiVaultScopeCwdMatcher(args.scopePaths)
   let index = 0
-  for (const rootDir of args.rootDirs) {
+  for (const rootDir of args.rootDirs.flatMap(layout.bucketDirs ?? ((dir) => [dir]))) {
     throwIfAiVaultScanCancelled(args.signal)
     let close: () => void = () => undefined
     try {

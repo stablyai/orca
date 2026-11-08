@@ -1,10 +1,20 @@
-import { OrcaRuntimeWithCreateAgentSession } from '../../orca-runtime-create-agent-session'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
-import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
-import { deriveRemoteRuntimeTerminalCreateHandle } from '../../remote-runtime-terminal-create-identity'
-import { withTimeoutResult } from '../../runtime-async-boundaries'
-import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../orca-runtime-postlude'
-import { inferWorktreeIdFromPtyId } from '../../runtime-worktree-path-identity'
+import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
+import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
+
+import { OrcaRuntimeWithCreateAgentSession } from '../../session-construction/agent-session/orca-runtime-create-agent-session'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../workspaces/creation/worktree-create-idempotency'
+import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
+import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
+import { ownerSurfacing } from './terminal-presentation'
+import {
+  type ResolvedWorktree,
+  inferWorktreeIdFromPtyId
+} from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { getRegisteredSshState } from '../../../ssh/targets/ssh-target-registry'
 import {
   getConnectionExecutionHostId,
@@ -12,10 +22,26 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { resolveWorktreeLaunchHost } from '../../worktree-launch-host-repo'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import { resolveWorktreeLaunchHost } from '../../workspaces/catalog/worktree-launch-host-repo'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithCreateAgentSession {
+  /** A create's scope: its `wslUserAct` lets the folder check start a stopped WSL distro (E9). */
+  protected resolveTerminalCreateLaunchScope(
+    selector: string,
+    opts: { wslUserAct?: boolean },
+    ...[createdWorktree, resolvedWorktree, resolvedFolder]: TerminalWorkspaceCreationEvidence
+  ): Promise<TerminalWorkspaceLaunchScope> {
+    return this.resolveTerminalWorkspaceLaunchScope(
+      selector,
+      createdWorktree,
+      { wslUserAct: opts.wslUserAct === true },
+      resolvedWorktree,
+      resolvedFolder
+    )
+  }
+
   async dedupeTerminalCreate(
     clientIdentity: string,
     worktreeSelector: string | undefined,
@@ -24,7 +50,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     run: (
       canonicalWorktreeSelector: string | undefined,
       preAllocatedHandle: string | undefined
-    ) => Promise<RuntimeTerminalCreate>
+    ) => Promise<RuntimeTerminalCreate>,
+    options: { wslUserAct?: boolean } = {}
   ): Promise<RuntimeTerminalCreate> {
     if (!clientMutationId || !worktreeSelector) {
       if (reconcileExisting) {
@@ -32,7 +59,11 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       }
       return await run(worktreeSelector, undefined)
     }
-    const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+    const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+      worktreeSelector,
+      undefined,
+      options
+    )
     const canonicalWorktreeSelector = `id:${workspace.id}`
     const preAllocatedHandle = deriveRemoteRuntimeTerminalCreateHandle(
       clientIdentity,
@@ -114,6 +145,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
     if (adoptedHandle !== terminalHandle) {
       throw new Error('terminal_create_identity_conflict')
     }
+    // Same as inventory adoption: the stream carries this survivor's title and output.
+    this.mainDaemonAttachments.reconcile(session.id)
     return {
       handle: adoptedHandle,
       ptyId: session.id,
@@ -154,41 +187,56 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       agent: TuiAgent
       prompt: string
       title?: string
+      agentArgs?: string | null
+      sessionOptions?: Readonly<Record<string, SessionOptionValue>>
       extraAgentArgs?: string
       suppressStartupUpdatePrompt?: boolean
-    }
+      /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
+      wslUserAct?: true
+      surfaceOwner?: false
+    },
+    resolvedTarget?: { worktree: ResolvedWorktree; repo: Repo; folderWorkspace?: FolderWorkspace }
   ): Promise<RuntimeTerminalCreate> {
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree =
+      resolvedTarget?.worktree ?? (await this.resolveGitWorktreeSelector(worktreeSelector))
     // Repo ids are host-blind; resolve against the worktree owner before quoting its launch (#11163).
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
     if (resolution.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
-    const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId)
+    const repo = resolvedTarget?.repo ?? resolution.repo ?? this.store?.getRepo(worktree.repoId)
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt, undefined, {
-      ...(opts.extraAgentArgs ? { extraAgentArgs: opts.extraAgentArgs } : {}),
-      ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
-      launchScope: await this.resolveTerminalWorkspaceLaunchScope(`id:${worktree.id}`)
-    })
-    if (startup.launchRuntime instanceof Error) {
-      throw startup.launchRuntime
-    }
-    const terminal = await this.createTerminal(`id:${worktree.id}`, {
-      command: startup.startup.command,
-      env: startup.startup.env,
-      ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
-      launchAgent: startup.agent,
-      launchRuntime: startup.launchRuntime,
-      startupCommandDelivery: startup.startup.startupCommandDelivery,
-      telemetry: startup.startup.telemetry,
-      title: opts.title
-    })
-    // Why: agents that read the prompt after they start get it typed in, not on argv.
-    if (startup.followup) {
-      this.sendStartupFollowupWhenReady(terminal.handle, startup.followup)
+    const prompt = opts.prompt.trim()
+    const commandPrompt = agentPromptRidesLaunchCommand(opts.agent)
+    const terminal = await this.createTerminal(
+      `id:${worktree.id}`,
+      {
+        startupAgent: opts.agent,
+        ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+        ...(opts.sessionOptions !== undefined ? { sessionOptions: opts.sessionOptions } : {}),
+        ...(opts.extraAgentArgs !== undefined ? { extraAgentArgs: opts.extraAgentArgs } : {}),
+        ...(prompt && commandPrompt ? { startupPrompt: prompt } : {}),
+        startupPromptCarry: 'force-line',
+        startupPromptDelivery: 'auto-submit',
+        ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
+        title: opts.title,
+        ...(opts.wslUserAct ? { wslUserAct: true } : {}),
+        ...ownerSurfacing(opts.surfaceOwner !== false)
+      },
+      undefined,
+      worktree,
+      resolvedTarget?.folderWorkspace
+    )
+    if (prompt && !commandPrompt) {
+      void this.deliverStartupFollowup(
+        terminal.handle,
+        { agent: opts.agent, prompt },
+        {
+          terminalCreation: terminal
+        }
+      )
     }
     return terminal
   }

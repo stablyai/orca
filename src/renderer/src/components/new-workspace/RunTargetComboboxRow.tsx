@@ -6,7 +6,7 @@ import { HostRowIcon } from '../host-row-icon'
 
 export { HostRowIcon }
 
-/** Match project-picker baseline rows; stacked Add-host cards add explanatory descriptions. */
+/** Match the project picker with details below each target name. */
 export function RunTargetRow({
   icon,
   label,
@@ -16,7 +16,7 @@ export function RunTargetRow({
   optionId,
   dimmed = false,
   submenu = false,
-  stacked = false,
+  stacked = true,
   onArm,
   onCommit,
   trailing
@@ -58,17 +58,20 @@ export function RunTargetRow({
     >
       <span
         className={cn(
-          'flex shrink-0 items-center',
-          stacked ? 'self-start pt-0.5' : 'h-8',
+          'flex w-4 shrink-0 items-center justify-center',
+          stacked ? 'h-5' : 'h-8',
+          stacked && detail && 'self-start',
           dimmed && 'opacity-60'
         )}
       >
         {icon}
       </span>
       {stacked ? (
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className={cn('flex min-w-0 flex-1 flex-col', dimmed && 'opacity-60')}>
           <span className={cn('truncate', current && 'font-medium')}>{label}</span>
-          <span className="truncate text-xs text-muted-foreground">{detail}</span>
+          {detail ? (
+            <ProjectOptionDetail detail={detail} className="text-xs text-muted-foreground" />
+          ) : null}
         </span>
       ) : (
         <>

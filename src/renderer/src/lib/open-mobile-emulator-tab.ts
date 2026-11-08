@@ -1,8 +1,12 @@
+import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import { EMULATOR_OPENING_PREFERENCES_CAPABILITY } from '../../../shared/emulator-runtime-capabilities'
+import { supportsEmulatorOpeningPreferences } from './emulator-opening-preferences-capability'
 import { toast } from 'sonner'
 import type { EmulatorStreamInfo } from '@/components/emulator-pane/emulator-pane-types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { emulatorErrorText } from './emulator-error-copy'
 import { ensureSimulatorTab, getSimulatorTabForWorktree } from './ensure-simulator-tab'
 import {
   beginManualSimulatorLaunch,
@@ -43,12 +47,12 @@ function dispatchPrelaunchedSession(worktreeId: string, info: EmulatorStreamInfo
 }
 
 function getLaunchErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return translate(
-    'auto.lib.open.mobile.emulator.tab.bf4f2a8a72',
-    'Could not start the emulator. Check iOS or Android emulator setup and try another device.'
+  return emulatorErrorText(
+    error,
+    translate(
+      'auto.lib.open.mobile.emulator.tab.bf4f2a8a72',
+      'Could not start the emulator. Check iOS or Android emulator setup and try another device.'
+    )
   )
 }
 
@@ -74,6 +78,18 @@ export async function openMobileEmulatorTab(
   }
 
   cancelPendingSimulatorPaneShutdown(worktreeId)
+  const capabilities = readLocalRuntimeCapabilitiesOrUnknown()
+  if (
+    capabilities?.includes(EMULATOR_OPENING_PREFERENCES_CAPABILITY) ||
+    (capabilities === null && (await supportsEmulatorOpeningPreferences()))
+  ) {
+    return ensureSimulatorTab(worktreeId, {
+      placement: options.placement ?? 'rightSplit',
+      targetGroupId,
+      surfacePane: true,
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+  }
   const alreadyLaunching = isManualSimulatorLaunchPending(worktreeId)
   if (alreadyLaunching) {
     return ensureSimulatorTab(worktreeId, {

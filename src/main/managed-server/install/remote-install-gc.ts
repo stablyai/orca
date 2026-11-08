@@ -1,6 +1,6 @@
 // Preserve legacy relay directories until the relay-era upgrade window closes.
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { probeInstallLockExistsCommand } from './remote-install-lock-commands'
 import { RELAY_INSTALL_LOCK_NAME } from '../../../shared/relay-install-lock-name'
@@ -18,17 +18,19 @@ import {
 import { cleanupRemoteInstallGcTombstones } from './remote-install-gc-tombstone'
 import {
   listRemoteInstallBaseDirsCommand,
-  MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES,
+  MAX_REMOTE_INSTALL_GC_LISTING_ENTRIES
+} from './remote-install-gc-listing-command'
+import {
   moveRemoteTreeCommand,
   probeFileExistsCommand,
   removeRemoteTreeCommand
-} from '../../ssh/ssh-remote-commands'
+} from '../../ssh/remote-exec/ssh-remote-commands'
 import {
   getRemoteHostPlatform,
   joinRemotePath,
   remoteBasename,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
@@ -49,7 +51,7 @@ export async function gcOldRemoteInstallVersions(
   currentDirAbsPath: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
   options: RemoteInstallGcOptions
-): Promise<void> {
+): Promise<boolean> {
   const baseDir = joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR)
   const currentDirName = remoteBasename(currentDirAbsPath, host)
   let listing: string
@@ -63,7 +65,7 @@ export async function gcOldRemoteInstallVersions(
     if (isUnconfirmedSshCommandTermination(err)) {
       throw err
     }
-    return
+    return false
   }
   const entries = listing
     .split('\n')
@@ -82,13 +84,13 @@ export async function gcOldRemoteInstallVersions(
     .filter((name) => !pinned.has(name))
 
   if (candidates.length === 0) {
-    return
+    return true
   }
   const extraPins = options.resolveExtraPinnedDirNames
     ? await options.resolveExtraPinnedDirNames(candidates)
     : []
   if (!extraPins) {
-    return
+    return false
   }
   const survivors = candidates.filter((name) => !extraPins.includes(name))
 
@@ -97,50 +99,11 @@ export async function gcOldRemoteInstallVersions(
   for (const name of survivors) {
     const dir = joinRemotePath(host, baseDir, name)
     try {
-      const safe = await isCandidateSafeToRemove(conn, model, dir, host, options)
-      if (!safe) {
+      if (await removeRemoteInstallVersionDir(conn, model, dir, host, options)) {
+        removed.push(name)
+      } else {
         kept.push(name)
-        continue
       }
-      // Sibling claims survive candidate deletion so installers can still detect and back out of GC.
-      const gcClaimToken = await tryAcquireRelayGcClaim(conn, dir, host)
-      if (!gcClaimToken) {
-        kept.push(name)
-        continue
-      }
-      let preserveGcClaim = false
-      let gcClaimReleaseNeeded = true
-      try {
-        // Installer checks before and after locking close both claim/lock acquisition orders.
-        if (!(await isCandidateSafeToRemove(conn, model, dir, host, options))) {
-          kept.push(name)
-          continue
-        }
-        if (!(await isRelayGcClaimOwned(conn, dir, gcClaimToken, host))) {
-          kept.push(name)
-          continue
-        }
-        const tombstone = `${dir}.gc-tombstone.${process.pid}.${Date.now()}`
-        const moved = await execHostCommand(conn, host, moveRemoteTreeCommand(host, dir, tombstone))
-        if (moved.trim() !== 'MOVED') {
-          kept.push(name)
-          continue
-        }
-        // Rename isolates fresh installs from tombstone deletion, so the stable claim can be released.
-        const release = await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
-        gcClaimReleaseNeeded = release === 'unknown'
-        await execHostCommand(conn, host, removeRemoteTreeCommand(host, tombstone))
-      } catch (err) {
-        if (isUnconfirmedSshCommandTermination(err)) {
-          preserveGcClaim = true
-        }
-        throw err
-      } finally {
-        if (!preserveGcClaim && gcClaimReleaseNeeded) {
-          await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
-        }
-      }
-      removed.push(name)
     } catch (err) {
       if (isUnconfirmedSshCommandTermination(err)) {
         throw err
@@ -158,6 +121,55 @@ export async function gcOldRemoteInstallVersions(
       `[${model.id}] GC: removed ${removed.length} stale version dir(s): ${removed.join(', ')}${keptSuffix}`
     )
   }
+  return kept.length === 0
+}
+
+/** Remove one complete, idle, unlocked version dir under a GC claim; false when it must stay. */
+export async function removeRemoteInstallVersionDir(
+  conn: RemoteInstallTransport,
+  model: RemoteInstallModel,
+  dir: string,
+  host: RemoteHostPlatform,
+  options: Pick<RemoteInstallGcOptions, 'isDirLive'>
+): Promise<boolean> {
+  if (!(await isCandidateSafeToRemove(conn, model, dir, host, options))) {
+    return false
+  }
+  // Sibling claims survive candidate deletion so installers can still detect and back out of GC.
+  const gcClaimToken = await tryAcquireRelayGcClaim(conn, dir, host)
+  if (!gcClaimToken) {
+    return false
+  }
+  let preserveGcClaim = false
+  let gcClaimReleaseNeeded = true
+  try {
+    // Installer checks before and after locking close both claim/lock acquisition orders.
+    if (!(await isCandidateSafeToRemove(conn, model, dir, host, options))) {
+      return false
+    }
+    if (!(await isRelayGcClaimOwned(conn, dir, gcClaimToken, host))) {
+      return false
+    }
+    const tombstone = `${dir}.gc-tombstone.${process.pid}.${Date.now()}`
+    const moved = await execHostCommand(conn, host, moveRemoteTreeCommand(host, dir, tombstone))
+    if (moved.trim() !== 'MOVED') {
+      return false
+    }
+    // Rename isolates fresh installs from tombstone deletion, so the stable claim can be released.
+    const release = await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
+    gcClaimReleaseNeeded = release === 'unknown'
+    await execHostCommand(conn, host, removeRemoteTreeCommand(host, tombstone))
+    return true
+  } catch (err) {
+    if (isUnconfirmedSshCommandTermination(err)) {
+      preserveGcClaim = true
+    }
+    throw err
+  } finally {
+    if (!preserveGcClaim && gcClaimReleaseNeeded) {
+      await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
+    }
+  }
 }
 
 async function isCandidateSafeToRemove(
@@ -165,7 +177,7 @@ async function isCandidateSafeToRemove(
   model: RemoteInstallModel,
   dir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
-  options: RemoteInstallGcOptions
+  options: Pick<RemoteInstallGcOptions, 'isDirLive'>
 ): Promise<boolean> {
   const lockDir = joinRemotePath(host, dir, RELAY_INSTALL_LOCK_NAME)
   let lockProbe: string

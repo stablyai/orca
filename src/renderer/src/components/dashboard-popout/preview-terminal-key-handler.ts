@@ -6,15 +6,15 @@ import {
   getLayoutCharacterForCode,
   prefetchLayoutCharacters
 } from '@/lib/keyboard-layout/layout-base-character'
-import { createTerminalNativeOnlyShortcutTracker } from '@/components/terminal-pane/terminal-native-only-shortcut'
+import { createTerminalNativeOnlyShortcutTracker } from '@/components/terminal-pane/input/keyboard/terminal-native-only-shortcut'
 import { createOptionKeyLocationTracker } from '@/lib/keyboard-layout/option-key-location-state'
-import { createTerminalOptionKittyReleaseTracker } from '@/components/terminal-pane/terminal-option-kitty-release'
+import { createTerminalOptionKittyReleaseTracker } from '@/components/terminal-pane/input/keyboard/terminal-option-kitty-release'
 import {
   resolvePreviewShortcutAction,
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
-import { readTerminalClipboardSelection } from '@/components/terminal-pane/terminal-clipboard-selection-text'
-import { isAppOwnedCopyChord } from '@/components/terminal-pane/xterm-bypass-policy'
+import { readTerminalClipboardSelection } from '@/components/terminal-pane/clipboard/terminal-clipboard-selection-text'
+import { isAppOwnedCopyChord } from '@/components/terminal-pane/input/keyboard/xterm-bypass-policy'
 
 /** Compose IME, clipboard and pane policy in xterm’s single custom handler; defer macOS Cmd+V to its menu accelerator to avoid double paste. Dispose Option-location listeners on teardown. */
 export function installPreviewTerminalKeyHandler(args: {
@@ -22,6 +22,7 @@ export function installPreviewTerminalKeyHandler(args: {
   claimImeKeyEvent: (event: KeyboardEvent) => boolean
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
   sendInput: (data: string) => void
+  requestClose?: () => void
   /** Everything but optionKeyLocations, which this installer tracks itself. */
   getShortcutContext: () => Omit<PreviewShortcutContext, 'optionKeyLocations'>
 }): () => void {
@@ -191,10 +192,13 @@ export function installPreviewTerminalKeyHandler(args: {
         nativeOnlyShortcutTracker.armKeyDown(event)
         event.stopImmediatePropagation()
         return false
+      // Why: the focused terminal swallows Escape and Tab, so Cmd/Ctrl+W is the only keyboard exit.
+      case 'closeActivePane':
+        args.requestClose?.()
+        return consumeEvent(event)
       // Swallow pane-only actions rather than encoding shell bytes such as Ctrl+D; list each so new actions require explicit classification.
       case 'clearActivePane':
       case 'clearPaneTitle':
-      case 'closeActivePane':
       case 'copySelection':
       case 'equalizePaneSizes':
       case 'focusPane':

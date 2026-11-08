@@ -1,18 +1,19 @@
-import { hasClosedTerminalTabRecord } from '../../../shared/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { keepUnsavedDrafts } from '../../../shared/workspace-session-draft-retention'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { keepUnsavedDrafts } from '../../../shared/workspace-session/workspace-session-draft-retention'
 import {
   withoutWorkspaces,
   workspaceIdsNamedByPartition,
   workspacesTheHostSupersedes
-} from '../../../shared/workspace-session-stranded-partition-adoption'
+} from '../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
 import { sessionPartitions } from './orcad-source-workspace-session-fragments'
 import {
   orcadMigrationOwnerMatchesScope,
   orcadMigrationPartitionScope,
+  orcadMigrationScopeOwnsWholeHost,
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
 
@@ -22,6 +23,10 @@ export function orcadMigrationSessionPartitions(
   scope: OrcadMigrationSourceScope
 ): [string, WorkspaceSessionState][] {
   const partitions = sessionPartitions(state, LOCAL_EXECUTION_HOST_ID)
+  // A WSL move's host is `local` itself: no second copy to reconcile with.
+  if (!orcadMigrationScopeOwnsWholeHost(scope)) {
+    return partitions
+  }
   const host = partitions.find(([hostId]) => hostId === scope.hostId)?.[1]
   if (!host) {
     return partitions

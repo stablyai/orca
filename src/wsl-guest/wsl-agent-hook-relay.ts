@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Forward guest loopback hooks over framed stdio and expose home-scoped installer operations (STA-1515).
 // Exit with stdin: a lingering listener can let WSL forwarding capture the freed Windows port and blackhole hooks.
-import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-interrupt-reconciliation'
+import { AGENT_HOOK_INFER_INTERRUPT_METHOD } from '../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
+import { CLAUDE_AGENT_VIEW_RELAY_METHOD } from '../shared/claude-agent-view'
 import { homedir } from 'node:os'
 
 import { RELAY_SENTINEL } from './protocol'
@@ -13,9 +14,12 @@ import { createInstallPluginsHandler } from './wsl-install-plugins-handler'
 import { PreflightHandler } from './preflight-handler'
 import {
   AGENT_HOOK_INSTALL_PLUGINS_METHOD,
-  AGENT_HOOK_REQUEST_REPLAY_METHOD
-} from '../shared/agent-hook-relay'
+  AGENT_HOOK_REQUEST_REPLAY_METHOD,
+  AGENT_HOOK_PANE_ROOT_METHOD
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
+import { createLocalHookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
+import { createRelayPaneRootResolver } from './relay-pane-root'
 import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_RELAY_INSTANCE_ENV,
@@ -59,7 +63,15 @@ async function main(): Promise<void> {
     endpointDir: wslHookRelayEndpointDir(homedir(), instanceKey),
     token,
     preferredPort: windowsPort,
-    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
+    forwardClaudeAgentView: (body) =>
+      dispatcher.requestPrimary(CLAUDE_AGENT_VIEW_RELAY_METHOD, { body }, { timeoutMs: 1000 }),
+    forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope),
+    // The desktop names each pane's root from its PTY inventory; only this guest reads its processes.
+    readHookRootEvidence: createLocalHookRootEvidenceReader(
+      createRelayPaneRootResolver((paneKey) =>
+        dispatcher.requestPrimary(AGENT_HOOK_PANE_ROOT_METHOD, { paneKey }, { timeoutMs: 400 })
+      )
+    )
   })
   dispatcher.onRequest(AGENT_HOOK_INFER_INTERRUPT_METHOD, async (params) => ({
     applied: hookServer.inferInterrupt(params)

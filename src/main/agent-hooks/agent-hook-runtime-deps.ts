@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { AgentStatusObservedPaneIdentities } from '../runtime/agent-status-observed-pane-identity'
+import type { AgentStatusObservedPaneIdentities } from '../runtime/terminal/identity/agent-status-observed-pane-identity'
 import type { AgentHookServer } from './server'
-import { isAgentStatusHooksEnabled } from '../../shared/agent-status-hooks-setting'
+import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 
 type RuntimeDeps = NonNullable<ConstructorParameters<typeof OrcaRuntimeService>[2]>
 
@@ -20,14 +20,26 @@ export function agentHookRuntimeDeps(
       server.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
     // Include resume identities so mobile can locate provider transcripts, including Pi sessions.
-    getAgentProviderSessionSnapshot: () => server.getStatusSnapshot(),
+    getAgentProviderSessionSnapshot: (tabId) =>
+      tabId === undefined
+        ? server.getStatusSnapshot()
+        : server.getProviderSessionSourceRowsForTab(tabId),
     getAgentProviderSessionRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+    getAcceptedAgentReply: (paneKey, leadTurnKey) => server.getAcceptedReply(paneKey, leadTurnKey),
+    subscribeAgentStatusRowChanges: (listener) =>
+      server.subscribeStatusRowMutations(({ before, after }) => {
+        const paneKey = after?.paneKey ?? before?.paneKey
+        if (paneKey) {
+          listener(paneKey)
+        }
+      }),
     subscribeAgentProviderSessionChanges: (listener) =>
       server.subscribeProviderSessionChanges(listener),
     // Use identity captured at observation; resolving now could attribute cached rows to a new process.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     // Structured chats publish here directly because they have no hooks.
     structuredAgentStatusSink: {
+      withSavedStatusGroup: (visit) => server.withSavedStructuredStatusGroup(visit),
       publish: (summary, subject) => server.ingestStructuredStatus(summary, subject),
       forget: (subject) => server.dropStructuredStatus(subject),
       publishChildWork: (subject, evidence, provider) =>

@@ -1,8 +1,9 @@
 import type {
   AgentHookRelayEnvelope,
   AgentHookUnavailableEnvelope
-} from '../shared/agent-hook-relay'
-import type { TmuxManagedPty } from '../shared/tmux-agent-hook-owner'
+} from '../shared/agent-hook-listener/transport/agent-hook-relay'
+import type { TmuxManagedPty } from '../shared/tmux-agent-hook-contract'
+import type { HookRootEvidenceReader } from '../shared/agent-hook-listener/presence/hook-process-root-evidence'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
@@ -17,11 +18,14 @@ export type RelayHookServerOptions = {
   preferredPort?: number
   forwardUnavailable?: (envelope: AgentHookUnavailableEnvelope) => void
   forward: RelayHookForward
+  forwardClaudeAgentView?: (body: unknown) => Promise<unknown>
   // Retired pane posts own no client surface; absent this callback, forward everything for legacy listeners without PTY state.
   getTmuxManagedPty?: (paneKey: string) => Promise<TmuxManagedPty | null>
   /** Token captured from the successful host spawn; absent authority keeps the physical poster. */
   getAgentLaunchToken?: (paneKey: string) => string | undefined
   isPaneSurfaceRetired?: (paneKey: string) => boolean
+  /** Reads this guest's process table when a hook tries to acquire a pane with no proven owner. */
+  readHookRootEvidence?: HookRootEvidenceReader
 }
 
 export type RelayHookServerStartOptions = {

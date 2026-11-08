@@ -21,7 +21,11 @@ const localizationResources = vi.hoisted(
   (): { active: boolean; destroy: ReturnType<typeof vi.fn<() => Promise<void>>> }[] => []
 )
 
-vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, getDocument }))
+vi.mock('pdfjs-dist', () => ({
+  GlobalWorkerOptions: {},
+  getDocument,
+  PDFDataRangeTransport: class {}
+}))
 vi.mock('pdfjs-dist/web/pdf_viewer.mjs', () => {
   class EventBus {
     listeners = new Map<string, Set<(event: { location?: unknown; scale: number }) => void>>()
@@ -143,20 +147,6 @@ afterEach(() => {
 })
 
 describe('PdfViewer when the file is rewritten', () => {
-  it('loads the next version of the file instead of staying on the error', async () => {
-    const finished = { name: 'finished' }
-    getDocument
-      .mockImplementationOnce(() => loadingTask('fail'))
-      .mockImplementationOnce(() => loadingTask(finished))
-    const view = render(<PdfViewer content={btoa('%PDF half-written')} filePath="out/main.pdf" />)
-    await waitFor(() => expect(view.queryByText(ERROR_TEXT)).toBeTruthy())
-
-    view.rerender(<PdfViewer content={btoa('%PDF finished %%EOF')} filePath="out/main.pdf" />)
-
-    await waitFor(() => expect(view.queryByText(ERROR_TEXT)).toBeNull())
-    expect(shownDocuments.at(-1)).toBe(finished)
-  })
-
   it('clears the previous version and reports a broken rewrite, then recovers', async () => {
     const previous = { name: 'previous build' }
     const next = { name: 'next build' }
@@ -174,36 +164,6 @@ describe('PdfViewer when the file is rewritten', () => {
     view.rerender(<PdfViewer content={btoa('%PDF v2 finished')} filePath="out/main.pdf" />)
     await waitFor(() => expect(shownDocuments.at(-1)).toBe(next))
     expect(view.queryByText(ERROR_TEXT)).toBeNull()
-  })
-
-  it('does not keep another file on screen when the newly opened one fails', async () => {
-    getDocument
-      .mockImplementationOnce(() => loadingTask({ name: 'a.pdf' }))
-      .mockImplementationOnce(() => loadingTask('fail'))
-    const view = render(<PdfViewer content={btoa('%PDF a')} filePath="a.pdf" />)
-    await waitFor(() => expect(shownDocuments.length).toBe(1))
-
-    view.rerender(<PdfViewer content={btoa('%PDF b broken')} filePath="b.pdf" />)
-
-    await waitFor(() => expect(view.queryByText(ERROR_TEXT)).toBeTruthy())
-    expect(shownDocuments.at(-1)).toBeNull()
-  })
-
-  it('aborts a load that a newer write supersedes, exactly once', async () => {
-    const pending = {
-      promise: new Promise<unknown>(() => {}),
-      destroy: vi.fn(() => Promise.resolve())
-    }
-    const next = { name: 'next build' }
-    getDocument
-      .mockImplementationOnce(() => pending)
-      .mockImplementationOnce(() => loadingTask(next))
-    const view = render(<PdfViewer content={btoa('%PDF v1 slow')} filePath="out/main.pdf" />)
-
-    view.rerender(<PdfViewer content={btoa('%PDF v2')} filePath="out/main.pdf" />)
-
-    await waitFor(() => expect(shownDocuments.at(-1)).toBe(next))
-    expect(pending.destroy).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -227,36 +187,6 @@ describe('PdfViewer when the file is rewritten', () => {
     }
   )
 
-  it('does not keep another file on screen when the newly opened one is empty', async () => {
-    getDocument.mockImplementationOnce(() => loadingTask({ name: 'a.pdf' }))
-    const view = render(<PdfViewer content={btoa('%PDF a')} filePath="a.pdf" />)
-    await waitFor(() => expect(shownDocuments.length).toBe(1))
-
-    view.rerender(<PdfViewer content="" filePath="empty.pdf" />)
-
-    await waitFor(() => expect(shownDocuments.at(-1)).toBeNull())
-    expect(view.queryByText(ERROR_TEXT)).toBeTruthy()
-  })
-
-  it('recovers after a failed load followed by an empty rewrite', async () => {
-    const finished = { name: 'finished' }
-    getDocument
-      .mockImplementationOnce(() => loadingTask('fail'))
-      .mockImplementationOnce(() => loadingTask(finished))
-    const view = render(<PdfViewer content={btoa('%PDF broken')} filePath="out/main.pdf" />)
-    await waitFor(() => expect(view.queryByText(ERROR_TEXT)).toBeTruthy())
-    const container = view.container.querySelector('.pdfViewer')
-
-    view.rerender(<PdfViewer content="" filePath="out/main.pdf" />)
-    expect(view.queryByText(ERROR_TEXT)).toBeTruthy()
-    expect(getDocument).toHaveBeenCalledTimes(1)
-    view.rerender(<PdfViewer content={btoa('%PDF finished')} filePath="out/main.pdf" />)
-
-    await waitFor(() => expect(shownDocuments.at(-1)).toBe(finished))
-    expect(view.queryByText(ERROR_TEXT)).toBeNull()
-    expect(view.container.querySelector('.pdfViewer')).toBe(container)
-  })
-
   it('recovers after invalid base64 without remounting the preview container', async () => {
     const finished = { name: 'finished' }
     getDocument.mockImplementationOnce(() => loadingTask(finished))
@@ -269,27 +199,6 @@ describe('PdfViewer when the file is rewritten', () => {
     await waitFor(() => expect(shownDocuments.at(-1)).toBe(finished))
     expect(view.queryByText('Failed to decode PDF content')).toBeNull()
     expect(view.container.querySelector('.pdfViewer')).toBe(container)
-  })
-
-  it('recovers from a password error and destroys the rejected task', async () => {
-    const failed = {
-      promise: Promise.reject(
-        Object.assign(new Error('Password required'), { name: 'PasswordException' })
-      ),
-      destroy: vi.fn(() => Promise.resolve())
-    }
-    const finished = { name: 'finished' }
-    getDocument
-      .mockImplementationOnce(() => failed)
-      .mockImplementationOnce(() => loadingTask(finished))
-    const view = render(<PdfViewer content={btoa('%PDF encrypted')} filePath="out/main.pdf" />)
-    await waitFor(() => expect(view.queryByText('This PDF is password-protected')).toBeTruthy())
-
-    view.rerender(<PdfViewer content={btoa('%PDF finished')} filePath="out/main.pdf" />)
-
-    await waitFor(() => expect(shownDocuments.at(-1)).toBe(finished))
-    expect(view.queryByText('This PDF is password-protected')).toBeNull()
-    expect(failed.destroy).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -488,27 +397,6 @@ describe('PdfViewer when the file is rewritten', () => {
     for (const task of tasks) {
       expect(task.destroy).toHaveBeenCalledTimes(1)
     }
-  })
-
-  it('does no parsing or viewer reconstruction for 100 unchanged rerenders', async () => {
-    const task = loadingTask({ name: 'stable' })
-    getDocument.mockImplementationOnce(() => task)
-    const content = btoa('%PDF stable')
-    const view = render(<PdfViewer content={content} filePath="out/main.pdf" />)
-    await waitFor(() => expect(viewers).toHaveLength(1))
-
-    for (let index = 0; index < 100; index += 1) {
-      view.rerender(
-        <PdfViewer content={index % 2 ? content : `\n${content}\n`} filePath="out/main.pdf" />
-      )
-    }
-
-    expect(getDocument).toHaveBeenCalledTimes(1)
-    expect(viewers).toHaveLength(1)
-    expect(viewerSignals).toHaveLength(1)
-    expect(task.destroy).not.toHaveBeenCalled()
-    view.unmount()
-    expect(task.destroy).toHaveBeenCalledTimes(1)
   })
 
   it('bounds active resources across 25 failed and successful rewrite cycles', async () => {

@@ -1,10 +1,9 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { TERMINAL_METHODS } from './methods/terminal'
-import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { TERMINAL_METHODS } from './methods/terminal/terminal'
+import type { RuntimeTerminalWait } from '../../../shared/runtime-terminal-contracts'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -12,7 +11,7 @@ import {
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../../shared/terminal-stream-protocol'
+} from '../../../shared/terminal/stream/terminal-stream-protocol'
 
 // Untagged resync resets live high-water, so trim buffered bytes covered by its seq or render them twice.
 // Tagged requestId snapshots feed side consumers; live view still needs every buffered chunk.
@@ -62,6 +61,7 @@ async function setupMultiplexStream(): Promise<{
     getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
     getLayout: vi.fn().mockReturnValue({ seq: 1 }),
     registerRemoteTerminalViewSubscriber: vi.fn(() => () => {}),
+    isSoleRemoteTerminalQueryOwner: () => false,
     subscribeToTerminalData: vi.fn(
       (_ptyId: string, cb: (data: string, meta?: OutputMeta) => void) => {
         emitOutput = cb

@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const { execute } = vi.hoisted(() => ({ execute: vi.fn() }))
-vi.mock('../git/runner', () => ({ glabExecFileAsync: execute }))
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: execute
+}))
 
 import { _resetKnownHostsCache, getGlabKnownHosts } from './gitlab-known-host-probe'
-import { PROBE_COALESCE_STALE_MS } from '../git/coalesced-probe'
+import { PROBE_COALESCE_STALE_MS } from '../git/remotes/coalesced-probe'
 
 const response = (host: string) => ({ stdout: `Logged in to ${host} as user`, stderr: '' })
 const deferred = () => Promise.withResolvers<ReturnType<typeof response>>()

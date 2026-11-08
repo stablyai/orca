@@ -1,6 +1,7 @@
 import { useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
 import { Platform, View } from 'react-native'
 import { WebView, type WebViewMessageEvent } from 'react-native-webview'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
 import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
@@ -14,6 +15,7 @@ export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
   function TerminalWebView(props, ref) {
+    const t = useMobileTranslation()
     const webViewRef = useRef<WebView>(null)
 
     const post = useCallback((command: TerminalWebViewCommand & { id: number }) => {
@@ -80,10 +82,23 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
           textZoom={100}
           onLoadStart={resetReadiness}
           onMessage={handleMessage}
-          onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
-          onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}
+          onError={(event) =>
+            reportNativeEngineError(
+              t('terminal.webView.loadFailed', 'Terminal WebView load failed'),
+              event
+            )
+          }
+          onHttpError={(event) =>
+            reportNativeEngineError(
+              t('terminal.webView.httpError', 'Terminal WebView HTTP error'),
+              event
+            )
+          }
           onRenderProcessGone={(event) =>
-            reportNativeEngineError('Terminal WebView render process ended', event)
+            reportNativeEngineError(
+              t('terminal.webView.renderProcessEnded', 'Terminal WebView render process ended'),
+              event
+            )
           }
           onContentProcessDidTerminate={handleContentProcessDidTerminate}
         />

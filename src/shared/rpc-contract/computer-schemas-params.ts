@@ -25,6 +25,8 @@ export const ComputerTarget = z.object({
 export const ComputerObserveTargetBase = ComputerTarget.extend({
   noScreenshot: OptionalBoolean,
   restoreWindow: OptionalBoolean,
+  // Older runtimes strip this and return the full tree, so callers need no capability check.
+  treeDiff: OptionalBoolean,
   windowId: OptionalNonNegativeInt,
   windowIndex: OptionalNonNegativeInt
 })

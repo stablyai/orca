@@ -1,16 +1,22 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
-import type { OpenFile } from '@/store/slices/editor'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getConnectionIdForFile } from './connection-context'
 import { getRuntimeTargetForFileOwner } from './file-owner-runtime-target'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 
 const USER_FILE_ACCESS: LocalFileAccess = { kind: 'user-file' }
 const CHAT_IMAGE_ACCESS: LocalFileAccess = { kind: 'chat-image' }
+const PROJECT_FOLDER_LINK_ACCESS: LocalFileAccess = { kind: 'project-folder-link' }
 
 /** For a path the user named by a gesture (click, drop, typed path); never for document content. */
 export function userNamedFileAccess(): LocalFileAccess {
   return USER_FILE_ACCESS
+}
+
+/** List a folder reached through a project symlink that leads outside; main verifies the link. */
+export function projectFolderLinkAccess(): LocalFileAccess {
+  return PROJECT_FOLDER_LINK_ACCESS
 }
 
 /** Read content-referenced local images by actual type; main refuses network shares even without a user gesture. */

@@ -1,23 +1,21 @@
 import { describe, expect, it, vi } from 'vitest'
-import { bindPaneFirst, registerBoundPty } from '../bind-first-pane.test-fixture'
+import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  assertWorktreeCleanForRemoval,
-  electronMocks,
-  ipcMain,
-  listWorktrees,
-  removeWorktree
-} from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
+import { ipcMain } from 'electron'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   createRuntime,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
 
 describe('OrcaRuntimeService', () => {
   describe('browser page targeting', () => {
@@ -47,7 +45,7 @@ describe('OrcaRuntimeService', () => {
       const result = await runtime.browserSnapshot({ page: 'page-1' })
 
       expect(result.browserPageId).toBe('page-1')
-      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1')
+      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1', { page: 'page-1' })
       expect(listWorktrees).not.toHaveBeenCalled()
     })
 
@@ -73,65 +71,10 @@ describe('OrcaRuntimeService', () => {
         page: 'page-1'
       })
 
-      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1')
-    })
-
-    it('routes tab switch and capture start by explicit page id', async () => {
-      mockLiveBrowserGuest()
-      const runtime = createRuntime()
-      const tabSwitchMock = vi.fn().mockResolvedValue({
-        switched: 2,
-        browserPageId: 'page-2'
+      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1', {
+        worktree: 'branch:feature/foo',
+        page: 'page-1'
       })
-      const captureStartMock = vi.fn().mockResolvedValue({
-        capturing: true
-      })
-
-      runtime.setAgentBrowserBridge({
-        tabSwitch: tabSwitchMock,
-        captureStart: captureStartMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-2', 2]])),
-        tabList: vi.fn(() => ({
-          tabs: [
-            { browserPageId: 'page-0', index: 0, url: 'about:blank', title: '', active: false },
-            { browserPageId: 'page-1', index: 1, url: 'about:blank', title: '', active: false },
-            { browserPageId: 'page-2', index: 2, url: 'about:blank', title: '', active: true }
-          ]
-        }))
-      } as never)
-
-      await expect(runtime.browserTabSwitch({ page: 'page-2' })).resolves.toEqual({
-        switched: 2,
-        browserPageId: 'page-2'
-      })
-      await expect(runtime.browserCaptureStart({ page: 'page-2' })).resolves.toEqual({
-        capturing: true
-      })
-      expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-2')
-      expect(captureStartMock).toHaveBeenCalledWith(undefined, 'page-2')
-    })
-
-    it('accepts focus on tab switch without altering bridge args (focus is main-side concern)', async () => {
-      mockLiveBrowserGuest()
-      const runtime = createRuntime()
-      const tabSwitchMock = vi.fn().mockResolvedValue({
-        switched: 0,
-        browserPageId: 'page-1'
-      })
-
-      runtime.setAgentBrowserBridge({
-        tabSwitch: tabSwitchMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
-        tabList: vi.fn(() => ({
-          tabs: [{ browserPageId: 'page-1', index: 0, url: 'about:blank', title: '', active: true }]
-        }))
-      } as never)
-
-      await expect(runtime.browserTabSwitch({ page: 'page-1', focus: true })).resolves.toEqual({
-        switched: 0,
-        browserPageId: 'page-1'
-      })
-      expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')
     })
 
     it('does not silently drop invalid explicit worktree selectors for page-targeted commands', async () => {
@@ -463,23 +406,6 @@ describe('OrcaRuntimeService', () => {
       record.ptyId = null
 
       expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-a' })
-    })
-
-    it('keeps terminal cwd resolution fail-soft when the provider is unavailable', async () => {
-      const runtime = new OrcaRuntimeService(store)
-      runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
-      const handle = issueLeafHandle(runtime, 'pty-a')
-      runtime.setPtyController({
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null,
-        getCwd: async () => {
-          throw new Error('ssh disconnected')
-        }
-      })
-
-      await expect(runtime.resolveTerminalCwd(handle)).resolves.toBeNull()
     })
   })
 

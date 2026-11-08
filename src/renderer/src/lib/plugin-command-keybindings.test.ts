@@ -1,18 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import {
-  findKeybindingConflictsForDefinitions,
-  KEYBINDING_DEFINITIONS
-} from '../../../shared/keybindings'
-import type { ActivePluginCommand } from '@/store/plugin-panels'
+// @vitest-environment happy-dom
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import type { KeybindingOverrides } from '../../../shared/keybindings'
 import {
   findPluginCommandForKeybinding,
-  getEffectivePluginCommandKeybindings,
-  pluginCommandKeybindingActionId,
-  pluginCommandKeybindingDefinition
+  globalShortcutTargetYields,
+  pluginCommandKeybindingActionId
 } from './plugin-command-keybindings'
 
 const command: ActivePluginCommand = {
-  pluginKey: 'orca-samples.tasks',
+  pluginKey: 'samples.tasks',
   pluginName: 'Tasks',
   id: 'open',
   title: 'Open Tasks',
@@ -22,24 +19,6 @@ const command: ActivePluginCommand = {
 }
 
 describe('plugin command keybindings', () => {
-  it('builds a stable dynamic action definition', () => {
-    expect(pluginCommandKeybindingActionId(command)).toBe('plugin:orca-samples.tasks/open')
-    expect(pluginCommandKeybindingDefinition(command)).toMatchObject({
-      title: 'Open Tasks — Tasks',
-      group: 'Plugins',
-      defaultBindings: { darwin: ['Mod+Alt+T'] }
-    })
-  })
-
-  it('lets user overrides replace or disable contributed defaults', () => {
-    const actionId = pluginCommandKeybindingActionId(command)
-    expect(getEffectivePluginCommandKeybindings(command, 'linux')).toEqual(['Mod+Alt+T'])
-    expect(
-      getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: ['Mod+Shift+T'] })
-    ).toEqual(['Mod+Shift+T'])
-    expect(getEffectivePluginCommandKeybindings(command, 'linux', { [actionId]: [] })).toEqual([])
-  })
-
   it('matches effective overrides and honors explicit disablement', () => {
     const actionId = pluginCommandKeybindingActionId(command)
     const input = {
@@ -66,39 +45,93 @@ describe('plugin command keybindings', () => {
     ).toBeNull()
   })
 
-  it('reports conflicts between plugin and built-in definitions', () => {
-    const actionId = pluginCommandKeybindingActionId(command)
-    const definitions = [...KEYBINDING_DEFINITIONS, pluginCommandKeybindingDefinition(command)]
-
-    expect(
-      findKeybindingConflictsForDefinitions(definitions, 'darwin', {
-        [actionId]: ['Mod+P']
+  // #15642: plugin chords follow the terminal shortcut policy like Orca's own app shortcuts.
+  it('fires in terminal focus under orca-first and stays out under terminal-first', () => {
+    const input = { key: 't', code: 'KeyT', control: true, meta: false, alt: true, shift: false }
+    const find = (
+      terminalShortcutPolicy: 'orca-first' | 'terminal-first' | undefined,
+      overrides?: KeybindingOverrides
+    ) =>
+      findPluginCommandForKeybinding([command], input, 'linux', overrides, true, {
+        context: 'terminal',
+        terminalShortcutPolicy
       })
-    ).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          actionIds: expect.arrayContaining([actionId, 'worktree.quickOpen'])
-        })
-      ])
-    )
+
+    expect(find('orca-first')).toBe(command)
+    // The policy defaults to orca-first, as it does for built-ins.
+    expect(find(undefined)).toBe(command)
+    expect(find('terminal-first')).toBeNull()
+    expect(
+      findPluginCommandForKeybinding([command], input, 'linux', undefined, true, {
+        context: 'app',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBe(command)
   })
 
-  it('does not match worktree commands without an active worktree', () => {
-    const worktreeCommand = { ...command, context: 'worktree' as const }
-    const input = {
-      key: 't',
-      code: 'KeyT',
-      control: true,
-      meta: false,
-      alt: true,
-      shift: false
-    }
+  it('matches effective bindings in terminal focus, so rebinds and unbinds apply there too', () => {
+    const actionId = pluginCommandKeybindingActionId(command)
+    const original = { key: 't', code: 'KeyT', control: true, meta: false, alt: true, shift: false }
+    const rebound = { key: 't', code: 'KeyT', control: true, meta: false, alt: false, shift: true }
+    const terminal = { context: 'terminal', terminalShortcutPolicy: 'orca-first' } as const
+    const rebind = { [actionId]: ['Mod+Shift+T'] }
 
     expect(
-      findPluginCommandForKeybinding([worktreeCommand], input, 'linux', undefined, false)
+      findPluginCommandForKeybinding([command], rebound, 'linux', rebind, true, terminal)
+    ).toBe(command)
+    expect(
+      findPluginCommandForKeybinding([command], original, 'linux', rebind, true, terminal)
     ).toBeNull()
-    expect(findPluginCommandForKeybinding([worktreeCommand], input, 'linux', undefined, true)).toBe(
-      worktreeCommand
-    )
+    expect(
+      findPluginCommandForKeybinding(
+        [command],
+        original,
+        'linux',
+        { [actionId]: [] },
+        true,
+        terminal
+      )
+    ).toBeNull()
+  })
+})
+
+describe('globalShortcutTargetYields', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    document.body.innerHTML = ''
+  })
+
+  function editable(inNativeChat: boolean): HTMLElement {
+    const root = document.createElement('div')
+    if (inNativeChat) {
+      root.dataset.nativeChatRoot = 'true'
+    }
+    const field = root.appendChild(document.createElement('div'))
+    field.contentEditable = 'true'
+    if (inNativeChat) {
+      field.dataset.nativeChatPromptEditor = ''
+    }
+    document.body.appendChild(root)
+    return field
+  }
+
+  it('lets rename through the chat prompt while protecting ordinary fields and editing chords', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
+    const yields = (letter: string, inNativeChat: boolean, overrides?: KeybindingOverrides) =>
+      globalShortcutTargetYields(
+        {
+          key: letter,
+          code: `Key${letter.toUpperCase()}`,
+          metaKey: true,
+          target: editable(inNativeChat)
+        },
+        'darwin',
+        overrides,
+        { context: 'app' }
+      )
+
+    expect(yields('r', true)).toBe(false)
+    expect(yields('r', false)).toBe(true)
+    expect(yields('z', true, { 'tab.rename': ['Mod+Z'] })).toBe(true)
   })
 })

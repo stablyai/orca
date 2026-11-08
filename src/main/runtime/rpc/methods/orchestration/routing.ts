@@ -1,11 +1,20 @@
-import type { MessageType } from '../../../orchestration/db'
-import type { RunRow } from '../../../orchestration/types'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { OrchestrationCallerIdentity } from '../../../orchestration/orchestration-caller-identity'
-import { MESSAGE_TYPES } from '../../../orchestration/types'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import {
+  type MessageType,
+  type DispatchContextRow,
+  type RunRow,
+  MESSAGE_TYPES
+} from '../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { LEGACY_CONTRACT_VERSION } from '../../../orchestration/db'
-import { isDispatchMutationMessageType, parseMessageTaskId } from './schemas'
+import '../../../orchestration/db/orchestration-db'
+import { LEGACY_CONTRACT_VERSION } from '../../../orchestration/db/contract-constants'
+import '../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../orchestration/db/dispatch-row-writer'
+import '../../../orchestration/db/attempt-outcome-projection'
+import { isDispatchMutationMessageType } from '../../../../../shared/rpc-contract/orchestration-params'
+import { parseMessageTaskId } from './messaging/message-payload'
+import { federatedMessageNamesOnlyHome } from '../../../orchestration/workers/reports/dispatch-report-mailbox'
 
 export function parseMessageTypes(rawTypes: string | undefined): MessageType[] | undefined {
   const types = rawTypes
@@ -19,6 +28,12 @@ export function parseMessageTypes(rawTypes: string | undefined): MessageType[] |
   return types && types.length > 0 ? types : undefined
 }
 
+export type MessageRouting = {
+  run: RunRow | undefined
+  dispatchId: string | undefined
+  dispatch: DispatchContextRow | undefined
+}
+
 export function resolveMessageRun(
   runtime: OrcaRuntimeService,
   params: {
@@ -29,7 +44,7 @@ export function resolveMessageRun(
     payload?: string
     type?: string
   }
-): { run: RunRow | undefined; dispatchId: string | undefined } {
+): MessageRouting {
   const db = runtime.getOrchestrationDb()
   let dispatchId: string | undefined
   if (params.payload) {
@@ -110,7 +125,7 @@ export function resolveMessageRun(
       )
     }
   }
-  return { run, dispatchId: dispatch?.id ?? dispatchId }
+  return { run, dispatchId: dispatch?.id ?? dispatchId, dispatch }
 }
 
 export function legacyWorkerDeliveryContract(
@@ -185,9 +200,7 @@ export function rejectFederatedExplicitTarget(
   params: { to?: string; run?: string },
   homeRunId: string
 ): void {
-  const namesOnlyHome =
-    (!params.to || params.to === `run:${homeRunId}`) && (!params.run || params.run === homeRunId)
-  if (!namesOnlyHome) {
+  if (!federatedMessageNamesOnlyHome(params, homeRunId)) {
     throw new OrchestrationError(
       'invalid_argument',
       'Federated Dispatch messages route to their Run home; omit --to and --run.'

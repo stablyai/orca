@@ -9,6 +9,7 @@ import {
   freshRetryAt,
   hostedReviewOptionArgs,
   isBackground,
+  isBudgetedBackground,
   isMergeabilityPendingOutcome,
   sameAliasRequestIdentity,
   validateCandidate,
@@ -17,7 +18,10 @@ import {
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
+import { PRWatchJobRunner } from './pr-refresh-watch-jobs'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
+import { blockedWslDistroForPath, wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
+import { outsideWslUserAct } from '../wsl/discovery/wsl-user-act-scope'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
 import type { PRRefreshVisibility } from './pr-refresh-visibility'
 
@@ -28,6 +32,7 @@ export class PRRefreshQueueDrainer {
   private timer: ReturnType<typeof setTimeout> | null = null
   // Why: queued work can outlive its project; re-check on every removal path before Git runs.
   private registrationCheck: PRRefreshRegistrationCheck | null = null
+  readonly watchJobs: PRWatchJobRunner
 
   constructor(
     private readonly queue: PRRefreshQueue,
@@ -35,7 +40,9 @@ export class PRRefreshQueueDrainer {
     private readonly visibility: PRRefreshVisibility,
     private readonly retry: PRRefreshRetryState,
     private readonly events: PRRefreshEventPublisher
-  ) {}
+  ) {
+    this.watchJobs = new PRWatchJobRunner(queue, retry, this)
+  }
 
   setRegistrationCheck(check: PRRefreshRegistrationCheck | null): void {
     this.registrationCheck = check
@@ -47,7 +54,8 @@ export class PRRefreshQueueDrainer {
     }
     this.timer = setTimeout(() => {
       this.timer = null
-      void this.drain()
+      // The drain serves every queued repo; a scheduling call inside a WSL user act must not lend it that act.
+      void outsideWslUserAct(() => this.drain())
     }, delay)
   }
 
@@ -125,6 +133,7 @@ export class PRRefreshQueueDrainer {
   }
 
   private ordered(): PRRefreshQueueEntry[] {
+    this.watchJobs.age(this.queue.values(), Date.now())
     return this.queue.ordered((a, b) => this.pacing.activeOrder(a, b))
   }
 
@@ -180,7 +189,14 @@ export class PRRefreshQueueDrainer {
         }
         if (
           !(this.registrationCheck?.(next.candidate) ?? true) ||
-          (next.reason === 'visible' && !this.visibility.has(next.key))
+          (next.reason === 'visible' && !this.visibility.has(next.key)) ||
+          // E9: gh/Git in a stopped distro's repo boots it; a queued refresh keeps the current status.
+          (isBackground(next.reason) &&
+            wslDistroForPath(next.candidate.repoPath, next.candidate.localGitOptions?.wslDistro) &&
+            (await blockedWslDistroForPath(
+              next.candidate.repoPath,
+              next.candidate.localGitOptions?.wslDistro
+            )))
         ) {
           this.events.broadcast({
             aliases,
@@ -188,6 +204,7 @@ export class PRRefreshQueueDrainer {
             status: 'skipped',
             skippedReason: 'fresh'
           })
+          this.watchJobs.skipped(next)
           continue
         }
         const requestSequence = this.events.nextSequence()
@@ -216,24 +233,25 @@ export class PRRefreshQueueDrainer {
             this.schedule(Math.max(1_000, pausedUntil - Date.now()))
             continue
           }
-          if (
-            next.bypassBackgroundBudget !== true &&
-            (next.reason === 'visible' || next.reason === 'swr')
-          ) {
+          if (next.bypassBackgroundBudget !== true && isBudgetedBackground(next.reason)) {
             this.pacing.noteBackgroundStart()
+            this.watchJobs.noteBudgetedStart(next)
           }
           if (usesActiveRefreshPacing(next)) {
             this.pacing.noteActiveStart(next)
           }
         }
 
+        if (await this.watchJobs.readHead(next)) {
+          continue
+        }
         const outcome = await getPRForBranchOutcome(
           next.candidate.repoPath,
           next.candidate.branch,
           next.candidate.linkedPRNumber ?? null,
           next.candidate.connectionId ?? null,
           next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
-          ...hostedReviewOptionArgs(next.candidate, next.reason)
+          ...hostedReviewOptionArgs(next.candidate, next.reason, { watchPRKey: next.watch?.prKey })
         )
         if (!this.queue.ownsRequest(next.key, requestSequence)) {
           this.events.broadcast(
@@ -257,6 +275,10 @@ export class PRRefreshQueueDrainer {
           { aliases, reason: next.reason, outcome: broadcastOutcome, requestStartedAt },
           requestSequence
         )
+        if (next.watch) {
+          this.watchJobs.afterOutcome(next, outcome)
+          continue
+        }
         this.scheduleVisibleFollowUp(
           next.key,
           next.candidate,
@@ -283,7 +305,7 @@ export class PRRefreshQueueDrainer {
     }
     if (
       entry.bypassBackgroundBudget !== true &&
-      (entry.reason === 'visible' || entry.reason === 'swr') &&
+      isBudgetedBackground(entry.reason) &&
       this.pacing.nextBudgetDelay() > 0
     ) {
       this.events.record('background-pause', entry.reason)

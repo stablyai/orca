@@ -1,10 +1,10 @@
-import { pairedRuntimeConnectionFromOffer } from '../../paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from '../pairing/paired-runtime-connection'
 /** Pin connect-bound timing and recoverability together: subscribe rejection crosses IPC with only its message.
  * Separate assertions could miss a rewording that stops pane recovery. */
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { generateKeyPair, publicKeyToBase64 } from '../../e2ee-crypto'
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { generateKeyPair, publicKeyToBase64 } from '../e2ee/node/e2ee-crypto'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   isRecoverableRemoteRuntimeConnectionError,
   toRemoteRuntimeClientErrorLike

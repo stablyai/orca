@@ -6,13 +6,14 @@ import { AUTOMATION_DEFAULT_TIME, getDefaultWorktree } from './automation-draft-
 import type { AutomationTemplate } from './automation-templates'
 import { dispatchAutomationReread } from './automation-row-action-dispatch'
 import { listAutomationsForTarget } from './automation-host-client'
+import { automationCreateHostFor } from './automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
 import type { AutomationsPageDestinationFormState } from './use-automations-page-destination-form'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Dialog open/edit actions, including host-captured re-reads and project changes. */
 export function useAutomationEditorActions({
@@ -35,13 +36,15 @@ export function useAutomationEditorActions({
     setEditingHostStableKey,
     setDraft,
     setDraftAtOpen,
+    setTargetEdited,
     setCreateOpen,
     draftRef,
     editingAutomationId,
     editingHostStableKey
   } = local
   const { getDefaultTarget, automationDispatchContext, rowRecoveryHost } = destination
-  const { destinationForProject, editHostResolution } = destinationForm
+  const { destinationForProject, editHostResolution, editDestinationControl, editHostEntries } =
+    destinationForm
 
   const openCreateDialog = (template?: AutomationTemplate): void => {
     editRequestRef.current += 1
@@ -84,10 +87,15 @@ export function useAutomationEditorActions({
       : baseDraft
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
+    setTargetEdited(false)
     setCreateOpen(true)
   }
 
-  const openEditDialog = async (row: AutomationListRow): Promise<void> => {
+  /** Resolves true once the edit session is set; headless keeps the dialog closed for Migrate. */
+  const openEditDialog = async (
+    row: AutomationListRow,
+    { headless = false }: { headless?: boolean } = {}
+  ): Promise<boolean> => {
     const requestId = (editRequestRef.current += 1)
     const automationId = row.automation.id
     const reread = await dispatchAutomationReread(
@@ -100,28 +108,45 @@ export function useAutomationEditorActions({
     )
     if (!reread.ok && reread.notice.severity === 'owner') {
       destination.reportOwnerAction(row.key, reread.notice)
-      return
+      return false
     }
     const latest = (reread.ok ? reread.value : null) ?? row.automation
     if (requestId !== editRequestRef.current) {
-      return
+      return false
     }
     setEditingAutomationId(latest.id)
     setEditingRowKey(row.key)
-    const initialHostStableKey = rowRecoveryHost(row.key)?.stableKey ?? null
-    const initialDestination = destinationForProject(latest.projectId, initialHostStableKey)
+    const rowHostStableKey = rowRecoveryHost(row.key)?.stableKey ?? null
+    const initialHost = automationCreateHostFor(editHostEntries, rowHostStableKey)
+    // A managed SSH host's row can only be saved by moving it to that host's Orca server.
+    const movingToServer = initialHost !== null && initialHost.stableKey !== rowHostStableKey
+    const initialDestination = destinationForProject(
+      latest.projectId,
+      initialHost?.stableKey ?? null
+    )
     setEditingDestination(
       initialDestination ? { projectId: latest.projectId, destination: initialDestination } : null
     )
-    setEditingHostStableKey(initialDestination?.entry.stableKey ?? null)
+    setEditingHostStableKey(
+      initialDestination?.entry.stableKey ?? (movingToServer ? initialHost.stableKey : null)
+    )
     const nextDraft = buildAutomationEditDraft(latest)
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
-    setCreateOpen(true)
+    setTargetEdited(movingToServer)
+    setCreateOpen(!headless)
+    return true
   }
 
   const handleProjectChange = useCallback(
     (projectId: string): void => {
+      setTargetEdited(true)
+      if (
+        editDestinationControl.recordedProject?.id === projectId &&
+        draftRef.current.projectId === projectId
+      ) {
+        return
+      }
       const currentWorktrees = worktreesByRepo[projectId] ?? []
       const currentDefaultWorktree = getDefaultWorktree(currentWorktrees)
       const selectedEditDestination =
@@ -167,6 +192,8 @@ export function useAutomationEditorActions({
     },
     [
       destinationForProject,
+      editDestinationControl.recordedProject,
+      draftRef,
       editingAutomationId,
       editingHostStableKey,
       editHostResolution,
@@ -174,6 +201,7 @@ export function useAutomationEditorActions({
       setEditingHostStableKey,
       setEditingDestination,
       setDraft,
+      setTargetEdited,
       worktreesByRepo
     ]
   )
@@ -185,8 +213,11 @@ export function useAutomationEditorActions({
       setDraft(next)
       if (
         editingAutomationId !== null &&
-        (next.projectId !== current.projectId || next.workspaceId !== current.workspaceId)
+        (next.projectId !== current.projectId ||
+          next.workspaceId !== current.workspaceId ||
+          next.workspaceMode !== current.workspaceMode)
       ) {
+        setTargetEdited(true)
         const target = destinationForProject(next.projectId, editingHostStableKey)
         setEditingDestination(target ? { projectId: next.projectId, destination: target } : null)
         if (target) {
@@ -200,6 +231,7 @@ export function useAutomationEditorActions({
       editingAutomationId,
       editingHostStableKey,
       setDraft,
+      setTargetEdited,
       setEditingDestination,
       setEditingHostStableKey
     ]

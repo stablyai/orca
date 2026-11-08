@@ -9,7 +9,11 @@ import type { AgentsStep, AgentsStepId } from '../../../../shared/agents-orchest
 import type { WorkbenchStep, WorkbenchStepId } from '../../../../shared/workbench-steps'
 import type { ReviewStep, ReviewStepId } from '../../../../shared/review-steps'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import {
+  getLocalizedFeatureWallStepCopy,
+  getLocalizedFeatureWallWorkflowCopy
+} from './feature-wall-tour-localized-copy'
 
 const SUB_STEP_LABELS = ['a', 'b', 'c', 'd', 'e', 'f'] as const
 
@@ -33,6 +37,7 @@ export function FeatureWallRail(props: {
   reviewStepDone: Record<ReviewStepId, boolean>
   onSelectReviewStep: (id: ReviewStepId) => void
 }): JSX.Element {
+  const t = useTranslate()
   const {
     selectedId,
     previewPanelId,
@@ -56,7 +61,7 @@ export function FeatureWallRail(props: {
   return (
     <nav
       className="scrollbar-sleek h-full max-h-72 overflow-y-auto border-b border-border bg-card p-2 md:max-h-none md:border-b-0"
-      aria-label={translate('auto.components.feature.wall.FeatureWallRail.7593d15f94', 'Workflows')}
+      aria-label={t('auto.components.feature.wall.FeatureWallRail.7593d15f94', 'Workflows')}
     >
       <div role="tablist" aria-orientation="vertical" className="flex flex-col gap-1.5 pt-1.5">
         {FEATURE_WALL_WORKFLOWS.map((workflow, index) => {
@@ -116,16 +121,15 @@ export function FeatureWallRail(props: {
                   )}
                   aria-label={
                     isDone
-                      ? translate(
-                          'auto.components.feature.wall.FeatureWallRail.69ea857689',
-                          'Completed'
-                        )
+                      ? t('auto.components.feature.wall.FeatureWallRail.69ea857689', 'Completed')
                       : undefined
                   }
                 >
                   {isDone ? <Check className="size-3.5" aria-hidden /> : index + 1}
                 </span>
-                <span className="min-w-0 truncate font-medium leading-tight">{workflow.title}</span>
+                <span className="min-w-0 truncate font-medium leading-tight">
+                  {getLocalizedFeatureWallWorkflowCopy(workflow.id).title}
+                </span>
               </button>
               {subSteps ? (
                 <div
@@ -164,7 +168,7 @@ export function FeatureWallRail(props: {
                               )}
                               aria-label={
                                 isStepDone
-                                  ? translate(
+                                  ? t(
                                       'auto.components.feature.wall.FeatureWallRail.69ea857689',
                                       'Completed'
                                     )
@@ -179,7 +183,7 @@ export function FeatureWallRail(props: {
                                 isStepActive ? 'font-medium' : 'text-muted-foreground'
                               )}
                             >
-                              {step.name}
+                              {getLocalizedFeatureWallStepCopy(step.id).name}
                             </span>
                           </button>
                         )

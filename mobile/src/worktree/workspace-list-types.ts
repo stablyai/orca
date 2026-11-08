@@ -1,58 +1,44 @@
-import type { SmartTier } from '../../../src/shared/sidebar-list/sort-stamps'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
-import type {
-  RuntimeWorktreeAgentRow,
-  RuntimeWorktreePsSummary
-} from '../../../src/shared/runtime-types'
+import type { RuntimeWorktreePsSummary } from '../../../src/shared/runtime-types'
 import type { ProjectSectionRepo } from '../../../src/shared/project-section-grouping'
 import type { WorkspaceRowFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
 
-export type Worktree = {
-  sectionListKey?: string
-  /** Show the existing project-name surface for a child from another repo. */
-  showProjectName?: boolean
-  workspaceKind?: 'git' | 'folder-workspace'
-  worktreeId: string
-  repoId: string
-  hostId?: ExecutionHostId
-  terminalPlatform?: NodeJS.Platform
-  // Show execution-host context when the list spans hosts.
+/** Fields every host the phone pairs with sends; the rest are optional because older hosts omit them. */
+type AlwaysSentHostRowField =
+  | 'worktreeId'
+  | 'repoId'
+  | 'repo'
+  | 'branch'
+  | 'displayName'
+  | 'path'
+  | 'liveTerminalCount'
+  | 'hasAttachedPty'
+  | 'unread'
+  | 'isPinned'
+  | 'linkedPR'
+
+/** The host's worktree.ps row, typed from the shared contract. Phone-only facts go in WorktreeRowView. */
+export type Worktree = Pick<RuntimeWorktreePsSummary, AlwaysSentHostRowField> &
+  Partial<Omit<RuntimeWorktreePsSummary, AlwaysSentHostRowField | 'sidebarStatus'>> & {
+    /** Unchecked wire data: a newer host may send a state this build does not know. */
+    sidebarStatus?: string
+  }
+
+/** The host context a mixed-host list shows on a row. */
+export type WorktreeHostContextView = {
   hostContextLabel?: string
   /** Resolved host for the display label; present when legacy rows omit hostId. */
   hostContextHostId?: ExecutionHostId
   // Omit health labels for healthy hosts.
   hostContextHealthLabel?: string
-  repo: string
-  branch: string
-  displayName: string
-  workspaceStatus?: string
-  sortOrder?: number
-  manualOrder?: number
-  lastActivityAt?: number
-  smartTier?: SmartTier
-  smartAt?: number
-  /** The host sorts by its own stamps; see src/shared/sidebar-list/stamp-order.ts. */
-  sortedByStamps?: true
-  createdAt?: number
-  // Use filesystem basenames to dedupe fallback workspace names.
-  path: string
-  isArchived?: boolean
-  isMainWorktree?: boolean
-  hasHostSidebarActivity?: boolean
-  /** The paired desktop calls this row another client's (its "Hide other-client workspaces" rule). */
-  desktopOtherClient?: true
-  /** Workspace options facts the host stamps (RuntimeWorktreePsSummary); older hosts send none. */
-  defaultBranch?: boolean
-  automationCreated?: true
-  automationName?: string
-  cliCreated?: true
-  detachedHead?: true
-  worktreeInstanceId?: string
-  lineageWorktreeInstanceId?: string
-  parentWorktreeInstanceId?: string
-  parentWorktreeId?: string | null
-  childWorktreeIds?: string[]
+}
+
+/** Facts the phone works out for a listed row. They sit beside the host's row, never on it, so a
+ *  host field of the same name cannot collide with them. */
+export type WorktreeRowView = WorktreeHostContextView & {
+  sectionListKey?: string
+  /** Show the existing project-name surface for a child from another repo. */
+  showProjectName?: boolean
   lineageDepth?: number
   // Match the desktop’s project-group row depth.
   projectGroupDepth?: number
@@ -63,24 +49,9 @@ export type Worktree = {
   /** The collapse key the shared builder gave this row's children; set only on a feed-built list. */
   lineageGroupKey?: string
   isLastLineageChild?: boolean
-  liveTerminalCount: number
-  hasAttachedPty: boolean
-  unread: boolean
-  lastOutputAt?: number
-  isPinned: boolean
-  isActive?: boolean
-  linkedPR: RuntimeWorktreePsSummary['linkedPR']
-  linkedIssue?: number | null
-  linkedLinearIssue?: string | null
-  linkedGitLabMR?: number | null
-  linkedGitLabIssue?: number | null
-  /** Every linked issue and review; hosts before the attachment list omit it. Unchecked wire data. */
-  linkedItems?: RuntimeWorktreePsSummary['linkedItems']
-  comment?: string
-  status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
-  workingMode?: AgentWorkingMode
-  agents?: RuntimeWorktreeAgentRow[]
 }
+
+export type WorkspaceListItem = { row: Worktree; view: WorktreeRowView }
 
 /** The desktop's Workspace options filters, one shared value. */
 export type FilterState = WorkspaceRowFilters
@@ -98,7 +69,10 @@ export type SectionRepo = ProjectSectionRepo & {
 export type SectionPendingCreation = { key: string; repoName: string | null }
 
 export type Section = {
+  /** The list identity; unique even when one header repeats in several host sections. */
   key: string
+  /** The view's collapse key when it differs from `key`; a header's copies share it. */
+  collapseKey?: string
   title: string
   icon?: 'pin'
   repo?: SectionRepo
@@ -107,5 +81,5 @@ export type Section = {
   /** The header's own count from a feed-built list, which a collapsed section still shows. */
   count?: number
   pendingCreations?: SectionPendingCreation[]
-  data: Worktree[]
+  data: WorkspaceListItem[]
 }

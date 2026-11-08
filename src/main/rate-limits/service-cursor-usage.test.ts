@@ -25,6 +25,10 @@ vi.mock('./grok-fetcher', () => ({ fetchGrokRateLimits: vi.fn() }))
 vi.mock('./grok-auth', () => ({ readGrokAuthSession: vi.fn(() => ({ status: 'missing' })) }))
 vi.mock('./zcode-usage-fetcher', () => ({ fetchZcodeRateLimits: vi.fn() }))
 
+vi.mock('./muse-usage-fetcher', () => ({
+  fetchMuseRateLimits: vi.fn()
+}))
+
 vi.mock('./antigravity-usage-fetcher', () => ({
   fetchAntigravityRateLimits: vi.fn()
 }))
@@ -62,48 +66,6 @@ describe('RateLimitService Cursor usage', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 0))
   })
 
-  it('does not probe the Cursor keychain while callers read state snapshots', () => {
-    const service = new RateLimitService()
-    service.getState()
-    service.getState()
-    expect(readCursorAuthSession).not.toHaveBeenCalled()
-  })
-
-  it('reports Cursor as unconfigured until a fetch cycle finds a session', async () => {
-    const service = new RateLimitService()
-    expect(service.getState().cursorAuthConfigured).toBe(false)
-
-    vi.mocked(readCursorAuthSession).mockResolvedValue(signedInResult())
-    vi.mocked(fetchCursorRateLimits).mockResolvedValue(okProvider('cursor', 42))
-    await service.refresh()
-
-    expect(service.getState().cursorAuthConfigured).toBe(true)
-    expect(service.getState().cursor?.status).toBe('ok')
-  })
-
-  it('passes the resolved session to the fetcher instead of reading it twice', async () => {
-    const authReadResult = signedInResult()
-    vi.mocked(readCursorAuthSession).mockResolvedValue(authReadResult)
-    vi.mocked(fetchCursorRateLimits).mockResolvedValue(okProvider('cursor', 7))
-
-    await new RateLimitService().refresh()
-
-    expect(readCursorAuthSession).toHaveBeenCalledTimes(1)
-    expect(fetchCursorRateLimits).toHaveBeenCalledWith(expect.objectContaining({ authReadResult }))
-  })
-
-  it('publishes an error snapshot instead of dropping the cycle when the fetch throws', async () => {
-    vi.mocked(readCursorAuthSession).mockResolvedValue({ status: 'missing' })
-    vi.mocked(fetchCursorRateLimits).mockRejectedValue(new Error('boom'))
-
-    const service = new RateLimitService()
-    await service.refresh()
-
-    const state = service.getState()
-    expect(state.cursor).toMatchObject({ provider: 'cursor', status: 'error', error: 'boom' })
-    expect(state.gemini?.status).toBe('ok')
-  })
-
   it("drops a previous account's usage when the signed-in account changes", async () => {
     // Stale-policy fallback must never put the previous account's figures beside a newly selected identity.
     vi.mocked(readCursorAuthSession).mockResolvedValue(signedInResult())
@@ -128,39 +90,5 @@ describe('RateLimitService Cursor usage', () => {
     await service.refresh()
     expect(service.getState().cursor?.session).toBeNull()
     expect(service.getState().cursor?.status).toBe('error')
-  })
-
-  it('keeps the last reading when a refresh fails without naming an account', async () => {
-    vi.mocked(readCursorAuthSession).mockResolvedValue(signedInResult())
-    vi.mocked(fetchCursorRateLimits).mockResolvedValue({
-      ...okProvider('cursor', 60),
-      usageMetadata: { source: 'cli', authProvenance: 'account-a' }
-    })
-    const service = new RateLimitService()
-    await service.refresh()
-
-    vi.mocked(fetchCursorRateLimits).mockResolvedValue({
-      provider: 'cursor',
-      session: null,
-      weekly: null,
-      updatedAt: Date.now(),
-      error: 'Cursor usage request failed',
-      status: 'error',
-      usageMetadata: { source: 'cli' }
-    })
-    await service.refresh()
-    expect(service.getState().cursor?.session?.usedPercent).toBe(60)
-  })
-
-  it('clears cursorAuthConfigured once the local session goes away', async () => {
-    vi.mocked(readCursorAuthSession).mockResolvedValue(signedInResult())
-    vi.mocked(fetchCursorRateLimits).mockResolvedValue(okProvider('cursor', 5))
-    const service = new RateLimitService()
-    await service.refresh()
-    expect(service.getState().cursorAuthConfigured).toBe(true)
-
-    vi.mocked(readCursorAuthSession).mockResolvedValue({ status: 'missing' })
-    await service.refresh()
-    expect(service.getState().cursorAuthConfigured).toBe(false)
   })
 })

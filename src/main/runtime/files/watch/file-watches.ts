@@ -10,16 +10,17 @@ import {
 } from '../file-target'
 import type { RuntimeFileCommandHost } from '../file-command-host'
 import { stat } from 'node:fs/promises'
-import type { DirEntry, FsChangeEvent } from '../../../../shared/filesystem-entry-types'
-import { sortDirEntries } from '../../../../shared/file-name-sort'
-import { resolveAuthorizedPath } from '../../../ipc/filesystem/filesystem-auth'
+import type { DirEntry } from '../../../../shared/file-listing/directory-entry'
+import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
+import { sortDirEntries } from '../../../../shared/file-listing/file-name-sort'
+import { resolveAuthorizedPath } from '../../../ipc/filesystem/access/filesystem-auth'
 import { resolveRuntimeAuthorizedPath } from '../chat-scratch-file-root'
-import { watchWindowsRuntimeFileExplorer } from './windows-file-watch'
-import { beginWatcherInstall } from '../../../ipc/watcher-removal-gate'
+import { WindowsRuntimeWatchPool } from './windows-runtime-watch-pool'
+import { beginWatcherInstall } from '../../../workspaces/removal/watcher-removal-gate'
 import {
   closeFileExplorerWatcherInWatcherProcess,
   watchFileExplorerInWatcherProcess
-} from '../../file-watcher-host'
+} from './file-watcher-host'
 
 type RuntimeFileWatchHost = Pick<
   RuntimeFileCommandHost,
@@ -27,6 +28,8 @@ type RuntimeFileWatchHost = Pick<
 >
 
 export class RuntimeFileWatches {
+  private readonly windowsWatches = new WindowsRuntimeWatchPool()
+
   constructor(private readonly host: RuntimeFileWatchHost) {}
 
   async readFileExplorerDir(
@@ -63,7 +66,7 @@ export class RuntimeFileWatches {
           throw new Error('not_a_directory')
         }
         if (process.platform === 'win32') {
-          const close = watchWindowsRuntimeFileExplorer(rootPath, callback, onTerminalError)
+          const close = await this.windowsWatches.watch(rootPath, callback, onTerminalError, signal)
           return { unsubscribe: close, rootPaths: [target.path, rootPath] }
         }
         // #5308/#8212: isolate native faults and blocking crawls from main/serve.
@@ -94,7 +97,8 @@ export class RuntimeFileWatches {
     if (leases) {
       await Promise.all(Array.from(leases, (lease) => lease.suspend()))
     }
-    if (!connectionId) {
+    // Windows watches in-process, so only the leases above exist; Git may already have revoked the path.
+    if (!connectionId && process.platform !== 'win32') {
       // Failed setup may still own a child without having published a lease-release callback.
       const resolvedRootPath = await resolveAuthorizedPath(rootPath, this.host.requireStore())
       await closeFileExplorerWatcherInWatcherProcess(resolvedRootPath)

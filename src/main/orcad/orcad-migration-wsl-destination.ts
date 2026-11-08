@@ -2,17 +2,28 @@
 import type { OrcadMigrationManifestSource } from '../../shared/orcad-migration/orcad-migration-manifest'
 import { isOrcadMigrationLocalWslSource } from '../../shared/orcad-migration/orcad-migration-source-kind'
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
+import { ORCAD_WSL_DISTRO_GUID_ENV } from '../../shared/orcad-server-launch-env'
 
 export const ORCAD_MIGRATION_SOURCE_NOT_THIS_HOST = 'orcad_migration_source_not_this_host'
 
-/** Desktop-provided registry ID; guests cannot read it themselves. */
-export const ORCAD_WSL_DISTRO_GUID_ENV = 'ORCA_WSL_DISTRO_GUID'
+export { ORCAD_WSL_DISTRO_GUID_ENV }
 
 export function servesLocalWslMigrationSource(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): boolean {
   return isWslHostOrcadProcess(env, platform)
+}
+
+// E2E hosts stand in for a WSL host's orcad; a real one is identified by isWslHostOrcadProcess.
+export const ORCA_E2E_WSL_MOVE_DESTINATION_ENV = 'ORCA_E2E_WSL_MOVE_DESTINATION'
+
+/**
+ * Whether this host is a WSL move's destination: it installs moved panes' terminal history and
+ * serves their stored scrollback. Every other host keeps that wire surface off.
+ */
+export function servesWslMovedPaneHistory(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isWslHostOrcadProcess(env) || env[ORCA_E2E_WSL_MOVE_DESTINATION_ENV] === '1'
 }
 
 export function assertOrcadMigrationSourceServedHere(

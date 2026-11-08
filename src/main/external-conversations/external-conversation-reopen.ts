@@ -1,7 +1,7 @@
 import type { ExternalConversationLink } from '../../shared/external-conversation-link'
-import type { LaunchedAgentReadinessRuntime } from '../runtime/launched-agent-composer-readiness'
+import type { LaunchedAgentReadinessRuntime } from '../runtime/terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { waitForStartedAgentReady } from '../runtime/rpc/methods/agent-launch-terminal-prompt'
+import { waitForStartedAgentReady } from '../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt'
 import type { AgentSessionResumeRefusal } from '../runtime/session-lifecycle/projection/resume-agent-session-in-workspace'
 import { refusalOf } from './external-conversation-chain'
 import { bindPane, type FollowUpTerminal } from './external-conversation-send'
@@ -19,7 +19,9 @@ const REOPEN_REFUSALS: Record<Exclude<AgentSessionResumeRefusal, 'aborted'>, Con
   // An unreachable SSH host may still run the old pane, so reopening would risk duplicates.
   held_elsewhere: 'agent_not_reachable',
   no_resume_command: 'reopen_refused',
-  create_failed: 'reopen_refused'
+  create_failed: 'reopen_refused',
+  // Connector refusal codes are a published set; the host-side result keeps the fix-it message.
+  windows_only_cli: 'reopen_refused'
 }
 
 /** Resume only the linked session after proving it is unheld; never substitute a shell or fresh agent. */

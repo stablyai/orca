@@ -1,25 +1,53 @@
-import type { MobileTerminalCreateOptions } from './mobile-terminal-renderer-create'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as SessionTabsPublication } from '../../session-tabs/session-tabs-change-publication'
 import { OrcaRuntimeWithFailedStartPanes } from './failed-start-pane'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
-} from '../../../../shared/agent-session-resume'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import type {
-  RuntimeTerminalCreate,
-  RuntimeMobileSessionCreateTerminalResult,
-  RuntimeTerminalPresentation
-} from '../../../../shared/runtime-types'
-import type { SpawnIntent } from '../../../../shared/host-spawn-admission'
-import type { AgentLaunchRuntime } from '../../../../shared/agent-launch-runtime'
-import { navigationTargetsHost } from '../../../../shared/runtime-navigation'
-import { MOBILE_TERMINAL_CREATE_RESULT_TTL_MS } from '../../orca-runtime-core'
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
+import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import {
+  type RuntimeNavigationTarget,
+  navigationTargetsHost
+} from '../../../../shared/runtime-navigation'
+
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
+// Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
+const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
+
+/** A paired client's terminal create request. */
+export type MobileTerminalCreateOptions = {
+  terminalImageViewerSupported?: boolean
+  afterTabId?: string
+  sourceChatFork?: { sessionId: string }
+  targetGroupId?: string
+  command?: string
+  shellOverride?: string
+  cwd?: string
+  env?: Record<string, string>
+  envToDelete?: string[]
+  startupCommandDelivery?: WorktreeStartupLaunch['startupCommandDelivery']
+  agent?: TuiAgent
+  agentPrompt?: string
+  launchConfig?: SleepingAgentLaunchConfig
+  launchAgent?: TuiAgent
+  trustWorktreeId?: string
+  viewMode?: 'terminal' | 'chat'
+  activate?: boolean
+  clientNavigationId?: string
+  clientMutationId?: string
+  supportsSplitGroupPlacement?: boolean
+  signal?: AbortSignal
+}
 
 export type OwnedMobileTerminalCreateOptions = {
+  /** A paired client's own create or tab open; without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
   command?: string
   shellOverride?: string
   cwd?: string
@@ -29,6 +57,7 @@ export type OwnedMobileTerminalCreateOptions = {
   identity?: { tabId: string; leafId: string; sessionId?: string }
   createMutation?: { clientIdentity: string; id: string }
   launchAgent?: TuiAgent
+  trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
   targetGroupId?: string
   afterDesktopTabId?: string
@@ -42,6 +71,7 @@ export type OwnedMobileTerminalCreateOptions = {
   signal?: AbortSignal
   refuseSleptWorktree?: boolean
   resumesSleepingRecord?: true
+  reopensPane?: true
   /** See TerminalCreateOptions; a create that throws before it proves nothing spawned. */
   onPtySpawnDispatched?: () => void
   /** The PTY this create produced, reported before publication can fail. */
@@ -61,9 +91,8 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
   abstract getExplicitSessionWorktreeIdSelector(selector: string | undefined): string | null
 
   protected abstract getMobileSessionTabsForWorktree(
-    worktreeId: string,
-    clientNavigationId?: string
-  ): RuntimeMobileSessionTabsResult
+    ...args: Parameters<SessionTabsPublication['getMobileSessionTabsForWorktree']>
+  ): ReturnType<SessionTabsPublication['getMobileSessionTabsForWorktree']>
 
   async createMobileSessionTerminal(
     worktreeSelector: string,
@@ -82,6 +111,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
       launchAgent?: TuiAgent
+      trustWorktreeId?: string
       terminalImageViewerSupported?: boolean
       viewMode?: 'terminal' | 'chat'
       activate?: boolean
@@ -132,9 +162,9 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
     if (select) {
       const worktreeId =
         this.getExplicitSessionWorktreeIdSelector(worktreeSelector) ??
-        (await this.resolveWorktreeSelector(worktreeSelector)).id
+        (await this.resolveWorkspaceSelector(worktreeSelector)).id
       this.applyMobileSessionTabNavigation(
-        this.getMobileSessionTabsForWorktree(worktreeId),
+        this.getMobileSessionTabsForWorktree(worktreeId, undefined, { includeAgentSenders: false }),
         result.tab.id,
         navigation,
         opts.clientNavigationId

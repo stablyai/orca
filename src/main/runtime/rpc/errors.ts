@@ -1,19 +1,29 @@
+import { BranchSwitchCollisionError } from '../../git/branch-switch-target'
+import {
+  RECIPE_VM_REFUSAL_CODES,
+  RecipeVmWakeUnavailableError
+} from '../../../shared/remote-runtime/recipe-vm-wake'
+import { formatTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
-import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch-surface'
+import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-surface'
 import {
   agentSessionRefusalReference,
   isAgentSessionRefusalError,
   type AgentSessionRefusalError
-} from '../../../shared/agent-session-wire-refusals'
+} from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
+import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connector-params'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
-import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
-import { TerminalSplitOutcomeError } from '../../../shared/terminal-split-outcome'
+import { COMPUTER_ERROR_CODES } from '../../../shared/computer-use-runtime-types'
+import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
+import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
+import { wslDistroHoldRpcFailure } from '../../../shared/wsl-distro-stopped-hold'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear/agent-access'
-import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
-import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
+import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session/agent-session-host-authority'
+import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifacts/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../shared/agent-skill-sharing-gate'
+import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../shared/sharing-unavailable-on-host'
 import {
   AGENT_SKILL_NOT_SHAREABLE_CODE,
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
@@ -26,28 +36,27 @@ import {
   SKILL_INSTALL_RPC_ERROR_CODE,
   classifySkillInstallFailureCode
 } from '../../../shared/skill-install-failure'
-import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git-diff-transport-budget'
-import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
+import { PLUGIN_CLI_ERROR_CODES } from '../../../shared/plugins/approval/plugin-cli-approval'
+import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git/diff/git-diff-transport-budget'
+import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automations/ownership/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
-import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
+import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/orchestration/workers/nested-worker-depth'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../shared/project-runtime-repair-message'
-import { WORKTREE_CREATE_COLLISION_CODE } from '../../../shared/new-workspace/worktree-create-collision'
-import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch-pane-already-live'
-import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch-session-already-exists'
-import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch-tab-closed'
-import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch-target-forbidden'
+import {
+  WORKTREE_CREATE_COLLISION_CODE,
+  WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE
+} from '../../../shared/new-workspace/worktree-create-collision'
+import { AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE } from '../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
+import { AGENT_LAUNCH_SESSION_ALREADY_EXISTS_CODE } from '../../../shared/agent-launch/contracts/agent-launch-session-already-exists'
+import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../shared/agent-launch/contracts/agent-launch-tab-closed'
+import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch/contracts/agent-launch-target-forbidden'
 import {
   parseTerminalSpawnDeferral,
   TERMINAL_SPAWN_DEFERRED_CODE
-} from '../../../shared/host-spawn-admission'
+} from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
-  return {
-    id,
-    ok: true,
-    result,
-    _meta: meta
-  }
+  return { id, ok: true, result, _meta: meta }
 }
 
 export function errorResponse(
@@ -98,15 +107,20 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'remote_update_not_downloaded',
   'connectors_disabled',
   'external_conversation_not_found',
+  ...CONNECTOR_REPLY_ERROR_CODES,
   ...AGENT_SESSION_RPC_ERROR_CODES
 ])
 
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
 const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  ...RECIPE_VM_REFUSAL_CODES,
   WORKTREE_CREATE_COLLISION_CODE,
+  WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE,
   AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE,
   'worktree_id_requires_full_path',
+  // A workspace selector's choices ride in data; a plain Error('selector_ambiguous') keeps the bare code.
+  'selector_ambiguous',
   'run_not_found',
   'run_home_unreachable',
   'run_required',
@@ -143,6 +157,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worker_prompt_too_large',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
+  // The user chose Keep open; only they can undo it, so a coordinator must not retry blindly.
+  'terminal_kept_open',
+  'worker_cannot_coordinate_own_run',
+  'worker_cannot_take_over_run',
   'request_mismatch',
   'mutation_ledger_full',
   'legacy_read_only',
@@ -162,6 +180,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,
+  SHARING_UNAVAILABLE_ON_HOST_CODE,
   AGENT_SKILL_NOT_SHAREABLE_CODE,
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,
   AGENT_SKILL_SELECTOR_NOT_FOUND_CODE,
@@ -169,6 +188,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_BUNDLE_NAME_TAKEN_CODE,
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   SKILL_INSTALL_RPC_ERROR_CODE,
+  ...PLUGIN_CLI_ERROR_CODES,
   // Keep owner conflicts distinct so clients can choose reload, re-adopt or stop offering the action.
   ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
   ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)
@@ -179,8 +199,15 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)
   }
-  if (error instanceof TerminalSplitOutcomeError) {
-    // Keeps the code callers already match; the split's id rides in `data` for scripts.
+  if (error instanceof RecipeVmWakeUnavailableError) {
+    return errorResponse(id, meta, error.code, message)
+  }
+  if (
+    error instanceof BranchSwitchCollisionError ||
+    error instanceof TerminalSplitOutcomeError ||
+    error instanceof WslHostWindowsDriveRefusalError
+  ) {
+    // Keeps the code callers already match; the split's id or the refusal kind rides in `data`.
     return errorResponse(id, meta, 'runtime_error', message, error.data)
   }
   if (
@@ -190,7 +217,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code, message))
+    return errorResponse(id, meta, code, message, computerUseErrorRecoveryData(code, message))
   }
   if (
     error instanceof Error &&
@@ -235,7 +262,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     )
   }
   if (RUNTIME_PASSTHROUGH_CODES.has(message)) {
-    return errorResponse(id, meta, message, message)
+    return errorResponse(id, meta, message, formatTerminalStartFailure(error) ?? message)
   }
   const deferral = parseTerminalSpawnDeferral(message)
   if (deferral) {
@@ -252,10 +279,15 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
       skillInstallFailure
     )
   }
+  // Same code older clients match; people read the sentence, programs the hold in `data`.
+  const held = wslDistroHoldRpcFailure(message)
+  if (held) {
+    return errorResponse(id, meta, 'runtime_error', held.message, held.data)
+  }
   if (message === 'invalid_terminal_send') {
     return errorResponse(id, meta, 'invalid_argument', 'Missing terminal send payload')
   }
-  return errorResponse(id, meta, 'runtime_error', message)
+  return errorResponse(id, meta, 'runtime_error', formatTerminalStartFailure(error) ?? message)
 }
 
 /** Map agent-session refusals before generic code passthrough; preserve released clients' exact code/message and add ignored details only in data. */
@@ -272,20 +304,6 @@ function agentSessionRefusalErrorResponse(
     code,
     { refusal: agentSessionRefusalReference(error.refusal) }
   )
-}
-
-export const computerErrorData = computerUseErrorRecoveryData
-
-// BrowserError.code uses the browser namespace, separate from the runtime message-code allowlist.
-export function mapBrowserError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
-  if (
-    error instanceof Error &&
-    'code' in error &&
-    typeof (error as { code: unknown }).code === 'string'
-  ) {
-    return errorResponse(id, meta, (error as { code: string }).code, error.message)
-  }
-  return mapRuntimeError(id, meta, error)
 }
 
 // EmulatorError.code likewise uses its own namespace rather than generic runtime_error.

@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
   GetProjectViewTableResult,
   GitHubProjectCommentMutationResult,
@@ -28,7 +29,7 @@ import type {
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
 } from '../../shared/github/project-request-types'
-import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { TaskSourceContext } from '../../shared/work-items/task-source-context'
 import type { GitHubCommentResult } from '../../shared/github/comment-types'
 import type {
   GitHubAssignableUser,
@@ -43,6 +44,7 @@ import type {
 import type { GitHubCreateIssueResult, GitHubIssueUpdate } from '../../shared/issue-mutation-types'
 
 export type GitHubRepoSelectorArgs = {
+  repoOwnerExecutionHostId?: string
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
@@ -74,9 +76,11 @@ export type GithubWorkItemApi = {
   }) => Promise<Omit<GitHubWorkItem, 'repoId'> | null>
   workItemDetails: (
     args: GitHubRepoSelectorArgs & {
+      expectedGhAccount?: GhAccountBinding | null
       number: number
       type?: 'issue' | 'pr'
       ownerRepo?: GitHubOwnerRepo
+      canonical?: boolean
     }
   ) => Promise<GitHubWorkItemDetails | null>
   notifyWorkItemMutated: (args: {
@@ -95,7 +99,12 @@ export type GithubWorkItemApi = {
     labels?: string[]
     assignees?: string[]
   }) => Promise<GitHubCreateIssueResult>
-  countWorkItems: (args: { repoPath: string; repoId?: string; query?: string }) => Promise<number>
+  countWorkItems: (args: {
+    repoPath: string
+    repoId?: string
+    query?: string
+    wakeWslDistro?: boolean
+  }) => Promise<number>
   listWorkItems: (args: {
     repoPath: string
     repoId?: string
@@ -103,6 +112,7 @@ export type GithubWorkItemApi = {
     query?: string
     page?: number
     noCache?: boolean
+    wakeWslDistro?: boolean
   }) => Promise<ListWorkItemsResult<Omit<GitHubWorkItem, 'repoId'>>>
   updateIssue: (
     args: GitHubRepoSelectorArgs & {
@@ -110,7 +120,7 @@ export type GithubWorkItemApi = {
       updates: GitHubIssueUpdate
       ownerRepo?: GitHubOwnerRepo
     }
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  ) => Promise<{ ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }>
   addIssueComment: (
     args: GitHubRepoSelectorArgs & {
       number: number
@@ -121,12 +131,14 @@ export type GithubWorkItemApi = {
     }
   ) => Promise<GitHubCommentResult>
   listLabels: (args: {
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string
     sourceContext?: TaskSourceContext | null
     ownerRepo?: GitHubOwnerRepo
   }) => Promise<string[]>
   listAssignableUsers: (args: {
+    expectedGhAccount?: GhAccountBinding | null
     repoPath: string
     repoId?: string
     sourceContext?: TaskSourceContext | null

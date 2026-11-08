@@ -1,7 +1,14 @@
 // @vitest-environment happy-dom
 // RN Web ignores keyboardShouldPersistTaps; focusable Pressables take mousedown focus and close the IME.
-import { afterEach, describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+// RN Web ignores keyboardShouldPersistTaps; focusable Pressables take mousedown focus and close the IME.
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { keepTextFocusThroughTaps } from './keyboard-persisting-taps'
+
+import type * as ReactNative from 'react-native'
+
+vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 
 function plant() {
   const container = document.createElement('div')

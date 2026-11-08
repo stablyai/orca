@@ -1,7 +1,7 @@
-import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { isFreshOmpLaunchCommand } from './agent-launch/startup/omp-fresh-launch'
+import { TUI_AGENT_CONFIG } from './agent-launch/catalog/tui-agent-config'
 import { getCommandTokenPathBasename, getFirstCommandToken } from './command-token-scanner'
-import { extractAgentLaunchCommand } from './agent-command-line-intent'
+import { extractAgentLaunchCommand } from './agent-launch/startup/agent-command-line-intent'
 
 /** Pi-compatible agents share PI_CODING_AGENT_DIR and extension APIs but have separate user directories.
  * Never cross-fallback: switching agents must not shadow the other agent’s extensions. */

@@ -4,6 +4,7 @@ import {
   isKnownBadPRReorderedDefaultStatusPayload,
   isLegacyDefaultWorkflowStatusPayload
 } from './workspace-status-default-migration'
+import { sliceAtCodeUnitLimit } from './surrogate-safe-text-slice'
 
 export { DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 
@@ -64,7 +65,7 @@ function sanitizeWorkspaceStatusLabel(value: unknown, fallback: string): string 
     return fallback
   }
   const trimmed = value.trim().replace(/\s+/g, ' ')
-  return trimmed ? trimmed.slice(0, MAX_STATUS_LABEL_LENGTH) : fallback
+  return trimmed ? sliceAtCodeUnitLimit(trimmed, MAX_STATUS_LABEL_LENGTH) : fallback
 }
 
 function slugWorkspaceStatusLabel(label: string): string {
@@ -262,6 +263,22 @@ export function withDefaultWorkspaceStatuses(
   statuses: readonly WorkspaceStatusDefinition[]
 ): readonly WorkspaceStatusDefinition[] {
   return statuses.length > 0 ? statuses : DEFAULT_WORKSPACE_STATUSES
+}
+
+/** Local columns first, then paired hosts' columns the local list lacks; an id clash keeps the local column. */
+export function mergeHostWorkspaceStatuses(
+  local: readonly WorkspaceStatusDefinition[],
+  hosts: readonly (readonly WorkspaceStatusDefinition[])[]
+): readonly WorkspaceStatusDefinition[] {
+  const seen = new Set(local.map((status) => status.id))
+  const extra: WorkspaceStatusDefinition[] = []
+  for (const status of hosts.flat()) {
+    if (!seen.has(status.id)) {
+      seen.add(status.id)
+      extra.push(status)
+    }
+  }
+  return extra.length > 0 ? [...local, ...extra] : local
 }
 
 export function getWorkspaceStatus(

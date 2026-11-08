@@ -24,7 +24,7 @@ export function useSkillsPageKeyboardNavigation({
         return
       }
       // Why: menus and dialogs own Escape before page-level navigation.
-      if (hasVisibleOverlay({ ignoreSelector: '[data-skills-page-list="true"]' })) {
+      if (hasVisibleOverlay()) {
         return
       }
       const target = event.target

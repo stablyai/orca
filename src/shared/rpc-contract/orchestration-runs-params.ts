@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { OptionalBoolean, OptionalString, requiredString } from './rpc-param-primitives'
-import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../orchestration-run-pagination'
+import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../orchestration/orchestration-run-pagination'
 
 export const RunCreateParams = z.object({
   objective: requiredString('Missing --objective'),
@@ -20,4 +20,10 @@ export const RunListParams = z.object({
   cursor: z.string().min(1).optional()
 })
 
-export const RunShowParams = z.object({ id: requiredString('Missing --id'), from: OptionalString })
+export const RunShowParams = z.object({
+  id: requiredString('Missing --id'),
+  from: OptionalString,
+  // Lists removed work 200 entries per page; older hosts strip both and return no removedWork.
+  removed: OptionalBoolean,
+  cursor: z.string().min(1).optional()
+})

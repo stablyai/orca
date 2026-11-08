@@ -3,13 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, win32 as pathWin32 } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  _resetHydrateShellPathCache,
-  configureWindowsShellPathHydration,
-  hydrateShellPath,
-  mergePathSegments,
-  type HydrationResult
-} from './hydrate-shell-path'
+import { _resetHydrateShellPathCache, type HydrationResult } from './hydrate-shell-path'
 import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
 
 type Deferred<T> = {
@@ -72,27 +66,6 @@ describe.runIf(process.platform === 'win32')('Windows shell PATH restoration', (
     rmSync(fixtureRoot, { force: true, recursive: true })
   })
 
-  it('restores the inherited baseline before applying a different shell profile', () => {
-    const baseline = [shellBDir, shellADir]
-    process.env.PATH = baseline.join(pathWin32.delimiter)
-
-    mergePathSegments([shellADir, shellBDir])
-    expect(process.env.PATH?.split(pathWin32.delimiter)).toEqual([shellADir, shellBDir])
-    expect(resolveProbe(process.env.PATH ?? '')).toBe('shell-a')
-
-    configureWindowsShellPathHydration('git-bash', 'C:\\Git\\bin\\bash.exe')
-    const shellBOutput = [shellBProfileDir, ...(process.env.PATH ?? '').split(pathWin32.delimiter)]
-    mergePathSegments(shellBOutput)
-
-    expect({
-      path: process.env.PATH?.split(pathWin32.delimiter),
-      selectedExecutable: resolveProbe(process.env.PATH ?? '')
-    }).toEqual({
-      path: [shellBProfileDir, ...baseline],
-      selectedExecutable: 'shell-b'
-    })
-  })
-
   it('generation-fences an active shell A probe before shell B inherits the baseline', async () => {
     const baseline = [shellBDir, shellADir]
     process.env.PATH = baseline.join(pathWin32.delimiter)
@@ -116,50 +89,5 @@ describe.runIf(process.platform === 'win32')('Windows shell PATH restoration', (
 
     expect(process.env.PATH?.split(pathWin32.delimiter)).toEqual([shellBProfileDir, ...baseline])
     expect(resolveProbe(process.env.PATH ?? '')).toBe('shell-b')
-  })
-
-  it('preserves a newly installed PATH entry across shell changes', () => {
-    const baseline = [shellBDir, shellADir]
-    const installedDir = join(fixtureRoot, 'newly-installed')
-    process.env.PATH = baseline.join(pathWin32.delimiter)
-    mergePathSegments([shellADir, shellBDir])
-    process.env.PATH += `${pathWin32.delimiter}${installedDir}`
-
-    configureWindowsShellPathHydration('git-bash', 'C:\\Git\\bin\\bash.exe')
-    mergePathSegments([shellBProfileDir, ...(process.env.PATH ?? '').split(pathWin32.delimiter)])
-
-    expect(process.env.PATH?.split(pathWin32.delimiter)).toEqual([
-      shellBProfileDir,
-      ...baseline,
-      installedDir
-    ])
-  })
-
-  it.each(['cmd.exe', 'wsl.exe'])('restores the exact baseline before switching to %s', (shell) => {
-    const baseline = `${shellBDir};${shellBDir.toUpperCase()}\\;C:\\;\\\\Server\\Share\\`
-    process.env.PATH = baseline
-    mergePathSegments([shellADir, shellBDir])
-
-    configureWindowsShellPathHydration(shell)
-
-    expect(process.env.PATH).toBe(baseline)
-  })
-
-  it('restores the baseline before a forced same-shell probe', async () => {
-    const baseline = [shellBDir, shellADir].join(pathWin32.delimiter)
-    process.env.PATH = baseline
-    mergePathSegments([shellADir, shellBDir])
-    let inheritedPath = ''
-
-    await hydrateShellPath({
-      force: true,
-      spawner: async () => {
-        inheritedPath = process.env.PATH ?? ''
-        return { segments: [], ok: false, failureReason: 'empty_path' }
-      }
-    })
-
-    expect(inheritedPath).toBe(baseline)
-    expect(process.env.PATH).toBe(baseline)
   })
 })

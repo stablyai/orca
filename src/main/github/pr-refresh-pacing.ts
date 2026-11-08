@@ -1,3 +1,4 @@
+import { isBudgetedBackground } from './pr-refresh-candidate-policy'
 import type { PRRefreshQueueEntry } from './pr-refresh-queue'
 
 const BACKGROUND_BUDGET_WINDOW_MS = 5 * 60_000
@@ -64,8 +65,7 @@ export class PRRefreshPacing {
     if (activeDelay > 0) {
       return activeDelay
     }
-    return entry.bypassBackgroundBudget !== true &&
-      (entry.reason === 'visible' || entry.reason === 'swr')
+    return entry.bypassBackgroundBudget !== true && isBudgetedBackground(entry.reason)
       ? this.nextBudgetDelay()
       : 0
   }

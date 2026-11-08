@@ -1,5 +1,5 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
 import {
   WORKSPACE_CLEANUP_BLOCKER_MODE_VALUES,
@@ -9,7 +9,7 @@ import {
   WORKSPACE_CLEANUP_REVIEW_STATE_VALUES,
   WORKSPACE_CLEANUP_TICKET_SOURCE_VALUES,
   WORKSPACE_CLEANUP_TRI_STATE_VALUES
-} from '../../../../shared/workspace-cleanup-facet-rankings'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-facet-rankings'
 import { getWorkspaceCleanupBlockerLabel } from './workspace-cleanup-candidate-labels'
 import {
   FacetChoice,
@@ -36,10 +36,11 @@ export function WorkspaceCleanupGitReviewFacets({
   options,
   onPatch
 }: WorkspaceCleanupFacetGroupProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.git', 'Git')}
+        title={t('components.workspace.cleanup.browse.facet.git', 'Git')}
         matchCount={counts.git}
         totalCount={totalCount}
       >
@@ -50,29 +51,29 @@ export function WorkspaceCleanupGitReviewFacets({
           onChange={(states) => onPatch('git', { states })}
         />
         <FacetNumberField
-          label={translate('components.workspace.cleanup.browse.minAhead', 'Commits ahead ≥')}
+          label={t('components.workspace.cleanup.browse.minAhead', 'Commits ahead ≥')}
           value={filters.git.minAhead}
           onChange={(minAhead) => onPatch('git', { minAhead })}
         />
         <FacetNumberField
-          label={translate('components.workspace.cleanup.browse.minBehind', 'Commits behind ≥')}
+          label={t('components.workspace.cleanup.browse.minBehind', 'Commits behind ≥')}
           value={filters.git.minBehind}
           onChange={(minBehind) => onPatch('git', { minBehind })}
         />
         <FacetTextField
-          label={translate('components.workspace.cleanup.browse.branchQuery', 'Branch contains')}
+          label={t('components.workspace.cleanup.browse.branchQuery', 'Branch contains')}
           value={filters.git.branchQuery}
           onChange={(branchQuery) => onPatch('git', { branchQuery })}
         />
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.prunable', 'Prunable')}
+          label={t('components.workspace.cleanup.browse.prunable', 'Prunable')}
           value={filters.git.prunable}
           options={WORKSPACE_CLEANUP_TRI_STATE_VALUES}
           getLabel={getWorkspaceCleanupTriStateLabel}
           onChange={(prunable) => onPatch('git', { prunable })}
         />
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.locked', 'Locked')}
+          label={t('components.workspace.cleanup.browse.locked', 'Locked')}
           value={filters.git.locked}
           options={WORKSPACE_CLEANUP_TRI_STATE_VALUES}
           getLabel={getWorkspaceCleanupTriStateLabel}
@@ -81,12 +82,12 @@ export function WorkspaceCleanupGitReviewFacets({
       </FacetSection>
 
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.review', 'Review')}
+        title={t('components.workspace.cleanup.browse.facet.review', 'Review')}
         matchCount={counts.review}
         totalCount={totalCount}
       >
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.reviewPresence', 'PR / MR')}
+          label={t('components.workspace.cleanup.browse.reviewPresence', 'PR / MR')}
           value={filters.review.presence}
           options={WORKSPACE_CLEANUP_PRESENCE_VALUES}
           getLabel={getWorkspaceCleanupPresenceLabel}
@@ -100,7 +101,7 @@ export function WorkspaceCleanupGitReviewFacets({
         />
         {options.reviewProviders.length > 0 ? (
           <FacetToggleList
-            label={translate('components.workspace.cleanup.browse.reviewProvider', 'Provider')}
+            label={t('components.workspace.cleanup.browse.reviewProvider', 'Provider')}
             values={options.reviewProviders}
             selected={filters.review.providers}
             getLabel={getWorkspaceCleanupReviewProviderLabel}
@@ -110,12 +111,12 @@ export function WorkspaceCleanupGitReviewFacets({
       </FacetSection>
 
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.ticket', 'Tickets')}
+        title={t('components.workspace.cleanup.browse.facet.ticket', 'Tickets')}
         matchCount={counts.ticket}
         totalCount={totalCount}
       >
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.ticketPresence', 'Linked ticket')}
+          label={t('components.workspace.cleanup.browse.ticketPresence', 'Linked ticket')}
           value={filters.ticket.presence}
           options={WORKSPACE_CLEANUP_PRESENCE_VALUES}
           getLabel={getWorkspaceCleanupPresenceLabel}
@@ -130,12 +131,12 @@ export function WorkspaceCleanupGitReviewFacets({
       </FacetSection>
 
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.location', 'Location')}
+        title={t('components.workspace.cleanup.browse.facet.location', 'Location')}
         matchCount={counts.location}
         totalCount={totalCount}
       >
         <FacetToggleList
-          label={translate('components.workspace.cleanup.browse.host', 'Host')}
+          label={t('components.workspace.cleanup.browse.host', 'Host')}
           values={options.hostIds}
           selected={filters.location.hostIds}
           getLabel={getExecutionHostLabel}
@@ -143,7 +144,7 @@ export function WorkspaceCleanupGitReviewFacets({
         />
         {options.repos.length > 1 ? (
           <FacetToggleList
-            label={translate('components.workspace.cleanup.browse.repo', 'Repository')}
+            label={t('components.workspace.cleanup.browse.repo', 'Repository')}
             values={options.repos.map((repo) => repo.id)}
             selected={filters.location.repoIds}
             getLabel={(id) => options.repos.find((repo) => repo.id === id)?.label ?? id}
@@ -151,33 +152,33 @@ export function WorkspaceCleanupGitReviewFacets({
           />
         ) : null}
         <FacetTextField
-          label={translate('components.workspace.cleanup.browse.pathPrefix', 'Path starts with')}
+          label={t('components.workspace.cleanup.browse.pathPrefix', 'Path starts with')}
           value={filters.location.pathPrefix}
           onChange={(pathPrefix) => onPatch('location', { pathPrefix })}
         />
       </FacetSection>
 
       <FacetSection
-        title={translate('components.workspace.cleanup.browse.facet.safety', 'Safety')}
+        title={t('components.workspace.cleanup.browse.facet.safety', 'Safety')}
         matchCount={counts.safety}
         totalCount={totalCount}
       >
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.blockerMode', 'Blocker match')}
+          label={t('components.workspace.cleanup.browse.blockerMode', 'Blocker match')}
           value={filters.safety.blockerMode}
           options={WORKSPACE_CLEANUP_BLOCKER_MODE_VALUES}
           getLabel={getWorkspaceCleanupBlockerModeLabel}
           onChange={(blockerMode) => onPatch('safety', { blockerMode })}
         />
         <FacetToggleList
-          label={translate('components.workspace.cleanup.browse.blockers', 'Blockers')}
+          label={t('components.workspace.cleanup.browse.blockers', 'Blockers')}
           values={WORKSPACE_CLEANUP_BLOCKER_VALUES}
           selected={filters.safety.blockers}
           getLabel={getWorkspaceCleanupBlockerLabel}
           onChange={(blockers) => onPatch('safety', { blockers })}
         />
         <FacetChoice
-          label={translate('components.workspace.cleanup.browse.dismissed', 'Ignored')}
+          label={t('components.workspace.cleanup.browse.dismissed', 'Ignored')}
           value={filters.safety.dismissed}
           options={WORKSPACE_CLEANUP_TRI_STATE_VALUES}
           getLabel={getWorkspaceCleanupTriStateLabel}

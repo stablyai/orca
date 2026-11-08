@@ -3,16 +3,25 @@ import {
   projectOrchestrationFleet,
   type FleetDurableWorker,
   type OrchestrationFleetWorker
-} from '../../../../../../shared/orchestration-fleet-projection'
-import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestration-fleet-outcome-resolution'
-import type { WorkerTerminalListState } from '../../../../orchestration/worker-terminal-ownership'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+} from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
+import { resolveFleetWorkerOutcome } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-outcome-resolution'
+import {
+  liveWorkerTerminalAutoReleaseAt,
+  type WorkerTerminalListState
+} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrcaSessionId } from '../../../../../../shared/orca-session-address'
 import {
   chatAssigneeSessionId,
   type ChatAssigneeObservation
-} from '../../../../orchestration/chat-assignee'
-import { refreshFleetWorkerVerdict } from '../federation/federated-fleet-snapshot'
+} from '../../../../orchestration/workers/lifecycle/chat-assignee'
+import {
+  applyFederatedFleetObservations,
+  readFederatedFleetSnapshots,
+  refreshFleetWorkerVerdict
+} from '../federation/federated-fleet-snapshot'
+import { chatAssigneeObserver } from './session-worker-observation'
 
 export type WorkerListPageParams = {
   run?: string
@@ -51,6 +60,7 @@ export function projectWorkerFleet(args: {
             hostScope: row.resource.host_scope,
             ownershipState: row.resource.ownership_state,
             releaseState: row.resource.release_state,
+            autoReleaseAt: liveWorkerTerminalAutoReleaseAt(row.resource),
             updatedAt: row.resource.updated_at
           }
         : null
@@ -114,4 +124,37 @@ function applyChatAssigneeLiveness(
     worker.evidence.lastObservedAt = observed.status === 'live' ? now : null
     refreshFleetWorkerVerdict(worker, fleet.durable)
   }
+}
+
+/** worker-list's projection of these rows; includeRemote layers on execution-host verdicts. */
+export async function projectWorkerListFleet(
+  runtime: OrcaRuntimeService,
+  rows: ReturnType<OrchestrationDb['listWorkerTerminalResources']>,
+  options: { limit: number; completeProjection?: boolean; includeRemote?: boolean }
+) {
+  const db = runtime.getOrchestrationDb()
+  const now = Date.now()
+  const fleet = projectWorkerFleet({
+    rows,
+    attentionFacts: db.getWorkerAttentionFactsForDispatches(
+      rows.map((row) => row.dispatchId),
+      now
+    ),
+    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
+    limit: options.limit,
+    now,
+    completeProjection: options.completeProjection,
+    observeChat: await chatAssigneeObserver(runtime, db, rows)
+  })
+  const federated = options.includeRemote
+    ? await readFederatedFleetSnapshots({
+        runtime,
+        db,
+        dispatchIds: rows.map((row) => row.dispatchId)
+      })
+    : null
+  if (federated) {
+    applyFederatedFleetObservations(fleet, federated, fleet.durable)
+  }
+  return { ...fleet, hostErrors: federated?.errors ?? [] }
 }

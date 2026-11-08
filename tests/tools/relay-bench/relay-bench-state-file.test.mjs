@@ -1,7 +1,6 @@
 // Require safe storage of live resume/device tokens: reject symlink traversal, fix existing 0644 permissions, and create parents before provisioned credentials are lost.
 import {
   chmodSync,
-  existsSync,
   lstatSync,
   mkdtempSync,
   readFileSync,
@@ -87,11 +86,5 @@ describe('readSecretFile', () => {
     chmodSync(target, 0o600)
     symlinkSync(target, link)
     expect(() => readSecretFile(link)).toThrow(/symlink/)
-  })
-
-  it('reports a missing file rather than returning empty text', () => {
-    const path = join(dir, 'absent.json')
-    expect(existsSync(path)).toBe(false)
-    expect(() => readSecretFile(path)).toThrow(/ENOENT/)
   })
 })

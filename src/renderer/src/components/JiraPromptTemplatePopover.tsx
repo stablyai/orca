@@ -10,7 +10,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { JiraIssue } from '../../../shared/jira/jira-types'
 import { copyJiraTextToClipboard } from './jira-issue-workspace-actions'
 import {
@@ -29,7 +29,8 @@ export function JiraPromptTemplatePopover({
   onClose: () => void
   onCloseAutoFocus: (event: Event) => void
 }): React.JSX.Element {
-  const templates = getJiraPromptTemplates()
+  const t = useTranslate()
+  const templates = getJiraPromptTemplates(t)
   const [selectedId, setSelectedId] = useState('implementation')
   const [customTemplate, setCustomTemplate] = useState(loadCustomJiraPromptTemplate)
   const [otherPrompt, setOtherPrompt] = useState('')
@@ -43,14 +44,14 @@ export function JiraPromptTemplatePopover({
     <PopoverContent
       align="end"
       className="w-[32rem] max-w-[calc(100vw-2rem)]"
-      aria-label={translate('jira.prompt.dialogTitle', 'Copy prompt from template')}
+      aria-label={t('jira.prompt.dialogTitle', 'Copy prompt from template')}
       onClick={(event) => event.stopPropagation()}
       onCloseAutoFocus={onCloseAutoFocus}
     >
       <div className="max-h-[calc(100vh-4rem)] overflow-y-auto scrollbar-sleek p-4">
         <div className="mb-4 space-y-1">
           <h3 className="text-sm font-medium">
-            {translate('jira.prompt.dialogTitle', 'Copy prompt from template')}
+            {t('jira.prompt.dialogTitle', 'Copy prompt from template')}
           </h3>
           <p className="text-xs text-muted-foreground">
             {issue.key} · {issue.title}
@@ -58,9 +59,7 @@ export function JiraPromptTemplatePopover({
         </div>
         <div className="space-y-3">
           <div className="space-y-2">
-            <Label htmlFor="jira-prompt-template">
-              {translate('jira.prompt.template', 'Template')}
-            </Label>
+            <Label htmlFor="jira-prompt-template">{t('jira.prompt.template', 'Template')}</Label>
             <Select value={selectedId} onValueChange={setSelectedId}>
               <SelectTrigger id="jira-prompt-template">
                 <SelectValue />
@@ -71,19 +70,17 @@ export function JiraPromptTemplatePopover({
                     {candidate.label}
                   </SelectItem>
                 ))}
-                <SelectItem value="custom">
-                  {translate('jira.prompt.custom', 'Custom template')}
-                </SelectItem>
+                <SelectItem value="custom">{t('jira.prompt.custom', 'Custom template')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           {selectedId === 'custom' ? (
             <div className="space-y-2">
               <Label htmlFor="jira-custom-template">
-                {translate('jira.prompt.templateText', 'Template text')}
+                {t('jira.prompt.templateText', 'Template text')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'jira.prompt.variables',
                   'Use $jira-issue for the issue context and $other-prompt for your additional instructions. Saved on this device.'
                 )}
@@ -100,7 +97,7 @@ export function JiraPromptTemplatePopover({
           ) : null}
           <div className="space-y-2">
             <Label htmlFor="jira-other-prompt">
-              {translate('jira.prompt.other', 'Additional instructions (optional)')}
+              {t('jira.prompt.other', 'Additional instructions (optional)')}
             </Label>
             <Textarea
               id="jira-other-prompt"
@@ -109,28 +106,26 @@ export function JiraPromptTemplatePopover({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="jira-prompt-preview">
-              {translate('jira.prompt.preview', 'Preview')}
-            </Label>
+            <Label htmlFor="jira-prompt-preview">{t('jira.prompt.preview', 'Preview')}</Label>
             <Textarea id="jira-prompt-preview" readOnly value={prompt} className="h-40" />
           </div>
         </div>
         <div className="mt-4 flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>
-            {translate('common.cancel', 'Cancel')}
+            {t('common.cancel', 'Cancel')}
           </Button>
           <Button
             disabled={copying || !prompt}
             onClick={async () => {
               setCopying(true)
-              const copied = await copyJiraTextToClipboard(prompt, 'Prompt')
+              const copied = await copyJiraTextToClipboard(prompt, 'prompt')
               setCopying(false)
               if (copied) {
                 onClose()
               }
             }}
           >
-            {translate('auto.components.JiraIssueWorkspace.0cc62bd690', 'Copy prompt')}
+            {t('auto.components.JiraIssueWorkspace.0cc62bd690', 'Copy prompt')}
           </Button>
         </div>
       </div>

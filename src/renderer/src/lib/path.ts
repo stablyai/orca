@@ -15,13 +15,6 @@ function getSeparator(path: string): '/' | '\\' {
   return path.includes('\\') ? '\\' : '/'
 }
 
-export function normalizeRelativePath(path: string, rootPath?: string | null): string {
-  if (rootPath && !isWindowsAbsolutePathLike(rootPath)) {
-    return path.replace(/^\/+/, '').replace(/\/+/g, '/')
-  }
-  return stripLeadingSeparators(path).replace(/[\\/]+/g, '/')
-}
-
 export function getRelativePathInsideRoot(
   filePath: string,
   rootPath: string | null

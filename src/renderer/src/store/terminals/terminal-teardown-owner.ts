@@ -1,7 +1,7 @@
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId
-} from '../../../../shared/remote-runtime-pty-id'
+} from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { TerminalPtyOwner } from '@/lib/terminal-worktree-route'
 
 export type TerminalTeardownOwner =

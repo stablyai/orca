@@ -4,12 +4,14 @@
   "family": "worktree.runtime-capabilities",
   "namedDeltas": [],
   "values": {
-    "ab209a152529": {
+    "d07813454621": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": {
         "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -58,9 +60,11 @@
         }
       }
     },
-    "f079a530dc44": {
+    "f8024fca8c7d": {
       "capabilities": {
         "agentLaunch": false,
+        "branchIntentV2": false,
+        "branchIntentV2Request": false,
         "hostPlatform": {
           "$rpc": "null"
         },
@@ -80,9 +84,9 @@
           "sender": ["eaed1eb137b5"],
           "payloads": ["d08f74d65ee6"],
           "settlements": {
-            "probe": "ab209a152529"
+            "probe": "d07813454621"
           },
-          "state": "f079a530dc44",
+          "state": "f8024fca8c7d",
           "effects": []
         }
       }

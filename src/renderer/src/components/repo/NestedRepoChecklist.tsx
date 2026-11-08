@@ -6,7 +6,7 @@ import {
   getRepoDisplayLabelKey,
   getRepoDisplayLabelsByPath
 } from '../../../../shared/repo-display-labels'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function NestedRepoSelectAllRow({
   total,
@@ -19,6 +19,7 @@ function NestedRepoSelectAllRow({
   disabled: boolean
   onToggle: () => void
 }) {
+  const t = useTranslate()
   const allSelected = total > 0 && selectedCount === total
   const noneSelected = selectedCount === 0
   const isMixed = !allSelected && !noneSelected
@@ -41,18 +42,21 @@ function NestedRepoSelectAllRow({
         onChange={onToggle}
         aria-label={
           allSelected
-            ? translate('auto.components.repo.NestedRepoChecklist.929734aea5', 'Deselect all')
-            : translate('auto.components.repo.NestedRepoChecklist.91b5bcadb6', 'Select all')
+            ? t('auto.components.repo.NestedRepoChecklist.929734aea5', 'Deselect all')
+            : t('auto.components.repo.NestedRepoChecklist.91b5bcadb6', 'Select all')
         }
       />
       <span className="min-w-0 truncate text-[12.5px] font-semibold text-foreground">
         {allSelected
-          ? translate('auto.components.repo.NestedRepoChecklist.929734aea5', 'Deselect all')
-          : translate('auto.components.repo.NestedRepoChecklist.91b5bcadb6', 'Select all')}
+          ? t('auto.components.repo.NestedRepoChecklist.929734aea5', 'Deselect all')
+          : t('auto.components.repo.NestedRepoChecklist.91b5bcadb6', 'Select all')}
       </span>
       <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
-        {selectedCount} {translate('auto.components.repo.NestedRepoChecklist.ea54c7bf8f', 'of')}{' '}
-        {total} {translate('auto.components.repo.NestedRepoChecklist.f7e1170567', 'selected')}
+        {t(
+          'auto.components.repo.NestedRepoChecklist.selectedOfTotal',
+          '{{selected}} of {{total}} selected',
+          { selected: selectedCount, total }
+        )}
       </span>
     </label>
   )

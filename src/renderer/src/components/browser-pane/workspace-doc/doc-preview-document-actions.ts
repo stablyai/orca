@@ -2,7 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import { detectLanguage } from '@/lib/language-detect'
 import {
@@ -10,7 +10,7 @@ import {
   canClientOsOpenWorkspaceFile
 } from '@/lib/workspace-file-host-routing'
 import { useAppStore } from '@/store'
-import { downloadAndOpenRemoteTerminalFile } from '@/components/terminal-pane/terminal-remote-file-download-open'
+import { downloadAndOpenRemoteTerminalFile } from '@/components/terminal-pane/links/files/terminal-remote-file-download-open'
 
 export type DocPreviewDocument = {
   filePath: string

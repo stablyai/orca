@@ -2,26 +2,28 @@ import {
   manuallyDisconnectedResponse,
   runtimeEnvironmentCallFailure
 } from './runtime-environment-call-failure'
-import { desktopChatCreationHistory } from '../../runtime/desktop-chat-creation-history'
+import { desktopChatCreationHistory } from '../../runtime/client/navigation/desktop-chat-creation-history'
 import { ipcMain } from 'electron'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
   removeEnvironment,
   resolveEnvironment
-} from '../../../shared/runtime-environment-store'
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
-  type PublicKnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+  type PublicKnownRuntimeEnvironment,
+  type RuntimeEnvironmentRemoval
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   connectThroughOwningService,
   removeThroughOwningService
 } from './runtime-environment-host-service-ops'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { Store } from '../../persistence'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { Store } from '../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from './runtime-environment-removal-cleanup'
+import { removeRedundantManagedPairing } from './runtime-environment-redundant-managed-removal'
 import { readSettingsWithRuntimeEnvironmentPreference } from './runtime-environment-preference'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
@@ -37,8 +39,8 @@ import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
 import { noteRuntimeEnvironmentConnectRequested } from './runtime-environment-pairing-refusal-registry'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'
-import { withWslOrcadAccountEnv } from '../../wsl/wsl-orcad-account-env'
-import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/ssh-credential-decline'
+import { withWslOrcadAccountEnv } from '../../wsl/orcad/wsl-orcad-account-env'
+import { clearSshCredentialDeclinedForEnvironment } from '../../ssh/authentication/ssh-credential-decline'
 import {
   disconnectManagedHostOfEnvironmentForUser,
   disconnectRuntimeEnvironmentForUser,
@@ -47,8 +49,12 @@ import {
 import {
   observeWslOrcadHostResponse,
   wslOrcadHostSupports
-} from '../../wsl/wsl-orcad-host-environments'
-import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/wsl-host-gate'
+} from '../../wsl/orcad/wsl-orcad-host-environments'
+import { assertWslHostReachable, isGatedOffWslHost } from '../../wsl/host-lifecycle/wsl-host-gate'
+import {
+  isHostSpawnFencedForWslMoveUndo,
+  wslMoveUndoSpawnFencedResponse
+} from '../../persistence/moving-wsl-projects/wsl-move-undo-spawn-fence'
 
 export { isRuntimeEnvironmentManuallyDisconnected }
 
@@ -110,9 +116,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     (
       _event,
       args: { selector: string }
-    ):
-      | { removed: PublicKnownRuntimeEnvironment }
-      | Promise<{ removed: PublicKnownRuntimeEnvironment }> => {
+    ): RuntimeEnvironmentRemoval | Promise<RuntimeEnvironmentRemoval> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error(
@@ -123,7 +127,18 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       assertWslHostReachable(environment)
       const ownedRemoval = removeThroughOwningService(environment)
       if (ownedRemoval) {
-        return ownedRemoval.then(() => ({ removed: redactRuntimeEnvironment(environment) }))
+        // A WSL host whose server Remove couldn't prove stopped stays listed; say so (E11).
+        return ownedRemoval.then((serverStop) => ({
+          removed: redactRuntimeEnvironment(environment),
+          serverStop
+        }))
+      }
+      const redundantManagedRemoval = removeRedundantManagedPairing(getUserDataPath(), environment)
+      if (redundantManagedRemoval) {
+        return redundantManagedRemoval.then((removal) => {
+          closeLegacySelectorTransport(args.selector, environment.id)
+          return removal
+        })
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       void retireRemovedRuntimeEnvironment(
@@ -171,9 +186,12 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   )
 }
 
-export function registerRuntimeEnvironmentPassiveHandlers(getUserDataPath: () => string): void {
+export function registerRuntimeEnvironmentPassiveHandlers(
+  getUserDataPath: () => string,
+  recordAnswer?: RecordRuntimeEnvironmentAnswer
+): void {
   registerPassiveStatusHandler(getUserDataPath)
-  registerPassiveCallHandler(getUserDataPath)
+  registerPassiveCallHandler(getUserDataPath, recordAnswer)
 }
 
 function closeLegacySelectorTransport(selector: string, environmentId: string): void {
@@ -208,7 +226,16 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
   )
 }
 
-function registerPassiveCallHandler(getUserDataPath: () => string): void {
+type RecordRuntimeEnvironmentAnswer = (
+  environment: ReturnType<typeof resolveEnvironment>,
+  method: string,
+  response: RuntimeRpcResponse<unknown>
+) => void
+
+function registerPassiveCallHandler(
+  getUserDataPath: () => string,
+  recordAnswer?: RecordRuntimeEnvironmentAnswer
+): void {
   ipcMain.handle(
     'runtimeEnvironments:call',
     async (
@@ -225,6 +252,9 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
+      }
+      if (isHostSpawnFencedForWslMoveUndo(environment.id, args.method)) {
+        return wslMoveUndoSpawnFencedResponse(environment, args.method)
       }
       void desktopChatCreationHistory(getUserDataPath()).recordCreate(
         environment.id,
@@ -269,6 +299,7 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
         throw error
       }
       observeWslOrcadHostResponse(environment.id, args.method, response)
+      recordAnswer?.(environment, args.method, response)
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)
         : response

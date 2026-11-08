@@ -1,8 +1,9 @@
 import { useContext } from 'react'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
+import { agentTypeToIconAgent } from '../../../shared/agent-status/presentation/agent-type-icon-agent'
+import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
 import {
   resumeFailureSelectable,
@@ -38,12 +39,13 @@ export function ResumeCandidateRow({
   onFailureAction?: (action: ResumeFailureAction, sessionId: string) => void
   renderStatus?: (sessionId: string, title: string) => React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const agentLabel = formatAgentTypeLabel(candidate.agent)
   const title =
     candidate.latestPrompt.trim() ||
-    translate('auto.components.NativeChatResumeOnRestartModal.untitled', 'Untitled chat')
+    t('auto.components.NativeChatResumeOnRestartModal.untitled', 'Untitled chat')
   const model = candidate.model?.trim() ?? ''
-  const activity = resumeActivityLabel(candidate.activity)
+  const activity = resumeActivityLabel(candidate.activity, t)
   const depth = useContext(ResumeTreeDepthContext)
   const status = renderStatus?.(candidate.sessionId, title)
   const act = (action: ResumeFailureAction) => onFailureAction?.(action, candidate.sessionId)
@@ -55,7 +57,7 @@ export function ResumeCandidateRow({
       disabled={disabled || (failure !== undefined && !resumeFailureSelectable(failure))}
       onCheckedChange={onCheckedChange}
       // Identifies the agent AND its workspace: rows would otherwise all read the same.
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectAgent',
         'Resume {{value0}} chat "{{value1}}" in {{value2}}',
         { value0: agentLabel, value1: title, value2: workspaceName }

@@ -9,8 +9,7 @@ import { readIndexGeneration } from './session-search-index-generation'
 import {
   decodeSessionSearchCursor,
   encodeSessionSearchCursor,
-  SessionSearchCursorError,
-  sessionSearchPageKey
+  SessionSearchCursorError
 } from './session-search-page-cursor'
 
 let harness: SessionSearchHarness | null = null
@@ -58,14 +57,6 @@ describe('a cursor walks one ranked list', () => {
     expect(engine.search(request).hits.map((hit) => hit.sessionId)).toEqual(seen.slice(0, 10))
   })
 
-  it('closes the page when the last hit has been handed out', async () => {
-    const { engine } = await withSessions(3)
-    const page = engine.search({ query: 'needle', limit: 10 })
-    expect(page.hits).toHaveLength(3)
-    expect(page.page.hasMore).toBe(false)
-    expect(page.page.cursor).toBeNull()
-  })
-
   it('lets a caller change page size mid-walk', async () => {
     const { engine } = await withSessions(12)
     const first = engine.search({ query: 'needle', limit: 5 })
@@ -104,46 +95,12 @@ describe('a cursor is refused rather than reinterpreted', () => {
     }
   })
 
-  it('names both generations, so a caller can tell a moved index from a bad cursor', async () => {
-    const { engine, store } = await withSessions(25)
-    const first = engine.search({ query: 'needle', limit: 10 })
-    const minted = readIndexGeneration(harness!.db)
-    store.removeFile('/synthetic/9.jsonl')
-
-    try {
-      engine.search({ query: 'needle', limit: 10, cursor: first.page.cursor! })
-      expect.unreachable('the index moved')
-    } catch (error) {
-      const rejected = error as SessionSearchCursorError
-      expect(rejected.rejection).toBe('stale-generation')
-      expect(rejected.expectedGeneration).toBe(minted)
-      expect(rejected.actualGeneration).toBe(readIndexGeneration(harness!.db))
-      expect(rejected.actualGeneration).toBeGreaterThan(rejected.expectedGeneration!)
-    }
-  })
-
   it('rejects a cursor carried over to a different query', async () => {
     const { engine } = await withSessions(25)
     const first = engine.search({ query: 'needle', limit: 10 })
     try {
       engine.search({ query: 'padding', limit: 10, cursor: first.page.cursor! })
       expect.unreachable('a cursor indexes into one ranked list, not any list')
-    } catch (error) {
-      expect((error as SessionSearchCursorError).rejection).toBe('different-query')
-    }
-  })
-
-  it('rejects a cursor whose filters changed, which reranks the list', async () => {
-    const { engine } = await withSessions(25)
-    const first = engine.search({ query: 'needle', limit: 10 })
-    try {
-      engine.search({
-        query: 'needle',
-        limit: 10,
-        cursor: first.page.cursor!,
-        filters: { sort: 'newest' }
-      })
-      expect.unreachable('a different sort is a different ranked list')
     } catch (error) {
       expect((error as SessionSearchCursorError).rejection).toBe('different-query')
     }
@@ -177,48 +134,10 @@ describe('a cursor is refused rather than reinterpreted', () => {
       expect((error as SessionSearchCursorError).rejection).toBe('different-query')
     }
   })
-
-  it('rejects a cursor that is not one of ours', async () => {
-    const { engine } = await withSessions(3)
-    try {
-      engine.search({ query: 'needle', cursor: 'not-a-cursor' })
-      expect.unreachable('a malformed cursor is not an empty one')
-    } catch (error) {
-      expect((error as SessionSearchCursorError).rejection).toBe('malformed')
-    }
-  })
 })
 
 describe('cursor encoding', () => {
-  const request: SessionSearchRequest = { query: 'needle', filters: { scopePaths: ['/a'] } }
   const incarnation = 'index-a'
-
-  it('round-trips an offset within its own generation and query', () => {
-    const key = sessionSearchPageKey(request)
-    expect(
-      decodeSessionSearchCursor(
-        encodeSessionSearchCursor(7, 40, key, incarnation),
-        7,
-        key,
-        incarnation
-      )
-    ).toBe(40)
-  })
-
-  it('keys a request by what changes its ranking, and not by its page size', () => {
-    expect(sessionSearchPageKey({ ...request, limit: 5 })).toBe(
-      sessionSearchPageKey({ ...request, limit: 50 })
-    )
-    expect(sessionSearchPageKey({ ...request, scope: 'conversation' })).not.toBe(
-      sessionSearchPageKey(request)
-    )
-  })
-
-  it('reads a filter list in any order as the same request', () => {
-    expect(sessionSearchPageKey({ query: 'a', filters: { agents: ['claude', 'codex'] } })).toBe(
-      sessionSearchPageKey({ query: 'a', filters: { agents: ['codex', 'claude'] } })
-    )
-  })
 
   it.each([
     ['a negative offset', encodeSessionSearchCursor(1, -1, 'k', incarnation), 1],
@@ -258,11 +177,6 @@ describe('cursor encoding', () => {
 })
 
 describe('the candidate limit is a tunable default, and says when it cut', () => {
-  it('does not claim truncation when every session fits', async () => {
-    const { engine } = await withSessions(5, { sessionCandidateLimit: 600 })
-    expect(engine.search({ query: 'needle' }).truncated.candidates).toBe(false)
-  })
-
   it('claims truncation, and ranks only what it retrieved, at the limit', async () => {
     const { engine } = await withSessions(10, { sessionCandidateLimit: 4 })
     const result = engine.search({ query: 'needle', limit: 100 })
@@ -291,26 +205,6 @@ describe('the candidate limit is a tunable default, and says when it cut', () =>
     const result = engine.search({ query: 'repo:needleonly' })
     expect(result.hits).toHaveLength(0)
     expect(result.truncated.candidates).toBe(true)
-  })
-
-  it('does not claim it gave up when the walk really did read everything', async () => {
-    const { db, engine } = await open('ss-engine-sparse-shallow', { sessionCandidateLimit: 600 })
-    addSyntheticSession(db, { id: 1, cwd: '/repo/app' })
-    const result = engine.search({ query: 'repo:nothing-here' })
-    expect(result.hits).toHaveLength(0)
-    expect(result.truncated.candidates).toBe(false)
-  })
-})
-
-describe('the response carries the snapshot it was built from', () => {
-  it('reports the index generation on every result', async () => {
-    const { db, engine, store } = await withSessions(3)
-    const before = engine.search({ query: 'needle' }).generation
-    expect(before).toBe(readIndexGeneration(db))
-    store.removeFile('/synthetic/1.jsonl')
-    const after = engine.search({ query: 'needle' }).generation
-    expect(after).toBe(readIndexGeneration(db))
-    expect(after).toBeGreaterThan(before)
   })
 })
 

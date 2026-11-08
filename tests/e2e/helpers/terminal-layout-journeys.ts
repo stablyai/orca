@@ -94,7 +94,8 @@ export async function closeActivePaneFromKeyboard(page: Page, paneCount: number)
 export async function dragPaneOutToTabStrip(
   page: Page,
   worktreeId: string,
-  leafId: string
+  leafId: string,
+  position: 'end' | 'start' = 'end'
 ): Promise<void> {
   const handle = page.locator(`.pane[data-leaf-id="${leafId}"] .pane-drag-handle`)
   const strip = page.locator(`[data-tab-group-strip-id][data-worktree-id="${worktreeId}"]`).first()
@@ -102,13 +103,16 @@ export async function dragPaneOutToTabStrip(
   const handleBox = await handle.boundingBox()
   const stripBox = await strip.boundingBox()
   const lastTabBox = await lastTab.boundingBox()
-  if (!handleBox || !stripBox || !lastTabBox) {
+  const firstTabBox = await strip.locator(SORTABLE_TAB).first().boundingBox()
+  if (!handleBox || !stripBox || !lastTabBox || !firstTabBox) {
     throw new Error('Pane drag handle or tab strip is not laid out')
   }
   await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 4)
   await page.mouse.down()
   await page.mouse.move(
-    Math.min(lastTabBox.x + lastTabBox.width + 24, stripBox.x + stripBox.width - 4),
+    position === 'start'
+      ? firstTabBox.x + 4
+      : Math.min(lastTabBox.x + lastTabBox.width + 24, stripBox.x + stripBox.width - 4),
     stripBox.y + stripBox.height / 2,
     { steps: 20 }
   )

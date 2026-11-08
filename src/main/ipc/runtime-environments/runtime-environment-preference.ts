@@ -1,10 +1,8 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import {
-  getEnvironmentStorePath,
-  listEnvironments
-} from '../../../shared/runtime-environment-store'
-import type { Store } from '../../persistence'
-import { watchFileAcrossReplacement } from '../rebinding-file-watch'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
+import type { Store } from '../../persistence/loading-store/store'
+import { watchFileAcrossReplacement } from '../filesystem/watcher-process/rebinding-file-watch'
 
 type PreferenceStore = Pick<Store, 'getSettings' | 'updateSettings'>
 
@@ -44,7 +42,9 @@ const REGISTRY_REBIND_SWEEP_MS = 30_000
 
 export function watchRuntimeEnvironmentPreference(
   store: PreferenceStore,
-  userDataPath: string
+  userDataPath: string,
+  // Renderers cache the catalog; CLI edits reach them only through this watch.
+  onRegistryChanged: () => void = () => {}
 ): () => void {
   const repairPreference = (): void => {
     try {
@@ -58,7 +58,10 @@ export function watchRuntimeEnvironmentPreference(
   // Watch the file: macOS directory watches recursively stream Orca's own userData writes.
   const registryWatch = watchFileAcrossReplacement(
     getEnvironmentStorePath(userDataPath),
-    repairPreference,
+    () => {
+      repairPreference()
+      onRegistryChanged()
+    },
     (error) => console.warn('[runtime-environments] Active Server preference watch failed:', error)
   )
   const sweep = setInterval(() => void registryWatch.refresh(), REGISTRY_REBIND_SWEEP_MS)

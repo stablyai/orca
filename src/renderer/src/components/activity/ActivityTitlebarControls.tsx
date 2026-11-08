@@ -5,9 +5,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useActivityUnreadCount } from './useActivityUnreadCount'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ActivityTitlebarControls(): React.JSX.Element {
+  const t = useTranslate()
   const unreadCount = useActivityUnreadCount()
   const closeActivityPage = useAppStore((s) => s.closeActivityPage)
 
@@ -25,7 +26,7 @@ export function ActivityTitlebarControls(): React.JSX.Element {
               variant="ghost"
               size="icon-xs"
               onClick={closeActivityPage}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.activity.ActivityTitlebarControls.dc708f3eff',
                 'Close agents'
               )}
@@ -34,19 +35,18 @@ export function ActivityTitlebarControls(): React.JSX.Element {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate(
-              'auto.components.activity.ActivityTitlebarControls.dc708f3eff',
-              'Close agents'
-            )}
+            {t('auto.components.activity.ActivityTitlebarControls.dc708f3eff', 'Close agents')}
           </TooltipContent>
         </Tooltip>
         <Bell className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="truncate text-xs font-medium">
-          {translate('auto.components.activity.ActivityTitlebarControls.d6a8de3934', 'agents')}
+          {t('auto.components.activity.ActivityTitlebarControls.d6a8de3934', 'agents')}
         </span>
         <Badge variant="secondary" className="h-5 px-1.5 text-[11px] font-normal">
-          {unreadCount}{' '}
-          {translate('auto.components.activity.ActivityTitlebarControls.f915168c8e', 'unread')}
+          {t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {
+            count: unreadCount,
+            defaultValue_one: '{{count}} unread'
+          })}
         </Badge>
       </div>
     </div>

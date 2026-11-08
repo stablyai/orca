@@ -1,10 +1,10 @@
-import { RemoteRuntimeClientError } from '../../remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import {
   measureRemoteRuntimeSubscriptionParams,
   REMOTE_RUNTIME_MAX_RETAINED_SUBSCRIPTION_BYTES,
   REMOTE_RUNTIME_MAX_SUBSCRIPTIONS,
   serializeRemoteRuntimeRpcRequest
-} from '../../remote-runtime-memory-limits'
+} from '../remote-runtime-memory-limits'
 import type { SharedControlLogicalSubscription } from './remote-runtime-shared-control-types'
 
 export function admitSharedControlSubscription(args: {

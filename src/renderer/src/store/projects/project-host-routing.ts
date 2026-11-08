@@ -13,18 +13,18 @@ import {
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc
-} from '../../runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { adoptEndpointProjectCatalog } from '../../../../shared/endpoint-catalog-adoption'
 import {
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
+  sshHostWithoutServerMessage,
   type ProjectHostSetupTarget
 } from '../../../../shared/project-host-setup-target'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import type { AppState } from '../types'
+import { findSoleHostCopy } from '../../../../shared/worktree/host-qualified-identity'
 
 export function getProjectSetupRuntimeTarget(
   hostId: ProjectHostSetupExistingFolderArgs['hostId']
@@ -45,11 +45,23 @@ export function assertNotSshProjectHost(
   if (parsed?.kind !== 'ssh') {
     return
   }
-  throw new Error(
-    isPairedServerSshTarget(state, parsed.targetId)
-      ? SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE
-      : `SSH connection "${parsed.targetId}" not found or not connected`
+  if (isPairedServerSshTarget(state, parsed.targetId)) {
+    throw new Error(SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE)
+  }
+  throw new SshProjectHostWithoutServerError(
+    parsed.targetId,
+    state.sshTargetLabels.get(parsed.targetId) || parsed.targetId
   )
+}
+
+/** This computer's SSH host has no Orca server yet; Connect sets one up. */
+export class SshProjectHostWithoutServerError extends Error {
+  constructor(
+    readonly targetId: string,
+    hostLabel: string
+  ) {
+    super(sshHostWithoutServerMessage(hostLabel))
+  }
 }
 
 /**
@@ -156,13 +168,17 @@ export async function prepareProjectHostSetupMutation<T extends ProjectHostSetup
   setups: readonly ProjectHostSetup[],
   args: T
 ): Promise<{ target: RuntimeClientTarget; hostArgs: T }> {
-  const setup = setups.find(
+  const matches = setups.filter(
     (entry) =>
       entry.id === args.setupId && (args.hostId === undefined || entry.hostId === args.hostId)
   )
+  const setup = findSoleHostCopy(matches, (entry) => entry.hostId)
   if (!setup && args.hostId !== undefined) {
     // Why: an id-only fallback could land on a same-id setup of another host.
     throw new Error(`Project host setup not found on ${args.hostId}: ${args.setupId}`)
+  }
+  if (!setup && matches.length > 0) {
+    throw new Error(`Project host setup ${args.setupId} exists on several hosts; name one`)
   }
   const target = setup ? getProjectSetupRuntimeTarget(setup.hostId) : { kind: 'local' as const }
   await assertProjectHostSetupMutationRuntimeCapabilities(target)

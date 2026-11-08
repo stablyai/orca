@@ -1,7 +1,9 @@
+import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../shared/status-bar-compact-change-notice'
-import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
+import { migrateExplorerDisplayRoots } from '../../../shared/file-listing/file-explorer-display-root'
 import {
   getWorktreeCardModeProperties,
+  isCurrentCompactWorktreeCardProperties,
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from '../../../shared/constants'
@@ -87,7 +89,7 @@ export function normalizeLoadedUiState(
     !deliberateUncheck &&
     Array.isArray(rawCardProps) &&
     !rawCardProps.includes('inline-agents')
-  const needsLegacyDefaultedCompactMigration =
+  const hasDefaultedCompactPreset =
     loadedCompactWorktreeCards &&
     parsed.ui?._worktreeCardModeDefaulted === true &&
     isDefaultedCompactWorktreeCardProperties(rawCardProps)
@@ -95,8 +97,11 @@ export function normalizeLoadedUiState(
     if (!Array.isArray(rawCardProps)) {
       return undefined
     }
-    if (needsLegacyDefaultedCompactMigration) {
-      return getWorktreeCardModeProperties('Compact')
+    if (hasDefaultedCompactPreset) {
+      // Only legacy presets need rewriting; returning a current one would save on every load.
+      return isCurrentCompactWorktreeCardProperties(rawCardProps)
+        ? undefined
+        : getWorktreeCardModeProperties('Compact')
     }
     const candidate = needsInlineAgentsMigration
       ? [...rawCardProps, 'inline-agents' as const]
@@ -218,6 +223,7 @@ export function normalizeLoadedUiState(
     sortBy: migrate ? ('smart' as const) : sort,
     _explorerDisplayRootMigrated: true,
     explorerDisplayRootByWorktree,
+    gitGraphFiltersByWorktree: normalizeGitGraphFilters(parsed.ui?.gitGraphFiltersByWorktree),
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(parsed.ui?.showDotfilesByWorktree),
     workspaceStatuses,
     _workspaceStatusesDefaultOrderMigrated: true,

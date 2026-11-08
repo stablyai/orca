@@ -21,6 +21,8 @@ export type PRComment = {
   author: string
   authorAvatarUrl: string
   body: string
+  /** Transient display sources from the same body fetch; never submit or persist these URLs. */
+  bodyImageUrls?: Record<string, string>
   createdAt: string
   url: string
   reactions?: GitHubReaction[]
@@ -38,8 +40,12 @@ export type PRComment = {
   line?: number
   /** Start line of the review annotation range (1-based). Absent for single-line comments. */
   startLine?: number
+  /** A thread root's last diff lines, ending on `line`; absent from older hosts and non-GitHub sources. */
+  diffHunk?: string
   /** Provider-reported bot identity beats login heuristics (qodo/coderabbit use varied names). Absent when non-GitHub gh fallbacks cannot report it. */
   isBot?: boolean
+  /** True only when the gh account that read the thread wrote it (GraphQL's flag, or its login on REST reads); absent from older hosts. */
+  viewerDidAuthor?: boolean
 }
 
 export type GitHubIssueTimelineTarget = {

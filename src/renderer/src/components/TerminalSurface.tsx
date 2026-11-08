@@ -1,9 +1,10 @@
-import EditorAutosaveController from './editor/EditorAutosaveController'
+import EditorAutosaveController from './editor/autosave/EditorAutosaveController'
 import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
 import { TerminalTitlebarTabs } from './TerminalTitlebarTabs'
 import { TerminalSplitWorkspaceSurfaces } from './TerminalSplitWorkspaceSurfaces'
 import { TerminalLegacyWorkspaceSurface } from './TerminalLegacyWorkspaceSurface'
 import { TerminalWorkspaceDialogs } from './TerminalWorkspaceDialogs'
+import { WslHostStoppedWorkspaceNotice } from './wsl-host-stopped/WslHostStoppedWorkspaceNotice'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalSurface({
@@ -16,7 +17,7 @@ export function TerminalSurface({
   return (
     <div
       // The workbench already removes hidden content from flow; only keep this ancestor paintable.
-      className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
+      className={`relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
         renderedActiveWorktreeId
           ? ''
           : retainBrowserGuestPaint
@@ -29,6 +30,7 @@ export function TerminalSurface({
       <TerminalTitlebarTabs controller={controller} />
       <TerminalSplitWorkspaceSurfaces controller={controller} />
       <TerminalLegacyWorkspaceSurface controller={controller} />
+      <WslHostStoppedWorkspaceNotice worktreeId={renderedActiveWorktreeId} />
       <TerminalWorkspaceDialogs controller={controller} />
     </div>
   )

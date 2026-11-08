@@ -1,4 +1,4 @@
-import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
+import type { TerminalGitHubPRLink } from '../../shared/terminal/links/terminal-github-pr-link-detector'
 
 export type PtyDataEvent = {
   id: string
@@ -6,6 +6,8 @@ export type PtyDataEvent = {
   sequenceChars?: number
   transformed?: boolean
   seq?: number
+  /** The emitting provider already fed this chunk to the runtime through configure().onData. */
+  runtimeFed?: true
 }
 
 /** Notification fact observed while the thinning transport owned scan authority for this PTY. */

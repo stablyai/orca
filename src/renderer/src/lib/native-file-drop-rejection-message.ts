@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   NATIVE_FILE_DROP_MAX_PATHS,
   type NativeFileDropRejectedPayload
-} from '../../../shared/native-file-drop'
+} from '../../../shared/file-import/native-file-drop'
 import { describeDropTempCopyFailure } from './drop-temp-copy-failure-copy'
 
 export function getNativeFileDropRejectionMessage(data: NativeFileDropRejectedPayload): {
@@ -15,7 +15,7 @@ export function getNativeFileDropRejectionMessage(data: NativeFileDropRejectedPa
       title: translate(
         'auto.hooks.useGlobalFileDrop.nativeDropTempCopyFailed',
         "Orca couldn't copy {{count}} dropped files.",
-        { count: data.pathCount }
+        { count: data.pathCount, defaultValue_one: "Orca couldn't copy {{count}} dropped file." }
       )
     }
   }

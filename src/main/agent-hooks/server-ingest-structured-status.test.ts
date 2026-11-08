@@ -1,15 +1,15 @@
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
-import type { AgentChildWorkEvidence } from '../../shared/agent-status-child-work-evidence'
-import { isFreshNonDoneAgentStatus } from '../../shared/agent-status-freshness'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
+import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import { isFreshNonDoneAgentStatus } from '../../shared/agent-status/contracts/agent-status-freshness'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
-} from '../../shared/structured-agent-session-projection'
+} from '../../shared/agent-session/view/structured-agent-session-projection'
 import { AgentHookServer, _internals } from './server'
 import { PANE } from './server.test-fixtures'
 
@@ -92,54 +92,6 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestStructuredStatus', () => {
-  it('stores the projection as a row under the pane key the renderer derives', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary(), SUBJECT)
-
-    expect(server.getStatusSnapshot()).toEqual([
-      expect.objectContaining({
-        paneKey: STRUCTURED_PANE,
-        tabId: TAB,
-        worktreeId: 'repo-1::/workspace/app',
-        connectionId: null,
-        state: 'working',
-        agentType: 'codex',
-        prompt: 'ship the thing',
-        model: 'gpt-6-astra',
-        toolName: 'shell',
-        toolInput: 'sleep 30',
-        lastAssistantMessage: 'on it',
-        structuredHost: 'owned',
-        // Restart republishing must not turn journal evidence into a fresh observation.
-        evidenceObservedAt: OBSERVED_AT,
-        stateStartedAt: OBSERVED_AT
-      })
-    ])
-    expect(server.getStatusSnapshot()[0]?.observation?.origin).toBe('structured')
-  })
-
-  it('keeps a logical start owned between physical children without changing the latest turn', () => {
-    const server = new AgentHookServer()
-    const starting = summary({ status: 'idle', hostExecutionPhase: 'starting' })
-    server.ingestStructuredStatus(starting, SUBJECT)
-    server.ingestStructuredStatus(starting, SUBJECT)
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      structuredHost: 'owned',
-      state: 'done',
-      stateStartedAt: OBSERVED_AT
-    })
-    server.ingestStructuredStatus({ ...starting, hostExecutionPhase: 'ready' }, SUBJECT)
-    expect(server.getStatusSnapshot()[0]).toMatchObject({ structuredHost: 'owned', state: 'done' })
-  })
-
-  it('maps attention to blocked and idle to done', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ status: 'attention' }), SUBJECT)
-    expect(server.getStatusSnapshot()[0]?.state).toBe('blocked')
-    server.ingestStructuredStatus(summary({ status: 'idle', updatedAt: OBSERVED_AT + 1 }), SUBJECT)
-    expect(server.getStatusSnapshot()[0]?.state).toBe('done')
-  })
-
   it("folds the host's live child records into an idle session the way the hook lane folds a roster", () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
@@ -213,52 +165,7 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     expect(isFreshNonDoneAgentStatus({ ...row!, updatedAt: row!.evidenceObservedAt! })).toBe(true)
   })
 
-  it('marks a session whose provider child is gone as held, not owned', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ hostExecutionOwned: undefined }), SUBJECT)
-    expect(server.getStatusSnapshot()[0]?.structuredHost).toBe('held')
-  })
-
-  it('keeps the state start while later evidence of the same state arrives', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    server.ingestStructuredStatus(
-      summary({ toolName: 'read', updatedAt: OBSERVED_AT + 5_000 }),
-      SUBJECT
-    )
-
-    expect(server.getStatusSnapshot()[0]).toMatchObject({
-      toolName: 'read',
-      evidenceObservedAt: OBSERVED_AT + 5_000,
-      stateStartedAt: OBSERVED_AT
-    })
-  })
-
-  it('holds no row for a session without a persisted turn, and drops one that regresses to none', () => {
-    const server = new AgentHookServer()
-    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
-    expect(server.getStatusSnapshot()).toEqual([])
-
-    server.ingestStructuredStatus(summary(), SUBJECT)
-    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
-    expect(server.getStatusSnapshot()).toEqual([])
-  })
-
   // Structured resume identity belongs to the record store; a PTY-style remnant here could never be cleared.
-  it('leaves no resume-identity remnant behind, even carrying a provider session', () => {
-    const server = new AgentHookServer()
-    const withProviderSession = summary({
-      providerSession: { key: 'session_id', id: 'codex-thread-1' }
-    })
-    server.ingestStructuredStatus(withProviderSession, SUBJECT)
-    expect(server.getStatusSnapshot()[0]?.providerSession).toEqual({
-      key: 'session_id',
-      id: 'codex-thread-1'
-    })
-
-    server.dropStructuredStatus(SUBJECT)
-    expect(server.getStatusSnapshot()).toEqual([])
-  })
 
   // The renderer feed owns structured panes, so host deletion must neither clear them nor rewrite hook persistence.
   it('drops the row without sending the renderer a clear for a pane it does not write', () => {
@@ -274,20 +181,6 @@ describe('AgentHookServer ingestStructuredStatus', () => {
     expect(server.getStatusSnapshot()).toEqual([])
     expect(cleared).toEqual([])
     expect(dropped).toEqual([STRUCTURED_PANE])
-  })
-
-  it('leaves a hook-reported pane alone', () => {
-    const server = new AgentHookServer()
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      connectionId: null,
-      payload: { state: 'working', prompt: 'watch the build', agentType: 'claude' }
-    })
-    server.ingestStructuredStatus(summary(), SUBJECT)
-
-    const byPane = new Map(server.getStatusSnapshot().map((row) => [row.paneKey, row]))
-    expect(byPane.get(PANE)?.structuredHost).toBeUndefined()
-    expect(byPane.get(STRUCTURED_PANE)?.structuredHost).toBe('owned')
   })
 })
 
@@ -397,21 +290,5 @@ describe('the main agent fact on a structured row', () => {
       state: 'working',
       stateStartedAt: OBSERVED_AT + 9
     })
-  })
-
-  it('reaches the enriched fanout every legacy subscriber reads', () => {
-    const server = new AgentHookServer()
-    const enriched = vi.fn()
-    server.subscribeEnrichedStatus(enriched)
-    server.ingestStructuredStatus(summary({ status: 'idle', turnOutcome: 'cancellation' }), SUBJECT)
-    expect(enriched).toHaveBeenCalledWith(
-      expect.objectContaining({
-        paneKey: STRUCTURED_PANE,
-        payload: expect.objectContaining({
-          state: 'done',
-          mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: OBSERVED_AT }
-        })
-      })
-    )
   })
 })

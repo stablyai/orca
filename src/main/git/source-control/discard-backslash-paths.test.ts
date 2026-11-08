@@ -4,7 +4,7 @@ import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
-import { RuntimeGitStagingCommands } from '../../runtime/runtime-git-staging-commands'
+import { RuntimeGitStagingCommands } from '../../runtime/integrations/git/runtime-git-staging-commands'
 import { bulkDiscardChanges } from './discard-changes'
 
 // Windows filenames cannot contain literal backslashes.
@@ -13,7 +13,18 @@ describe.skipIf(process.platform === 'win32')('discard preserves POSIX path iden
   let commands: RuntimeGitStagingCommands
 
   async function git(args: string[]): Promise<string> {
-    const result = await runProcess({ program: 'git', args, cwd: repo })
+    const result = await runProcess({
+      program: 'git',
+      args: ['-c', 'commit.gpgsign=false', ...args],
+      cwd: repo,
+      env: {
+        ...process.env,
+        GIT_AUTHOR_NAME: 'Test User',
+        GIT_AUTHOR_EMAIL: 'test@example.com',
+        GIT_COMMITTER_NAME: 'Test User',
+        GIT_COMMITTER_EMAIL: 'test@example.com'
+      }
+    })
     expect(result.code, result.stderr).toBe(0)
     return result.stdout
   }
@@ -21,8 +32,6 @@ describe.skipIf(process.platform === 'win32')('discard preserves POSIX path iden
   beforeEach(async () => {
     repo = await mkdtemp(path.join(tmpdir(), 'orca-discard-paths-'))
     await git(['init'])
-    await git(['config', 'user.email', 'test@example.com'])
-    await git(['config', 'user.name', 'Test User'])
     const gitInfo = {
       path: repo,
       head: 'a'.repeat(40),

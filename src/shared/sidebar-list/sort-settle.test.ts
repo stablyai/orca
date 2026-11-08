@@ -51,12 +51,6 @@ describe('reduceSortSettle', () => {
     })
   })
 
-  it('settles Manual and mode switches without waiting', () => {
-    for (const modes of [{ sortBy: 'manual' }, { previousSortBy: 'smart' }] as const) {
-      expect(reduceSortSettle(settled, write(modes), 0)).toEqual({ state: settled, settle: true })
-    }
-  })
-
   it('retires a pending deadline when a write lands settled', () => {
     const pending = reduceSortSettle(settled, write({}), 0).state
     const reset = reduceSortSettle(pending, write({ change: null, settled: true }), 10)

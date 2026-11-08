@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { Repo } from '../../../../shared/repo-types'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 
@@ -36,6 +36,7 @@ export function useSetupScriptPromptRevalidation(input: {
   const promptNeedsRevalidation =
     promptBelongsToActiveRepo &&
     (promptState?.status === 'error' ||
+      promptState?.status === 'distro-stopped' ||
       (promptState?.status === 'ok' && !promptState.hasEffectiveSetup))
 
   // Focus may reveal disk or terminal changes that React inputs cannot observe.

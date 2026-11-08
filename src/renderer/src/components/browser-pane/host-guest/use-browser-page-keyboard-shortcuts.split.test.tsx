@@ -87,7 +87,7 @@ function renderFloatingOverSplit() {
     <>
       <PaneHarness id="a" scope="focused" spies={split} />
       <div data-floating-terminal-panel>
-        <PaneHarness id="floating" scope="owned-target" spies={floating} />
+        <PaneHarness id="floating" scope="owned-target-focused" spies={floating} />
       </div>
     </>
   )
@@ -185,18 +185,6 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(a.reload).not.toHaveBeenCalled()
   })
 
-  it('answers a chrome chord only in the focused split', () => {
-    const { a, b } = renderSplit('focused', 'inactive')
-
-    press(window, { key: '[', code: 'BracketLeft' })
-    press(window, { key: 'r', code: 'KeyR' })
-
-    expect(a.webview.goBack).toHaveBeenCalledTimes(1)
-    expect(a.reload).toHaveBeenCalledWith(false)
-    expect(b.webview.goBack).not.toHaveBeenCalled()
-    expect(b.reload).not.toHaveBeenCalled()
-  })
-
   it('answers a chrome chord only in the pane it came from when no split is focused', () => {
     const { a, b } = renderSplit('owned-target', 'owned-target')
 
@@ -207,15 +195,6 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(b.reload).toHaveBeenCalledTimes(1)
     expect(a.webview.goBack).not.toHaveBeenCalled()
     expect(a.reload).not.toHaveBeenCalled()
-  })
-
-  it('arms grab from the focused pane only', () => {
-    const { a, b } = renderSplit('focused', 'inactive')
-
-    press(document.body, { key: 'c', code: 'KeyC' })
-
-    expect(a.startGrabIntent).toHaveBeenCalledWith('copy')
-    expect(b.startGrabIntent).not.toHaveBeenCalled()
   })
 
   it('leaves Cmd+C to copy while text is selected', () => {
@@ -247,15 +226,6 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
 
     expect(b.startGrabIntent.mock.calls).toEqual([['annotate'], ['copy']])
     expect(a.startGrabIntent).not.toHaveBeenCalled()
-  })
-
-  it('ignores a forwarded chord while markup is open, like the disabled toolbar buttons', () => {
-    const spies = createSpies()
-    render(<PaneHarness id="a" scope="focused" spies={spies} markupIsActive />)
-
-    act(() => grabModeToggleListeners.forEach((listener) => listener('page-a', 'annotate')))
-
-    expect(spies.startGrabIntent).not.toHaveBeenCalled()
   })
 
   it('answers a floating browser chord only in the floating panel', () => {

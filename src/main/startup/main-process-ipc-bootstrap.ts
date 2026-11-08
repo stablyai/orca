@@ -4,11 +4,15 @@ import { placeUnshownLiveTerminalsBestEffort } from '../runtime/terminal/adoptio
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './legacy-worker-renderer-recovery'
 import { logStartupMilestone } from './startup-diagnostics'
 import { mainProcessState as state } from './main-process-state'
+import {
+  consumeQuitAndStopAllSessionsRequest,
+  quitAfterRendererStoppedAllSessions
+} from './main-window-actions'
 import { resolveOsOpenedDocuments } from './os-opened-documents'
 import {
   onStructuredAgentSessionsHeldChanged,
   structuredAgentSessionsHeld
-} from '../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { subscribeAgentSessionUploadRemoval } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 
 export function registerMainProcessIpcHandlers(): void {
@@ -69,7 +73,14 @@ export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('ui:consumePendingOpenSettings', (event) =>
     state.pendingOpenSettings.matches(event.sender.id, { consume: true })
   )
+  ipcMain.handle('ui:consumePendingQuitAndStopAllSessions', (event) =>
+    consumeQuitAndStopAllSessionsRequest(event.sender.id)
+  )
+  ipcMain.handle('ui:quitAfterStoppingAllSessions', (event) =>
+    quitAfterRendererStoppedAllSessions(event.sender.id)
+  )
   ipcMain.handle('ui:consumePendingSkillShare', () => state.skillShareDeepLinks.consume())
+  ipcMain.handle('ui:consumePendingPluginInstallLink', () => state.pluginInstallLinks.consume())
   // Pull delivers cold-start Open With and proves the listener is ready for later pushes.
   ipcMain.handle('ui:consumePendingMarkdownFileOpens', async () => {
     state.osDocumentOpenListenerReady = true

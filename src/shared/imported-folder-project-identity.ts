@@ -1,7 +1,9 @@
 import {
   GIT_REMOTE_PROJECT_ID_PREFIX,
   getGitRemoteProviderIdentity,
-  getProjectIdForProviderIdentity
+  getProjectIdForProviderIdentity,
+  getProjectIdentityKey,
+  isHostLocalProjectId
 } from './project-host-setup-projection'
 import type { ProjectProviderIdentity } from './project-types'
 import type { Repo } from './repo-types'
@@ -31,7 +33,7 @@ export function assertImportedFolderRemoteMatchesProject(
 
 /** Supply missing project links: GitHub projects stamp upstream; remote-keyed projects record matching remotes not yet probed after cloning. */
 export function resolveImportedFolderProjectLink(
-  folder: Pick<Repo, 'gitRemoteIdentity'>,
+  folder: Pick<Repo, 'id' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity'>,
   projectId: string,
   providerIdentity: ProjectProviderIdentity | undefined
 ): Pick<Repo, 'upstream'> | Pick<Repo, 'gitRemoteIdentity'> {
@@ -53,5 +55,12 @@ export function resolveImportedFolderProjectLink(
   ) {
     return { gitRemoteIdentity: remote }
   }
-  throw new Error('Imported folder does not match the selected project identity.')
+  const folderProjectId = getProjectIdentityKey(folder)
+  // Host-local or identical ids give the caller no better project to choose.
+  if (isHostLocalProjectId(folderProjectId) || folderProjectId === projectId) {
+    throw new Error('Imported folder does not match the selected project identity.')
+  }
+  throw new Error(
+    `Imported folder resolves to project "${folderProjectId}", not the selected project "${projectId}".`
+  )
 }

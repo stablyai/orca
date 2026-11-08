@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getUserPluginsDir } from './plugin-discovery'
-import { installPluginFromLocalPath } from './plugin-install'
+import { installPluginFromLocalPath } from './installation/plugin-install'
 import {
   createUninstallFixture,
   holdNextUninstallRefresh,
@@ -21,7 +22,7 @@ it('blocks fresh work while removal is pending and restores admission after fail
   const { service, install } = await createUninstallFixture()
   const key = await install('failure', {
     panels: [{ id: 'panel', title: 'Panel', entry: 'panel.html' }],
-    events: [{ on: 'worktree.created' }]
+    events: [{ on: 'workspace.created' }]
   })
   const entered = uninstallGate()
   const release = uninstallGate()
@@ -35,12 +36,13 @@ it('blocks fresh work while removal is pending and restores admission after fail
   try {
     await entered.promise
     const workers = uninstallWorkerPorts.length
-    expect(service.getGrantedCapabilities(key)).toEqual(['events:subscribe'])
+    expect(service.getGrantedCapabilities(key)).toBeNull()
     expect(service.getLogs(key)).toHaveLength(200)
     await expect(service.invokeCommand(key, 'run')).rejects.toThrow('not enabled')
     await expect(service.panels.readEntry(key, 'panel')).resolves.toBeNull()
-    service.emitEvent('worktree.created', {
-      worktreeId: 'fixture',
+    service.emitEvent('workspace.created', {
+      workspaceId: 'fixture',
+      kind: 'worktree',
       path: 'synthetic-path',
       branch: 'main'
     })
@@ -59,7 +61,7 @@ it('publishes retirement before a held subsequent refresh can finish', async () 
   const { service, install } = await createUninstallFixture()
   const key = await install('refresh-gap', {
     panels: [{ id: 'panel', title: 'Panel', entry: 'panel.html' }],
-    events: [{ on: 'worktree.created' }]
+    events: [{ on: 'workspace.created' }]
   })
   const child = latestUninstallWorker()
   const held = holdNextUninstallRefresh(service)
@@ -71,8 +73,9 @@ it('publishes retirement before a held subsequent refresh can finish', async () 
     const workers = uninstallWorkerPorts.length
     await expect(service.invokeCommand(key, 'run')).rejects.toThrow('not enabled')
     await expect(service.panels.readEntry(key, 'panel')).resolves.toBeNull()
-    service.emitEvent('worktree.created', {
-      worktreeId: 'fixture',
+    service.emitEvent('workspace.created', {
+      workspaceId: 'fixture',
+      kind: 'worktree',
       path: 'synthetic-path',
       branch: 'main'
     })
@@ -168,14 +171,24 @@ it('waits for removal during service disposal and preserves history until succes
   expect(service.getLogs(key)).toHaveLength(0)
 })
 
-it('preserves installed crash history while cancelling the existing restart backoff', async () => {
-  const { service, install } = await createUninstallFixture()
-  const key = await install('crash')
-  const child = latestUninstallWorker()
-  child.connected = false
-  child.emit('exit', 1)
-  expect(latestPluginLog(service, key).line).toContain('exited unexpectedly')
-  await service.deactivatePlugin(key)
-  expect(service.findValidPlugin(key)).not.toBeNull()
-  expect(service.getLogs(key)).toHaveLength(200)
+it('revokes consent and enablement state before deleting the plugin files', async () => {
+  const { root, store, install } = await createUninstallFixture()
+  const key = await install('atomic')
+  store.updateSettings({ disabledPlugins: ['other.plugin', key] })
+  const pluginDir = join(getUserPluginsDir(root), key)
+  const original = store.updateSettings.bind(store)
+  const filesPresentAtRevoke: boolean[] = []
+  vi.spyOn(store, 'updateSettings').mockImplementation((patch) => {
+    if (patch.pluginConsents && !(key in patch.pluginConsents)) {
+      filesPresentAtRevoke.push(existsSync(pluginDir))
+    }
+    original(patch)
+  })
+
+  await removeThroughPluginIpc(key)
+
+  expect(filesPresentAtRevoke).toEqual([true])
+  expect(store.getSettings().pluginConsents).not.toHaveProperty(key)
+  expect(store.getSettings().disabledPlugins).toEqual(['other.plugin'])
+  expect(existsSync(pluginDir)).toBe(false)
 })

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { TASK_SEARCH_DEBOUNCE_MS } from '../task-page-source-context'
+import { TASK_SEARCH_DEBOUNCE_MS } from './task-page-source-context'
 
 /** Applies a task search input after the shared debounce, once resume state has landed. */
 export function useTaskSearchDebouncedApply(

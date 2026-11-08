@@ -4,8 +4,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SecretStore } from '../../shared/secret-store'
 import { classifyUnenvelopedCredential } from '../../shared/secret-at-rest-protection'
-import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
-import { writeCredentialFileAtomic } from '../integration-credential-file'
+import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-storage/secure-file'
+import { writeCredentialFileAtomic } from '../credentials/integration-credential-file'
 import {
   getWorkspaceTokenDir,
   getWorkspaceTokenPath,

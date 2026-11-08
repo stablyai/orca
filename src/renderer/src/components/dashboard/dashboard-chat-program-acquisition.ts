@@ -1,7 +1,10 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { holdChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { resolveChatProgramContext } from '@/lib/host-chat-program'
-import { selectAgentLaunchRouteView, worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import {
+  selectAgentLaunchRouteView,
+  worktreeLaunchWorkspace
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { DASHBOARD_MAX_LAUNCH_WORKTREES } from '../../../../shared/dashboard-snapshot'
 import { collectActiveDashboardWorkspaces } from './dashboard-snapshot-workspaces'
 

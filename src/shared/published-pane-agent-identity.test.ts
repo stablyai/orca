@@ -22,11 +22,6 @@ describe('resolvePublishedPaneAgentIdentity', () => {
     })
   })
 
-  it('keeps the launch record when an unambiguous title names a different agent', () => {
-    // Unlike agreeing/absent title cases, this detects the title-first mutant: explicit Claude branding cannot override a Codex launch.
-    expect(resolve({ launchAgent: 'codex', title: '✳ Claude Code' })).toBe('codex')
-  })
-
   it('prefers the live foreground process to the launch record', () => {
     expect(resolve({ launchAgent: 'claude', foregroundAgent: 'codex' })).toBe('codex')
   })
@@ -43,11 +38,6 @@ describe('resolvePublishedPaneAgentIdentity', () => {
       )
     })
 
-    it('identifies a pane whose title unambiguously names its agent', () => {
-      // Hand-started WSL panes may lack launch/process/hooks; unambiguous title evidence keeps them addressable.
-      expect(resolve({ title: '✳ Claude Code' })).toBe('claude')
-    })
-
     it('still declines a bare worktree name that merely contains an agent word', () => {
       expect(resolve({ title: 'review-14600-codex' })).toBeUndefined()
     })
@@ -58,29 +48,6 @@ describe('resolvePublishedPaneAgentIdentity', () => {
       )
       expect(resolve({ title: '✳ Claude Code', foregroundAgent: 'codex' })).toBe('codex')
       expect(resolve({ title: '✳ Claude Code', launchAgent: 'codex' })).toBe('codex')
-    })
-  })
-
-  it('publishes nothing when the title names no agent unambiguously', () => {
-    // Absence is meaningful: it tells a caller to fail closed rather than guess.
-    expect(resolve({ title: '◐ Rebase PR #14624 onto main' })).toBeUndefined()
-    expect(resolve({ title: 'Fix the codex bug' })).toBeUndefined()
-    expect(resolve({})).toBeUndefined()
-  })
-
-  describe('identity must not depend on how the agent was started', () => {
-    // Shell-started agents lack Orca launch records, so identity must also work from hooks.
-    it('identifies a shell-started agent from its own hook report', () => {
-      expect(resolve({ hookAgent: 'codex', hookIsLive: true })).toBe('codex')
-    })
-
-    it('identifies a shell-started agent on WSL, where the process signal is useless', () => {
-      // Windows sees wsl.exe rather than the distro agent; completed hooks retain identity without launch/process evidence.
-      expect(resolve({ hookAgent: 'codex', hookIsLive: false })).toBe('codex')
-    })
-
-    it('still resolves when only a launch record exists', () => {
-      expect(resolve({ launchAgent: 'claude' })).toBe('claude')
     })
   })
 

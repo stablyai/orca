@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path'
 import ts from 'typescript-api'
 import { nativeMountingSubstitutes } from './native-mounting-substitutes'
 import { observeSalvagedReads } from './salvage-observation'
-import * as deliveryAmbiguity from '../../transport/rpc-delivery-ambiguity'
+import * as deliveryAmbiguity from '../../transport/rpc/rpc-delivery-ambiguity'
 import { compiledOperationModule } from './compiled-operation-module'
 
 export type OperationModule = Record<string, (...args: any[]) => unknown>
@@ -19,7 +19,7 @@ export type OperationMutation = {
 export type OperationExposure = readonly [suffix: string, source: string]
 
 // Share delivery ambiguity’s WeakSet registry; evaluating another copy would turn marked unknown deliveries into definite failures.
-const SHARED_MODULE = 'mobile/src/transport/rpc-delivery-ambiguity.ts'
+const SHARED_MODULE = 'mobile/src/transport/rpc/rpc-delivery-ambiguity.ts'
 
 // Only mounting boundaries are substituted; every operation and projection is loaded from source.
 export function operationModuleLoader(
@@ -33,6 +33,10 @@ export function operationModuleLoader(
   let natives: Map<string, unknown> | undefined
   const sharedModulePath = resolve(root, SHARED_MODULE)
   let mutationCount = 0
+  function readSource(file: string): string {
+    const source = readFileSync(file, 'utf8')
+    return source
+  }
   function pathFor(base: string): string {
     const file = ['', '.ts', '.tsx', '/index.ts']
       .map((suffix) => base + suffix)
@@ -62,6 +66,13 @@ export function operationModuleLoader(
           }
         }
       )
+    }
+    if (name.endsWith('.json')) {
+      // Catalogs and other data modules carry no behavior; hand over their parsed value.
+      return {
+        __esModule: true,
+        default: JSON.parse(readSource(resolve(dirname(base), name)))
+      }
     }
     const file = pathFor(resolve(dirname(base), name))
     if (file === sharedModulePath) {
@@ -108,7 +119,7 @@ export function operationModuleLoader(
               }
             } else if (!statement.exportClause) {
               const target = pathFor(resolve(dirname(file), name))
-              const text = readFileSync(target, 'utf8')
+              const text = readSource(target)
               if (
                 new RegExp(`export (?:async )?(?:function|const|class) ${String(key)}\\b`).test(
                   text
@@ -140,7 +151,7 @@ export function operationModuleLoader(
     if (cached) {
       return cached
     }
-    let source = readFileSync(file, 'utf8')
+    let source = readSource(file)
     const sourceIdentity = file.replaceAll('\\', '/')
     if (/mobile-tasks-(dependencies|legacy-foundation)\.tsx?$/.test(file)) {
       const result = barrel(file, source)

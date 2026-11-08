@@ -1,8 +1,8 @@
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { HoveredTabInsertion } from '../tab-group/useTabDragSplit'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 

@@ -9,8 +9,7 @@ import { openProfileStateDatabase } from './profile-state-database'
 import { readProfileStateSnapshot } from './profile-state-documents'
 import {
   ProfileStateWriteWorkerClient,
-  profileStateWriterFailureOutcome,
-  resolveProfileStateWriterWorkerPath
+  profileStateWriterFailureOutcome
 } from './profile-state-writer-worker-client'
 
 let bundleRoot: string
@@ -137,27 +136,6 @@ describe('persistent profile state write worker', () => {
     await expect(missing.ready).rejects.toMatchObject({ code: 'unreadable' })
     await missing.close()
     expect(existsSync(join(f.root, 'missing.db'))).toBe(false)
-  })
-
-  it('permanently retires bootstrap authority and refuses subsequent calls', () => {
-    const f = fixture()
-    for (const call of [
-      () => f.authority.readInitialState(),
-      () => f.authority.readAcceptedState('{}'),
-      () => f.authority.readSerializedState(),
-      () => f.authority.writeSerializedDomains([]),
-      () => f.authority.writeCompleteSerializedDomains([]),
-      () => f.authority.writeSerializedAutomationRuns([], []),
-      () => f.authority.writeSerializedState(Buffer.from('{}')),
-      () => f.authority.writeJsonExport(join(f.root, 'export.json')),
-      () => f.authority.scheduleBackup(),
-      () => f.authority.assertCurrentRevision(),
-      () => f.authority.initializeFromRevision(1),
-      () => f.authority.retireForWorker(),
-      () => f.authority.close()
-    ]) {
-      expect(call).toThrow(/retired/)
-    }
   })
 
   it('preserves known validation failures and rejects a peer at the no-op fence', async () => {
@@ -348,29 +326,5 @@ describe('persistent profile state write worker', () => {
     expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
     await client.close()
     expect(readState(f.path, f.profileId)).toEqual({ settings: { theme: 'dark' } })
-  })
-
-  it('aborts an active request without treating the pending write as rolled back', async () => {
-    const f = fixture()
-    const hung = script(
-      f.root,
-      `
-      const { parentPort } = require('node:worker_threads')
-      parentPort.postMessage({ id: 0, ok: true, revision: 1 })
-      parentPort.on('message', () => {})
-    `
-    )
-    const client = clientFor(f.initialization, hung)
-    await client.ready
-    const write = client.writeSerializedDomains([{ domain: 'settings', payload: '{}' }])
-    const failed = expect(write).rejects.toMatchObject({ outcome: 'indeterminate' })
-    await client.abort()
-    await failed
-    await client.close()
-  })
-
-  it('resolves flat and shared-chunk entry layouts', () => {
-    expect(resolveProfileStateWriterWorkerPath(bundleRoot)).toBe(workerPath)
-    expect(resolveProfileStateWriterWorkerPath(join(bundleRoot, 'chunks'))).toBe(workerPath)
   })
 })

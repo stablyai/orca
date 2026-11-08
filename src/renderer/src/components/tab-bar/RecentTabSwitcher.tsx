@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileText, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
+import { FileText, GitGraph, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
 import { getShortcutPlatform } from '../../hooks/useShortcutLabel'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  activateFloatingWorkspaceCyclableTab,
+  isFloatingWorkspacePanelFocused
+} from '@/lib/floating-workspace-terminal-actions'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord
@@ -14,13 +19,14 @@ import {
   normalizeCtrlTabOrderMode,
   type RecentTabSwitcherItem
 } from './recent-tab-switching'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 import { cn } from '@/lib/utils'
 
 type SwitcherState = {
   items: RecentTabSwitcherItem[]
   selectedIndex: number
+  targetWorktreeId: string
 }
 
 function consumeKeyboardEvent(event: KeyboardEvent): void {
@@ -36,6 +42,9 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
   if (item.type === 'browser') {
     return <Globe2 className={className} />
   }
+  if (item.contentType === 'git-graph') {
+    return <GitGraph className={className} />
+  }
   if (
     item.contentType === 'diff' ||
     item.contentType === 'conflict-review' ||
@@ -47,6 +56,7 @@ function TabIcon({ item }: { item: RecentTabSwitcherItem }): React.JSX.Element {
 }
 
 export default function RecentTabSwitcher(): React.JSX.Element | null {
+  const t = useTranslate()
   const [switcher, setSwitcher] = useState<SwitcherState | null>(null)
   const switcherRef = useRef<SwitcherState | null>(null)
 
@@ -58,20 +68,24 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
   const openOrAdvance = useCallback(
     (direction: 1 | -1): void => {
       const store = useAppStore.getState()
-      if (store.activeView !== 'terminal' || !store.activeWorktreeId) {
+      const current = switcherRef.current
+      const targetWorktreeId =
+        current?.targetWorktreeId ??
+        (isFloatingWorkspacePanelFocused() ? FLOATING_TERMINAL_WORKTREE_ID : store.activeWorktreeId)
+      const isFloating = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      if ((!isFloating && store.activeView !== 'terminal') || !targetWorktreeId) {
         return
       }
 
       const model = buildRecentTabSwitcherModel(
         store,
-        store.activeWorktreeId,
+        targetWorktreeId,
         normalizeCtrlTabOrderMode(store.settings?.ctrlTabOrderMode)
       )
       if (!model) {
         return
       }
 
-      const current = switcherRef.current
       const selectedKey = current?.items[current.selectedIndex]?.key ?? null
       const currentIndex =
         selectedKey == null
@@ -82,7 +96,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         currentIndex,
         direction
       )
-      setSwitcherState({ items: model.items, selectedIndex })
+      setSwitcherState({ items: model.items, selectedIndex, targetWorktreeId })
     },
     [setSwitcherState]
   )
@@ -94,7 +108,12 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
     if (!selected) {
       return
     }
-    activateCyclableTab(useAppStore.getState(), selected)
+    const store = useAppStore.getState()
+    if (current.targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      activateFloatingWorkspaceCyclableTab(store, selected)
+    } else {
+      activateCyclableTab(store, selected)
+    }
   }, [setSwitcherState])
 
   const cancel = useCallback((): void => {
@@ -155,13 +174,10 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
       <div
         className="w-[min(22.5rem,calc(100vw-3rem))] overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-floating"
         role="listbox"
-        aria-label={translate(
-          'auto.components.tab.bar.RecentTabSwitcher.07ad4cd0b7',
-          'Switch tabs'
-        )}
+        aria-label={t('auto.components.tab.bar.RecentTabSwitcher.07ad4cd0b7', 'Switch tabs')}
       >
         <div className="border-b border-border px-2 py-1 text-2xs font-semibold text-muted-foreground">
-          {translate('auto.components.tab.bar.RecentTabSwitcher.329638ff6f', 'Switch Tab')}
+          {t('auto.components.tab.bar.RecentTabSwitcher.329638ff6f', 'Switch Tab')}
         </div>
         <div className="max-h-[min(18rem,60vh)] overflow-hidden py-0.5">
           {switcher.items.map((item, index) => {

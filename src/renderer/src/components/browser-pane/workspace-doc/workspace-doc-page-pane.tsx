@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { getRelativePathInsideRoot } from '@/lib/path'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 import { HtmlDocPreview } from './HtmlDocPreview'
 import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
@@ -43,6 +43,7 @@ export function WorkspaceDocPagePane({
         isActive={isActive}
         holdsGuestFocus={isActive && isReaderSurface}
         previewId={page.id}
+        browserWorkspaceId={page.workspaceId}
         filePath={filePath}
         relativePath={relativePath}
         worktreeId={worktreeId}

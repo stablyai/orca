@@ -19,7 +19,14 @@ export type InstallPluginsResult = {
     omp: boolean
     primeAgent: boolean
   }
-  overlayDirs: { opencode?: string; opencode2?: string; pi?: string; omp?: string }
+  overlayDirs: {
+    claudeAgentView?: string
+    claudeConfig?: string
+    opencode?: string
+    opencode2?: string
+    pi?: string
+    omp?: string
+  }
 }
 
 export type InstallPluginsHandler = (params: Record<string, unknown>) => InstallPluginsResult
@@ -35,6 +42,8 @@ export function createInstallPluginsHandler(
   let materialized2: { source: string; sourceDir: string | undefined; dir: string } | null = null
 
   return (params) => {
+    const claudeAgentView = params.claudeAgentViewSource
+    assertPluginSourceUnderByteCap('claudeAgentViewSource', claudeAgentView)
     const startupPrompt = params.opencodeStartupPromptSource
     const opencode = params.opencodePluginSource
     const opencode2 = params.opencode2PluginSource
@@ -49,6 +58,7 @@ export function createInstallPluginsHandler(
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
     assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     pluginOverlay.setSources({
+      ...(typeof claudeAgentView === 'string' ? { claudeAgentViewSource: claudeAgentView } : {}),
       opencodeStartupPromptSource: typeof startupPrompt === 'string' ? startupPrompt : undefined,
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       opencode2PluginSource: typeof opencode2 === 'string' ? opencode2 : undefined,
@@ -148,6 +158,10 @@ export function createInstallPluginsHandler(
       pluginOverlay.installOpenCodeStartupPromptPlugin(env, dir)
     )
     const startupPromptInstalled = promptInstallResults.every(Boolean)
+    const claude = pluginOverlay.claudeAgentView.materialize(
+      env[WSL_HOOK_RELAY_INSTANCE_ENV] ?? 'wsl-claude',
+      env.CLAUDE_CONFIG_DIR
+    )
     return {
       installed: {
         opencodeStartupPrompt: startupPromptInstalled,
@@ -158,6 +172,7 @@ export function createInstallPluginsHandler(
         primeAgent: pluginOverlay.hasPiSource('prime-agent')
       },
       overlayDirs: {
+        ...(claude ? { claudeAgentView: claude.pluginDir, claudeConfig: claude.configDir } : {}),
         ...(opencodeDir ? { opencode: opencodeDir } : {}),
         ...(opencode2Dir ? { opencode2: opencode2Dir } : {}),
         ...(piDir ? { pi: piDir } : {}),

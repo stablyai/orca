@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,6 +39,7 @@ type FixtureResult = {
   afterHostChips: CdpCookie[]
   afterPlain: CdpCookie[]
   afterUnreadable: CdpCookie[]
+  afterScope: { name: string; value: string; domain: string }[]
 }
 
 const EXPECTED_PARTITION_KEY = {
@@ -47,6 +48,16 @@ const EXPECTED_PARTITION_KEY = {
 }
 
 const SOURCE_COOKIES = [
+  { domain: 'scope.example', name: 'host-only', value: 'imported', path: '/', secure: true },
+  { domain: '.scope.example', name: 'domain', value: 'imported', path: '/', secure: true },
+  {
+    domain: 'reject.example',
+    name: 'sid',
+    value: 'bad',
+    path: '/',
+    secure: false,
+    sameSite: 'None'
+  },
   {
     domain: '.app.acme-chips.test',
     name: 'chips-auth',
@@ -111,8 +122,10 @@ async function run() {
   debug.attach('1.3')
   mark('debugger attached')
 
-  // Why: only CDP can observe partitionKey; an empty jar first means every cookie read
-  // afterwards can only have come from the import.
+  const cookies = session.fromPartition(partition).cookies
+  await cookies.set({url: 'https://scope.example/', name: 'host-only', value: 'old', path: '/', secure: true})
+  await cookies.set({url: 'http://reject.example/', name: 'sid', value: 'working', path: '/'})
+  await cookies.set({url: 'https://scope.example/', name: 'site-set', value: 'rotated', path: '/auth', secure: true})
   const beforeCookies = (await debug.sendCommand('Network.getAllCookies')).cookies
   mark('jar read before import')
 
@@ -135,7 +148,9 @@ async function run() {
     afterChips: project('chips-auth'),
     afterHostChips: project('__Host-chips-session'),
     afterPlain: project('plain'),
-    afterUnreadable: project('partial-chips')
+    afterUnreadable: project('partial-chips'),
+    afterScope: afterCookies.filter((cookie) => ['host-only', 'domain', 'sid', 'site-set'].includes(cookie.name))
+      .map(({name, value, domain}) => ({name, value, domain})).sort((a, b) => a.name.localeCompare(b.name))
   }))
   debug.detach()
   window.destroy()
@@ -179,25 +194,47 @@ async function runFixture(): Promise<FixtureResult> {
   })
   writeFileSync(fixturePath, buildFixtureMain(bundlePath, resultPath, cookieFilePath))
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
-  const electronArgs = [fixturePath, `--user-data-dir=${join(root, 'profile')}`]
+  const home = join(root, 'home')
+  mkdirSync(home, { recursive: true })
+  const isolatedEnv = {
+    ...env,
+    ORCA_BACKGROUND_LAUNCH: '1',
+    HOME: home,
+    USERPROFILE: home,
+    XDG_CONFIG_HOME: join(home, 'config'),
+    XDG_DATA_HOME: join(home, 'data'),
+    XDG_CACHE_HOME: join(home, 'cache'),
+    XDG_STATE_HOME: join(home, 'state'),
+    CLAUDE_CONFIG_DIR: join(home, 'claude'),
+    CODEX_HOME: join(home, 'codex'),
+    ORCA_E2E_HOME_DIR: home,
+    ORCA_E2E_USER_DATA_DIR: join(root, 'profile'),
+    ORCA_DISABLE_MACOS_LOGIN_SHELL: '1'
+  }
+  const electronArgs = [
+    fixturePath,
+    `--user-data-dir=${join(root, 'profile')}`,
+    '--password-store=basic',
+    '--use-mock-keychain'
+  ]
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
   const args =
     process.platform === 'linux'
       ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
       : electronArgs
-  const run = spawnSync(executable, args, { encoding: 'utf8', env, timeout: 90_000 })
+  const run = spawnSync(executable, args, { encoding: 'utf8', env: isolatedEnv, timeout: 90_000 })
   const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
   return JSON.parse(fixtureResult) as FixtureResult
 }
 
-describe('STA-4300: partitioned cookies on the validated (file/paste) import success path', () => {
-  it('stores CHIPS and __Host- CHIPS partitioned, and skips an unreadable partition', async () => {
+describe('merge-only file import cookie fidelity', () => {
+  it('preserves working sessions on rejection, source host scope, and CHIPS identity', async () => {
     const result = await runFixture()
 
     expect(result.step).toBe('import finished')
-    expect(result.beforeCookieCount).toBe(0)
+    expect(result.beforeCookieCount).toBe(3)
     expect(result.importResult.ok).toBe(true)
 
     expect(result.afterPlain).toEqual([{ name: 'plain', value: 'plain-ok', partitionKey: null }])
@@ -216,7 +253,14 @@ describe('STA-4300: partitioned cookies on the validated (file/paste) import suc
 
     expect(result.afterUnreadable).toEqual([])
     expect(result.importResult.summary?.partitionSkippedCookies).toBe(1)
-    expect(result.importResult.summary?.importedCookies).toBe(3)
+    expect(result.importResult.summary?.importedCookies).toBe(5)
+    expect(result.importResult.summary?.skippedCookies).toBe(2)
+    expect(result.afterScope).toEqual([
+      { name: 'domain', value: 'imported', domain: '.scope.example' },
+      { name: 'host-only', value: 'imported', domain: 'scope.example' },
+      { name: 'sid', value: 'working', domain: 'reject.example' },
+      { name: 'site-set', value: 'rotated', domain: 'scope.example' }
+    ])
     expect(result.importResult.summary?.domains).not.toContain('partial.example')
   }, 120_000)
 })

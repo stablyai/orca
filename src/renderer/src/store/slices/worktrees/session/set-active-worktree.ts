@@ -1,8 +1,8 @@
-import { cancelActiveWorktreeRemoval } from '@/store/active-worktree-deselection-intent'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { cancelActiveWorktreeRemoval } from '@/store/workspaces/selection/active-worktree-deselection-intent'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { projectWorktreeTabModelReconciliation } from '../../tabs'
-import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../browser-webview-cleanup'
+import { projectWorktreeTabModelReconciliation } from '../../tabs/tabs-reconciliation'
+import { moveFocusToRendererBeforeFocusedWebviewHidden } from '../../../../components/browser-pane/host-guest/webview-registry'
 import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { markInputQuietSchedulerInput, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import {
@@ -76,6 +76,9 @@ export function createSetActiveWorktree(
         }
       }
 
+      const nextActiveWorkspaceKey = isWorkspaceKey(worktreeId)
+        ? worktreeId
+        : worktreeWorkspaceKey(worktreeId)
       const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
       const {
         restoredRightSidebarExplorerView,
@@ -124,6 +127,7 @@ export function createSetActiveWorktree(
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
+        s.activeWorkspaceKey !== nextActiveWorkspaceKey ||
         s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
         // Why: a pending-creation panel can show over the prior worktree; a non-null activePendingCreationId counts as a change.
         s.activePendingCreationId !== null ||
@@ -148,9 +152,7 @@ export function createSetActiveWorktree(
         ...reconciliation?.patch,
         activeRepoId: nextActiveRepoId,
         activeWorktreeId: worktreeId,
-        activeWorkspaceKey: isWorkspaceKey(worktreeId)
-          ? worktreeId
-          : worktreeWorkspaceKey(worktreeId),
+        activeWorkspaceKey: nextActiveWorkspaceKey,
         activeWorkspaceExecutionHostId: executionHostId ?? null,
         activePendingCreationId: null,
         activeFileId,

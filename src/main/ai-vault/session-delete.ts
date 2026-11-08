@@ -1,20 +1,23 @@
 import { lstat, realpath } from 'node:fs/promises'
-import { shell } from 'electron'
 import type {
   AiVaultDeleteSessionResult,
   AiVaultSessionDeleteRemoval
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import {
   validateAiVaultSessionDeleteTarget,
   type ValidateAiVaultSessionDeleteTargetArgs
 } from './session-delete-target'
-import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl-unc-delete'
-import { isENOENT } from '../ipc/filesystem/filesystem-path-containment'
+import { tryDeleteWslUncPath, WslDeleteValidationError } from '../wsl/filesystem/wsl-unc-delete'
+import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
+
+/** Desktop moves to Trash; a plain-Node host has none, so it removes permanently after the user confirmed. */
+export type AiVaultSessionPathRemover = (removal: AiVaultSessionDeleteRemoval) => Promise<void>
 
 // Remove companions first so partial failure leaves the transcript visible for retry.
 export async function deleteAiVaultSessionFile(
-  args: ValidateAiVaultSessionDeleteTargetArgs & { sessionId?: string }
+  args: ValidateAiVaultSessionDeleteTargetArgs & { sessionId?: string },
+  removePath: AiVaultSessionPathRemover
 ): Promise<AiVaultDeleteSessionResult> {
   const validation = validateAiVaultSessionDeleteTarget(args)
   if (!validation.allowed) {
@@ -24,7 +27,7 @@ export async function deleteAiVaultSessionFile(
 
   try {
     for (const removal of removals) {
-      const rejection = await removeOne(removal)
+      const rejection = await removeOne(removal, removePath)
       if (rejection) {
         return { outcome: 'rejected', agent, reason: rejection }
       }
@@ -41,7 +44,8 @@ export async function deleteAiVaultSessionFile(
 
 // Missing companions or externally removed transcripts are successful, idempotent removals.
 async function removeOne(
-  removal: AiVaultSessionDeleteRemoval
+  removal: AiVaultSessionDeleteRemoval,
+  removePath: AiVaultSessionPathRemover
 ): Promise<'unexpected-target-kind' | 'path-outside-known-roots' | null> {
   // Remove inside WSL: 9P stats are unreliable and UNC volumes have no Recycle Bin.
   try {
@@ -95,7 +99,7 @@ async function removeOne(
   }
 
   try {
-    await shell.trashItem(removal.path)
+    await removePath(removal)
   } catch (error) {
     if (isENOENT(error)) {
       return null

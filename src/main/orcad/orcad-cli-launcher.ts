@@ -6,7 +6,7 @@ import {
   ORCAD_CLI_ENTRY_FILENAME,
   ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
 } from '../../shared/orcad-artifacts'
-import { nodeFileContentsEqual } from '../../shared/node-file-content-equality'
+import { nodeFileContentsEqual } from '../../shared/file-content/node-file-content-equality'
 import { buildUnixCliLauncher } from '../cli/cli-dev-launcher'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import { resolveOrcadInstallRoot, resolveUserDataPath } from './orcad-app-paths'
@@ -35,15 +35,19 @@ export async function prepareOrcadCliLauncher(): Promise<void> {
     launcherPath = await prepareWindowsLauncher(installRoot, entry, userDataPath, binDir)
     return
   }
-  const path = join(binDir, 'orca')
   const script = buildUnixCliLauncher(process.execPath, entry, userDataPath, 'node')
   await mkdir(binDir, { recursive: true })
-  const current = await readFile(path, 'utf8').catch(() => null)
-  if (current !== script) {
-    writeFileAtomically(path, script, { mode: 0o700 })
+  // Older clients type the Linux desktop `orca-ide claude-teams` into server terminals.
+  const names = process.platform === 'linux' ? ['orca', 'orca-ide'] : ['orca']
+  for (const name of names) {
+    const path = join(binDir, name)
+    const current = await readFile(path, 'utf8').catch(() => null)
+    if (current !== script) {
+      writeFileAtomically(path, script, { mode: 0o700 })
+    }
+    await chmod(path, 0o700)
   }
-  await chmod(path, 0o700)
-  launcherPath = path
+  launcherPath = join(binDir, 'orca')
 }
 
 export function buildWindowsCliLauncherConfig(

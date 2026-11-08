@@ -6,6 +6,12 @@ import type {
   GitHubProjectTable
 } from './project-types'
 
+import {
+  projectContentField,
+  projectContentFieldLabel,
+  projectContentFieldSortValue
+} from './project-content-field'
+
 export type ProjectGroup = {
   key: string
   label: string
@@ -69,8 +75,19 @@ function getFieldValueForGrouping(
   field: GitHubProjectField,
   orderIndex: ReadonlyMap<string, number>
 ): { key: string; label: string; orderHint: number; iteration: ProjectGroup['iteration'] } {
-  const value = row.fieldValuesByFieldId[field.id]
-  if (!hasNonEmptyFieldValue(value)) {
+  const contentValue = projectContentField(row.content, field.dataType)
+  if (contentValue && contentValue.kind !== 'linked') {
+    const label = projectContentFieldLabel(contentValue)
+    const order = projectContentFieldSortValue(contentValue)
+    return {
+      key: contentValue.kind === 'parent' ? contentValue.parent.url : `raw:${label}`,
+      label,
+      orderHint: typeof order === 'number' ? order : UNKNOWN_INDEX_SENTINEL - 1,
+      iteration: null
+    }
+  }
+  const value = contentValue === null ? undefined : row.fieldValuesByFieldId[field.id]
+  if (!value || !hasNonEmptyFieldValue(value)) {
     return {
       key: EMPTY_PROJECT_GROUP_KEY,
       label: labelForEmpty(field),
@@ -101,7 +118,13 @@ function getFieldValueForGrouping(
     }
   }
   const label = deriveStringValue(value)
-  return { key: `raw:${label}`, label, orderHint: 0, iteration: null }
+  return {
+    key: `raw:${label}`,
+    label,
+    // Why: number labels sort as text (10 before 2, -10 between -1 and -2).
+    orderHint: value.kind === 'number' ? value.number : UNKNOWN_INDEX_SENTINEL - 1,
+    iteration: null
+  }
 }
 
 function labelForEmpty(field: GitHubProjectField): string {
@@ -177,6 +200,13 @@ export function groupRowsByField(
     if (groupField.kind === 'iteration' || groupField.kind === 'single-select') {
       return a[1].orderHint - b[1].orderHint
     }
+    if (
+      groupField.dataType === 'NUMBER' ||
+      groupField.dataType === 'PARENT_ISSUE' ||
+      groupField.dataType === 'SUB_ISSUES_PROGRESS'
+    ) {
+      return a[1].orderHint - b[1].orderHint || a[1].label.localeCompare(b[1].label)
+    }
     return a[1].label.localeCompare(b[1].label)
   })
   return entries.map(([key, v]) => ({
@@ -194,6 +224,20 @@ function compareSort(
   orderIndex: ReadonlyMap<string, number>
 ): number {
   const field = sort.field
+  const aContent = projectContentField(a.content, field.dataType)
+  if (aContent !== undefined) {
+    const bContent = projectContentField(b.content, field.dataType)
+    const aOrder = projectContentFieldSortValue(aContent)
+    const bOrder = projectContentFieldSortValue(bContent ?? null)
+    if (aOrder === null || bOrder === null) {
+      return aOrder === bOrder ? 0 : aOrder === null ? 1 : -1
+    }
+    const cmp =
+      typeof aOrder === 'number' && typeof bOrder === 'number'
+        ? aOrder - bOrder
+        : String(aOrder).localeCompare(String(bOrder))
+    return sort.direction === 'DESC' ? -cmp : cmp
+  }
   const aValue = a.fieldValuesByFieldId[field.id]
   const bValue = b.fieldValuesByFieldId[field.id]
   // Why: return before the trailing DESC flip so empty sorts last in both directions.

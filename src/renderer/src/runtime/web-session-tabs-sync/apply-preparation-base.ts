@@ -9,19 +9,19 @@ import type {
 import {
   reconcileWebSessionCloseIntents,
   isWebSessionCloseIntentPending
-} from '../web-session-close-intent'
+} from './closing/web-session-close-intent'
 import {
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId,
   clearWebSessionFocusIntent
-} from '../web-session-focus-intent'
+} from './navigation/web-session-focus-intent'
 import {
   resolveWebAgentSessionHandoff,
   isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
   clearWebAgentSessionHandoff
-} from '../web-agent-session-handoff'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+} from '../hosted-terminals/creation/agent-launch/web-agent-session-handoff'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   isReadyTerminalTab,
   isTerminalSurfaceTab,
@@ -29,7 +29,12 @@ import {
   shouldReplaceTerminalTab
 } from './terminal-surfaces'
 import { buildMirroredTerminalTabs } from './terminal-build'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import {
+  collectHostRetiredTerminals,
+  isTerminalRowRetiredByHost
+} from './host-retired-terminal-rows'
+import { hostSnapshotAffirmsWorktreeContents } from './hydration/host-session-snapshot-authority'
+import { logHostTerminalTabsShrunk } from './host-terminal-tab-drop-log'
 
 export function prepareWebSessionTabsSnapshotBase(
   state: WebSessionTabsSyncState,
@@ -137,6 +142,7 @@ export function prepareWebSessionTabsSnapshotBase(
     }
   }
   const exactProvisionalHandoffs = new Set(provisionalHandoffHostTabIds.keys())
+  const hostRetiredTerminals = collectHostRetiredTerminals(snapshot, environmentId)
   const retainedTerminalTabs = reconcilesNonAgentTabs
     ? currentTerminalTabs.filter(
         (tab) =>
@@ -148,6 +154,11 @@ export function prepareWebSessionTabsSnapshotBase(
             nextMirroredTerminalIds,
             exactProvisionalHandoffs,
             state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
+          ) &&
+          !isTerminalRowRetiredByHost(
+            tab,
+            state.terminalLayoutsByTabId[tab.id],
+            hostRetiredTerminals
           )
       )
     : currentTerminalTabs
@@ -177,6 +188,15 @@ export function prepareWebSessionTabsSnapshotBase(
           !hostSnapshotAffirmsWorktreeContents(snapshot)
         ? null
         : []
+  if (reconcilesNonAgentTabs) {
+    logHostTerminalTabsShrunk(
+      environmentId,
+      worktreeId,
+      currentTerminalTabs,
+      nextTerminalTabs ?? [],
+      now
+    )
+  }
   const mirroredTerminalIds = new Set(mirroredTerminalTabEntries.map((tab) => tab.id))
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)

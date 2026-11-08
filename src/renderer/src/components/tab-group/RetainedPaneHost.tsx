@@ -102,10 +102,11 @@ export function RetainedPaneHost({
         ? {
             position: 'absolute',
             positionAnchor: anchorName,
-            top: `anchor(${anchorName} top)`,
-            left: `anchor(${anchorName} left)`,
-            width: `anchor-size(${anchorName} width)`,
-            height: `anchor-size(${anchorName} height)`,
+            // An unresolved anchor must stay clipped instead of painting a content-sized pane.
+            top: `anchor(${anchorName} top, 0px)`,
+            left: `anchor(${anchorName} left, 0px)`,
+            width: `anchor-size(${anchorName} width, 0px)`,
+            height: `anchor-size(${anchorName} height, 0px)`,
             display: isVisible || measureWhileHidden ? 'flex' : 'none',
             opacity: isVisible ? visibleOpacity : 0,
             pointerEvents: isVisible ? 'auto' : 'none'

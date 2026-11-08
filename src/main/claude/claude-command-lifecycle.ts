@@ -3,18 +3,18 @@
 import {
   agentSessionFailureFact,
   type SubmissionRejectionKind
-} from '../../shared/agent-session-failure'
+} from '../../shared/agent-session/failures/agent-session-failure'
 import {
   DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED,
   DISPATCH_DOUBT_PROVIDER_IDLE
-} from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+} from '../native-chat/agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import {
   rejectClaudeDispatchWaiters,
   releaseClaudeDispatchWaitersInDoubt
-} from './claude-structured-dispatch'
-import { readClaudeFrameString } from './claude-structured-init-proof'
+} from './structured/claude-structured-dispatch'
+import { readClaudeFrameString } from './structured/claude-structured-init-proof'
 import type { ClaudeLateDispatchSettlement } from './claude-replay-turn-resolution'
-import type { ClaudeSession, ClaudeStartedSend } from './claude-structured-session-state'
+import type { ClaudeSession, ClaudeStartedSend } from './structured/claude-structured-session-state'
 
 const UNSTARTED_VERDICT = {
   cancelled: 'cancelled',

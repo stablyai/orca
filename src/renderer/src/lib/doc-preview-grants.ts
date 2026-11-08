@@ -1,9 +1,9 @@
 import type { DocPreviewGrantRequest } from '../../../preload/api/doc-preview-api'
 import { basename, dirname, getRelativePathInsideRoot } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import { chatScratchFileAddress } from '@/runtime/files/addressing/runtime-chat-scratch-file-address'
 import type { AppState } from '@/store/types'
 
 /** `location` is what the grant was minted for, so its readers and its share key stay on that host. */
@@ -48,8 +48,25 @@ export function buildDocPreviewGrantRequest(
           relativePath: worktreeRelativePath
         }
       : chatScratchFileAddress(filePath)
-  if (!environmentId || !base) {
+  if (!environmentId) {
     return null
+  }
+  if (!base) {
+    if (!worktreeRoot) {
+      return null
+    }
+    return {
+      owner: {
+        kind: 'runtime',
+        environmentId,
+        worktreeSelector: toRuntimeWorktreeSelector(worktreeId),
+        worktreeRoot,
+        fileAccess: 'terminal-artifact'
+      },
+      requestBase: root,
+      root,
+      entryRelativePath: basename(filePath)
+    }
   }
   return {
     owner: {
