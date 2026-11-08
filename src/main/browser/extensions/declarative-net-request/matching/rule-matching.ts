@@ -1,7 +1,7 @@
 import { hostMatchesDomainLists } from './domain-matching'
-import type { DnrHeaderCondition } from './header-rules'
-import type { DnrIndexedRule } from './indexed-rule'
-import type { DnrRequestContext } from './request-context'
+import type { DnrHeaderCondition } from '../header-actions/header-rules'
+import type { DnrIndexedRule } from '../rule-compilation/indexed-rule'
+import type { DnrRequestContext } from '../request-context'
 
 // Per-rule checks from url_pattern_index.cc (DoesRuleFlagsMatch, DoesOriginMatchInitiatorDomainList,
 // DoesURLMatchRequestDomainList) and request_params.cc DoEmbedderConditionsMatch.

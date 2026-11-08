@@ -2,7 +2,7 @@ import { createIndexedRule } from './indexed-rule'
 import { dnrRuleProblem, type DnrRuleProblem } from './parse-errors'
 import { readDnrRuleJson } from './rule-schema'
 import type { DnrRulesetSource } from './rule-types'
-import { DnrRulesetIndex } from './ruleset-index'
+import { DnrRulesetIndex } from '../indexing/ruleset-index'
 
 // RulesetSource::IndexRules (ruleset_source.cc). Static rulesets skip bad rules with warnings;
 // updateDynamicRules / updateSessionRules reject the whole update on the first bad rule.

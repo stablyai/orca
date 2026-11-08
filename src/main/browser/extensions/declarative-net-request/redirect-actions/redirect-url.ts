@@ -1,5 +1,5 @@
-import { dnrRuleProblem, type DnrRuleProblem } from './parse-errors'
-import type { DnrRedirect, DnrUrlTransform } from './rule-types'
+import { dnrRuleProblem, type DnrRuleProblem } from '../rule-compilation/parse-errors'
+import type { DnrRedirect, DnrUrlTransform } from '../rule-compilation/rule-types'
 
 // Redirect parsing (indexed_rule.cc ParseRedirect/ValidateTransform, flat_ruleset_indexer.cc
 // BuildTransformOffset) and application (ruleset_matcher_base.cc GetTransformedURL,

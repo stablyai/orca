@@ -1,8 +1,8 @@
-import { hostLabelSuffixes, type DnrDomainList } from './domain-matching'
-import type { DnrIndexedRule } from './indexed-rule'
+import { hostLabelSuffixes, type DnrDomainList } from '../matching/domain-matching'
+import type { DnrIndexedRule } from '../rule-compilation/indexed-rule'
 import { dnrNgramDictionary, patternNgrams } from './ngram-dictionary'
-import type { DnrRequestContext } from './request-context'
-import { toLowerAscii } from './url-text'
+import type { DnrRequestContext } from '../request-context'
+import { toLowerAscii } from '../matching/url-text'
 
 // One url_pattern_index (url_pattern_index.cc UrlPatternIndexBuilder): rules keyed by a 5-gram
 // of their filter. Rules without one are keyed by an included request or initiator domain,

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { sameDomainOrHost } from './domain-matching'
+import { sameDomainOrHost } from '../matching/domain-matching'
 import { parseDnrRedirect, transformDnrUrl } from './redirect-url'
-import { isDnrRuleProblem } from './parse-errors'
-import type { DnrUrlTransform } from './rule-types'
+import { isDnrRuleProblem } from '../rule-compilation/parse-errors'
+import type { DnrUrlTransform } from '../rule-compilation/rule-types'
 
 function transform(url: string, spec: DnrUrlTransform): string | null {
   const parsed = parseDnrRedirect({ transform: spec }, 1, 'ext')

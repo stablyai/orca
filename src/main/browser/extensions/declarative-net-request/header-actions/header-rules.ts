@@ -1,6 +1,10 @@
-import { dnrRuleProblem, type DnrRuleProblem } from './parse-errors'
-import type { DnrHeaderInfo, DnrHeaderOperation, DnrModifyHeaderInfo } from './rule-types'
-import { toLowerAscii } from './url-text'
+import { dnrRuleProblem, type DnrRuleProblem } from '../rule-compilation/parse-errors'
+import type {
+  DnrHeaderInfo,
+  DnrHeaderOperation,
+  DnrModifyHeaderInfo
+} from '../rule-compilation/rule-types'
+import { toLowerAscii } from '../matching/url-text'
 
 // Header validation from indexed_rule.cc (ValidateHeadersForModification,
 // ValidateResponseHeadersForMatching) and the request-header append allowlist with each
