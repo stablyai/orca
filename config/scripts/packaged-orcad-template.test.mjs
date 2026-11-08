@@ -15,6 +15,7 @@ const {
   assertOrcadTemplateBuilt,
   finalizePackagedOrcadTemplate,
   findOrcadTemplateMachOFiles,
+  isOrcadTemplateRequired,
   resealOrcadTemplateManifest,
   resealSignedWindowsApp
 } = require('./packaged-orcad-template.cjs')
@@ -100,21 +101,24 @@ describe('packaged orcad template', () => {
     )
   })
 
-  it('fails a required build without the template and lets a dev build skip it', async () => {
+  it('requires SSH templates by default and only skips them for an explicit development opt-out', async () => {
     quietly()
     const resourcesDir = await tempRoot()
-    const env = { ORCA_REQUIRE_ORCAD_TEMPLATE: '1' }
-
+    for (const env of [{}, { ORCA_REQUIRE_ORCAD_TEMPLATE: '1' }]) {
+      expect(isOrcadTemplateRequired(env)).toBe(true)
+      await expect(
+        finalizePackagedOrcadTemplate(resourcesDir, { platform: 'linux', env })
+      ).rejects.toThrow('missing the orcad deployment template')
+      expect(() => assertOrcadTemplateBuilt(resourcesDir, env)).toThrow(
+        'SSH-enabled packaging requires'
+      )
+    }
+    const env = { ORCA_REQUIRE_ORCAD_TEMPLATE: '0' }
+    expect(isOrcadTemplateRequired(env)).toBe(false)
     await expect(
       finalizePackagedOrcadTemplate(resourcesDir, { platform: 'linux', env })
-    ).rejects.toThrow('missing the orcad deployment template')
-    await expect(
-      finalizePackagedOrcadTemplate(resourcesDir, { platform: 'linux', env: {} })
     ).resolves.toBeUndefined()
-    expect(() => assertOrcadTemplateBuilt(resourcesDir, env)).toThrow(
-      'ORCA_REQUIRE_ORCAD_TEMPLATE=1'
-    )
-    expect(() => assertOrcadTemplateBuilt(resourcesDir, {})).not.toThrow()
+    expect(() => assertOrcadTemplateBuilt(resourcesDir, env)).not.toThrow()
   })
 
   it('reseals the Windows files SignPath returned, by their app-relative list', async () => {

@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { promisify } from 'node:util'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { writeMobileWebBundleFixtureTree } from './mobile-web-bundle-fixture-tree.mjs'
 
 const REPO_ROOT = join(import.meta.dirname, '..', '..')
@@ -429,11 +429,13 @@ describe('arch-aware packaging guard', () => {
   let scratch
   let bundleDir
   beforeAll(async () => {
+    vi.stubEnv('ORCA_REQUIRE_ORCAD_TEMPLATE', '0')
     scratch = await mkdtemp(join(tmpdir(), 'orca-electron-builder-guard-'))
     bundleDir = join(scratch, 'mobile-web')
     await writeMobileWebBundleFixtureTree({ outDir: bundleDir })
   })
   afterAll(async () => {
+    vi.unstubAllEnvs()
     await rm(scratch, { recursive: true, force: true })
   })
 

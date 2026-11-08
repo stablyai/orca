@@ -38,9 +38,9 @@ const orcadTemplateMacSignIgnore = ['/orcad-template/']
 // Mach-O thin (both byte orders, 32/64-bit) and fat headers.
 const MACH_O_MAGICS = new Set(['feedface', 'feedfacf', 'cefaedfe', 'cffaedfe', 'cafebabe'])
 
-/** Release packaging sets it; dev and local builds may ship without the template. */
+/** Installers include SSH deployment support unless a development build explicitly opts out. */
 function isOrcadTemplateRequired(env = process.env) {
-  return env.ORCA_REQUIRE_ORCAD_TEMPLATE === '1'
+  return env.ORCA_REQUIRE_ORCAD_TEMPLATE !== '0'
 }
 
 // Why: electron-builder only warns on a missing extraResources source.
@@ -52,7 +52,7 @@ function assertOrcadTemplateBuilt(projectDir = join(__dirname, '..', '..'), env 
   )
   if (isOrcadTemplateRequired(env) && !existsSync(manifest)) {
     throw new Error(
-      `ORCA_REQUIRE_ORCAD_TEMPLATE=1 but ${manifest} is missing; download the merged template ` +
+      `SSH-enabled packaging requires ${manifest}; download the merged template ` +
         'from the release template job, or build it with `pnpm build:orcad-template`.'
     )
   }

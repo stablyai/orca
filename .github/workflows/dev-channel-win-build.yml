@@ -322,7 +322,7 @@ jobs:
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           ORCA_BUILD_COMMIT: ${{ inputs.ref }}
           # beforePack and afterPack fail the package when the template is absent.
-          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '' }}
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '0' }}
           # Allow upload beyond publisher’s 2h release-age guard; slow mac notarization/Windows build can otherwise silently drop every asset.
           EP_GH_IGNORE_TIME: 'true'
 
@@ -355,7 +355,7 @@ jobs:
           command: node config/scripts/ensure-native-runtime.mjs --runtime=electron; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }; pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
         env:
           ORCA_BUILD_COMMIT: ${{ inputs.ref }}
-          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '' }}
+          ORCA_REQUIRE_ORCAD_TEMPLATE: ${{ inputs.orcad_template && '1' || '0' }}
 
       - name: Validate staged Windows artifacts
         if: inputs.stage_only

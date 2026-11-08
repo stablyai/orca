@@ -158,6 +158,13 @@ Ordinary installs include native optional dependencies for the current OS and CP
 Before a cross-architecture build (including `pnpm build:mac`, which produces both x64 and
 arm64 artifacts by default), run `pnpm install:release` to add the other CPU's variants.
 
+Desktop installers require the bundled SSH deployment template by default. Prepare
+`out/orcad-template` from the release template job, or run `pnpm build:orcad-template`
+with the required cross-platform native prebuilds available. Packaging fails when
+the template is missing and verifies the copied template before creating artifacts.
+For a development-only package without SSH workspace support, explicitly set
+`ORCA_REQUIRE_ORCAD_TEMPLATE=0`. Do not distribute that package as a full installer.
+
 Linux `pnpm build`, `pnpm build:native`, and Linux packaging require a running Docker
 daemon to build the clipboard helper against Ubuntu 20.04 rather than the host's
 newer libraries. A verified cached helper can be reused without Docker. For native

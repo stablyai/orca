@@ -182,14 +182,19 @@ describe('electron-builder packaging wiring', () => {
 
   it('verifies the bundle root it is given, not the repo one', async () => {
     // Injected root must reach verifier so unit tests can use scratch build without real out/.
-    await withBundle(async ({ bundleDir }) => {
-      await rm(join(bundleDir, 'manifest.json'))
-      expect(() =>
-        electronBuilderConfig.beforePack(
-          { electronPlatformName: process.platform, arch: process.arch === 'arm64' ? 3 : 1 },
-          bundleDir
-        )
-      ).toThrow(/no bundle manifest/)
-    })
+    vi.stubEnv('ORCA_REQUIRE_ORCAD_TEMPLATE', '0')
+    try {
+      await withBundle(async ({ bundleDir }) => {
+        await rm(join(bundleDir, 'manifest.json'))
+        expect(() =>
+          electronBuilderConfig.beforePack(
+            { electronPlatformName: process.platform, arch: process.arch === 'arm64' ? 3 : 1 },
+            bundleDir
+          )
+        ).toThrow(/no bundle manifest/)
+      })
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 })
