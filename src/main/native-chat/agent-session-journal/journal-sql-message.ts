@@ -175,12 +175,7 @@ export function applyJournalSqlMessage(
   }
   const rendered = journalRenderItem(itemId, revision, row.body, row, scope)
   const next = previous ? journalItemRevisionValue(previous, rendered) : rendered
-  const returned = db
-    .prepare(`SELECT card.message_id, card.version_sequence, card.version_index, card.state,
-      card.position, card.payload_json FROM journal_card_versions AS card
-    JOIN journal_items AS item ON item.session_id=card.session_id AND item.epoch=card.epoch AND item.item_id=card.command_turn_item_id
-    WHERE card.session_id=? AND card.epoch=? AND card.current=1 AND card.state='returned'`)
-    .all(...prefix)
+  const spent = spendJournalSqlCommandCards(db, prefix, savedAt)
   const result: JournalSqlMessageCommit = {
     cursor: { epoch, sequence },
     outcome: { kind: 'committed', wrote: true },
@@ -235,7 +230,7 @@ export function applyJournalSqlMessage(
       result.acceptedInputs = readJournalSqlAcceptedInputs(db, prefix)
     }
   }
-  Object.assign(result, spendJournalSqlCommandCards(db, prefix, sequence, returned, savedAt))
+  Object.assign(result, spent)
   result.inputChanged ||= result.cards.length > 0
   if (isJournalProviderActivity(row.recovered, rawId, row.body)) {
     db.prepare(`INSERT INTO journal_provider_activity(session_id,epoch,fence,last_activity_at) VALUES(?,?,?,?)

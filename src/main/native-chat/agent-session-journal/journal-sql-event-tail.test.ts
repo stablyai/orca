@@ -154,10 +154,6 @@ it('resets old cursors at the replay count and metadata budgets while preserving
   for (let index = 0; index < 300; index++) {
     const messageId = `returned-command-${index}`.padEnd(64, 'x')
     const card = {
-      messageId,
-      position: index,
-      state: 'returned',
-      fingerprint: 'command',
       body: { kind: 'message', role: 'user', blocks: [], command: { name: 'compact' } },
       holdReason: null,
       returnedReason: 'refused',
@@ -166,9 +162,9 @@ it('resets old cursors at the replay count and metadata budgets while preserving
       queuedAt: null
     }
     db.prepare(
-      `INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,version_index,current,state,command_turn_item_id,payload_json)
-        VALUES('chat','epoch',?,1,0,1,'returned','orca:command',?)`
-    ).run(messageId, JSON.stringify(card))
+      `INSERT INTO journal_queue_cards(session_id,epoch,message_id,revision,state,position,command_turn_item_id,payload_json)
+        VALUES('chat','epoch',?,1,'returned',?,'orca:command',?)`
+    ).run(messageId, index, JSON.stringify(card))
   }
   await commit(message('wide withdrawal remains saved'))
   expect(after(4107)).toMatchObject({ ok: false, reset: 'cursor_compacted' })
@@ -176,11 +172,7 @@ it('resets old cursors at the replay count and metadata budgets while preserving
     body: { blocks: [{ text: 'wide withdrawal remains saved' }] }
   })
   expect(
-    db
-      .prepare(
-        "SELECT COUNT(*) AS count FROM journal_card_versions WHERE current=1 AND state='withdrawn'"
-      )
-      .get()
+    db.prepare("SELECT COUNT(*) AS count FROM journal_queue_cards WHERE state='withdrawn'").get()
   ).toEqual({ count: 300 })
   expect(
     db.prepare('SELECT COUNT(*) AS count FROM journal_events').get()!.count

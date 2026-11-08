@@ -2,6 +2,7 @@ import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA } from './journal-domain-current-queue-schema'
 import {
   applyJournalDomainEditLease,
   journalDomainEditLeaseDeadline,
@@ -21,9 +22,11 @@ function fixture() {
   const db = new Database(':memory:')
   databases.push(db)
   migrateJournalDomainSchema(db)
-  let version = 0
+  // Temporary until the central ordered migration list runs this body.
+  db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA)
+  // Each seed is a content or state write on the one current row, as the queue writers make.
   const seed = (fields: Partial<QueuedMessageRow> = {}) => {
-    const card: QueuedMessageRow = {
+    const { messageId, state, position, ...card }: QueuedMessageRow = {
       messageId: 'card',
       position: 1,
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] },
@@ -36,20 +39,15 @@ function fixture() {
       queuedAt: null,
       ...fields
     }
-    db.prepare(`UPDATE journal_card_versions SET current=0
-      WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
+    db.prepare(`INSERT INTO journal_queue_cards
+      (session_id,epoch,message_id,revision,state,position,payload_json) VALUES(?,?,?,1,?,?,?)
+      ON CONFLICT(session_id,epoch,message_id) DO UPDATE SET revision=revision+1,
+        state=excluded.state, payload_json=excluded.payload_json`).run(
       target.sessionId,
       target.epoch,
-      card.messageId
-    )
-    db.prepare(`INSERT INTO journal_card_versions
-      (session_id,epoch,message_id,version_sequence,version_index,current,state,payload_json)
-      VALUES(?,?,?,?,0,1,?,?)`).run(
-      target.sessionId,
-      target.epoch,
-      card.messageId,
-      ++version,
-      card.state,
+      messageId,
+      state,
+      position,
       JSON.stringify(card)
     )
   }

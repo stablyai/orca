@@ -7,6 +7,7 @@ import type {
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA } from './journal-domain-current-queue-schema'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { JournalSqlBatch } from './journal-sql-batch'
 import {
@@ -33,6 +34,8 @@ export function message(
 export function messageFixture(db = new Database(':memory:')) {
   db.pragma('user_version=4')
   migrateJournalDomainSchema(db)
+  // Temporary until the central ordered migration list runs this body.
+  db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA)
   db.prepare(
     `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES(?,?,10,1)`
   ).run(target.sessionId, target.epoch)

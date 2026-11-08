@@ -12,7 +12,13 @@ import {
 } from '../agent-session-attachments/agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { applyJournalDomainEditLease } from './journal-domain-edit-leases'
+import { JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA } from './journal-domain-current-queue-schema'
+import {
+  applyJournalDomainEditLease,
+  journalDomainMessageEditHeld
+} from './journal-domain-edit-leases'
+import { journalDomainQueueRow } from './journal-domain-queue-rows'
+import { readJournalSqlAcceptedInputs } from './journal-sql-accepted-inputs'
 import {
   applyJournalDomainQueueCommand,
   type JournalDomainQueueOperation
@@ -39,20 +45,14 @@ function fixture() {
     rmSync(stateDirectory, { recursive: true, force: true })
   })
   migrateJournalDomainSchema(db)
+  // Temporary until the central ordered migration list runs this body.
+  db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA)
   ensureAgentSessionAttachmentClaimTables(db)
   db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
     VALUES('chat','epoch',10,1)`).run()
-  const seed = (
-    messageId: string,
-    position: number,
-    fields: Partial<QueuedMessageRow> = {},
-    version = 1
-  ) => {
-    const card = {
-      messageId,
-      position,
+  const seed = (messageId: string, position: number, fields: Partial<QueuedMessageRow> = {}) => {
+    const { state = 'waiting', ...card } = {
       body: text(messageId),
-      state: 'waiting',
       holdReason: null,
       returnedReason: null,
       returnedRejection: null,
@@ -60,13 +60,12 @@ function fixture() {
       queuedAt: { epoch: 'epoch', sequence: 1 },
       ...fields
     }
-    db.prepare(`INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,
-      version_index,current,state,payload_json,position) VALUES('chat','epoch',?,?,0,1,?,?,?)`).run(
+    db.prepare(`INSERT INTO journal_queue_cards(session_id,epoch,message_id,revision,state,position,
+      payload_json) VALUES('chat','epoch',?,1,?,?,?)`).run(
       messageId,
-      version,
-      card.state,
-      JSON.stringify(card),
-      position
+      state,
+      position,
+      JSON.stringify(card)
     )
   }
   const run = (operation: JournalDomainQueueOperation) => {
@@ -109,22 +108,14 @@ function fixture() {
       .prepare('SELECT sequence, changes_json FROM journal_events ORDER BY sequence')
       .all()
       .map((row) => [row.sequence, JSON.parse(String(row.changes_json)).cards])
-  const versions = (messageId: string) =>
-    db
-      .prepare(`SELECT version_sequence, current, state, position, payload_json FROM journal_card_versions
-        WHERE message_id=? ORDER BY version_sequence`)
-      .all(messageId)
-      .map((row) => {
-        const payload = JSON.parse(String(row.payload_json))
-        return [row.version_sequence, row.current, row.state, row.position, payload.body.blocks]
-      })
+  const card = (messageId: string) => journalDomainQueueRow(db, target, messageId)
+  const held = (messageId: string) => journalDomainMessageEditHeld(db, target, messageId, now)
   const order = () =>
     db
-      .prepare(`SELECT message_id, position FROM journal_card_versions WHERE current=1
-        ORDER BY position, message_id`)
+      .prepare('SELECT message_id, position FROM journal_queue_cards ORDER BY position, message_id')
       .all()
       .map((row) => [row.message_id, row.position])
-  return { db, stateDirectory, seed, run, lease, leases, head, events, versions, order }
+  return { db, stateDirectory, seed, run, lease, leases, head, events, card, held, order }
 }
 
 afterEach(() => {
@@ -133,7 +124,7 @@ afterEach(() => {
   }
 })
 
-it('admits a card once and keeps a replaced version only while an attempt names it', () => {
+it('admits a card once and edits its one current row in place', () => {
   const queue = fixture()
   queue.seed('earlier', 4, { state: 'withdrawn' })
   const first = queue.run({
@@ -157,11 +148,6 @@ it('admits a card once and keeps a replaced version only while an attempt names 
   })
   expect(queue.events()).toEqual([[11, ['card']]])
 
-  queue.db
-    .prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,
-    attempt_index,current,item_id,ordinal,submitted_at,fingerprint,dispatch_state,source_card_sequence,
-    source_card_index,payload_json) VALUES('chat','epoch','send',12,0,1,'item',12,1,'f','pending',11,0,?)`)
-    .run(JSON.stringify({ clientMessageId: 'send', queuedMessageId: 'card' }))
   const edit = (expected: string, value: string) =>
     queue.run({
       kind: 'queue-update',
@@ -169,10 +155,17 @@ it('admits a card once and keeps a replaced version only while an attempt names 
     })
   edit(agentSessionSendBodyFingerprint('chat', text('first')), 'edited once')
   edit(agentSessionSendBodyFingerprint('chat', text('edited once')), 'edited twice')
-  expect(queue.versions('card')).toEqual([
-    [11, 0, 'waiting', 5, [{ type: 'text', text: 'first' }]],
-    [13, 1, 'waiting', 5, [{ type: 'text', text: 'edited twice' }]]
+  expect(queue.order()).toEqual([
+    ['earlier', 4],
+    ['card', 5]
   ])
+  expect(queue.card('card')?.card).toMatchObject({
+    position: 5,
+    state: 'waiting',
+    body: text('edited twice'),
+    deliveryMode: 'queue',
+    unattended: false
+  })
 })
 
 it('answers a stale or repeated edit without a version and refuses a swept new upload atomically', () => {
@@ -231,10 +224,11 @@ it('answers a stale or repeated edit without a version and refuses a swept new u
   }
   expect(isAgentSessionAttachmentExpiredError(refusal)).toBe(true)
   expect(queue.head()).toBe(11)
-  expect(queue.versions('card').filter(([, current]) => current === 1)).toEqual([
-    [11, 1, 'waiting', 1, [{ type: 'text', text: 'look again' }, image(UPLOAD_A)]]
+  expect(queue.card('card')?.card.body.blocks).toEqual([
+    { type: 'text', text: 'look again' },
+    image(UPLOAD_A)
   ])
-  expect(queue.leases()).toEqual(['card'])
+  expect(queue.held('card')).toBe(true)
   expect(queue.db.prepare('SELECT upload_id FROM agent_session_attachment_claims').all()).toEqual([
     { upload_id: UPLOAD_A }
   ])
@@ -246,14 +240,25 @@ it('moves among unsettled cards only, keeping dispatched slots and id ties', () 
   queue.seed('b', 2, { state: 'dispatched', consumedAs: 'send-b' })
   queue.seed('c', 3, { state: 'returned', returnedReason: 'refused' })
   queue.seed('y', 4)
-  queue.seed('x', 4)
+  queue.seed('x', 4, { deliveryMode: 'steer', unattended: true })
   queue.lease('a')
+  queue.lease('x')
+  const before = queue.card('x')!
 
   const moved = queue.run({
     kind: 'queue-move',
     input: { messageId: 'x', beforeMessageId: 'a' }
   })
   expect(moved.result).toEqual({ kind: 'queue-move', move: { messageId: 'x', status: 'moved' } })
+  expect(moved.placements).toEqual([
+    { messageId: 'x', position: 1 },
+    { messageId: 'a', position: 3 },
+    { messageId: 'c', position: 4 }
+  ])
+  // Placement keeps the editor's authority, body and delivery facts.
+  expect(queue.card('x')).toEqual({ ...before, card: { ...before.card, position: 1 } })
+  expect(queue.held('x')).toBe(true)
+  expect(queue.held('a')).toBe(true)
   expect(queue.order()).toEqual([
     ['x', 1],
     ['b', 2],
@@ -262,7 +267,6 @@ it('moves among unsettled cards only, keeping dispatched slots and id ties', () 
     ['y', 4]
   ])
   expect(queue.events()).toEqual([[11, ['x', 'a', 'c']]])
-  expect(queue.leases()).toEqual(['a'])
   expect(moved.editDeadline).toBeUndefined()
 
   const stale = queue.run({ kind: 'queue-move', input: { messageId: 'b', beforeMessageId: 'a' } })
@@ -282,7 +286,7 @@ it('holds waiting cards and withdraws unsettled ones, ending only invalidated ed
   expect(held.cards.map((card) => [card.messageId, card.holdReason])).toEqual([
     ['a', 'send_failed']
   ])
-  expect(queue.leases()).toEqual(['a', 'c'])
+  expect([queue.held('a'), queue.held('c')]).toEqual([true, true])
   const again = queue.run({ kind: 'queue-hold', messageIds: ['a'], reason: 'send_failed' })
   expect(again).toMatchObject({ cursor: { sequence: 11 }, cards: [], inputChanged: false })
 
@@ -297,5 +301,74 @@ it('holds waiting cards and withdraws unsettled ones, ending only invalidated ed
     [11, ['a']],
     [12, ['c']]
   ])
-  expect(queue.versions('b')).toEqual([[1, 1, 'dispatched', 2, [{ type: 'text', text: 'b' }]]])
+  expect(queue.card('b')?.card).toMatchObject({ state: 'dispatched', position: 2, body: text('b') })
+})
+
+it('migrates current cards in place and snapshots admission provenance from the named card', () => {
+  const db = new Database(':memory:')
+  cleanups.push(() => db.close())
+  migrateJournalDomainSchema(db)
+  const version = (
+    messageId: string,
+    sequence: number,
+    current: number,
+    fields: Partial<QueuedMessageRow> = {}
+  ) => {
+    const card = { messageId, position: 2, body: text(messageId), state: 'waiting', ...fields }
+    db.prepare(`INSERT INTO journal_card_versions(session_id,epoch,message_id,version_sequence,
+      version_index,current,state,payload_json,position) VALUES('chat','epoch',?,?,0,?,?,?,?)`).run(
+      messageId,
+      sequence,
+      current,
+      card.state,
+      JSON.stringify(card),
+      card.position
+    )
+  }
+  // Mail admitted from its original card, which a later edit attributed to the user.
+  version('mail', 3, 0, {
+    body: { ...text('mail'), from: { kind: 'agent', senders: [], orchestration: null } }
+  })
+  version('mail', 5, 1, { body: text('edited mail') })
+  version('mine', 4, 1, { deliveryMode: 'steer', unattended: false })
+  version('robot', 6, 1, { unattended: true })
+  const attempt = db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,
+    attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,
+    dispatch_state,source_card_sequence,source_card_index,payload_json)
+    VALUES('chat','epoch',?,?,0,1,?,?,1,?,'f','accepted',?,0,?)`)
+  const admit = (sendId: string, accepted: number, card: string, cardSequence: number | null) =>
+    attempt.run(
+      sendId,
+      accepted,
+      `item-${sendId}`,
+      accepted,
+      accepted,
+      cardSequence,
+      JSON.stringify({ clientMessageId: sendId, queuedMessageId: card })
+    )
+  admit('send-mine', 7, 'mine', 4)
+  admit('send-robot', 8, 'robot', 6)
+  admit('send-mail', 9, 'mail', 3)
+  admit('send-lost', 10, 'mail', 1)
+  db.prepare(`INSERT INTO journal_edit_leases(session_id,epoch,owner_id,caller_key,edit_id,message_id,
+    fingerprint,state,consumed_as,expires_at) VALUES('chat','epoch','handle','phone','edit','mine','f',
+    'waiting',NULL,?)`).run(now + 60_000)
+
+  db.exec('BEGIN IMMEDIATE')
+  db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA)
+  db.exec('COMMIT')
+
+  const accepted = readJournalSqlAcceptedInputs(db, ['chat', 'epoch'])
+  expect(accepted).toEqual({ latestAcceptedTurnSequence: 10, latestPersonAcceptedSequence: 7 })
+  expect(journalDomainQueueRow(db, target, 'mail')?.card).toMatchObject({
+    messageId: 'mail',
+    position: 2,
+    state: 'waiting',
+    body: text('edited mail')
+  })
+  expect(journalDomainQueueRow(db, target, 'mine')?.card).toMatchObject({
+    deliveryMode: 'steer',
+    unattended: false
+  })
+  expect(journalDomainMessageEditHeld(db, target, 'mine', now)).toBe(true)
 })
