@@ -629,6 +629,51 @@ describe('registerClipboardHandlers', () => {
     }
   )
 
+  it('tries raw image bytes after the Windows copied file read fails', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    clipboardAvailableFormatsMock.mockReturnValue(['image/png', 'FileNameW'])
+    clipboardReadImageMock.mockReturnValue({ isEmpty: () => true })
+    const source = Buffer.alloc(24)
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).copy(source)
+    source.writeUInt32BE(13, 8)
+    source.write('IHDR', 12, 'ascii')
+    source.writeUInt32BE(1, 16)
+    source.writeUInt32BE(1, 20)
+    clipboardReadBufferMock.mockImplementation((format: string) => {
+      if (format === 'FileNameW') {
+        return Buffer.from('C:\\Users\\alice\\missing.png\0', 'utf16le')
+      }
+      if (format === 'Shell IDList Array') {
+        return shellIdListArray(1)
+      }
+      return source
+    })
+    fsOpenMock.mockRejectedValue(new Error('EACCES: unreadable copied file'))
+    const png = Buffer.from([4, 3, 2, 1])
+    nativeImageCreateFromBufferMock.mockReturnValue({
+      getSize: () => ({ height: 1, width: 1 }),
+      isEmpty: () => false,
+      toPNG: () => png
+    })
+    try {
+      registerClipboardHandlers({} as never)
+
+      const handler = getRegisteredHandlers().get('clipboard:saveImageAsTempFile')
+      await expect(handler?.(makeClipboardEvent())).resolves.toMatch(
+        /orca-paste-1760000000000-00000000-0000-4000-8000-000000000000\.png$/
+      )
+      expect(nativeImageCreateFromBufferMock).toHaveBeenCalledWith(source)
+      expect(fsWriteFileMock).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /orca-paste-1760000000000-00000000-0000-4000-8000-000000000000\.png$/
+        ),
+        png
+      )
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
   it('saves clipboard images through the selected remote runtime host', async () => {
     const png = Buffer.alloc(512 * 1024)
     const contentBase64 = png.toString('base64')

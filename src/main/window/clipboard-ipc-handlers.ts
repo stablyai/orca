@@ -169,20 +169,23 @@ export function registerClipboardHandlers(
       let png: Buffer | null = null
       if (!image.isEmpty()) {
         png = await encodeClipboardNativeImagePng(image)
-      } else if (source.windowsFileFormats) {
-        png = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
-          createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
-          openFile: (filePath) => open(filePath, 'r')
-        })
       } else {
-        // Why (#26739): CleanShot X puts JPEG bytes under public.png, which
-        // readImage reports as empty; try raw flavors, and fail loudly when
-        // nothing decodes so the paste is never silent.
-        const rawImagePng = readClipboardRawImageAsPng(clipboard)
-        if (rawImagePng) {
-          png = rawImagePng
-        } else {
-          throw new Error('Clipboard image could not be read')
+        if (source.windowsFileFormats) {
+          png = await readWindowsClipboardImageFileAsPng(source.windowsFileFormats, {
+            createImageFromBuffer: (buffer) => nativeImage.createFromBuffer(buffer),
+            openFile: (filePath) => open(filePath, 'r')
+          })
+        }
+        if (!png) {
+          // Why (#26739): CleanShot X puts JPEG bytes under public.png, which
+          // readImage reports as empty; a Windows copied file can also be
+          // unreadable while raw image bytes are still advertised. Try the raw
+          // flavors, and fail loudly when nothing decodes so the paste is
+          // never silent.
+          png = readClipboardRawImageAsPng(clipboard)
+          if (!png) {
+            throw new Error('Clipboard image could not be read')
+          }
         }
       }
       return png ? saveClipboardImageBufferForTarget(png, args, handlerOptions) : null
