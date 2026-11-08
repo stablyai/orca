@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import { Pencil, StickyNote } from 'lucide-react'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
@@ -55,6 +55,12 @@ export function ActivityThreadHoverCard({
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const open = detailsHoverControl.hoverOpen && !suppressed
+  const { closeHover } = detailsHoverControl
+  useEffect(() => {
+    if (suppressed) {
+      closeHover()
+    }
+  }, [suppressed, closeHover])
   const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
     useWorkspaceReferenceLinkActions(thread.worktree.id, detailsHoverControl)
 

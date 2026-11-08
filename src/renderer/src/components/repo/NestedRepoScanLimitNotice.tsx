@@ -63,6 +63,12 @@ export function NestedRepoScanLimitNotice({ scan }: { scan: NestedRepoScanResult
       className="inline-flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground"
       onPointerEnter={() => setDetailsOpen(true)}
       onPointerLeave={() => setDetailsOpen(false)}
+      onPointerDown={(event) => {
+        if (event.button === 2) {
+          event.preventDefault()
+        }
+      }}
+      onContextMenu={() => setDetailsOpen(false)}
       onFocusCapture={() => setDetailsOpen(true)}
       onBlurCapture={() => setDetailsOpen(false)}
     >
@@ -97,8 +103,10 @@ export function NestedRepoScanLimitNotice({ scan }: { scan: NestedRepoScanResult
           side="top"
           sideOffset={4}
           className="max-w-[260px] px-3 py-2 text-xs leading-5 text-pretty"
+          onContextMenu={(event) => event.stopPropagation()}
           // Hover-open must not move focus from the dialog when the pointer grazes this icon.
           onOpenAutoFocus={(event) => event.preventDefault()}
+          onCloseAutoFocus={(event) => event.preventDefault()}
         >
           {detailsText}
         </PopoverContent>
