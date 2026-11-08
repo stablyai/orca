@@ -179,6 +179,7 @@ export function AgentLaunchSetupPanel({
       <Command
         surface="inline"
         density="model"
+        defaultValue={currentModel}
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
@@ -238,29 +239,38 @@ export function AgentLaunchSetupPanel({
                 {t('agentPicker.legacyModels', 'Legacy models')}
               </CommandItem>
             ) : null}
-            {models
-              .filter(
+            {[
+              ...models.filter(
                 (model) =>
                   !model.hidden &&
                   (model.id === currentModel || modelQuery || Boolean(model.isLegacy) === legacy)
-              )
-              .map((model) => (
+              ),
+              // Why one keyed list: when the catalog lists an unlisted current model, its row keeps
+              // its identity, so the highlight stays on it instead of jumping to the first model.
+              ...(currentModel && !models.some((model) => model.id === currentModel)
+                ? [{ id: currentModel, label: currentModel, unlisted: true }]
+                : [])
+            ].map((model) => {
+              const current =
+                'unlisted' in model || (currentModel === model.id && !modelInArguments)
+              return (
                 <CommandItem
                   key={model.id}
                   value={model.id}
                   keywords={[model.label]}
                   disabled={modelDisabled}
-                  data-current={currentModel === model.id && !modelInArguments}
-                  onSelect={() => editDraft({ kind: 'choice', patch: { model: model.id } })}
+                  data-current={current}
+                  onSelect={() =>
+                    'unlisted' in model || editDraft({ kind: 'choice', patch: { model: model.id } })
+                  }
                 >
                   {model.label}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
-                    {currentModel === model.id && !modelInArguments ? (
-                      <Check className="size-3.5 text-muted-foreground" />
-                    ) : null}
+                    {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
                   </span>
                 </CommandItem>
-              ))}
+              )
+            })}
             {!legacy && !modelQuery && legacyCount > 0 ? (
               <CommandItem value="__legacy__" disabled={disabled} onSelect={() => setLegacy(true)}>
                 <span className="flex min-w-0 flex-col">
@@ -272,17 +282,6 @@ export function AgentLaunchSetupPanel({
                   </span>
                 </span>
                 <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
-              </CommandItem>
-            ) : null}
-            {currentModel && !models.some((model) => model.id === currentModel) ? (
-              <CommandItem
-                value={currentModel}
-                disabled={modelDisabled}
-                onSelect={() => {}}
-                data-current="true"
-              >
-                {currentModel}
-                <Check className="ml-auto size-3.5 text-muted-foreground" />
               </CommandItem>
             ) : null}
           </CommandGroup>
