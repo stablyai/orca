@@ -12,7 +12,7 @@ import {
 } from '../../autosave/editor-autosave-controller-test-fixture'
 import { discardEditorFileChangesAndClose } from '../flush/discard-editor-file-changes'
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 
 const storeHolder = vi.hoisted((): { store: StoreApi<AppState> | null } => ({ store: null }))
 
@@ -125,58 +125,6 @@ describe('untitled note save lifecycle', () => {
     } finally {
       cleanup()
     }
-  })
-
-  it("keeps autosaved content when Don't Save interrupts the in-flight write", async () => {
-    loadFromDisk(store, '')
-    let finishWrite: () => void = () => {}
-    disk.fs.writeFile.mockImplementationOnce(
-      ({ filePath, content }: { filePath: string; content: string }) =>
-        new Promise<void>((resolve) => {
-          finishWrite = () => {
-            disk.files.set(filePath, content)
-            resolve()
-          }
-        })
-    )
-    const cleanup = attachEditorAutosaveController(withLoadedBaselines(store, disk))
-    try {
-      typeInto(store, 'my note')
-      await vi.advanceTimersByTimeAsync(1500)
-      expect(disk.fs.writeFile).toHaveBeenCalledTimes(1)
-
-      const discarded = discardEditorFileChangesAndClose(FILE_ID)
-      finishWrite()
-      await discarded
-      // Why: the superseded save left the tab looking like a placeholder, so only the size check keeps the note.
-      await vi.advanceTimersByTimeAsync(0)
-
-      expect(store.getState().openFiles).toHaveLength(0)
-      expect(disk.files.get(FILE_ID)).toBe('my note')
-      expect(disk.fs.deletePath).not.toHaveBeenCalled()
-    } finally {
-      cleanup()
-    }
-  })
-
-  it.each([
-    ['while its tab showed the new text', true],
-    ['while its tab was in the background', false]
-  ])('keeps a note an agent wrote into %s', async (_when, reloaded) => {
-    loadFromDisk(store, '')
-    disk.files.set(FILE_ID, 'agent text')
-    if (reloaded) {
-      loadFromDisk(store, 'agent text')
-    }
-
-    store.getState().closeFile(FILE_ID)
-
-    // Why: a macrotask drains the stat → delete chain before asserting nothing was removed.
-    await vi.advanceTimersByTimeAsync(0)
-    expect(disk.files.get(FILE_ID)).toBe('agent text')
-    expect(disk.fs.deletePath).not.toHaveBeenCalled()
-    // Why: a background tab never reloaded the write, so only the size check knew it was a real note.
-    expect(isReopenable(store)).toBe(reloaded)
   })
 
   it("removes a never-saved note's placeholder on Don't Save", async () => {

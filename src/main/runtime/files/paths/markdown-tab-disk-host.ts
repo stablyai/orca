@@ -1,6 +1,6 @@
 /** Local workspaces use local disk; runtime environments use their server's file RPCs/compare-write.
  * Raw SSH routes remain unsupported instead of falling back to client paths. */
-import { isBinaryBuffer } from '../../../../shared/binary-buffer'
+import { isBinaryBuffer } from '../../../../shared/file-preview/binary-buffer'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   compareDiskWritePrecondition,
@@ -13,10 +13,10 @@ import {
   type FileWriteDiskComparison,
   type FileWriteDiskPrecondition,
   type FileWriteResult
-} from '../../../../shared/file-write-disk-precondition'
+} from '../../../../shared/file-write/file-write-disk-precondition'
 import { utf8ByteLength } from '../../../../shared/mobile-markdown-document'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
-import { assertFileMutationOwnershipCapability } from '../../../../shared/file-mutation-ownership'
+import { assertFileMutationOwnershipCapability } from '../../../../shared/file-write/file-mutation-ownership'
 import type { PersistedOpenFile } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { readLocalRuntimeFilePrefix } from '../file-reads'
 import {

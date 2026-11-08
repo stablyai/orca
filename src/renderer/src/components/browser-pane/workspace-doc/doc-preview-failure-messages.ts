@@ -1,7 +1,7 @@
 import type {
   DocPreviewFileFailure,
   DocPreviewFileFailureReason
-} from '../../../../../shared/doc-preview-scheme'
+} from '../../../../../shared/document-preview/doc-preview-scheme'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

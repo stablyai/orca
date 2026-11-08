@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { Copy, ExternalLink, MoreHorizontal, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,

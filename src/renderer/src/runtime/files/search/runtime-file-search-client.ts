@@ -3,12 +3,15 @@ import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
 } from '../../../../../shared/abort-signal-reason'
-import type { SearchOptions, SearchResult } from '../../../../../shared/code-search-types'
-import type { RuntimeFileListResult } from '../../../../../shared/runtime-file-contracts'
+import type {
+  SearchOptions,
+  SearchResult
+} from '../../../../../shared/file-search/code-search-types'
+import type { RuntimeFileListResult } from '../../../../../shared/file-listing/runtime-file-list'
 import {
   buildExcludePathPrefixes,
   shouldExcludeQuickOpenRelPath
-} from '../../../../../shared/quick-open-filter'
+} from '../../../../../shared/quick-open/quick-open-filter'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import {
   createEmptyRuntimeFileSearchResult,

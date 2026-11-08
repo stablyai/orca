@@ -7,7 +7,7 @@ import type {
   ArtifactPublishedLink,
   ArtifactPublishResult,
   ArtifactWriteRequest
-} from '../../../shared/artifacts'
+} from '../../../shared/artifacts/artifacts'
 import { SharingUnavailableOnHostError } from '../../../shared/sharing-unavailable-on-host'
 import type { ArtifactCloudService } from '../../artifacts/artifact-cloud-service'
 

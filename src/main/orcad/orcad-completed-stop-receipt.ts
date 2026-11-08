@@ -1,8 +1,8 @@
 import { lstatSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { z } from 'zod'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import { hasErrorCode } from '../daemon/endpoint/identity/daemon-process-inspection'
 import {
   ORCAD_STOP_RECEIPTS_DIRNAME,

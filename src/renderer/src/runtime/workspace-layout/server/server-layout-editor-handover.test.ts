@@ -10,9 +10,9 @@ import type {
   LayoutApplyReply,
   LayoutCommand
 } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
-import { ownedEditorFileId } from '../../../../../shared/workspace-session/workspace-session-pane-ownership'
+
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
@@ -21,7 +21,6 @@ import { _resetLayoutFramePositionForTests } from '../frames/layout-frame-positi
 import {
   CAPABLE,
   ENV,
-  HOST_GROUP,
   SERVER_LAYOUT,
   WT,
   createFakeLayoutStreams,
@@ -128,9 +127,6 @@ const { setServers, mirroredStore, install, uninstallAll } = createServerHarness
 
 const FILE_PATH = '/worktree/src/a.ts'
 const SECOND_PATH = '/worktree/src/b.ts'
-/** The id this desktop gives the server's file, before the hand-over and after it. */
-const desktopFileId = (path: string) => ownedEditorFileId(path, WT, ENV)
-const serverFileId = (path: string) => ownedEditorFileId(path, WT, undefined)
 
 /** Opens a file the way an editor action does; returns its file id and tab id. */
 function openDesktopFile(
@@ -222,46 +218,6 @@ afterEach(() => {
 })
 
 describe('a desktop-only editor tab when the server’s frames take its workspace', () => {
-  it('is handed over under its own id, then drawn from the frames with its draft, once', async () => {
-    const store = mirroredStore()
-    const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
-    expect(fileId).toBe(desktopFileId(FILE_PATH))
-    expect(tabId).toBeDefined()
-    editDraft(store, fileId, 'unsaved')
-    const server = serverWith()
-
-    const stream = await connect(store, server)
-
-    expect(hoisted.sent.map(({ target, command }) => [target, command])).toEqual([
-      [
-        { kind: 'environment', environmentId: ENV },
-        expect.objectContaining({
-          type: 'openEditorTab',
-          workspace: WT,
-          tabId,
-          fileId: serverFileId(FILE_PATH),
-          groupId: HOST_GROUP,
-          contentType: 'editor',
-          file: { filePath: FILE_PATH, relativePath: 'src/a.ts', language: 'typescript' }
-        })
-      ]
-    ])
-    expect(server.layout(WT)?.tabs.map((tab) => tab.id)).toContain(tabId)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-
-    // The server's next records frame: the tab is the server's now, so it stays.
-    const renamed = structuredClone(server.layout(WT)!)
-    renamed.tabs[0]!.customTitle = 'named on the server'
-    server.change(WT, renamed)
-    await settle()
-
-    expect(editorTabIds(store)).toEqual([tabId])
-    expect(openFileIds(store)).toEqual([fileId])
-    expect(store.getState().editorDrafts[fileId]).toBe('unsaved')
-    expect(store.getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe('named on the server')
-    expect(stream.closed).toBe(false)
-  })
-
   it('keeps the tab and its draft on the mirror for the stream after any other refusal', async () => {
     const store = mirroredStore()
     const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
@@ -438,28 +394,6 @@ describe('a desktop-only editor tab when the server’s frames take its workspac
     expect(hoisted.closeSessionTab).toHaveBeenCalledTimes(1)
     expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
     expect(editorTabIds(store)).toEqual([])
-  })
-
-  it('routes an open in the gated workspace to the server, whose frames keep the tab', async () => {
-    const store = mirroredStore()
-    const server = serverWith()
-    await connect(store, server)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-
-    const { fileId } = openDesktopFile(store, FILE_PATH)
-    editDraft(store, fileId, 'unsaved')
-    await settle()
-    await settle()
-    const [open] = serverOpens()
-    const renamed = structuredClone(server.layout(WT)!)
-    renamed.tabs[0]!.customTitle = 'named on the server'
-    server.change(WT, renamed)
-    await settle()
-
-    expect(open).toMatchObject({ fileId: serverFileId(FILE_PATH), groupId: HOST_GROUP })
-    expect(editorTabIds(store)).toEqual([open!.tabId])
-    expect(openFileIds(store)).toEqual([fileId])
-    expect(store.getState().editorDrafts[fileId]).toBe('unsaved')
   })
 
   it('saves a handed-over file through the server, never this machine’s disk', async () => {

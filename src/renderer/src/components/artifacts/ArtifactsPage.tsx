@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { ArtifactCloudOperation, ArtifactListItem } from '../../../../shared/artifacts'
+import type {
+  ArtifactCloudOperation,
+  ArtifactListItem
+} from '../../../../shared/artifacts/artifacts'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { persistConfirmationSkipPreference } from '@/components/confirmation-skip-preference'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

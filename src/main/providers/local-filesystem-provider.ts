@@ -4,7 +4,7 @@ import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abo
 import {
   readAuthorizedDocPreviewFile,
   readAuthorizedDocPreviewFileChunk
-} from '../../shared/doc-preview-file-access'
+} from '../../shared/document-preview/doc-preview-file-access'
 import { renameLocalPathSerializedByDestination } from '../filesystem/destination-serialized-local-rename'
 import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../ipc/filesystem/access/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
@@ -22,7 +22,7 @@ import type { IFilesystemProvider } from './filesystem-provider-contract'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../shared/file-write-disk-precondition'
+} from '../../shared/file-write/file-write-disk-precondition'
 import { writeLocalTextFileWithDiskPrecondition } from '../ipc/filesystem/local-disk-write-precondition'
 import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 

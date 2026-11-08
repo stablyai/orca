@@ -1,4 +1,7 @@
-import { getPreparedQuickOpenFiles, isQuickOpenQueryTooLarge } from '../quick-open-search'
+import {
+  getPreparedQuickOpenFiles,
+  isQuickOpenQueryTooLarge
+} from '../../../../shared/quick-open/quick-open-path-search'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -17,7 +20,7 @@ import {
   validateNewTabEntryRelativePath
 } from './tab-create-entry-path-validation'
 import { classifyExplicitUrl, classifyHostUrl } from './tab-create-entry-url-classification'
-import { htmlFilePathFromUrl } from '../../../../shared/html-file-url'
+import { htmlFilePathFromUrl } from '../../../../shared/file-links/html-file-url'
 
 export {
   isTabEntryAbsolutePathLike,
