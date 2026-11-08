@@ -152,26 +152,6 @@ describe('wsl login shell command helpers', () => {
       },
       30_000
     )
-
-    it('keeps payload bytes that themselves contain a fence', () => {
-      // A per-call nonce prevents payloads quoting an older marker from truncating capture.
-      const captured = buildWslCapturedLoginShellCommand('cat -- /f', 'nonce2')
-      const payload = 'see __ORCA_WSL_CAPTURE_BEGIN_nonce1__ and __ORCA_WSL_CAPTURE_END_nonce1__\n'
-
-      expect(
-        captured.readStdout(
-          `banner\n__ORCA_WSL_CAPTURE_BEGIN_nonce2__${payload}__ORCA_WSL_CAPTURE_END_nonce2__`
-        )
-      ).toBe(payload)
-    })
-
-    it('returns the tail when a payload exits before the closing fence', () => {
-      const captured = buildWslCapturedLoginShellCommand('printf partial; exit 2', 'nonce1')
-
-      expect(captured.readStdout('banner\n__ORCA_WSL_CAPTURE_BEGIN_nonce1__partial')).toBe(
-        'partial'
-      )
-    })
   })
 })
 

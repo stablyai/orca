@@ -1,4 +1,4 @@
-import { useEffect, useMemo, type ReactElement } from 'react'
+import { memo, useCallback, useEffect, useMemo, type ReactElement } from 'react'
 import {
   ActivityIndicator,
   Animated,
@@ -13,6 +13,8 @@ import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { Presence } from '../components/AutoHeight'
 import { DisclosureChevron } from '../components/DisclosureChevron'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
+import { HostOfflineBanner, useHostOfflineBanner } from '../components/HostOfflineBanner'
+import { isConnectionOutage } from '../transport/connection/connection-health'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
 import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
@@ -25,13 +27,16 @@ import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
 } from '../worktree/host-workspace-list-states'
-import { getWorktreeDotStatus } from '../worktree/workspace-list-ordering'
+import { getWorktreeDotStatus, hasWorktreeAgentState } from '../worktree/workspace-list-ordering'
+import type { Section, WorkspaceListItem, Worktree } from '../worktree/workspace-list-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../src/shared/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../src/shared/worktree/card-properties'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import { buildRepoLookById } from './host-repo-looks'
+import { useRepoLookById, type RepoLook } from './host-repo-looks'
 import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
+import { useHostMutationDrafts } from '../query/host-mutation-drafts'
+import { workspaceRenameDraftKey } from './workspace-rename-sheet'
 import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
 
@@ -51,17 +56,19 @@ export function HostWorkspaceList({
     actions,
     activeWorktreeScroll,
     catalog,
+    client,
     connState,
     contentMaxWidth,
     displayWorktrees,
     embedded,
     forceReconnectHost,
+    hostDisplay,
     hostId,
     insets,
     isReadOnly,
     isWideLayout,
+    lastConnectedAt,
     noticeParam,
-    now,
     reconnectAttempts,
     relayRecovery,
     routeNotice,
@@ -81,17 +88,96 @@ export function HostWorkspaceList({
     )
   )
   const hasRows = sections.length > 0
+  const offlineBanner = useHostOfflineBanner({
+    client,
+    connState,
+    lastConnectedAt,
+    outage: isConnectionOutage(controller.connectionVerdict),
+    forceReconnect: hostId && forceReconnectHost ? () => void forceReconnectHost(hostId) : null,
+    // Group headers can stand with no rows under them; that list says "unreachable" in its body.
+    hasData: (controller.feed ? sections.length : displayWorktrees.length) > 0,
+    asOf: catalog.readAt
+  })
+  const renameDrafts = useHostMutationDrafts()
   const resetTitle = pageTitle?.collapsing.reset
   useEffect(() => {
     if (!hasRows) {
       resetTitle?.()
     }
   }, [hasRows, resetTitle])
-  const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
+  const repoLookById = useRepoLookById(repoById)
   const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(worktreeCardProperties, { compactWorktreeCards, newCardStyle }),
     [worktreeCardProperties, compactWorktreeCards, newCardStyle]
+  )
+  const sectionCounts = useMemo(
+    () => new Map(rawSections.map((section) => [section.key, section.data.length])),
+    [rawSections]
+  )
+  const { collapsedGroups } = controller
+  const { groupBy, agentActivityDisplayMode } = state.view
+  const { toggleCollapsed, toggleWorktreeLineage } = settings
+  const { setActionTarget } = state
+  const { openWorktreeSession } = actions
+  const statusLive = connState === 'connected'
+
+  const renderSectionHeader = useCallback(
+    ({ section }: { section: Section }) => {
+      const collapseKey = section.collapseKey ?? section.key
+      return (
+        <HostSectionHeader
+          title={section.title}
+          icon={section.icon}
+          isProjectGroup={section.isProjectGroup}
+          projectGroupDepth={section.projectGroupDepth}
+          pendingCreations={section.pendingCreations}
+          collapseKey={collapseKey}
+          collapsed={collapsedGroups.has(collapseKey)}
+          count={section.count ?? sectionCounts.get(section.key) ?? 0}
+          pending={pendingCollapseKeys.has(collapseKey)}
+          groupByRepo={groupBy === 'repo'}
+          repoLook={groupBy === 'repo' && section.repo ? repoLookById.get(section.repo.id) : null}
+          onToggle={toggleCollapsed}
+        />
+      )
+    },
+    [collapsedGroups, sectionCounts, pendingCollapseKeys, groupBy, repoLookById, toggleCollapsed]
+  )
+
+  const renderItem = useCallback(
+    ({ item: { row: item, view } }: { item: WorkspaceListItem }) => (
+      <WorktreeListRow
+        item={item}
+        view={view}
+        isReadOnly={isReadOnly}
+        status={hasWorktreeAgentState(item) ? getWorktreeDotStatus(item) : null}
+        repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
+        repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
+        hideRepo={groupBy === 'repo' && !view.showProjectName}
+        cardDetails={cardDetails}
+        agentActivityDisplayMode={agentActivityDisplayMode}
+        onPress={openWorktreeSession}
+        onAgentPress={openWorktreeSession}
+        statusLive={statusLive && !view.hostContextHealthLabel}
+        onLongPress={item.workspaceKind === 'folder-workspace' ? undefined : setActionTarget}
+        onToggleLineage={toggleWorktreeLineage}
+        unsavedName={unsavedRename(renameDrafts, hostId, item)}
+      />
+    ),
+    [
+      renameDrafts,
+      hostId,
+      isReadOnly,
+      cardDetails,
+      repoLookById,
+      groupBy,
+      agentActivityDisplayMode,
+      openWorktreeSession,
+      statusLive,
+      setActionTarget,
+      toggleWorktreeLineage
+    ]
   )
 
   // Group headers can exist before any row loads; the state then sits under them, not above the title.
@@ -178,7 +264,21 @@ export function HostWorkspaceList({
       {sections.length > 0 && (
         <Animated.SectionList
           ref={activeWorktreeScroll.sectionListRef}
-          ListHeaderComponent={pageTitle?.element}
+          ListHeaderComponent={
+            <>
+              {pageTitle?.element}
+              {offlineBanner ? (
+                <View style={styles.offlineBanner}>
+                  <HostOfflineBanner
+                    hostName={hostDisplay.title}
+                    offline={offlineBanner.offline}
+                    asOf={offlineBanner.asOf}
+                    onRetry={offlineBanner.retry}
+                  />
+                </View>
+              ) : null}
+            </>
+          }
           ListFooterComponent={listState}
           onScroll={pageTitle?.collapsing.onScroll}
           {...pageTitle?.collapsing.touchHandlers}
@@ -199,72 +299,7 @@ export function HostWorkspaceList({
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
-          renderSectionHeader={({ section }) => {
-            const pendingCreations = section.pendingCreations?.map((creation) => (
-              <HostPendingCreationRow key={creation.key} creation={creation} />
-            ))
-            if (!section.title) {
-              return pendingCreations ? <>{pendingCreations}</> : null
-            }
-            const collapseKey = section.collapseKey ?? section.key
-            const isCollapsed = controller.collapsedGroups.has(collapseKey)
-            const count =
-              section.count ?? rawSections.find((s) => s.key === section.key)?.data.length ?? 0
-            const repoSectionLook =
-              state.view.groupBy === 'repo' && section.repo
-                ? repoLookById.get(section.repo.id)
-                : null
-            const repoSectionColor = repoSectionLook?.color ?? null
-            const repoSectionIcon = repoSectionLook?.icon ?? null
-            return (
-              <>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.sectionHeader,
-                    section.projectGroupDepth
-                      ? {
-                          paddingLeft:
-                            WORKTREE_ROW_LAYOUT.indicatorInset +
-                            projectGroupHeaderIndent(section.projectGroupDepth)
-                        }
-                      : null,
-                    pressed && { backgroundColor: colors.translucentFill }
-                  ]}
-                  onPress={() => settings.toggleCollapsed(collapseKey)}
-                >
-                  <View style={styles.sectionChevron}>
-                    <DisclosureChevron expanded={!isCollapsed} collapsedDeg={0} expandedDeg={90}>
-                      <ChevronRight size={12} color={colors.textMuted} />
-                    </DisclosureChevron>
-                  </View>
-                  {section.icon === 'pin' && (
-                    <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
-                  )}
-                  {state.view.groupBy === 'repo' && section.isProjectGroup ? (
-                    <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
-                  ) : state.view.groupBy === 'repo' ? (
-                    <View style={styles.sectionRepoIcon}>
-                      <MobileRepoIcon
-                        repoIcon={repoSectionIcon}
-                        size={14}
-                        color={repoSectionColor ?? colors.textSecondary}
-                      />
-                    </View>
-                  ) : null}
-                  <Text style={styles.sectionTitle}>{section.title}</Text>
-                  <Text style={styles.sectionCount}>{count}</Text>
-                  {pendingCollapseKeys.has(collapseKey) && (
-                    <ActivityIndicator
-                      size="small"
-                      color={colors.textMuted}
-                      style={styles.sectionPendingSpinner}
-                    />
-                  )}
-                </Pressable>
-                {pendingCreations}
-              </>
-            )
-          }}
+          renderSectionHeader={renderSectionHeader}
           ItemSeparatorComponent={ListSeparator}
           // Why (#8498): manual pull-to-refresh forces a fresh snapshot after a stale-cache reconnect.
           refreshControl={
@@ -275,32 +310,94 @@ export function HostWorkspaceList({
               colors={[colors.textSecondary]}
             />
           }
-          renderItem={({ item: { row: item, view } }) => (
-            <WorktreeListRow
-              item={item}
-              view={view}
-              isReadOnly={isReadOnly}
-              now={now}
-              status={getWorktreeDotStatus(item)}
-              repoColor={repoLookById.get(item.repoId)?.color ?? DEFAULT_REPO_BADGE_COLOR}
-              repoIcon={repoLookById.get(item.repoId)?.icon ?? null}
-              hideRepo={state.view.groupBy === 'repo' && !view.showProjectName}
-              cardDetails={cardDetails}
-              agentActivityDisplayMode={state.view.agentActivityDisplayMode}
-              onPress={actions.openWorktreeSession}
-              onAgentPress={actions.openWorktreeSession}
-              statusLive={connState === 'connected' && !view.hostContextHealthLabel}
-              onLongPress={
-                item.workspaceKind === 'folder-workspace' ? undefined : state.setActionTarget
-              }
-              onToggleLineage={settings.toggleWorktreeLineage}
-            />
-          )}
+          renderItem={renderItem}
         />
       )}
     </>
   )
 }
+
+// The row keeps its real name; a rename the desktop never took is shown under it.
+function unsavedRename(
+  drafts: ReadonlyMap<string, string>,
+  hostId: string | undefined,
+  row: Worktree
+): string | undefined {
+  const draft = hostId ? drafts.get(workspaceRenameDraftKey(hostId, row)) : undefined
+  return draft?.trim() && draft !== row.displayName ? draft : undefined
+}
+
+// Takes the header's own fields, not the section, so a poll that rebuilds sections skips unchanged headers.
+const HostSectionHeader = memo(function HostSectionHeader(props: {
+  title: string
+  icon: Section['icon']
+  isProjectGroup: boolean | undefined
+  projectGroupDepth: number | undefined
+  pendingCreations: Section['pendingCreations']
+  collapseKey: string
+  collapsed: boolean
+  count: number
+  pending: boolean
+  groupByRepo: boolean
+  repoLook: RepoLook | null | undefined
+  onToggle: (collapseKey: string) => void
+}) {
+  useMobileColorScheme()
+  const pendingCreations = props.pendingCreations?.map((creation) => (
+    <HostPendingCreationRow key={creation.key} creation={creation} />
+  ))
+  if (!props.title) {
+    return pendingCreations ? <>{pendingCreations}</> : null
+  }
+  return (
+    <>
+      <Pressable
+        style={({ pressed }) => [
+          styles.sectionHeader,
+          props.projectGroupDepth
+            ? {
+                paddingLeft:
+                  WORKTREE_ROW_LAYOUT.indicatorInset +
+                  projectGroupHeaderIndent(props.projectGroupDepth)
+              }
+            : null,
+          pressed && { backgroundColor: colors.translucentFill }
+        ]}
+        onPress={() => props.onToggle(props.collapseKey)}
+      >
+        <View style={styles.sectionChevron}>
+          <DisclosureChevron expanded={!props.collapsed} collapsedDeg={0} expandedDeg={90}>
+            <ChevronRight size={12} color={colors.textMuted} />
+          </DisclosureChevron>
+        </View>
+        {props.icon === 'pin' && (
+          <Pin size={12} color={colors.textMuted} style={styles.sectionIcon} />
+        )}
+        {props.groupByRepo && props.isProjectGroup ? (
+          <FolderTree size={12} color={colors.textPrimary} style={styles.sectionIcon} />
+        ) : props.groupByRepo ? (
+          <View style={styles.sectionRepoIcon}>
+            <MobileRepoIcon
+              repoIcon={props.repoLook?.icon ?? null}
+              size={14}
+              color={props.repoLook?.color ?? colors.textSecondary}
+            />
+          </View>
+        ) : null}
+        <Text style={styles.sectionTitle}>{props.title}</Text>
+        <Text style={styles.sectionCount}>{props.count}</Text>
+        {props.pending && (
+          <ActivityIndicator
+            size="small"
+            color={colors.textMuted}
+            style={styles.sectionPendingSpinner}
+          />
+        )}
+      </Pressable>
+      {pendingCreations}
+    </>
+  )
+})
 
 function ListSeparator() {
   useMobileColorScheme()

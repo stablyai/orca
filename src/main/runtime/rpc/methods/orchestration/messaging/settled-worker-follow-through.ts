@@ -1,21 +1,21 @@
 import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   clearFollowUpMail,
   markUnreadFollowUpMail,
   getFollowUpDispatch,
   hasNewUnreadFollowUpMail,
-  FOLLOW_UP_MESSAGE_TYPES,
   listDispatchesWithFollowUpMail,
   receivesMailWhole
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
-import { resolveOrcaSessionParty } from '../../../../orchestration/orchestration-party'
-import { readStructuredAgentSessionRecord } from '../../../../structured-worker-authority'
+import { FOLLOW_UP_MESSAGE_TYPES } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { resolveOrcaSessionParty } from '../../../../orchestration/addressing/orchestration-party'
+import { readStructuredAgentSessionRecord } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { createHash } from 'node:crypto'
-import { escalateWorkerFailure } from '../../../../orchestration/worker-failure-escalation'
-import { dispatchReportMailbox } from '../../../../orchestration/dispatch-report-mailbox'
+import { escalateWorkerFailure } from '../../../../orchestration/workers/reports/worker-failure-escalation'
+import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import {
   planWorkerFollowUp,
   startWorkerFollowUp,

@@ -1,15 +1,15 @@
 import { groupFederatedDispatches } from './federated-fleet-host-groups'
 import { mapWithConcurrency } from '../../../../../../shared/map-with-concurrency'
-import { ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import { ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import {
   refreshOrchestrationFleetLivenessAttention,
   type FleetDurableWorker,
   type OrchestrationFleetPage
-} from '../../../../../../shared/orchestration-fleet-projection'
-import { projectFleetNextAction } from '../../../../../../shared/orchestration-fleet-worker-projection'
-import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/orchestration-peer-capability-cache'
-import { liveFederatedHomeAutoReleaseAt } from '../../../../orchestration/worker-terminal-ownership'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+} from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
+import { projectFleetNextAction } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-worker-projection'
+import { getOrchestrationPeerCapabilityCache } from '../../../../orchestration/federation/orchestration-peer-capability-cache'
+import { liveFederatedHomeAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolvePinnedFederatedServer } from '../worker/worker-observation'

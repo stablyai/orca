@@ -1,9 +1,10 @@
 import { memo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { ShieldQuestion } from 'lucide-react-native'
+import { approvalDetailPreview } from '../../../../../src/shared/agent-session/agent-session-approval-detail-preview'
 import { approvalBlockedPathToShow } from '../../../../../src/shared/agent-session/agent-session-approval-blocked-path'
 import { MobileNativeChatCardHeaderAction } from '../MobileNativeChatCardHeaderAction'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -135,7 +136,7 @@ function MobileNativeChatPermissionContext({
       ) : null}
       {isPlanApprovalSubject(permission.subject) ? (
         <View>
-          <MobileMarkdown content={permission.subject.text} />
+          <MobileNativeChatMarkdown content={permission.subject.text} />
           {permission.subject.filePath ? (
             <Text style={styles.planFile}>
               {t('chat.permission.planFile', 'Plan file: {{filePath}}', {
@@ -145,7 +146,7 @@ function MobileNativeChatPermissionContext({
           ) : null}
         </View>
       ) : permission.detail ? (
-        <Text style={styles.detail}>{permission.detail}</Text>
+        <MobileNativeChatPermissionDetail detail={permission.detail} />
       ) : null}
       {newerSubject ? (
         <Text testID="native-chat-approval-needs-newer-orca" style={styles.detail}>
@@ -153,6 +154,31 @@ function MobileNativeChatPermissionContext({
         </Text>
       ) : null}
     </ScrollView>
+  )
+}
+
+function MobileNativeChatPermissionDetail({ detail }: { detail: string }): React.JSX.Element {
+  const t = useMobileTranslation()
+  const [expanded, setExpanded] = useState(false)
+  const preview = approvalDetailPreview(detail)
+  return (
+    <View style={styles.content}>
+      {preview !== detail ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          onPress={() => setExpanded((open) => !open)}
+          hitSlop={8}
+        >
+          <Text style={[styles.detail, styles.contextLabel]}>
+            {expanded ? t('common.hideDetails', 'Hide details') : t('common.details', 'Details')}
+          </Text>
+        </Pressable>
+      ) : null}
+      <Text selectable style={styles.detail}>
+        {expanded ? detail : preview}
+      </Text>
+    </View>
   )
 }
 

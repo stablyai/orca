@@ -1,12 +1,12 @@
 import type { Repo } from '../../../../shared/repo-types'
 import { applyInheritedProjectGroups } from '../../../../shared/project-group-inheritance'
-import { reconcileFetchedRepos } from '../slices/repo-identity-reconcile'
-import { getRepoRowIdentity } from '../slices/repo-host-identity'
+import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
+import { getRepoRowIdentity } from './repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { mergeFetchedProjectCompatibilityForHost } from '../../../../shared/project-compatibility-host-merge'
 import { projectCompatibilityFromRepos } from '../../../../shared/project-compatibility-merge'
-import { mergeByIdentity } from '../catalog-identity'
+import { mergeByIdentity } from '../../lib/catalog-reconciliation/catalog-identity'
 import { isSavedHostCatalogRow } from './saved-host-catalog-rows'
 
 export function mergeFetchedReposForHost(
@@ -28,9 +28,10 @@ export function mergeFetchedReposForHost(
       (requested !== null && !requested.has(identity) && !isSavedHostCatalogRow(repo))
     )
   })
-  return reconcileFetchedRepos(
+  return reconcileCatalogRows(
     previous,
-    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoRowIdentity)
+    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoRowIdentity),
+    getRepoRowIdentity
   )
 }
 

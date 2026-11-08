@@ -1,6 +1,6 @@
 // Run workspace-seeded launch producers against the real parity store; stub only setup/trust/detection/workspace creation.
 import type { LaunchTestStore } from './launch-parity-renderer.test-fixture'
-import type * as WorkItemLaunch from '@/lib/launch-work-item-direct'
+import type * as WorkItemLaunch from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import type * as FolderComposerSubmit from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit'
 import {
   resolveTuiAgentLaunchArgs,
@@ -9,7 +9,7 @@ import {
 import {
   LAUNCH_FOLDER_ID,
   type WindowLaunchCase
-} from '../../../shared/launch-parity-window-request.test-fixture'
+} from '../../../shared/agent-launch/fixtures/launch-parity-window-request.test-fixture'
 
 type WorkspaceStartProducer = Extract<
   WindowLaunchCase['producer'],
@@ -22,7 +22,7 @@ export type WorkspaceStartModules = {
 }
 
 export const loadWorkspaceStartModules = async (): Promise<WorkspaceStartModules> => ({
-  workItem: await import('@/lib/launch-work-item-direct'),
+  workItem: await import('@/lib/workspace/creation/work-item/launch-work-item-direct'),
   folder:
     await import('@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit')
 })

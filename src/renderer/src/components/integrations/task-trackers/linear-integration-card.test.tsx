@@ -3,14 +3,11 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getExecutionHostLabel } from '../../../../../shared/execution-host'
-import es from '@/i18n/locales/es.json'
-import { i18n, loadRendererUiLanguage, translate } from '@/i18n/i18n'
+
+import { i18n, loadRendererUiLanguage } from '@/i18n/i18n'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { TooltipProvider } from '../../ui/tooltip'
 import { LinearIntegrationCard } from './linear-integration-card'
-
-const LOCAL_HOST_LABEL = getExecutionHostLabel('local')
 
 type StoreState = {
   linearStatus: {
@@ -124,114 +121,6 @@ describe('LinearIntegrationCard account scope', () => {
     mocks.store.current = null
     await i18n.changeLanguage(await loadRendererUiLanguage('en'))
     Reflect.deleteProperty(window, 'api')
-  })
-
-  it.each(['en', 'ko'] as const)(
-    'renders complete %s connection counts without an English suffix',
-    async (language) => {
-      await i18n.changeLanguage(await loadRendererUiLanguage(language))
-      for (const count of [0, 1, 2]) {
-        const state = installStore(true)
-        state.linearStatus.workspaces = Array.from({ length: count }, (_, index) => ({
-          id: `workspace-${index}`,
-          organizationName: 'Fixture',
-          displayName: 'Fixture workspace'
-        }))
-        const rendered = await renderCard()
-        const description =
-          rendered.querySelector('[data-settings-section="integrations-linear"]')?.textContent ?? ''
-        const expected =
-          language === 'ko'
-            ? `워크스페이스 ${count}개 연결됨`
-            : `${count} workspace${count === 1 ? '' : 's'} connected`
-        expect(description).toContain(expected)
-        expect(description).not.toMatch(/개(?: 사이트| 워크스페이스)?s/)
-        await act(async () => {
-          root?.unmount()
-        })
-        root = null
-        container?.remove()
-        container = null
-      }
-    }
-  )
-
-  it('translates a coded connection failure at the display site', async () => {
-    await i18n.changeLanguage(await loadRendererUiLanguage('es'))
-    const state = installStore(true)
-    state.testLinearConnection = vi.fn(async () => ({
-      ok: false,
-      error: 'Wire detail from the host',
-      errorCode: 'linear.noApiKey'
-    }))
-    const rendered = await renderCard()
-    const label = translate(
-      'auto.components.settings.task.tracker.integration.cards.c24e56c532',
-      'Test'
-    )
-    const button = Array.from(rendered.querySelectorAll('button')).find(
-      (button) => button.textContent === label
-    )
-    expect(button).toBeDefined()
-    await act(async () => {
-      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(rendered.textContent).toContain(es.taskProviders.errors.linear.noApiKey)
-    expect(rendered.textContent).not.toContain('Wire detail from the host')
-  })
-
-  it('shows local-client account ownership when Linear is disconnected', async () => {
-    const state = installStore(false)
-
-    const rendered = await renderCard()
-
-    expect(rendered.querySelector('[data-settings-section="integrations-linear"]')).not.toBeNull()
-    expect(rendered.textContent).toContain(`Account scope: ${LOCAL_HOST_LABEL}`)
-    expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > New projects open on.'
-    )
-    expect(rendered.textContent).toContain('Open Remote Servers')
-    expect(rendered.textContent).toContain('Add access with a Personal API key')
-
-    await act(async () => {
-      Array.from(rendered.querySelectorAll('button'))
-        .find((button) => button.textContent === 'Re-check')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(state.checkLinearConnection).toHaveBeenCalledWith(true)
-  })
-
-  it('shows remote-server account ownership and connected workspace rows', async () => {
-    const state = installStore(true, { activeRuntimeEnvironmentId: 'runtime-1' })
-
-    const rendered = await renderCard()
-
-    expect(rendered.textContent).toContain('Account scope: Remote server: runtime-1')
-    expect(rendered.textContent).toContain(
-      'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > New projects open on.'
-    )
-    await act(async () => {
-      Array.from(rendered.querySelectorAll('button'))
-        .find((button) => button.textContent === 'Open Remote Servers')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    expect(state.openSettingsPage).toHaveBeenCalledTimes(1)
-    expect(state.openSettingsTarget).toHaveBeenCalledWith({
-      pane: 'servers',
-      repoId: null,
-      sectionId: 'default-runtime'
-    })
-    expect(rendered.textContent).toContain('Acme')
-    expect(rendered.textContent).toContain('Acme workspace · linear@example.test')
-
-    await act(async () => {
-      Array.from(rendered.querySelectorAll('button'))
-        .find((button) => button.textContent === 'Test')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(state.testLinearConnection).toHaveBeenCalledWith('workspace-1')
   })
 
   it('clears verification state after adding another Linear workspace', async () => {

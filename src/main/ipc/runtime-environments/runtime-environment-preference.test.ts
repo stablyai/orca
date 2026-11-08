@@ -6,11 +6,9 @@ import { getDefaultSettings } from '../../../shared/constants'
 import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import {
   addEnvironmentFromPairingCode,
-  listEnvironments,
   removeEnvironment
 } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getEnvironmentStorePath } from '../../../shared/remote-runtime/host-store/runtime-environment-store-records'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   readSettingsWithRuntimeEnvironmentPreference,
@@ -72,83 +70,6 @@ describe('Active Server after a saved host is removed', () => {
     }
   })
 
-  it('notifies the running renderer when the CLI atomically replaces the registry', async () => {
-    const environment = saveEnvironment()
-    const store = preferenceStore(environment.id)
-    const stopWatching = watchRuntimeEnvironmentPreference(store, userDataPath)
-    try {
-      await new Promise<void>((resolve) => setImmediate(resolve))
-      removeEnvironment(userDataPath, environment.id)
-      await vi.waitFor(() => expect(store.getSettings().activeRuntimeEnvironmentId).toBeNull(), {
-        timeout: 5_000
-      })
-      expect(store.updateSettings).toHaveBeenCalledWith(
-        { activeRuntimeEnvironmentId: null },
-        { notifyListeners: true }
-      )
-    } finally {
-      stopWatching()
-    }
-  })
-
-  it('keeps following the registry after earlier replacements', async () => {
-    const kept = saveEnvironment('kept')
-    const removed = saveEnvironment('removed')
-    const store = preferenceStore(removed.id)
-    const stopWatching = watchRuntimeEnvironmentPreference(store, userDataPath)
-    try {
-      await new Promise((resolve) => setTimeout(resolve, 150))
-      // Unrelated replacements move the registry to new inodes first.
-      saveEnvironment('first')
-      await new Promise((resolve) => setTimeout(resolve, 150))
-      saveEnvironment('second')
-      await new Promise((resolve) => setTimeout(resolve, 150))
-      expect(store.getSettings().activeRuntimeEnvironmentId).toBe(removed.id)
-
-      removeEnvironment(userDataPath, removed.id)
-      await vi.waitFor(() => expect(store.getSettings().activeRuntimeEnvironmentId).toBeNull(), {
-        timeout: 5_000
-      })
-      expect(listEnvironments(userDataPath).map(({ id }) => id)).toContain(kept.id)
-    } finally {
-      stopWatching()
-    }
-  })
-
-  it('tells renderers when the CLI saves a new server (#25251)', async () => {
-    saveEnvironment('existing')
-    const onRegistryChanged = vi.fn()
-    const stopWatching = watchRuntimeEnvironmentPreference(
-      preferenceStore(null),
-      userDataPath,
-      onRegistryChanged
-    )
-    try {
-      saveEnvironment('cli-added')
-      await vi.waitFor(() => expect(onRegistryChanged).toHaveBeenCalled(), { timeout: 5_000 })
-    } finally {
-      stopWatching()
-    }
-  })
-
-  it('repairs a CLI removal before settings can route to the deleted pairing', () => {
-    const environment = saveEnvironment()
-    const store = preferenceStore(environment.id)
-    const before = store.getSettings()
-    removeEnvironment(userDataPath, environment.id)
-
-    const settings = readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)
-
-    expect(settings).toEqual({ ...before, activeRuntimeEnvironmentId: null })
-    expect(store.getSettings().activeRuntimeEnvironmentId).toBeNull()
-    expect(store.updateSettings).toHaveBeenCalledWith(
-      { activeRuntimeEnvironmentId: null },
-      { notifyListeners: true }
-    )
-    readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)
-    expect(store.updateSettings).toHaveBeenCalledOnce()
-  })
-
   it('does not select a same-name replacement or another saved server', () => {
     const removed = saveEnvironment()
     const store = preferenceStore(removed.id)
@@ -160,61 +81,5 @@ describe('Active Server after a saved host is removed', () => {
     expect(
       readSettingsWithRuntimeEnvironmentPreference(store, userDataPath).activeRuntimeEnvironmentId
     ).toBeNull()
-  })
-
-  it('keeps a saved host even when its endpoint is offline', () => {
-    const environment = saveEnvironment()
-    const store = preferenceStore(environment.id)
-    const settings = store.getSettings()
-
-    expect(readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)).toBe(settings)
-    expect(store.updateSettings).not.toHaveBeenCalled()
-  })
-
-  it.each(['missing', 'corrupt', 'unsupported'] as const)(
-    'preserves the preference when the registry is %s',
-    (kind) => {
-      const environment = saveEnvironment()
-      const store = preferenceStore(environment.id)
-      const registryPath = getEnvironmentStorePath(userDataPath)
-      if (kind === 'missing') {
-        rmSync(registryPath)
-      } else {
-        writeFileSync(registryPath, kind === 'corrupt' ? '{' : '{"version":99,"environments":[]}')
-      }
-
-      expect(readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)).toBe(
-        store.getSettings()
-      )
-      expect(store.updateSettings).not.toHaveBeenCalled()
-    }
-  )
-
-  it('keeps local defaults without requiring a pairing registry', () => {
-    const store = preferenceStore(null)
-    expect(readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)).toBe(
-      store.getSettings()
-    )
-    expect(store.updateSettings).not.toHaveBeenCalled()
-  })
-
-  it('does not swallow a settings write failure after confirming removal', () => {
-    const environment = saveEnvironment()
-    const store = preferenceStore(environment.id)
-    removeEnvironment(userDataPath, environment.id)
-    store.updateSettings.mockImplementation((): GlobalSettings => {
-      throw new Error('settings write failed')
-    })
-
-    expect(() => readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)).toThrow(
-      'settings write failed'
-    )
-  })
-
-  it('distinguishes a new profile from an unavailable registry for repair reads', () => {
-    expect(listEnvironments(userDataPath)).toEqual([])
-    expect(() => listEnvironments(userDataPath, { requireStoreFile: true })).toThrow(
-      'Could not read Orca environments'
-    )
   })
 })

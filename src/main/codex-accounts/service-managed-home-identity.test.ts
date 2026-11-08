@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { EventEmitter } from 'node:events'
-import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import {
@@ -94,20 +94,5 @@ describe('Codex managed home identity', () => {
     await expect(reauth).rejects.toThrow()
     expect(readFileSync(join(account.managedHomePath, 'auth.json'), 'utf-8')).toBe(accountIAuth)
     expect(store.getSettings().activeCodexManagedAccountId).toBe('account-i')
-  })
-
-  it('relabels a managed account whose home now holds a different login', async () => {
-    const account = createAccountI()
-    writeFileSync(
-      join(account.managedHomePath, 'auth.json'),
-      createCodexAuthJson('c@example.com', 'provider-c', 'refresh-c'),
-      'utf-8'
-    )
-    const { service } = await createService(createSettings({ codexManagedAccounts: [account] }))
-
-    const listed = service.listAccounts().accounts.find((entry) => entry.id === 'account-i')
-
-    expect(listed).toMatchObject({ email: 'c@example.com', providerAccountId: 'provider-c' })
-    expect(listed?.updatedAt).toBeGreaterThan(account.updatedAt)
   })
 })

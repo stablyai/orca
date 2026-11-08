@@ -3,8 +3,21 @@ import { resolveWindowsShellStartupFamily } from '../../shared/windows-terminal-
 
 export const SHELL_PATH_DELIMITER = '__ORCA_SHELL_PATH__'
 
+/** Own session on POSIX so an `-i` probe can't take the launching terminal's foreground; Windows `detached` opens a console. */
+export function shellProbeDetached(): boolean {
+  return process.platform !== 'win32'
+}
+
 /** Build the login PATH probe in the selected shell's native syntax. */
-export function shellPathProbe(shell: string): { args: string[]; pathDelimiter: string } {
+export function shellPathProbe(shell: string): {
+  args: string[]
+  pathDelimiter: string
+  detached: boolean
+} {
+  return { ...shellPathProbeCommand(shell), detached: shellProbeDetached() }
+}
+
+function shellPathProbeCommand(shell: string): { args: string[]; pathDelimiter: string } {
   if (process.platform !== 'win32') {
     if (pathWin32.basename(shell).toLowerCase() === 'nu') {
       // Nushell stores PATH as a list; POSIX quoting would print a literal.

@@ -12,23 +12,23 @@ import {
   type CliConversationRowAgent
 } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
 import { hasRuntimeRpcErrorCode } from '../../../../../../shared/runtime-rpc-error-code'
-import { prepareAiVaultSessionForResume } from '@/lib/ai-vault-session-resume-preparation'
-import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
-import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { prepareAiVaultSessionForResume } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
+import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import type { AgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import {
   beginStructuredAgentSessionProvisionalLaunch,
   structuredLaunchOwner
 } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
 import { structuredLaunchFailure } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
-import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
-import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
+import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/worktree-agent-activation-gate'
+import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import type { StructuredAgentLaunchSettlement } from '@/lib/agent-session/launch/continuation/structured-agent-launch-settlement'
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 
 /** A chat the resumed one takes the place of: it opens right after that tab. */
 export type AiVaultChatReplacement = {

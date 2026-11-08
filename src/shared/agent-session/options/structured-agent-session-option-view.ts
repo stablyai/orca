@@ -36,8 +36,20 @@ export function structuredAgentSessionOptionView(
       requested
     )
   }
-  const { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: heldPermission, ...heldSelection } = held
-  const view = modelOptionView(state, seed, heldSelection)
+  const {
+    [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: heldPermission,
+    interactionMode,
+    ...heldSelection
+  } = held
+  const modelView = modelOptionView(state, seed, heldSelection)
+  const requestedMode = interactionMode ?? requested?.interactionMode
+  const view =
+    requestedMode === undefined
+      ? modelView
+      : commitStructuredAgentSessionOptionValues(
+          { ...modelView, record: cloneStructuredAgentSessionOptionRecord(modelView.record) },
+          { interactionMode: requestedMode }
+        )
   const permissionMode =
     heldPermission ??
     state.permissionMode ??
@@ -118,7 +130,7 @@ function modelOptionView(
   return commitStructuredAgentSessionOptionValues(view, held)
 }
 
-/** Claude keeps the legacy model baseline; current-host effort comes only from accepted input. */
+/** Claude keeps the legacy baseline for older hosts; current hosts never send a shown default or a report. */
 export function structuredAgentSessionSendSelection(
   view: StructuredAgentSessionOptionState
 ): Record<string, string> | undefined {
@@ -133,15 +145,23 @@ export function structuredAgentSessionSendSelection(
     const kind = snapshot.find((descriptor) => descriptor.id === id)?.kind
     return kind?.type === 'select' ? kind.currentValue : undefined
   }
-  const model = structuredAgentSessionOwnValue(view.record, 'model') ?? shown('model')
+  const accepted = view.acceptedInputSources
+  const tracked = view.record.values.model
+  // A local pick the host has not saved yet still counts; a report does not.
+  const model =
+    accepted === undefined
+      ? (structuredAgentSessionOwnValue(view.record, 'model') ?? shown('model'))
+      : accepted.model || (tracked && tracked.source !== 'reported')
+        ? structuredAgentSessionOwnValue(view.record, 'model')
+        : undefined
   const effort =
-    view.acceptedInputSources !== undefined
-      ? view.acceptedInputSources.effort
+    accepted !== undefined
+      ? accepted.effort
         ? view.record.values.effort?.value
         : undefined
       : (structuredAgentSessionOwnValue(view.record, 'effort') ?? shown('effort'))
   return model || effort
-    ? { ...(model ? { model } : {}), ...(effort ? { effort: String(effort) } : {}) }
+    ? { ...(model ? { model: String(model) } : {}), ...(effort ? { effort: String(effort) } : {}) }
     : undefined
 }
 
@@ -151,7 +171,7 @@ export function structuredAgentSessionMessageSelection(
 ): Record<string, string> {
   const selection: Record<string, string> = {}
   const snapshot = structuredAgentSessionOptionSnapshot(view)
-  for (const id of ['model', 'effort', 'fastMode', 'serviceTier'] as const) {
+  for (const id of ['model', 'effort', 'fastMode', 'serviceTier', 'interactionMode'] as const) {
     const descriptor = snapshot.find((entry) => entry.id === id)
     if (view.acceptedInputSources !== undefined) {
       if (!view.acceptedInputSources[id]) {

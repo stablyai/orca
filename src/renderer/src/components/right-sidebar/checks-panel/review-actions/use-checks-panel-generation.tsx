@@ -9,8 +9,8 @@ import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   generateRuntimePullRequestFields,
   cancelRuntimeGeneratePullRequestFields
-} from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
@@ -19,12 +19,14 @@ import {
   markPullRequestGenerationTerminalSeedRestored,
   resolvePullRequestGenerationCancel,
   resolvePullRequestGenerationFailure,
-  resolvePullRequestGenerationSuccess,
-  type PullRequestFieldRevisions,
-  type PullRequestGenerationContext,
-  type PullRequestGenerationFields
-} from '@/store/slices/pull-request-generation'
-import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+  resolvePullRequestGenerationSuccess
+} from '@/store/slices/hosted-review/generation/pull-request-generation'
+import type {
+  PullRequestFieldRevisions,
+  PullRequestGenerationContext,
+  PullRequestGenerationFields
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
 
 type ChecksPanelGenerationInput = Pick<
   ChecksPanelReviewState,

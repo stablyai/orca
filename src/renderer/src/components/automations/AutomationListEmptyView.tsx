@@ -9,6 +9,7 @@ import {
   recoveryActionLabel,
   type AutomationHostRecoveryAction
 } from './automation-host-status-descriptors'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Renders whichever empty/partial/failure state the list is in; nothing when rows exist. */
 
@@ -22,7 +23,8 @@ export function AutomationListEmptyView({
   className,
   ...input
 }: AutomationListEmptyViewProps): React.JSX.Element | null {
-  const state = resolveAutomationListEmptyState(input)
+  const t = useTranslate()
+  const state = resolveAutomationListEmptyState(input, t)
   const recovery = state.recovery
   if (state.kind === 'rows') {
     return null
@@ -46,7 +48,7 @@ export function AutomationListEmptyView({
           className="mt-1.5"
           onClick={() => onRecover(recovery)}
         >
-          {recoveryActionLabel(recovery)}
+          {recoveryActionLabel(recovery, t)}
         </Button>
       ) : null}
     </div>

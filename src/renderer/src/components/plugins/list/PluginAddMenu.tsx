@@ -1,5 +1,5 @@
 import { ChevronDown, Folder, GitBranch, Plus } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
   DropdownMenu,
@@ -16,23 +16,24 @@ export function PluginAddMenu({
   disabled: boolean
   onChoose: (kind: 'local-path' | 'git') => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" disabled={disabled}>
           <Plus />
-          {translate('auto.components.settings.PluginAddMenu.add', 'Add plugin')}
+          {t('auto.components.settings.PluginAddMenu.add', 'Add plugin')}
           <ChevronDown className="text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuItem onSelect={() => onChoose('local-path')}>
           <Folder />
-          {translate('auto.components.settings.PluginAddMenu.folder', 'From a folder…')}
+          {t('auto.components.settings.PluginAddMenu.folder', 'From a folder…')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onChoose('git')}>
           <GitBranch />
-          {translate('auto.components.settings.PluginAddMenu.git', 'From a Git URL…')}
+          {t('auto.components.settings.PluginAddMenu.git', 'From a Git URL…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

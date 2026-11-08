@@ -1,5 +1,5 @@
 import { ORCA_BROWSER_PAGE_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 
 export function createBrowserClientPageRetainedRoot(document: Document): HTMLDivElement {
   const root = document.createElement('div')

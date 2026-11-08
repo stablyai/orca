@@ -81,21 +81,6 @@ export function newWorkspaceMountAdapters(
           }),
         dispose: hook.unmount
       }
-    },
-    'components.codex-reset-capability': ({ client }) => {
-      const read = modules.load<typeof import('../../../components/codex-reset-credit-capability')>(
-        'mobile/src/components/codex-reset-credit-capability.ts'
-      ).readCodexResetCreditCapability
-      let supported: unknown = 'unprobed'
-      return {
-        action: () =>
-          read(client).then((value: unknown) => {
-            supported = value
-            return value
-          }),
-        state: () => ({ supported }),
-        dispose: () => {}
-      }
     }
   }
 }

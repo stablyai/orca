@@ -21,13 +21,14 @@ vi.mock('../../browser/identity/browser-identity-mode-store', () => ({
   getBrowserIdentityModeStatus: vi.fn(() => ({ identity: {}, migrationNotice: null }))
 }))
 
+vi.mock('./browser-passwords-ipc', () => ({ registerBrowserPasswordsHandlers: vi.fn() }))
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn() },
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock },
   webContents: { fromId: vi.fn() }
 }))
 
-vi.mock('../../browser/browser-manager', () => ({
+vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserCertificateTrustController: { proceed: vi.fn() },
   browserManager: {
     getWebContentsIdByTabId: vi.fn(() => new Map())
@@ -81,7 +82,7 @@ describe('browser session profile IPC', () => {
     event: { sender: Electron.WebContents },
     mode: unknown
   ) => Promise<unknown> {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     return handleMock.mock.calls.find(([channel]) => channel === 'browser:identity:set')?.[1]
   }
 
@@ -98,7 +99,7 @@ describe('browser session profile IPC', () => {
     event: { sender: Electron.WebContents },
     args: { environmentId: string }
   ) => unknown {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     return handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:session:detectBrowsersForClientHost'
     )?.[1]

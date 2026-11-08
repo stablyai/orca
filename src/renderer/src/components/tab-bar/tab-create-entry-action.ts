@@ -1,18 +1,18 @@
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { joinPath } from '@/lib/path'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { createRuntimePath } from '@/runtime/runtime-file-mutation-client'
-import { statRuntimePath } from '@/runtime/runtime-file-metadata-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { createRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation-client'
+import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   DEFAULT_SEARCH_ENGINE,
   type SearchEngine,
   type SearchUrlOptions
 } from '../../../../shared/browser-url'
 import type { RuntimeFileListState } from '../quick-open-file-list'
-import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import {
   classifyTabEntryQuery,
   getTabEntryAbsolutePathRemoteBlockedMessage,
@@ -51,10 +51,11 @@ export {
 } from './tab-create-entry-local-path'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { openHtmlFilePreview } from '@/lib/open-html-file-preview'
+import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
-} from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor-file-operation-provenance'
 
 export type TabCreateEntryArgs = {
   classification?: TabEntryActionClassification
@@ -261,7 +262,7 @@ export async function openTabBarEntry(args: TabCreateEntryArgs): Promise<void> {
     worktreeId: args.worktreeId,
     groupId: args.groupId,
     getFileContext: () => {
-      const worktree = state.getKnownWorktreeById(args.worktreeId)
+      const worktree = selectFileListWorktree(state, args.worktreeId)
       if (!worktree) {
         throw new Error(getTabEntryNoActiveWorktreeMessage())
       }

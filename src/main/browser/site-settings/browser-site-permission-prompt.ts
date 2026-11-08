@@ -6,7 +6,7 @@ import {
   type BrowserSitePermissionDecision
 } from '../../../shared/browser-site-permission'
 import { isEligibleLocalCertificateHost } from '../../../shared/browser-url'
-import { browserManager } from '../browser-manager'
+import { browserManager } from '../guest-lifecycle/manager/browser-manager'
 import {
   browserPagePromptOrigin,
   openBrowserPagePrompt

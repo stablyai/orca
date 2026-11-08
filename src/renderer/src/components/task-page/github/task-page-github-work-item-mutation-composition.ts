@@ -1,4 +1,5 @@
-import type { ParsedTaskQuery } from '../../../../../shared/task-query'
+import { projectPRCheckOwner } from '../../../../../shared/github/complete-pr-check-owner'
+import type { ParsedTaskQuery } from '../../../../../shared/work-items/task-query'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
@@ -143,7 +144,7 @@ export function getRegistryMergedTaskPageGitHubWorkItem(
         : { ...merged, reviewRequests: composed }
   }
 
-  return merged
+  return projectPRCheckOwner(item, merged)
 }
 
 export function recomputeSoftHideForItem(args: {

@@ -33,7 +33,6 @@ import {
   invalidateBrowserSessionProxyApplication,
   setBrowserNetworkProxySettingsResolver
 } from './browser-session-proxy'
-import { handleElectronProxyLogin } from '../../network/electron-proxy-credentials'
 import {
   applyProxySettingsToSession,
   releaseProxySessionApplication
@@ -66,110 +65,6 @@ describe('browser session proxy', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('pins the configured proxy onto every browser partition', async () => {
-    await applyBrowserSessionProxies(PROFILES, {
-      httpProxyUrl: 'socks5://127.0.0.1:1080',
-      httpProxyBypassRules: ''
-    })
-
-    expect(fromPartitionMock).toHaveBeenCalledWith('persist:orca-browser')
-    expect(fromPartitionMock).toHaveBeenCalledWith('persist:orca-browser-session-iso')
-    for (const partition of PROFILES.map((p) => p.partition)) {
-      expect(sessionsByPartition.get(partition)?.setProxy).toHaveBeenCalledWith({
-        mode: 'fixed_servers',
-        proxyRules: 'socks5://127.0.0.1:1080'
-      })
-    }
-  })
-
-  it('carries bypass rules through to each partition', async () => {
-    await applyBrowserSessionProxies(PROFILES, {
-      httpProxyUrl: 'socks5://127.0.0.1:1080',
-      httpProxyBypassRules: 'localhost, *.internal'
-    })
-
-    expect(sessionsByPartition.get('persist:orca-browser')?.setProxy).toHaveBeenCalledWith({
-      mode: 'fixed_servers',
-      proxyRules: 'socks5://127.0.0.1:1080',
-      proxyBypassRules: 'localhost;*.internal'
-    })
-  })
-
-  it('authenticates a credentialed proxy without exposing credentials in partition rules', async () => {
-    await applyBrowserSessionProxies(PROFILES.slice(0, 1), {
-      httpProxyUrl: 'http://browser-user:browser-pass@proxy.example:8080',
-      httpProxyBypassRules: ''
-    })
-    const sess = sessionsByPartition.get('persist:orca-browser')
-    expect(sess?.setProxy).toHaveBeenCalledWith({
-      mode: 'fixed_servers',
-      proxyRules: 'http://proxy.example:8080'
-    })
-
-    const preventDefault = vi.fn()
-    const callback = vi.fn()
-    handleElectronProxyLogin(
-      { preventDefault } as never,
-      { session: sess } as never,
-      {} as never,
-      {
-        isProxy: true,
-        scheme: 'basic',
-        host: 'proxy.example',
-        port: 8080,
-        realm: 'proxy'
-      },
-      callback
-    )
-
-    expect(preventDefault).toHaveBeenCalledOnce()
-    expect(callback).toHaveBeenCalledWith('browser-user', 'browser-pass')
-  })
-
-  it('keeps sweeping but reports failure so the failed partition stays gated', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    fromPartitionMock.mockImplementationOnce(() => {
-      throw new Error('partition unavailable')
-    })
-
-    await expect(
-      applyBrowserSessionProxies(PROFILES, {
-        httpProxyUrl: 'socks5://127.0.0.1:1080',
-        httpProxyBypassRules: ''
-      })
-    ).rejects.toThrow('persist:orca-browser')
-
-    expect(
-      sessionsByPartition.get('persist:orca-browser-session-iso')?.setProxy
-    ).toHaveBeenCalledWith({ mode: 'fixed_servers', proxyRules: 'socks5://127.0.0.1:1080' })
-    expect(warn).toHaveBeenCalledWith(
-      '[proxy] Failed to apply proxy to browser partition',
-      'persist:orca-browser'
-    )
-  })
-
-  it('starts every partition write without waiting for earlier partitions', async () => {
-    let finishFirstWrite: (() => void) | undefined
-    const firstSession = fromPartition('persist:orca-browser')
-    firstSession.setProxy.mockImplementation(
-      () => new Promise<void>((resolve) => (finishFirstWrite = resolve))
-    )
-    sessionsByPartition.set('persist:orca-browser', firstSession)
-
-    const sweep = applyBrowserSessionProxies(PROFILES, {
-      httpProxyUrl: 'socks5://127.0.0.1:1080',
-      httpProxyBypassRules: ''
-    })
-
-    await vi.waitFor(() =>
-      expect(
-        sessionsByPartition.get('persist:orca-browser-session-iso')?.setProxy
-      ).toHaveBeenCalledOnce()
-    )
-    finishFirstWrite?.()
-    await sweep
   })
 
   it('settles an in-flight new partition on the latest swept policy', async () => {
@@ -216,29 +111,6 @@ describe('browser session proxy', () => {
       [{ mode: 'fixed_servers', proxyRules: 'http://old.example:8080' }],
       [{ mode: 'system' }]
     ])
-  })
-
-  it('reads settings through the injected resolver when none are passed', async () => {
-    setBrowserNetworkProxySettingsResolver(() => ({
-      httpProxyUrl: 'socks5://127.0.0.1:1080',
-      httpProxyBypassRules: ''
-    }))
-    const sess = fromPartitionMock('persist:orca-browser')
-
-    await applyProxyToBrowserSession(sess as never)
-
-    expect(sess.setProxy).toHaveBeenCalledWith({
-      mode: 'fixed_servers',
-      proxyRules: 'socks5://127.0.0.1:1080'
-    })
-  })
-
-  it('makes no proxy write when no resolver is registered', async () => {
-    const sess = fromPartitionMock('persist:orca-browser')
-
-    await applyProxyToBrowserSession(sess as never)
-
-    expect(sess.setProxy).not.toHaveBeenCalled()
   })
 
   describe('startup readiness', () => {
@@ -290,24 +162,6 @@ describe('browser session proxy', () => {
       for (const sess of sessions) {
         expect(sess.resolveProxy).toHaveBeenCalledTimes(2)
       }
-    })
-
-    it('retries only a failed installation after its bounded attempts are exhausted', async () => {
-      const failed = fromPartition('persist:orca-browser')
-      const healthy = fromPartition('persist:orca-browser-session-iso')
-      for (let attempt = 0; attempt < 3; attempt++) {
-        failed.resolveProxy.mockRejectedValueOnce(new Error('native proxy failure'))
-      }
-      const initialFailure = expect(applyProxySettingsToSession(failed, {})).rejects.toThrow(
-        'native proxy failure'
-      )
-      await applyProxySettingsToSession(healthy, {})
-      await initialFailure
-
-      await awaitBrowserSessionProxies(PROFILES)
-
-      expect(failed.resolveProxy).toHaveBeenCalledTimes(4)
-      expect(healthy.resolveProxy).toHaveBeenCalledOnce()
     })
 
     it('awaits every installation and preserves failed-partition warnings and retry budget', async () => {

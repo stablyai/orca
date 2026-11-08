@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
@@ -30,6 +30,7 @@ export function RuntimeSshAccessControl({
   onChanged,
   footerStart
 }: RuntimeSshAccessControlProps): React.JSX.Element {
+  const t = useTranslate()
   const [targetId, setTargetId] = useState(targets.length === 1 ? (targets[0]?.id ?? '') : '')
   const [remotePort, setRemotePort] = useState(DEFAULT_REMOTE_PORT)
   const [busy, setBusy] = useState(false)
@@ -66,11 +67,11 @@ export function RuntimeSshAccessControl({
       <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 px-3 py-2">
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">
           {pending.operation === 'link'
-            ? translate(
+            ? t(
                 'auto.components.settings.managedServers.access.pendingLink',
                 'Connecting through SSH didn’t finish.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.managedServers.access.pendingUnlink',
                 'Stopping SSH access didn’t finish.'
               )}
@@ -86,7 +87,7 @@ export function RuntimeSshAccessControl({
                 void run(() => api.unlinkSshAccess({ selector: environment.id, requestId }))
               }
             >
-              {translate('auto.components.settings.managedServers.access.cancelLink', 'Cancel')}
+              {t('auto.components.settings.managedServers.access.cancelLink', 'Cancel')}
             </Button>
           ) : null}
           <Button
@@ -96,7 +97,7 @@ export function RuntimeSshAccessControl({
             disabled={busy}
             onClick={() => void run(retry)}
           >
-            {translate('auto.components.settings.managedServers.access.retry', 'Retry')}
+            {t('auto.components.settings.managedServers.access.retry', 'Retry')}
           </Button>
         </div>
       </div>
@@ -122,7 +123,7 @@ export function RuntimeSshAccessControl({
     return (
       <div className="flex flex-wrap items-center gap-3">
         <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.managedServers.access.linkedRoute',
             'Reached through {{host}}, server port {{port}}.',
             {
@@ -139,7 +140,7 @@ export function RuntimeSshAccessControl({
           onClick={() => void submit()}
         >
           {busy ? <Loader2 className="animate-spin" /> : null}
-          {translate('auto.components.settings.managedServers.access.unlink', 'Stop using SSH')}
+          {t('auto.components.settings.managedServers.access.unlink', 'Stop using SSH')}
         </Button>
       </div>
     )
@@ -158,14 +159,14 @@ export function RuntimeSshAccessControl({
     >
       <div className="space-y-2">
         <Label htmlFor={targetFieldId}>
-          {translate('auto.components.settings.managedServers.deploy.host', 'SSH host')}
+          {t('auto.components.settings.managedServers.deploy.host', 'SSH host')}
         </Label>
         <SshTargetSelect
           id={targetFieldId}
           targets={targets}
           value={targetId}
           onChange={setTargetId}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.managedServers.access.chooseHost',
             'Choose a host'
           )}
@@ -173,7 +174,7 @@ export function RuntimeSshAccessControl({
       </div>
       <div className="w-32 space-y-2">
         <Label htmlFor={portFieldId}>
-          {translate('auto.components.settings.managedServers.access.port', 'Server port')}
+          {t('auto.components.settings.managedServers.access.port', 'Server port')}
         </Label>
         <Input
           id={portFieldId}
@@ -187,8 +188,8 @@ export function RuntimeSshAccessControl({
         <Button type="submit" size="sm" disabled={busy || !valid}>
           {busy ? <Loader2 className="animate-spin" /> : null}
           {busy
-            ? translate('auto.components.settings.managedServers.access.linking', 'Connecting…')
-            : translate('auto.components.settings.managedServers.access.connect', 'Connect')}
+            ? t('auto.components.settings.managedServers.access.linking', 'Connecting…')
+            : t('auto.components.settings.managedServers.access.connect', 'Connect')}
         </Button>
       </div>
     </form>

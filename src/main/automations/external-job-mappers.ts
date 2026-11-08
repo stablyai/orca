@@ -3,7 +3,7 @@ import type {
   ExternalAutomationProvider,
   ExternalAutomationRun,
   ExternalAutomationRunStatus
-} from '../../shared/automations-types'
+} from '../../shared/automations/external/external-automation'
 
 type ExternalJobRecord = Record<string, unknown>
 

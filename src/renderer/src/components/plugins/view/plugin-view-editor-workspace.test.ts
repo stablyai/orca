@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorkspace: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorkspace: vi.fn()
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
 
 import { findWorkspaceShowingFile, folderWorkspaceRows } from './plugin-view-editor-workspace'

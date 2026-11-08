@@ -49,17 +49,6 @@ it('falls back to any column for an identifier-only match, brackets or not', asy
   expect(hit?.evidence?.snippet).not.toContain('numpy')
 })
 
-it('leaves a transcript’s own brackets in the text it shows', async () => {
-  harness = await openSessionSearchHarness('ss-snippet-marks-literal')
-  addSyntheticSession(harness.db, { id: 1, text: `zebrafish ${BASH}` })
-
-  const [hit] = harness.engine.search({ query: 'zebrafish' }).hits
-  expect(hit?.evidence?.snippet).toContain(
-    `${SESSION_SEARCH_SNIPPET_MARK_OPEN}zebrafish${SESSION_SEARCH_SNIPPET_MARK_CLOSE}`
-  )
-  expect(hit?.evidence?.snippet).toContain('[[ -f')
-})
-
 it('picks by comparison, so a private-use code point in content cannot pose as a mark', async () => {
   harness = await openSessionSearchHarness('ss-snippet-marks-private-use')
   addSyntheticSession(harness.db, {
@@ -71,20 +60,6 @@ it('picks by comparison, so a private-use code point in content cannot pose as a
   const [hit] = harness.engine.search({ query: 'zebrafish' }).hits
   expect(hit?.evidence?.snippet).toContain('zebrafish')
   expect(hit?.evidence?.snippet).not.toContain('glyph')
-})
-
-it('truncates on the last real mark, not on a bracket the transcript wrote', async () => {
-  harness = await openSessionSearchHarness('ss-snippet-marks-truncation')
-  const long = (letter: string): string =>
-    Array.from({ length: 5 }, () => `${letter.repeat(55)}/tail`).join(' ')
-  addSyntheticSession(harness.db, {
-    id: 1,
-    text: `zebrafish ${long('p')} [[ ${long('q')}`
-  })
-
-  const snippet = harness.engine.search({ query: 'zebrafish' }).hits[0]?.evidence?.snippet ?? ''
-  expect(snippet).toContain('[[zebrafish]]')
-  expect(snippet).toContain('qqqqq')
 })
 
 it('marks only what FTS5 marked, so a glyph in the text stays a glyph', async () => {

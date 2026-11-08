@@ -23,7 +23,7 @@ import { startSpan } from '../../observability/tracer'
 import {
   terminalSurfaceCloseMutation,
   type TerminalSurfaceCloseCommit
-} from '../../runtime/terminal-surface-close'
+} from '../../runtime/terminal/surface/terminal-surface-close'
 import type {
   DurableProfileStateMutation,
   StoreRuntimeState
@@ -156,7 +156,8 @@ export function applyLayout(
           ? commitWindowPaneDetach(
               hostIds,
               { ...command, windowDetach: command.windowDetach },
-              context
+              context,
+              run
             )
           : commitLayoutCommand(hostIds, command, context, run)
     ),

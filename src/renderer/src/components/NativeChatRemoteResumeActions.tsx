@@ -1,5 +1,5 @@
 import { Button } from './ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatRestartStore } from './native-chat-resume-on-restart-store'
 
 export function NativeChatRemoteResumeActions({
@@ -19,12 +19,13 @@ export function NativeChatRemoteResumeActions({
   dismiss: () => void
   resumeButtonRef: React.Ref<HTMLButtonElement>
 }): React.JSX.Element {
+  const t = useTranslate()
   const all = [...chosen]
   const startedHere = all.filter(store.startedHere)
   return (
     <>
       <Button variant="ghost" size="sm" disabled={busy} onClick={dismiss}>
-        {translate('auto.components.NativeChatResumeOnRestartModal.serverDismiss', 'Dismiss')}
+        {t('auto.components.NativeChatResumeOnRestartModal.serverDismiss', 'Dismiss')}
       </Button>
       <Button
         variant="outline"
@@ -32,7 +33,7 @@ export function NativeChatRemoteResumeActions({
         disabled={busy || all.length === 0}
         onClick={() => resume(all)}
       >
-        {translate(
+        {t(
           'auto.components.NativeChatResumeOnRestartModal.serverResumeAll',
           'Resume all {{count}} on {{machine}}',
           { count: all.length, machine: machineName }
@@ -45,7 +46,7 @@ export function NativeChatRemoteResumeActions({
         disabled={busy || startedHere.length === 0}
         onClick={() => resume(startedHere)}
       >
-        {translate(
+        {t(
           'auto.components.NativeChatResumeOnRestartModal.serverResumeHereCount',
           'Resume {{count}} chats started here',
           { count: startedHere.length, defaultValue_one: 'Resume {{count}} chat started here' }

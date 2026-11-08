@@ -1,6 +1,6 @@
 import { _resetPendingWorktreeRemovalsForTests } from '../workspaces/removal/worktree-background-removal'
 import { vi } from 'vitest'
-import { WorkspaceLifecycleQueue } from '../runtime/workspaces/workspace-lifecycle-queue'
+import { WorkspaceLifecycleQueue } from '../runtime/workspaces/lifecycle/workspace-lifecycle-queue'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 export type WorktreeRuntimeStub = {
@@ -22,7 +22,6 @@ export type WorktreeRuntimeStub = {
   notifyWorktreesChangedForRemoteClients: ReturnType<typeof vi.fn>
   closeFileWatchersForRemoval: ReturnType<typeof vi.fn>
   acquireFileWatcherRemoval: ReturnType<typeof vi.fn>
-  hydrateInferredWorktreeLineage: ReturnType<typeof vi.fn>
   publishWorktreeRemovalChange: ReturnType<typeof vi.fn>
   workspaceLifecycle: WorkspaceLifecycleQueue | null
 }
@@ -62,7 +61,6 @@ export function createWorktreeRuntimeStub(mainWindow?: {
     notifyWorktreesChangedForRemoteClients: vi.fn(),
     closeFileWatchersForRemoval: vi.fn().mockResolvedValue(undefined),
     acquireFileWatcherRemoval: vi.fn(),
-    hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined),
     publishWorktreeRemovalChange: vi.fn((repoId: string) => {
       mainWindow?.webContents.send('worktrees:changed', { repoId })
     })

@@ -144,7 +144,9 @@ export function usePluginDeclarativeTree(
     return {
       onRender: (payload) => {
         pendingRef.current = { payload }
-        frameRef.current ??= requestAnimationFrame(flush)
+        if (frameRef.current == null) {
+          frameRef.current = requestAnimationFrame(flush)
+        }
       },
       onRefused: (message, retryAfterMs) => {
         const payload: unknown =

@@ -19,6 +19,7 @@ import { SkillInstallMachineSelect } from './SkillInstallMachineSelect'
 import { SkillInstallManagementStatus } from './SkillInstallManagementStatus'
 import { SkillManagedInstallRow } from './SkillManagedInstallRow'
 import type { SkillManagedInstallGroup } from './skill-managed-install-groups'
+import { useTranslate } from '@/i18n/use-translate'
 
 type SkillInstallManagementDialogContentProps = {
   bundleResult: SkillBundleInstallResult | null
@@ -77,6 +78,7 @@ export function SkillInstallManagementDialogContent({
   onSendToMachine,
   onVersionChange
 }: SkillInstallManagementDialogContentProps): React.JSX.Element {
+  const t = useTranslate()
   const destructiveConflict =
     result?.status === 'conflict' ||
     Boolean(
@@ -136,7 +138,7 @@ export function SkillInstallManagementDialogContent({
         </ul>
       ) : null}
       <SkillInstallManagementStatus
-        resultLabel={result ? skillInstallResultLabel(result) : null}
+        resultLabel={result ? skillInstallResultLabel(result, t) : null}
         progressLabel={progressLabel}
         error={error}
         notice={notice}

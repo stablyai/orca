@@ -7,6 +7,7 @@ import { capturedAutomationOwner } from './automation-captured-owner'
 import {
   automationChatSupport,
   automationDraftLaunchSetup,
+  automationCopyLaunchSetup,
   automationLaunchWorkspace
 } from './automation-launch-surface'
 import { toast } from 'sonner'
@@ -14,10 +15,9 @@ import type {
   Automation,
   AutomationCreateInput,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
-import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { ensureHooksApproved } from '@/lib/ensure-hooks-confirmed'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { listAutomationsForTarget } from './automation-host-client'
@@ -25,9 +25,10 @@ import {
   dispatchAutomationReread,
   type AutomationDispatchResult
 } from './automation-row-action-dispatch'
-import { buildDraftPrecheck } from './automation-draft-model'
+import { buildDraftPrecheck, buildDraftSchedule } from './automation-draft-model'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
 import { resolveAutomationSetupDecisionForSave } from './automation-setup-decision'
+import { reconfirmSkippedSetup } from './automation-setup-review'
 import {
   createAutomationOnDestination,
   moveAutomationToDestination,
@@ -47,7 +48,6 @@ export async function saveOrcaAutomation(
     draft,
     editingAutomationId,
     editingRowKey,
-    editingDestination,
     draftAtOpen,
     setEditorNotice,
     setEditorNoticeHost,
@@ -60,7 +60,8 @@ export async function saveOrcaAutomation(
     rowRecoveryHost,
     createDestination
   } = destination
-  const { dialogRepos, editHostResolution, automationDialogTarget } = destinationForm
+  const { dialogRepos, editHostResolution, automationDialogTarget, editingDestination } =
+    destinationForm
 
   // Fence the destination before hook probes/trust prompts or any other transaction side effect.
   const createCheck = editingAutomationId === null ? createDestination.check(draft.projectId) : null
@@ -94,17 +95,7 @@ export async function saveOrcaAutomation(
   const targetEdited = !currentAutomation || local.targetEdited
   const scheduleEdited = (['preset', 'time', 'dayOfWeek', 'customSchedule'] as const).some(edited)
   const timezone = currentAutomation?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-  const rrule =
-    draft.preset === 'custom'
-      ? draft.customSchedule.trim()
-      : buildAutomationRrule({
-          preset: draft.preset,
-          hour: time.hour,
-          minute: time.minute,
-          dayOfWeek: Number(draft.dayOfWeek)
-        })
-  const rawGrace = Number(draft.missedRunGraceMinutes)
-  const missedRunGraceMinutes = Number.isFinite(rawGrace) ? Math.max(0, rawGrace) : 720
+  const { rrule, missedRunGraceMinutes } = buildDraftSchedule(draft, time)
   const precheck = buildDraftPrecheck(draft)
   const recordedContext =
     currentAutomation && editingDestination && isSameAutomationWorkspace(currentAutomation, draft)
@@ -144,16 +135,16 @@ export async function saveOrcaAutomation(
           draftSetupDecision: draft.setupDecision
         })
       : currentAutomation.setupDecision
-  if (setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))) {
-    const trustDecision = await ensureHooksConfirmed(
-      useAppStore.getState(),
-      draft.projectId,
-      'setup',
-      setupHostId
-    )
-    if (trustDecision === 'skip') {
-      setupDecision = 'skip'
-    }
+  const trust =
+    setupDecision === 'run' && ((targetEdited && !recordedContext) || edited('setupDecision'))
+      ? await ensureHooksApproved(useAppStore.getState(), draft.projectId, 'setup', setupHostId)
+      : null
+  // Stored with `run` so later runs execute only this content.
+  const setupTrustHash =
+    trust?.approvedContentHash ??
+    (await reconfirmSkippedSetup(context, trust, setupDecision, currentAutomation, setupHostId))
+  if (trust?.decision === 'skip') {
+    setupDecision = 'skip'
   }
 
   const runContext = targetEdited
@@ -186,6 +177,7 @@ export async function saveOrcaAutomation(
       : time.surface
   const launchSetup = automationDraftLaunchSetup(
     {
+      launchSetupPatch: draft.launchSetupPatch,
       extraAgentArgs: edited('extraAgentArgs')
         ? draft.extraAgentArgs
         : (currentAutomation?.extraAgentArgs ?? '')
@@ -198,7 +190,12 @@ export async function saveOrcaAutomation(
     ...(edited('prompt') ? { prompt: draft.prompt } : {}),
     ...(edited('precheckCommand') || edited('precheckTimeoutSeconds') ? { precheck } : {}),
     ...(edited('agentId') ? { agentId: draft.agentId } : {}),
-    ...(!currentAutomation || edited('surface') || edited('extraAgentArgs') ? launchSetup : {}),
+    ...(!currentAutomation ||
+    draft.launchSetupPatch ||
+    edited('surface') ||
+    edited('extraAgentArgs')
+      ? launchSetup
+      : {}),
     ...(targetEdited
       ? {
           runContext,
@@ -211,6 +208,7 @@ export async function saveOrcaAutomation(
     ...(edited('setupDecision') || setupDecision !== currentAutomation?.setupDecision
       ? { setupDecision }
       : {}),
+    ...(setupTrustHash ? { setupTrustHash } : {}),
     ...(edited('reuseSession') || edited('workspaceMode')
       ? { reuseSession: draft.workspaceMode === 'existing' && draft.reuseSession }
       : {}),
@@ -220,7 +218,7 @@ export async function saveOrcaAutomation(
     updates.rrule = rrule
     updates.dtstart = time.now
   }
-  const createInput: AutomationCreateInput = {
+  const createInput: AutomationCreateInput = automationCopyLaunchSetup(currentAutomation, updates, {
     name: currentAutomation ? currentAutomation.name : draft.name,
     prompt: currentAutomation ? currentAutomation.prompt : draft.prompt,
     precheck: currentAutomation ? currentAutomation.precheck : precheck,
@@ -232,6 +230,7 @@ export async function saveOrcaAutomation(
     workspaceId: currentAutomation ? currentAutomation.workspaceId : draft.workspaceId,
     baseBranch: currentAutomation ? currentAutomation.baseBranch : draft.baseBranch.trim() || null,
     setupDecision: currentAutomation ? currentAutomation.setupDecision : setupDecision,
+    setupTrustHash: currentAutomation ? currentAutomation.setupTrustHash : setupTrustHash,
     reuseSession: currentAutomation
       ? currentAutomation.reuseSession
       : draft.workspaceMode === 'existing' && draft.reuseSession,
@@ -242,7 +241,7 @@ export async function saveOrcaAutomation(
       ? currentAutomation.missedRunGraceMinutes
       : missedRunGraceMinutes,
     ...updates
-  }
+  })
 
   const destinationResult = resolveAutomationEditDestination({
     currentAutomation,

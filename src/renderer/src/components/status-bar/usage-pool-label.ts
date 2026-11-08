@@ -1,5 +1,9 @@
 import { translate } from '@/i18n/i18n'
-import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
+import type { Translate } from '@/i18n/use-translate'
+import {
+  formatRateLimitWindowChipLabel,
+  formatWindowLabel
+} from '../../../../shared/rate-limit-window-label'
 import type {
   ProviderRateLimits,
   RateLimitBucket,
@@ -41,19 +45,23 @@ export function formatPoolGroupLabel(group: string, buckets: readonly RateLimitB
   return collides ? group : short
 }
 
-function formatPoolWindowName(bucket: RateLimitBucket): string {
+function formatPoolWindowName(bucket: RateLimitBucket, t: Translate = translate): string {
   // An unmapped agy window has no length; formatWindowLabel(0) would invent "0m".
   if (!(bucket.windowMinutes > 0)) {
     return (bucket.windowName ?? '').replace(/\s*limit remaining$/i, '').trim()
   }
   if (bucket.windowMinutes === WEEKLY_WINDOW_MINUTES) {
-    return translate('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
+    return t('auto.components.status.bar.StatusBar.5c938d39ac', 'wk')
   }
   return formatWindowLabel(bucket.windowMinutes)
 }
 
-export function formatPoolWindowLabel(bucket: RateLimitBucket, now?: number): string {
-  const label = formatPoolWindowName(bucket)
+export function formatPoolWindowLabel(
+  bucket: RateLimitBucket,
+  now?: number,
+  t?: Translate
+): string {
+  const label = formatPoolWindowName(bucket, t)
   // Urgency follows consumption even when the user displays the percentage remaining.
   if (clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT && bucket.resetsAt != null) {
     const countdown = formatRateLimitWindowChipLabel(bucket, now)
@@ -65,20 +73,22 @@ export function formatPoolWindowLabel(bucket: RateLimitBucket, now?: number): st
 export function formatPoolShortLabel(
   bucket: RateLimitBucket,
   buckets: readonly RateLimitBucket[],
-  now?: number
+  now?: number,
+  t?: Translate
 ): string {
   if (!bucket.group) {
     return bucket.name
   }
-  return `${formatPoolGroupLabel(bucket.group, buckets)} ${formatPoolWindowLabel(bucket, now)}`.trim()
+  return `${formatPoolGroupLabel(bucket.group, buckets)} ${formatPoolWindowLabel(bucket, now, t)}`.trim()
 }
 
 export function formatStatusBarSectionLabel(
   p: ProviderRateLimits,
   section: { label: string; window: RateLimitWindow },
-  now?: number
+  now?: number,
+  t?: Translate
 ): string {
   return isGroupedUsagePool(section.window)
-    ? formatPoolShortLabel(section.window, p.buckets ?? [], now)
+    ? formatPoolShortLabel(section.window, p.buckets ?? [], now, t)
     : section.label
 }

@@ -3,8 +3,8 @@ import { useAppStore } from '@/store'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import type { AutomationHostFilter } from '../../../../shared/automation-host-filter'
-import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationHostFilter } from '../../../../shared/automations/ownership/automation-host-filter'
+import type { StableAutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
 import { subscribeAutomationHostInvalidation } from './automation-host-invalidation-window-events'
 import { buildAutomationHostCatalogSource } from './automation-host-catalog-source'
@@ -23,7 +23,7 @@ import type {
   AutomationHostCatalog,
   AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
-import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
+import { automationHostFilterStableKey } from '../../../../shared/automations/ownership/automation-host-filter'
 import {
   foldDesktopHostFilter,
   resolveAutomationHostFilter,

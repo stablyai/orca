@@ -46,9 +46,9 @@ vi.mock('child_process', async () => {
 import { main } from './index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
-import { HeadlessEmulator } from '../main/daemon/headless-emulator'
-import { projectTerminalVisibleLines } from '../main/runtime/orca-runtime-terminal-projection'
-import { readRuntimeFixture } from '../main/runtime/agent-transcript-replay-test-harness'
+import { HeadlessEmulator } from '../main/daemon/emulation/headless-emulator'
+import { projectTerminalVisibleLines } from '../main/runtime/terminal/view/orca-runtime-terminal-projection'
+import { readRuntimeFixture } from '../main/runtime/terminal/wait/agent-transcript-replay-test-harness'
 
 function readFixture(overrides: Record<string, unknown> = {}) {
   return okFixture('req_terminal_read', {

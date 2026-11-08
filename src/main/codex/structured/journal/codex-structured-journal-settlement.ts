@@ -5,16 +5,16 @@ import {
   type AgentJournalTurnLifecycleState
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import '../../../native-chat/agent-session-journal/journal-row-builders'
+import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput
-} from '../../../native-chat/agent-session-journal/journal-lifecycle-mutation'
+} from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { cancelledJournalPromptBody } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import type { CodexTurnOrdinals } from './codex-turn-ordinals'
 import type { CodexStructuredItemStreams } from '../items/codex-structured-item-stream-contracts'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
@@ -22,7 +22,7 @@ import { codexCommandOutlivesTurn } from '../items/codex-command-lifecycle'
 import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
 import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { appendCodexLifecycleMutations } from './codex-structured-journal-sink'
-import { codexActiveItemBody, interruptedCodexItemBody } from '../items/codex-unfinished-item-body'
+import { interruptedCodexItemBody } from '../items/codex-unfinished-item-body'
 import type { CodexRowAttribution } from '../background-work/codex-subagent-linkage'
 import type { CodexActiveJournalItem } from './codex-structured-journal-contracts'
 
@@ -53,7 +53,7 @@ export function settleCodexJournalSession(input: {
   const mutations: JournalLifecycleIdentityMutationInput[] = []
   const turnOrdinalsToForget: { threadId: string; turnId: string }[] = []
   for (const active of input.activeItems.values()) {
-    const body = interruptedCodexItemBody(codexActiveItemBody(active, input.streams), {
+    const body = interruptedCodexItemBody(active, input.streams, {
       at: input.event.observedAt ?? input.now?.() ?? Date.now(),
       call: 'interrupted'
     })
@@ -128,7 +128,7 @@ export function settleCodexJournalTurn(input: {
     if (codexCommandOutlivesTurn(active.item)) {
       continue
     }
-    const body = interruptedCodexItemBody(codexActiveItemBody(active, input.streams), {
+    const body = interruptedCodexItemBody(active, input.streams, {
       at: input.completedAt,
       call: input.turnEnd
     })

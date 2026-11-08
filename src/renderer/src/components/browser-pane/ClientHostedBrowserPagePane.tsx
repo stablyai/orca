@@ -36,7 +36,7 @@ import { isPageDocumentNavigationStart } from './host-guest/browser-page-webview
 import { ClientHostedBrowserLoadFailure } from './client-hosted-browser-load-failure'
 import { useClientHostedPageUrlSubmission } from './navigate/use-client-hosted-page-url-submission'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { BrowserNewTabPage } from './new-tab/BrowserNewTabPage'
 import { useBrowserPageReloadActions } from './navigate/use-browser-page-reload-actions'
 import { resolveActiveBrowserLoadFailure } from './navigate/browser-load-failure-for-url'
@@ -356,6 +356,7 @@ export function ClientHostedBrowserPagePane({
           {markup.overlay}
           <BrowserPageFeedbackBadge ref={zoom.feedbackBadgeRef} />
           <BrowserFind
+            browserPageId={browserTab.id}
             isOpen={findOpen}
             onClose={() => setFindOpen(false)}
             webviewRef={webviewRef}
