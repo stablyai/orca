@@ -200,4 +200,20 @@ describe('uploadRuntimeDropPaths panel scope', () => {
     })
     vi.unstubAllGlobals()
   })
+
+  it('tears the panel down at once when the import throws', async () => {
+    mocks.runImport.mockImplementation(async (progress: RuntimeImportProgressHandlers) => {
+      progress.onStart([row])
+      progress.onFinish()
+      throw new Error('runtime unreachable')
+    })
+
+    await uploadRuntimeDropPaths(dropArgs(['/local/clip.mp4']))
+
+    // No outcome hold: the session is gone and the panel stops following workspace switches.
+    expect(getTransferSession('session-1')).toBeUndefined()
+    expect(mocks.store.listeners.size).toBe(0)
+    expect(toast.dismiss).toHaveBeenCalledWith('panel')
+    expect(toast.error).toHaveBeenCalled()
+  })
 })
