@@ -21,7 +21,16 @@ const UNCOMPILED_FILES = [
   // structuredSessionSelectionAuthority/Controller read module state the selection lifetime replaces.
   'src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-option-state.ts',
   // applyTerminalColdActivation mutates controller refs during render on the terminal hot path.
-  'src/renderer/src/components/use-terminal-controller.ts'
+  'src/renderer/src/components/use-terminal-controller.ts',
+  // Render reads of a TanStack virtualizer passed in; it mutates in place, so memoizing on it freezes rows.
+  'src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-section-list.tsx',
+  'src/renderer/src/components/editor/markdown-preview/viewport/use-markdown-preview-scroll-anchor.ts',
+  'src/renderer/src/components/github-item-dialog/inspect-pull-request/pr-files-combined-diff-body.tsx',
+  'src/renderer/src/components/right-sidebar/file-explorer/panel/FileExplorerVirtualRows.tsx',
+  'src/renderer/src/components/sidebar/worktree-list/viewport/VirtualizedWorktreeViewport.tsx',
+  // The workbench subtree relies on the shell re-rendering with each app render; memoized, new browser tabs mount their webview late.
+  'src/renderer/src/app-shell/AppWorkspaceShell.tsx',
+  'src/renderer/src/app-shell/use-app-chrome-layout.ts'
 ]
 
 // Files still listed in these ratchets would run differently once compiled.
