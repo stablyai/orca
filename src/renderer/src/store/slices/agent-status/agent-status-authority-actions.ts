@@ -5,7 +5,7 @@ import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
   transferAgentPaneAuthorityAlias
-} from '../agent-pane-authority'
+} from './agent-pane-authority'
 import {
   boundRecentlyRetiredAgentStatusPaneKeys,
   movePaneKeyedRecord,

@@ -24,8 +24,8 @@ export type GuestShortcutForwardContext = {
   resolveWorktreeId?: (browserTabId: string) => string | null
   resolveWorkspaceId?: (browserTabId: string) => string | null
   forwardBrowserPageZoom: (event: Electron.Event, direction: BrowserPageZoomDirection) => void
-  /** False for plugin frames: no address bar, history, find or page zoom, and Close closes the
-   *  active tab rather than a browser source. */
+  /** False for plugin frames: no address bar, history, find or page zoom, so zoom and the
+   *  sidebar chords go to Orca, and Close closes the active tab rather than a browser source. */
   browserPage?: boolean
 }
 
@@ -49,7 +49,10 @@ export function forwardGuestShortcutInput(
   const keybindings = getKeybindings?.()
   if (action?.type === 'zoom') {
     if (!page) {
-      return false
+      // Why: a plugin frame has no page zoom; Orca zooms what it would with focus outside a pane.
+      event.preventDefault()
+      resolveRenderer(browserTabId)?.send('terminal:zoom', action.direction)
+      return true
     }
     forwardBrowserPageZoom(event, action.direction)
     return true
@@ -159,6 +162,15 @@ export function forwardGuestShortcutInput(
     } else {
       renderer.send('ui:closeActiveTab')
     }
+  } else if (
+    keybindingMatchesAction('sidebar.projects.toggleCollapse', input, process.platform, keybindings)
+  ) {
+    renderer.send('ui:toggleProjectsCollapse')
+  } else if (!page && action?.type === 'toggleLeftSidebar') {
+    // Why: a browser page keeps Mod+B for the page and Mod+L for its address bar.
+    renderer.send('ui:toggleLeftSidebar')
+  } else if (!page && action?.type === 'toggleRightSidebar') {
+    renderer.send('ui:toggleRightSidebar')
   } else if (action?.type === 'toggleWorktreePalette') {
     renderer.send('ui:toggleWorktreePalette')
   } else if (action?.type === 'openQuickOpen') {

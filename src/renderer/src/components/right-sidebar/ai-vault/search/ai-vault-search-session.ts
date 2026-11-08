@@ -46,7 +46,7 @@ export function withAiVaultHistoryPreviews(
   if (hitSessions.length === 0 || history.length === 0) {
     return hitSessions
   }
-  // Relay hits are redacted of their transcript path, so join on host, agent and session id; skip ambiguous ones.
+  // Browser and phone hits are redacted of their transcript path, so join on host, agent and session id; skip ambiguous ones.
   const historyByIdentity = new Map<string, AiVaultSession | null>()
   for (const session of history) {
     const key = previewIdentity(session)
@@ -54,10 +54,15 @@ export function withAiVaultHistoryPreviews(
   }
   return hitSessions.map((hitSession) => {
     const row = historyByIdentity.get(previewIdentity(hitSession))
-    const hydrated =
-      row && (!hitSession.filePath || hitSession.filePath === row.filePath)
-        ? withAiVaultSessionCwdAliases(hitSession, row)
-        : hitSession
+    const sameFile = row && (!hitSession.filePath || hitSession.filePath === row.filePath)
+    const hydrated = sameFile
+      ? {
+          ...withAiVaultSessionCwdAliases(hitSession, row),
+          ...(row.antigravityArtifactPath
+            ? { antigravityArtifactPath: row.antigravityArtifactPath }
+            : {})
+        }
+      : hitSession
     return row && hitSession.previewMessages.length === 0
       ? {
           ...hydrated,

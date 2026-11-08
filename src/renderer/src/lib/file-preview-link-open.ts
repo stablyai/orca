@@ -1,24 +1,28 @@
-import { resolveBrowserLinkSession } from './browser-link-session'
-import { activateAndRevealWorkspace } from './worktree-activation'
+import { resolveBrowserLinkSession } from './browser/navigation/browser-link-session'
+import { activateAndRevealWorkspace } from './workspace/activation/worktree-activation'
 import type { AppState } from '@/store/types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import type { WorkspaceFilePreviewPlan } from './file-preview'
-import type { BrowserLinkOpenContext, BrowserOpenOutcome } from './browser-link-destination'
-import { openLocalBrowserLink } from './browser-link-open'
+import type {
+  BrowserLinkOpenContext,
+  BrowserOpenOutcome
+} from './browser/navigation/browser-link-destination'
+import { openLocalBrowserLink } from './browser/navigation/browser-link-open'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
-import { createBrowserLinkHostMatcher } from './browser-link-owner'
+import { createBrowserLinkHostMatcher } from './browser/navigation/browser-link-owner'
 import { resolveWorktreeOperationRoute } from './worktree-operation-route'
-import { selectDetectedWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { hasIndexedDetectedWorktree } from './worktree-runtime-owner-index'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { hasIndexedDetectedWorktree } from './workspace/ownership/worktree-runtime-owner-index'
 
 export type FileBrowserLinkTarget = {
   filePath: string
   worktreeId: string
   fileExecutionHostId?: ExecutionHostId
+  placementWorkspaceId?: string
 }
 
-function resolveFileBrowserLinkExecutionHostId(
+export function resolveFileBrowserLinkExecutionHostId(
   state: AppState,
   worktreeId: string
 ): ExecutionHostId | null {
@@ -43,14 +47,20 @@ export async function openPlannedFileBrowserLink(
   context: BrowserLinkOpenContext,
   ownsPreviewRoute: (state: AppState) => boolean
 ): Promise<BrowserOpenOutcome> {
-  const executionHostId = resolveFileBrowserLinkExecutionHostId(state, params.worktreeId)
+  const fileExecutionHostId = resolveFileBrowserLinkExecutionHostId(state, params.worktreeId)
+  const placementWorkspaceId = params.placementWorkspaceId ?? params.worktreeId
+  const executionHostId =
+    placementWorkspaceId === params.worktreeId
+      ? fileExecutionHostId
+      : resolveFileBrowserLinkExecutionHostId(state, placementWorkspaceId)
   if (
+    !fileExecutionHostId ||
     !executionHostId ||
     (params.fileExecutionHostId &&
       !createBrowserLinkHostMatcher(
         state,
         params.worktreeId,
-        executionHostId
+        fileExecutionHostId
       )(params.fileExecutionHostId))
   ) {
     return { status: 'refused' }
@@ -63,11 +73,11 @@ export async function openPlannedFileBrowserLink(
   return openLocalBrowserLink({
     context,
     destination: {
-      worktreeId: params.worktreeId,
+      worktreeId: placementWorkspaceId,
       executionHostId,
       browserRuntimeEnvironmentId: null,
       profileHostId: LOCAL_EXECUTION_HOST_ID,
-      ...resolveBrowserLinkSession(state, params.worktreeId, LOCAL_EXECUTION_HOST_ID),
+      ...resolveBrowserLinkSession(state, placementWorkspaceId, LOCAL_EXECUTION_HOST_ID),
       resource:
         plan.status === 'doc-preview'
           ? { kind: 'document', docLocation }
@@ -76,13 +86,14 @@ export async function openPlannedFileBrowserLink(
     url: plan.status === 'doc-preview' ? ORCA_BROWSER_BLANK_URL : plan.url,
     options: plan.status === 'doc-preview' ? { docLocation } : { title: plan.title },
     reveal: () => {
-      activateAndRevealWorkspace(params.worktreeId, {
+      activateAndRevealWorkspace(placementWorkspaceId, {
         providesInitialSurface: true,
         executionHostId
       })
     },
     ownsRoute: (current) =>
-      resolveFileBrowserLinkExecutionHostId(current, params.worktreeId) === executionHostId &&
+      resolveFileBrowserLinkExecutionHostId(current, params.worktreeId) === fileExecutionHostId &&
+      resolveFileBrowserLinkExecutionHostId(current, placementWorkspaceId) === executionHostId &&
       ownsPreviewRoute(current)
   })
 }

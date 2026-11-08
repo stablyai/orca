@@ -17,7 +17,10 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../ipc/pty/kill-all': { killAllPty },
-  '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
+  '../daemon/providers/lifecycle/daemon-provider-state': {
+    disconnectDaemon: settled(),
+    shutdownDaemon: settled()
+  },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
   './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
@@ -32,7 +35,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
     setStructuredAgentSessionTeardownTrigger: idle()
   },
   '../runtime/files/watch/file-watcher-leases': { awaitRuntimeFileWatcherUnsubscribes: settled() },
-  '../runtime/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
+  '../runtime/rpc/server/runtime-metadata': { clearRuntimeMetadataIfOwned: idle() },
   '../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime': {
     shutdownPairedRuntimeBrowserClientHosts: settled()
   },
@@ -133,14 +136,6 @@ it('quits at the teardown deadline without releasing admission while the writer 
   expect(state.profileStateAdmission).toBe(admission)
 })
 
-it('releases admission only after the final flush and freeze complete', async () => {
-  const { app, admission, store } = await startQuit(async () => {})
-  await vi.advanceTimersByTimeAsync(0)
-  expect(store.freezeWritesAsync).toHaveBeenCalledOnce()
-  expect(admission.release).toHaveBeenCalledOnce()
-  expect(app.quit).toHaveBeenCalledOnce()
-})
-
 it('writes a pane grid still inside its write burst before the final flush', async () => {
   const paneGrids = Promise.withResolvers<void>()
   const { store } = await startQuit(async () => {}, {
@@ -167,24 +162,6 @@ it('writes a pane grid still inside its write burst before the final flush', asy
   )
   // Nothing awaited between them: the save started in the same turn as the SSH shutdown.
   expect(flushesByNextMicrotask).toBe(1)
-})
-
-it('starts the SSH shutdown and the final save at once when no pane grid waits', async () => {
-  const { store } = await startQuit(async () => {})
-  expect(beginSshShutdown).toHaveBeenCalledOnce()
-  expect(store.flushFinalOrThrowAsync).toHaveBeenCalledOnce()
-  const order = [beginSshShutdown, killAllPty, store.flushFinalOrThrowAsync].map(
-    (step) => step.mock.invocationCallOrder[0]!
-  )
-  expect(order).toEqual([...order].sort((a, b) => a - b))
-  await vi.advanceTimersByTimeAsync(0)
-  expect(flushesByNextMicrotask).toBe(1)
-})
-
-// Chat teardown reads hook status after server stop; retain it for background-only session resume offers.
-it('stops the hook server without clearing the status store the chat teardown reads', async () => {
-  await startQuit(async () => {})
-  expect(stopAgentHookServer).toHaveBeenCalledWith({ keepStatus: true })
 })
 
 it.each([

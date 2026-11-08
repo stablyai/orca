@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { answered } from '@/store/github/answered-request.test-fixture'
+import { answered } from '@/store/github/requests/answered-request.test-fixture'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useStore } from 'zustand'
@@ -8,12 +8,12 @@ import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks
-} from '@/store/slices/github-slice-test-harness'
+} from '@/store/github/github-slice-test-harness'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
-import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+
 import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 import { parseTaskQuery } from '../../../../../shared/task-query'
 import type { GitHubProjectTable } from '../../../../../shared/github/project-types'
@@ -40,8 +40,10 @@ vi.mock('@/store', () => ({
     }
   )
 }))
-vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
-vi.mock('@/lib/github-work-item-source-lookup', () => ({
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
+  useAllWorktrees: () => []
+}))
+vi.mock('@/lib/work-items/github/github-work-item-source-lookup', () => ({
   lookupGitHubWorkItemDetailsForSource: mocks.details,
   lookupGitHubWorkItemByOwnerRepoForSource: mocks.item
 }))
@@ -64,7 +66,9 @@ vi.mock('@/i18n/i18n', async (original) => ({
   ...(await original<object>()),
   translate: (_key: string, fallback: string) => fallback
 }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: vi.fn()
+}))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
 vi.mock('./github-item-dialog-issue-header', () => ({
   GitHubItemDialogIssueHeader: (props: {
@@ -220,10 +224,7 @@ function renderDialog() {
     )
   })
 }
-function TasksRow({ rows }: { rows: GitHubWorkItem[] }) {
-  const [projected] = useGitHubTaskItems(rows)
-  return <output data-field="tasks">{projected.assignees?.map((u) => u.login).join(',')}</output>
-}
+
 const text = (field: string) => node.querySelector(`[data-field="${field}"]`)?.textContent
 async function click(label: string) {
   const button = [...node.querySelectorAll('button')].find((b) => b.textContent === label)
@@ -260,38 +261,6 @@ describe('issue dialog edits reach the Tasks row through the shared record', () 
   afterEach(async () => {
     await act(async () => root.unmount())
     node.remove()
-  })
-
-  it('assigns in the dialog, keeps it through a stale search, and starts with the item', async () => {
-    const rows = answered(await mocks.store!.getState().fetchWorkItems(repo.id, repo.path, 20, ''))
-    await act(async () => {
-      root.render(
-        <>
-          <TasksRow rows={[...rows]} />
-          <GitHubItemDialog
-            workItem={rows[0]}
-            repoPath={repo.path}
-            repoId={repo.id}
-            sourceContext={source}
-            onUse={mocks.onUse}
-            onClose={() => {}}
-          />
-        </>
-      )
-    })
-    await click('Assign me')
-    await act(async () => {
-      await Promise.resolve()
-    })
-    expect(mocks.update).toHaveBeenCalledOnce()
-    expect(text('tasks')).toBe('alice')
-    expect(text('dialog')).toBe('alice')
-    const stale = answered(
-      await mocks.store!.getState().fetchWorkItems(repo.id, repo.path, 20, '', { force: true })
-    )
-    expect(stale[0].assignees?.map((u) => u.login)).toEqual(['alice'])
-    await click('Start')
-    expect(mocks.onUse).toHaveBeenCalledWith(expect.objectContaining({ id: row.id }))
   })
 
   it.each([

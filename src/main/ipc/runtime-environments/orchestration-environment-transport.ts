@@ -4,7 +4,7 @@ import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/ru
 import {
   pairedOrchestrationPeers,
   type OrchestrationEnvironmentTransport
-} from '../../runtime/orchestration/environment-transport'
+} from '../../runtime/orchestration/federation/environment-transport'
 
 /** Dials this host's paired servers for cross-server orchestration; host-free, so desktop and orcad share it. */
 export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironmentTransport {
@@ -22,7 +22,7 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
       }
     },
     // Loaded on first dial: the routing graph is large and most hosts never place remote workers.
-    call: async (selector, method, params, timeoutMs, envelope, expectedPairingRevision) =>
+    call: async (selector, method, params, timeoutMs, envelope, expectedPairingRevision, send) =>
       (await import('./runtime-environment-transport-routing')).callRuntimeEnvironment(
         registryRoot(),
         selector,
@@ -30,7 +30,13 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         params,
         timeoutMs,
         expectedPairingRevision,
-        envelope
+        envelope,
+        send && {
+          ...(send.prepareRequest ? { prepareRequest: send.prepareRequest } : {}),
+          ...(send.expectedRuntimeId === undefined
+            ? {}
+            : { expectedEnvironmentRuntimeId: send.expectedRuntimeId })
+        }
       )
   }
 }

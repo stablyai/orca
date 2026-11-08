@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
 import {
   normalizeGitHubReviewerLogins,

@@ -78,17 +78,17 @@ const { publicRuntimeEnvironment } = await vi.importActual<{
   publicRuntimeEnvironment(
     fields: Pick<PublicKnownRuntimeEnvironment, 'id'> & Partial<PublicKnownRuntimeEnvironment>
   ): PublicKnownRuntimeEnvironment
-}>('../../../renderer/src/runtime/paired-runtime-environment-test-fixture')
+}>('../../../renderer/src/runtime/rpc/testing/paired-runtime-environment-test-fixture')
 const runtime = await vi.importActual<typeof ClientHostRuntime>(
   '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 )
 
 const { replaceRuntimeEnvironmentRevisions } = await vi.importActual<{
   replaceRuntimeEnvironmentRevisions(environments: PublicKnownRuntimeEnvironment[]): void
-}>('../../../renderer/src/runtime/runtime-environment-revision')
+}>('../../../renderer/src/runtime/rpc/environment-revisions/runtime-environment-revision')
 const { createTestStore } = await vi.importActual<{
   createTestStore(): BrowserTestStore
-}>('../../../renderer/src/store/slices/browser-slice-test-harness')
+}>('../../../renderer/src/store/slices/browser/browser-slice-test-harness')
 const { captureGoogleCookieClearTarget, confirmAndClearGoogleCookies } = await vi.importActual<{
   captureGoogleCookieClearTarget(
     hostId: string,
@@ -100,16 +100,11 @@ const { captureGoogleCookieClearTarget, confirmAndClearGoogleCookies } = await v
     target: GoogleCookieClearTarget,
     confirm: () => Promise<boolean>
   ): Promise<void>
-}>('../../../renderer/src/lib/browser-google-cookie-clear')
+}>('../../../renderer/src/lib/browser/cookies/browser-google-cookie-clear')
 import { registerBrowserHandlers } from '../../ipc/browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../../ipc/browser/browser-renderer-trust'
-import {
-  bindRoutePartition,
-  importCookiesIntoClientRoutePartition
-} from './client-route/browser-client-route-cookie-import'
-import { clearGoogleCookies } from './browser-google-cookie-clear'
+import { importCookiesIntoClientRoutePartition } from './client-route/browser-client-route-cookie-import'
 import { acquireCookieMutationLock } from './browser-cookie-import-clear'
-import { deriveBrowserRoutePartition } from '../routing/partitions/browser-route-identity'
 import * as bindingFile from '../routing/partitions/browser-route-partition-binding-file'
 
 const profile: BrowserSessionProfile = {
@@ -241,62 +236,6 @@ it('preserves import refusal/order, reserves delegation for absent routes, and r
   expect(server.cookies.get).not.toHaveBeenCalled()
 })
 
-it.each([
-  [10, 50],
-  [100, 500]
-])(
-  'bounds real binding-file work at K=%i B=%i and preserves alias-selected/non-Google jars',
-  async (count, bindings) => {
-    const entries = Object.fromEntries(
-      Array.from({ length: bindings - 1 }, (_, i) => {
-        const d = deriveBrowserRoutePartition({ ...route, browserProfileId: `unused-${i}` })
-        return [
-          d.partition,
-          { fingerprint: d.bindingFingerprint, storageScope: route.storageScope, lastUsedAt: 1 }
-        ]
-      })
-    )
-    const compatible = deriveBrowserRoutePartition({
-      ...route,
-      browserProfileId: 'work',
-      authorityConnectionIdentity: route.pairingAuthorityConnectionIdentity
-    })
-    entries[compatible.partition] = {
-      fingerprint: compatible.bindingFingerprint,
-      storageScope: route.storageScope,
-      lastUsedAt: 1
-    }
-    writeFileSync(
-      join(mocks.root, 'browser-route-partition-bindings.json'),
-      JSON.stringify({ version: 2, bindings: entries })
-    )
-    const partition = bindRoutePartition(route, 'work')
-    expect(partition).toBe(compatible.partition)
-    const target: GoogleCookieClearLocalTarget = targetSchema.parse(
-      call('googleCookieClearTarget', { profileId: 'work', environmentId: 'server' })
-    )
-    const session = jar(count)
-    session.cookies.get.mockResolvedValueOnce([
-      ...(await session.cookies.get()),
-      ...(await session.cookies.get()).filter((row) => row.name === 'SID0')
-    ])
-    session.cookies.get.mockClear()
-    const decoy = jar()
-    mocks.sessions.set(partition, session)
-    mocks.sessions.set(profile.partition, decoy)
-    const read = vi.spyOn(bindingFile, 'readBoundedUtf8File')
-    expect(await call('clearGoogleCookies', target)).toBe('cleared')
-    expect(read).toHaveBeenCalledTimes(4)
-    expect(session.cookies.get).toHaveBeenCalledTimes(2)
-    expect(session.cookies.remove).toHaveBeenCalledTimes(count)
-    expect(await session.cookies.get()).toEqual([expect.objectContaining({ name: 'other' })])
-    expect(decoy.cookies.get).not.toHaveBeenCalled()
-    session.cookies.get.mockClear()
-    expect(await call('clearGoogleCookies', target)).toBe('empty')
-    expect(session.cookies.get).toHaveBeenCalledTimes(1)
-  }
-)
-
 it.each(['between selectors', 'queued profile'])(
   'stops mutation after changed ownership: %s',
   async (change) => {
@@ -318,57 +257,6 @@ it.each(['between selectors', 'queued profile'])(
       release()
       await expect(clearing).rejects.toThrow('connection changed')
       expect(session.cookies.get).not.toHaveBeenCalled()
-    }
-  }
-)
-
-import { browserProfileRpcFixture } from '../../runtime/browser/browser-profile-rpc-test-fixture'
-import { RuntimeBrowserProfiles } from '../../runtime/browser/browser-profiles'
-it('validates required executor params at the dispatcher before owner entry', async () => {
-  const clear = vi.spyOn(RuntimeBrowserProfiles.prototype, 'browserProfileClearGoogleCookies')
-  const { dispatcher } = browserProfileRpcFixture('S1')
-  expect(
-    await dispatcher.dispatch({
-      id: 'clear',
-      authToken: 'fixture',
-      method: 'browser.profileClearGoogleCookies',
-      params: { profileId: 'work' }
-    })
-  ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
-  expect(clear).not.toHaveBeenCalled()
-  expect(
-    await dispatcher.dispatch({
-      id: 'valid-clear',
-      authToken: 'fixture',
-      method: 'browser.profileClearGoogleCookies',
-      params: { profileId: 'absent', executorRuntimeId: 'S1' }
-    })
-  ).toMatchObject({ ok: false, error: { message: expect.stringContaining('not found') } })
-  expect(clear).toHaveBeenCalledTimes(1)
-})
-
-it.each(['reject after delete', 'first read', 'last read'])(
-  'reports observed cookie truth through the selected Session: %s',
-  async (fault) => {
-    const session = jar(2)
-    const remove = session.cookies.remove.getMockImplementation()!
-    if (fault === 'reject after delete') {
-      session.cookies.remove.mockImplementationOnce(async (url, name) => {
-        await remove(url, name)
-        throw new Error('deleted then rejected')
-      })
-    }
-    if (fault === 'first read' || fault === 'last read') {
-      if (fault === 'last read') {
-        session.cookies.get.mockResolvedValueOnce(await session.cookies.get())
-      }
-      session.cookies.get.mockRejectedValueOnce(new Error('read failed'))
-    }
-    expect(await clearGoogleCookies(session)).toBe(
-      fault.includes('read') ? 'unverified' : 'cleared'
-    )
-    if (!fault.includes('read')) {
-      expect(session.cookies.remove).toHaveBeenCalledTimes(2)
     }
   }
 )

@@ -8,6 +8,13 @@ export function isSshHostServed(status: SshManagedServerStatus | undefined): boo
   return status?.kind === 'managed' || (status?.kind === 'relay' && status.bridged === true)
 }
 
+/** Connected but unmoved only while the legacy relay bridge serves relay terminals. */
+export function isSshHostKeptForBridgedTerminals(
+  status: SshManagedServerStatus | undefined
+): boolean {
+  return status?.kind === 'relay' && status.bridged === true
+}
+
 /** Restore on every served publisher: tunnel startup can serve a host without an SSH connect (#32484). */
 export function setSshHostServedListener(listener: ((targetId: string) => void) | null): void {
   servedListener = listener

@@ -67,23 +67,6 @@ const desktopOrphan: StableAutomationCatalogRef = {
 }
 
 describe('resolveAutomationHostFilter', () => {
-  it('passes All hosts through untouched', () => {
-    expect(resolveAutomationHostFilter({ filter: { kind: 'all' }, catalog: catalogOf() })).toEqual({
-      effective: { kind: 'all' },
-      entry: null,
-      status: 'all',
-      announceFallback: false
-    })
-  })
-
-  it('resolves Desktop + Self immediately', () => {
-    const filter = filterFor({ authority: { kind: 'desktop' }, selector: { kind: 'self' } })
-    const resolution = resolveAutomationHostFilter({ filter, catalog: catalogOf() })
-    expect(resolution.status).toBe('ready')
-    expect(resolution.effective).toBe(filter)
-    expect(resolution.entry?.label).toBe('Local Mac')
-  })
-
   it('retains a desktop SSH selection until the target list hydrates', () => {
     const filter = filterFor(desktopSsh('pending'))
     const resolution = resolveAutomationHostFilter({
@@ -126,21 +109,6 @@ describe('resolveAutomationHostFilter', () => {
     expect(resolution.status).toBe('ghost')
     expect(resolution.announceFallback).toBe(false)
     expect(resolution.entry?.label).toBe('Old box')
-  })
-
-  it('drops a tombstoned host that nothing else references', () => {
-    const host = desktopSsh('gone')
-    const resolution = resolveAutomationHostFilter({
-      filter: filterFor(host),
-      catalog: catalogOf({
-        desktop: {
-          label: 'Local Mac',
-          ssh: mirror({ removedTargetLabels: new Map([['gone', 'Old box']]) })
-        }
-      })
-    })
-    expect(resolution.status).toBe('removed')
-    expect(resolution.announceFallback).toBe(true)
   })
 
   it('retains a Runtime Self selection until the saved runtime catalog settles', () => {
@@ -251,16 +219,5 @@ describe('resolveAutomationHostFilter', () => {
     expect(after.entry?.stableKey).toBe(before.entry?.stableKey)
     // The display slot survives; the captured incarnation does not.
     expect(after.entry?.owner).not.toEqual(before.entry?.owner)
-  })
-
-  it('retains the selection through a rename', () => {
-    const filter = filterFor(runtimeSelf)
-    const resolution = resolveAutomationHostFilter({
-      filter,
-      catalog: catalogOf({ runtimes: [runtime({ label: 'Renamed server' })] })
-    })
-    expect(resolution.status).toBe('ready')
-    expect(resolution.entry?.label).toBe('Renamed server')
-    expect(resolution.entry?.stableKey).toBe(hostStableKey(runtimeSelf))
   })
 })

@@ -5,4 +5,4 @@
 inline src/main/ipc/worktree-remote.ts
 inline src/main/ssh/ssh-channel-multiplexer.ts
 inline src/main/ssh/connection/ssh-connection.ts
-inline src/renderer/src/components/terminal-pane/remote-runtime-pty-transport.ts
+inline src/renderer/src/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-transport.ts

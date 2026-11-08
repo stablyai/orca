@@ -3,8 +3,11 @@
  * relaunch a hidden worktree's or headless tab's session is live in the daemon though no pane in
  * this app run has noted it, and orchestration, automations or mobile may wake its agent.
  */
-import { getDaemonProvider, listLiveDaemonSessions } from '../daemon/daemon-provider-state'
-import type { SessionInfo } from '../daemon/daemon-session-info'
+import {
+  getDaemonProvider,
+  listLiveDaemonSessions
+} from '../daemon/providers/lifecycle/daemon-provider-state'
+import type { SessionInfo } from '../daemon/protocol/daemon-session-info'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 

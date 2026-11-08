@@ -3,15 +3,7 @@ import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import {
-  fetchAddIssueComment,
-  fetchAddPRReviewCommentReply,
-  fetchDeleteIssueComment,
-  fetchResolveReviewThread,
-  fetchUpdateIssueComment,
-  type GitHubPrMutationOutcome
-} from './github-pr-mutations'
+import { useHostMutation } from '../query/host-mutation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -21,60 +13,18 @@ import {
   buildReplyParams,
   buildResolveParams
 } from './pr-comment-actions'
-
-export type PrCommentMutations = {
-  reply: (args: {
-    prNumber: number
-    commentId: number
-    body: string
-    threadId?: string
-    path?: string
-    line?: number
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  resolveThread: (args: {
-    threadId: string
-    resolve: boolean
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  addRootComment: (args: {
-    prNumber: number
-    body: string
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  editComment: (args: {
-    owner: string
-    repo: string
-    host?: string
-    commentId: number
-    body: string
-  }) => Promise<GitHubPrMutationOutcome>
-  deleteComment: (args: {
-    owner: string
-    repo: string
-    host?: string
-    commentId: number
-  }) => Promise<GitHubPrMutationOutcome>
-}
+import { prCommentTarget, prCommentWrite, type PrCommentWrite } from './pr-comment-writes'
+import type { PrQueryScope } from './mobile-pr-queries'
 
 export type PrCommentActionsInput = {
+  hostId: string
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
   prNumber: number
   prRepo?: GitHubPrRepoSlug | null
-  refetch: () => void | Promise<void>
-  mutations?: PrCommentMutations
-}
-
-function realMutations(client: RpcOperationSender, worktreeId: string): PrCommentMutations {
-  return {
-    reply: (args) => fetchAddPRReviewCommentReply(client, worktreeId, args),
-    resolveThread: (args) => fetchResolveReviewThread(client, worktreeId, args),
-    addRootComment: (args) => fetchAddIssueComment(client, worktreeId, args),
-    editComment: (args) => fetchUpdateIssueComment(client, args),
-    deleteComment: (args) => fetchDeleteIssueComment(client, args)
-  }
+  /** The shown PR's reads; a write patches its cached comments and re-reads only them. */
+  queries: PrQueryScope | null
 }
 
 // Track busy state per comment so one write cannot disable unrelated reply/resolve controls.
@@ -94,17 +44,14 @@ const ROOT_KEY = 'root'
 
 export function useMobilePrCommentActions(input: PrCommentActionsInput) {
   const t = useMobileTranslation()
-  const { client, connState, worktreeId, prNumber, prRepo, refetch } = input
+  const { hostId, client, connState, worktreeId, prNumber, prRepo, queries } = input
   const [busyKeys, setBusyKeys] = useState<ReadonlySet<string>>(() => new Set())
   const [error, setError] = useState<string | { kind: 'actionFailed' } | null>(null)
-  // Guard against overlapping fires of the same key (double-tap before refetch).
+  // Guard against overlapping fires of the same key (double-tap before the write settles).
   const inFlightRef = useRef<Set<string>>(new Set())
-
-  const mutations = useMemo(
-    () => input.mutations ?? (client ? realMutations(client, worktreeId) : null),
-    [input.mutations, client, worktreeId]
-  )
-  const ready = mutations !== null && (input.mutations !== undefined || connState === 'connected')
+  const { mutate, blockedOffline } = useHostMutation(prCommentWrite, { hostId, client })
+  const ready = client !== null && connState === 'connected' && !blockedOffline
+  const target = useMemo(() => prCommentTarget(queries), [queries])
 
   const setBusy = useCallback((key: string, busy: boolean) => {
     setBusyKeys((prev) => {
@@ -119,7 +66,7 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
   }, [])
 
   const run = useCallback(
-    async (key: string, mutate: () => Promise<GitHubPrMutationOutcome>): Promise<boolean> => {
+    async (key: string, change: PrCommentWrite): Promise<boolean> => {
       if (!ready || inFlightRef.current.has(key)) {
         return false
       }
@@ -127,17 +74,11 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
       setBusy(key, true)
       setError(null)
       try {
-        const outcome = await mutate()
-        if (outcome.ok) {
-          triggerSuccess()
-          await refetch()
-          return true
-        }
-        triggerError()
-        setError(outcome.error)
-        return false
+        await mutate({ worktreeId, prRepo: prRepo ?? null, target, write: change })
+        triggerSuccess()
+        return true
       } catch (err) {
-        // Contain mutation/refetch throws as false with feedback; callers rely on the boolean contract.
+        // Contain refusals as false with feedback; callers rely on the boolean contract.
         triggerError()
         setError(err instanceof Error ? err.message : { kind: 'actionFailed' })
         return false
@@ -146,62 +87,59 @@ export function useMobilePrCommentActions(input: PrCommentActionsInput) {
         setBusy(key, false)
       }
     },
-    [ready, refetch, setBusy]
+    [mutate, prRepo, ready, setBusy, target, worktreeId]
   )
 
   const reply = useCallback(
-    (comment: PRComment, body: string) => {
-      if (!mutations) {
-        return Promise.resolve(false)
-      }
-      const params = buildReplyParams(prNumber, comment, body)
-      return run(replyKey(comment.id), () => mutations.reply({ ...params, prRepo }))
-    },
-    [mutations, prNumber, prRepo, run]
+    (comment: PRComment, body: string) =>
+      run(replyKey(comment.id), {
+        kind: 'reply',
+        params: buildReplyParams(prNumber, comment, body)
+      }),
+    [prNumber, run]
   )
 
   const toggleResolve = useCallback(
     (comment: PRComment) => {
       const params = buildResolveParams(comment)
-      if (!mutations || !params) {
+      if (!params) {
         return Promise.resolve(false)
       }
-      return run(resolveKey(params.threadId), () => mutations.resolveThread({ ...params, prRepo }))
+      return run(resolveKey(params.threadId), { kind: 'resolve', params })
     },
-    [mutations, prRepo, run]
+    [run]
   )
 
   const addRootComment = useCallback(
-    (body: string) => {
-      if (!mutations) {
-        return Promise.resolve(false)
-      }
-      const params = buildAddRootCommentParams(prNumber, body)
-      return run(ROOT_KEY, () => mutations.addRootComment({ ...params, prRepo }))
-    },
-    [mutations, prNumber, prRepo, run]
+    (body: string) =>
+      run(ROOT_KEY, { kind: 'root', params: buildAddRootCommentParams(prNumber, body) }),
+    [prNumber, run]
   )
 
   const editComment = useCallback(
     (commentId: number, body: string) => {
-      if (!mutations || !prRepo) {
+      if (!prRepo) {
         return Promise.resolve(false)
       }
-      const params = buildEditCommentParams(prRepo, commentId, body)
-      return run(editKey(commentId), () => mutations.editComment(params))
+      return run(editKey(commentId), {
+        kind: 'edit',
+        params: buildEditCommentParams(prRepo, commentId, body)
+      })
     },
-    [mutations, prRepo, run]
+    [prRepo, run]
   )
 
   const deleteComment = useCallback(
     (commentId: number) => {
-      if (!mutations || !prRepo) {
+      if (!prRepo) {
         return Promise.resolve(false)
       }
-      const params = buildDeleteCommentParams(prRepo, commentId)
-      return run(deleteKey(commentId), () => mutations.deleteComment(params))
+      return run(deleteKey(commentId), {
+        kind: 'delete',
+        params: buildDeleteCommentParams(prRepo, commentId)
+      })
     },
-    [mutations, prRepo, run]
+    [prRepo, run]
   )
 
   return {

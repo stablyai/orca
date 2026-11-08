@@ -2,6 +2,7 @@ import React from 'react'
 import { toast } from 'sonner'
 import { CircleAlert, Info } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { revealTerminalPane } from '@/lib/reveal-terminal-pane'
@@ -59,10 +60,11 @@ export function WslMoveOrchestratorStatusLine({
 }: {
   distro: string
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const record = useWslMoveOrchestratorStatus((s) =>
     wslMoveOrchestratorRecordFor(s.records, distro)
   )
-  const line = wslMoveOrchestratorLine(record)
+  const line = wslMoveOrchestratorLine(record, t)
   if (!line || !record) {
     return null
   }
@@ -79,9 +81,9 @@ export function WslMoveOrchestratorStatusLine({
         <div className="text-muted-foreground">{line.text}</div>
         {blockers.map((blocker) => (
           <div key={blocker.kind} className="text-muted-foreground">
-            {translate('wslMove.orchestrator.blocker', '{{title}}. {{hint}}', {
-              title: wslMoveBlockerTitle(blocker.kind, blocker.ids.length),
-              hint: wslMoveBlockerHint(blocker.kind)
+            {t('wslMove.orchestrator.blocker', '{{title}}. {{hint}}', {
+              title: wslMoveBlockerTitle(blocker.kind, blocker.ids.length, t),
+              hint: wslMoveBlockerHint(blocker.kind, t)
             })}
           </div>
         ))}
@@ -93,13 +95,13 @@ export function WslMoveOrchestratorStatusLine({
               variant="outline"
               onClick={() => showBlockingTerminal(paneKey)}
             >
-              {translate('wslMove.orchestrator.showTerminal', 'Show terminal')}
+              {t('wslMove.orchestrator.showTerminal', 'Show terminal')}
             </Button>
           ) : null}
           <Button type="button" size="xs" variant="outline" onClick={() => retry(record.distro)}>
             {line.kind === 'declined'
-              ? translate('wslMove.orchestrator.moveAgain', 'Move again')
-              : translate('wslMove.orchestrator.checkAgain', 'Check again')}
+              ? t('wslMove.orchestrator.moveAgain', 'Move again')
+              : t('wslMove.orchestrator.checkAgain', 'Check again')}
           </Button>
         </div>
       </div>

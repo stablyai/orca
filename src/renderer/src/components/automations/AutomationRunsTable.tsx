@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ChevronRight, Loader2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { AutomationRunsDashboardEntry } from './automation-runs-dashboard-model'
 import {
   formatAutomationDateTimeWithRelative,
@@ -27,6 +27,8 @@ export function AutomationRunsTable({
   onLoadMore: () => void
   onOpenRun: (entry: AutomationRunsDashboardEntry) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadMoreRequestedRef = useRef(false)
   useEffect(() => {
@@ -59,43 +61,27 @@ export function AutomationRunsTable({
       >
         <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] gap-3 border-b border-border/60 bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
           <div>
-            {translate(
-              'auto.components.automations.AutomationRunsDashboard.automation',
-              'Automation'
-            )}
+            {t('auto.components.automations.AutomationRunsDashboard.automation', 'Automation')}
           </div>
           <div>
-            {translate(
-              'auto.components.automations.AutomationRunsDashboard.triggered',
-              'Triggered'
-            )}
+            {t('auto.components.automations.AutomationRunsDashboard.triggered', 'Triggered')}
           </div>
-          <div>
-            {translate('auto.components.automations.AutomationRunsDashboard.trigger', 'Trigger')}
-          </div>
-          <div>{translate('auto.components.automations.AutomationRunsDashboard.host', 'Host')}</div>
-          <div>
-            {translate('auto.components.automations.AutomationRunsDashboard.status', 'Status')}
-          </div>
+          <div>{t('auto.components.automations.AutomationRunsDashboard.trigger', 'Trigger')}</div>
+          <div>{t('auto.components.automations.AutomationRunsDashboard.host', 'Host')}</div>
+          <div>{t('auto.components.automations.AutomationRunsDashboard.status', 'Status')}</div>
         </div>
         {loading && entries.length === 0 ? (
           <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            {translate(
-              'auto.components.automations.AutomationRunsDashboard.loading',
-              'Loading runs…'
-            )}
+            {t('auto.components.automations.AutomationRunsDashboard.loading', 'Loading runs…')}
           </div>
         ) : entries.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
             <div className="text-sm font-medium">
-              {translate(
-                'auto.components.automations.AutomationRunsDashboard.noRuns',
-                'No runs yet'
-              )}
+              {t('auto.components.automations.AutomationRunsDashboard.noRuns', 'No runs yet')}
             </div>
             <div className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.automations.AutomationRunsDashboard.emptyDescription',
                 'Runs appear here after an automation is triggered.'
               )}
@@ -129,21 +115,26 @@ export function AutomationRunsTable({
                       </div>
                     </div>
                     <div className="min-w-0 truncate text-xs">
-                      {formatAutomationDateTimeWithRelative(entry.run.scheduledFor)}
+                      {formatAutomationDateTimeWithRelative(
+                        entry.run.scheduledFor,
+                        undefined,
+                        t,
+                        intlLocale
+                      )}
                     </div>
                     <div className="capitalize text-xs text-muted-foreground">
                       {entry.run.trigger}
                     </div>
                     <div className="min-w-0 truncate text-xs" title={entry.row.hostLabel}>
                       {entry.row.hostLabel ||
-                        translate(
+                        t(
                           `auto.components.automations.AutomationRunsDashboard.${entry.scope}`,
                           entry.scope === 'local' ? 'Local' : 'Remote'
                         )}
                     </div>
                     <div className="flex items-center justify-between gap-2">
                       <Badge variant={getAutomationRunStatusVariant(entry.run.status)}>
-                        {getAutomationRunStatusLabel(entry.run.status)}
+                        {getAutomationRunStatusLabel(entry.run.status, t)}
                       </Badge>
                       <ChevronRight className="size-3.5 text-muted-foreground" />
                     </div>

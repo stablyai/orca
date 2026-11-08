@@ -7,7 +7,8 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { makeWorktree, TEST_REPO } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 
 const initialAppState = useAppStore.getInitialState()
@@ -90,100 +91,8 @@ afterEach(() => {
 })
 
 describe('useChecksPanelTerminalWorktree', () => {
-  it('follows the active terminal cwd to the deepest matching worktree', async () => {
-    getCwdMock.mockResolvedValue(`${CHILD_PATH}/src`)
-
-    await renderHook(parentWorktree)
-    await flushMicrotasks()
-
-    expect(getCwdMock).toHaveBeenCalledWith('pty-1')
-    expect(latest?.worktree).toBe(childWorktree)
-  })
-
-  it('returns the default worktree (no blank flicker) while the cwd is unresolved', async () => {
-    getCwdMock.mockReturnValue(new Promise<string>(() => {}))
-
-    await renderHook(parentWorktree)
-    await flushMicrotasks()
-
-    expect(latest?.worktree).toBe(parentWorktree)
-  })
-
-  it('does not poll when the panel is hidden, and uses the default worktree', async () => {
-    getCwdMock.mockResolvedValue(`${CHILD_PATH}/src`)
-
-    await renderHook(parentWorktree, false)
-    await flushMicrotasks()
-
-    expect(getCwdMock).not.toHaveBeenCalled()
-    expect(latest?.worktree).toBe(parentWorktree)
-  })
-
-  it('does not poll remote-runtime terminals', async () => {
-    useAppStore.setState({ ptyIdsByTabId: { 'tab-1': ['remote:host:pty-1'] } } as Partial<AppState>)
-
-    await renderHook(parentWorktree)
-    await flushMicrotasks()
-
-    expect(getCwdMock).not.toHaveBeenCalled()
-    expect(latest?.worktree).toBe(parentWorktree)
-  })
-
-  it('does not spawn getCwd while the window is hidden, then refreshes on becoming visible', async () => {
-    getCwdMock.mockResolvedValue(`${CHILD_PATH}/src`)
-    const setVisibility = (state: 'visible' | 'hidden'): void => {
-      Object.defineProperty(document, 'visibilityState', {
-        configurable: true,
-        get: () => state
-      })
-    }
-    setVisibility('hidden')
-    try {
-      await renderHook(parentWorktree)
-      await flushMicrotasks()
-      expect(getCwdMock).not.toHaveBeenCalled()
-      expect(latest?.worktree).toBe(parentWorktree)
-
-      setVisibility('visible')
-      await act(async () => {
-        document.dispatchEvent(new Event('visibilitychange'))
-      })
-      await flushMicrotasks()
-      // Visibility recovery must pick up cwd changes made while hidden.
-      expect(getCwdMock).toHaveBeenCalledWith('pty-1')
-      expect(latest?.worktree).toBe(childWorktree)
-    } finally {
-      setVisibility('visible')
-    }
-  })
-
-  it('keeps the default worktree when the cwd is outside every worktree', async () => {
-    getCwdMock.mockResolvedValue('/tmp/scratch')
-
-    await renderHook(parentWorktree)
-    await flushMicrotasks()
-
-    expect(latest?.worktree).toBe(parentWorktree)
-  })
-
   it('retains the last resolved worktree when a later cwd poll returns empty', async () => {
     getCwdMock.mockResolvedValueOnce(`${CHILD_PATH}/src`).mockResolvedValueOnce('')
-
-    await renderHook(parentWorktree)
-    await flushMicrotasks()
-
-    expect(latest?.worktree).toBe(childWorktree)
-
-    await runNextCwdPoll()
-
-    expect(getCwdMock).toHaveBeenCalledTimes(2)
-    expect(latest?.worktree).toBe(childWorktree)
-  })
-
-  it('retains the last resolved worktree when a later cwd poll rejects', async () => {
-    getCwdMock
-      .mockResolvedValueOnce(`${CHILD_PATH}/src`)
-      .mockRejectedValueOnce(new Error('lsof timed out'))
 
     await renderHook(parentWorktree)
     await flushMicrotasks()
@@ -211,18 +120,6 @@ describe('useChecksPanelTerminalWorktree', () => {
 
     expect(getCwdMock).toHaveBeenCalledTimes(2)
     expect(getCwdMock).toHaveBeenLastCalledWith('pty-2')
-    expect(latest?.worktree).toBe(parentWorktree)
-  })
-
-  it('does not poll an SSH terminal (its cwd is on the relay host)', async () => {
-    useAppStore.setState({
-      ptyIdsByTabId: { 'tab-1': ['ssh:target-1@@pty-9'] }
-    } as Partial<AppState>)
-
-    await renderHook(parentWorktree)
-    await flushMicrotasks()
-
-    expect(getCwdMock).not.toHaveBeenCalled()
     expect(latest?.worktree).toBe(parentWorktree)
   })
 

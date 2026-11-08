@@ -3,16 +3,16 @@ import type {
   OrchestrationWorkerReadResult,
   OrchestrationWorkerReadSource
 } from '../../../../../../shared/orchestration-worker-output'
-import type { RuntimeTerminalState } from '../../../../../../shared/runtime-types'
+import type { RuntimeTerminalState } from '../../../../../../shared/runtime-terminal-contracts'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   createWorkerOutputSourceIdentity,
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
-} from '../../../../orchestration/worker-output-cursor'
-import { redactWorkerTerminalView } from '../../../../orchestration/worker-terminal-redaction'
-import { readWorkerTranscript } from '../../../../orchestration/worker-transcript-read'
+} from '../../../../orchestration/workers/transcripts/worker-output-cursor'
+import { redactWorkerTerminalView } from '../../../../orchestration/terminal-authority/views/worker-terminal-redaction'
+import { readWorkerTranscript } from '../../../../orchestration/workers/transcripts/worker-transcript-read'
 import { isWslHookRelayConnectionId } from '../../../../../../shared/wsl-hook-relay-contract'
 
 export async function readExactWorkerOutput(args: {

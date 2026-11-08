@@ -1,7 +1,11 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import { githubPrCheckDetailsSchema } from './github-pr-check-reply-schema'
-import { assignableUsersSchema, prChecksSchema } from './github-pr-entity-reply-schema'
+import {
+  assignableUsersSchema,
+  prChecksSchema,
+  prCommentsSchema
+} from './github-pr-entity-reply-schema'
 import {
   githubPrForBranchSchema,
   githubPrRepoSlugSchema,
@@ -86,5 +90,16 @@ export const githubPrAssignableUsersRead = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: rpcResultVariant('pr-assignable-users', assignableUsersSchema)
+  })
+)
+
+/** The PR's conversation and review threads alone: what a comment write changes. */
+export const githubPrCommentsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'github.pr-comments',
+    method: 'github.prComments',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('pr-comments', prCommentsSchema)
   })
 )

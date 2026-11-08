@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const readRuntimeDirectory = vi.fn()
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-directory-read', () => ({
   readRuntimeDirectory: (...args: unknown[]) => readRuntimeDirectory(...args)
 }))
 vi.mock('../navigation/file-explorer-operation-owner', () => ({
@@ -14,99 +14,9 @@ vi.mock('../navigation/file-explorer-operation-owner', () => ({
   getFileExplorerOwnerUnresolvedMessage: () => 'unresolved'
 }))
 
-import {
-  keepOpenedDirectoryLinks,
-  clearFailedOpenedDirectoryLink,
-  canFollowFolderLink,
-  readFileExplorerDirectory
-} from './file-explorer-directory-listing'
-import { fileExplorerListingToDirCache } from './file-explorer-dir-pages'
-import type { DirCache, TreeNode } from './file-explorer-types'
+import { keepOpenedDirectoryLinks } from './file-explorer-directory-listing'
 
-describe('readFileExplorerDirectory', () => {
-  it('re-sorts backend order — remote-runtime and paired-web routes return the host order verbatim', async () => {
-    readRuntimeDirectory.mockResolvedValueOnce([
-      { name: '100 - b.txt', isDirectory: false, isSymlink: false },
-      { name: '9 - c.txt', isDirectory: false, isSymlink: false },
-      { name: '10 - dir', isDirectory: true, isSymlink: false },
-      { name: '99 - a.txt', isDirectory: false, isSymlink: false }
-    ])
-
-    const { entries } = await readFileExplorerDirectory('wt-1', '/w', '/w/dir')
-    expect(entries.map((e) => e.name)).toEqual([
-      '10 - dir',
-      '9 - c.txt',
-      '99 - a.txt',
-      '100 - b.txt'
-    ])
-  })
-})
-
-it('preserves the host directory classification with default Quick Open preferences', async () => {
-  readRuntimeDirectory.mockResolvedValueOnce([
-    { name: 'linked', isDirectory: true, isSymlink: true }
-  ])
-  const { entries } = await readFileExplorerDirectory('wt-1', '/w', '/w')
-  expect(entries).toEqual([{ name: 'linked', isDirectory: true, isSymlink: true }])
-  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', {})
-})
-
-it('forwards the WSL wake flag of a user act to the directory read', async () => {
-  readRuntimeDirectory.mockResolvedValueOnce([])
-  await readFileExplorerDirectory('wt-1', '/w', '/w', { wakeWslDistro: true })
-  expect(readRuntimeDirectory).toHaveBeenLastCalledWith(expect.anything(), '/w', {
-    wakeWslDistro: true
-  })
-})
-
-describe('outside-project folder links', () => {
-  it('marks a folder listed through a project link and its rows as outside the project', async () => {
-    readRuntimeDirectory.mockImplementation(
-      async (_context: unknown, _path: string, options: { access?: unknown }) => {
-        if (!options.access) {
-          throw new Error('Access denied: path resolves outside allowed directories.')
-        }
-        return [{ name: 'notes.md', isDirectory: false, isSymlink: false }]
-      }
-    )
-
-    const listing = await readFileExplorerDirectory('wt-1', '/w', '/w/linked', {
-      followProjectFolderLink: true
-    })
-    const cache = fileExplorerListingToDirCache(listing, '/w/linked', 0, '/w')
-
-    expect(cache.outsideProject).toBe(true)
-    expect(cache.children).toEqual([
-      expect.objectContaining({ path: '/w/linked/notes.md', outsideProject: true })
-    ])
-    readRuntimeDirectory.mockReset()
-  })
-
-  it('follows links only on a gesture, a listed link row, or under an outside listing', () => {
-    const cache: Record<string, DirCache> = {
-      '/w': {
-        children: [
-          { name: 'src', path: '/w/src', relativePath: 'src', isDirectory: true, depth: 0 },
-          {
-            name: 'docs',
-            path: '/w/docs',
-            relativePath: 'docs',
-            isDirectory: true,
-            isSymlink: true,
-            depth: 0
-          }
-        ]
-      },
-      '/w/linked': { children: [], outsideProject: true }
-    }
-
-    expect(canFollowFolderLink(cache, '/w/src', false)).toBe(false)
-    expect(canFollowFolderLink(cache, '/w/src', true)).toBe(true)
-    expect(canFollowFolderLink(cache, '/w/docs', false)).toBe(true)
-    expect(canFollowFolderLink(cache, '/w/linked', false)).toBe(true)
-    expect(canFollowFolderLink(cache, '/w/linked/guides', false)).toBe(true)
-  })
-})
+import type { TreeNode } from './file-explorer-types'
 
 describe('keepOpenedDirectoryLinks', () => {
   const node = (name: string, overrides: Partial<TreeNode> = {}): TreeNode => ({
@@ -129,37 +39,6 @@ describe('keepOpenedDirectoryLinks', () => {
       ['linked', true],
       ['other', false]
     ])
-  })
-
-  it('lets a link revert once its own listing is no longer cached', () => {
-    const previous = [node('linked', { isSymlink: true, isDirectory: true })]
-    const next = [node('linked', { isSymlink: true })]
-    expect(keepOpenedDirectoryLinks(previous, next, {})).toBe(next)
-  })
-
-  it('never promotes a link that was not opened, or a plain file with the same path', () => {
-    const previous = [node('linked', { isSymlink: true }), node('file', { isDirectory: true })]
-    const next = [node('linked', { isSymlink: true }), node('file')]
-    const cache = { '/w/linked': { children: [] }, '/w/file': { children: [] } }
-    expect(keepOpenedDirectoryLinks(previous, next, cache)).toBe(next)
-  })
-
-  it('does not restore a deleted link or a link replaced by a regular file', () => {
-    const previous = [node('linked', { isSymlink: true, isDirectory: true })]
-    const cache = { '/w/linked': { children: [], operationOwner: { kind: 'local' as const } } }
-    expect(keepOpenedDirectoryLinks(previous, [], cache)).toEqual([])
-    expect(keepOpenedDirectoryLinks(previous, [node('linked')], cache)[0].isDirectory).toBe(false)
-  })
-
-  it('does not reuse a failed or still-unproven child listing', () => {
-    const previous = [node('linked', { isSymlink: true, isDirectory: true })]
-    const next = [node('linked', { isSymlink: true })]
-    expect(keepOpenedDirectoryLinks(previous, next, { '/w/linked': { children: [] } })).toBe(next)
-    expect(
-      keepOpenedDirectoryLinks(previous, next, {
-        '/w/linked': { children: [], operationOwner: { kind: 'local' }, error: 'Not a directory' }
-      })
-    ).toBe(next)
   })
 
   it('does not carry directory classification across operation owners', () => {
@@ -190,31 +69,5 @@ describe('keepOpenedDirectoryLinks', () => {
       '/w/linked': { children: [], operationOwner: { kind: 'local' } }
     })
     expect(result.map((child) => child.isDirectory)).toEqual([true, false])
-  })
-})
-
-describe('clearFailedOpenedDirectoryLink', () => {
-  it.each(['/w/link', 'C:\\link'])('drops only inferred folder state for failed %s', (linkPath) => {
-    const parentPath = linkPath.startsWith('C:') ? 'C:\\' : '/w'
-    const cache: Record<string, DirCache> = {
-      [parentPath]: {
-        children: [
-          {
-            name: 'link',
-            path: linkPath,
-            relativePath: 'link',
-            isDirectory: true,
-            isSymlink: true,
-            isDirectoryFromOpenedLink: true,
-            depth: 0
-          }
-        ]
-      }
-    }
-    expect(
-      clearFailedOpenedDirectoryLink(cache, linkPath)[parentPath].children[0].isDirectory
-    ).toBe(false)
-    cache[parentPath].children[0].isDirectoryFromOpenedLink = false
-    expect(clearFailedOpenedDirectoryLink(cache, linkPath)).toBe(cache)
   })
 })

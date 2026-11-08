@@ -1,6 +1,6 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import { Button } from '@/components/ui/button'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 import { formatBytes } from '../status-bar/workspace-space-format'
@@ -49,6 +49,7 @@ export function EditorMarkdownFileSurface({
   handleDirtyStateHint: (dirty: boolean) => void
   monacoEditor: React.JSX.Element
 }): React.JSX.Element {
+  const t = useTranslate()
   const setSizeOverride = useAppStore((s) => s.setMarkdownRichModeSizeOverride)
 
   if (activeFile.conflict?.conflictStatus === 'unresolved') {
@@ -65,7 +66,7 @@ export function EditorMarkdownFileSurface({
       isSizeFallback && !exceedsMarkdownRenderOverrideSizeLimit(currentContent)
     const richFallbackMessage =
       richModeUnsupportedMessage ??
-      translate(
+      t(
         'editor.richMarkdown.tooLarge',
         'File is larger than the {{limit}} rich editing limit. Showing source mode instead.',
         { limit: formatBytes(RICH_MARKDOWN_MAX_SIZE_BYTES) }
@@ -82,7 +83,7 @@ export function EditorMarkdownFileSurface({
               className="shrink-0"
               onClick={() => setSizeOverride(activeFile.id, true)}
             >
-              {translate('editor.richMarkdown.openAnyway', 'Open anyway')}
+              {t('editor.richMarkdown.openAnyway', 'Open anyway')}
             </Button>
           ) : null}
         </div>
@@ -158,6 +159,7 @@ export function EditorMarkdownFileSurface({
             filePath={activeFile.filePath}
             sourceFileId={activeFile.id}
             sourceWorktreeId={activeFile.worktreeId}
+            sourceRelativePath={activeFile.relativePath}
             sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={`${editorViewStateKey}:preview`}
             showTableOfContents={showMarkdownTableOfContents}
@@ -173,6 +175,7 @@ export function EditorMarkdownFileSurface({
 }
 
 function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
+  const t = useTranslate()
   const inner = raw
     .replace(/^(?:---|\+\+\+)\r?\n/, '')
     .replace(/\r?\n(?:---|\+\+\+)\r?\n?$/, '')
@@ -181,9 +184,9 @@ function FrontMatterBanner({ raw }: { raw: string }): React.JSX.Element {
   return (
     <div className="border-b border-border/60 bg-muted/40 px-3 py-2">
       <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        {translate('auto.components.editor.EditorContent.e4b074749d', 'Front Matter')}
+        {t('auto.components.editor.EditorContent.e4b074749d', 'Front Matter')}
         <span className="ml-2 font-normal normal-case tracking-normal opacity-70">
-          {translate('auto.components.editor.EditorContent.56dba34e1a', '(edit in source mode)')}
+          {t('auto.components.editor.EditorContent.56dba34e1a', '(edit in source mode)')}
         </span>
       </div>
       <pre className="max-h-32 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">

@@ -14,7 +14,9 @@ import { assertWorkspaceAcceptsNewPty } from './spawn-cwd'
 const { listLiveDaemonPtyIds } = vi.hoisted(() => ({
   listLiveDaemonPtyIds: vi.fn<() => Promise<string[] | null>>()
 }))
-vi.mock('../../../daemon/daemon-provider-state', () => ({ listLiveDaemonPtyIds }))
+vi.mock('../../../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  listLiveDaemonPtyIds
+}))
 
 let userDataPath: string
 // No store: a readable journal never needs one.

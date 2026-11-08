@@ -3,8 +3,8 @@ import {
   fetchProviderAccountsSnapshot,
   getProviderAccountsOwnerKey,
   type ProviderAccountsSnapshot
-} from '@/runtime/runtime-provider-accounts-client'
-import { observedProviderAccounts } from '@/runtime/observed-provider-accounts'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { observedProviderAccounts } from '@/runtime/provider-accounts/observations/observed-provider-accounts'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const noSubscription = () => () => {}

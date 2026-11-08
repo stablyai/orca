@@ -1,11 +1,12 @@
 // Publish and track the child before handshaking so startup cancellation can reach it.
 
 import { initializeAcpStructuredSession } from './acp-structured-handshake'
-import {
-  AgentSessionPreSpawnError,
-  type AgentSessionAcquisition,
-  type StructuredAgentSessionAcquireInput
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
+import type {
+  AgentSessionAcquisition,
+  StructuredAgentSessionAcquireInput
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
 import { providerSpawnedProcessIdentity } from '../provider-process/provider-spawned-process-identity'
 import { acpPrivateTempConnect } from './acp-private-temp'
@@ -17,17 +18,19 @@ import {
 import type { AcpSessionEvent } from './acp-session-runtime'
 import type { AcpStructuredConnection } from './acp-structured-connection'
 import { acpAgentName } from './acp-structured-agent-definitions'
-import { AcpStructuredLane, acpLaneChildWorkDelivery } from './acp-structured-lane'
+import { AcpStructuredLane } from './acp-structured-lane'
+import { acpLaneChildWorkDelivery } from './acp-lane-child-work-delivery'
 import { NO_ACP_CHILD_STOPS } from './acp-structured-child-stop'
 import { prepareAcpStructuredLaunch } from './acp-structured-launch-preparation'
 import { AcpStructuredOptions } from './acp-structured-options'
+import { acpLaunchPermissionModes } from './acp-launch-permission-modes'
 import { AcpStructuredPrompts } from './acp-structured-prompts'
 import { AcpLoadHistory } from './history/acp-history-replay'
 import { asReattachHistory, routeAcpSessionEvent } from './acp-structured-session'
 import type { AcpStructuredSessionAdapterDeps } from './acp-structured-session-adapter-deps'
 import type { AcpStructuredTurnsDeps } from './acp-structured-turns'
 import { RequestPermissionResponseSchema } from './generated/acp-protocol.generated'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
 const MAX_EARLY_FRAMES = 2_048
 
@@ -48,15 +51,14 @@ export async function acquireAcpStructuredSession(input: {
   session: AcpStructuredChild
 }> {
   const { acquire, deps, generation } = input
-  const { spec } = deps
-  const agentName = acpAgentName(spec.agent)
+  const agentName = acpAgentName(deps.spec.agent)
   const logger = deps.logger ?? createStructuredAgentSessionLogger()
   const sessionId = acquire.identity.sessionId
   const now = deps.now ?? Date.now
   const events = acquire.events
   const sink = events ? providerTimelineSink(events) : null
   if (!sink) {
-    throw new AgentSessionPreSpawnError(new Error(`${spec.agent} chats need a journal sink`))
+    throw new AgentSessionPreSpawnError(new Error(`${deps.spec.agent} chats need a journal sink`))
   }
   const closedBeforeSpawn = () => {
     if (input.abandoned()) {
@@ -65,6 +67,8 @@ export async function acquireAcpStructuredSession(input: {
   }
   closedBeforeSpawn()
   const launch = await prepareAcpStructuredLaunch(deps, acquire, closedBeforeSpawn)
+  // The chat's account home pins its backend.
+  const { spec } = launch
   let session: AcpStructuredChild | null = null
   // Use a slot so closure writes do not conflict with control-flow narrowing.
   const slot: {
@@ -72,15 +76,11 @@ export async function acquireAcpStructuredSession(input: {
     reattaching: boolean
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
-  const options = new AcpStructuredOptions(launch.spec.dialect)
-  // Agent-initiated turns cannot open interactive requests; settled request content may still show.
+  const options = new AcpStructuredOptions(spec.dialect)
+  const permissionModes = acpLaunchPermissionModes(spec, launch.fullAccess)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
-    () => isAcpReadySession(session) && session.turns?.acceptsRequests === true,
-    () =>
-      isAcpReadySession(session) &&
-      (session.turns.acceptsRequests ||
-        (!session.turns.running && !session.turns.stopped && session.lane.openTurnId !== null))
+    () => isAcpReadySession(session) && session.turns?.acceptsRequests === true
   )
   const early: (() => void)[] = []
   const whenLane = (deliver: () => void): void => {
@@ -104,11 +104,12 @@ export async function acquireAcpStructuredSession(input: {
     },
     {
       clientInfo: { name: 'orca', version: '1' },
+      clientCapabilities: spec.dialect.clientCapabilities,
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {
         if (!isAcpReadySession(session) || !session.turns?.acceptsRequests) {
-          // No interactive prompt remains during Stop, steering or an agent-initiated turn.
+          // Nobody can answer during Stop, a steer or teardown.
           return { outcome: { outcome: 'cancelled' } }
         }
         // Do not auto-approve questions or permissions enforced by the agent's own mode.
@@ -182,7 +183,7 @@ export async function acquireAcpStructuredSession(input: {
           sessionId,
           fence: acquire.fence,
           acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(spec.permissionModeConfig?.values),
+          reportedOptions: options.observedCurrent(permissionModes),
           catalogListing: { models: options.read().models }
         })
       }
@@ -250,6 +251,7 @@ export async function acquireAcpStructuredSession(input: {
     fence: acquire.fence,
     acquisitionGeneration: generation,
     spec,
+    permissionModes,
     connection,
     lane: null,
     turns: null,

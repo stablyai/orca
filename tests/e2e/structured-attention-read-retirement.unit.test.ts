@@ -23,24 +23,25 @@ import {
   agentSessionAttentionSubjectPrefix,
   agentSessionPromptAttentionKey
 } from '../../src/shared/agent-session/agent-session-attention'
-import { SESSION } from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+import '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+import { SESSION } from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
 import {
   projectStructuredAgentSessionStatusState,
   structuredAgentSessionPaneKey
 } from '../../src/shared/agent-session/view/structured-agent-session-projection'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
 import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/agent-session/structured-agent-session-mobile-attention'
-import { makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { useAppStore } from '@/store'
-import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
-import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
+import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
+import { useStructuredAgentSessionRead } from '@/components/native-chat/session/structured/read/use-structured-agent-session-read'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
-import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
+import { findStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { StructuredNotificationRead } from '../../src/shared/notification-settings-types'
-import { RuntimeMobileNotificationController } from '../../src/main/runtime/runtime-mobile-notification-controller'
+import { RuntimeMobileNotificationController } from '../../src/main/runtime/push/notifications/runtime-mobile-notification-controller'
 
 describe('Explicit desktop read acknowledgements', () => {
   const TARGET = { kind: 'local' } as const

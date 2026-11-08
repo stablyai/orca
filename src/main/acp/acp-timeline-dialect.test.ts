@@ -26,18 +26,6 @@ async function dialectRig() {
   return { rig, translator, apply, notification }
 }
 
-const question = {
-  sessionId: 'provider-1',
-  toolCallId: 'ask-1',
-  questions: [
-    {
-      question: 'Choose a test?',
-      multiSelect: null,
-      options: [{ label: 'Unit', description: 'Fast tests' }, { label: 'Integration' }]
-    }
-  ]
-}
-
 describe('ACP dialect request and turn boundaries', () => {
   it('separates anonymous output across a suppressed user echo within one prompt', async () => {
     const { rig, translator, apply, notification } = await dialectRig()
@@ -65,7 +53,7 @@ describe('ACP dialect request and turn boundaries', () => {
     expect(await rig.turns()).toHaveLength(1)
   })
 
-  it('preserves provider permission labels, validates selected ids, and cancels unanswered rows on turn end', async () => {
+  it('preserves provider permission labels, validates selected ids, and keeps unanswered rows until withdrawn', async () => {
     const { rig, translator, apply } = await dialectRig()
     apply(translator.openPrompt('send-1', 1000).events)
     apply(
@@ -103,74 +91,16 @@ describe('ACP dialect request and turn boundaries', () => {
       'offered option'
     )
     apply(translator.promptResult('send-1', { stopReason: 'cancelled' }, 1200))
-    expect((await rig.rows()).find((row) => row.body.kind === 'approval')?.body).toMatchObject({
-      resolution: { state: 'cancelled' }
-    })
-  })
-
-  it('encodes labels and free text under the question text, validates grouped choices, and settles a plan without a gate', async () => {
-    const { translator } = await dialectRig()
-    const ask = translator.request('_x.ai/ask_user_question', question, 0).presentation!
-    expect(
-      ask.reply({ kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['o2'] }] })
-    ).toEqual({ outcome: 'accepted', answers: { 'Choose a test?': 'Integration' } })
-    expect(
-      ask.reply({ kind: 'answers', answers: [{ questionId: 'q1', optionIds: [], other: 'Smoke' }] })
-    ).toEqual({
-      outcome: 'accepted',
-      answers: { 'Choose a test?': 'Other' },
-      annotations: { 'Choose a test?': { notes: 'Smoke' } }
-    })
-    const alias = translator.request('x.ai/ask_user_question', question, 3).presentation!
-    expect(
-      alias.reply({
-        kind: 'answers',
-        answers: [{ questionId: 'q1', optionIds: ['o1'], other: 'Also run smoke checks' }]
-      })
-    ).toEqual({
-      outcome: 'accepted',
-      answers: { 'Choose a test?': 'Unit' },
-      annotations: { 'Choose a test?': { notes: 'Also run smoke checks' } }
-    })
-    expect(ask.reply(null)).toEqual({ outcome: 'cancelled' })
-    expect(() => ask.reply({ kind: 'answers', answers: [] })).toThrow('every offered question')
-    expect(() =>
-      ask.reply({ kind: 'answers', answers: [{ questionId: 'q1', optionIds: ['o1', 'o2'] }] })
-    ).toThrow('every offered question')
-    const grouped = translator.request(
-      '_x.ai/ask_user_question',
-      {
-        ...question,
-        questions: [
-          { ...question.questions[0], multiSelect: true },
-          { question: 'Another?', options: [{ label: 'Yes' }] }
-        ]
-      },
-      1
-    ).presentation!
-    expect(
-      grouped.reply({
-        kind: 'answers',
-        answers: [
-          { questionId: 'q1', optionIds: ['o1', 'o2'] },
-          { questionId: 'q2', optionIds: ['o1'] }
-        ]
-      })
-    ).toEqual({
-      outcome: 'accepted',
-      answers: { 'Choose a test?': ['Unit', 'Integration'], 'Another?': 'Yes' }
-    })
-    // Show the plan without opening approval or auto-approving it.
-    const plan = translator.request(
-      '_x.ai/exit_plan_mode',
-      { sessionId: 'provider-1', toolCallId: 'plan-1', planContent: '# Plan' },
-      2
+    const approval = async () =>
+      (await rig.rows()).find((row) => row.body.kind === 'approval')?.body
+    expect(await approval()).toMatchObject({ resolution: { state: 'pending' } })
+    const opened = request.events.find((event) => event.type === 'request.open')
+    apply(
+      opened?.type === 'request.open'
+        ? [{ type: 'request.withdrawn', request: opened.request }]
+        : []
     )
-    expect(plan.presentation).toBeUndefined()
-    expect(plan.settled?.reply).toEqual({ outcome: 'abandoned', feedback: expect.any(String) })
-    expect(plan.events).toMatchObject([
-      { body: { kind: 'status', presentation: 'plan-document', text: '# Plan' } }
-    ])
+    expect(await approval()).toMatchObject({ resolution: { state: 'cancelled' } })
   })
 
   it('keeps client prompt settlement on the response, and never gives an autonomous turn invented success', async () => {

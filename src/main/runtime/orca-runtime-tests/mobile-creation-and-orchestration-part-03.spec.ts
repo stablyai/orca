@@ -1,16 +1,17 @@
 import { settledWriteStub } from '../../providers/settled-pty-write-stub'
 import { describe, expect, it, vi } from 'vitest'
-import { registerLivePty } from '../bind-first-pane.test-fixture'
-import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
+import { registerLivePty } from './bind-first-pane.test-fixture'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
 import {
-  InMemoryOrchestrationMessages,
   TEST_WORKTREE_ID,
   bindSinglePtyRun,
   setInMemoryOrchestrationMessages,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
-import { MessageWake } from '../runtime-message-waiters'
+} from './orca-runtime-test-fixtures.spec'
+import { InMemoryOrchestrationMessages } from '../orchestration/mailbox/terminal-pointer/in-memory-orchestration-messages.spec'
+import { MessageWake } from '../orchestration/mailbox/runtime-message-waiters'
 
 describe('OrcaRuntimeService', () => {
   it('leaves rows a live filtered waiter reserved out of the pushed batch', async () => {

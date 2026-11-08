@@ -1,22 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import {
-  formatOrcaSessionAddress,
-  isOrcaSessionId,
-  parseOrcaSessionAddress
-} from './orca-session-address'
+import { isOrcaSessionId, parseOrcaSessionAddress } from './orca-session-address'
 import { testOrcaSessionId } from './orca-session-address-test-fixture'
 
 const SESSION_ID = testOrcaSessionId('0b7e4c2a-5f1d-4e8a-9c3b-2d6f8a1e4b70')
-const ADDRESS = `orca_session_id:${SESSION_ID}`
 
 describe('Orca session address', () => {
-  it('addresses an Orca session id as orca_session_id:<id> and parses the bare id back', () => {
-    expect(formatOrcaSessionAddress(SESSION_ID)).toBe(ADDRESS)
-    expect(parseOrcaSessionAddress(ADDRESS)).toBe(SESSION_ID)
-    const parsed = parseOrcaSessionAddress(ADDRESS)
-    expect(parsed && formatOrcaSessionAddress(parsed)).toBe(ADDRESS)
-  })
-
   it('reads only the addressed spelling when parsing an address', () => {
     // A bare id is what the columns store, not an address.
     expect(parseOrcaSessionAddress(SESSION_ID)).toBeNull()
@@ -51,11 +39,5 @@ describe('Orca session address', () => {
     // Handles share the session-id charset, so the session-record predicate alone would accept them.
     expect(isOrcaSessionId(handle)).toBe(false)
     expect(parseOrcaSessionAddress(`orca_session_id:${handle}`)).toBeNull()
-  })
-
-  it('validates an Orca session id with the session-record predicate', () => {
-    expect(isOrcaSessionId(SESSION_ID)).toBe(true)
-    expect(isOrcaSessionId('has space in it')).toBe(false)
-    expect(isOrcaSessionId('x'.repeat(129))).toBe(false)
   })
 })

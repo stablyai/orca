@@ -1,7 +1,7 @@
 import React, { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SidebarHeaderActions } from './sidebar-header-actions'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
@@ -14,12 +14,15 @@ import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCount
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
+  projectsCollapseTarget?: React.Ref<HTMLDivElement>
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
   onWorkspaceBoardMenuOpenChange,
-  activityOptionsTarget
+  activityOptionsTarget,
+  projectsCollapseTarget
 }: SidebarHeaderProps) {
+  const t = useTranslate()
   // Subscribe this memoized header to locale changes before using translate().
   useTranslation()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
@@ -31,10 +34,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const activityBadgeId = useId()
   const activityCount = counts.attention || counts.working
   const activityStatusLabel = counts.attention
-    ? translate('dashboardPopout.bucket.attention', 'Needs You')
+    ? t('dashboardPopout.bucket.attention', 'Needs You')
     : counts.working
-      ? translate('dashboardPopout.bucket.working', 'Working')
-      : translate('dashboardPopout.bucket.idle', 'Idle')
+      ? t('dashboardPopout.bucket.working', 'Working')
+      : t('dashboardPopout.bucket.idle', 'Idle')
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
     (s) => s.settings?.agentsSidebarMigratedFromExperimental === true
@@ -48,16 +51,19 @@ const SidebarHeader = React.memo(function SidebarHeader({
   }, [updateSettings])
   const sidebarTitle =
     groupBy === 'repo'
-      ? translate('dashboard.sidebar.projects', 'Projects')
-      : translate('dashboard.sidebar.workspaces', 'Workspaces')
-  const activityLabel = translate(
+      ? t('dashboard.sidebar.projects', 'Projects')
+      : t('dashboard.sidebar.workspaces', 'Workspaces')
+  const activityLabel = t(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
   )
 
   return (
-    <div className="mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">
-      <div className="flex min-w-0 items-center gap-1">
+    <div className="group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">
+      <div
+        className="flex min-w-0 items-center"
+        data-contextual-tour-target={groupBy === 'repo' ? 'projects-collapse-all' : undefined}
+      >
         <span
           // Truncate localized titles because fixed-width actions cannot shrink inside the short header row.
           className="min-w-0 truncate select-none pl-2 pr-0.5 text-xs font-semibold text-muted-foreground/80"
@@ -65,6 +71,8 @@ const SidebarHeader = React.memo(function SidebarHeader({
         >
           {sidebarTitle}
         </span>
+        {/* WorktreeList portals the collapse-all toggle here; it owns the rendered project rows. */}
+        <div ref={projectsCollapseTarget} className="flex shrink-0 items-center empty:hidden" />
       </div>
       <div className="flex shrink-0 items-center gap-1">
         <Popover
@@ -147,18 +155,18 @@ const SidebarHeader = React.memo(function SidebarHeader({
               <div className="flex items-center gap-1.5">
                 <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
                 <h3 id={introTitleId} className="text-sm font-semibold text-foreground">
-                  {translate('agentsSidebarIntro.migrated.title', 'Agents are easier to find')}
+                  {t('agentsSidebarIntro.migrated.title', 'Agents are easier to find')}
                 </h3>
               </div>
               <p id={introDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
-                {translate(
+                {t(
                   'agentsSidebarIntro.migrated.description',
                   'Your Agents view is now a dedicated sidebar tab. Your activity and filters are preserved.'
                 )}
               </p>
               <div className="flex justify-end pt-0.5">
                 <Button size="sm" onClick={acknowledgeIntro}>
-                  {translate('agentsSidebarIntro.migrated.dismiss', 'Got it')}
+                  {t('agentsSidebarIntro.migrated.dismiss', 'Got it')}
                 </Button>
               </div>
             </div>

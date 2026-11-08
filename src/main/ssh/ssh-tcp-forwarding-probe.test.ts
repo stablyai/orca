@@ -63,7 +63,9 @@ describe('forward channel check (system SSH)', () => {
     const dropped = await forwardAnswering((socket) => socket.destroy())
     await expect(checkForwardChannel(dropped)).resolves.toBe('unverifiable')
     const silent = await forwardAnswering((socket) => socket.resume())
-    await expect(checkForwardChannel(silent, 50)).resolves.toBe('unverifiable')
+    await expect(checkForwardChannel(silent, { channelTimeoutMs: 50 })).resolves.toBe(
+      'unverifiable'
+    )
     await expect(checkForwardChannel({ entry: dropped.entry })).resolves.toBe('unverifiable')
   })
 
@@ -71,6 +73,34 @@ describe('forward channel check (system SSH)', () => {
   it('reports a listener that never came up as not listening', async () => {
     const closed = await forwardAnswering(() => {})
     await new Promise((resolve) => servers.pop()?.close(resolve))
-    await expect(checkForwardChannel(closed, 300)).resolves.toBe('not-listening')
+    await expect(checkForwardChannel(closed, { listenTimeoutMs: 300 })).resolves.toBe(
+      'not-listening'
+    )
+  })
+
+  // Why: ssh -L binds only after its own login, which a ProxyCommand such as Coder's can stretch well past the channel wait.
+  it('waits out a slow login and reads the answer once the listener comes up', async () => {
+    const forward = await forwardAnswering((socket) => {
+      socket.once('data', () => socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'))
+    })
+    const server = servers.pop()
+    await new Promise((resolve) => server?.close(resolve))
+    const verdict = checkForwardChannel(forward, { channelTimeoutMs: 50, listenTimeoutMs: 5_000 })
+    // ast-grep-ignore: test-no-real-time-wait -- a real socket must fail to dial before the listener comes up.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    server?.listen(forward.entry.localPort, '127.0.0.1')
+    if (server) {
+      servers.push(server)
+    }
+    await expect(verdict).resolves.toBe('allowed')
+  })
+
+  it('stops waiting for the listener once the forward exits', async () => {
+    const closed = await forwardAnswering(() => {})
+    await new Promise((resolve) => servers.pop()?.close(resolve))
+    const exited = new AbortController()
+    const verdict = checkForwardChannel(closed, { signal: exited.signal })
+    setTimeout(() => exited.abort(), 100)
+    await expect(verdict).resolves.toBe('not-listening')
   })
 })

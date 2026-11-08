@@ -44,6 +44,7 @@ export type ProviderLoadActionsInput = Pick<
   | 'connState'
   | 'defaultLinearTeamSelectionRef'
   | 'githubKind'
+  | 'keepSettings'
   | 'setJiraConnection'
   | 'jiraStatusRequestIdRef'
   | 'setLinearConnected'
@@ -65,6 +66,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     connState,
     defaultLinearTeamSelectionRef,
     githubKind,
+    keepSettings,
     setJiraConnection,
     jiraStatusRequestIdRef,
     setLinearConnected,
@@ -122,13 +124,14 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
+      keepSettings({ defaultLinearTeamSelection: selection })
       void taskSettingsWrite
         .request(client, { defaultLinearTeamSelection: selection })
         .catch(() => {
           // Preference persistence is best-effort; the local picker already changed.
         })
     },
-    [client, taskUiReady]
+    [client, keepSettings, taskUiReady]
   )
 
   const fetchGitHubItemsPage = useCallback(

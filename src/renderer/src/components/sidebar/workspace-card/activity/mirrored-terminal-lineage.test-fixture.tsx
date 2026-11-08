@@ -7,13 +7,13 @@ import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 
 // Load the native graph during collection; fixture state stays per test.
 const {
   default: { publicLineageFixture, canonicalChatRow, LINEAGE_PARENT, LINEAGE_CHILD }
 } = await vi.importActual<{ default: RuntimeAgentLineageTestModule }>(
-  '../../../../../../main/runtime/runtime-agent-lineage.test-fixture'
+  '../../../../../../main/runtime/workspaces/process-listing/runtime-agent-lineage.test-fixture'
 )
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
@@ -32,8 +32,9 @@ export async function verifyMirroredTerminalLineage(
     getRows: () => DashboardAgentRow[]
   }
 ): Promise<void> {
-  const { makeUnifiedTab, makeWorktree, TEST_REPO } =
-    await import('@/store/slices/store-test-helpers')
+  const { makeUnifiedTab } = await import('@/store/slices/tabs/tab-group.test-fixture'),
+    { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture'),
+    { TEST_REPO } = await import('@/store/repos/repo.test-fixture')
   const { selectDashboardOrchestration } =
     await import('@/components/dashboard/dashboard-orchestration-selection')
   const { selectWorktreeAgentRowsCached } =
@@ -49,10 +50,11 @@ export async function verifyMirroredTerminalLineage(
   const { toWebTerminalSurfaceTabId } =
     await import('../../../../../../shared/workspace-layout/terminal-surface-id')
   const { projectStatus } =
-    await import('@/components/native-chat/structured-agent-session-status-projection')
+    await import('@/components/native-chat/session/status/structured-agent-session-status-projection')
   const { structuredAgentSessionPaneKey: pane, structuredAgentSessionTabId: tabId } =
     await import('../../../../../../shared/agent-session/view/structured-agent-session-projection')
-  const { selectVisibleAgentOrchestration } = await import('@/runtime/visible-agent-orchestration')
+  const { selectVisibleAgentOrchestration } =
+    await import('@/runtime/agent-orchestration/visible-agent-orchestration')
   const worktree = makeWorktree({ id: 'folder-a', repoId: TEST_REPO.id })
   patch({ repos: [TEST_REPO], worktreesByRepo: { [TEST_REPO.id]: [worktree] } })
   const f = publicLineageFixture('folder-a')

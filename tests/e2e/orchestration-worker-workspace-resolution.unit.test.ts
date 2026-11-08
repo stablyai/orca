@@ -1,4 +1,3 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -20,7 +19,7 @@ const electronMocks = vi.hoisted(() => {
 vi.mock('electron', () => electronMocks)
 
 const scanLocalRepoWorktreesForResolution = vi.hoisted(() => vi.fn())
-vi.mock('../../src/main/runtime/repo-worktree-resolution-scan', () => ({
+vi.mock('../../src/main/runtime/workspaces/catalog/repo-worktree-resolution-scan', () => ({
   scanLocalRepoWorktreesForResolution
 }))
 
@@ -29,14 +28,18 @@ import { formatCliError } from '../../src/cli/cli-error'
 import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../src/shared/protocol-version'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
-import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
-import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
+import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/orchestration'
+import { OrchestrationDb } from '../../src/main/runtime/orchestration/db/orchestration-db'
+import '../../src/main/runtime/orchestration/db/contract-constants'
+import '../../src/main/runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../src/main/runtime/orchestration/db/dispatch-row-writer'
+import '../../src/main/runtime/orchestration/db/attempt-outcome-projection'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../src/shared/constants'
 import type { FolderWorkspace } from '../../src/shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../src/shared/project-group-types'
 import type { Repo } from '../../src/shared/repo-types'
 import type { WorktreeMeta } from '../../src/shared/worktree/meta-types'
-import type { RuntimeStore } from '../../src/main/runtime/runtime-store-contract'
+import type { RuntimeStore } from '../../src/main/runtime/construction/runtime-store-contract'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { HostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
 

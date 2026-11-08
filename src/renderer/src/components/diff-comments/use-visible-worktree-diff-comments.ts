@@ -1,8 +1,8 @@
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useDiffCommentView } from './use-diff-comment-owner'
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import type { WorkspaceCopySource } from '@/lib/workspace-copy-owner'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store'
 import {
   isMarkdownReviewNotesEnabled,
   withoutMarkdownReviewNotes
@@ -24,7 +24,9 @@ export function useVisibleWorktreeDiffComments(
   const { owner, comments: listed } = useDiffCommentView(worktreeId, source)
   // Unknown copies still need a stable empty list; inline arrays would churn memoized consumers.
   const allComments = listed ?? NO_COMMENTS
-  const markdownReviewNotesEnabled = useAppStore((s) => isMarkdownReviewNotesEnabled(s.settings))
+  const markdownReviewNotesEnabled = useAppStateValue((s) =>
+    isMarkdownReviewNotesEnabled(s.settings)
+  )
   const comments = useMemo(
     () => (markdownReviewNotesEnabled ? allComments : withoutMarkdownReviewNotes(allComments)),
     [allComments, markdownReviewNotesEnabled]

@@ -9,7 +9,8 @@ import {
   resetMobileNativeChatDraftInputsForTests
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement, type ReactNode } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import type {
   AgentSessionQueuedMessage,
@@ -229,7 +230,9 @@ export function mobileQueuedEditHarness() {
         : readOrHoldReply(method, params)
     )
     await act(async () => {
-      state.renderer = create(createElement(Harness, { editSupport, agent, sessionId }))
+      state.renderer = createWithQueryClient(
+        createElement(Harness, { editSupport, agent, sessionId })
+      )
     })
     const snapshot = snapshotEvent({ queuedMessages: [message], runningTurn: true })
     act(() => state.listener?.({ ...snapshot, sessionId, page: { ...snapshot.page, sessionId } }))
@@ -291,7 +294,7 @@ export function registerQueuedCanonicalInputTest({
     await mount(message)
     expect(state.hook!.queued.cards[0]).toMatchObject({
       line: '  Task 🐋',
-      attribution: 'From Coordinator'
+      from: { senders: [{ name: 'Coordinator' }] }
     })
     expect(state.hook!.queued.cards[0].images).toHaveLength(1)
     expect(state.hook!.queued.editor!.text).toBe(`${prefix}  Task 🐋 [Image #1]  `)
@@ -303,7 +306,7 @@ export function registerQueuedCanonicalInputTest({
     ).toBe(false)
     expect(state.hook!.queued.cards[0]).toMatchObject({
       line: '  Task 🐋',
-      attribution: 'From Coordinator'
+      from: { senders: [{ name: 'Coordinator' }] }
     })
     await act(async () => {
       await state.hook!.queued.edit!('task')
@@ -321,10 +324,8 @@ export function registerQueuedCanonicalInputTest({
     const saved: typeof message = { ...message, body: userBody }
     act(() => state.listener?.(batchEvent([saved])))
     const [savedCard] = state.hook!.queued.cards
-    expect(savedCard).toMatchObject({
-      line: `${prefix}Edited`,
-      attribution: null
-    })
+    expect(savedCard.line).toBe(`${prefix}Edited`)
+    expect(savedCard.from).toBeUndefined()
     await act(async () => {
       await state.hook!.queued.edit!('task')
     })

@@ -5,14 +5,14 @@ import type { AppState } from '@/store/types'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 
-vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
   closeWebRuntimeSessionTab: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
 vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
@@ -27,15 +27,17 @@ vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: vi.fn(() => null)
 }))
 
-vi.mock('@/runtime/structured-agent-session-close', () => ({
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-close', () => ({
   closeStructuredAgentSession: vi.fn(() => Promise.resolve())
 }))
 
-const { createTabsSliceMockApi } = await import('@/store/slices/tabs-slice-test-harness')
+const { createTabsSliceMockApi } = await import('@/store/slices/tabs/tabs-slice-test-harness')
 createTabsSliceMockApi()
 
-const { createTestStore, makeTab, makeTabGroup, makeUnifiedTab, makeWorktree, seedStore } =
-  await import('@/store/slices/store-test-helpers')
+const { createTestStore, seedStore } = await import('@/store/testing/app-store-test-fixture'),
+  { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture'),
+  { makeTabGroup, makeUnifiedTab } = await import('@/store/slices/tabs/tab-group.test-fixture'),
+  { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture')
 const store = createTestStore()
 
 vi.mock('@/store', () => ({ useAppStore: store }))

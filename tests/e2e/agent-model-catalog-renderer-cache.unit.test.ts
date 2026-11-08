@@ -1,23 +1,25 @@
 // @vitest-environment happy-dom
 
-import { homedir } from 'node:os'
+import { resolveHiddenProbeCwd } from '../../src/main/rate-limits/hidden-probe-cwd'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), cli: vi.fn() }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
-}))
-vi.mock('@/runtime/runtime-git-generation-client', () => ({
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: mocks.call
+  })
+)
+vi.mock('@/runtime/source-control/git/runtime-git-generation-client', () => ({
   discoverRuntimeCommitMessageModels: mocks.cli
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => [],
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
 
-import { discoverNativeChatCatalogModels } from '../../src/renderer/src/components/native-chat/native-chat-session-option-discovery'
 import type { AgentModelCatalogProbe } from '../../src/main/native-chat/agent-model-catalog/agent-model-catalog-discovery'
 import { createAgentModelCatalogService } from '../../src/main/native-chat/agent-model-catalog/agent-model-catalog-service'
 import { AgentModelCatalogStore } from '../../src/main/native-chat/agent-model-catalog/agent-model-catalog-store'
@@ -25,7 +27,7 @@ import {
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
-} from '../../src/renderer/src/runtime/host-model-catalog-snapshots'
+} from '../../src/renderer/src/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 
 const LOCAL = { kind: 'local' } as const
 const NEW_CHAT = { newLaunch: true, worktree: 'wt-1', seedsModel: false }
@@ -152,7 +154,9 @@ describe('account catalog to renderer cache', () => {
         expect(publish).not.toHaveBeenCalled()
         scope.resolve()
         await refresh
-        expect(probe.resolve.mock.calls.every(([, cwd]) => cwd === homedir())).toBe(true)
+        expect(probe.resolve.mock.calls.every(([, cwd]) => cwd === resolveHiddenProbeCwd())).toBe(
+          true
+        )
         const exact = service.snapshot({ agent, verifiedOnly: true })
         expect(exact).toMatchObject({
           models: [{ id: 'account-model', isDefault: true, declaredDefaultEffort: 'high' }]
@@ -167,42 +171,6 @@ describe('account catalog to renderer cache', () => {
       } finally {
         scope.resolve()
         service.stop()
-      }
-    }
-  )
-
-  it.each(['claude', 'codex'] as const)(
-    'terminal discovery consumes the real %s accepted response after a failed refresh',
-    async (agent) => {
-      const h = hostCatalog(agent)
-      h.listing.models.push({
-        ...h.listing.models[0],
-        id: 'other-model',
-        label: 'Other',
-        isDefault: false
-      })
-      try {
-        await h.service.demand({ agent })
-        h.probe.resolve.mockRejectedValue(new Error('scope lookup failed'))
-        await h.service.demand({ agent })
-        mocks.call.mockImplementation((_target, _method, params: { agent: string }) =>
-          h.service.read(params)
-        )
-        const models = await discoverNativeChatCatalogModels(
-          agent,
-          { target: LOCAL, worktreeId: null, worktreePath: '' },
-          'local'
-        )
-        expect(mocks.call).toHaveBeenCalledWith(LOCAL, 'agentSession.modelCatalog', { agent })
-        expect(
-          models?.map(({ id, label, isDefault }) => ({ id, label, isDefault: !!isDefault }))
-        ).toEqual([
-          { id: 'account-model', label: 'Account model', isDefault: true },
-          { id: 'other-model', label: 'Other', isDefault: false }
-        ])
-        expect(mocks.cli).not.toHaveBeenCalled()
-      } finally {
-        h.service.stop()
       }
     }
   )

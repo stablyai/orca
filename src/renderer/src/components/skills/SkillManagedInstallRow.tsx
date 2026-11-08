@@ -9,7 +9,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { SkillBundleInstallResult } from '../../../../shared/skill-bundle-install-contract'
 import type { SkillInstallResult } from '../../../../shared/skill-install-contract'
 import type { SkillCloudPackageDetails } from '../../../../shared/skill-cloud-contract'
@@ -24,10 +24,11 @@ import {
 } from './skill-managed-install-labels'
 
 function SkillLines({ group }: { group: SkillManagedInstallGroup }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <ul className="space-y-1">
       {group.installs.map((install) => {
-        const note = managedSkillStateNote(install.state)
+        const note = managedSkillStateNote(install.state, t)
         return (
           <li key={install.name} className="flex items-baseline justify-between gap-3 text-xs">
             <span className="min-w-0 truncate">{install.name}</span>
@@ -74,8 +75,10 @@ export function SkillManagedInstallRow({
   onSendToMachine: (shareId: string) => void
   onRemove: (discardLocal?: boolean) => void
 }): React.JSX.Element {
-  const stateNote = managedInstallStateNote(group)
-  const installedOn = managedInstalledOnLabel(group)
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  const stateNote = managedInstallStateNote(group, t)
+  const installedOn = managedInstalledOnLabel(group, t, intlLocale)
   const activeShare = details?.management?.shares[0]
   const switching = Boolean(versionId) && versionId !== group.versionId
   const retrying = result?.status === 'partial' || bundleResult?.status === 'partial'
@@ -85,11 +88,13 @@ export function SkillManagedInstallRow({
       <Collapsible open={open} onOpenChange={onOpenChange} className="group/install">
         <CollapsibleTrigger className="flex w-full items-center gap-3 px-3 py-2 text-left outline-none focus-visible:ring-1 focus-visible:ring-ring">
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">{managedInstallTitle(group)}</span>
+            <span className="block truncate text-sm font-medium">
+              {managedInstallTitle(group, t)}
+            </span>
             <span className="block truncate text-xs text-muted-foreground">
               {group.installs.map((install) => install.name).join(', ')}
               {' · '}
-              {managedInstallScopeLabel(group)}
+              {managedInstallScopeLabel(group, t)}
             </span>
           </span>
           {stateNote ? (
@@ -105,7 +110,7 @@ export function SkillManagedInstallRow({
           {details ? (
             <label className="block space-y-1">
               <span className="text-xs text-muted-foreground">
-                {translate('auto.components.skills.managedInstall.versionLabel', 'Version')}
+                {t('auto.components.skills.managedInstall.versionLabel', 'Version')}
               </span>
               <Select value={versionId} onValueChange={onVersionChange}>
                 <SelectTrigger className="h-8">
@@ -114,7 +119,7 @@ export function SkillManagedInstallRow({
                 <SelectContent>
                   {details.versions.map((version) => (
                     <SelectItem key={version.versionId} value={version.versionId}>
-                      {managedVersionLabel(version, group.versionId)}
+                      {managedVersionLabel(version, group.versionId, t, intlLocale)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -123,7 +128,7 @@ export function SkillManagedInstallRow({
           ) : null}
           {editedWarning ? (
             <p className="text-xs text-muted-foreground" role="alert">
-              {translate(
+              {t(
                 'auto.components.skills.managedInstall.editedWarning',
                 'Your edits are kept unless you choose to discard them.'
               )}
@@ -138,21 +143,15 @@ export function SkillManagedInstallRow({
                   <RotateCcw className="size-3.5" />
                 )}
                 {retrying
-                  ? translate(
-                      'auto.components.skills.managedInstall.finishInstall',
-                      'Finish installing'
-                    )
+                  ? t('auto.components.skills.managedInstall.finishInstall', 'Finish installing')
                   : switching
-                    ? translate(
-                        'auto.components.skills.managedInstall.useVersion',
-                        'Use this version'
-                      )
-                    : translate('auto.components.skills.managedInstall.reinstall', 'Reinstall')}
+                    ? t('auto.components.skills.managedInstall.useVersion', 'Use this version')
+                    : t('auto.components.skills.managedInstall.reinstall', 'Reinstall')}
               </Button>
             ) : null}
             {installActive ? (
               <Button variant="secondary" size="sm" onClick={onCancelInstall}>
-                {translate('auto.components.skills.managedInstall.cancel', 'Cancel')}
+                {t('auto.components.skills.managedInstall.cancel', 'Cancel')}
               </Button>
             ) : null}
             {activeShare ? (
@@ -163,10 +162,7 @@ export function SkillManagedInstallRow({
                 onClick={() => onSendToMachine(activeShare.id)}
               >
                 <MonitorUp className="size-3.5" />
-                {translate(
-                  'auto.components.skills.managedInstall.installElsewhere',
-                  'Install elsewhere…'
-                )}
+                {t('auto.components.skills.managedInstall.installElsewhere', 'Install elsewhere…')}
               </Button>
             ) : null}
             <Button
@@ -178,12 +174,12 @@ export function SkillManagedInstallRow({
             >
               <Trash2 className="size-3.5" />
               {confirmRemove
-                ? translate('auto.components.skills.managedInstall.confirmRemove', 'Confirm remove')
-                : translate('auto.components.skills.managedInstall.remove', 'Remove')}
+                ? t('auto.components.skills.managedInstall.confirmRemove', 'Confirm remove')
+                : t('auto.components.skills.managedInstall.remove', 'Remove')}
             </Button>
             {editedWarning ? (
               <Button variant="ghost" size="sm" disabled={busy} onClick={() => onRemove(true)}>
-                {translate(
+                {t(
                   'auto.components.skills.managedInstall.discardEditsRemove',
                   'Discard my edits and remove'
                 )}
@@ -191,7 +187,7 @@ export function SkillManagedInstallRow({
             ) : null}
             {editedWarning ? (
               <Button variant="ghost" size="sm" disabled={busy} onClick={() => onInstall(true)}>
-                {translate(
+                {t(
                   'auto.components.skills.managedInstall.discardEdits',
                   'Discard my edits and reinstall'
                 )}

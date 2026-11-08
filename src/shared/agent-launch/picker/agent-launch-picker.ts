@@ -1,3 +1,4 @@
+import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
 import {
   textActionPickerEffectiveChoices,
   type TextActionPickerCatalog
@@ -29,6 +30,7 @@ export type AgentPickerEntry = {
   textGeneration?: TextActionPickerCatalog
   agent: TuiAgent
   label: string
+  description?: string
   aliases?: string[]
   rows: NewTabAgentMenuRow[]
   surfaces: AgentPickerSurface[]
@@ -246,6 +248,22 @@ export function agentPickerLaunchInputs(draft: AgentPickerDraft, entry?: AgentPi
     sourceKeys: current?.context.literalKeys,
     permissionContext: entry?.terminal.permissionMode
   })
+}
+
+export function agentPickerFreshLaunchInputs(
+  draft: AgentPickerDraft,
+  destination: { surface: AgentPickerSurface; executionHostId: ExecutionHostId | undefined },
+  entry?: AgentPickerEntry
+) {
+  if (
+    destination.surface === 'terminal' &&
+    parseExecutionHostId(destination.executionHostId)?.kind === 'runtime' &&
+    draft.acceptedEdits?.arguments === undefined
+  ) {
+    // Why: choosing a control can materialize settings text without authoring Arguments.
+    return agentPickerLaunchInputs({ ...draft, arguments: undefined })
+  }
+  return agentPickerLaunchInputs(draft, entry)
 }
 
 export function agentPickerButtonOrder(entry: AgentPickerEntry): AgentPickerSurface[] {

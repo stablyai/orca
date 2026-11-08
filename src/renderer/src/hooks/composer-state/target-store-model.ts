@@ -4,7 +4,7 @@ import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import type { UISlice } from '../../store/slices/ui'
+import type { UISlice } from '../../store/slices/ui/ui-slice-contract'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -27,6 +27,7 @@ export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined
   initialEphemeralVmRecipeId: string | undefined
   initialName: string
+  initialNote: string
   initialPrompt: string
   initialLinkedWorkItem: LinkedWorkItemSummary | null
   initialGitHubWorkItem: GitHubWorkItem | null
@@ -34,6 +35,7 @@ export type ComposerTargetStoreModel = {
   initialWorkspaceTarget: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus: WorkspaceStatus | undefined
   initialBaseBranch: string | undefined
+  initialParentWorktreeId?: string
   persistDraft: boolean
   onCreated: (() => void) | undefined
   isSubmissionCancelled: () => boolean
