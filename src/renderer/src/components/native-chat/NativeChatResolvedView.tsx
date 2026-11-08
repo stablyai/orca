@@ -228,6 +228,39 @@ export function NativeChatResolvedView({
     composerReady: composerReady && childNavigator.child === null
   })
 
+  const pendingMessages = useMemo(
+    () => pendingSendsAsMessages(pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch),
+    [pending, sessionAfterCommandBoundaries.messages, sendWorkingEpoch]
+  )
+  const messagesWithPending = useMemo(
+    () =>
+      pendingMessages.length === 0
+        ? sessionAfterCommandBoundaries.messages
+        : [...sessionAfterCommandBoundaries.messages, ...pendingMessages],
+    [sessionAfterCommandBoundaries.messages, pendingMessages]
+  )
+  const streamingText = useMemo(() => {
+    return deriveNativeChatStreamingText({
+      messages: messagesWithPending,
+      previewText: hookPreview,
+      working: liveWorking,
+      previewIsToolOutput: hookPreviewIsToolOutput
+    })
+  }, [messagesWithPending, hookPreview, liveWorking, hookPreviewIsToolOutput])
+  const sessionWithPending = useMemo<typeof session>(() => {
+    if (pending.length === 0 && commandMarkers.length === 0 && !streamingText) {
+      return sessionAfterCommandBoundaries
+    }
+    return {
+      ...sessionAfterCommandBoundaries,
+      messages: [
+        ...sessionAfterCommandBoundaries.messages,
+        ...commandMarkersAsMessages(commandMarkers),
+        ...(streamingText ? [nativeChatStreamingMessage(streamingText)] : []),
+        ...pendingMessages
+      ]
+    }
+  }, [sessionAfterCommandBoundaries, pending, pendingMessages, commandMarkers, streamingText])
   // Include pending sends when selecting view state so the first echo leaves the empty screen immediately.
   const viewState = selectNativeChatViewState(sessionWithPending)
 

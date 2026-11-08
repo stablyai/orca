@@ -8,7 +8,7 @@ import {
   type OrchestrationSessionChildren
 } from '../../../../shared/orchestration-session-children'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 
 function workerLifecycleKey(state: ReturnType<typeof useAppStore.getState>): string {
   return JSON.stringify(
