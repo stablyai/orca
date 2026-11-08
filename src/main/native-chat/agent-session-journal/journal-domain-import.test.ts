@@ -4,13 +4,19 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { AGENT_SESSION_JOURNAL_QUEUE_SCHEMA_VERSION } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { openJournalDomainDatabase } from './database/journal-domain-database'
-import { runJournalTransaction } from './database/journal-database'
+import {
+  initializeJournalDomainDatabase,
+  openJournalDomainDatabase
+} from './database/journal-domain-database'
+import { openJournalDatabase, runJournalTransaction } from './database/journal-database'
 import { publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { publishJournalOutcomeEpoch } from './outcomes/journal-outcome-write'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { prepareJournalDomainImport } from './journal-domain-import'
 import { applyJournalSqlMaintenance } from './journal-sql-maintenance'
+import { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import { JournalSqlConversions } from './journal-sql-conversions'
+import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -192,4 +198,82 @@ it('keeps a ready chat on its domain rows and never reads the changed or missing
   expect(db.prepare(`SELECT payload_json FROM journal_items ORDER BY item_id`).all()).toEqual(
     current
   )
+})
+
+it('imports history from the separate original after interruption, taking the current original before ready', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-original-import-'))
+  const originalFilename = join(root, 'agent-session-journal.db')
+  const { db: original } = openJournalDatabase(originalFilename)
+  let originalClosed = false
+  const saved = journalSqlRetryRows(true)
+  runJournalTransaction(original, () => {
+    publishJournalSessionEpoch(
+      original,
+      { sessionId: 'session', workspaceId: 'workspace' },
+      'epoch'
+    )
+    publishJournalOutcomeEpoch(original, 'session', 'epoch', saved)
+  })
+  const filename = await initializeJournalDomainDatabase(root)
+  const { db } = openJournalDomainDatabase(filename)
+  const pool = new JournalSqlReaderPool(filename, originalFilename, journalSqlReaderPath())
+  let interrupt = true
+  const conversions = new JournalSqlConversions(
+    {
+      maintain: async (operation) => {
+        if (operation.kind === 'import-page' && operation.page.kind === 'cards' && interrupt) {
+          interrupt = false
+          throw new Error('interrupted before ready')
+        }
+        return maintain(db, operation)
+      }
+    },
+    pool,
+    async () => {}
+  )
+  try {
+    expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([])
+    await expect(conversions.ensure('session')).rejects.toThrow('interrupted before ready')
+    expect(db.prepare('SELECT message_id FROM journal_send_receipts').all()).toEqual([
+      { message_id: 'send' }
+    ])
+    // A previous build may replace the original between failed new-build runs.
+    const current = saved
+      .filter((row) => row.kind === 'epoch' || (row.kind === 'item' && row.itemId === 'failed'))
+      .map((row, index) => ({ ...row, epoch: 'current-original', seq: index + 1 }))
+    runJournalTransaction(original, () => {
+      publishJournalSessionEpoch(
+        original,
+        { sessionId: 'session', workspaceId: 'workspace' },
+        'current-original'
+      )
+      publishJournalOutcomeEpoch(original, 'session', 'current-original', current)
+    })
+    expect(await conversions.ensure('session')).toBe('current-original')
+    expect(db.prepare('SELECT epoch,item_id FROM journal_items').all()).toEqual([
+      { epoch: 'current-original', item_id: 'failed' }
+    ])
+    expect(db.prepare('SELECT message_id FROM journal_send_receipts').all()).toEqual([])
+    expect(db.prepare('SELECT message_id FROM journal_submission_attempts').all()).toEqual([])
+    expect(db.prepare('SELECT session_id FROM journal_sessions').all()).toEqual([
+      { session_id: 'session' }
+    ])
+    original.close()
+    originalClosed = true
+    rmSync(originalFilename)
+    expect(await conversions.ensure('session')).toBe('current-original')
+    expect(maintain(db, { kind: 'import-discard', sessionId: 'session' })).toEqual({
+      more: false,
+      epoch: 'current-original'
+    })
+    expect(db.prepare('SELECT item_id FROM journal_items').all()).toEqual([{ item_id: 'failed' }])
+  } finally {
+    await conversions.close()
+    await pool.close()
+    db.close()
+    if (!originalClosed) {
+      original.close()
+    }
+    rmSync(root, { recursive: true, force: true })
+  }
 })

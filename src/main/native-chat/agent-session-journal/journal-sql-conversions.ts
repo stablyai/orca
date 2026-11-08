@@ -10,8 +10,8 @@ export class JournalSqlConversions {
   private closed = false
 
   constructor(
-    private readonly writer: JournalSqlOwner,
-    private readonly readers: JournalSqlReaderPool,
+    private readonly writer: Pick<JournalSqlOwner, 'maintain'>,
+    private readonly readers: Pick<JournalSqlReaderPool, 'importState' | 'prepareConversion'>,
     private readonly waitForIdle: (promotion: AbortSignal) => Promise<void>
   ) {}
 
@@ -63,12 +63,27 @@ export class JournalSqlConversions {
 
   private async convert(sessionId: string, promotion: AbortSignal): Promise<string | null> {
     await this.boundary(promotion)
-    const state = await this.writer.maintain({ kind: 'projection-state', sessionId })
-    if (!state || typeof state !== 'object' || !('state' in state)) {
-      throw new Error('journal writer returned no projection state')
-    }
-    if (state.state !== 'converting') {
+    const state = await this.readers.importState(sessionId)
+    if (state.state === 'ready') {
       return state.epoch
+    }
+    for (;;) {
+      await this.boundary(promotion)
+      const discarded = await this.writer.maintain({ kind: 'import-discard', sessionId })
+      if (
+        !discarded ||
+        typeof discarded !== 'object' ||
+        !('more' in discarded) ||
+        !('epoch' in discarded)
+      ) {
+        throw new Error('journal writer returned no import discard result')
+      }
+      if (discarded.epoch !== null) {
+        return discarded.epoch
+      }
+      if (!discarded.more) {
+        break
+      }
     }
     await this.boundary(promotion)
     const reader = await this.readers.prepareConversion(sessionId)

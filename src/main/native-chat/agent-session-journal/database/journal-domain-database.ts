@@ -42,13 +42,16 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
       if (existsSync(sourcePath)) {
         const source = new Database(sourcePath, { readonly: true, fileMustExist: true })
         try {
-          await importJournalDomainProfile(source, db)
+          importJournalDomainProfile(source, db)
         } finally {
           source.close()
         }
       }
+      const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
+      if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
+        throw new Error('chat initialization could not fold its private WAL')
+      }
     } finally {
-      // Closing folds the private WAL into the file before it is published.
       db.close()
     }
     try {

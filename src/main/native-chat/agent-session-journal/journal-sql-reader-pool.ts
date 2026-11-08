@@ -27,9 +27,11 @@ export class JournalSqlReaderPool {
   private readonly retiring = new Set<Promise<void>>()
   private closed = false
   private closing?: Promise<void>
+  private conversionSlot?: ReaderSlot
 
   constructor(
     private readonly filename: string,
+    private readonly originalFilename: string,
     private readonly workerPath = resolveWorkerThreadEntryPath(
       currentWorkerEntryLayout(__dirname),
       'journal-sql-reader-entry.js'
@@ -53,7 +55,18 @@ export class JournalSqlReaderPool {
   }
 
   async prepareConversion(sessionId: string): Promise<JournalSqlConversionReader | null> {
-    return this.slot().prepareConversion(sessionId)
+    if (!this.conversionSlot || this.conversionSlot.failed) {
+      this.conversionSlot = this.slot()
+    }
+    return this.conversionSlot.prepareConversion(sessionId)
+  }
+
+  async importState(sessionId: string) {
+    const response = await this.slot().request({ kind: 'import-state', sessionId })
+    if (response.type !== 'import-state') {
+      throw new Error('journal reader returned no import state')
+    }
+    return response.state
   }
 
   async database(operation: JournalSqlDatabaseRead): Promise<JournalSqlDatabaseReadResult> {
@@ -85,7 +98,7 @@ export class JournalSqlReaderPool {
     }
     let slot = this.slots.toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
     if ((!slot || slot.pendingCount > 0) && this.slots.length < 4) {
-      slot = new ReaderSlot(this.filename, this.workerPath)
+      slot = new ReaderSlot(this.filename, this.originalFilename, this.workerPath)
       this.slots.push(slot)
     }
     return slot!
@@ -151,8 +164,11 @@ class ReaderSlot {
     return this.pending.size + this.conversions
   }
 
-  constructor(filename: string, workerPath: string) {
-    this.worker = spawnWorkerThread(workerPath, { workerData: { filename }, execArgv: [] })
+  constructor(filename: string, originalFilename: string, workerPath: string) {
+    this.worker = spawnWorkerThread(workerPath, {
+      workerData: { filename, originalFilename },
+      execArgv: []
+    })
     const startup = setTimeout(() => {
       this.fail(new Error('journal SQL reader did not open within 10000 ms'))
       void this.close()

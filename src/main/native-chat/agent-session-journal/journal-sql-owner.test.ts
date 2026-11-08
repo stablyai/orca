@@ -126,7 +126,7 @@ it('correlates interleaved replies and resumes current bodies after writer closu
     },
     { status: 'rejected', reason: expect.any(Error) }
   ])
-  const pool = new JournalSqlReaderPool(filename, journalSqlReaderPath())
+  const pool = new JournalSqlReaderPool(filename, filename, journalSqlReaderPath())
   readers.push(pool)
   const request = {
     sessionId: 'session',
@@ -144,7 +144,7 @@ it('correlates interleaved replies and resumes current bodies after writer closu
   await owner.maintain({ kind: 'event-tail-prune', now: 86400100 })
   await owner.close()
   await pool.close()
-  const reopened = new JournalSqlReaderPool(filename, journalSqlReaderPath())
+  const reopened = new JournalSqlReaderPool(filename, filename, journalSqlReaderPath())
   readers.push(reopened)
   const reset = await reopened.domainHistory(request)
   expect(reset).toMatchObject({

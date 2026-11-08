@@ -100,6 +100,7 @@ it('answers lifecycle reads from one database snapshot exactly as the in-memory 
   database.transaction((db) => convertJournalSqlProjection(db, 'session-1'))
   const pool = new JournalSqlReaderPool(
     join(fixture.root, 'agent-session-journal.db'),
+    join(fixture.root, 'agent-session-journal.db'),
     journalSqlReaderPath()
   )
   try {

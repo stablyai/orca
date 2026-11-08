@@ -66,6 +66,7 @@ it('preserves default, clamped, backward, hydration and reset wire pages from a 
   }
   const pool = new JournalSqlReaderPool(
     join(fixture.root, 'agent-session-journal.db'),
+    join(fixture.root, 'agent-session-journal.db'),
     journalSqlReaderPath()
   )
   try {

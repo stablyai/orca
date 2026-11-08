@@ -1,17 +1,16 @@
 import type Database from '../../sqlite/sync-database'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
 
 export type JournalDomainImportState =
-  | { state: 'founding' | 'converting'; epoch: null }
+  | { state: 'converting'; epoch: null }
   | { state: 'ready'; epoch: string }
 
 /**
  * A chat's head row is its ready mark: once written, domain state wins and the frozen source is
- * never read again. Only an unready chat consults its copied source, by point reads.
+ * never read again. An unready chat imports the original under the profile lock.
  */
 export function journalDomainImportState(
   db: Database.Database,
@@ -21,16 +20,7 @@ export function journalDomainImportState(
   if (ready) {
     return { state: 'ready', epoch: String(ready.epoch) }
   }
-  const epoch = readJournalSessionEpoch(db, sessionId)
-  const saved =
-    epoch !== null &&
-    (db
-      .prepare('SELECT 1 FROM journal_rows WHERE session_id=? AND epoch=? LIMIT 1')
-      .get(sessionId, epoch) ??
-      db
-        .prepare('SELECT 1 FROM journal_outcome_epochs WHERE session_id=? AND epoch=?')
-        .get(sessionId, epoch))
-  return { state: saved ? 'converting' : 'founding', epoch: null }
+  return { state: 'converting', epoch: null }
 }
 
 /**

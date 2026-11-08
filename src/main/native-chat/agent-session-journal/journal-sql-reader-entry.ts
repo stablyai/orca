@@ -1,4 +1,5 @@
 import { parentPort, workerData } from 'node:worker_threads'
+import { existsSync } from 'node:fs'
 import Database from '../../sqlite/sync-database'
 import { readJournalSqlHistoryPage } from './journal-sql-history-page'
 import { journalSqlFailure } from './journal-sql-failure'
@@ -7,12 +8,18 @@ import { prepareJournalDomainImport, type JournalDomainImport } from './journal-
 import { readJournalSqlDatabase } from './journal-sql-database-read'
 import { readJournalSqlPoint } from './journal-sql-point-read'
 import { readJournalDomainHistoryPage } from './journal-domain-history-page'
+import { journalDomainImportState } from './journal-domain-import-rows'
 
-if (!parentPort || typeof workerData?.filename !== 'string') {
+if (
+  !parentPort ||
+  typeof workerData?.filename !== 'string' ||
+  typeof workerData.originalFilename !== 'string'
+) {
   throw new Error('journal SQL reader requires a database path and parent port')
 }
 const port = parentPort
 let db: Database.Database | undefined
+let original: Database.Database | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
 function reply(message: JournalSqlReaderReply): void {
   port.postMessage(message)
@@ -35,6 +42,13 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       throw new Error('journal SQL reader is unavailable')
     }
     switch (operation.kind) {
+      case 'import-state':
+        reply({
+          type: 'import-state',
+          id,
+          state: journalDomainImportState(db, operation.sessionId)
+        })
+        break
       case 'domain-history':
         reply({ type: 'page', id, result: readJournalDomainHistoryPage(db, operation.request) })
         break
@@ -49,7 +63,14 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
-        const prepared = prepareJournalDomainImport(db, operation.sessionId)
+        if (!original && existsSync(workerData.originalFilename)) {
+          original = new Database(workerData.originalFilename, {
+            readonly: true,
+            fileMustExist: true,
+            timeout: 5000
+          })
+        }
+        const prepared = original ? prepareJournalDomainImport(original, operation.sessionId) : null
         if (prepared) {
           const { pages, ...header } = prepared
           conversions.set(id, pages)

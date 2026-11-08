@@ -32,7 +32,7 @@ async function workers() {
   const writer = new JournalSqlOwner(filename, fixture.root, journalSqlWorkerPath())
   owners.push(writer)
   await writer.opened()
-  const readers = new JournalSqlReaderPool(filename, journalSqlReaderPath())
+  const readers = new JournalSqlReaderPool(filename, filename, journalSqlReaderPath())
   pools.push(readers)
   return { writer, readers }
 }

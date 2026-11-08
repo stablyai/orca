@@ -34,6 +34,7 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
   database.transaction((db) => convertJournalSqlProjection(db, 'session-1'))
   const pool = new JournalSqlReaderPool(
     join(fixture.root, 'agent-session-journal.db'),
+    join(fixture.root, 'agent-session-journal.db'),
     journalSqlReaderPath()
   )
   try {

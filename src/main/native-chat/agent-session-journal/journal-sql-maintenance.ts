@@ -15,9 +15,14 @@ import {
   type JournalDomainMaintenanceResult
 } from './journal-domain-maintenance'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
+import {
+  discardJournalDomainImportPage,
+  type JournalDomainImportDiscard
+} from './journal-domain-import-discard'
 
 export type JournalSqlMaintenance =
   | { kind: 'projection-state'; sessionId: string }
+  | { kind: 'import-discard'; sessionId: string }
   | {
       kind: 'import-page'
       target: Pick<JournalDomainImportHeader, 'sessionId' | 'epoch'>
@@ -33,6 +38,7 @@ export type JournalSqlMaintenanceResult =
   | JournalSqlProjectionState
   | JournalSqlEventTailResult
   | JournalDomainMaintenanceResult
+  | JournalDomainImportDiscard
   | boolean
   | string
   | null
@@ -44,6 +50,8 @@ export function applyJournalSqlMaintenance(
   switch (operation.kind) {
     case 'projection-state':
       return journalDomainImportState(db, operation.sessionId)
+    case 'import-discard':
+      return discardJournalDomainImportPage(db, operation.sessionId)
     case 'import-page':
       return insertJournalDomainImportPage(db, operation.target, operation.page)
     case 'import-finish':

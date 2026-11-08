@@ -34,7 +34,11 @@ export class JournalSqlDatabase {
       onMaintenanceError: (error: unknown, sessionId?: string) => void
     }
   ) {
-    this.readers = new JournalSqlReaderPool(journalDatabasePath(stateDirectory), options.readerPath)
+    this.readers = new JournalSqlReaderPool(
+      journalDatabasePath(stateDirectory),
+      journalDatabasePath(stateDirectory),
+      options.readerPath
+    )
     this.conversions = new JournalSqlConversions(writer, this.readers, this.activity.waitForIdle)
     this.maintenance = new JournalSqlBackgroundMaintenance(
       writer,
