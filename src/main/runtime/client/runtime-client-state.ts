@@ -16,6 +16,15 @@ import type { IPtyProvider } from '../../providers/pty-provider-contract'
 import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-teardown'
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
+import {
+  readHostTokenUsage,
+  type HostTokenUsageSources
+} from '../../usage/host-token-usage-summary'
+import type {
+  HostTokenUsageRange,
+  HostTokenUsageScope,
+  HostTokenUsageSummary
+} from '../../../shared/host-token-usage-types'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
 import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
@@ -162,6 +171,22 @@ export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRunti
 
   getStatsSummary(): StatsSummary | null {
     return this.stats?.getSummary() ?? null
+  }
+
+  private tokenUsageSources: HostTokenUsageSources | null = null
+
+  setTokenUsageSources(sources: HostTokenUsageSources): void {
+    this.tokenUsageSources = sources
+  }
+
+  getHostTokenUsage(params: {
+    range: HostTokenUsageRange
+    scope: HostTokenUsageScope
+  }): Promise<HostTokenUsageSummary> {
+    if (!this.tokenUsageSources) {
+      throw new Error('usage_unavailable')
+    }
+    return readHostTokenUsage(this.tokenUsageSources, params)
   }
 
   getMemorySnapshot(): Promise<MemorySnapshot> {
