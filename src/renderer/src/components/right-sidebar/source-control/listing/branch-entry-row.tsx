@@ -5,7 +5,7 @@ import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
 import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { DiffLineCounts } from './diff-line-counts'
 import { reviewNoteCountTitle } from './review-note-count-title'
 import { SourceControlEntryContextMenu } from './entry-context-menu'
@@ -15,7 +15,9 @@ import {
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,
   SOURCE_CONTROL_TREE_INDENT_PX
 } from './row-layout'
-import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function BranchEntryRow({
   entry,
@@ -40,6 +42,7 @@ export function BranchEntryRow({
   commentCount: number
   showPathHint?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const fileName = basename(entry.path)
   const parentDir = dirname(entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
@@ -89,7 +92,7 @@ export function BranchEntryRow({
         {commentCount > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-[10px] text-muted-foreground"
-            title={reviewNoteCountTitle(commentCount)}
+            title={reviewNoteCountTitle(commentCount, t)}
           >
             <MessageSquare className="size-3" />
             <span className="tabular-nums">{commentCount}</span>

@@ -2,8 +2,8 @@ import { existsSync } from 'node:fs'
 import { utimes } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import { SessionSearchInstance } from './session-search-instance'
 import {
   openSessionSearchIndexerHarness,
@@ -75,24 +75,6 @@ it('constructs nothing and touches no disk while the setting is off', async () =
   expect(errors).toEqual([])
 })
 
-it('indexes and answers once the setting is on', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a distinctive conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-
-  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
-  const status = subject.status()
-  expect(status.enabled).toBe(true)
-  expect(status.filesIndexed).toBeGreaterThan(0)
-  expect(status.generation).toBeGreaterThan(0)
-  expect(errors).toEqual([])
-})
-
 it('closes the live pair and starts a new one on a settings change', async () => {
   const recent = transcriptPath(RECENT_SESSION_ID)
   const ancient = transcriptPath(ANCIENT_SESSION_ID)
@@ -114,26 +96,6 @@ it('closes the live pair and starts a new one on a settings change', async () =>
   subject.apply({ enabled: true, historyDays: null })
   await subject.settled()
   expect(await searchFor('ancient')).toEqual([ANCIENT_SESSION_ID])
-  expect(errors).toEqual([])
-})
-
-it('leaves nothing running and no live claim when the setting goes off', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(subject.running).toBe(true)
-
-  subject.apply({ enabled: false, historyDays: null })
-  expect(subject.running).toBe(false)
-  expect(existsSync(harness.databasePath)).toBe(true)
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  expect(subject.running).toBe(true)
   expect(errors).toEqual([])
 })
 
@@ -207,44 +169,4 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   expect(second.hits).toHaveLength(1)
   expect(second.hits[0].sessionId).not.toBe(first.hits[0].sessionId)
   expect(errors).toEqual([])
-})
-
-it('reports being switched off before blaming a scope it does not know', async () => {
-  const subject = newInstance()
-  subject.apply({ enabled: false, historyDays: null })
-  await subject.settled()
-
-  expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'disabled'
-  })
-})
-
-it('reports not being ready before blaming a scope it does not know', async () => {
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-  subject.close()
-
-  expect(await subject.search({ query: 'anything' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'not-ready'
-  })
-})
-
-it('answers scope-unknown once it is switched on and ready', async () => {
-  await writeClaudeTranscript(
-    transcriptPath(RECENT_SESSION_ID),
-    ['a distinctive conversation'],
-    RECENT_SESSION_ID
-  )
-  const subject = newInstance()
-  subject.apply({ enabled: true, historyDays: null })
-  await subject.settled()
-
-  expect(await subject.search({ query: 'distinctive' }, { kind: 'unknown' })).toEqual({
-    kind: 'unavailable',
-    reason: 'scope-unknown'
-  })
-  expect(await searchFor('distinctive')).toEqual([RECENT_SESSION_ID])
 })

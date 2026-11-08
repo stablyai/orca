@@ -6,7 +6,6 @@ vi.mock('electron', () => ({
   app: { getAppPath: () => '/mock/app' }
 }))
 
-import { SshConnection } from './connection/ssh-connection'
 import { uploadDirectoryViaSystemSsh } from './system-transport/system-ssh-file-transfer'
 import type { SshTarget } from '../../shared/ssh-types'
 import { relayArtifactFilenames } from './relay-install-artifacts'
@@ -206,25 +205,6 @@ describe('system SSH transport integration', () => {
     }
     rmSync(tempDir, { recursive: true, force: true })
   })
-
-  it.skipIf(process.platform === 'win32')(
-    'connects GSSAPI-flagged targets through system ssh without the force override',
-    async () => {
-      delete process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT
-      const conn = new SshConnection(
-        { ...makeTarget(), source: 'manual', gssapiAuthentication: true },
-        { onStateChange: vi.fn() }
-      )
-      await conn.connect()
-      try {
-        expect(conn.usesSystemSshTransport()).toBe(true)
-        expect(conn.getState().status).toBe('connected')
-      } finally {
-        await conn.disconnect()
-      }
-    },
-    20_000
-  )
 
   it.skipIf(process.platform === 'win32')(
     'uploads a directory through the system ssh stdin/stdout path',

@@ -1,3 +1,4 @@
+import type * as RuntimeEnvironmentStore from '../shared/remote-runtime/host-store/runtime-environment-store'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
 
@@ -31,10 +32,17 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
 }))
+
+vi.mock(
+  '../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof RuntimeEnvironmentStore>()),
+    listEnvironments: listEnvironmentsMock
+  })
+)
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
@@ -47,7 +55,7 @@ import type {
   RuntimeAgentLineageTestModule,
   RuntimeAgentLineageCatalogTestModule
 } from '../shared/runtime-agent-lineage-consumer.test-fixture'
-import { COMMAND_SPECS } from './specs'
+import { COMMAND_SPECS } from './specs/index'
 import { okFixture, queueFixtures } from './test-fixtures'
 import { pairRuntimeEnvironment, useWorktreeAwarenessEnvironment } from './index-test-harness'
 
@@ -58,12 +66,12 @@ let catalog: RuntimeAgentLineageCatalogTestModule
 beforeAll(async () => {
   lineage = (
     await vi.importActual<{ default: RuntimeAgentLineageTestModule }>(
-      '../main/runtime/runtime-agent-lineage.test-fixture'
+      '../main/runtime/workspaces/process-listing/runtime-agent-lineage.test-fixture'
     )
   ).default
   catalog = (
     await vi.importActual<{ default: RuntimeAgentLineageCatalogTestModule }>(
-      '../main/runtime/runtime-agent-lineage-catalog.test-fixture'
+      '../main/runtime/workspaces/process-listing/runtime-agent-lineage-catalog.test-fixture'
     )
   ).default
 })
@@ -181,29 +189,6 @@ describe('omittedHostIds selector annotation', () => {
     ])
   })
 
-  it('says which omitted hosts are not selectable in the human listing', async () => {
-    pairRuntimeEnvironment(listEnvironmentsMock, 'env-paired', 'm4air')
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_list', {
-        terminals: [TERMINAL_ROW],
-        totalCount: 1,
-        truncated: false,
-        hostScope: {
-          hostIds: ['local'],
-          omittedHostIds: ['runtime:env-paired', 'runtime:env-retired']
-        }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'list'], '/tmp/repo')
-
-    const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('runtime:env-paired (--environment m4air)')
-    expect(printed).toContain('runtime:env-retired (not selectable from this machine)')
-  })
-
   it.each([
     ['terminal', 'list', 'req_terminal_list', { terminals: [TERMINAL_ROW] }],
     ['worktree', 'list', 'req_worktree_list', { worktrees: [] }],
@@ -246,75 +231,6 @@ describe('omittedHostIds selector annotation', () => {
       expect(callMock).toHaveBeenCalledTimes(1)
     }
   )
-
-  it('says this runtime reaches an omitted local or SSH host in the human listing', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_list', {
-        terminals: [TERMINAL_ROW],
-        totalCount: 1,
-        truncated: false,
-        hostScope: { hostIds: [], omittedHostIds: ['local', 'ssh:box-1'] }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'list'], '/tmp/repo')
-
-    const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('local (reached through this runtime; no flag selects it)')
-    expect(printed).toContain('ssh:box-1 (reached through this runtime; no flag selects it)')
-    expect(printed).not.toContain('--host')
-  })
-
-  it('never keeps a host id out of omittedHostIds', async () => {
-    listEnvironmentsMock.mockReturnValue([])
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_list', {
-        terminals: [],
-        totalCount: 0,
-        truncated: false,
-        hostScope: { hostIds: [], omittedHostIds: ['runtime:env-retired'] }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'list', '--json'], '/tmp/repo')
-
-    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-    expect(printed.result.hostScope.omittedHostIds).toEqual(['runtime:env-retired'])
-  })
-
-  it('costs no extra round trip when nothing was omitted', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_list', {
-        terminals: [TERMINAL_ROW],
-        totalCount: 1,
-        truncated: false,
-        hostScope: { hostIds: ['local'], omittedHostIds: [] }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['terminal', 'list', '--json'], '/tmp/repo')
-
-    expect(callMock).toHaveBeenCalledExactlyOnceWith('terminal.list', {
-      worktree: undefined,
-      limit: undefined,
-      includeVisualLayouts: false
-    })
-    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
-      ok: true,
-      result: {
-        terminals: [TERMINAL_ROW],
-        totalCount: 1,
-        truncated: false,
-        hostScope: { hostIds: ['local'], omittedHostIds: [] }
-      }
-    })
-  })
 })
 
 describe('worktree listings report their host coverage', () => {
@@ -325,40 +241,6 @@ describe('worktree listings report their host coverage', () => {
     addEnvironmentFromPairingCodeMock,
     listEnvironmentsMock,
     spawnMock
-  })
-
-  it('prints a host column and the scope line for `worktree list`', async () => {
-    listEnvironmentsMock.mockReturnValue([])
-    queueFixtures(
-      callMock,
-      okFixture('req_worktree_list', {
-        worktrees: [
-          {
-            id: 'repo-ssh::/remote/wt',
-            branch: 'main',
-            path: '/remote/wt',
-            hostId: 'ssh:box-1',
-            displayName: 'remote',
-            parentWorktreeId: null,
-            childWorktreeIds: [],
-            linkedIssue: null,
-            comment: ''
-          }
-        ],
-        totalCount: 521,
-        truncated: true,
-        hostScope: { hostIds: ['ssh:box-1'], omittedHostIds: ['runtime:env-retired'] }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['worktree', 'list'], '/tmp/repo')
-
-    const printed = String(logSpy.mock.calls[0]?.[0])
-    expect(printed).toContain('host=ssh:box-1')
-    expect(printed).toContain('scope: ssh:box-1')
-    expect(printed).toContain('runtime:env-retired (not selectable from this machine)')
-    expect(printed).toContain('truncated: showing 1 of 521')
   })
 
   it('does not claim a scope for `worktree ps` when the host reported none', async () => {

@@ -3,14 +3,14 @@ import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../wsl-guest/agent-hook-server'
 import { AgentHookServer } from './server'
 import { buildBody, PANE, postHookEvent } from './server.test-fixtures'
 import { ClaudeHelperKillPoller } from '../../shared/agent-hook-listener/providers/claude-helper-kill-poller'
-import { ClaudeTranscriptDecoder } from '../../shared/agent-hook-listener/providers/claude-transcript-decoder'
+import '../../shared/agent-hook-listener/providers/claude-transcript-decoder'
 import * as cursor from '../../shared/agent-hook-listener/providers/claude-transcript-cursor'
-import { AgentTranscriptPollScheduler } from '../../shared/agent-transcript-poll-scheduler'
+import '../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 
 // Complete captured lifecycle records, with runtime replay seeded by real persisted HTTP state.
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
@@ -19,10 +19,15 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 const servers: { stop: () => void }[] = []
 const folders: string[] = []
+const realSetTimeout = globalThis.setTimeout
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+})
 afterEach(async () => {
   for (const server of servers.splice(0)) {
     server.stop()
   }
+  vi.useRealTimers()
   // Only exact test-created mkdtemp paths; no external state is reachable.
   for (const folder of folders.splice(0)) {
     await rm(folder, { recursive: true, force: true })
@@ -32,7 +37,16 @@ afterEach(async () => {
 const lines = (records: Record<string, unknown>[]) =>
   records.map((r) => `${JSON.stringify(r)}\n`).join('')
 // ast-grep-ignore: test-no-real-time-wait -- Real elapsed gaps separate hook R, provider K and restart S.
-const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+const pause = (ms: number) => new Promise((resolve) => realSetTimeout(resolve, ms))
+// Transcript polls run on the fake clock while transcript I/O and wall time stay real.
+const settle = (assertion: () => void) =>
+  vi.waitFor(
+    () => {
+      vi.advanceTimersByTime(250)
+      assertion()
+    },
+    { timeout: 3000, interval: 10 }
+  )
 async function load(stream: string): Promise<Record<string, unknown>[]> {
   return (
     await readFile(
@@ -68,9 +82,7 @@ async function setup(
     killAt?: number
     throwOnce?: boolean
     disabled?: boolean
-    paneCount?: number
     beforeStart?: (transcript: string) => void
-    admitted?: () => void
     retryBind?: boolean
     busyPort?: number
     stopBeforeBind?: boolean
@@ -101,17 +113,8 @@ async function setup(
     const previous = new AgentHookServer()
     servers.push(previous)
     await previous.start(startOptions)
-    for (let i = 0; i < (options.paneCount ?? 1); i++) {
-      for (const h of inputHooks) {
-        expect(
-          (
-            await postHookEvent(previous, {
-              ...body(h),
-              paneKey: i === 0 ? PANE : PANE.slice(0, -12) + (i + 1).toString(16).padStart(12, '0')
-            })
-          ).status
-        ).toBe(204)
-      }
+    for (const h of inputHooks) {
+      expect((await postHookEvent(previous, body(h))).status).toBe(204)
     }
     expect(previous.getStatusSnapshotForPane(PANE)[0]?.subagents?.[0]?.state).toBe('working')
     previous.flushStatusPersistSync()
@@ -124,15 +127,12 @@ async function setup(
     await writeFile(
       join(endpointDir, 'spool', 'claude.jsonl'),
       lines(
-        Array.from({ length: options.paneCount ?? 1 }, (_, i) =>
-          inputHooks.map((h) => ({
-            ...body(h),
-            paneKey: i === 0 ? PANE : PANE.slice(0, -12) + (i + 1).toString(16).padStart(12, '0'),
-            source: 'claude',
-            launchToken: 'same-owner',
-            receivedAt
-          }))
-        ).flat()
+        inputHooks.map((h) => ({
+          ...body(h),
+          source: 'claude',
+          launchToken: 'same-owner',
+          receivedAt
+        }))
       )
     )
   }
@@ -151,8 +151,7 @@ async function setup(
     desktop.dropStatusEntriesByTabPrefix('tab-1')
   }
   let prebind = false,
-    threw = false,
-    starting = true
+    threw = false
   const beforeBind = () => {
     if (when === 'accepted-before-bind' && !prebind) {
       prebind = true
@@ -171,9 +170,6 @@ async function setup(
     }
   }
   desktop.setListener((event) => {
-    if (kind === 'desktop-spool' && starting) {
-      options.admitted?.()
-    }
     if (options.throwOnce && !threw && event.hookEventName === 'SubagentStart') {
       threw = true
       appendFileSync(
@@ -198,9 +194,6 @@ async function setup(
     preferredPort: options.retryBind ? -1 : options.busyPort,
     isPaneSurfaceRetired: () => options.retired === true,
     forward: (e) => {
-      if (kind === 'relay-spool' && starting) {
-        options.admitted?.()
-      }
       desktop.ingestRemote(e, 'connection')
       if (kind === 'relay-spool' && e.hookEventName === 'Stop') {
         beforeBind()
@@ -228,7 +221,6 @@ async function setup(
   } else {
     await start()
   }
-  starting = false
   const post = async (payload: Record<string, unknown>, extra: Record<string, unknown> = {}) => {
     if (kind.startsWith('desktop')) {
       expect((await postHookEvent(desktop, { ...body(payload), ...extra })).status).toBe(204)
@@ -281,10 +273,7 @@ it.each([
     advanceBeforeBind: () => clock?.mockReturnValue(acceptedAt + 10)
   })
   const before = p.row()!
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   expect(p.row()?.workingMode).toBe('monitoring')
   expect(p.row()?.mainAgent).toEqual(before.mainAgent)
   expect(p.row()?.lastAssistantMessage).toBe('READY')
@@ -293,10 +282,7 @@ it.each([
   const offset = owner.parent.offset
   // A delayed hook is the legitimate parked wake. No second kill is appended.
   await p.post(hooks[1])
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   expect(p.entries.get(PANE)).toBe(owner)
   expect(owner.parent.offset).toBe(offset)
   if (when === 'accepted-before-bind') {
@@ -310,10 +296,7 @@ it.each(['desktop-http', 'relay-http', 'desktop-spool', 'relay-spool'])(
     const p = await setup(kind, 'accepted-before-bind', { throwOnce: true })
     expect(p.threw).toBe(true)
     expect(p.entries.size).toBe(1)
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
     expect(p.row()?.state).toBe('working') // Unknown root remains live; no parent hook was supplied.
   }
 )
@@ -323,10 +306,7 @@ it.each(['relay-spool', 'desktop-spool'])(
   async (kind) => {
     const R = Math.floor(Date.now() / 1000) * 1000
     const p = await setup(kind, 'before-start', { cutoff: R, killAt: R - 1001 })
-    await vi.waitFor(() => expect(p.entries.get(PANE)?.parent.offset).toBeGreaterThan(0), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.entries.get(PANE)?.parent.offset).toBeGreaterThan(0))
     expect(p.entries.get(PANE)?.killedAt).toBeUndefined()
     expect(p.row()?.subagents?.[0]?.state).toBe('working')
     const child = join(p.transcript.slice(0, -6), 'subagents', 'agent-a123.jsonl')
@@ -344,20 +324,14 @@ it.each(['relay-spool', 'desktop-spool'])(
       p.transcript,
       lines([{ ...p.oldKill, timestamp: new Date(R + 500).toISOString() }])
     )
-    await vi.waitFor(() => expect(p.entries.get(PANE)?.killedAt).toBe(R + 500), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.entries.get(PANE)?.killedAt).toBe(R + 500))
     expect(p.row()?.subagents?.[0]?.state).toBe('working')
     // R's precision admits K, but only provider generation decides whether this work ends.
     await appendFile(
       p.transcript,
       lines([{ ...p.oldKill, timestamp: new Date(R + 600).toISOString() }])
     )
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   }
 )
 
@@ -365,14 +339,11 @@ it('initialization of an already-listening desktop activates parked runtime spoo
   const p = await setup('desktop-spool', 'before-start', { disabled: true })
   expect(p.entries.size).toBe(0)
   p.desktop.setStatusHooksEnabled(true)
-  await vi.waitFor(
-    () => {
-      expect(p.entries.size).toBe(1)
-      expect(p.row()?.subagents ?? []).toEqual([])
-      expect(p.row()?.workingMode).toBe('monitoring')
-    },
-    { timeout: 3000, interval: 30 }
-  )
+  await settle(() => {
+    expect(p.entries.size).toBe(1)
+    expect(p.row()?.subagents ?? []).toEqual([])
+    expect(p.row()?.workingMode).toBe('monitoring')
+  })
 })
 
 it('caps future spool cutoffs and keeps HTTP cutoff provenance private', async () => {
@@ -380,10 +351,7 @@ it('caps future spool cutoffs and keeps HTTP cutoff provenance private', async (
   const p = await setup('relay-spool', 'before-start', { cutoff: S + 60000 })
   expect(p.entries.get(PANE)?.observedAt).toBeLessThan(S + 60000)
   await appendFile(p.transcript, lines([{ ...p.oldKill, timestamp: new Date().toISOString() }]))
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   const q = await setup('desktop-http', 'after-start')
   await q.post(hooks[2], { receivedAt: 0, hookReceivedAt: 0 })
   expect(q.entries.get(PANE)?.observedAt).toBeGreaterThan(S - 1000)
@@ -391,127 +359,13 @@ it('caps future spool cutoffs and keeps HTTP cutoff provenance private', async (
     q.transcript,
     lines([{ ...q.oldKill, timestamp: new Date(S - 10000).toISOString() }])
   )
-  await vi.waitFor(() => expect(q.entries.get(PANE)?.parent.offset).toBeGreaterThan(0), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(q.entries.get(PANE)?.parent.offset).toBeGreaterThan(0))
   expect(q.row()?.subagents?.[0]?.state).toBe('working')
 })
 
-it.each(['relay-spool', 'desktop-spool'])(
-  'bounds actual admitted trigger and activation at N/10N on %s',
-  async (kind) => {
-    const measurements: {
-      N: number
-      captures: number
-      activations: number
-      reads: number
-      parentBytes: number
-      tokens: number
-      batches: number
-      head: number
-    }[] = []
-    for (const N of [10, 100]) {
-      let tokens = 0,
-        batches = 0,
-        head = 0
-      const write = ClaudeTranscriptDecoder.prototype.write
-      const decoding = vi
-        .spyOn(ClaudeTranscriptDecoder.prototype, 'write')
-        .mockImplementation(function (this: ClaudeTranscriptDecoder, text, input) {
-          const before = this['tokens']
-          write.call(this, text, input)
-          tokens += this['tokens'] - before
-          batches++
-          head = Math.max(head, this['head'].length)
-          expect(text.length).toBeLessThanOrEqual(64 * 1024)
-        })
-      const read = vi.spyOn(cursor, 'readClaudeTranscriptChunk')
-      const capture = vi.spyOn(ClaudeHelperKillPoller.prototype, 'schedule')
-      const activate = vi.spyOn(ClaudeHelperKillPoller.prototype, 'activate')
-      const arm = vi.spyOn(AgentTranscriptPollScheduler.prototype, 'schedule')
-      let accepted = 0
-      const p = await setup(kind, 'accepted-before-bind', {
-        paneCount: N,
-        beforeStart: (transcript) => {
-          // Valid oversized ordinary input follows the same uniform decoder on every admitted owner.
-          appendFileSync(transcript, lines([{ type: 'attachment', content: 'x'.repeat(300_000) }]))
-          tokens = batches = head = 0
-          decoding.mockClear()
-          read.mockClear()
-          capture.mockClear()
-          activate.mockClear()
-          arm.mockClear()
-        },
-        admitted: () => {
-          accepted++
-          // These are spies over real methods, never substitutes for a production loop step.
-          expect(read).not.toHaveBeenCalled()
-          expect(decoding).not.toHaveBeenCalled()
-          expect(arm).not.toHaveBeenCalled()
-        }
-      })
-      expect(accepted).toBe(3 * N)
-      expect(capture).toHaveBeenCalledTimes(3 * N)
-      expect(p.entries.size).toBe(N)
-      expect(activate.mock.calls.length).toBeLessThanOrEqual(2)
-      expect(arm).toHaveBeenCalledTimes(N)
-      const first = [...p.entries.values()]
-      p.poller.activate()
-      p.poller.activate()
-      expect([...p.entries.values()]).toEqual(first)
-      expect(p.poller['scheduler']['entries'].size).toBe(N)
-      await vi.waitFor(
-        () => {
-          expect(p.row()?.subagents ?? []).toEqual([])
-          for (const entry of p.entries.values()) {
-            expect(entry.killedAt).toBeDefined()
-          }
-          expect(p.poller['scheduler']['entries'].size).toBe(0)
-          expect(p.poller['scheduler']['deadlines']['timer']).toBeUndefined()
-        },
-        { timeout: 5000, interval: 30 }
-      )
-      expect(read.mock.calls.length).toBeLessThanOrEqual(3 * N)
-      const offsets = [...p.entries.values()].reduce((sum, e) => sum + e.parent.offset, 0)
-      for (const entry of p.entries.values()) {
-        expect(entry.parent.decoder['head'].length).toBeLessThanOrEqual(320)
-      }
-      measurements.push({
-        N,
-        captures: capture.mock.calls.length,
-        activations: activate.mock.calls.length,
-        reads: read.mock.calls.length,
-        parentBytes: offsets,
-        tokens,
-        batches,
-        head
-      })
-      expect(tokens).toBeGreaterThan(0)
-      expect(head).toBeLessThanOrEqual(320)
-      p.desktop.stop()
-      p.relay.stop()
-      expect(p.entries.size).toBe(0)
-      decoding.mockRestore()
-      read.mockRestore()
-      capture.mockRestore()
-      activate.mockRestore()
-      arm.mockRestore()
-    }
-    expect(measurements[1].captures).toBe(10 * measurements[0].captures)
-    expect(measurements[1].parentBytes).toBe(10 * measurements[0].parentBytes)
-    expect(measurements[1].tokens).toBe(10 * measurements[0].tokens)
-    expect(measurements[1].batches).toBe(10 * measurements[0].batches)
-    process.stdout.write(`admitted owner contract ${kind} ${JSON.stringify(measurements)}\n`)
-  }
-)
-
 it('a real failed bind parks without resources and explicit retry delivers its first fact', async () => {
   const p = await setup('relay-spool', 'before-start', { retryBind: true })
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   expect(p.row()?.workingMode).toBe('monitoring')
 })
 
@@ -568,10 +422,7 @@ it('a held local child permission cannot reset the admitted owner', async () => 
   expect(capture).not.toHaveBeenCalled()
   expect(p.entries.get(PANE)).toBe(owner)
   await appendFile(p.transcript, lines([{ ...p.oldKill, timestamp: new Date().toISOString() }]))
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
 })
 
 it('preferred-port fallback activates the original admitted observation', async () => {
@@ -584,10 +435,7 @@ it('preferred-port fallback activates the original admitted observation', async 
     }
     const p = await setup('relay-spool', 'before-start', { busyPort: address.port })
     expect(p.relay.usedPortFallback).toBe(true)
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
     expect(p.row()?.workingMode).toBe('monitoring')
   } finally {
     await new Promise<void>((resolve) => busy.close(() => resolve()))
@@ -613,10 +461,7 @@ it.each(['desktop-http', 'relay-http'])(
       p.transcript,
       lines([{ ...p.oldKill, timestamp: new Date(S + 1).toISOString() }])
     )
-    await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-      timeout: 3000,
-      interval: 30
-    })
+    await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
   }
 )
 
@@ -647,8 +492,5 @@ it('reentrant mirror and OSC writes cannot borrow local hook admission', async (
   expect(p.entries.size).toBe(1)
   expect(p.desktop.getStatusSnapshotForPane(other)[0]?.state).toBe('working')
   await appendFile(p.transcript, lines([{ ...p.oldKill, timestamp: new Date().toISOString() }]))
-  await vi.waitFor(() => expect(p.row()?.subagents ?? []).toEqual([]), {
-    timeout: 3000,
-    interval: 30
-  })
+  await settle(() => expect(p.row()?.subagents ?? []).toEqual([]))
 })

@@ -15,20 +15,22 @@ import {
   searchBrowserPages,
   type BrowserPaletteSearchResult,
   type SearchableBrowserPage
-} from '@/lib/browser-palette-search'
+} from '@/lib/browser/palette/browser-palette-search'
 import {
   searchSimulatorTabs,
   type SearchableSimulatorTab,
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
 import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
-import type { TerminalAgent } from '../../../../shared/terminal-agent'
-import {
-  searchWorkspaceTabs,
-  type SearchableWorkspaceTab,
-  type WorkspaceTabContentType,
-  type WorkspaceTabPaletteSearchResult
-} from '@/lib/workspace-tab-palette-search'
+import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
+import type {
+  SearchableWorkspaceTab,
+  WorkspaceTabContentType
+} from '@/lib/workspace/search/tabs/workspace-tab-search-types'
+import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
+import type { Translate } from '@/i18n/use-translate'
 
 export const OPEN_TAB_SEARCH_RESULT_LIMIT = 4
 
@@ -156,13 +158,16 @@ function rank<TEngine extends EngineResult>(
   })
 }
 
-export function searchOpenTabCandidates({
-  workspaceTabs,
-  browserPages,
-  simulatorTabs,
-  query,
-  context: suppliedContext
-}: OpenTabSearchInput): OpenTabSearchResult[] {
+export function searchOpenTabCandidates(
+  {
+    workspaceTabs,
+    browserPages,
+    simulatorTabs,
+    query,
+    context: suppliedContext
+  }: OpenTabSearchInput,
+  t?: Translate
+): OpenTabSearchResult[] {
   const trimmed = query.trim()
   if (!trimmed || isOpenTabSearchQueryTooLarge(query)) {
     return []
@@ -220,7 +225,7 @@ export function searchOpenTabCandidates({
     ),
     ...rank(
       'simulator',
-      searchSimulatorTabs([...simulatorTabs], trimmed, { context, fieldMode: 'omnibox' }),
+      searchSimulatorTabs([...simulatorTabs], trimmed, { context, fieldMode: 'omnibox' }, t),
       (result) => ({
         ...baseResult(result, result.executionHostId ?? LOCAL_EXECUTION_HOST_ID),
         source: 'simulator',
@@ -249,8 +254,8 @@ export function searchOpenTabCandidates({
     .map((ranked) => ranked.result)
 }
 
-export function searchOpenTabs(input: OpenTabSearchInput): OpenTabSearchResult[] {
-  return capOpenTabSearchCandidates(searchOpenTabCandidates(input), input.retainedResultId)
+export function searchOpenTabs(input: OpenTabSearchInput, t?: Translate): OpenTabSearchResult[] {
+  return capOpenTabSearchCandidates(searchOpenTabCandidates(input, t), input.retainedResultId)
 }
 
 export function capOpenTabSearchCandidates(

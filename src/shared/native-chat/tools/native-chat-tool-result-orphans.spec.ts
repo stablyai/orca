@@ -3,13 +3,13 @@ import { foldToolMessages } from './native-chat-tool-fold'
 import { pairToolBlocks } from './native-chat-tool-pairs'
 import { nativeChatToolRunOutcome } from './native-chat-tool-run-outcome'
 import { nativeChatWorkRunMember } from '../native-chat-work-run'
-import { nativeChatMessagesShareTranscriptRow } from '../../native-chat-types'
+import { nativeChatMessagesShareTranscriptRow } from '../native-chat-types'
 import type {
   NativeChatBlock,
   NativeChatMessage,
   NativeChatToolCallBlock,
   NativeChatToolResultBlock
-} from '../../native-chat-types'
+} from '../native-chat-types'
 
 function row(
   id: string,

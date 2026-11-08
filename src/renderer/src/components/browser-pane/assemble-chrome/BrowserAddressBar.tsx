@@ -3,9 +3,9 @@ import { Globe } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser-page-records'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../../shared/browser-url'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
 import { buildBrowserAddressBarSuggestions } from './browser-address-bar-suggestions'
@@ -24,13 +24,7 @@ import BrowserAddressBarSuggestionList from './BrowserAddressBarSuggestionList'
 import { BrowserLoadProgress } from './browser-load-progress'
 import { toDisplayUrl } from '../describe-page/browser-page-url-display'
 import BrowserHistoryDialog from '../history/BrowserHistoryDialog'
-
-function clearTimerRef(timerRef: { current: number | null }): void {
-  if (timerRef.current !== null) {
-    window.clearTimeout(timerRef.current)
-    timerRef.current = null
-  }
-}
+import { clearTimerRef, useClearTimersOnFormUnmount } from './use-browser-address-bar-close-timers'
 
 type BrowserAddressBarProps = {
   /** The page this bar edits; its worktree's other open pages are offered as "Switch to tab". */
@@ -71,6 +65,7 @@ export default function BrowserAddressBar({
   loading = false,
   loadFailed = false
 }: BrowserAddressBarProps): React.ReactElement {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [selectedValueOverride, setSelectedValueOverride] = useState<string | null>(null)
   const prePreviewValueRef = useRef<string | null>(null)
@@ -88,22 +83,9 @@ export default function BrowserAddressBar({
   const openedAtRef = useRef(0)
   const blurCloseTimerRef = useRef<number | null>(null)
   const closingResetTimerRef = useRef<number | null>(null)
+  const setAddressBarFormRef = useClearTimersOnFormUnmount(blurCloseTimerRef, closingResetTimerRef)
   const slotRef = useRef<HTMLDivElement | null>(null)
   const overlay = useBrowserAddressBarOverlay(slotRef, open)
-
-  const clearAddressBarTimers = useCallback((): void => {
-    clearTimerRef(blurCloseTimerRef)
-    clearTimerRef(closingResetTimerRef)
-  }, [])
-
-  const setAddressBarFormRef = useCallback(
-    (node: HTMLFormElement | null) => {
-      if (node === null) {
-        clearAddressBarTimers()
-      }
-    },
-    [clearAddressBarTimers]
-  )
 
   const searchEngine: SearchEngine =
     (browserDefaultSearchEngine as SearchEngine | null) ?? DEFAULT_SEARCH_ENGINE
@@ -377,7 +359,7 @@ export default function BrowserAddressBar({
             <Input
               ref={inputRef}
               value={value}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.browser.pane.browser.address.bar.placeholder',
                 'Search or enter URL'
               )}

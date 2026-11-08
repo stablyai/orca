@@ -1,52 +1,10 @@
 import { createServer, type Server, type Socket } from 'node:net'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+
 import type { ForwardChannelOpenFailure } from './port-forwarding/ssh-port-forward-provider'
-import { checkForwardChannel, probeTcpForwarding } from './ssh-tcp-forwarding-probe'
+import { checkForwardChannel } from './ssh-tcp-forwarding-probe'
+
 import { lastChannelOpenFailure } from './port-forwarding/system-ssh-port-forward-provider'
-
-type OpenCallback = (error: (Error & { reason?: number }) | undefined, channel?: unknown) => void
-
-function connectionAnswering(answer: (callback: OpenCallback) => void) {
-  const forwardOut = vi.fn((_srcHost, _srcPort, _host, _port, callback: OpenCallback) =>
-    answer(callback)
-  )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the probe calls only forwardOut on the client.
-  return { forwardOut, connection: { getClient: () => ({ forwardOut }) as never } }
-}
-
-function openFailure(reason: number): Error & { reason: number } {
-  return Object.assign(new Error('open failed'), { reason })
-}
-
-describe('TCP forwarding probe', () => {
-  it('reads an administrative refusal as forwarding refused', async () => {
-    const { connection } = connectionAnswering((callback) => callback(openFailure(1)))
-    await expect(probeTcpForwarding(connection, 6768)).resolves.toBe('refused')
-  })
-
-  it('reads a connect failure as allowed: sshd tried, nothing listened yet', async () => {
-    const { connection, forwardOut } = connectionAnswering((callback) => callback(openFailure(2)))
-    await expect(probeTcpForwarding(connection, 6768)).resolves.toBe('allowed')
-    expect(forwardOut).toHaveBeenCalledWith('127.0.0.1', 0, '127.0.0.1', 6768, expect.any(Function))
-  })
-
-  it('closes an opened channel and reads it as allowed', async () => {
-    const channel = { close: vi.fn() }
-    const { connection } = connectionAnswering((callback) => callback(undefined, channel))
-    await expect(probeTcpForwarding(connection, 6768)).resolves.toBe('allowed')
-    expect(channel.close).toHaveBeenCalled()
-  })
-
-  it('is unverifiable without an ssh2 client, on a throw, or with no answer', async () => {
-    await expect(probeTcpForwarding({ getClient: () => null }, 6768)).resolves.toBe('unverifiable')
-    const throwing = connectionAnswering(() => {
-      throw new Error('Not connected')
-    })
-    await expect(probeTcpForwarding(throwing.connection, 6768)).resolves.toBe('unverifiable')
-    const silent = connectionAnswering(() => {})
-    await expect(probeTcpForwarding(silent.connection, 6768, 5)).resolves.toBe('unverifiable')
-  })
-})
 
 const servers: Server[] = []
 afterEach(async () => {
@@ -86,14 +44,6 @@ describe('forward channel check (system SSH)', () => {
     await expect(checkForwardChannel(forward)).resolves.toBe('refused')
   })
 
-  it('waits briefly for a refusal logged after the socket dropped', async () => {
-    const forward = await forwardAnswering((socket, log) => {
-      socket.destroy()
-      setTimeout(() => log('channel 1: open failed: administratively prohibited: open failed'), 50)
-    })
-    await expect(checkForwardChannel(forward)).resolves.toBe('refused')
-  })
-
   it('reads a connect failure as allowed: sshd dialled, nothing listened yet', async () => {
     const forward = await forwardAnswering((socket, log) => {
       log('channel 1: open failed: connect failed: Connection refused')
@@ -113,7 +63,9 @@ describe('forward channel check (system SSH)', () => {
     const dropped = await forwardAnswering((socket) => socket.destroy())
     await expect(checkForwardChannel(dropped)).resolves.toBe('unverifiable')
     const silent = await forwardAnswering((socket) => socket.resume())
-    await expect(checkForwardChannel(silent, 50)).resolves.toBe('unverifiable')
+    await expect(checkForwardChannel(silent, { channelTimeoutMs: 50 })).resolves.toBe(
+      'unverifiable'
+    )
     await expect(checkForwardChannel({ entry: dropped.entry })).resolves.toBe('unverifiable')
   })
 
@@ -121,16 +73,34 @@ describe('forward channel check (system SSH)', () => {
   it('reports a listener that never came up as not listening', async () => {
     const closed = await forwardAnswering(() => {})
     await new Promise((resolve) => servers.pop()?.close(resolve))
-    await expect(checkForwardChannel(closed, 300)).resolves.toBe('not-listening')
+    await expect(checkForwardChannel(closed, { listenTimeoutMs: 300 })).resolves.toBe(
+      'not-listening'
+    )
   })
 
-  it('reads the last channel failure OpenSSH logged', () => {
-    expect(lastChannelOpenFailure('Warning: Permanently added host\n')).toBeNull()
-    expect(
-      lastChannelOpenFailure(
-        'channel 1: open failed: connect failed: Connection refused\n' +
-          'channel 2: open failed: administratively prohibited: open failed\n'
-      )
-    ).toBe('administratively-prohibited')
+  // Why: ssh -L binds only after its own login, which a ProxyCommand such as Coder's can stretch well past the channel wait.
+  it('waits out a slow login and reads the answer once the listener comes up', async () => {
+    const forward = await forwardAnswering((socket) => {
+      socket.once('data', () => socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'))
+    })
+    const server = servers.pop()
+    await new Promise((resolve) => server?.close(resolve))
+    const verdict = checkForwardChannel(forward, { channelTimeoutMs: 50, listenTimeoutMs: 5_000 })
+    // ast-grep-ignore: test-no-real-time-wait -- a real socket must fail to dial before the listener comes up.
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    server?.listen(forward.entry.localPort, '127.0.0.1')
+    if (server) {
+      servers.push(server)
+    }
+    await expect(verdict).resolves.toBe('allowed')
+  })
+
+  it('stops waiting for the listener once the forward exits', async () => {
+    const closed = await forwardAnswering(() => {})
+    await new Promise((resolve) => servers.pop()?.close(resolve))
+    const exited = new AbortController()
+    const verdict = checkForwardChannel(closed, { signal: exited.signal })
+    setTimeout(() => exited.abort(), 100)
+    await expect(verdict).resolves.toBe('not-listening')
   })
 })

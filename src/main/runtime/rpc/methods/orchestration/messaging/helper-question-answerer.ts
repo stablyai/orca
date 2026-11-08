@@ -1,6 +1,6 @@
-import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration-compatibility-evidence'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
-import type { MessageRow } from '../../../../orchestration/types'
+import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration/orchestration-compatibility-evidence'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { assertCallerHandleMatchesEvidence, orchestrationCallerIdentity } from '../runs/run-scope'
 

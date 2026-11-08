@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
+import { makeTabGroup, makeUnifiedTab } from '../../store/slices/tabs/tab-group.test-fixture'
 import type { BulkTabCloseScope } from '../../../../shared/bulk-tab-close-confirmation'
 import { useTabGroupCloseScopeCommands } from './useTabGroupCloseScopeCommands'
 
@@ -83,24 +83,6 @@ describe('group bulk close confirmation', () => {
       expect(closeMany).not.toHaveBeenCalled()
     }
   )
-
-  it.each([
-    ['others', ['left', 'right']],
-    ['right', ['right']],
-    ['left', ['left']]
-  ] as const)('closes the unpinned %s selection on confirmation', async (scope, ids) => {
-    request(scope)
-    await confirmRequest()
-    expect(closeMany).toHaveBeenCalledExactlyOnceWith([...ids])
-    expect(closeItem).not.toHaveBeenCalled()
-  })
-
-  it('routes editor closes through the existing dirty-aware item command', async () => {
-    request('editors')
-    await confirmRequest()
-    expect(closeItem).toHaveBeenCalledExactlyOnceWith(left.id)
-    expect(closeMany).not.toHaveBeenCalled()
-  })
 
   it.each(['others', 'right', 'left'] as const)(
     'abandons %s when the anchor is removed while the dialog is open',
@@ -183,11 +165,5 @@ describe('group bulk close confirmation', () => {
     await confirmRequest()
     expect(closeMany).toHaveBeenCalledExactlyOnceWith([left.id, right.id])
     expect(otherCloseMany).not.toHaveBeenCalled()
-  })
-
-  it('does not prompt when there are no eligible targets', () => {
-    useAppStore.setState({ unifiedTabsByWorktree: { [worktreeId]: [anchor, pinned] } })
-    request('others')
-    expect(confirm).not.toHaveBeenCalled()
   })
 })

@@ -1,3 +1,4 @@
+import { RuntimeRpcFailureError, type RuntimeRpcFailure } from './runtime/types'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -30,9 +31,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -41,7 +45,14 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  queueNoFolderAtSelector,
+  worktreeListFixture
+} from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
@@ -155,6 +166,7 @@ describe('orca cli worktree awareness', () => {
       }
     ]
   ] as const)('%s', async (_name, { title, command, flags, expected }) => {
+    queueNoFolderAtSelector(callMock)
     queueFixtures(
       callMock,
       okFixture('req_terminal_create', {
@@ -182,59 +194,27 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock.mock.calls).toEqual([
-      ['terminal.create', { worktree: 'path:/tmp/repo/feature', command, title, ...expected }]
-    ])
-    expect(process.exitCode).toBeUndefined()
-  })
-
-  it('prints terminal.read fallback screen lines in json mode', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_read', {
-        terminal: {
-          handle: 'term_worker',
-          status: 'running',
-          tail: ['Claude Code', 'Checking files', 'Waiting for input'],
-          truncated: false,
-          limited: true,
-          oldestCursor: '0',
-          nextCursor: '3000',
-          latestCursor: '3000',
-          returnedLineCount: 3
-        }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['terminal', 'read', '--terminal', 'term_worker', '--limit', '120', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('terminal.read', {
-      terminal: 'term_worker',
-      limit: 120
+    expect(callMock).toHaveBeenLastCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command,
+      title,
+      ...expected
     })
-    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-    expect(printed.result.terminal.tail).toEqual([
-      'Claude Code',
-      'Checking files',
-      'Waiting for input'
-    ])
+    expect(process.exitCode).toBeUndefined()
   })
 
   it('uses the resolved enclosing worktree for terminal consumers', async () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', { terminals: [], totalCount: 0, truncated: false })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['terminal', 'list', '--worktree', 'active', '--json'], '/tmp/repo/feature/src')
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.list', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'terminal.list', {
       worktree: 'id:repo::/tmp/repo/feature',
       limit: undefined,
       includeVisualLayouts: false
@@ -245,6 +225,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', { terminals: [], totalCount: 0, truncated: false })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -252,7 +233,7 @@ describe('orca cli worktree awareness', () => {
     await main(['terminal', 'list', '--worktree', 'active'], '/tmp/repo/feature/src')
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'terminal.list',
       expect.objectContaining({ includeVisualLayouts: true })
     )
@@ -269,6 +250,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', {
         terminals: [],
         visualLayouts,
@@ -284,7 +266,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'terminal.list',
       expect.objectContaining({ includeVisualLayouts: true })
     )
@@ -292,6 +274,53 @@ describe('orca cli worktree awareness', () => {
       result: { visualLayouts }
     })
   })
+
+  it.each(
+    [[], ['--pairing-code', 'remote-runtime']].flatMap((remote) =>
+      [false, true].map((json) => ({ remote, json }))
+    )
+  )(
+    'prints the host failure through terminal create ($remote, json=$json)',
+    async ({ remote, json }) => {
+      const failure = {
+        id: 'start',
+        ok: false,
+        error: {
+          code: 'agent_session_exited_during_start',
+          message:
+            'Git Bash reported its limit of 128 open terminals on this PC while starting the terminal. Close some Git Bash terminals and try again.'
+        },
+        _meta: { runtimeId: 'host' }
+      } satisfies RuntimeRpcFailure
+      queueNoFolderAtSelector(callMock)
+      callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(failure))
+      const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const stderr = vi.spyOn(console, 'error').mockImplementation(() => {})
+      await main(
+        [
+          'terminal',
+          'create',
+          '--worktree',
+          'path:/tmp/host/workspace',
+          ...remote,
+          ...(json ? ['--json'] : [])
+        ],
+        '/tmp/client'
+      )
+      expect(callMock).toHaveBeenCalledWith(
+        'terminal.create',
+        expect.objectContaining({ worktree: 'path:/tmp/host/workspace' })
+      )
+      if (json) {
+        expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toEqual(failure)
+        expect(stderr).not.toHaveBeenCalled()
+      } else {
+        expect(stderr).toHaveBeenCalledExactlyOnceWith(failure.error.message)
+        expect(log).not.toHaveBeenCalled()
+      }
+      expect(process.exitCode).toBe(1)
+    }
+  )
 
   it('rejects implicit remote terminal create instead of resolving from client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})

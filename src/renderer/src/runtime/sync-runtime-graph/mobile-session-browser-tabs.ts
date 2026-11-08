@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-types'
 import type { Tab } from '../../../../shared/tab-types'
-import { editorRowHost } from '../../../../shared/session-tab-file-host'
+import { editorRowHost } from '../../../../shared/workspace-session/session-tab-file-host'
 import type { MobileSessionWorktreeInputs } from './types'
 import { isUnifiedTabActiveInActiveGroup } from './mobile-session-surfaces'
 

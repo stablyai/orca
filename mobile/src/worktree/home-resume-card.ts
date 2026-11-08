@@ -1,5 +1,5 @@
 import { isSyntheticWorkspaceRoute } from '../session/synthetic-workspace-route'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from './home-worktree-info'
 
 // Reserve Resume’s slot from persisted history before connection so Tasks cannot move under the user’s thumb.
@@ -59,13 +59,19 @@ function hostHistoryCard(
 
 // Only a proven catalog can establish deletion; cold/loading snapshots leave navigation to the session’s later check.
 export function isResumeTargetConfirmedMissing(
-  card: HomeResumeCard,
-  provenWorktrees: readonly { worktreeId: string }[] | null
+  card: Readonly<{ worktree: Readonly<{ worktreeId: string }> }>,
+  provenWorktrees: readonly unknown[] | null
 ): boolean {
   if (!provenWorktrees || isSyntheticWorkspaceRoute(card.worktree.worktreeId)) {
     return false
   }
-  return !provenWorktrees.some((worktree) => worktree.worktreeId === card.worktree.worktreeId)
+  return !provenWorktrees.some(
+    (worktree) =>
+      typeof worktree === 'object' &&
+      worktree !== null &&
+      'worktreeId' in worktree &&
+      worktree.worktreeId === card.worktree.worktreeId
+  )
 }
 
 export function selectHomeResumeCard(input: HomeResumeCardInput): HomeResumeCard | null {

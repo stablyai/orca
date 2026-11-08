@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { durableWriteTempPath, writeFileDurableSync } from '../../durable-file-write'
+import { durableWriteTempPath, writeFileDurableSync } from '../../filesystem/durable-file-write'
 import {
   MAX_ORCAD_MIGRATION_TERMINAL_RESTORE_HINTS,
   isOrcadMigrationTerminalRestoreHintCwd,

@@ -4,12 +4,12 @@ import { it, expect, afterEach, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { DetectedWorktree } from '../../../shared/worktree/types'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { useQuickOpenInteraction } from './use-quick-open-interaction'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwnerFromState
-} from './right-sidebar/file-explorer-operation-owner'
+} from './right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
 const mocks = vi.hoisted(() => ({ stat: vi.fn(), open: vi.fn(() => 'owner-file') }))
 vi.mock('@/lib/user-opened-local-path', () => ({ statUserOpenedPath: mocks.stat }))
 vi.mock('@/store/slices/editor/focus/editor-focus-reveal', () => ({

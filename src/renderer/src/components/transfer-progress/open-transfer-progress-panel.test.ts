@@ -6,7 +6,9 @@ import {
 import { endTransferSession, getTransferSession } from './transfer-session-state'
 
 vi.mock('sonner', () => ({ toast: { custom: vi.fn(() => 'toast-1'), dismiss: vi.fn() } }))
-vi.mock('@/lib/browser-uuid', () => ({ createBrowserUuid: () => 'panel-1' }))
+vi.mock('../../../../shared/non-secure-context-uuid', () => ({
+  createNonSecureContextUuid: () => 'panel-1'
+}))
 
 const rows = [
   { transferId: 'a', name: 'a.bin', sentBytes: 0, totalBytes: 10, status: 'active' as const }

@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { describeSharedDropFailureReason } from '@/lib/drop-skip-reason-copy'
-import type { ImportItemResult } from '../../../../shared/filesystem-import-result-types'
+import type { ImportItemResult } from '../../../../shared/file-import/filesystem-import-result'
 
 export function reportEditorDropUploadRejections(results: readonly ImportItemResult[]): void {
   const rejected = results

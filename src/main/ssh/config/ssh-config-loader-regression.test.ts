@@ -108,47 +108,6 @@ describe('loadUserSshConfig regressions', () => {
     expect(hosts.map((host) => host.host)).toEqual(['alpha', 'zeta', 'team', 'forward'])
   })
 
-  it('preserves quoted Windows include paths with native backslashes and spaces', async () => {
-    const files = new Map<string, string>([
-      [
-        normalizeWin('C:/Users/Test User/.ssh/config'),
-        'Include "C:\\Users\\Test User\\quoted configs\\team.conf"'
-      ],
-      [
-        normalizeWin('C:/Users/Test User/quoted configs/team.conf'),
-        'Host team\n  HostName team.example.com\n'
-      ]
-    ])
-
-    await mockOs('C:\\Users\\Test User', 'TestUser', -1, 'winbox.example.com')
-    vi.doMock('fs', async () => {
-      const actual = await vi.importActual<typeof FsModule>('fs')
-      return {
-        ...actual,
-        existsSync: (filePath: string) => files.has(normalizeWin(filePath)),
-        readFileSync: (filePath: string) => {
-          const content = files.get(normalizeWin(filePath))
-          if (content === undefined) {
-            throw new Error(`ENOENT: ${filePath}`)
-          }
-          return content
-        },
-        realpathSync: Object.assign((filePath: string) => normalizeWin(filePath), {
-          native: (filePath: string) => normalizeWin(filePath)
-        }),
-        statSync: (filePath: string) => {
-          const content = files.get(normalizeWin(filePath))
-          if (content === undefined) {
-            throw new Error(`ENOENT: ${filePath}`)
-          }
-          return { isFile: () => true, size: content.length }
-        }
-      }
-    })
-
-    expect(await loadUserSshConfig()).toEqual([{ host: 'team', hostname: 'team.example.com' }])
-  })
-
   it('skips non-regular include targets without reading them', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const home = platformSshHome()

@@ -1,8 +1,9 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { captureWorkerOutputArchive } from '../../../../orchestration/worker-output-archive'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { captureWorkerOutputArchive } from '../../../../orchestration/workers/archives/worker-output-archive'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
 import { orchestrationTimestampToMs } from './worker-output'
+import { captureWorkerResumeSession } from './worker-resume-session-capture'
 import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
 
 // Well inside the 30 s remote stop RPC budget.
@@ -20,6 +21,10 @@ export async function archiveWorkerOutputBeforeStop(args: {
   // Stopping matters more than the copy; on failure or timeout, release reports the archive unavailable.
   try {
     const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
+    const attachedAtMs = orchestrationTimestampToMs(args.attachedAt)
+    if (resource) {
+      captureWorkerResumeSession(args.runtime, db, resource, attachedAtMs)
+    }
     if (
       !resource ||
       resource.ownership_state !== 'owned' ||
@@ -32,7 +37,7 @@ export async function archiveWorkerOutputBeforeStop(args: {
         runtime: args.runtime,
         dispatchId,
         terminalHandle: args.terminalHandle,
-        attachedAtMs: orchestrationTimestampToMs(args.attachedAt),
+        attachedAtMs,
         structuredWorker: resolveStructuredWorkerForDispatch(db, dispatchId)
       }),
       STOP_ARCHIVE_TIMEOUT_MS,

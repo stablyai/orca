@@ -3,7 +3,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { writeFileDurable, writeFileDurableIfCurrent } from '../durable-file-write'
+import { writeFileDurable, writeFileDurableIfCurrent } from '../filesystem/durable-file-write'
 
 const rename = vi.hoisted(() => vi.fn())
 vi.mock('node:fs/promises', async (importOriginal) => {

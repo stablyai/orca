@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { usageLimitResetsAt } from '../../../shared/agent-session-usage-limit'
-import { readOpenCodeDatabase } from '../../ai-vault/session-scanner-opencode-sqlite-open'
+import { usageLimitResetsAt } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import { readOpenCodeDatabase } from '../../ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
 import { columnExists, tableExists } from '../../opencode-usage/schema-helpers'
 import {
   openCodePromptFailureSchema,

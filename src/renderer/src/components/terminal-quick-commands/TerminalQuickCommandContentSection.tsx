@@ -1,30 +1,46 @@
-import { useId, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import {
+  useCallback,
+  useId,
+  useMemo,
+  type Dispatch,
+  type MutableRefObject,
+  type SetStateAction
+} from 'react'
+import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import {
   formatKilobytes,
   type TerminalQuickCommandBodySize
-} from '../../../../shared/terminal-quick-command-prompt-limit'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from '@/components/ui/select'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
 
 const QUICK_COMMAND_AGENT_OPTIONS = getTerminalQuickCommandAgentOptions()
+const QUICK_COMMAND_PICKER_MODEL: NewTabAgentMenuModel = {
+  state: 'settled',
+  rows: QUICK_COMMAND_AGENT_OPTIONS.map(({ id }) => ({ agent: id, kind: 'cli' })),
+  detection: {
+    detectedIds: [],
+    isLoading: false,
+    isRefreshing: false,
+    detectionFailed: false,
+    needsServerUpdate: false,
+    refresh: async () => []
+  }
+}
 // Why: long pastes are the common way to hit the cap, so the count appears before Save disables.
 const BODY_LENGTH_COUNTER_THRESHOLD = 0.8
 
@@ -39,31 +55,35 @@ type TerminalQuickCommandContentSectionProps = {
   toggleAppendEnter: () => void
 }
 
-function getBodyLengthLabel(bodySize: TerminalQuickCommandBodySize): string {
+function getBodyLengthLabel(
+  bodySize: TerminalQuickCommandBodySize,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
   if (bodySize.unit === 'bytes') {
-    return translate(
+    return t(
       'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.size_count',
       '{{value0}} / {{value1}}',
       { value0: formatKilobytes(bodySize.used), value1: formatKilobytes(bodySize.max) }
     )
   }
-  return translate(
+  return t(
     'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.length_count',
     '{{value0}} / {{value1}} characters',
     {
-      value0: bodySize.used.toLocaleString(getIntlLocale()),
-      value1: bodySize.max.toLocaleString(getIntlLocale())
+      value0: bodySize.used.toLocaleString(intlLocale),
+      value1: bodySize.max.toLocaleString(intlLocale)
     }
   )
 }
 
-function getBodyRefusalLabel(belowCurrentPromptCap: boolean): string {
+function getBodyRefusalLabel(belowCurrentPromptCap: boolean, t: Translate = translate): string {
   return belowCurrentPromptCap
-    ? translate(
+    ? t(
         'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.prompt_over_host_limit',
         'Too long for this host. Update Orca on the host to save longer prompts.'
       )
-    : translate(
+    : t(
         'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.length_over_limit',
         'Too long to save.'
       )
@@ -79,6 +99,40 @@ export function TerminalQuickCommandContentSection({
   setDraft,
   toggleAppendEnter
 }: TerminalQuickCommandContentSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
+  useUiLanguageRevision()
+  const unsupportedLabel = t(
+    'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.026cfb232a',
+    'Does not support prompt commands'
+  )
+  const entries = useMemo<AgentPickerEntry[]>(
+    () =>
+      QUICK_COMMAND_AGENT_OPTIONS.map(({ id, label }) => {
+        const supported = supportsTerminalAgentQuickCommand(id)
+        return {
+          agent: id,
+          label,
+          description: supported ? undefined : unsupportedLabel,
+          rows: [{ agent: id, kind: 'cli' }],
+          surfaces: supported ? ['terminal'] : [],
+          defaultSurface: 'terminal',
+          terminal: {},
+          structured: {},
+          catalog: { origin: 'unknown' }
+        }
+      }),
+    [unsupportedLabel]
+  )
+  const selectAgent = useCallback(
+    (nextAgent: TuiAgent) => {
+      draftMemoryRef.current = { ...draftMemoryRef.current, agent: nextAgent }
+      setDraft((current) =>
+        isTerminalAgentQuickCommand(current) ? { ...current, agent: nextAgent } : current
+      )
+    },
+    [draftMemoryRef, setDraft]
+  )
   const bodyTooLong = bodySize.used > bodySize.max
   const showBodyLength = bodySize.used >= bodySize.max * BODY_LENGTH_COUNTER_THRESHOLD
   const lengthId = useId()
@@ -89,11 +143,8 @@ export function TerminalQuickCommandContentSection({
   const commandText = isTerminalAgentQuickCommand(draft) ? draft.prompt : draft.command
   // Why: the frame header is a plain span, so the textarea carries the accessible name itself.
   const commandFieldLabel = isAgentAction
-    ? translate(
-        'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.dc921c17ee',
-        'Prompt'
-      )
-    : translate(
+    ? t('auto.components.terminal.quick.commands.TerminalQuickCommandDialog.dc921c17ee', 'Prompt')
+    : t(
         'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.command_label',
         'Command'
       )
@@ -119,63 +170,23 @@ export function TerminalQuickCommandContentSection({
             )}
           >
             <Label>
-              {translate(
+              {t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.0adba8fa0c',
                 'Agent'
               )}
             </Label>
-            <Select
-              value={selectedAgent}
+            <AgentLaunchPicker
+              model={QUICK_COMMAND_PICKER_MODEL}
+              entries={entries}
+              agent={selectedAgent}
+              emptyLabel={t(
+                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.346d409ab2',
+                'Choose agent'
+              )}
+              setupDisabled
               disabled={disabled || !isAgentAction}
-              onValueChange={(agent) => {
-                const nextAgent = agent as TuiAgent
-                draftMemoryRef.current = {
-                  ...draftMemoryRef.current,
-                  agent: nextAgent
-                }
-                setDraft((current) =>
-                  isTerminalAgentQuickCommand(current) ? { ...current, agent: nextAgent } : current
-                )
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={translate(
-                    'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.346d409ab2',
-                    'Choose agent'
-                  )}
-                />
-              </SelectTrigger>
-              <SelectContent
-                position="popper"
-                side="bottom"
-                align="start"
-                sideOffset={4}
-                className="max-h-[min(20rem,var(--radix-select-content-available-height))] w-[--radix-select-trigger-width]"
-              >
-                {QUICK_COMMAND_AGENT_OPTIONS.map((entry) => {
-                  const supported = supportsTerminalAgentQuickCommand(entry.id)
-                  return (
-                    <SelectItem key={entry.id} value={entry.id} disabled={disabled || !supported}>
-                      <span className="flex min-w-0 items-center gap-2">
-                        <AgentIcon agent={entry.id} size={16} />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="truncate">{entry.label}</span>
-                          {!supported ? (
-                            <span className="truncate text-xs text-muted-foreground">
-                              {translate(
-                                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.026cfb232a',
-                                'Does not support prompt commands'
-                              )}
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-                    </SelectItem>
-                  )
-                })}
-              </SelectContent>
-            </Select>
+              onPick={selectAgent}
+            />
           </div>
         </div>
       </div>
@@ -194,7 +205,7 @@ export function TerminalQuickCommandContentSection({
           </span>
           {isAgentAction ? (
             <span className="shrink-0 text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_toolbar_hint',
                 'Supports /goal, skills, paths'
               )}
@@ -226,11 +237,11 @@ export function TerminalQuickCommandContentSection({
           }}
           placeholder={
             isAgentAction
-              ? translate(
+              ? t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.577a342c7d',
                   'Ask the agent to investigate this workspace'
                 )
-              : translate(
+              : t(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.79af0c0841',
                   'npm run dev'
                 )
@@ -252,7 +263,7 @@ export function TerminalQuickCommandContentSection({
             />
           ) : (
             <span className="text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_footer_hint',
                 'Multi-line prompts are fine — keep them focused.'
               )}
@@ -263,7 +274,7 @@ export function TerminalQuickCommandContentSection({
               {/* Why static text in the alert: a live count would re-announce on every keystroke. */}
               {bodyTooLong ? (
                 <span id={refusalId} role="alert" className="text-destructive">
-                  {getBodyRefusalLabel(bodySize.olderHostCap)}
+                  {getBodyRefusalLabel(bodySize.olderHostCap, t)}
                 </span>
               ) : null}
               <span
@@ -273,12 +284,12 @@ export function TerminalQuickCommandContentSection({
                   bodyTooLong ? 'text-destructive' : 'text-muted-foreground'
                 )}
               >
-                {getBodyLengthLabel(bodySize)}
+                {getBodyLengthLabel(bodySize, t, intlLocale)}
               </span>
             </span>
           ) : (
             <span className="shrink-0 text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.resize_hint',
                 'Drag corner to resize'
               )}

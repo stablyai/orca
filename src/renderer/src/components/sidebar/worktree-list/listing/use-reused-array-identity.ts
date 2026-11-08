@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { reuseArrayIfEqual } from '../../worktree-agent-row-selectors'
+import { reuseArrayIfEqual } from '../../workspace-card/activity/worktree-agent-row-selectors'
 
 // Reuse equal arrays for downstream memos; elements must be replaced immutably, never mutated in place.
 export function useReusedArrayIdentity<T>(next: T[]): T[] {

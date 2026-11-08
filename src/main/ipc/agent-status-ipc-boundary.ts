@@ -1,10 +1,10 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   mintFleetAgentStatusEvidence,
   type FleetAgentStatusEvidence,
   type FleetEvidenceBinding
-} from '../../shared/orchestration-fleet-agent-status-evidence'
-import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+} from '../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
+import { isValidTerminalTabId } from '../../shared/workspace-layout/terminal-tab-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 export type AgentStatusRuntimeEnrichment = Pick<

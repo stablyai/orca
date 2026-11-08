@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { toast } from 'sonner'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   openWorktreeScopedToast,
   type ToastId,

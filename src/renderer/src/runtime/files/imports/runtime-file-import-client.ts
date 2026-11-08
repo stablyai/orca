@@ -1,0 +1,268 @@
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { joinPath } from '@/lib/path'
+import type { ImportItemResult } from '../../../../../shared/file-import/filesystem-import-result'
+import { deconflictCopyName } from '../../../../../shared/import-copy-name'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
+import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
+import { runtimePathExists } from '../metadata/runtime-file-metadata-client'
+import {
+  assertRuntimeFileMutationCapability,
+  callRuntimeFileImportMutation,
+  createRuntimeImportSessionGuard,
+  type RuntimeFileImportSession
+} from '../mutations/runtime-file-mutation-rpc'
+import {
+  getRemoteFileArgs,
+  joinRuntimeRelativePath,
+  withSshMutationExpectation,
+  localAccess
+} from '../runtime-file-routing'
+import {
+  ensureRuntimeDirectory,
+  ensureRuntimeDropStagingIgnored,
+  uploadRuntimeFileWithoutClobber
+} from './runtime-file-upload-client'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import type { LocalFileAccess } from '../../../../../shared/file-access/local-file-access'
+import {
+  createRuntimeUploadProgressTracker,
+  sumSourceUploadBytes,
+  type RuntimeImportProgressHandlers,
+  type RuntimeImportProgressRow,
+  type RuntimeUploadProgressTracker,
+  stopIfCancelled,
+  wasStoppedByCancel
+} from './runtime-upload-progress-tracker'
+
+export async function importExternalPathsToRuntime(
+  context: RuntimeFileOperationArgs,
+  sourcePaths: string[],
+  destinationDir: string,
+  options?: {
+    ensureDestinationDir?: boolean
+    assertCurrent?: () => void
+    /** Local imports only; remote destinations stay root-relative. */
+    access?: LocalFileAccess
+    /** Remote `.orca/drops` uploads: name an extensionless image by its bytes. */
+    nameExtensionlessImages?: boolean
+    progress?: RuntimeImportProgressHandlers
+  }
+): Promise<{ results: ImportItemResult[] }> {
+  const target = context.target
+  if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
+    return window.api.fs.importExternalPaths(
+      withSshMutationExpectation(context, {
+        sourcePaths,
+        destDir: destinationDir,
+        connectionId: context.connectionId,
+        ensureDir: options?.ensureDestinationDir,
+        ...localAccess(context.connectionId, options?.access)
+      })
+    )
+  }
+
+  const destinationArgs = getRemoteFileArgs(context, destinationDir)
+  if (!destinationArgs) {
+    throw new Error('Destination is outside the active runtime worktree')
+  }
+
+  const expectedEnvironmentPairingRevision = captureRuntimeEnvironmentRequestRevision(
+    target.environmentId
+  )
+  const expectedEnvironmentConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(
+    target.environmentId
+  )
+  const expectedEnvironmentRuntimeId = await assertRuntimeFileMutationCapability(
+    target,
+    expectedEnvironmentPairingRevision
+  )
+  const assertImportSessionCurrent = createRuntimeImportSessionGuard(
+    target.environmentId,
+    expectedEnvironmentPairingRevision,
+    expectedEnvironmentConnectionGeneration,
+    options?.assertCurrent
+  )
+  const importSession: RuntimeFileImportSession = {
+    target,
+    expectedEnvironmentPairingRevision,
+    expectedEnvironmentConnectionGeneration,
+    expectedEnvironmentRuntimeId,
+    assertCurrent: assertImportSessionCurrent
+  }
+  importSession.assertCurrent()
+  const staged = await window.api.fs.stageExternalPathsForRuntimeUpload({
+    sourcePaths,
+    nameExtensionlessImages: options?.nameExtensionlessImages
+  })
+  importSession.assertCurrent()
+  const handlers = options?.progress
+  // One id per dropped source: it is both the progress key and the cancel handle,
+  // so cancelling a row stops that source and leaves the rest of the drop running.
+  // Why: keyed by position, not path — the same path dropped twice stages twice
+  // and each copy needs its own bar and cancel.
+  const uploadIdsBySourceIndex = new Map<number, string>()
+  const trackers = new Map<string, RuntimeUploadProgressTracker>()
+  if (handlers) {
+    const rows: RuntimeImportProgressRow[] = []
+    for (const [sourceIndex, source] of staged.sources.entries()) {
+      if (source.status !== 'staged') {
+        continue
+      }
+      const rowUploadId = createBrowserUuid()
+      uploadIdsBySourceIndex.set(sourceIndex, rowUploadId)
+      const totalBytes = sumSourceUploadBytes(source)
+      trackers.set(
+        rowUploadId,
+        createRuntimeUploadProgressTracker(totalBytes, ({ sentBytes }) =>
+          handlers.onRowProgress(rowUploadId, sentBytes)
+        )
+      )
+      rows.push({
+        uploadId: rowUploadId,
+        name: source.name,
+        totalBytes,
+        sourcePath: source.sourcePath,
+        kind: source.kind
+      })
+    }
+    handlers.onStart(rows)
+  }
+  const unsubscribeProgress = handlers
+    ? window.api.fs.onUploadProgress((event) => {
+        // Why: a concurrent drop in another pane shares this channel.
+        trackers.get(event.uploadId)?.reportFileProgress(event.sentBytes, event.fileSequence)
+      })
+    : null
+  const results: ImportItemResult[] = []
+  const reservedNames = new Set<string>()
+  let nextFileSequence = 0
+
+  try {
+    await ensureRuntimeDirectory(context, destinationDir, importSession)
+    await ensureRuntimeDropStagingIgnored(context, destinationDir, importSession)
+    // The ignore step swallows a stale session; re-check before results that never reach the host.
+    importSession.assertCurrent()
+
+    for (const [sourceIndex, source] of staged.sources.entries()) {
+      if (source.status !== 'staged') {
+        results.push(source)
+        continue
+      }
+      let createdDirectoryImportRoot: string | null = null
+      const sourceUploadId = uploadIdsBySourceIndex.get(sourceIndex)
+      try {
+        const finalName = await deconflictCopyName(source.name, async (n) => {
+          importSession.assertCurrent()
+          return (
+            (await runtimePathExists(
+              context,
+              joinPath(destinationDir, n),
+              importSession.expectedEnvironmentPairingRevision
+            )) || reservedNames.has(n)
+          )
+        })
+        const destPath = joinPath(destinationDir, finalName)
+        const destRelativePath = joinRuntimeRelativePath(destinationArgs.relativePath, finalName)
+        for (const entry of source.entries) {
+          const entryRelativePath = joinRuntimeRelativePath(destRelativePath, entry.relativePath)
+          if (entry.kind === 'directory') {
+            // Why: only file streams reach main's cancel registry, so directories check here:
+            // before a create, so nothing new appears after a cancel, and after it, for one
+            // cancelled mid-request.
+            stopIfCancelled(handlers, sourceUploadId)
+            await callRuntimeFileImportMutation(
+              importSession,
+              'files.createDirNoClobber',
+              withSshMutationExpectation(context, {
+                worktree: toRuntimeWorktreeSelector(context.worktreeId),
+                relativePath: entryRelativePath
+              }),
+              15_000
+            )
+            if (source.kind === 'directory' && entry.relativePath === '') {
+              createdDirectoryImportRoot = entryRelativePath
+            }
+            stopIfCancelled(handlers, sourceUploadId)
+            continue
+          }
+          const fileSequence = sourceUploadId ? nextFileSequence++ : undefined
+          if (sourceUploadId && fileSequence !== undefined) {
+            trackers.get(sourceUploadId)?.beginFile(fileSequence)
+          }
+          await uploadRuntimeFileWithoutClobber(
+            importSession,
+            context.worktreeId,
+            entryRelativePath,
+            {
+              sourceRootPath: source.sourcePath,
+              entryRelativePath: entry.relativePath,
+              expected: {
+                byteLength: entry.byteLength,
+                inode: entry.inode,
+                deviceId: entry.deviceId,
+                modifiedAtMs: entry.modifiedAtMs
+              }
+            },
+            context.expectedSshConnectionGeneration,
+            context.expectedSshTargetId,
+            context.expectedExecutionHostId ??
+              (context.expectedSshTargetId
+                ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
+                : 'local'),
+            sourceUploadId,
+            fileSequence
+          )
+          if (sourceUploadId) {
+            trackers.get(sourceUploadId)?.completeFile(entry.byteLength)
+          }
+        }
+        reservedNames.add(finalName)
+        results.push({
+          sourcePath: source.sourcePath,
+          status: 'imported',
+          destPath,
+          kind: source.kind,
+          renamed: finalName !== source.name
+        })
+        if (sourceUploadId) {
+          handlers?.onRowSettled(sourceUploadId, 'done')
+        }
+      } catch (error) {
+        if (createdDirectoryImportRoot) {
+          // Match local directory rollback: remove the no-clobber root after partial nested runtime upload failure.
+          await callRuntimeFileImportMutation(
+            importSession,
+            'files.delete',
+            withSshMutationExpectation(context, {
+              worktree: toRuntimeWorktreeSelector(context.worktreeId),
+              relativePath: createdDirectoryImportRoot,
+              recursive: true
+            }),
+            15_000
+          ).catch(() => {})
+        }
+        const reason = error instanceof Error ? error.message : String(error)
+        // Why: per source, since a path dropped twice can be cancelled once.
+        const cancelled = wasStoppedByCancel(handlers, sourceUploadId, reason)
+        results.push({
+          sourcePath: source.sourcePath,
+          status: 'failed',
+          reason,
+          ...(cancelled ? { cancelled: true } : {})
+        })
+        if (sourceUploadId) {
+          handlers?.onRowSettled(sourceUploadId, cancelled ? 'cancelled' : 'failed')
+        }
+      }
+    }
+
+    return { results }
+  } finally {
+    unsubscribeProgress?.()
+    for (const releasedId of uploadIdsBySourceIndex.values()) {
+      void window.api.fs.releaseRuntimeUpload({ uploadId: releasedId }).catch(() => {})
+    }
+    handlers?.onFinish()
+  }
+}

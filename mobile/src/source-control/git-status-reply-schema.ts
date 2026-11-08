@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
 // Require only unguarded consumer fields; unread host metadata must not become a compatibility gate.
@@ -44,7 +44,7 @@ const gitStatusEntrySchema = z.looseObject({
   removed: z.number().optional()
 })
 
-const gitUpstreamStatusSchema = z.looseObject({
+export const gitUpstreamStatusSchema = z.looseObject({
   hasUpstream: z.boolean(),
   ahead: z.number(),
   behind: z.number(),

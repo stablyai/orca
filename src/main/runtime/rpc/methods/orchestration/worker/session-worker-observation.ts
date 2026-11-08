@@ -4,13 +4,13 @@ import {
   chatAssigneeSessionId,
   observeChatAssignee,
   type ChatAssigneeObservation
-} from '../../../../orchestration/chat-assignee'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+} from '../../../../orchestration/workers/lifecycle/chat-assignee'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   holdStructuredWorker,
   observeStructuredSession
-} from '../../../../structured-worker-authority'
-import { resolveStructuredWorkerForDispatch } from '../../orchestration-structured-worker-lifecycle'
+} from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
 
 export type SessionWorkerObservation = {
   terminal: null

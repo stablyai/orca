@@ -1,4 +1,4 @@
-import type { RuntimeImportProgressHandlers } from '@/runtime/runtime-upload-progress-tracker'
+import type { RuntimeImportProgressHandlers } from '@/runtime/files/imports/runtime-upload-progress-tracker'
 import {
   openTransferProgressPanel,
   type TransferPanelScope,

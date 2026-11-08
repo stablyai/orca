@@ -5,11 +5,11 @@ import {
   nativeChatUserMessageFolds
 } from '../../../../../src/shared/native-chat/transcript/native-chat-user-message-fold'
 import { styles as markdownStyles } from '../../../components/mobile-markdown-styles'
-import { colors, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { CHAT_PROSE_SCALE } from './mobile-native-chat-message-styles'
-import type { useMobileNativeChatFullMessage } from '../../MobileNativeChatFullContent'
+import type { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 
 const FOLDED_HEIGHT =
@@ -53,7 +53,7 @@ export function MobileNativeChatUserMessageFold({
       )}
       {(!longText || height !== null) && (folds || recovery) ? (
         <Pressable
-          style={styles.toggle}
+          style={({ pressed }) => [styles.toggle, pressed && pressedStyle]}
           onPress={() => {
             onToggle()
             if (!open && recovery && recovery.load !== 'loading') {

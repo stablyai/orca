@@ -1,6 +1,6 @@
 // Readiness and instance-lock records must agree before the slot's own build requests a stop.
 import { randomUUID } from 'node:crypto'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { selectOrcadSlotRuntimeCommand } from '../install/orcad-remote-runtime'
 import {
   parseOrcadReadinessWaitOutput,

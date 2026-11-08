@@ -46,8 +46,9 @@ test('a Claude chat that Claude refuses to start as root names the reason', asyn
     const { page, environmentId } = await launchManagedWorkspace(fixture)
     await page.evaluate(async () => {
       await window.__store?.getState().updateSettings({
-        experimentalNativeChat: true,
-        defaultTuiAgent: 'claude'
+        nativeChatProviders: { claude: true, codex: true },
+        defaultTuiAgent: 'claude',
+        claudeCodeThemeSyncOffer: 'settled'
       })
     })
     await page.getByRole('button', { name: 'New tab', exact: true }).first().click()

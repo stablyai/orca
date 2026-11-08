@@ -7,35 +7,25 @@ export const listStyles = themedStyleSheet(() => ({
   listContent: {
     paddingHorizontal: spacing.lg
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
+  // SectionHeader brings its own row padding, so it reaches past the list's.
+  sectionHeaderBleed: {
+    marginHorizontal: -spacing.lg
   },
-  sectionTitle: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase'
-  },
-  sectionCount: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
+  sectionAction: {
+    color: colors.textPrimary,
+    fontSize: 13,
     fontWeight: '600'
   },
-  branchCompareBlock: {
-    paddingBottom: spacing.sm
+  sectionActions: {
+    flexDirection: 'row',
+    gap: spacing.lg
   },
-  branchSectionTitleBlock: {
-    flex: 1,
-    minWidth: 0
+  sectionActionPressed: {
+    opacity: 0.6
   },
-  branchSectionSubtitle: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: 2
+  sectionMeta: {
+    color: colors.textSecondary,
+    fontSize: 13
   },
   branchStateRow: {
     minHeight: 44,
@@ -52,27 +42,27 @@ export const listStyles = themedStyleSheet(() => ({
     fontSize: typography.metaSize,
     lineHeight: 18
   },
+  // Opaque so a left swipe uncovers Discard only as the row slides.
   fileRow: {
     minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
+    backgroundColor: colors.bgBase,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.borderSubtle
   },
   fileRowPressed: {
     backgroundColor: colors.bgPanel
   },
-  fileRowDisabled: {
-    opacity: 0.78
-  },
   fileRowUnavailable: {
     opacity: 0.72
   },
+  // Leading-aligned so the status letter starts on the section label's edge.
   statusBadge: {
     width: 24,
-    alignItems: 'center'
+    alignItems: 'flex-start'
   },
   statusBadgeText: {
     fontFamily: typography.monoFamily,
@@ -83,22 +73,18 @@ export const listStyles = themedStyleSheet(() => ({
     flex: 1,
     minWidth: 0
   },
-  filePath: {
+  fileName: {
     color: colors.textPrimary,
     fontSize: typography.bodySize
   },
-  filePathDisabled: {
-    color: colors.textSecondary
+  fileNameGone: {
+    color: colors.textSecondary,
+    textDecorationLine: 'line-through'
   },
   fileMeta: {
     color: colors.textMuted,
     fontSize: typography.metaSize,
     marginTop: 2
-  },
-  rowActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
   },
   iconButton: {
     width: 32,
@@ -106,6 +92,23 @@ export const listStyles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center'
+  },
+  // Behind the row's right end; the row slides left to uncover it.
+  discardAction: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    width: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    backgroundColor: colors.statusRed
+  },
+  discardActionText: {
+    color: colors.onStatusRed,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
   },
   conflictActions: {
     flexDirection: 'row',
@@ -137,8 +140,9 @@ export const listStyles = themedStyleSheet(() => ({
     left: 0,
     right: 0,
     gap: spacing.xs,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+    paddingBottom: spacing.lg,
     backgroundColor: colors.bgPanel,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle

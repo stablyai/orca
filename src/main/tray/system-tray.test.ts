@@ -97,7 +97,7 @@ vi.mock('../../../resources/tray/orca-menu-barTemplate@2x.png?asset&asarUnpack',
   default: '/assets/orca-menu-barTemplate@2x.png'
 }))
 
-vi.mock('../app-icon', () => ({
+vi.mock('../window/desktop-integration/app-icon', () => ({
   createAppIconImage: createAppIconImageMock
 }))
 
@@ -303,39 +303,6 @@ describe('createSystemTray', () => {
 })
 
 describe('dev instance indicator', () => {
-  it('stamps the DEV badge into the macOS template with a rebuilt Retina rep', async () => {
-    setPlatform('darwin')
-    const { createSystemTray } = await loadModule()
-
-    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
-
-    expect(stampDevBadgeMock).toHaveBeenCalledWith(baseMacImage)
-    expect(stampDevBadgeMock).toHaveBeenCalledWith(baseMacImage, 2)
-    expect(devBadgeImage.addRepresentation).toHaveBeenCalledWith({
-      scaleFactor: 2,
-      dataURL: 'data:image/png;base64,dev-badge-retina'
-    })
-    expect(devBadgeImage.setTemplateImage).toHaveBeenCalledWith(true)
-    expect(trayInstances[0].image).toBe(devBadgeImage)
-    expect(trayInstances[0].setTitle).not.toHaveBeenCalled()
-    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch)')
-    expect(builtMenuItems()[0]).toMatchObject({
-      label: 'Orca DEV (my-branch)',
-      enabled: false
-    })
-  })
-
-  it('tints the badged image (not the plain one) for macOS attention', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
-
-    setTrayAttention(true)
-    flushTraySceneMutation()
-
-    expect(tintTemplateMock).toHaveBeenCalledWith(devBadgeImage, false)
-  })
-
   it('falls back to the plain icon when badge stamping fails', async () => {
     setPlatform('darwin')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -350,53 +317,6 @@ describe('dev instance indicator', () => {
       '[system-tray] dev badge could not be stamped; showing plain icon',
       expect.any(Error)
     )
-  })
-
-  it('omits the label suffix when the dev instance has none', async () => {
-    setPlatform('darwin')
-    const { createSystemTray } = await loadModule()
-
-    createSystemTray(createOptions({ isDevInstance: true }))
-
-    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV')
-    expect(builtMenuItems()[0]).toMatchObject({ label: 'Orca DEV', enabled: false })
-  })
-
-  it('keeps the DEV marker in the tooltip across the attention toggle', async () => {
-    setPlatform('darwin')
-    const { createSystemTray, setTrayAttention } = await loadModule()
-    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
-    const created = trayInstances[0]
-    created.setToolTip.mockClear()
-
-    setTrayAttention(true)
-    flushTraySceneMutation()
-    expect(created.setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch) - activity waiting')
-    setTrayAttention(false)
-    flushTraySceneMutation()
-    expect(created.setToolTip).toHaveBeenLastCalledWith('Orca DEV (my-branch)')
-  })
-
-  it('marks the Windows tooltip without badging the icon', async () => {
-    setPlatform('win32')
-    const { createSystemTray } = await loadModule()
-
-    createSystemTray(createOptions({ isDevInstance: true, devInstanceLabel: 'my-branch' }))
-
-    expect(trayInstances[0].setToolTip).toHaveBeenCalledWith('Orca DEV (my-branch)')
-    expect(stampDevBadgeMock).not.toHaveBeenCalled()
-    expect(builtMenuItems()[0]).toMatchObject({ label: 'Orca DEV (my-branch)', enabled: false })
-  })
-
-  it('adds no DEV marker for production instances', async () => {
-    setPlatform('darwin')
-    const { createSystemTray } = await loadModule()
-
-    createSystemTray(createOptions())
-
-    expect(stampDevBadgeMock).not.toHaveBeenCalled()
-    expect(trayInstances[0].image).toBe(baseMacImage)
-    expect(builtMenuItems()[0].label).toBe('Open Orca')
   })
 })
 

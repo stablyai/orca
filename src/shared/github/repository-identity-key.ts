@@ -1,3 +1,5 @@
+import type { Repo } from '../repo-types'
+
 // Share github.com/GHES detection across cache identity, quota scoping and execution routing.
 export function isDefaultGitHubHost(host?: string): boolean {
   return !host?.trim() || host.trim().toLowerCase() === 'github.com'
@@ -19,4 +21,19 @@ export function githubRepoIdentityKey(repo: {
 export function githubHostFromIdentityKey(key: string | null | undefined): string | undefined {
   const segments = key?.split('/') ?? []
   return segments.length === 3 ? segments[0] : undefined
+}
+
+/** Fork-parent alias, or null if untrusted. Require resolved origin identity as host fallback for older upstream metadata, or GHES parents could collapse into github.com. */
+export function repoUpstreamIdentityKey(
+  repo: Pick<Repo, 'upstream'>,
+  originIdentityKey: string | null | undefined
+): string | null {
+  const upstream = repo.upstream
+  if (!upstream?.owner || !upstream.repo || !originIdentityKey) {
+    return null
+  }
+  return githubRepoIdentityKey({
+    ...upstream,
+    host: upstream.host ?? githubHostFromIdentityKey(originIdentityKey)
+  })
 }

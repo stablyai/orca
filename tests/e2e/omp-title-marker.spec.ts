@@ -1,5 +1,5 @@
 import { writeFile } from 'node:fs/promises'
-import { buildShellCommandFromArgv } from '../../src/shared/tui-agent-startup-shell'
+import { buildShellCommandFromArgv } from '../../src/shared/agent-launch/startup/tui-agent-startup-shell'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {

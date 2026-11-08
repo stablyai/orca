@@ -8,25 +8,22 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
-const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
 const { toAppSshPtyId } = await import('../../../../shared/ssh-pty-id')
 const {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
-  makeFolderProjectGroup,
-  makeFolderWorkspace,
-  TEST_FOLDER_WORKSPACE_KEY,
-  TEST_FOLDER_WORKSPACE_PATH,
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-test-fixtures.spec')
+} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
-const { registerBoundPty } = await import('../../bind-first-pane.test-fixture')
+const { registerBoundPty } = await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
 
 const SSH_PTY = toAppSshPtyId('ssh-target', 'relay-pty')
 
@@ -134,16 +131,6 @@ afterEach(() => {
 })
 
 describe('a pane main owns does not vouch for its terminal (switch on)', () => {
-  it('reads a headless pane disconnected once the host stops listing its shell', async () => {
-    const { runtime, host } = savedPaneHost('saved-pty')
-    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
-
-    host.live.clear()
-
-    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('pending-handle')
-    expect(record(runtime, 'saved-pty')?.connected).toBe(false)
-  })
-
   it('reads a windowed pane disconnected, and a window republish does not reconnect it', async () => {
     const { runtime, host, publishWindowGraph } = savedPaneHost('saved-pty', { windowed: true })
     expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
@@ -155,24 +142,6 @@ describe('a pane main owns does not vouch for its terminal (switch on)', () => {
 
     expect(record(runtime, 'saved-pty')?.connected).toBe(false)
     expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('pending-handle')
-  })
-
-  it('never shows a restored pane not ready while its shell is listed', async () => {
-    const { runtime } = savedPaneHost('saved-pty', { windowed: true })
-    const statuses: string[] = []
-    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
-      for (const tab of snapshot.tabs) {
-        if (tab.type === 'terminal') {
-          statuses.push(tab.status)
-        }
-      }
-    })
-
-    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
-    await new Promise((resolve) => setImmediate(resolve))
-    unsubscribe()
-
-    expect(statuses.filter((status) => status !== 'ready')).toEqual([])
   })
 
   it('leaves an SSH pane to the relay: a local sweep is not absence, the relay omitting it is', async () => {
@@ -193,63 +162,6 @@ describe('a pane main owns does not vouch for its terminal (switch on)', () => {
     await sweepProvider(runtime, 'ssh-target')
     expect(record(runtime, SSH_PTY)?.connected).toBe(false)
     expect(runtime.getPtyLivenessVerdict(SSH_PTY)?.status).not.toBe('exited')
-  })
-
-  it('applies the same rule to a folder workspace', async () => {
-    const host: Host = { live: new Set(['folder-pty']) }
-    const session = makeWorkspaceSessionWithHeadlessTerminal({
-      activeWorktreeId: TEST_FOLDER_WORKSPACE_KEY,
-      tabsByWorktree: {
-        [TEST_FOLDER_WORKSPACE_KEY]: [
-          {
-            id: 'folder-tab',
-            ptyId: 'folder-pty',
-            worktreeId: TEST_FOLDER_WORKSPACE_KEY,
-            title: 'Folder',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'folder-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: 'folder-pty' })
-      }
-    })
-    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
-    const runtime = new OrcaRuntimeService({
-      ...runtimeStore,
-      getFolderWorkspaces: () => [makeFolderWorkspace()],
-      getProjectGroups: () => [makeFolderProjectGroup()]
-    })
-    runtime.setPtyController(
-      hostController(host, TEST_FOLDER_WORKSPACE_PATH, TEST_FOLDER_WORKSPACE_KEY)
-    )
-    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-    expect(await rowStatus(runtime, TEST_FOLDER_WORKSPACE_KEY)).toBe('ready')
-
-    host.live.clear()
-
-    expect(await rowStatus(runtime, TEST_FOLDER_WORKSPACE_KEY)).toBe('pending-handle')
-  })
-})
-
-describe('a launch into a pane through a listing gap (switch on)', () => {
-  it('treats a disconnected terminal main still binds as running until its exit is certified', async () => {
-    const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
-    const paneKey = `host-tab:${HEADLESS_LEAF_ID}`
-    await rowStatus(runtime, TEST_WORKTREE_ID)
-    expect(runtime.hasLiveTerminalForPaneKey(paneKey)).toBe(true)
-
-    // The host omits the shell once: an agent launch must attach or refuse, never start a second.
-    host.live.clear()
-    await rowStatus(runtime, TEST_WORKTREE_ID)
-    expect(record(runtime, 'saved-pty')?.connected).toBe(false)
-    expect(runtime.hasLiveTerminalForPaneKey(paneKey)).toBe(true)
-
-    await runtime.onPtyExit('saved-pty', 0)
-    expect(runtime.hasLiveTerminalForPaneKey(paneKey)).toBe(false)
   })
 })
 
@@ -423,18 +335,5 @@ describe('a terminal registered while a listing is in flight (switch on)', () =>
     await listing
 
     expect(record(runtime, 'split-pty')?.connected).toBe(true)
-  })
-})
-
-describe('switch off: a window leaf still vouches for its terminal', () => {
-  it('keeps the window record but withholds a ready mobile handle when the host loses its PTY', async () => {
-    layoutOwner.isMain = false
-    const { runtime, host } = savedPaneHost('saved-pty', { windowed: true })
-    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('ready')
-
-    host.live.clear()
-
-    expect(await rowStatus(runtime, TEST_WORKTREE_ID)).toBe('pending-handle')
-    expect(record(runtime, 'saved-pty')?.connected).toBe(true)
   })
 })

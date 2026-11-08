@@ -1,7 +1,10 @@
 import { lstatSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallState,
+  AgentHookInstallStatus
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
 import {
   readHooksJson,
@@ -11,7 +14,11 @@ import {
 } from '../agent-hooks/installer-utils'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
-import { buildInstalledGrokConfig, GROK_EVENTS, GROK_TOOL_EVENT_MATCHER } from './grok-hook-config'
+import {
+  removeGrokHookBackupEntries,
+  removeGrokHookBackupEntriesAsync
+} from './grok-hook-backup-cleanup'
+import { buildInstalledGrokConfig, GROK_EVENTS } from './grok-hook-config'
 import { installRemoteGrokHook } from './grok-hook-remote-install'
 import {
   getGrokManagedCommand,
@@ -36,10 +43,6 @@ import {
   matchesRecordedGrokSymlinkCleanup,
   recordGrokSymlinkCleanup
 } from './grok-hook-symlink-cleanup-marker'
-
-export function getGrokToolEventMatcherForTests(): string {
-  return GROK_TOOL_EVENT_MATCHER
-}
 
 function getConfigPath(): string {
   // Use Grok's selected home and a dedicated managed file so unrelated user hook files stay untouched.
@@ -232,6 +235,7 @@ export class GrokHookService {
     } else {
       writeHooksJson(configPath, cleanup.config)
     }
+    removeGrokHookBackupEntries(configPath)
     return notInstalledStatus(configPath)
   }
 
@@ -280,6 +284,9 @@ export class GrokHookService {
     }
     if (updated && configIsSymlink) {
       await recordGrokSymlinkCleanup(configPath, serialized)
+    }
+    if (updated) {
+      await removeGrokHookBackupEntriesAsync(configPath)
     }
     return updated
       ? notInstalledStatus(configPath)

@@ -1,4 +1,4 @@
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import type { ClientWorkspaceView } from '../../../shared/rpc-contract/client-workspace-view-params'
 

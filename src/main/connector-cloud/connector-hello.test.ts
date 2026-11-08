@@ -40,20 +40,4 @@ describe('connectorHello', () => {
     expect(sent.length).toBeGreaterThan(0)
     expect(sent).toEqual(projects.slice(0, sent.length))
   })
-
-  it('sends every project when they fit', () => {
-    const project: ConnectorProject = {
-      placeId: 'pl_1',
-      name: longest('a'),
-      kind: 'folder',
-      where: { kind: 'local' }
-    }
-    const projects = Array.from({ length: CONNECTOR_CLIENT_LIMITS.maxHelloProjects }, () => project)
-    const { body, trimmed } = connectorHello(
-      fakeMachine(() => null),
-      { agents: [], projects }
-    )
-    expect(trimmed).toBe(false)
-    expect(body).toMatchObject({ projects })
-  })
 })

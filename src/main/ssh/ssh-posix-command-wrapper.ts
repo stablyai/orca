@@ -1,6 +1,6 @@
 import { encodePosixPrintfRecords } from '../../shared/posix-printf-encoding'
 import { gzipSync } from 'node:zlib'
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
 const REMOTE_COMMAND_COMPRESSION_THRESHOLD_BYTES = 8_000
 

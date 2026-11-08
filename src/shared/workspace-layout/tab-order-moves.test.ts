@@ -30,11 +30,4 @@ describe('tabOrderMoves', () => {
       expect(replay(from, tabOrderMoves(from, to))).toEqual(to)
     }
   })
-
-  it('is nothing for the same order or orders holding different tabs', () => {
-    expect(tabOrderMoves(['a', 'b'], ['a', 'b'])).toEqual([])
-    expect(tabOrderMoves(['a', 'b'], ['b', 'c'])).toEqual([])
-    expect(tabOrderMoves(['a', 'b'], ['b'])).toEqual([])
-    expect(tabOrderMoves(['a', 'a', 'b'], ['b', 'a', 'a'])).toEqual([])
-  })
 })

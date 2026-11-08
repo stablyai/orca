@@ -1,8 +1,9 @@
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 import { normalizeQoderEvent } from './providers/qoder-events'
-import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../agent-status-types'
-import type { AgentHookSource } from '../agent-hook-relay'
-import { readHostTurnSignals } from '../agent-hook-turn-end-timing'
+import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
+import type { ParsedAgentStatusPayload } from '../agent-status/contracts/agent-status-types'
+import type { AgentHookSource } from './transport/agent-hook-relay'
+import { readHostTurnSignals } from './state/agent-hook-turn-end-timing'
 import type { AgentHookEventPayload } from './listener-event'
 import { readLastCommandCodeUserPromptEntryFromTranscript } from './command-code-transcript'
 import { readGrokHomeEnvelope } from './grok-result-discovery'
@@ -42,6 +43,8 @@ export type ProviderDispatchResult = {
   /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
   eventName: unknown
   hostTurnSignals: Pick<AgentHookEventPayload, 'stopHookActive' | 'nativeTurnKey'>
+  /** Full reply text this hook carried, outside the cached tool snapshot; refreshes carry none. */
+  replyCandidate: string | undefined
 }
 
 /** Exhaustive provider routing with provider-specific transcript locality and attribution. */
@@ -72,6 +75,7 @@ export function normalizeProviderEvent(input: {
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
   let payload: ParsedAgentStatusPayload | null
+  state.eventReplyCandidate = undefined
 
   switch (source) {
     case 'codebuddy':
@@ -228,6 +232,8 @@ export function normalizeProviderEvent(input: {
     case 'kiro':
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
   }
+  const replyCandidate = state.eventReplyCandidate
+  state.eventReplyCandidate = undefined
 
   return {
     payload,
@@ -235,6 +241,7 @@ export function normalizeProviderEvent(input: {
     promptInteractionKey,
     hasTranscriptPromptEvidence,
     eventName,
-    hostTurnSignals: readHostTurnSignals(source, hookPayload, promptInteractionKey)
+    hostTurnSignals: readHostTurnSignals(source, hookPayload, promptInteractionKey),
+    replyCandidate
   }
 }

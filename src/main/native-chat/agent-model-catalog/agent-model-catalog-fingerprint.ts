@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type {
   AgentModelCatalogSessionAccess,
   AgentModelCatalogStore
@@ -7,7 +7,7 @@ import type {
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
 
 /** Key by agent, account, host and optional project scope; later probes repair login/version drift. */
 export type AgentModelCatalogIdentity = {
@@ -40,7 +40,8 @@ export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity
     .digest('hex')
 }
 
-/** Use the account pinned at launch, regardless of later account selection. */
+/** The catalog of the account in `record.accountHome`; a session's reads and saves pass the account
+ *  it runs on there, which differs from the one it was created under once the selection moved. */
 export function agentModelCatalogIdentityForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
 ): AgentModelCatalogIdentity {
@@ -56,6 +57,20 @@ export function agentModelCatalogFingerprintForRecord(
   folder?: string
 ): string {
   return agentModelCatalogFingerprint({ ...agentModelCatalogIdentityForRecord(record), folder })
+}
+
+/** A chat keys by the account pinned at launch; native probes cannot list a WSL-pinned one. */
+export function recordCatalogKey(
+  record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>,
+  folder?: string
+): { fingerprint: string; accountHome: AgentSessionRecord['accountHome'] | null } {
+  return {
+    fingerprint: agentModelCatalogFingerprintForRecord(record, folder),
+    accountHome:
+      record.location.executionHostId === 'local' && record.location.wslDistro === null
+        ? record.accountHome
+        : null
+  }
 }
 
 /** Per-spawn store access; supported structured adapters require native execution. */

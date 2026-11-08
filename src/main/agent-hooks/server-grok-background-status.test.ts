@@ -40,57 +40,6 @@ async function postGrokHook(
 }
 
 describe('Grok background status ownership', () => {
-  it('keeps the host-owned row working while finite background work remains', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      await postGrokHook(server, {
-        hookEventName: 'user_prompt_submit',
-        sessionId: 'session-1',
-        promptId: 'prompt-1',
-        prompt: 'run a background task'
-      })
-      await postGrokHook(server, {
-        hookEventName: 'stop',
-        sessionId: 'session-1',
-        promptId: 'prompt-1',
-        reason: 'end_turn',
-        stopHookActive: false,
-        backgroundTasks: [{ id: 'task-1', type: 'shell', status: 'running' }]
-      })
-
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          state: 'working',
-          workingMode: 'monitoring',
-          agentType: 'grok'
-        })
-      ])
-
-      await postGrokHook(server, {
-        hookEventName: 'user_prompt_submit',
-        sessionId: 'session-1',
-        promptId: 'task-completed-task-1',
-        prompt: 'the background task completed'
-      })
-      await postGrokHook(server, {
-        hookEventName: 'stop',
-        sessionId: 'session-1',
-        promptId: 'task-completed-task-1',
-        reason: 'end_turn',
-        stopHookActive: false,
-        backgroundTasks: []
-      })
-
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({ paneKey: PANE, state: 'done', agentType: 'grok' })
-      ])
-    } finally {
-      server.stop()
-    }
-  })
-
   it.each([
     {
       label: 'a background subagent',

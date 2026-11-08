@@ -1,21 +1,21 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
+import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
-import { buildExecutionHostRegistry } from '../../../shared/execution-host-registry'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { buildExecutionHostRegistry } from '../../../shared/execution-host/execution-host-registry'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'
 import type {
   RuntimeTerminalQuickCommands,
   TerminalQuickCommandHostsSlice
-} from '@/store/slices/terminal-quick-command-hosts'
-import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+} from '@/store/terminals/terminal-quick-command-hosts'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 
 export type TerminalQuickCommandHost = {
   commands: readonly TerminalQuickCommand[]

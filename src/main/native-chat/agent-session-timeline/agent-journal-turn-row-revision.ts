@@ -6,23 +6,23 @@ import {
   MAX_CONTEXT_MODEL_ID_CHARS,
   type AgentSessionContextUsage,
   type AgentSessionContextWindow
-} from '../../../shared/agent-session-context-usage'
+} from '../../../shared/agent-session/agent-session-context-usage'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
-} from '../../../shared/agent-session-journal-item-key'
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
   type AgentJournalTurnItem
-} from '../../../shared/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionEventSink,
-  StructuredAgentSessionRevisionJournal,
   StructuredAgentSessionRevisionOptions
-} from '../agent-session-wire/structured-agent-session-event-sink'
+} from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionRevisionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 export type AgentJournalTurnRowTarget = { identity: AgentJournalItemIdentity } | { newest: true }
 
