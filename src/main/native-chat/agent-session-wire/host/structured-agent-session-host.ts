@@ -307,7 +307,8 @@ export class StructuredAgentSessionHost {
     this.sessions
   )
   journalSnapshot = (sessionId: string) => this.backgroundTasks.journalSnapshot(sessionId)
-  journalCurrentRead = this.reads.journalCurrentRead
+  namingPrompt = this.reads.namingPrompt
+  automationRun = this.reads.automationRun
   queuedSendAnswer = this.reads.queuedSendAnswer
   sendAnswer = this.reads.sendAnswer
   wakeQueuedMessages = (sessionId: string) => this.queued.refresh(sessionId)
@@ -321,8 +322,7 @@ export class StructuredAgentSessionHost {
 
   currentWork = this.clientDelivery.readCurrentWork
   currentWorkAtRest = this.reads.currentWorkAtRest
-  readCurrentRequests: BackgroundTasks['currentRequests'] = (...args) =>
-    this.backgroundTasks.currentRequests(...args)
+  readCurrentRequests = this.backgroundTasks.currentRequests.bind(this.backgroundTasks)
 
   observeJournalPublications = this.clientDelivery.observeJournalPublications
 
@@ -335,7 +335,6 @@ export class StructuredAgentSessionHost {
   publishChildWorkEvidence = this.clientDelivery.publishChildWork
   unsubscribe = (id: string, key: string): void => this.clientDelivery.subscribers.close(id, key)
 
-  /** Retains no per-session subscription. */
   subscribeStatus = this.clientDelivery.subscribeStatus
   publishConversationName = this.clientDelivery.publishConversationName
   regenerateConversationName = (sessionId: string): boolean =>

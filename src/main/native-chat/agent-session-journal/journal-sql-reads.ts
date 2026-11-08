@@ -18,6 +18,8 @@ import type {
 } from './journal-input-reads'
 
 export type JournalSqlReads = AgentSessionJournalReads & {
+  namingPrompt(hostStartedAt?: number): Promise<string>
+  automationRun(messageId: string, inputIds: readonly string[]): Promise<AgentJournalSnapshot>
   historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
   hasProviderTurn(nativeId: string): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
@@ -82,6 +84,10 @@ export function journalSqlReads(
   const provenance = async (itemId: string) =>
     (await read({ kind: 'item-provenance', itemId })).provenance
   return {
+    namingPrompt: async (hostStartedAt) =>
+      (await read({ kind: 'naming-prompt', hostStartedAt })).prompt,
+    automationRun: async (messageId, inputIds) =>
+      (await read({ kind: 'automation-run', messageId, inputIds })).snapshot,
     historySourceItems: async (clientMessageIds) => {
       const items: AgentJournalRenderItem[] = []
       for (let offset = 0; offset < clientMessageIds.length; offset += 128) {

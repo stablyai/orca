@@ -1,4 +1,9 @@
 import {
+  readJournalDomainConsumer,
+  type JournalConsumerRead,
+  type JournalConsumerReadResult
+} from './journal-domain-consumer-reads'
+import {
   readJournalGeneration,
   type JournalGenerationRead,
   type JournalGenerationResult
@@ -84,6 +89,7 @@ export type JournalSqlPointRead = {
     | { kind: 'queue'; operation: JournalSqlQueueRead }
     | JournalSqlItemRead
     | JournalPublicationRead
+    | JournalConsumerRead
 }
 
 export type JournalSqlPointReadResult =
@@ -127,6 +133,7 @@ export type JournalSqlPointReadResult =
   | { kind: 'queue'; result: JournalSqlQueueReadResult }
   | JournalSqlItemReadResult
   | JournalPublicationReadResult
+  | JournalConsumerReadResult
 
 /** Point procedures decode only the named entity and its captured incarnations. */
 export function readJournalSqlPoint(
@@ -141,6 +148,9 @@ function read(
   operation: JournalSqlPointRead['operation']
 ): JournalSqlPointReadResult {
   switch (operation.kind) {
+    case 'naming-prompt':
+    case 'automation-run':
+      return readJournalDomainConsumer(scope, operation)
     case 'history-source-items':
       return {
         kind: operation.kind,

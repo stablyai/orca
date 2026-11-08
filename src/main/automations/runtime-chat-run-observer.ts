@@ -118,7 +118,7 @@ export async function observeAutomationChatRun(
           const version = revision
           const readingSource = source
           const current = () => !settled && version === revision && readingSource === source
-          const snapshot = await host.journalCurrentRead(sessionId, [submissionId, messageId])
+          const snapshot = await host.automationRun(sessionId, messageId, [submissionId])
           if (!current()) {
             continue
           }

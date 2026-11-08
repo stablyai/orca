@@ -61,8 +61,10 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       const { deps, sessions } = context()
       return hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId)
     },
-    journalCurrentRead: async (sessionId: string, inputIds?: readonly string[]) =>
-      (await context().conversation(sessionId)).journal.currentRead(inputIds),
+    namingPrompt: async (sessionId: string, hostStartedAt?: number) =>
+      (await journalOf(sessionId)).reads.namingPrompt(hostStartedAt),
+    automationRun: async (sessionId: string, messageId: string, inputIds: readonly string[]) =>
+      (await journalOf(sessionId)).reads.automationRun(messageId, inputIds),
 
     readModelCatalog,
     attentionReads: {
