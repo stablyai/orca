@@ -4,6 +4,7 @@ import type { JournalCurrentWorkAuthority, JournalObserverResult } from './journ
 
 export type JournalWorkRead =
   | { kind: 'state' }
+  | { kind: 'opening-send'; fence: number }
   | { kind: 'turn' }
   | { kind: 'child-work' }
   | { kind: 'item'; itemId: string }
@@ -11,6 +12,7 @@ export type JournalWorkRead =
   | { kind: 'attempt-ended'; clientMessageId: string }
 
 export type JournalWorkReadResult =
+  | { kind: 'opening-send'; opening: boolean }
   | { kind: 'state'; state: JournalObserverResult['work'] }
   | {
       kind: 'child-work'

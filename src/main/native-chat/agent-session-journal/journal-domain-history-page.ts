@@ -1,3 +1,6 @@
+import { boundedFrameItem } from '../agent-session-wire/publication/history/agent-session-bounded-frame-item'
+import { agentJournalItemForWire } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
+import { BOUNDED_FRAME_CONTENT_BUDGET_BYTES } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import type Database from '../../sqlite/sync-database'
 import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
@@ -34,6 +37,7 @@ export type JournalDomainHistoryRequest = Omit<AgentSessionHistoryRequest, 'dire
   fence?: number
   scope?: 'every-agent' | 'own-agent'
   rowReplay?: boolean
+  reader?: { form: 'client' | 'bounded'; budgetBytes?: number }
 }
 
 export type JournalDomainHistoryHead = {
@@ -50,7 +54,17 @@ type HistoryReaderForm = Pick<HistoryReader, 'form' | 'budgetBytes'>
 export function readJournalDomainHistoryPage(
   db: Database.Database,
   request: JournalDomainHistoryRequest,
-  reader: HistoryReaderForm = CLIENT_HISTORY_READER
+  reader: HistoryReaderForm = request.reader?.form === 'bounded'
+    ? {
+        form: (item) => boundedFrameItem(agentJournalItemForWire(item)),
+        budgetBytes: request.reader.budgetBytes ?? BOUNDED_FRAME_CONTENT_BUDGET_BYTES
+      }
+    : {
+        ...CLIENT_HISTORY_READER,
+        ...(request.reader?.budgetBytes !== undefined
+          ? { budgetBytes: request.reader.budgetBytes }
+          : {})
+      }
 ): AgentSessionHistoryResult {
   db.exec('BEGIN')
   try {

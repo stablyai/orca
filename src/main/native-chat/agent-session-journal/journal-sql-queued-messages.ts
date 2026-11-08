@@ -1,3 +1,4 @@
+import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session/options/agent-session-execution-options'
@@ -42,6 +43,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
   | { kind: 'revision' }
   | { kind: 'cleared-through' }
   | { kind: 'next-input-card'; automatic: boolean; steer: boolean }
+  | { kind: 'failure-holds' }
   | { kind: 'pauses' }
   | { kind: 'user-stop-in-force' }
   | { kind: 'reopen-mark' }
@@ -55,6 +57,7 @@ export type JournalSqlQueueReadResult =
   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
   /** The next card is mail from a sender whose availability the host has not answered. */
   | { kind: 'mail-needed'; card: QueuedMessageRow }
+  | { kind: 'failure-holds'; held: boolean }
   | { kind: 'pauses'; pauses: DerivedQueuePause[] }
   | { kind: 'user-stop-in-force'; stop: JournalLatestStop | null }
   /** Whether this handle owes a reopen mark, and where one written now would begin. */
@@ -117,6 +120,13 @@ export function readJournalSqlQueue(
           return { kind: 'mail-needed', card: error.card }
         }
         throw error
+      }
+    case 'failure-holds':
+      return {
+        kind: 'failure-holds',
+        held: readJournalDomainQueuePauseContext(db, target, facts.reopenFloor, []).pauses.some(
+          (pause) => pause.reason === 'failed'
+        )
       }
     case 'pauses':
       return {
@@ -202,6 +212,10 @@ export class SqlJournalQueuedMessages {
       journalMailSenderKey(card.body.from!),
       this.mailUnavailable?.(card) ?? false
     ])
+  }
+
+  async failureHolds(): Promise<boolean> {
+    return (await this.read({ kind: 'failure-holds' }, 'failure-holds')).held
   }
 
   async list(): Promise<QueuedMessageRow[]> {

@@ -1,3 +1,4 @@
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { latestStructuredAgentSessionTurn } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   StructuredAgentSessionWorkPolicy,
@@ -103,6 +104,8 @@ function readWork(
   operation: JournalWorkRead
 ): JournalWorkReadResult {
   switch (operation.kind) {
+    case 'opening-send':
+      return { kind: 'opening-send', opening: journalOpeningSend(context, work, operation.fence) }
     case 'state':
       return { kind: 'state', state: readJournalSqlWorkState(context, work) }
     case 'turn':
@@ -145,4 +148,38 @@ function readWork(
       }
     }
   }
+}
+
+/** Only pending handovers and the newest raw root turn can hold a subsequent send. */
+function journalOpeningSend(
+  context: JournalSqlStatusContext,
+  work: StructuredAgentSessionWorkPolicy,
+  fence: number
+): boolean {
+  const pending = context
+    .recoverableSubmissions()
+    .filter(
+      (send) =>
+        send.dispatchState === 'pending' &&
+        send.handedOverAt !== undefined &&
+        send.fence === fence &&
+        work.owesSend(send)
+    )
+  if (pending.length === 0) {
+    return false
+  }
+  const row = context.scope.db
+    .prepare(`SELECT MAX(sequence) AS sequence FROM journal_items
+    WHERE session_id=? AND epoch=? AND turn_marker=1 AND context_clear=0 AND root=1`)
+    .get(...context.scope.prefix)
+  const settledAt = row?.sequence == null ? -1 : Number(row.sequence)
+  const item = context.scope.db.prepare(`SELECT sequence FROM journal_items
+    WHERE session_id=? AND epoch=? AND item_id=? AND turn_scope_kind='thread'`)
+  return pending.some((send) => {
+    const placed = item.get(
+      ...context.scope.prefix,
+      agentJournalSubmissionKey(send.clientMessageId)
+    )
+    return placed !== undefined && Number(placed.sequence) > settledAt
+  })
 }
