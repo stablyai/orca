@@ -233,9 +233,11 @@ const ORCA_CLI_MARKDOWN = [
   "  comments, and Orca's embedded browser through the `orca` CLI. Use when the user says",
   "  \"$orca-cli\", \"Orca worktree\", \"child worktree\", \"spawn codex/claude in a worktree\",",
   "  \"read/wait/send Orca terminal\", \"handoff\" / \"handover\" / \"give this to another agent\", or",
-  "  \"Orca browser\". Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca",
-  "  state is involved. Use Computer Use only when a visible window needs GUI control that a",
-  "  CLI, filesystem, or API cannot do.",
+  "  \"Orca browser\". Also use for opening, reading, testing, or capturing local or external",
+  "  web pages while working in Orca, unless the user or project names another browser tool.",
+  "  Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca state is involved.",
+  "  Use Computer Use for existing Chrome/Safari windows or Orca's own app UI when GUI control",
+  "  is needed and a CLI, filesystem, or API cannot do the job.",
   "---",
   "",
   "# Orca CLI",
@@ -4222,7 +4224,7 @@ export const BUNDLED_SKILL_GUIDES = [
   },
   {
     name: "orca-cli",
-    description: "Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, worktree comments, and Orca's embedded browser through the `orca` CLI. Use when the user says \"$orca-cli\", \"Orca worktree\", \"child worktree\", \"spawn codex/claude in a worktree\", \"read/wait/send Orca terminal\", \"handoff\" / \"handover\" / \"give this to another agent\", or \"Orca browser\". Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use only when a visible window needs GUI control that a CLI, filesystem, or API cannot do.",
+    description: "Operate Orca-managed worktrees, folder contexts, terminals, repos, automations, worktree comments, and Orca's embedded browser through the `orca` CLI. Use when the user says \"$orca-cli\", \"Orca worktree\", \"child worktree\", \"spawn codex/claude in a worktree\", \"read/wait/send Orca terminal\", \"handoff\" / \"handover\" / \"give this to another agent\", or \"Orca browser\". Also use for opening, reading, testing, or capturing local or external web pages while working in Orca, unless the user or project names another browser tool. Prefer it over raw git worktree, ad hoc PTYs, or Computer Use when Orca state is involved. Use Computer Use for existing Chrome/Safari windows or Orca's own app UI when GUI control is needed and a CLI, filesystem, or API cannot do the job.",
     markdown: ORCA_CLI_MARKDOWN,
     aliases: [],
     references: [{ name: "artifacts", markdown: ORCA_CLI_ARTIFACTS_REFERENCE_MARKDOWN }, { name: "automations", markdown: ORCA_CLI_AUTOMATIONS_REFERENCE_MARKDOWN }, { name: "browser", markdown: ORCA_CLI_BROWSER_REFERENCE_MARKDOWN }, { name: "plugins", markdown: ORCA_CLI_PLUGINS_REFERENCE_MARKDOWN }, { name: "skill-sharing", markdown: ORCA_CLI_SKILL_SHARING_REFERENCE_MARKDOWN }]
