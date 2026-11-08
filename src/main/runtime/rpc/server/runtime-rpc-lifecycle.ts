@@ -25,8 +25,10 @@ import {
 } from './runtime-rpc-pairing-types'
 import {
   createRuntimeTransportMetadata,
+  runtimeSocketDirs,
   sweepOrphanedRuntimeSockets
 } from './runtime-rpc-socket-metadata'
+import { ensureDaemonSocketDir } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import { errorMessage } from '../../../../shared/error-message'
 import {
   loadHostDescriptor,
@@ -41,7 +43,9 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
 
     // Sweep sockets orphaned by SIGKILL/OOM; Windows pipes leave no files.
     if (this.platform !== 'win32') {
-      sweepOrphanedRuntimeSockets(this.userDataPath, this.pid)
+      for (const dir of runtimeSocketDirs(this.userDataPath)) {
+        sweepOrphanedRuntimeSockets(dir, this.pid)
+      }
     }
 
     const transportMeta = createRuntimeTransportMetadata(
@@ -50,6 +54,10 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       this.platform,
       this.runtime.getRuntimeId()
     )
+
+    if (transportMeta.kind === 'unix') {
+      ensureDaemonSocketDir(transportMeta.endpoint)
+    }
 
     const socketTransport = new UnixSocketTransport({
       endpoint: transportMeta.endpoint,
