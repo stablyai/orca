@@ -35,6 +35,11 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
     const sql = journalSqlReads(pool, 'session-1')
     const memory = fixture.journal.reads
     expect(await sql.hasItems()).toBe(true)
+    expect(await sql.namedTurn('turn-1')).toEqual({
+      scope: { kind: 'turn', turnItemId: 'orca:turn-1' },
+      removed: false
+    })
+    expect(await sql.namedTurn('missing-turn')).toEqual({ scope: null, removed: false })
     expect(await sql.canonicalItemIds(['orca:turn-1', 'orca:missing'])).toEqual([
       { itemId: 'orca:turn-1', canonicalItemId: 'orca:turn-1' },
       { itemId: 'orca:missing', canonicalItemId: 'orca:missing' }

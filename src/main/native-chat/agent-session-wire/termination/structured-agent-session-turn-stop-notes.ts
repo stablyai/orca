@@ -2,7 +2,6 @@
 
 import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { structuredAgentSessionStopNoteIdentity } from '../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
@@ -25,31 +24,27 @@ export function structuredAgentSessionStopNamesTurnNotLive(
 }
 
 /** A known non-live turn is ended, including one removed by rewind; unknown turns may still open. */
-export function structuredAgentSessionStopNamesEndedTurn(
-  journal: Pick<AgentSessionJournal, 'itemsRead' | 'stops'>,
+export async function structuredAgentSessionStopNamesEndedTurn(
+  journal: Pick<AgentSessionJournal, 'reads'>,
   work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId' | 'working'>,
   namedTurnId: string | undefined
-): boolean {
+): Promise<boolean> {
   const live = work.activeTurnId()
   if (namedTurnId === undefined || namedTurnId === live) {
     return false
   }
-  return (
-    live !== null ||
-    !work.working() ||
-    journal.stops.turnWasRemoved(namedTurnId) ||
-    structuredAgentSessionNamedTurnScope(journal, namedTurnId) !== null
-  )
+  if (live !== null || !work.working()) {
+    return true
+  }
+  const turn = await journal.reads.namedTurn(namedTurnId)
+  return turn.removed || turn.scope !== null
 }
 
-export function structuredAgentSessionNamedTurnScope(
-  journal: Pick<AgentSessionJournal, 'itemsRead'>,
+export async function structuredAgentSessionNamedTurnScope(
+  journal: Pick<AgentSessionJournal, 'reads'>,
   turnId: string
-): Extract<AgentJournalTurnScope, { kind: 'turn' }> | null {
-  const turn = journal
-    .itemsRead()
-    .items.findLast((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
-  return turn ? { kind: 'turn', turnItemId: turn.itemId } : null
+): Promise<Extract<AgentJournalTurnScope, { kind: 'turn' }> | null> {
+  return (await journal.reads.namedTurn(turnId)).scope
 }
 
 export function writeStructuredAgentSessionStopNote(

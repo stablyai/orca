@@ -146,7 +146,7 @@ async function cancelAndNote(
   const turnScope =
     input.acceptedStop?.turnScope ??
     (input.turnId !== undefined
-      ? structuredAgentSessionNamedTurnScope(ctx.journal, input.turnId)
+      ? await structuredAgentSessionNamedTurnScope(ctx.journal, input.turnId)
       : null) ??
     live.turnScope
   // Commands end only through provider or child exit; dead-generation settlement supplies their verdict.

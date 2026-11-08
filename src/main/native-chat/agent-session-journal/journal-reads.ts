@@ -17,6 +17,7 @@ import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-stat
 import type { NativeChatUsageLimitCut } from '../../../shared/native-chat/native-chat-usage-limit-cut'
 import { readJournalStatusState, type JournalStatusState } from './journal-status-state'
 import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { memoryJournalMap } from './journal-memory-collections'
 import { journalInputPresentationMember } from './input-order/journal-input-obligations'
 import {
@@ -28,6 +29,11 @@ import {
 /** Which items a visit decodes; a database serves only the named kinds, in sequence order. */
 export type JournalItemFilter = {
   kinds: readonly AgentJournalItemBody['kind'][]
+}
+
+export type JournalNamedTurn = {
+  scope: Extract<AgentJournalTurnScope, { kind: 'turn' }> | null
+  removed: boolean
 }
 
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
@@ -63,6 +69,7 @@ export type AgentSessionJournalReads = {
   lastProviderActivityAt(fence: number): Promise<number | undefined>
   runningTurn(): Promise<{ item: AgentJournalRenderItem; turnId: string } | null>
   newestTurn(): Promise<AgentJournalTurnLifecycle | null>
+  namedTurn(turnId: string): Promise<JournalNamedTurn>
   threadGoalSource(): Promise<JournalThreadGoalSource>
   contextUsage(): Promise<AgentSessionContextUsage>
   visitItems(filter: JournalItemFilter, visit: JournalItemLinkageVisitor): Promise<void>
@@ -76,6 +83,7 @@ type FoldedJournalReads = {
       | 'visitItems'
       | 'hasItems'
       | 'canonicalItemIds'
+      | 'namedTurn'
       | 'contextFloor'
       | 'input'
       | 'usageLimitCut'
@@ -146,6 +154,14 @@ export function foldedJournalReads(
     lastProviderActivityAt: now(journal.lastProviderActivityAt),
     runningTurn: now(journal.runningTurn),
     newestTurn: now(journal.newestTurn),
+    namedTurn: now((turnId: string) => {
+      const current = state()
+      const item = current.queries.latestItemForTurn(current, turnId)
+      return {
+        scope: item ? { kind: 'turn' as const, turnItemId: item.itemId } : null,
+        removed: current.removedTurnIds.has(turnId)
+      }
+    }),
     threadGoalSource: now(journal.threadGoalSource),
     contextUsage: now(journal.contextUsage),
     visitItems: now((filter: JournalItemFilter, visit: JournalItemLinkageVisitor) => {

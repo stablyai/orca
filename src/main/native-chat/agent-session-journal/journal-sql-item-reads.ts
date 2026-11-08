@@ -11,6 +11,8 @@ import {
   type JournalThreadGoalSource
 } from './projection/journal-thread-goal-source'
 import type { JournalSqlScope } from './journal-sql-scope'
+import type { JournalNamedTurn } from './journal-reads'
+import { JournalSqlReadValues } from './journal-sql-read-values'
 import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
 
 /** Item reads by type and position; each names the rows it decodes, as projection reads do. */
@@ -25,6 +27,7 @@ export type JournalSqlItemRead =
   | { kind: 'running-turn' }
   | { kind: 'context-usage' }
   | { kind: 'thread-goal-source' }
+  | { kind: 'named-turn'; turnId: string }
 
 export type JournalSqlItemReadResult =
   | { kind: 'items-by-kind'; items: AgentJournalRenderItem[]; nextOrdinal: number | null }
@@ -32,6 +35,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'running-turn'; running: { item: AgentJournalRenderItem; turnId: string } | null }
   | { kind: 'context-usage'; usage: AgentSessionContextUsage }
   | { kind: 'thread-goal-source'; source: JournalThreadGoalSource }
+  | { kind: 'named-turn'; turn: JournalNamedTurn }
 
 export type JournalSqlItemReadContext = {
   scope: JournalSqlScope
@@ -50,6 +54,23 @@ export function readJournalSqlItems(
 ): JournalSqlItemReadResult {
   const { scope } = context
   switch (operation.kind) {
+    case 'named-turn': {
+      const row = scope.db
+        .prepare(`SELECT entry_key FROM journal_proj_items
+        WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0
+        ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
+        .get(...scope.prefix, operation.turnId)
+      if (row) {
+        scope.examined(row)
+      }
+      return {
+        kind: 'named-turn',
+        turn: {
+          scope: row ? { kind: 'turn', turnItemId: entryItemId(row) } : null,
+          removed: new JournalSqlReadValues(scope, () => {}).has('removedTurnIds', operation.turnId)
+        }
+      }
+    }
     case 'items-by-kind': {
       const kinds = [...new Set(operation.kinds)]
       const rows = kinds.length

@@ -179,6 +179,7 @@ function read(
     case 'running-turn':
     case 'context-usage':
     case 'thread-goal-source':
+    case 'named-turn':
       return readJournalSqlItems(
         {
           scope,
