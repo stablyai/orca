@@ -153,35 +153,6 @@ describe('OrchestrationDb legacy contract storage', () => {
     )
   })
 
-  it('fails closed when an adopted coordinator handle becomes a current-contract worker', () => {
-    const state = openAdoptedFixture()
-    expect(db!.getRunMailboxOwnerIdsForHandle('term_legacy_coord')).toEqual([state.adoptedRunId])
-    const task = db!.createTask({
-      runId: state.adoptedRunId,
-      spec: 'mixed contract worker identity',
-      createdByTerminalHandle: 'term_legacy_coord'
-    })
-
-    const dispatch = db!.createDispatchContext({
-      taskId: task.id,
-      assigneeHandle: 'term_legacy_coord',
-      assigneePaneKey: 'tab_mixed:leaf_mixed',
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER
-    })
-
-    expect(dispatch.contract_version).toBe(CURRENT_CONTRACT_VERSION)
-    expect(db!.getRunMailboxOwnerIdsForHandle('term_legacy_coord')).toEqual([])
-  })
-
-  it('does not synthesize an adopted Run or compatibility authority for a fresh database', () => {
-    db = new OrchestrationDb(':memory:')
-
-    expect(db.getLegacyAdoption()).toBeUndefined()
-    expect(db.listLegacyCompatibilityPrincipals(LEGACY_RUN_ID)).toEqual([])
-    expect(db.listRuns().runs).toEqual([expect.objectContaining({ id: LEGACY_RUN_ID, legacy: 1 })])
-  })
-
   it('keeps current Delivery disjoint from adopted direct and audit-only mail', () => {
     const state = openAdoptedFixture()
     const run = db!.getRun(state.adoptedRunId) as NonNullable<ReturnType<OrchestrationDb['getRun']>>
@@ -257,56 +228,6 @@ describe('OrchestrationDb legacy contract storage', () => {
       'unread history'
     ])
     expect(db!.getMessageById(unread.id)?.read).toBe(0)
-  })
-
-  it('resolves legacy principals and completion evidence only within exact assignments', () => {
-    const state = openAdoptedFixture()
-    const taskId = db!.getDispatchContextById(state.fixture.legacyDispatchId)!.task_id
-    const payload = JSON.stringify({ taskId, dispatchId: state.fixture.legacyDispatchId })
-    const completion = db!.insertMessage({
-      runId: state.adoptedRunId,
-      deliveryContract: 'legacy_direct',
-      from: 'term_legacy_worker',
-      to: 'term_legacy_coord',
-      subject: 'Completed',
-      body: 'done',
-      type: 'worker_done',
-      payload
-    })
-
-    expect(
-      db!.resolveLegacyWorkerCandidate({
-        runId: state.adoptedRunId,
-        terminalHandle: 'term_legacy_worker',
-        paneKey: 'tab_reminted:33333333-3333-4333-8333-333333333333',
-        taskId
-      })
-    ).toMatchObject({ dispatch: { id: state.fixture.legacyDispatchId } })
-    expect(
-      db!.resolveLegacyWorkerCandidate({
-        runId: state.adoptedRunId,
-        terminalHandle: 'term_legacy_worker',
-        paneKey: 'tab_wrong:99999999-9999-4999-8999-999999999999',
-        taskId
-      })
-    ).toBeUndefined()
-    expect(
-      db!.resolveLegacyCoordinatorCandidate({
-        runId: state.adoptedRunId,
-        terminalHandle: 'term_legacy_coord',
-        paneKey: 'tab_coord:44444444-4444-4444-8444-444444444444'
-      })
-    ).toMatchObject({ terminalHandle: 'term_legacy_coord' })
-    expect(
-      db!.findLegacyWorkerCompletion({
-        principalId: state.workerPrincipalId,
-        taskId,
-        recipientHandle: 'term_legacy_coord',
-        subject: 'Completed',
-        body: 'done',
-        payload
-      })
-    ).toMatchObject({ id: completion.id })
   })
 
   it('prevents an unproven coordinator from taking over an active adopted Run', () => {

@@ -47,6 +47,9 @@ export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
 export const WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY =
   'worktree.create.client-automation-provenance.v1' as const
 
+export const WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY =
+  'worktree.create-agent-options.v1' as const
+
 // Hosts that save a parent from another Orca store; older hosts strip `crossStoreParent` and write no link.
 export const WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY =
   'worktree.lineage.crossMachine' as const
@@ -87,11 +90,16 @@ export function assertFolderParentSetSupported(
   }
 }
 
+// Hosts whose selector RPCs accept `matchFolderWorkspaces`, letting path: and name: also match folder workspaces.
+export const WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY =
+  'workspace-selector.folder-match.v1' as const
+
 // Hosts that run an existing worktree's setup once the user approves that worktree's content.
 export const WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY =
   'worktree.run-approved-setup.v1' as const
 
 export const WORKTREE_RUNTIME_CAPABILITIES = [
+  WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY,
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
@@ -113,5 +121,6 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY,
   WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY,
   WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY,
+  WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY,
   WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY
 ] as const

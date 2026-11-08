@@ -113,7 +113,8 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree show': async ({ flags, client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client)
+      worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
+      matchFolderWorkspaces: true
     })
     printResult(result, json, formatWorktreeShow)
   },

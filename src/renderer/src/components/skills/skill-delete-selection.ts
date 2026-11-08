@@ -8,6 +8,7 @@ import {
   retainedSkillSelection,
   type SkillSelectionPolicy
 } from './skill-selection'
+import type { Translate } from '../../i18n/use-translate'
 
 /** Do not collapse names: same-name files in different roots are independently deletable. */
 const DELETE_SELECTION_POLICY: SkillSelectionPolicy = {
@@ -21,9 +22,9 @@ export function isSkillDeleteEligible(skill: DiscoveredSkill): boolean {
 }
 
 /** Client eligibility is advisory; the host rechecks placements and may refuse deletion. */
-export function skillDeleteEligibilityReason(skill: DiscoveredSkill): string | null {
+export function skillDeleteEligibilityReason(skill: DiscoveredSkill, t?: Translate): string | null {
   const eligibility = skillDeletionEligibility(skill)
-  return eligibility.deletable ? null : skillDeleteBlockReasonLabel(eligibility.reason)
+  return eligibility.deletable ? null : skillDeleteBlockReasonLabel(eligibility.reason, t)
 }
 
 export function eligibleDeleteSkillCount(results: readonly DiscoveredSkill[]): number {

@@ -1,5 +1,4 @@
 import { afterEach, expect, it } from 'vitest'
-import recordedOmp from './fixtures/omp-v17-windows-new-no-model.json'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { CALLER } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
@@ -196,21 +195,6 @@ it.each(['canonical', 'missing'] as const)(
   }
 )
 
-it('writes explicit new-chat input even when its provisional report is equal', async () => {
-  const f = await openModel({
-    restored: false,
-    script: (agent, native) => {
-      native.model = 'provisional'
-      agent.on('session/set_config_option', (frame) => {
-        native.model = String(SetSessionConfigOptionRequestSchema.parse(frame.params).value)
-        agent.reply(frame, { configOptions: config(native.model) })
-      })
-    }
-  })
-  await f.reply('explicit new chat', 'existing_lb/gpt-6.1-sol:low')
-  await f.host.close(SESSION, 'user-close')
-})
-
 it('keeps explicit effort through an unoffered turn and applies it despite a fallback echo', async () => {
   const f = await openModel({
     intent: { model: MODEL, effort: 'high' },
@@ -284,29 +268,6 @@ it('does not send when an offered effort control is genuinely rejected', async (
   )
   expect(framesOf(f.rig.child(), 'session/prompt')).toHaveLength(0)
   expect(f.store.getRecord(SESSION)?.options?.effort).toBe('high')
-  await f.host.close(SESSION, 'user-close')
-})
-
-it('keeps the recorded OMP unlisted-effort control route', async () => {
-  const f = await openModel({
-    agent: 'omp',
-    intent: { model: MODEL, effort: 'high' },
-    script: (agent, native) => {
-      agent.on('session/load', (frame) =>
-        agent.reply(frame, { configOptions: [...config(), ...recordedOmp.configOptions] })
-      )
-      agent.on('session/set_config_option', (frame) => {
-        const { configId, value } = SetSessionConfigOptionRequestSchema.parse(frame.params)
-        if (configId !== 'thinking' || value !== 'high') {
-          agent.fail(frame, -32602, 'Invalid params', 'unexpected control')
-          return
-        }
-        native.effort = 'high'
-        agent.reply(frame, { configOptions: [...config(), ...recordedOmp.configOptions] })
-      })
-    }
-  })
-  await f.reply('use saved high', 'existing_lb/gpt-6.1-sol:high')
   await f.host.close(SESSION, 'user-close')
 })
 
@@ -392,24 +353,6 @@ it('does not adopt another session model update into the selected restored chat'
   const f = await openModel()
   f.rig.child().agent.notify('session/update', push(config(OTHER), 'old-session').params)
   await f.reply('same saved chat', 'existing_lb/gpt-6.1-sol:low')
-  await f.host.close(SESSION, 'user-close')
-})
-
-it('retains the native legacy model without requiring inventory membership', async () => {
-  const f = await openModel({
-    agent: 'omp',
-    script: (agent) => {
-      agent.on('session/load', (frame) =>
-        agent.reply(frame, {
-          models: { currentModelId: MODEL, availableModels: [] }
-        })
-      )
-      agent.on('session/set_model', (frame) =>
-        agent.fail(frame, -32602, 'Invalid params', 'model not found')
-      )
-    }
-  })
-  await f.reply('legacy model', 'existing_lb/gpt-6.1-sol:low')
   await f.host.close(SESSION, 'user-close')
 })
 

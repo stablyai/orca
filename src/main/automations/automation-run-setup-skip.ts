@@ -13,7 +13,7 @@ export async function automationRunSetupSkip(
   automation: Pick<Automation, 'workspaceMode' | 'setupDecision' | 'setupTrustHash'>,
   repo: Repo,
   workspaceId: string
-): Promise<Pick<AutomationDispatchResult, 'setupSkippedReason'>> {
+): Promise<Pick<AutomationDispatchResult, 'setupSkippedReason' | 'setupSkippedContent'>> {
   if (automation.workspaceMode !== 'new_per_run' || !automation.setupTrustHash) {
     return {}
   }
@@ -23,9 +23,9 @@ export async function automationRunSetupSkip(
       repo,
       loadHooks(worktree.path),
       automation.setupDecision,
-      automation.setupTrustHash
+      { approvedSetupHash: automation.setupTrustHash }
     )
-    return mismatch ? { setupSkippedReason: 'setup-changed' } : {}
+    return mismatch ? { setupSkippedReason: 'setup-changed', setupSkippedContent: mismatch } : {}
   } catch {
     // Reporting only; the run itself already started.
     return {}

@@ -24,8 +24,10 @@ vi.mock('@/store', () => ({
     subscribe: () => () => {}
   })
 }))
-vi.mock('@/store/selectors', () => ({
-  useActiveWorktree: () => ({ path: '/workspace' }),
+vi.mock('@/store/workspaces/selection/use-selected-worktree', () => ({
+  useActiveWorktree: () => ({ path: '/workspace' })
+}))
+vi.mock('@/store/workspaces/selection/known-worktree-selection', () => ({
   selectFileListWorktree: () => ({ path: '/workspace' })
 }))
 vi.mock('./quick-open-file-list', () => ({

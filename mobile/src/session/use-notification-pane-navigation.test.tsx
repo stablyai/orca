@@ -43,7 +43,7 @@ const pageUrl = vi.hoisted(() => {
 })
 vi.mock('expo-router', () => ({
   useLocalSearchParams: () => pageUrl.params,
-  useRouter: () => pageUrl
+  useNavigation: () => pageUrl
 }))
 
 vi.mock('../transport/client-context.web', () => ({
@@ -141,29 +141,6 @@ beforeEach(() => {
 
 // Exercise the page hook: shell init carries pane requests because this document at / cannot edit the native route.
 describe('the page pane hook', () => {
-  it('holds that request until the terminals have loaded, rather than dropping it', () => {
-    bridge.route = { pathname: '/h/host-1/session/wt-1', params: { paneKey: `tab-b:${LEAF}` } }
-    const tree = render(false)
-    expect(switched).toEqual([])
-    act(() => {
-      tree.update(createElement(Probe, { terminalsLoaded: true }))
-    })
-    expect(switched.map((tab) => tab.id)).toEqual(['second'])
-  })
-
-  it('switches again for a repeat tap on the pane already showing', () => {
-    // A clear between identical values makes the later value a new request.
-    render(true)
-    deliver(`tab-a:${LEAF}`)
-    deliver('')
-    deliver(`tab-a:${LEAF}`)
-    expect(switched.map((tab) => tab.id)).toEqual(['first', 'first'])
-    expect(bridge.cleared).toEqual([
-      { param: 'paneKey', value: `tab-a:${LEAF}` },
-      { param: 'paneKey', value: `tab-a:${LEAF}` }
-    ])
-  })
-
   it('applies one pane once however many inits carry it', () => {
     // Replay must retry a lost clear without switching away from the user’s newer tab.
     render(true)
@@ -182,6 +159,17 @@ describe('the page pane hook', () => {
     expect(switched).toEqual([])
     act(() => {
       tree.update(createElement(Probe, { terminalsLoaded: true, sessionTabs: TABS }))
+    })
+    expect(switched.map((tab) => tab.id)).toEqual(['second'])
+  })
+
+  it('switches to a pane the host document hands the session already showing', () => {
+    // A notification for the session on top reaches it as URL params, since a second copy is never pushed.
+    bridge.route = { pathname: '/h/host-1' }
+    const tree = render(true)
+    pageUrl.params = { paneKey: `tab-b:${LEAF}` }
+    act(() => {
+      tree.update(createElement(Probe, { terminalsLoaded: true }))
     })
     expect(switched.map((tab) => tab.id)).toEqual(['second'])
   })

@@ -10,7 +10,7 @@ import type {
 import {
   resolveAgentPaneAuthorityKey,
   transferAgentPaneAuthorityAlias
-} from '../agent-pane-authority'
+} from './agent-pane-authority'
 import {
   buildAgentStatusLiveEntry,
   type AgentStatusLiveEntryBuild,

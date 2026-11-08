@@ -7,19 +7,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import { cn } from '@/lib/utils'
-import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
-import { useAppStore } from '@/store'
-import {
-  ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID,
-  resolveAntigravityInstallTarget,
-  type AntigravityInstallTarget
-} from './antigravity-install-target'
 import type { AgentSurface } from './use-onboarding-flow-types'
 import { AgentPickerButton, AgentSectionHeader } from './AgentPickerButton'
 import { YoloPermissionsControl } from './YoloPermissionsControl'
@@ -50,7 +42,6 @@ type AgentStepProps = {
   nativeChatProviders?: GlobalSettings['nativeChatProviders']
   yoloPermissions?: boolean
   onYoloPermissionsChange?: (enabled: boolean) => void
-  onInstallAntigravity?: (target: AntigravityInstallTarget) => void
 }
 
 export function AgentStep({
@@ -65,25 +56,10 @@ export function AgentStep({
   chatDetected = null,
   nativeChatProviders,
   yoloPermissions = true,
-  onYoloPermissionsChange,
-  onInstallAntigravity
+  onYoloPermissionsChange
 }: AgentStepProps) {
+  const t = useTranslate()
   const agentCatalog = getAgentCatalog()
-  // Offer the installer only where its terminal spawns on this computer, the host detection reads.
-  const installerSpawnsLocally = useAppStore(
-    (state) =>
-      resolveTerminalPtyOwner(state, ANTIGRAVITY_INSTALL_TERMINAL_WORKTREE_ID, 'spawn').kind ===
-      'non-runtime'
-  )
-  // Chat never runs in WSL, so Chat UI installs natively; Terminal follows agent detection.
-  const detectionContext = useAppStore((state) =>
-    agentSurface === 'chat' ? undefined : getLocalAgentPreflightContext(state)
-  )
-  const antigravityInstallTarget = resolveAntigravityInstallTarget(
-    getRendererAppPlatform(),
-    detectionContext,
-    installerSpawnsLocally
-  )
   const gridFades = useScrollEdgeFades<HTMLElement>()
   const chatMode = agentSurface === 'chat'
   // Chat runs only on native installs; an agent found only in WSL opens in a terminal.
@@ -143,19 +119,20 @@ export function AgentStep({
     }
   }
   const fallbackRestLabel = openState
-    ? translate('auto.components.onboarding.AgentStep.hideAgents', 'Hide agents')
-    : translate(
-        'auto.components.onboarding.AgentStep.showMoreAgents',
-        'Show {{count}} more agents →',
-        { count: fallbackRest.length, defaultValue_one: 'Show {{count}} more agent →' }
-      )
+    ? t('auto.components.onboarding.AgentStep.hideAgents', 'Hide agents')
+    : t('auto.components.onboarding.AgentStep.showMoreAgents', 'Show {{count}} more agents →', {
+        count: fallbackRest.length,
+        defaultValue_one: 'Show {{count}} more agent →'
+      })
   const useTerminal = (): void => onAgentSurfaceChange?.('terminal')
   const renderTile = (agent: AgentCatalogEntry, fromCollapsedSection: boolean) => (
     <AgentPickerButton
       key={agent.id}
       agent={agent}
       selected={selectedAgent === agent.id}
-      detail={agentSurface === 'terminal' ? chatAvailableDetail(opensAsChat(agent.id)) : undefined}
+      detail={
+        agentSurface === 'terminal' ? chatAvailableDetail(opensAsChat(agent.id), t) : undefined
+      }
       onClick={() => onSelect(agent.id, fromCollapsedSection)}
     />
   )
@@ -170,7 +147,7 @@ export function AgentStep({
       )}
       {!hasDetected && !isDetecting && !chatMode && (
         <div className="shrink-0 rounded-lg border border-border px-4 py-3 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.onboarding.AgentStep.1eee1c7bd8',
             'No agents detected on your PATH. Pick one to install later, or continue with a blank terminal.'
           )}
@@ -193,7 +170,7 @@ export function AgentStep({
           <span>
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'auto.components.onboarding.AgentStep.agentNotOnPath',
                 "<agent>{{agent}}</agent> isn't on your PATH yet. Orca will set it as your default and you can install it any time.",
                 { agent: selectedEntry.label }
@@ -201,28 +178,16 @@ export function AgentStep({
               components={{ agent: <span className="font-medium text-foreground" /> }}
             />
           </span>
-          <div className="flex shrink-0 items-center gap-2">
-            {selectedEntry.id === 'antigravity' &&
-              antigravityInstallTarget &&
-              onInstallAntigravity && (
-                <Button
-                  type="button"
-                  size="xs"
-                  onClick={() => onInstallAntigravity(antigravityInstallTarget)}
-                >
-                  {translate('components.onboarding.agyInstall.open', 'Install')}
-                </Button>
-              )}
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              onClick={(event) => openAppHttpLink(selectedEntry.homepageUrl, { event })}
-            >
-              {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
-              <ExternalLink className="size-3" />
-            </Button>
-          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            className="shrink-0"
+            onClick={(event) => openAppHttpLink(selectedEntry.homepageUrl, { event })}
+          >
+            {t('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
+            <ExternalLink className="size-3" />
+          </Button>
         </div>
       )}
       <section
@@ -251,14 +216,11 @@ export function AgentStep({
                 <AgentSectionHeader
                   label={
                     hasDetected
-                      ? translate(
+                      ? t(
                           'auto.components.onboarding.AgentStep.d7b3ef168b',
                           'Detected on your system'
                         )
-                      : translate(
-                          'auto.components.onboarding.AgentStep.e6a369bd04',
-                          'Popular agents'
-                        )
+                      : t('auto.components.onboarding.AgentStep.e6a369bd04', 'Popular agents')
                   }
                   count={primary.length}
                 />
@@ -272,8 +234,8 @@ export function AgentStep({
                 <AgentSectionHeader
                   label={
                     noChatAgents
-                      ? translate('components.onboarding.agentStep.worksInChat', 'Works in Chat UI')
-                      : translate('components.onboarding.agentStep.chatAgents', 'Chat UI agents')
+                      ? t('components.onboarding.agentStep.worksInChat', 'Works in Chat UI')
+                      : t('components.onboarding.agentStep.chatAgents', 'Chat UI agents')
                   }
                   count={chatSection.length}
                 />
@@ -285,11 +247,11 @@ export function AgentStep({
             {terminalSection.length > 0 && (
               <div className="space-y-3">
                 <AgentSectionHeader
-                  label={translate(
+                  label={t(
                     'components.onboarding.agentStep.terminalAgents',
                     'Available as terminal agents'
                   )}
-                  hint={translate(
+                  hint={t(
                     'components.onboarding.agentStep.terminalAgentsHint',
                     'No Chat UI support, so these fall back to a terminal.'
                   )}

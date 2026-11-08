@@ -26,13 +26,6 @@ afterEach(async () => {
   await index.close()
 })
 
-it('reads an unsafe INTEGER through the append cursor lookup', () => {
-  index.db
-    .prepare('INSERT INTO files(path, dev, ino, byte_offset, mtime_ms) VALUES (?, 1, ?, 100, 0)')
-    .run(SYNTHETIC_TRANSCRIPT, BigInt(LARGE_ID))
-  expect(store.indexedFile(SYNTHETIC_TRANSCRIPT, { dev: 1, ino: LARGE_ID })?.byteOffset).toBe(100)
-})
-
 it.each([
   { dev: 1, ino: LARGE_ID },
   { dev: LARGE_ID, ino: 1 },

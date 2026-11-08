@@ -1,6 +1,6 @@
 import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
-import { listRuntimeMarkdownDocuments } from '@/runtime/runtime-file-metadata-client'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import { listRuntimeMarkdownDocuments } from '@/runtime/files/metadata/runtime-file-metadata-client'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 type MarkdownDocumentListLoader = (
   context: RuntimeFileOperationArgs,

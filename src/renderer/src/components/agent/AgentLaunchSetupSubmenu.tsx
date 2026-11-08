@@ -123,7 +123,7 @@ export function AgentLaunchSetupSubmenu({
           segmentRelease.current = false
         }}
         onKeyDown={(event) => {
-          if (!disabled && event.target === event.currentTarget && event.key === 'ArrowRight') {
+          if (!disabled && event.key === 'ArrowRight') {
             event.preventDefault()
             openExplicitly()
           }

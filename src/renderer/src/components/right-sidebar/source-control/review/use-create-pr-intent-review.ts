@@ -8,7 +8,7 @@ import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { operationGitContext } from '../listing/operation-target'
 import { translate } from '@/i18n/i18n'
-import { generateRuntimePullRequestFields } from '@/runtime/runtime-git-generation-client'
+import { generateRuntimePullRequestFields } from '@/runtime/source-control/git/runtime-git-generation-client'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import {
   localizedCreateFailure,

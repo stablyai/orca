@@ -17,11 +17,11 @@ import { describeAiVaultCliForkFailure } from '../right-sidebar/ai-vault/session
 import {
   captureWebSessionIntentOwner,
   matchesWebSessionIntentOwner
-} from '@/runtime/web-runtime-session-environment'
+} from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import {
   onRuntimeEnvironmentsRetired,
   onRuntimeEnvironmentRevisionsChanged
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   resolveNativeChatCliForkIdentity,

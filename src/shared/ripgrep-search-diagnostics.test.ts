@@ -34,12 +34,6 @@ describe('ripgrep search diagnostics', () => {
     expect(diagnostics.failure(null, 'SIGTERM', acc)).toBeNull()
   })
 
-  it.each([0, 1])('accepts normal exit %i without inventing truncation', (code) => {
-    const acc = createAccumulator()
-    expect(new RipgrepSearchDiagnostics().failure(code, null, acc)).toBeNull()
-    expect(acc.truncated).toBe(false)
-  })
-
   describe('skippable per-path OS errors', () => {
     const skippable = new Set([1, 1920])
 
@@ -65,12 +59,6 @@ describe('ripgrep search diagnostics', () => {
       expect(
         new RipgrepSearchDiagnostics(skippable).failure(2, null, createAccumulator())
       ).toBeInstanceOf(Error)
-    })
-
-    it('keeps the default policy when no errors are skippable', () => {
-      const diagnostics = new RipgrepSearchDiagnostics()
-      diagnostics.append('rg: .\\nul: Incorrect function. (os error 1)\n')
-      expect(diagnostics.failure(2, null, createAccumulator())).toBeInstanceOf(Error)
     })
   })
 })

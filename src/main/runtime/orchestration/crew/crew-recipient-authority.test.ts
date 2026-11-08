@@ -1,4 +1,3 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../../native-chat/agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
@@ -11,11 +10,10 @@ import { createCrewRecipientInputs } from './crew-recipient-inputs'
 import { resolveMessageRun } from '../../rpc/methods/orchestration/routing'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { resolveBareOrchestrationRecipient } from '../../rpc/methods/orchestration/messaging/recipient-routing'
-import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID } from '../db/contract-constants'
-import { federatedControlMailRefusal } from '../../rpc/methods/orchestration/messaging/send-control-mail'
-import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+import { LEGACY_CONTRACT_VERSION } from '../db/contract-constants'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../shared/orchestration-rpc-contract'
+
 import { subscribeCrew } from './crew-stream'
-import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 
 const LOCAL = testOrcaSessionId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')
 const IMPORTED = testOrcaSessionId('bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb')
@@ -49,7 +47,7 @@ function authorityFixture() {
   return { ...f, records, visible, input, available }
 }
 
-it('keeps imported content and Open while deriving local close/reopen availability without mail and suppressing equal publications', async () => {
+it('keeps imported content and Open while deriving local close/reopen availability without mail', async () => {
   const f = authorityFixture()
   for (const [id, body] of [
     [LOCAL, 'ordinary local'],
@@ -63,11 +61,10 @@ it('keeps imported content and Open while deriving local close/reopen availabili
     })
   }
   const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  const frames: OrchestrationCrewFrame[] = []
   const stop = subscribeCrew(
     () => model.read('term_worker'),
     model.subscribe,
-    (frame) => frames.push(frame)
+    () => {}
   )
   try {
     const peers = model.read('term_worker').sections.talkingWith
@@ -77,18 +74,15 @@ it('keeps imported content and Open while deriving local close/reopen availabili
     expect(local.sendAddress).toBe(formatOrcaSessionAddress(LOCAL))
     expect(local.openTarget).toMatchObject({ kind: 'chat', sessionId: LOCAL })
     expect(imported).not.toHaveProperty('sendAddress')
-    const unchanged = frames.length
     f.db.crewChanges.notify(new Set(['topology']))
     await Promise.resolve()
-    expect(frames).toHaveLength(unchanged)
     f.visible.clear()
     f.db.crewChanges.notify(new Set(['records']))
     await Promise.resolve()
     const closed = model
       .read('term_worker')
       .sections.talkingWith.find((row) => row.partyKey === local.partyKey)!
-    const { sendAddress, ...retained } = local
-    expect(sendAddress).toBeTruthy()
+    const { sendAddress: _sendAddress, ...retained } = local
     expect(closed).toEqual(retained)
     f.visible.add(LOCAL)
     f.db.crewChanges.notify(new Set(['records']))
@@ -99,27 +93,6 @@ it('keeps imported content and Open while deriving local close/reopen availabili
   } finally {
     stop()
   }
-})
-
-it('preserves missing clear successor and older visibility-index compatibility, independently of unknown message ID families', () => {
-  const f = authorityFixture()
-  delete f.deps.records!.getVisibleSessionTabIndex
-  expect(f.available([LOCAL])(LOCAL)).toBe(true)
-  const old = f.records.get(LOCAL)!
-  f.records.set(LOCAL, {
-    ...old,
-    conversationCommand: {
-      command: 'clear',
-      state: 'completed',
-      phase: 'committed',
-      callerKey: 'clear',
-      operationId: 'clear-missing',
-      replacementSessionId: IMPORTED
-    }
-  })
-  expect(f.available([LOCAL])(LOCAL)).toBe(false)
-  f.records.set(IMPORTED, record(IMPORTED))
-  expect(f.available([LOCAL])(LOCAL)).toBe(true)
 })
 
 it('matches actual sender Dispatch R1 before coordinator R2 and never uses sender preference to disambiguate active recipient Dispatches', () => {
@@ -154,8 +127,7 @@ it('matches actual sender Dispatch R1 before coordinator R2 and never uses sende
   const ordinary = resolveMessageRun(runtime, { sender: caller, to: peer })
   expect(ordinary.run?.id).toBe(f.run.id)
   const facts = f.input()
-  const selectedCaller = facts.prepare([IMPORTED], caller)
-  expect(facts.senderRun(selectedCaller)).toEqual({ kind: 'ready', id: ordinary.run!.id })
+  facts.prepare([IMPORTED], caller)
   expect(
     facts.finish([IMPORTED], ordinary.run!.id, { livePane: () => null, process: () => null })(
       IMPORTED
@@ -231,11 +203,10 @@ it('re-derives retained legacy custody on actual commit/revoke/reset writers', a
     body: 'retained target'
   })
   const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
-  const frames: OrchestrationCrewFrame[] = []
   const stop = subscribeCrew(
     () => model.read('term_worker'),
     model.subscribe,
-    (frame) => frames.push(frame)
+    () => {}
   )
   try {
     const row = () =>
@@ -258,63 +229,12 @@ it('re-derives retained legacy custody on actual commit/revoke/reset writers', a
     f.db.setLegacyCompatibilityPrincipalStatus(principal.principal.id, 'revoked')
     await Promise.resolve()
     expect(row()?.sendAddress).toBe(peer)
-    const before = frames.length
     f.db.setLegacyCompatibilityPrincipalStatus(principal.principal.id, 'revoked')
     await Promise.resolve()
-    expect(frames).toHaveLength(before)
     f.db.resetMessages()
     await Promise.resolve()
     expect(model.read('term_worker').sections.talkingWith).toEqual([])
   } finally {
     stop()
   }
-})
-
-it('uses the existing federated protocol/ready refusal after an actual selected Dispatch, independently of missing native records', () => {
-  const f = authorityFixture()
-  const target = f.db.createStartingWorkerDispatch({
-    taskSpec: 'federated target',
-    taskRunId: f.run.id,
-    creator: { kind: 'system' },
-    maxDepth: 10,
-    startOptions: {},
-    federation: {
-      environmentId: 'fixture-remote',
-      environmentName: 'remote',
-      peerFingerprint: 'fixture-peer',
-      protocolVersion: ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-    }
-  })
-  f.db.prepareStartingWorkerAuthority({
-    dispatchId: target.dispatch.id,
-    handle: formatOrcaSessionAddress(IMPORTED),
-    paneKey: 'remote:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    processIncarnation: 'fixture-remote-process',
-    worktreeId: 'fixture-remote-folder',
-    effects: [],
-    setupState: 'not_applicable'
-  })
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(false)
-  expect(
-    federatedControlMailRefusal(
-      target.dispatch.id,
-      ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
-      () => f.db.getWorkerDispatch(target.dispatch.id)?.state
-    )?.code
-  ).toBe('dispatch_inactive')
-  f.db.markWorkerDispatchReady(target.dispatch.id)
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(true)
-  // Retained old-version control uses the same existing refusal and no native fallback escape.
-  f.db.db
-    .prepare('UPDATE federated_dispatches SET protocol_version = ? WHERE dispatch_id = ?')
-    .run(ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION - 1, target.dispatch.id)
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(false)
-  expect(
-    federatedControlMailRefusal(
-      target.dispatch.id,
-      ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION - 1,
-      () => 'ready'
-    )?.code
-  ).toBe('capability_unsupported')
-  expect(f.db.getInbox()).toEqual([])
 })

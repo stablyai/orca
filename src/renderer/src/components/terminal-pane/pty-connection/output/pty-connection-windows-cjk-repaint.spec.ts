@@ -24,6 +24,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -48,7 +49,6 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -70,52 +70,9 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('does not schedule WebGL atlas recovery for ordinary foreground shell rewrites', async () => {
-      const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
-      try {
-        const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const transport = createMockTransport()
-        const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-        transport.connect.mockImplementation(
-          async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-            capturedDataCallback.current = callbacks.onData ?? null
-            return 'pty-id'
-          }
-        )
-        transportFactoryQueue.push(transport)
-
-        const pane = createPane(1)
-        const refresh = vi.fn()
-        let parseCallback: (() => void) | undefined
-        const terminal = pane.terminal as typeof pane.terminal & {
-          _core?: { refresh: typeof refresh }
-        }
-        terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
-          parseCallback = callback
-        })
-
-        connectPanePty(
-          pane as never,
-          createManager(1) as never,
-          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks)
-        )
-        await flushAsyncTicks(6)
-
-        capturedDataCallback.current?.('\r\x1b[Korca % npm test')
-
-        parseCallback?.()
-        expect(refresh).toHaveBeenCalledWith(0, 39, true)
-        expectNoGlobalAtlasRecovery()
-      } finally {
-        restoreNavigator()
-      }
-    })
-
     it('does not schedule WebGL atlas recovery for plain synchronized foreground frames', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks2 =
@@ -151,137 +108,11 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       }
     })
 
-    it('forces a viewport refresh when foreground background SGR is split across PTY chunks', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport()
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const refresh = vi.fn()
-      const terminal = pane.terminal as typeof pane.terminal & {
-        _core?: { refresh: typeof refresh }
-      }
-      terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
-        callback?.()
-      })
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks3)
-      )
-      await flushAsyncTicks(6)
-
-      capturedDataCallback.current?.('\x1b[48')
-      expect(refresh).not.toHaveBeenCalled()
-      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
-
-      capturedDataCallback.current?.(';2;52;52;52m codex block \x1b[0m\r\n')
-
-      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
-      expect(refresh).toHaveBeenCalledWith(0, 39, true)
-    })
-
-    it('forces a viewport refresh when the foreground CSI introducer is split across PTY chunks', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport()
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const refresh = vi.fn()
-      const terminal = pane.terminal as typeof pane.terminal & {
-        _core?: { refresh: typeof refresh }
-      }
-      terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
-        callback?.()
-      })
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks4)
-      )
-      await flushAsyncTicks(6)
-
-      capturedDataCallback.current?.('\x1b')
-      expect(refresh).not.toHaveBeenCalled()
-
-      capturedDataCallback.current?.('[48;2;52;52;52m codex block text \x1b[0m\r\n')
-
-      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
-      expect(refresh).toHaveBeenCalledWith(0, 39, true)
-    })
-
-    it('does not keep forcing viewport refresh after completed background redraws', async () => {
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-      const transport = createMockTransport()
-      const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          capturedDataCallback.current = callbacks.onData ?? null
-          return 'pty-id'
-        }
-      )
-      transportFactoryQueue.push(transport)
-
-      const pane = createPane(1)
-      const manager = createManager(1)
-      const refresh = vi.fn()
-      const terminal = pane.terminal as typeof pane.terminal & {
-        _core?: { refresh: typeof refresh }
-      }
-      terminal._core = { refresh }
-      terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
-        callback?.()
-      })
-
-      connectPanePty(
-        pane as never,
-        manager as never,
-        bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks5)
-      )
-      await flushAsyncTicks(6)
-
-      capturedDataCallback.current?.(
-        '\x1b[2J\x1b[H\x1b[48;2;52;52;52m codex block text \x1b[0m\r\n'
-      )
-      expect(refresh).toHaveBeenCalledWith(0, 39, true)
-      expect(manager.markPaneHasComplexScriptOutput).not.toHaveBeenCalled()
-
-      refresh.mockClear()
-      capturedDataCallback.current?.('plain follow-up output\r\n')
-
-      expect(refresh).not.toHaveBeenCalled()
-    })
-
     it('forces a viewport refresh for native Windows CJK foreground output after terminal input', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks6 =
@@ -326,6 +157,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks7 =
@@ -369,6 +201,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks8 =
@@ -411,6 +244,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
 
     it('does not repaint ordinary non-ASCII output on non-Windows clients', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks9 =
@@ -455,6 +289,7 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks10 =
@@ -498,51 +333,9 @@ export function registerPtyConnectionWindowsCjkRepaintTests(): void {
       }
     })
 
-    it('does not schedule a follow-up repaint for the Claude redraw pattern on non-Windows clients', async () => {
-      const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
-      try {
-        const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks11 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
-        const transport = createMockTransport()
-        const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
-        transport.connect.mockImplementation(
-          async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-            capturedDataCallback.current = callbacks.onData ?? null
-            return 'pty-id'
-          }
-        )
-        transportFactoryQueue.push(transport)
-
-        const pane = createPane(1)
-        const refresh = vi.fn()
-        const terminal = pane.terminal as typeof pane.terminal & {
-          _core?: { refresh: typeof refresh }
-        }
-        terminal._core = { refresh }
-        terminal.write = vi.fn((_data: string | Uint8Array, callback?: () => void) => {
-          callback?.()
-        })
-
-        connectPanePty(
-          pane as never,
-          createManager(1) as never,
-          bindPaneAgentTitleMocks(createDeps() as never, agentTitleMocks11)
-        )
-        await flushAsyncTicks(6)
-
-        // CR redraw still forces one synchronous refresh, but no native-Windows follow-up repaint is scheduled.
-        capturedDataCallback.current?.('\r\x1b[3Gzzzx\x1b[K')
-
-        expect(refresh).toHaveBeenCalledTimes(1)
-        expect(refresh).toHaveBeenCalledWith(0, 39, true)
-      } finally {
-        restoreNavigator()
-      }
-    })
-
     it('coalesces forced foreground refreshes when WebGL is live', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks12 =

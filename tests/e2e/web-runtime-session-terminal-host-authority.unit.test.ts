@@ -1,4 +1,5 @@
-import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
+import type * as SessionTabsStateModule from '../../src/renderer/src/runtime/web-session-tabs-sync/state'
+import { createWebRuntimeSessionTerminalResult } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
 import { launchAgentInWebHostTab } from '../../src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-web-host-tab'
 import {
   independentActionEffortPlan,
@@ -6,12 +7,10 @@ import {
 } from './prepared-action-launch.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as TrackingDecisions from '../../src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions'
-import {
-  deliverCreatedWebRuntimeAgentSessionPrompt,
-  createWebRuntimeSessionTerminal
-} from '../../src/renderer/src/runtime/web-runtime-terminal-creation'
-import { peekWebSessionFocusIntent } from '../../src/renderer/src/runtime/web-session-focus-intent'
-import { resetWebSessionCloseIntentForTests } from '../../src/renderer/src/runtime/web-session-close-intent'
+import { deliverCreatedWebRuntimeAgentSessionPrompt } from '../../src/renderer/src/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
+import { createWebRuntimeSessionTerminal } from '../../src/renderer/src/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
+import { peekWebSessionFocusIntent } from '../../src/renderer/src/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
+import { resetWebSessionCloseIntentForTests } from '../../src/renderer/src/runtime/web-session-tabs-sync/closing/web-session-close-intent'
 import {
   ENVIRONMENT_ID,
   FOCUS_LEAF_ID,
@@ -20,8 +19,8 @@ import {
   makeSnapshot,
   resetTerminalCreateEnvironment,
   stubTerminalCreateEnvironment
-} from '../../src/renderer/src/runtime/web-runtime-session-test-harness'
-import { stubRuntimeEnvironmentBridge } from '../../src/renderer/src/runtime/runtime-environment-bridge-fixture'
+} from '../../src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../src/renderer/src/runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 const mocks = vi.hoisted(() => ({
   changedAgentPaneKeys: new Set<string>(),
@@ -53,8 +52,12 @@ vi.mock('../../src/renderer/src/store', () => ({
   }
 }))
 
+vi.mock('../../src/renderer/src/runtime/web-session-tabs-sync/state', async (importOriginal) => ({
+  ...(await importOriginal<typeof SessionTabsStateModule>()),
+  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot
+}))
+
 vi.mock('../../src/renderer/src/runtime/web-session-tabs-sync/tracking-lifecycle', () => ({
-  acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration
 }))
 vi.mock('../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api', () => ({
@@ -88,9 +91,12 @@ vi.mock('@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery', () => 
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
 
-vi.mock('../../src/renderer/src/runtime/web-runtime-browser-materialization', () => ({
-  hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/browser/creation/web-runtime-browser-materialization',
+  () => ({
+    hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
+  })
+)
 
 afterEach(() => resetWebSessionCloseIntentForTests())
 
@@ -253,6 +259,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       await expect(
         createWebRuntimeSessionTerminal({
           worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
           agentSessionKind: sessionKind,
           launchAgent: 'codex',
           ...(sessionKind === 'resume'
@@ -340,6 +347,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       await expect(
         createWebRuntimeSessionTerminal({
           worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
           agentSessionKind: 'resume',
           launchAgent: 'kimi',
           command: "kimi '--session' 'session_431324d7'",
@@ -417,6 +425,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     await expect(
       createWebRuntimeSessionTerminal({
         worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
         targetGroupId: 'group-left',
         command: "codex 'linked issue context'",
         cwd: '/repo/packages/app',
@@ -529,6 +538,7 @@ describe('createWebRuntimeSessionTerminal', () => {
       await expect(
         createWebRuntimeSessionTerminal({
           worktreeId: WORKTREE_ID,
+          environmentId: ENVIRONMENT_ID,
           targetGroupId: failedMethod === 'session.tabs.move' ? 'group-left' : undefined,
           launchAgent: 'codex',
           activate: true
@@ -593,6 +603,7 @@ describe('createWebRuntimeSessionTerminal', () => {
 
       const result = await createWebRuntimeSessionTerminal({
         worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
         launchAgent: 'codex',
         targetGroupId: 'group-left'
       })

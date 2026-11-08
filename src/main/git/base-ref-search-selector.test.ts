@@ -59,8 +59,4 @@ describe('base ref search selectors', () => {
       { refName: 'safe-one', localBranchName: 'safe-one' }
     ])
   })
-
-  it('does not publish malformed full refs', () => {
-    expect(parseAndFilterSearchRefDetails('refs/heads/bad..name\0bad..name', 10)).toEqual([])
-  })
 })

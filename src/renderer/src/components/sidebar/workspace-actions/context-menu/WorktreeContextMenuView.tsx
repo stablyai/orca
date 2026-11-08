@@ -32,7 +32,7 @@ import { WorktreeRowOpenInSubMenu } from '../open/WorktreeRowOpenInSubMenu'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
@@ -49,6 +49,7 @@ import {
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
+  const t = useTranslate()
   const {
     batchDeleteWorktrees,
     children,
@@ -158,13 +159,13 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           onCloseAutoFocus={handleCloseAutoFocus}
         >
           <DropdownMenuLabel>
-            {translate('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
+            {t('auto.components.sidebar.WorktreeContextMenu.workspaceSection', 'Workspace')}
           </DropdownMenuLabel>
           {!isMultiContext && <WorktreeWslHostStartMenuItem worktreeId={worktree.id} />}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleRename} disabled={isDeleting}>
               <Pencil className="size-3.5" />
-              {translate('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
+              {t('auto.components.sidebar.WorktreeContextMenu.439fa94d53', 'Update')}
             </DropdownMenuItem>
           )}
           <WorktreeStatusMenuItems
@@ -184,11 +185,11 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               />
               <DropdownMenuItem onSelect={handleCopyPath} disabled={isDeleting}>
                 <Copy className="size-3.5" />
-                {translate('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
+                {t('auto.components.sidebar.WorktreeContextMenu.3350101edb', 'Copy Path')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleCopyName} disabled={isDeleting}>
                 <Copy className="size-3.5" />
-                {translate(
+                {t(
                   'auto.components.sidebar.WorktreeContextMenu.copyWorktreeName',
                   'Copy Worktree Name'
                 )}
@@ -197,8 +198,8 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <DropdownMenuItem onSelect={handleTogglePin} disabled={isDeleting}>
                 {worktree.isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
                 {worktree.isPinned
-                  ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
-                  : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
+                  ? t('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
+                  : t('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
                 {worktree.isUnread ? (
@@ -207,18 +208,15 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   <Bell className="size-3.5" />
                 )}
                 {worktree.isUnread
-                  ? translate('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
-                  : translate(
-                      'auto.components.sidebar.WorktreeContextMenu.f50603c6b2',
-                      'Mark Unread'
-                    )}
+                  ? t('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
+                  : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
               </DropdownMenuItem>
               {repo ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={handleCreateGroupFromRepo} disabled={isDeleting}>
                     <FolderPlus className="size-3.5" />
-                    {translate(
+                    {t(
                       'auto.components.sidebar.WorktreeContextMenu.503ec0f8e6',
                       'New group from project'
                     )}
@@ -227,7 +225,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger disabled={isDeleting}>
                         <FolderInput className="size-3.5" />
-                        {translate(
+                        {t(
                           'auto.components.sidebar.WorktreeContextMenu.76865d827f',
                           'Move to group'
                         )}
@@ -248,7 +246,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   {repo.projectGroupId ? (
                     <DropdownMenuItem onSelect={handleRemoveProjectFromGroup} disabled={isDeleting}>
                       <CircleX className="size-3.5" />
-                      {translate(
+                      {t(
                         'auto.components.sidebar.WorktreeContextMenu.d35dfeae58',
                         'Remove from group'
                       )}
@@ -260,7 +258,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               {model.canCreateChildWorktree ? (
                 <DropdownMenuItem onSelect={handleNewChildWorktree} disabled={isDeleting}>
                   <GitBranchPlus className="size-3.5" />
-                  {translate(
+                  {t(
                     'auto.components.sidebar.WorktreeContextMenu.newChildWorktree',
                     'New Child Worktree...'
                   )}
@@ -271,14 +269,14 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 disabled={isWorktreeParentPickerDisabled({ isDeleting, eligibleParentCount })}
               >
                 <FolderTree className="size-3.5" />
-                {getWorktreeParentPickerLabel(validParentWorktreeId)}
+                {getWorktreeParentPickerLabel(validParentWorktreeId, t)}
               </DropdownMenuItem>
               {(validParentWorktreeId || hasParentLink) && (
                 <>
                   {validParentWorktreeId && (
                     <DropdownMenuItem onSelect={handleOpenParent} disabled={isDeleting}>
                       <Workflow className="size-3.5" />
-                      {translate(
+                      {t(
                         'auto.components.sidebar.WorktreeContextMenu.8d9cd19d09',
                         'Open Parent Worktree'
                       )}
@@ -287,7 +285,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   {hasParentLink && (
                     <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={isDeleting}>
                       <Unlink className="size-3.5" />
-                      {translate(
+                      {t(
                         'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
                         'Remove from Parent'
                       )}
@@ -302,10 +300,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             <>
               <DropdownMenuItem onSelect={handleRemoveParentLink} disabled={deletingContext}>
                 <Unlink className="size-3.5" />
-                {translate(
-                  'auto.components.sidebar.WorktreeContextMenu.579b1a8e61',
-                  'Remove from Parent'
-                )}
+                {t('auto.components.sidebar.WorktreeContextMenu.579b1a8e61', 'Remove from Parent')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
@@ -333,7 +328,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 <div>
                   <DropdownMenuItem variant="destructive" disabled>
                     <Trash2 className="size-3.5" />
-                    {translate(
+                    {t(
                       'auto.components.sidebar.WorktreeContextMenu.deleteWorktree',
                       'Delete Worktree'
                     )}
@@ -341,7 +336,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 </div>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={8} className="max-w-[200px] text-pretty">
-                {translate(
+                {t(
                   'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
                   "Primary worktree — can't be deleted. Remove the project instead."
                 )}
@@ -359,7 +354,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             }
             title={
               !isMultiContext && worktree.isMainWorktree && !removesProject
-                ? translate(
+                ? t(
                     'auto.components.sidebar.WorktreeContextMenu.e091caab15',
                     'The project could not be found'
                   )
@@ -368,28 +363,22 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
           >
             <Trash2 className="size-3.5" />
             {contextDeletePending
-              ? translate('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
+              ? t('auto.components.sidebar.WorktreeContextMenu.b42391d8bf', 'Deleting…')
               : isMultiContext
                 ? deleteLabel
                 : folderWorkspaceId
-                  ? translate(
-                      'auto.components.sidebar.WorktreeContextMenu.250de158fd',
-                      'Remove Workspace'
-                    )
+                  ? t('auto.components.sidebar.WorktreeContextMenu.250de158fd', 'Remove Workspace')
                   : removesProject
-                    ? translate(
+                    ? t(
                         'auto.components.sidebar.WorktreeContextMenu.f5ac91531d',
                         'Remove Project from Orca'
                       )
                     : lineageDescendantCount > 0
-                      ? translate(
+                      ? t(
                           'auto.components.sidebar.WorktreeContextMenu.deleteWithDescendants',
                           'Delete with Descendants…'
                         )
-                      : translate(
-                          'auto.components.sidebar.WorktreeContextMenu.f4475537d8',
-                          'Delete'
-                        )}
+                      : t('auto.components.sidebar.WorktreeContextMenu.f4475537d8', 'Delete')}
             {!isMultiContext && !removesProject && deleteShortcut ? (
               <DropdownMenuShortcut>{deleteShortcut}</DropdownMenuShortcut>
             ) : null}

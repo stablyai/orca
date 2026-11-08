@@ -6,8 +6,8 @@ import {
   GITHUB_IMAGE_ATTACHMENT_CAPABILITY
 } from '../../../../shared/github/image-attachment'
 import { CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from '../../../../shared/rpc-contract/clipboard-params'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { readStoredWebRuntimeEnvironment } from '@/web/web-runtime-environment'
 import { blobToBase64 } from '@/lib/image-blob-png'

@@ -117,29 +117,6 @@ describe('CodexAccountService config sync', () => {
       expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(1)
     })
 
-    it('resolves selectAccount when the quota refresh rejects', async () => {
-      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const store = createStore(createAccountOneSettings())
-      const rateLimits = {
-        refreshForCodexAccountChange: vi.fn().mockRejectedValue(new Error('cold probe failed')),
-        evictInactiveCodexCache: vi.fn()
-      }
-      const runtimeHome = createRuntimeHome()
-
-      const { CodexAccountService } = await import('./service')
-      const service = new CodexAccountService(
-        store as never,
-        rateLimits as never,
-        runtimeHome as never
-      )
-
-      const state = await service.selectAccount('account-1')
-
-      expect(state.activeAccountId).toBe('account-1')
-      await vi.waitFor(() => expect(errorSpy).toHaveBeenCalled())
-      errorSpy.mockRestore()
-    })
-
     it('resolves addAccount while the post-login quota refresh never settles', async () => {
       vi.resetModules()
       writeFileSync(

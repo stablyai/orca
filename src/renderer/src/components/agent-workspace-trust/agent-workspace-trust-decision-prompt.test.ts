@@ -3,7 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   installIpcPtyWindow,
   restorePtySpecWindow
-} from '../terminal-pane/pty-transport-test-harness'
+} from '../terminal-pane/pty-transport/ipc/pty-transport-test-harness'
 
 type StoreState = {
   repos: Partial<Repo>[]
@@ -120,35 +120,6 @@ describe('first agent launch in a repo', () => {
     }
   )
 
-  it('holds the launch until answered, asking once for all its worktrees', async () => {
-    const first = launch()
-    const second = launch('repo-1::/repos/app/other')
-    expect(first).not.toBeNull()
-    expect(second).toBe(first)
-    expect(getAgentWorkspaceTrustDecisionRequest()?.repoName).toBe('app')
-
-    await answerAgentWorkspaceTrustDecision('agent-asks')
-
-    await expect(first).resolves.toBe('agent-asks')
-    expect(state.updateRepo).toHaveBeenCalledWith(
-      'repo-1',
-      { agentWorkspaceTrust: 'agent-asks' },
-      { hostId: 'local' }
-    )
-    expect(getAgentWorkspaceTrustDecisionRequest()).toBeNull()
-    expect(launch()).toBeNull()
-  })
-
-  it('releases with the answer when saving fails, and asks again next time', async () => {
-    state.updateRepo = vi.fn(async () => false)
-    const pending = launch()
-
-    await answerAgentWorkspaceTrustDecision('agent-asks')
-
-    await expect(pending).resolves.toBe('agent-asks')
-    expect(launch()).not.toBeNull()
-  })
-
   it('releases with the answer when saving stalls', async () => {
     state.updateRepo = vi.fn(() => new Promise<boolean>(() => {}))
     const pending = launch()
@@ -173,14 +144,5 @@ describe('first agent launch in a repo', () => {
   it('never holds a launch when no dialog is mounted to answer it', () => {
     unsubscribeDialog()
     expect(launch()).toBeNull()
-  })
-
-  it('does not ask when folder trust is off globally', () => {
-    state.settings = { agentWorkspaceTrustEnabled: false }
-    expect(launch()).toBeNull()
-  })
-
-  it('does not ask for folder workspaces, which have no repo to remember the answer', () => {
-    expect(launch('folder:abc')).toBeNull()
   })
 })

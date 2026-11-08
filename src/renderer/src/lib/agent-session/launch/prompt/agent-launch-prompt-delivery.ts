@@ -29,6 +29,7 @@ export function deliverLaunchPromptToAgentTab(args: {
   submit: boolean
   forcePaste: boolean
   timeoutMs?: number
+  beforePaste?: () => boolean
   onTimeout?: () => void
   /** The paste was written without ever observing the agent's composer. */
   onUnconfirmedDelivery?: () => void
@@ -41,6 +42,9 @@ export function deliverLaunchPromptToAgentTab(args: {
     submit === true && content.trim().length > 0 && isNativeChatSupportedAgent(agent)
   let seeded = false
   const seedChatCopy = (): void => {
+    if (args.beforePaste?.() === false) {
+      return
+    }
     if (shouldSeed) {
       seeded = true
       useAppStore.getState().seedNativeChatLaunchPrompt({
@@ -77,6 +81,7 @@ export function deliverLaunchPromptToAgentTab(args: {
     timeoutMs,
     onTimeout,
     onUnconfirmedDelivery,
+    beforePaste: args.beforePaste,
     ...(launchPty ? { launchPty } : {})
   }).then(
     (delivered) => {

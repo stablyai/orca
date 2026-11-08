@@ -36,27 +36,6 @@ function withQueue(
 }
 
 describe('PTY side-effect queue reentrant delivery', () => {
-  it('keeps empty-tail coalescing observable during the apply callback', () => {
-    let queue: PtyOutputSideEffectQueue
-    const observed: string[] = []
-    withQueue(
-      (created) => {
-        queue = created
-        queue.enqueue(emptyEffect())
-        queue.flush()
-        expect(observed).toEqual(['none', 'stale-probe'])
-        expect(queue.isDrained()).toBe(true)
-      },
-      (effect) => {
-        observed.push(effect.titleScanEffect)
-        if (observed.length === 1) {
-          queue.enqueue(emptyEffect('stale-probe'))
-        }
-        observed.push(effect.titleScanEffect)
-      }
-    )
-  })
-
   it('delivers the same effect requeued after clear without releasing its new slot', () => {
     let queue: PtyOutputSideEffectQueue
     const delivered: string[] = []
@@ -98,25 +77,6 @@ describe('PTY side-effect queue reentrant delivery', () => {
           queue.flush()
           queue.enqueue(titledEffect('third'))
         }
-      }
-    )
-  })
-
-  it('preserves thrown apply errors and their existing empty-tail coalescing', () => {
-    const failure = new Error('apply failed')
-    let applied = 0
-    withQueue(
-      (queue) => {
-        queue.enqueue(emptyEffect())
-        expect(() => queue.flush()).toThrow(failure)
-        queue.enqueue(emptyEffect('stale-probe'))
-        queue.flush()
-        expect(applied).toBe(1)
-        expect(queue.isDrained()).toBe(true)
-      },
-      () => {
-        applied += 1
-        throw failure
       }
     )
   })

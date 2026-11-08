@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   findMobileDiffReviewInitialIndex,
   type MobileDiffReviewInitialTarget
@@ -20,10 +20,22 @@ export function useMobileDiffReviewSelection(
   const [selection, setSelection] = useState<MobileDiffReviewSelection>(
     NO_MOBILE_DIFF_REVIEW_SELECTION
   )
-  const currentIndex = resolveMobileDiffReviewSelection(filteredQueue, selection)
+  // Seed the tapped file in the render the queue first exists, so no other file is ever current or read.
+  const initialTargetKey = initialTarget ? `${initialTarget.area}\0${initialTarget.filePath}` : ''
+  const [seededTargetKey, setSeededTargetKey] = useState<string | null>(null)
+  let held = selection
+  if (filteredQueue.length > 0 && seededTargetKey !== initialTargetKey) {
+    held = selectMobileDiffReviewIndex(
+      filteredQueue,
+      findMobileDiffReviewInitialIndex(filteredQueue, initialTarget)
+    )
+    setSeededTargetKey(initialTargetKey)
+    setSelection(held)
+  }
+  const currentIndex = resolveMobileDiffReviewSelection(filteredQueue, held)
   const currentItem = filteredQueue[currentIndex] ?? null
   // Remember the file actually showing and where it sits, including the one that replaced a file that left.
-  if (currentItem && (currentItem.key !== selection.key || currentIndex !== selection.index)) {
+  if (currentItem && (currentItem.key !== held.key || currentIndex !== held.index)) {
     setSelection({ key: currentItem.key, index: currentIndex })
   }
   const selectIndex = useCallback(
@@ -39,25 +51,6 @@ export function useMobileDiffReviewSelection(
       setSelection((prev) => moveMobileDiffReviewSelection(filteredQueue, prev, direction)),
     [filteredQueue]
   )
-
-  const seededInitialTargetRef = useRef(false)
-  const initialTargetKey = initialTarget ? `${initialTarget.area}\0${initialTarget.filePath}` : ''
-  useEffect(() => {
-    seededInitialTargetRef.current = false
-  }, [initialTargetKey])
-  useEffect(() => {
-    if (seededInitialTargetRef.current || filteredQueue.length === 0) {
-      return
-    }
-    seededInitialTargetRef.current = true
-    // Seed the tapped file only once the queue exists.
-    setSelection(
-      selectMobileDiffReviewIndex(
-        filteredQueue,
-        findMobileDiffReviewInitialIndex(filteredQueue, initialTarget)
-      )
-    )
-  }, [filteredQueue, initialTarget])
 
   return { currentIndex, currentItem, selectIndex, selectKey, moveSelection }
 }

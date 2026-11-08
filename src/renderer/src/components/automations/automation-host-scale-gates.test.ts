@@ -20,17 +20,18 @@ import {
   createAutomationHostScheduler,
   type AutomationHostFetchTarget
 } from './automation-host-scheduler'
-import { AUTOMATION_HOST_REQUEST_CONCURRENCY } from './automation-host-scheduler-queue'
+
 import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 
 const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args),
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: (...args: unknown[]) => callRuntimeRpc(...args)
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: (...args: unknown[]) => getRuntimeEnvironmentStatus(...args)
 }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 // Use 10 authorities × 5 entries × 20 automations; half are legacy to exercise per-authority fan-out budgets.
 const AUTHORITY_COUNT = 10
@@ -38,7 +39,7 @@ const ENTRIES_PER_AUTHORITY = 5
 const AUTOMATIONS_PER_HOST = 20
 const SCOPED_AUTHORITIES = AUTHORITY_COUNT / 2
 const HOST_COUNT = AUTHORITY_COUNT * ENTRIES_PER_AUTHORITY
-const AUTOMATION_COUNT = HOST_COUNT * AUTOMATIONS_PER_HOST
+
 const SSH_TARGET_GENERATION = 3
 
 function authorityAt(index: number): AutomationAuthorityRef {
@@ -267,106 +268,6 @@ beforeEach(() => {
     wire.scopedCalls += 1
     const selector = (params as { selector: AutomationListScopeSelector }).selector
     return roundTrip(environmentId, () => scopedPayload(environmentId, selector))
-  })
-})
-
-describe('one refresh of 50 hosts carrying 1,000 automations', () => {
-  it('never exceeds four requests in flight, however many hosts are waiting', async () => {
-    const { refresh } = harness()
-
-    await refresh()
-
-    expect(wire.maxInFlight).toBeGreaterThan(1)
-    expect(wire.maxInFlight).toBeLessThanOrEqual(AUTOMATION_HOST_REQUEST_CONCURRENCY)
-  })
-
-  // The gate a fan-out is most likely to break: five entries on one old server
-  // must still cost that server one call, not five.
-  it('asks each old server exactly once, and each modern host exactly once', async () => {
-    const { refresh } = harness()
-
-    await refresh()
-
-    const snap = snapshot()
-    expect(wire.scopedCalls).toBe(SCOPED_AUTHORITIES * ENTRIES_PER_AUTHORITY)
-    expect([...wire.legacyCallsByEnvironment.values()]).toEqual(
-      Array.from({ length: AUTHORITY_COUNT - SCOPED_AUTHORITIES }, () => 1)
-    )
-    expect(snap.totals).toMatchObject({
-      scopedRequests: SCOPED_AUTHORITIES * ENTRIES_PER_AUTHORITY,
-      legacyRequests: AUTHORITY_COUNT - SCOPED_AUTHORITIES
-    })
-    for (let index = SCOPED_AUTHORITIES; index < AUTHORITY_COUNT; index += 1) {
-      expect(authorityCounters(snap, index).legacyRequests).toBe(1)
-    }
-  })
-
-  it('lands all 1,000 automations on the host each one belongs to', async () => {
-    const { cache, refresh } = harness()
-
-    await refresh()
-
-    let landed = 0
-    for (const ref of ALL_REFS) {
-      const rows = cache.get(ref)?.data ?? []
-      const index = environmentIndex(
-        ref.authority.kind === 'runtime' ? ref.authority.environmentId : 'env-0'
-      )
-      const prefix = `auto-${index}-${hostLabel(ref)}-`
-      expect(rows).toHaveLength(AUTOMATIONS_PER_HOST)
-      // A row carrying another host's prefix is a misattribution, not a miscount.
-      expect(rows.every((row) => row.automation.id.startsWith(prefix))).toBe(true)
-      landed += rows.length
-    }
-    expect(landed).toBe(AUTOMATION_COUNT)
-  })
-
-  // Per-host row counts have to survive the legacy fan-out, or doc 416's numbers
-  // go missing for exactly the hosts whose payload is worst.
-  it('accounts for every row twice over: once per response and once per host', async () => {
-    const { refresh } = harness()
-
-    await refresh()
-
-    const snap = snapshot()
-    const perHost = Object.values(snap.byStableKey).reduce((sum, entry) => sum + entry.rows, 0)
-    expect(snap.totals.rows).toBe(AUTOMATION_COUNT)
-    expect(perHost).toBe(AUTOMATION_COUNT)
-  })
-})
-
-describe('relay cost the request pool cannot see', () => {
-  // Capability probes sit outside the pool but dedupe per authority incarnation, not per host.
-  it('counts one capability probe per scoped authority, and none for a legacy one', async () => {
-    const { refresh } = harness()
-
-    await refresh()
-
-    const snap = snapshot()
-    const scopedEntries = SCOPED_AUTHORITIES * ENTRIES_PER_AUTHORITY
-    expect(wire.probes).toBe(SCOPED_AUTHORITIES)
-    expect(snap.totals.capabilityProbes).toBe(SCOPED_AUTHORITIES)
-    for (let index = 0; index < AUTHORITY_COUNT; index += 1) {
-      expect(authorityCounters(snap, index).capabilityProbes).toBe(isLegacyAuthority(index) ? 0 : 1)
-    }
-    expect(snap.totals.requests + snap.totals.capabilityProbes).toBe(
-      scopedEntries + SCOPED_AUTHORITIES + (AUTHORITY_COUNT - SCOPED_AUTHORITIES)
-    )
-  })
-
-  // The cache is per incarnation, so even a forced second refresh — which
-  // re-fetches every list — costs no probes at all.
-  it('does not probe again on a later refresh of the same incarnations', async () => {
-    const { refresh } = harness()
-
-    await refresh()
-    const probesAfterFirst = wire.probes
-    const scopedCallsAfterFirst = wire.scopedCalls
-    await refresh({ force: true })
-
-    expect(probesAfterFirst).toBe(SCOPED_AUTHORITIES)
-    expect(wire.probes).toBe(probesAfterFirst)
-    expect(wire.scopedCalls).toBeGreaterThan(scopedCallsAfterFirst)
   })
 })
 

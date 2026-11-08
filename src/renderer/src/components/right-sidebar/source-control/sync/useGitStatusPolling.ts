@@ -1,16 +1,12 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
-import { useAllWorktrees, useRepoMap } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import {
   useWorktreeGitStatusObservation,
   SLOW_GIT_POLL_BACKOFF
 } from './use-worktree-git-status-observation'
 import { useStaleConflictOperationPolling } from './stale-conflict-operation-poll'
-export {
-  useWorktreeGitStatusObservation,
-  SLOW_GIT_POLL_BACKOFF,
-  admissionTierForGitStatusRefreshReason
-} from './use-worktree-git-status-observation'
 export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   useWorktreeGitStatusObservation(null, options)
   const enabled = options.enabled ?? true

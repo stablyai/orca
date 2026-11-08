@@ -21,7 +21,7 @@ import { agentModelChoiceChips } from './launch-settings/agent-model-choice-chip
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { AgentDefaultArgsInput } from './launch-settings/AgentLaunchDefaultsEditor'
-import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOptionRows'
+import { NativeChatSessionOptionRows } from '../native-chat/session/options/controls/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { AgentPermissionMenu } from './launch-settings/AgentPermissionChoiceControls'
@@ -53,6 +53,7 @@ export function AgentLaunchSetupPanel({
   mode = 'launch',
   disabled,
   autoFocus = true,
+  terminalBlocked,
   onDraftChange,
   onUse
 }: AgentLaunchSetupPanelProps) {
@@ -121,10 +122,7 @@ export function AgentLaunchSetupPanel({
     ) : null
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
-    if (current) {
-      return onUse({ ...acceptAgentPickerArguments(entry, current), surface })
-    }
-    return false
+    return current ? onUse({ ...acceptAgentPickerArguments(entry, current), surface }) : false
   }
   const use = (surface: AgentPickerSurface) =>
     mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
@@ -383,6 +381,7 @@ export function AgentLaunchSetupPanel({
         <AgentLaunchSetupFooter
           ref={footer}
           entry={entry}
+          terminalBlocked={terminalBlocked}
           disabled={disabled}
           onLaunch={(surface, prompt) => {
             const current = getDraft()

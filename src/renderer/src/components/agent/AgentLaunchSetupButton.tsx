@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from 'react'
 import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import type {
   AgentPickerDraft,
@@ -24,6 +24,7 @@ export type AgentLaunchSetupPanelProps = {
   mode?: 'launch' | 'select'
   disabled?: boolean
   autoFocus?: boolean
+  terminalBlocked?: boolean
   onDraftChange: (draft: AgentPickerDraft) => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }
@@ -39,6 +40,7 @@ export function AgentLaunchSetupButton({
   mode = 'launch',
   renderAnchor,
   disabled,
+  terminalBlocked,
   open: controlledOpen,
   onOpenChange,
   returnFocus,
@@ -54,11 +56,13 @@ export function AgentLaunchSetupButton({
   mode?: 'launch' | 'select'
   renderAnchor: (trigger: ReactElement) => ReactElement
   disabled?: boolean
+  terminalBlocked?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
   returnFocus?: () => void
   onUse: (draft: AgentPickerDraft) => boolean | void | Promise<boolean>
 }) {
+  const t = useTranslate()
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
   const setup = useAgentPickerSetup({
@@ -91,8 +95,12 @@ export function AgentLaunchSetupButton({
           getDraft={setup.getDraft}
           disabled={disabled}
           autoFocus={autoFocus}
+          terminalBlocked={terminalBlocked}
           onDraftChange={setup.change}
           onUse={(draft) => {
+            if (mode !== 'select' && terminalBlocked && draft.surface === 'terminal') {
+              return false
+            }
             const options = { ...draft, surface: setup.draft.surface }
             delete options.prompt
             if (!setup.accept(mode === 'select' ? draft : options)) {
@@ -114,7 +122,7 @@ export function AgentLaunchSetupButton({
       onOpenChange={changeOpen}
       renderAnchor={renderAnchor}
       disabled={disabled}
-      label={translate('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })}
+      label={t('agentPicker.configure', 'Configure {{agent}}', { agent: entry.label })}
       returnFocus={returnFocus}
     >
       {panel}

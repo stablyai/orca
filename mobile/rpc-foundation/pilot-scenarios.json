@@ -1058,7 +1058,7 @@
                   "displayName": "Emoji",
                   "repoIcon": {
                     "type": "emoji",
-                    "emoji": "\ud83d\udc33"
+                    "emoji": "🐳"
                   },
                   "connectionId": "ssh-1"
                 },
@@ -3118,18 +3118,6 @@
         },
         {
           "checkpoint": "refresh-pending"
-        },
-        {
-          "complete": "status.get#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["mobile.tasks.v1"]
-            }
-          }
         },
         {
           "complete": "settings.get#2",
@@ -7407,34 +7395,6 @@
       ]
     },
     {
-      "id": "components-codex-capability",
-      "operation": "components.codex-reset-capability",
-      "family": "components.codex-reset-capability",
-      "sites": ["mobile/src/components/codex-reset-credit-capability.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "probe",
-          "id": "probe"
-        },
-        {
-          "complete": "status.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["accounts.codex-reset-credit.v1"]
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "host-view-settings-sync",
       "operation": "host.view-settings",
       "family": "host.view-settings",
@@ -7897,7 +7857,7 @@
             "ok": false,
             "error": {
               "code": "worktree_archive_hook_failed",
-              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 \u2014 exited 1.",
+              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 — exited 1.",
               "data": {
                 "worktreePath": "/repos/marlin/wt-1",
                 "outcome": "exited",
@@ -9638,7 +9598,10 @@
       "id": "diff-review-snapshot",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": [
+        "mobile/src/session/mobile-diff-review-loaders.ts",
+        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -9676,21 +9639,7 @@
           }
         },
         {
-          "bind": "base-ref-show",
-          "request": "worktree.show#1",
-          "params": {
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "bind": "review-show",
-          "request": "worktree.show#2",
-          "params": {
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "complete": "base-ref-show",
+          "complete": "worktree.show#1",
           "params": {
             "worktree": "id:repo-9::/w"
           },
@@ -9699,7 +9648,11 @@
             "result": {
               "worktree": {
                 "baseRef": "origin/main",
-                "linkedPR": 12
+                "linkedPR": 12,
+                "diffComments": [],
+                "mobileDiffReview": {
+                  "files": []
+                }
               }
             }
           }
@@ -9718,23 +9671,6 @@
                   "worktreeBaseRef": "origin/main"
                 }
               ]
-            }
-          }
-        },
-        {
-          "complete": "review-show",
-          "params": {
-            "worktree": "id:repo-9::/w"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "worktree": {
-                "diffComments": [],
-                "mobileDiffReview": {
-                  "files": []
-                }
-              }
             }
           }
         },
@@ -9776,7 +9712,10 @@
       "id": "diff-review-status-unavailable",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": [
+        "mobile/src/session/mobile-diff-review-loaders.ts",
+        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -10212,7 +10151,10 @@
       "id": "diff-review-notes-refused-before-compare",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": [
+        "mobile/src/session/mobile-diff-review-loaders.ts",
+        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -10247,21 +10189,7 @@
           }
         },
         {
-          "bind": "base-ref-show",
-          "request": "worktree.show#1",
-          "params": {
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "bind": "review-show",
-          "request": "worktree.show#2",
-          "params": {
-            "worktree": "id:repo-9::/w"
-          }
-        },
-        {
-          "complete": "review-show",
+          "complete": "worktree.show#1",
           "params": {
             "worktree": "id:repo-9::/w"
           },
@@ -10275,21 +10203,6 @@
         },
         {
           "checkpoint": "notes-refused"
-        },
-        {
-          "complete": "base-ref-show",
-          "params": {
-            "worktree": "id:repo-9::/w"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "worktree": {
-                "baseRef": "origin/main",
-                "linkedPR": 12
-              }
-            }
-          }
         },
         {
           "complete": "repo.list#1",
@@ -15008,18 +14921,6 @@
           }
         },
         {
-          "complete": "status.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["aiVault.v1"]
-            }
-          }
-        },
-        {
           "checkpoint": "held"
         },
         {
@@ -15027,7 +14928,7 @@
           "id": "worktrees-loaded"
         },
         {
-          "complete": "status.get#2",
+          "complete": "status.get#1",
           "params": {
             "$undefined": true
           },
@@ -15061,6 +14962,278 @@
         },
         {
           "checkpoint": "ready"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-revisit",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "action": "leave",
+          "id": "leave"
+        },
+        {
+          "advance": 31000
+        },
+        {
+          "action": "return",
+          "id": "return"
+        },
+        {
+          "checkpoint": "cached"
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                },
+                {
+                  "id": "s2",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "revalidated"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-refresh",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "action": "refresh",
+          "id": "refresh"
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": true,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s2",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "refreshed"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-association",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "pi",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "frame": "agentSession.subscribeStatus#1",
+          "params": {},
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "snapshot",
+              "sessions": [
+                {
+                  "sessionId": "native",
+                  "agent": "pi",
+                  "workspaceId": "worktree-1",
+                  "latestPrompt": "",
+                  "status": null,
+                  "updatedAt": 1,
+                  "providerSession": {
+                    "key": "session_id",
+                    "id": "/provider"
+                  },
+                  "conversationName": "Budget plan"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "pi",
+                  "cwd": "/repo/feature",
+                  "structuredSession": {
+                    "sessionId": "native",
+                    "workspaceId": "worktree-1"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "associated"
         }
       ]
     },
@@ -19588,7 +19761,8 @@
           "complete": "files.readDir#1",
           "params": {
             "worktree": "id:wt-files",
-            "relativePath": ""
+            "relativePath": "",
+            "limit": 500
           },
           "reply": {
             "ok": false,
@@ -19646,7 +19820,8 @@
           "complete": "files.readDir#1",
           "params": {
             "worktree": "id:wt-files",
-            "relativePath": ""
+            "relativePath": "",
+            "limit": 500
           },
           "reply": {
             "ok": true,
@@ -20306,13 +20481,6 @@
           "id": "mount"
         },
         {
-          "bind": "platform-status",
-          "request": "status.get#1",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
           "checkpoint": "worktrees-pending"
         },
         {
@@ -20340,19 +20508,14 @@
           }
         },
         {
-          "complete": "platform-status",
+          "bind": "platform-status",
+          "request": "status.get#1",
           "params": {
             "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["aiVault.v1"]
-            }
           }
         },
         {
-          "complete": "status.get#2",
+          "complete": "platform-status",
           "params": {
             "$undefined": true
           },
@@ -20380,13 +20543,6 @@
           "id": "mount"
         },
         {
-          "bind": "platform-status",
-          "request": "status.get#1",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
           "checkpoint": "worktrees-pending"
         },
         {
@@ -20414,19 +20570,14 @@
           }
         },
         {
-          "complete": "platform-status",
+          "bind": "platform-status",
+          "request": "status.get#1",
           "params": {
             "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["aiVault.v1"]
-            }
           }
         },
         {
-          "complete": "status.get#2",
+          "complete": "platform-status",
           "params": {
             "$undefined": true
           },
@@ -21003,6 +21154,9 @@
           "id": "leave"
         },
         {
+          "advance": 3001
+        },
+        {
           "action": "remount",
           "id": "return"
         },
@@ -21098,6 +21252,9 @@
         {
           "action": "leave",
           "id": "leave"
+        },
+        {
+          "advance": 3001
         },
         {
           "action": "remount",
@@ -21961,6 +22118,98 @@
         },
         {
           "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "session-startup-reopens-with-last-strip",
+      "operation": "session.startup",
+      "family": "session.startup",
+      "sites": ["mobile/src/session/use-mobile-session-startup.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount",
+          "args": {
+            "floating": true
+          }
+        },
+        {
+          "action": "host-tabs",
+          "id": "host-lists-three",
+          "args": {
+            "tabs": ["tab-a", "tab-b", "tab-x"]
+          }
+        },
+        {
+          "checkpoint": "live"
+        },
+        {
+          "action": "leave",
+          "id": "leave"
+        },
+        {
+          "action": "mount",
+          "id": "reopen",
+          "args": {
+            "floating": true
+          }
+        },
+        {
+          "checkpoint": "reopened-with-last-strip"
+        },
+        {
+          "action": "host-tabs",
+          "id": "host-closed-x",
+          "args": {
+            "tabs": ["tab-a", "tab-b"]
+          }
+        },
+        {
+          "checkpoint": "snapshot-replaced-strip"
+        },
+        {
+          "action": "leave",
+          "id": "leave-again"
+        },
+        {
+          "action": "mount",
+          "id": "reopen-again",
+          "args": {
+            "floating": true
+          }
+        },
+        {
+          "checkpoint": "closed-tab-stays-gone"
+        },
+        {
+          "action": "switch-worktree",
+          "id": "switch-to-wt-2",
+          "args": {
+            "worktree": "wt-2"
+          }
+        },
+        {
+          "checkpoint": "next-worktree-starts-empty"
+        },
+        {
+          "action": "leave",
+          "id": "leave-wt-2"
+        },
+        {
+          "action": "mount",
+          "id": "reopen-wt-2",
+          "args": {
+            "floating": true
+          }
+        },
+        {
+          "checkpoint": "next-worktree-never-took-the-last-strip"
+        },
+        {
+          "action": "unmount",
+          "id": "unmount"
         }
       ]
     },

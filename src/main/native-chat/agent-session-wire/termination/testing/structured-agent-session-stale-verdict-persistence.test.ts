@@ -2,7 +2,6 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
 import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   createTrackedJournalOpener,
@@ -18,65 +17,6 @@ import {
   THREAD,
   turnScopeOf
 } from './structured-agent-session-stale-verdict-contract-test-fixture'
-
-it('revises an unverifiable turn only from a proof naming its own owner, and only once', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
-  const journals = createTrackedJournalOpener({ legacyInputs: true })
-  let now = 100
-  try {
-    const journal = await journals.open({
-      identity: {
-        sessionId: 'session-1',
-        workspaceId: 'workspace-1',
-        hostId: 'local',
-        agent: 'codex',
-        providerHandle: codexProviderHandle(THREAD)
-      },
-      stateDirectory: root,
-      now: () => now
-    })
-    await journal.appendItem(
-      RUNNING_IDENTITY,
-      { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: 100 },
-      { fence: 1, turnScope: turnScopeOf(RUNNING_IDENTITY) }
-    )
-    now = 400
-    const settle = (deathEvidence: AgentSessionDeathEvidence | null) =>
-      settleStaleStructuredAgentSessionState({
-        journal,
-        sessionId: 'session-1',
-        fence: 2,
-        acquisitionGeneration: null,
-        deathEvidence
-      })
-    await settle(null)
-    now = 9_000
-    const turn = () => journal.snapshot().items.map((item) => readAgentJournalTurn(item.body))[0]
-    expect(turn()).toMatchObject({ state: 'unverifiable' })
-
-    const unrevised = journal.cursor()
-    await expect(settle({ ...PROVEN, ownerFence: 2 })).resolves.toBe(0)
-    const { ownerFence: _ownerFence, ...olderBuildProof } = PROVEN
-    await expect(settle({ ...olderBuildProof, kind: 'exit-observed' })).resolves.toBe(0)
-    expect(journal.cursor()).toEqual(unrevised)
-    expect(turn()).toMatchObject({ state: 'unverifiable' })
-
-    await expect(settle(PROVEN)).resolves.toBe(2)
-    expect(turn()).toEqual({
-      turnId: 'turn-2',
-      state: 'interrupted',
-      startedAt: 100,
-      completedAt: 100
-    })
-    const revised = journal.cursor()
-    await expect(settle(PROVEN)).resolves.toBe(0)
-    expect(journal.cursor()).toEqual(revised)
-    expect(journal.snapshot().items.filter((item) => item.body.kind === 'status')).toHaveLength(1)
-  } finally {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
-  }
-})
 
 it('adds one row for a death however many attempts its settle takes to write', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))

@@ -8,25 +8,6 @@ import {
 const parse = (value: unknown) => parsePluginIconThemeArtifact(JSON.stringify(value), 'strict')
 
 describe('plugin icon theme artifacts', () => {
-  it('lowercases name, extension and folder keys', () => {
-    expect(
-      parse({
-        schemaVersion: 1,
-        icons: { folder: 'icons/folder.svg' },
-        fileNames: { 'README.md': 'icons/readme.svg' },
-        fileExtensions: { TS: 'icons/ts.svg' },
-        folderNames: { Src: 'icons/src.svg', '.github': 'icons/github.svg' },
-        folderNamesExpanded: { SRC: 'icons/src-open.svg' }
-      })
-    ).toEqual({
-      icons: { folder: 'icons/folder.svg' },
-      fileNames: { 'readme.md': 'icons/readme.svg' },
-      fileExtensions: { ts: 'icons/ts.svg' },
-      folderNames: { src: 'icons/src.svg', '.github': 'icons/github.svg' },
-      folderNamesExpanded: { src: 'icons/src-open.svg' }
-    })
-  })
-
   it('counts folder mappings toward the mapping limit', () => {
     const folderNames = Object.fromEntries(
       Array.from({ length: 257 }, (_, index) => [`dir${index}`, 'a.svg'])

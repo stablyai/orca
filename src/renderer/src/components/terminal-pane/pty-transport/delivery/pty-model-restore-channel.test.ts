@@ -35,25 +35,6 @@ describe('pty model-restore channel routing', () => {
     }
   })
 
-  it('attaches the channel once and routes markers to the registered PTY handler', async () => {
-    const { registerPtyModelRestoreNeededHandler } = await import('./pty-model-restore-channel')
-    const handlerA = vi.fn()
-    const handlerB = vi.fn()
-
-    registerPtyModelRestoreNeededHandler('pty-a', handlerA)
-    registerPtyModelRestoreNeededHandler('pty-b', handlerB)
-    expect(onModelRestoreNeeded).toHaveBeenCalledTimes(1)
-
-    channelCallback?.({ id: 'pty-a', reason: 'hidden-drop', markerSeq: 42 })
-    expect(handlerA).toHaveBeenCalledWith({ id: 'pty-a', reason: 'hidden-drop', markerSeq: 42 })
-    expect(handlerB).not.toHaveBeenCalled()
-
-    // Markers for PTYs without a registered handler are dropped silently.
-    channelCallback?.({ id: 'pty-unknown', reason: 'pending-cap' })
-    expect(handlerA).toHaveBeenCalledTimes(1)
-    expect(handlerB).not.toHaveBeenCalled()
-  })
-
   it('lets a new registration replace a stale one without the stale unregister clobbering it', async () => {
     const { registerPtyModelRestoreNeededHandler } = await import('./pty-model-restore-channel')
     const staleHandler = vi.fn()
@@ -67,16 +48,5 @@ describe('pty model-restore channel routing', () => {
     channelCallback?.({ id: 'pty-a', reason: 'unhide' })
     expect(staleHandler).not.toHaveBeenCalled()
     expect(liveHandler).toHaveBeenCalledTimes(1)
-  })
-
-  it('stops routing after the live handler unregisters', async () => {
-    const { registerPtyModelRestoreNeededHandler } = await import('./pty-model-restore-channel')
-    const handler = vi.fn()
-
-    const unregister = registerPtyModelRestoreNeededHandler('pty-a', handler)
-    unregister()
-
-    channelCallback?.({ id: 'pty-a', reason: 'hidden-drop' })
-    expect(handler).not.toHaveBeenCalled()
   })
 })

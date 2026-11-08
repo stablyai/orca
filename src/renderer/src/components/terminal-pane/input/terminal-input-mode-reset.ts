@@ -1,4 +1,4 @@
-import { resetWebRuntimeTerminalInputModes } from '@/runtime/web-runtime-terminal-buffer-actions'
+import { resetWebRuntimeTerminalInputModes } from '@/runtime/hosted-terminals/actions/web-runtime-terminal-buffer-actions'
 import { resetPtyRendererInputModes } from '../snapshots/pty-buffer-serializer'
 
 /** Ground pane and host input modes so reattach cannot revive stale state; older hosts may reject, leaving only the pane reset. */

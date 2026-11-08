@@ -1,8 +1,8 @@
-import type { DiffCommentOwner } from '@/store/diff-comment-owner'
+import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { Check, Copy, MessageSquare } from 'lucide-react'
 import { NotesSendMenu, type NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
 import type { MarkdownReviewNote } from '@/lib/markdown-review-notes'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RichMarkdownReviewRailActionsProps = {
   owner: DiffCommentOwner | null
@@ -29,6 +29,7 @@ export function RichMarkdownReviewRailActions({
   onCopyNotes,
   onDelivered
 }: RichMarkdownReviewRailActionsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="rich-markdown-review-rail-actions">
       <button
@@ -36,11 +37,11 @@ export function RichMarkdownReviewRailActions({
         className="rich-markdown-review-rail-toggle"
         aria-label={
           railOpen
-            ? translate(
+            ? t(
                 'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
                 'Hide review notes'
               )
-            : translate(
+            : t(
                 'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
                 'Show review notes'
               )
@@ -48,11 +49,11 @@ export function RichMarkdownReviewRailActions({
         aria-expanded={railOpen}
         title={
           railOpen
-            ? translate(
+            ? t(
                 'auto.components.editor.RichMarkdownReviewRailActions.af02dc2456',
                 'Hide review notes'
               )
-            : translate(
+            : t(
                 'auto.components.editor.RichMarkdownReviewRailActions.8aaf2c4c69',
                 'Show review notes'
               )
@@ -67,22 +68,16 @@ export function RichMarkdownReviewRailActions({
         className="rich-markdown-review-rail-action"
         title={
           notesCopied
-            ? translate(
-                'auto.components.editor.RichMarkdownReviewRailActions.a807596997',
-                'Copied notes'
-              )
-            : translate(
+            ? t('auto.components.editor.RichMarkdownReviewRailActions.a807596997', 'Copied notes')
+            : t(
                 'auto.components.editor.RichMarkdownReviewRailActions.636394af72',
                 'Copy notes for agent'
               )
         }
         aria-label={
           notesCopied
-            ? translate(
-                'auto.components.editor.RichMarkdownReviewRailActions.a807596997',
-                'Copied notes'
-              )
-            : translate(
+            ? t('auto.components.editor.RichMarkdownReviewRailActions.a807596997', 'Copied notes')
+            : t(
                 'auto.components.editor.RichMarkdownReviewRailActions.636394af72',
                 'Copy notes for agent'
               )

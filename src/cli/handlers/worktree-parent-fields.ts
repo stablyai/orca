@@ -13,6 +13,7 @@ import {
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveWorktreeCreateCwdContext } from '../selectors'
+import { mayNameFolderWorkspace } from '../folder-workspace-selector'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
 import { getOptionalParentSelector } from '../caller-folder-workspace'
 
@@ -87,6 +88,10 @@ export async function resolveCreateParentFields(
   }
   const targetParent = {
     parentWorktree: explicitParent.parentWorktree,
+    // The runtime classifies path:/name: parents by kind; older runtimes strip this.
+    ...(explicitParent.parentWorktree && mayNameFolderWorkspace(explicitParent.parentWorktree)
+      ? { matchFolderWorkspaces: true }
+      : {}),
     ...(explicitParent.parentWorkspace ? { parentWorkspace: explicitParent.parentWorkspace } : {}),
     noParent
   }
@@ -182,7 +187,11 @@ export async function resolveSetParentFields(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient
-): Promise<{ crossStoreParent?: CrossStoreParentRef; parentWorktree?: string }> {
+): Promise<{
+  crossStoreParent?: CrossStoreParentRef
+  parentWorktree?: string
+  matchFolderWorkspaces?: true
+}> {
   const raw = getOptionalStringFlag(flags, 'parent-worktree')
   const rawKey = raw?.startsWith('id:') ? raw.slice('id:'.length) : raw
   if (rawKey && parseWorkspaceKey(rawKey)?.type === 'folder') {
@@ -202,12 +211,12 @@ export async function resolveSetParentFields(
     parentCwdNextSteps(raw),
     raw
   )
-  return {
-    parentWorktree:
-      parentWorktree && parseWorkspaceKey(parentWorktree)?.type === 'folder'
-        ? await assertFolderParentSetSupportedBy(client, parentWorktree)
-        : parentWorktree
+  if (parentWorktree && parseWorkspaceKey(parentWorktree)?.type === 'folder') {
+    return { parentWorktree: await assertFolderParentSetSupportedBy(client, parentWorktree) }
   }
+  return parentWorktree && mayNameFolderWorkspace(parentWorktree)
+    ? { parentWorktree, matchFolderWorkspaces: true }
+    : { parentWorktree }
 }
 
 /** An older host refuses a folder parent as "not found"; say it needs an update instead. */

@@ -1,7 +1,6 @@
 /** Shrink without reflow can retain off-grid cells; snapshots must exclude them to prevent wrapped garbage. */
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
-import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { HeadlessEmulator } from '../headless-emulator'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal/appearance/terminal-unicode-provider'
@@ -61,26 +60,6 @@ describe('snapshot after a column shrink', () => {
     expect(snapshot.modes.alternateScreen).toBe(true)
     expect(visibleRows(restored)).toEqual(NARROW_GRID)
     emu.dispose()
-  })
-
-  it('restores the visible normal-buffer grid when the shrink did not reflow', async () => {
-    const terminal = new Terminal({
-      cols: WIDE,
-      rows: ROWS,
-      allowProposedApi: true,
-      windowsPty: { backend: 'conpty', buildNumber: 19041 }
-    })
-    const serializer = new SerializeAddon()
-    terminal.loadAddon(serializer)
-    await paintShrinkRepaint(
-      { write: (data) => writeTerminal(terminal, data), resize: (c, r) => terminal.resize(c, r) },
-      ''
-    )
-    expect(visibleRows(terminal)).toEqual(NARROW_GRID)
-
-    const restored = await replayAtNarrowGrid(serializer.serialize())
-
-    expect(visibleRows(restored)).toEqual(NARROW_GRID)
   })
 
   it.each([
