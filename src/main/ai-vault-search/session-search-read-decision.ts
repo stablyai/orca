@@ -24,7 +24,7 @@ export function sessionSearchReadDecision(args: {
     return 'skip'
   }
   if (!row) {
-    return 'any'
+    return 'whole'
   }
   if (heldOut(row, file.mtimeMs)) {
     return 'skip'

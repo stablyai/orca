@@ -1,15 +1,17 @@
 import type { SessionFileCandidate } from '../session-scanner-types'
 import { TranscriptMessageChannel } from '../transcripts/session-transcript-channel'
-import { hasTranscriptConsumers } from '../transcripts/session-transcript-consumers'
+import type { TranscriptReadStats } from '../transcripts/session-transcript-reader'
 import { createClaudeSessionResumeStateFromCheckpoint } from '../scanners/claude/session-scanner-claude-checkpoint'
 import type { SessionParseCheckpoint, SessionParseResumePoint } from './session-parse-cache-store'
+import { readCheckpointSample } from './session-parse-checkpoint-sample'
 
-export function checkpointResumeFor(
+export async function checkpointResumeFor(
   candidate: SessionFileCandidate,
-  checkpoint: SessionParseCheckpoint
-): SessionParseResumePoint | null {
-  // Consumers prove their persisted prefix against a replacement stream after restart.
-  if (candidate.agent !== 'claude' || hasTranscriptConsumers()) {
+  checkpoint: SessionParseCheckpoint,
+  stats?: TranscriptReadStats,
+  signal?: AbortSignal
+): Promise<SessionParseResumePoint | null> {
+  if (candidate.agent !== 'claude') {
     return null
   }
   if (
@@ -21,6 +23,12 @@ export function checkpointResumeFor(
   const channel = new TranscriptMessageChannel()
   const state = createClaudeSessionResumeStateFromCheckpoint(candidate.file, channel, checkpoint)
   if (!state) {
+    return null
+  }
+  if (
+    (await readCheckpointSample(candidate, checkpoint.byteOffset, stats, signal)) !==
+    checkpoint.sampleHash
+  ) {
     return null
   }
   return {
@@ -36,12 +44,18 @@ export function checkpointResumeFor(
 }
 
 /** Compose the persisted checkpoint from a finished read; null when the parser cannot snapshot. */
-export function sessionParseCheckpointOf(
+export async function sessionParseCheckpointOf(
   candidate: SessionFileCandidate,
-  resume: SessionParseResumePoint
-): SessionParseCheckpoint | null {
+  resume: SessionParseResumePoint,
+  stats?: TranscriptReadStats,
+  signal?: AbortSignal
+): Promise<SessionParseCheckpoint | null> {
   const data = resume.state.snapshotResume?.()
   if (!data) {
+    return null
+  }
+  const sampleHash = await readCheckpointSample(candidate, resume.byteOffset, stats, signal)
+  if (sampleHash === null) {
     return null
   }
   return {
@@ -55,6 +69,7 @@ export function sessionParseCheckpointOf(
       typeof candidate.file.dev === 'number' && typeof candidate.file.ino === 'number'
         ? { dev: candidate.file.dev, ino: candidate.file.ino }
         : null,
+    sampleHash,
     skippedRecords: resume.skippedRecords,
     snapshot: data.snapshot
   }

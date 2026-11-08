@@ -12,6 +12,7 @@ const checkpointSchema = z
     fileIdentity: z
       .object({ dev: z.number().nonnegative(), ino: z.number().nonnegative() })
       .nullable(),
+    sampleHash: z.string().regex(/^[0-9a-f]{64}$/),
     skippedRecords: z.array(
       z.object({
         byteOffset: z.number().int().nonnegative(),

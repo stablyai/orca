@@ -44,6 +44,7 @@ export type SessionParseCheckpoint = {
   mtimeMs: number
   sizeBytes: number | null
   fileIdentity: { dev: number; ino: number } | null
+  sampleHash: string
   // Budget skips accumulated through this boundary; replacements revisit those records.
   skippedRecords: SkippedTranscriptRecord[]
   snapshot: unknown

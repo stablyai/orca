@@ -23,6 +23,7 @@ import {
 } from './session-parse-cache-store'
 import type { TranscriptMessageSink } from '../transcripts/session-transcript-consumers'
 import { checkpointResumeFor, sessionParseCheckpointOf } from './session-parse-checkpoint-restore'
+import { throwIfAiVaultScanCancelled } from '../ai-vault-scan-cancellation'
 import { sidecarUnchanged } from './session-sidecar-stat'
 import {
   mergeSkippedTranscriptRecords,
@@ -203,7 +204,9 @@ async function parseCachedInLane(
     const resume =
       entry?.platform === platform
         ? (entry.resume ??
-          (entry.checkpoint ? checkpointResumeFor(candidate, entry.checkpoint) : null))
+          (entry.checkpoint
+            ? await checkpointResumeFor(candidate, entry.checkpoint, stats, signal)
+            : null))
         : null
     const read = await readResumableTranscript({
       candidate,
@@ -214,6 +217,8 @@ async function parseCachedInLane(
       signal,
       sessionForConsumers
     })
+    const checkpoint = await sessionParseCheckpointOf(candidate, read.resume, stats, signal)
+    throwIfAiVaultScanCancelled(signal)
     storeSessionParseCacheEntry(key, {
       agent: candidate.agent,
       mtimeMs: file.mtimeMs,
@@ -224,7 +229,7 @@ async function parseCachedInLane(
       sidecar: enriched.refused ? 'unknown' : file.sidecar,
       foldSession: read.session,
       resume: read.resume,
-      checkpoint: sessionParseCheckpointOf(candidate, read.resume)
+      checkpoint
     })
     return enriched.session
   }

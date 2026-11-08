@@ -140,3 +140,61 @@ it('replaces stale indexed content when a transcript prefix changes across resta
     .all()
   expect(rows.map((row) => row.user_text)).toEqual(['replaced', 'new message'])
 })
+
+it('continues history and search from their shared cursor across consecutive restarts', async () => {
+  const path = join(root, 'session.jsonl')
+  const indexPath = join(root, 'search.sqlite')
+  search = new SessionSearchStore(indexPath)
+  registerSessionSearchIndexConsumer(search)
+  await writeFile(
+    path,
+    `${userRecord(0, 'original')}\n${JSON.stringify({ type: 'progress', padding: 'x'.repeat(32768) })}\n`
+  )
+  await scan(path)
+  await flushSessionParseCachePersist()
+
+  for (const index of [1, 2]) {
+    resetTranscriptConsumersForTests()
+    search.close()
+    restart()
+    search = new SessionSearchStore(indexPath)
+    registerSessionSearchIndexConsumer(search)
+    await appendFile(path, `${userRecord(index, `append ${index}`)}\n`)
+    const result = await runSessionSearchIndexPass(
+      search,
+      [await sessionCandidate('claude', path)],
+      {
+        rows: new Map(search.files().map((row) => [row.path, row]))
+      }
+    )
+    expect(result.stats.fullParses).toBe(0)
+    expect(result.stats.incremental).toBe(1)
+    expect(result.stats.bytesRead).toBeLessThan(20000)
+    await flushSessionParseCachePersist()
+  }
+  const session = await scan(path)
+  expect(session?.messageCount).toBe(3)
+  expect(session?.previewMessages.map((message) => message.text)).toEqual([
+    'original',
+    'append 1',
+    'append 2'
+  ])
+  const rows = search.connection.prepare('SELECT user_text FROM messages_fts ORDER BY rowid').all()
+  expect(rows.map((row) => row.user_text)).toEqual(['original', 'append 1', 'append 2'])
+})
+
+it('indexes the complete transcript when search starts without a saved index', async () => {
+  const path = join(root, 'session.jsonl')
+  await writeFile(path, `${userRecord(0, 'original')}\n`)
+  await scan(path)
+  await flushSessionParseCachePersist()
+  restart()
+  await appendFile(path, `${userRecord(1, 'new message')}\n`)
+  search = new SessionSearchStore(join(root, 'search.sqlite'))
+  registerSessionSearchIndexConsumer(search)
+  await runSessionSearchIndexPass(search, [await sessionCandidate('claude', path)], {
+    rows: new Map()
+  })
+  const rows = search.connection.prepare('SELECT user_text FROM messages_fts ORDER BY rowid').all()
+  expect(rows.map((row) => row.user_text)).toEqual(['original', 'new message'])
+})

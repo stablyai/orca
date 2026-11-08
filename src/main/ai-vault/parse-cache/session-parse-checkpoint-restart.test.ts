@@ -122,7 +122,7 @@ describe('claude parse checkpoints across restarts', () => {
     const transcript = join(root, `${SESSION_ID}.jsonl`)
     await writeFile(
       transcript,
-      `${userRecord(0, 'first question')}\n${assistantRecord(1, 'answer')}\n`
+      `${userRecord(0, 'first question')}\n${assistantRecord(1, 'answer')}\n${JSON.stringify({ type: 'progress', padding: 'x'.repeat(32768) })}\n`
     )
     const first = await scan(transcript)
     expect(first.stats.fullParses).toBe(1)
@@ -136,7 +136,7 @@ describe('claude parse checkpoints across restarts', () => {
     expect(grown.stats.incremental).toBe(1)
     expect(grown.stats.fullParses).toBe(0)
     expect(grown.stats.bytesRead).toBeGreaterThan(0)
-    expect(grown.stats.bytesRead).toBeLessThan((await claudeCandidate(transcript)).file.sizeBytes!)
+    expect(grown.stats.bytesRead).toBeLessThan((await stat(transcript)).size)
 
     const whole = await parseClaudeSessionFile((await claudeCandidate(transcript)).file)
     expect(grown.session).toEqual(whole)
