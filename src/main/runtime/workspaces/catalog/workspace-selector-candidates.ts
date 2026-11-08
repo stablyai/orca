@@ -136,7 +136,8 @@ function choiceLines(choices: readonly WorkspaceSelectorChoice[]): string[] {
 export function assertUniqueFolderWorkspaceId(
   catalog: FolderCatalog,
   folderId: string,
-  selector: string
+  selector: string,
+  outcome = 'Nothing was changed.'
 ): void {
   const rows = catalog.folderWorkspaces.filter((folder) => folder.id === folderId)
   if (rows.length < 2) {
@@ -153,7 +154,7 @@ export function assertUniqueFolderWorkspaceId(
     [
       `Folder workspace id "${folderId}" belongs to ${rows.length} folder workspaces in this Orca, so no selector can name one of them:`,
       ...choiceLines(candidates),
-      `Nothing was changed. ${repair}`
+      `${outcome} ${repair}`
     ].join('\n'),
     { selector, candidates, duplicateFolderId: folderId, nextSteps: [repair] }
   )

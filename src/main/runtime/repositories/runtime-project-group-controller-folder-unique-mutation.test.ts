@@ -39,12 +39,13 @@ function createController(rows: FolderWorkspace[], onTeardown: () => void = () =
     hydrateRepo: (repo) => repo
   })
   const teardown = vi.fn(async () => onTeardown())
+  const cleanup = vi.fn()
   const store: RuntimeStore = {
     getProjectGroups: () => [],
     getRepos: () => [],
     getFolderWorkspaces: () => folders.getFolderWorkspaces(),
     updateFolderWorkspace: (id, updates) => folders.updateFolderWorkspace(id, updates),
-    removeFolderWorkspace: (id, only) => folders.removeFolderWorkspace(id, only),
+    removeFolderWorkspace: (id) => folders.removeFolderWorkspace(id),
     getRepo: unused,
     addRepo: unused,
     updateRepo: unused,
@@ -62,10 +63,10 @@ function createController(rows: FolderWorkspace[], onTeardown: () => void = () =
     resolveFolderConnectionId: () => null,
     teardownFolderWorkspacePtys: teardown,
     acquireFileWatcherRemoval: async () => ({ finish: async () => undefined }),
-    cleanupRemovedFolderWorkspaceState: () => undefined,
+    cleanupRemovedFolderWorkspaceState: cleanup,
     emitWorktreeLifecycle: () => undefined
   })
-  return { controller, state, teardown }
+  return { controller, state, teardown, cleanup }
 }
 
 describe('folder workspace update and delete with requireUniqueId', () => {
@@ -92,7 +93,7 @@ describe('folder workspace update and delete with requireUniqueId', () => {
     expect(deps.teardown).not.toHaveBeenCalled()
   })
 
-  it('deletes only the checked row when a twin appears during teardown', async () => {
+  it('refuses the delete when a twin appears during teardown, before any cleanup', async () => {
     const twin = folderRow({ comment: 'added during teardown' })
     const deps = createController([folderRow({ comment: 'selected' })], () => {
       deps.state.folderWorkspaces = [...deps.state.folderWorkspaces, twin]
@@ -100,8 +101,12 @@ describe('folder workspace update and delete with requireUniqueId', () => {
 
     await expect(
       deps.controller.deleteFolderWorkspace('hub-a', { requireUniqueId: true })
-    ).resolves.toEqual({ deleted: true })
+    ).rejects.toMatchObject({ code: 'selector_ambiguous' })
 
-    expect(deps.state.folderWorkspaces.map((row) => row.comment)).toEqual(['added during teardown'])
+    expect(deps.state.folderWorkspaces.map((row) => row.comment)).toEqual([
+      'selected',
+      'added during teardown'
+    ])
+    expect(deps.cleanup).not.toHaveBeenCalled()
   })
 })

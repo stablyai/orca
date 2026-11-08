@@ -11,13 +11,15 @@ export type FolderWorkspaceMutationOptions = { requireUniqueId?: boolean }
 export function assertUniqueIdWhenRequired(
   store: RuntimeStore,
   folderWorkspaceId: string,
-  options: FolderWorkspaceMutationOptions
+  options: FolderWorkspaceMutationOptions,
+  outcome?: string
 ): void {
   if (options.requireUniqueId) {
     assertUniqueFolderWorkspaceId(
       folderCatalogOf(store),
       folderWorkspaceId,
-      folderWorkspaceKey(folderWorkspaceId)
+      folderWorkspaceKey(folderWorkspaceId),
+      outcome
     )
   }
 }
