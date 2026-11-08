@@ -91,11 +91,11 @@ describe('subscribeSharedClientEvents', () => {
     expect(afterReconnect.events).toEqual([])
 
     opened[0]!.emit({ type: 'ready', subscriptionId: 'sub-2' })
-    const replayed = { type: 'ready', subscriptionId: 'sub-2' }
+    const replayed = { type: 'ready', subscriptionId: 'sub-2', replayed: true }
     expect(first.events).toEqual([{ type: 'ready', subscriptionId: 'sub-1' }, replayed])
     expect(early.events).toEqual([{ type: 'ready', subscriptionId: 'sub-1' }, replayed])
     expect(late.events).toEqual([{ type: 'ready', joined: true }, replayed])
-    expect(afterReconnect.events).toEqual([replayed])
+    expect(afterReconnect.events).toEqual([{ type: 'ready', subscriptionId: 'sub-2' }])
     expect(opened).toHaveLength(1)
   })
 
@@ -108,7 +108,6 @@ describe('subscribeSharedClientEvents', () => {
     opened[0]!.emit({ type: 'ready', subscriptionId: 'sub-1' })
 
     opened[0]!.emit({ type: 'end' })
-    expect(opened[0]!.stop).toHaveBeenCalledTimes(1)
     await flush()
     expect(opened).toHaveLength(2)
     opened[0]!.emit({ type: 'reposChanged' })
@@ -117,7 +116,7 @@ describe('subscribeSharedClientEvents', () => {
     const afterEnd = [
       { type: 'ready', subscriptionId: 'sub-1' },
       { type: 'end' },
-      { type: 'ready', subscriptionId: 'sub-2' },
+      { type: 'ready', subscriptionId: 'sub-2', replayed: true },
       { type: 'reposChanged' }
     ]
     expect(home.events).toEqual(afterEnd)

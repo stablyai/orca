@@ -75,8 +75,6 @@ export function useLiveWorktreeName({
       }
       let stale = false
       let eventStreamReady = false
-      // A ready after the first follows a reconnect or a reopened stream, which missed title notices.
-      let heardReady = false
       let hasSuccessfulRefresh = false
       let fallbackInterval: ReturnType<typeof setInterval> | null = null
       let refreshGeneration = 0
@@ -163,13 +161,12 @@ export function useLiveWorktreeName({
           return
         }
         if (event.type === 'ready') {
-          const replayed = heardReady
-          heardReady = true
           eventStreamReady = true
           if (hasSuccessfulRefresh) {
             stopFallbackPoll()
           }
-          if (replayed) {
+          if ('replayed' in event) {
+            // A reopened stream or path switch missed title notices.
             invalidateAndRefresh()
           }
           return

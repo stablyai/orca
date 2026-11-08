@@ -52,7 +52,6 @@ function startHostEventRouter(
   hostId: string,
   client: RpcClient
 ): () => void {
-  let ready = false
   // When the stream last said it was live; a replayed ready may have missed events since.
   let readyAt = 0
   const floorTimers = new Map<string, ReturnType<typeof setTimeout>>()
@@ -109,11 +108,10 @@ function startHostEventRouter(
 
   const onEvent = (event: SharedClientEvent): void => {
     if (event.type === 'ready') {
-      // Events are not queued while disconnected or between a stream's end and its reopen, so a replayed ready may follow missed changes.
-      if (ready && !('joined' in event)) {
+      // Events are not queued while disconnected or between a stream's end and its reopen.
+      if ('replayed' in event) {
         onReplayedReady(readyAt)
       }
-      ready = true
       readyAt = Date.now()
       return
     }

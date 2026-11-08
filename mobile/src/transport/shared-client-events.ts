@@ -6,7 +6,8 @@ type WireReady = Extract<RuntimeClientEventStreamMessage, { type: 'ready' }>
 
 export type SharedClientEvent =
   | Exclude<RuntimeClientEventStreamMessage, { type: 'ready' }>
-  | WireReady
+  // `replayed`: this listener heard a ready before, so events since then may have been missed.
+  | (WireReady & { replayed?: true })
   // Joined a stream already live on this connection: no snapshot and no per-subscription replay come.
   | { type: 'ready'; joined: true }
   | { type: 'error'; message?: string }
@@ -19,13 +20,18 @@ export type SharedClientEventsClient = Pick<
 >
 
 // One `runtime.clientEvents.subscribe` on the transport; payloads from a wire that is no longer current are dropped.
-type Wire = { stop: (() => void) | null; ready: boolean }
+type Wire = {
+  stop: (() => void) | null
+  ready: boolean
+  // The connection this wire's last `ready` arrived on.
+  readyOn: string | null
+}
+
+type Subscription = { listener: SharedClientEventListener; heardReady: boolean }
 
 type SharedStream = {
-  listeners: Set<{ listener: SharedClientEventListener }>
+  listeners: Set<Subscription>
   wire: Wire | null
-  // The connection the last wire `ready` arrived on; null until one does.
-  readyOn: string | null
   // A wire that failed before its ready opens again on the next connected edge, not in the same one.
   stopWatching: () => void
 }
@@ -36,24 +42,26 @@ const streams = new WeakMap<SharedClientEventsClient, SharedStream>()
  * One `runtime.clientEvents` wire stream per client, shared by every listener in this JS world.
  * Every wire event reaches every listener; a listener that joins after the wire's `ready` on the
  * current connection gets a `joined` ready instead. When the wire ends or fails, listeners hear it
- * and the stream opens a fresh wire for them; its `ready` is a replay, since events were missed.
+ * and the stream opens a fresh wire for them; its `ready` comes `replayed`, since events were missed.
  * The stream closes once its last listener leaves.
  */
 export function subscribeSharedClientEvents(
   client: SharedClientEventsClient,
   listener: SharedClientEventListener
 ): () => void {
-  const subscription = { listener }
+  const subscription: Subscription = { listener, heardReady: false }
   const joined = streams.get(client) ?? createStream(client)
   joined.listeners.add(subscription)
   if (joined.wire) {
     // Deferred like a wire reply, so a caller never hears back before subscribe returns.
     queueMicrotask(() => {
+      const readyOn = joined.wire?.readyOn ?? null
       if (
         joined.listeners.has(subscription) &&
-        joined.readyOn !== null &&
-        joined.readyOn === connectionKey(client)
+        readyOn !== null &&
+        readyOn === connectionKey(client)
       ) {
+        subscription.heardReady = true
         listener({ type: 'ready', joined: true })
       }
     })
@@ -84,7 +92,6 @@ function createStream(client: SharedClientEventsClient): SharedStream {
   const stream: SharedStream = {
     listeners: new Set(),
     wire: null,
-    readyOn: null,
     stopWatching: () => {}
   }
   stream.stopWatching = client.onStateChange((state) => {
@@ -97,7 +104,7 @@ function createStream(client: SharedClientEventsClient): SharedStream {
 }
 
 function openWire(client: SharedClientEventsClient, stream: SharedStream): void {
-  const wire: Wire = { stop: null, ready: false }
+  const wire: Wire = { stop: null, ready: false, readyOn: null }
   stream.wire = wire
   let stop: () => void
   try {
@@ -131,11 +138,10 @@ function deliver(
   let reopen = false
   if (payload.type === 'ready') {
     wire.ready = true
-    stream.readyOn = connectionKey(client)
+    wire.readyOn = connectionKey(client)
   } else if (payload.type === 'end' || payload.type === 'error') {
     // A wire that went live may open again at once; one refused before ready waits for a new connection.
     reopen = wire.ready
-    stream.readyOn = null
     stream.wire = null
     // Releases the transport's record too, so a path switch can't replay the dead subscribe.
     wire.stop?.()
@@ -147,7 +153,13 @@ function deliver(
       continue
     }
     try {
-      subscription.listener(payload)
+      if (payload.type === 'ready') {
+        const replayed = subscription.heardReady
+        subscription.heardReady = true
+        subscription.listener(replayed ? { ...payload, replayed } : payload)
+      } else {
+        subscription.listener(payload)
+      }
     } catch (error) {
       // One throwing consumer must not starve the rest; rethrow to the transport afterwards.
       failure ??= { error }
