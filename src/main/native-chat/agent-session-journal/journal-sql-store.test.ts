@@ -558,3 +558,75 @@ it('resolves a text snapshot against its persisted turn after an earlier step se
     turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
   })
 })
+
+it('refuses stale running items on the writer while permitting completion of existing work', async () => {
+  const { journal } = await fixture()
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'turn' },
+    agentJournalTurnBody({ turnId: 'turn', state: 'interrupted', userItemId: 'orca:turn' }),
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'done' },
+    { kind: 'tool-call', name: 'read', input: {}, state: 'completed' },
+    { fence: 1, turnScope: { kind: 'turn', turnItemId: 'orca:turn' } }
+  )
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'open' },
+    { kind: 'tool-call', name: 'read', input: {}, state: 'running' },
+    { fence: 1, turnScope: { kind: 'turn', turnItemId: 'orca:turn' } }
+  )
+  expect(
+    await journal.appendSteps([
+      {
+        kind: 'resolved-item',
+        resolution: {
+          kind: 'guarded-item',
+          change: 'update',
+          identity: { provider: 'orca', clientMessageId: 'done' },
+          body: { kind: 'tool-call', name: 'read', input: {}, state: 'running' }
+        },
+        options: { fence: 1, turnScope: { kind: 'thread' } },
+        reservedBytes: 4096
+      },
+      {
+        kind: 'resolved-item',
+        resolution: {
+          kind: 'guarded-item',
+          change: 'open',
+          identity: { provider: 'orca', clientMessageId: 'late' },
+          body: { kind: 'tool-call', name: 'read', input: {}, state: 'running' }
+        },
+        options: { fence: 1, turnScope: { kind: 'turn', turnItemId: 'orca:turn' } },
+        reservedBytes: 4096
+      },
+      {
+        kind: 'resolved-item',
+        resolution: {
+          kind: 'guarded-item',
+          change: 'close',
+          identity: { provider: 'orca', clientMessageId: 'open' },
+          body: { kind: 'tool-call', name: 'read', input: {}, state: 'completed' }
+        },
+        options: { fence: 1, turnScope: { kind: 'thread' } },
+        reservedBytes: 4096
+      }
+    ])
+  ).toEqual({
+    outcomes: [
+      { kind: 'dropped', reason: 'item-settled' },
+      { kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' },
+      { kind: 'committed', wrote: true }
+    ]
+  })
+  expect(await journal.reads.item('orca:done')).toMatchObject({
+    revision: 1,
+    body: { state: 'completed' }
+  })
+  expect(await journal.reads.item('orca:late')).toBeNull()
+  expect(await journal.reads.item('orca:open')).toMatchObject({
+    revision: 2,
+    body: { state: 'completed' },
+    turnScope: { kind: 'turn', turnItemId: 'orca:turn' }
+  })
+})

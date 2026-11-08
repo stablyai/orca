@@ -1,35 +1,18 @@
-import { isDeepStrictEqual } from 'node:util'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { cancelledJournalPromptBody } from '../agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import { requiresTerminalSettlement } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { unhandledProviderFrameJournalItem } from '../agent-session-wire/providers/unhandled-provider-frame'
-import { relightsProviderTimelineBackgroundTask } from './provider-timeline-background-tasks'
 import { providerTimelinePlacement } from './provider-timeline-context'
 import type {
   ProviderTimelineDecidedEvent,
   ProviderTimelineDecision,
   ProviderTimelineDecisionInput
 } from './provider-timeline-decision'
-import {
-  providerKey,
-  providerTimelineTurnRowState,
-  turnOf,
-  type ProviderTimelineRowId
-} from './provider-timeline-rows'
+import { providerKey, providerTimelineTurnRowState, turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineRequestBody } from './provider-timeline-event'
 import type { ProviderTimelineOpenItem } from './provider-timeline-state'
-
-type Journal = StructuredAgentSessionTransitionJournal
-type ItemChange = 'open' | 'update' | 'close'
-
-function settledTool(body: AgentJournalItemBody | null): boolean {
-  return body?.kind === 'tool-call' && body.state !== 'running'
-}
 
 function pendingPrompt(body: AgentJournalItemBody | null): body is ProviderTimelineRequestBody {
   return (
@@ -37,39 +20,11 @@ function pendingPrompt(body: AgentJournalItemBody | null): body is ProviderTimel
   )
 }
 
-/** Preserve terminal tools/tasks; settled turns accept updates to open work, never new unsettled work. */
-function refusesItemWrite(
-  journal: Journal,
-  row: ProviderTimelineRowId,
-  change: ItemChange,
-  body: AgentJournalItemBody,
-  placed: string | null
-): boolean {
-  const held = journal.item(row.itemId)
-  const turn = held ? turnOf(held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE) : placed
-  if (
-    held &&
-    settledTool(held.body) &&
-    (change === 'close' || !isDeepStrictEqual(held.body, body))
-  ) {
-    return true
-  }
-  if (relightsProviderTimelineBackgroundTask(held?.body ?? null, body)) {
-    return true
-  }
-  return (
-    requiresTerminalSettlement(body) &&
-    !(held && requiresTerminalSettlement(held.body)) &&
-    turn !== null &&
-    providerTimelineTurnRowState(journal, turn) === 'settled'
-  )
-}
-
 export function decideItem(
   input: ProviderTimelineDecisionInput,
   event: Extract<ProviderTimelineDecidedEvent, { type: 'item.open' | 'item.update' | 'item.close' }>
 ): ProviderTimelineDecision {
-  const { state, journal, context } = input
+  const { state, context } = input
   const change =
     event.type === 'item.open' ? 'open' : event.type === 'item.update' ? 'update' : 'close'
   const row = context.rows.item('item', providerKey(event.item), event.join?.thread ?? null)
@@ -78,23 +33,25 @@ export function decideItem(
   const scope = providerTimelinePlacement(context, state, event.join)
   const placed = turnOf(scope)
   if (
-    (closed &&
-      (change === 'close' || (change === 'update' && requiresTerminalSettlement(event.body)))) ||
-    (journal && refusesItemWrite(journal, row, change, event.body, placed))
+    closed &&
+    (change === 'close' || (change === 'update' && requiresTerminalSettlement(event.body)))
   ) {
     return { dropped: 'item-settled' }
   }
   const obligation = change !== 'close' && requiresTerminalSettlement(event.body)
+  const opened: ProviderTimelineOpenItem = { kind: 'item', row, turnItemId: placed }
   return {
     writes: [
       {
         reservedBytes: estimateStructuredAgentSessionItemBytes(row.identity, event.body),
         lifecycle: change !== 'update',
         options: { ...event.producer, turnScope: scope },
-        resolve: (at) =>
-          refusesItemWrite(at, row, change, event.body, placed)
-            ? null
-            : { identity: row.identity, body: event.body }
+        resolution: { kind: 'guarded-item', identity: row.identity, body: event.body, change },
+        onResolved: (outcome) => {
+          if (outcome.kind === 'dropped' && state.items.get(key) === opened) {
+            state.items.delete(key)
+          }
+        }
       }
     ],
     ...(change === 'close' ? { closes: key } : {}),
@@ -103,7 +60,7 @@ export function decideItem(
         next.close(key, placed)
       } else if (obligation) {
         next.closedItems.delete(key)
-        next.items.set(key, { kind: 'item', row, turnItemId: placed })
+        next.items.set(key, opened)
       } else if (change === 'open' || !next.closedItems.has(key)) {
         next.closedItems.delete(key)
         next.items.delete(key)
@@ -212,14 +169,13 @@ export function decideFrame(
     context.rows.minted('f', input.serial()),
     event.join?.thread ?? null
   )
-  const write = { identity: row.identity, body: frame.body }
   return {
     writes: [
       {
         reservedBytes: estimateStructuredAgentSessionItemBytes(row.identity, frame.body),
         lifecycle: false,
         options: { turnScope: providerTimelinePlacement(context, state, event.join) },
-        resolve: () => write
+        resolution: { kind: 'literal', identity: row.identity, body: frame.body }
       }
     ]
   }

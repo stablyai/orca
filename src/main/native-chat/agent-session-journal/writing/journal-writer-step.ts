@@ -33,7 +33,7 @@ export type JournalWriterStep =
 
 export type JournalStepOutcome =
   | { kind: 'committed'; wrote: boolean }
-  | { kind: 'dropped'; reason?: 'turn-settled'; turnItemId?: string }
+  | { kind: 'dropped'; reason?: 'turn-settled' | 'item-settled'; turnItemId?: string }
 
 export type JournalStepsResult = {
   outcomes: JournalStepOutcome[]

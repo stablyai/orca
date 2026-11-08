@@ -7,6 +7,8 @@ import type { JournalLifecycleMutationInput } from '../agent-session-journal/wri
 import type { StructuredAgentSessionItemAppendOptions } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ProviderTimelineContext } from './provider-timeline-context'
+import type { JournalTimelineItemResolution } from '../agent-session-journal/writing/journal-timeline-resolution'
+import type { JournalStepOutcome } from '../agent-session-journal/writing/journal-writer-step'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import {
   decideFrame,
@@ -50,13 +52,19 @@ export type ProviderTimelineResolvedWrite = {
 }
 
 /** Placement is fixed at admission; content resolves at execution. */
-export type ProviderTimelineItemWrite = {
+type ProviderTimelineItemWriteOptions = {
   reservedBytes: number
   lifecycle: boolean
   /** Existing rows keep their scope; new rows use admission placement. */
   options: StructuredAgentSessionItemAppendOptions
-  resolve: (journal: Journal) => ProviderTimelineResolvedWrite | null
+  onResolved?: (outcome: JournalStepOutcome) => void
 }
+
+export type ProviderTimelineItemWrite = ProviderTimelineItemWriteOptions &
+  (
+    | { resolution: JournalTimelineItemResolution }
+    | { resolve: (journal: Journal) => ProviderTimelineResolvedWrite | null }
+  )
 
 export type ProviderTimelineDecision = {
   dropped?: ProviderTimelineDropRule

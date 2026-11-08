@@ -79,10 +79,11 @@ export function planProviderTimelineWrites(
     plan.item(
       {
         reservedBytes: write.reservedBytes,
-        resolve: write.resolve,
+        ...('resolution' in write ? { resolution: write.resolution } : { resolve: write.resolve }),
         options: write.options
       },
-      write.lifecycle
+      write.lifecycle,
+      write.onResolved
     )
   }
 }

@@ -56,12 +56,21 @@ export class ProviderTimelinePlan {
     sink: ProviderTimelineSink,
     onPublished?: () => void
   ): StructuredAgentSessionSinkAdmission {
+    let admitted = false
+    let synchronousOutcomes: readonly JournalStepOutcome[] | undefined
+    const resolve = (outcomes: readonly JournalStepOutcome[]) => {
+      if (admitted) {
+        this.resolved.forEach((change) => change(outcomes))
+      } else {
+        synchronousOutcomes = outcomes
+      }
+    }
     if (this.steps.length > 0) {
       const admission = sink.tryAppendTransition({
         steps: this.steps,
         lifecycle: this.lifecycle,
         publish: true,
-        onResolved: (outcomes) => this.resolved.forEach((change) => change(outcomes)),
+        onResolved: resolve,
         ...(onPublished ? { onPublished } : {})
       })
       if (!admission.accepted) {
@@ -70,6 +79,10 @@ export class ProviderTimelinePlan {
     }
     for (const change of this.admitted) {
       change()
+    }
+    admitted = true
+    if (synchronousOutcomes) {
+      resolve(synchronousOutcomes)
     }
     return ADMITTED
   }
