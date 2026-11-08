@@ -21,3 +21,14 @@ export function githubProjectHost(host?: string | null): string {
   const trimmed = host?.trim()
   return trimmed || 'github.com'
 }
+
+/** Settings rows carry only identity fields: the host's settings schema rejects
+ * extra keys such as a picker row's title. */
+export function toGitHubProjectIdentity(project: GitHubProjectIdentity): GitHubProjectIdentity {
+  return {
+    owner: project.owner,
+    ownerType: project.ownerType,
+    number: project.number,
+    host: githubProjectHost(project.host)
+  }
+}
