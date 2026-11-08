@@ -99,6 +99,18 @@ CREATE TABLE journal_items (
   queue_failed_at INTEGER NOT NULL DEFAULT 0,
   queue_failure_witnessed_through INTEGER NOT NULL DEFAULT 0,
   queue_failure_report_turn_item_id TEXT,
+  placement_json TEXT,
+  kind TEXT,
+  message_role TEXT,
+  turn_id TEXT,
+  opener_item_id TEXT,
+  context_clear INTEGER NOT NULL DEFAULT 0,
+  goal_transition INTEGER NOT NULL DEFAULT 0,
+  producer_agent_id TEXT,
+  producer_parent_ref TEXT,
+  producer_attempt INTEGER,
+  prompt INTEGER NOT NULL DEFAULT 0,
+  signed_out INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(session_id, epoch, item_id)
 );
 CREATE TABLE journal_item_subagent_names (
@@ -121,6 +133,12 @@ CREATE TABLE journal_item_tombstones (
   item_id TEXT NOT NULL,
   revision INTEGER NOT NULL,
   PRIMARY KEY(session_id, epoch, item_id)
+) WITHOUT ROWID;
+CREATE TABLE journal_removed_turns (
+  session_id TEXT NOT NULL,
+  epoch TEXT NOT NULL,
+  turn_id TEXT NOT NULL,
+  PRIMARY KEY(session_id, epoch, turn_id)
 ) WITHOUT ROWID;
 CREATE TABLE journal_item_aliases (
   session_id TEXT NOT NULL,
@@ -145,6 +163,8 @@ CREATE TABLE journal_submission_attempts (
   accepted_sequence INTEGER,
   fingerprint TEXT NOT NULL,
   dispatch_state TEXT NOT NULL,
+  dispatch_fence INTEGER NOT NULL DEFAULT 0,
+  signed_out INTEGER NOT NULL DEFAULT 0 CHECK(signed_out IN (0,1)),
   candidate INTEGER NOT NULL DEFAULT 0,
   admitted_personal INTEGER NOT NULL DEFAULT 0 CHECK(admitted_personal IN (0,1)),
   payload_json TEXT NOT NULL,
@@ -217,6 +237,33 @@ CREATE INDEX journal_items_queue_failure_report ON journal_items(session_id, epo
 CREATE INDEX journal_items_stop_turn ON journal_items(session_id, epoch, turn_item_id)
   WHERE hidden=0 AND turn_item_id IS NOT NULL;
 CREATE INDEX journal_events_saved_at ON journal_events(saved_at,session_id,epoch,sequence);
+
+CREATE INDEX journal_items_kind ON journal_items(session_id, epoch, kind, ordinal) WHERE hidden=0;
+CREATE INDEX journal_items_user_message ON journal_items(session_id, epoch, ordinal)
+  WHERE hidden=0 AND kind='message' AND message_role='user';
+CREATE INDEX journal_items_named_turn ON journal_items(session_id, epoch, turn_id, sequence, sequence_index, ordinal)
+  WHERE hidden=0 AND turn_id IS NOT NULL;
+CREATE INDEX journal_items_opener ON journal_items(session_id, epoch, opener_item_id, ordinal)
+  WHERE hidden=0 AND opener_item_id IS NOT NULL;
+CREATE INDEX journal_items_context_clear ON journal_items(session_id, epoch, sequence)
+  WHERE hidden=0 AND context_clear=1;
+CREATE INDEX journal_items_goal_transition ON journal_items(session_id, epoch, sequence, ordinal)
+  WHERE hidden=0 AND goal_transition=1;
+CREATE INDEX journal_items_producer_parent ON journal_items(session_id, epoch, producer_parent_ref, ordinal, producer_agent_id)
+  WHERE hidden=0 AND producer_parent_ref IS NOT NULL;
+CREATE INDEX journal_items_producer_attempt ON journal_items(session_id, epoch, producer_agent_id, producer_attempt)
+  WHERE hidden=0 AND producer_agent_id IS NOT NULL;
+CREATE INDEX journal_items_prompt ON journal_items(session_id, epoch, sequence, ordinal)
+  WHERE hidden=0 AND prompt=1;
+CREATE INDEX journal_items_signed_out ON journal_items(session_id, epoch, COALESCE(execution_owner,owner_fence))
+  WHERE hidden=0 AND root=1 AND signed_out=1;
+CREATE INDEX journal_submission_accepted_position ON journal_submission_attempts(session_id, epoch, accepted_sequence, ordinal)
+  WHERE current=1 AND accepted_sequence IS NOT NULL;
+CREATE INDEX journal_submission_signed_out ON journal_submission_attempts(session_id,epoch,dispatch_fence)
+  WHERE current=1 AND signed_out=1;
+CREATE INDEX journal_submission_order ON journal_submission_attempts(session_id, epoch, submitted_at, ordinal, message_id)
+  WHERE current=1;
+
 CREATE TABLE journal_maintenance (
   id INTEGER PRIMARY KEY CHECK(id=1),
   compacted_at INTEGER NOT NULL

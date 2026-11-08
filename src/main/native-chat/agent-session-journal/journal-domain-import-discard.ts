@@ -19,6 +19,7 @@ export function discardJournalDomainImportPage(
     ['journal_item_subagent_names', 'epoch,subagent_id,item_id'],
     ['journal_items', 'epoch,item_id'],
     ['journal_item_tombstones', 'epoch,item_id'],
+    ['journal_removed_turns', 'epoch,turn_id'],
     ['journal_item_aliases', 'epoch,provider_item_id'],
     ['journal_submission_attempts', 'epoch,message_id,attempt_sequence,attempt_index'],
     ['journal_send_receipts', 'epoch,message_id'],

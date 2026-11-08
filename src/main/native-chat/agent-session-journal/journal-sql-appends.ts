@@ -244,14 +244,13 @@ function textMessages(steps: readonly JournalWriterStep[]): JournalSqlMessage[] 
     if (step.kind !== 'resolved-item' || step.resolution.kind !== 'text-snapshot') {
       return null
     }
-    const { identity, body, scopeItemIds, position } = step.resolution
+    const { identity, body, scopeItemIds } = step.resolution
     messages.push({
       kind: 'text-snapshot',
       identity,
       body,
       options: step.options,
-      scopeItemIds,
-      position
+      scopeItemIds
     })
   }
   return messages

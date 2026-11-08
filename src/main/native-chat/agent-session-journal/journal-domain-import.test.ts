@@ -19,6 +19,7 @@ import { JournalSqlConversions } from './journal-sql-conversions'
 import { journalSqlReaderPath } from './journal-sql-worker-bundle.test-fixture'
 import { readJournalDomainQueuePauseContext } from './journal-domain-queue-pauses'
 import { readJournalDomainTurnScope } from './journal-domain-turn-scope'
+import { readJournalDomainItems } from './journal-sql-item-reads'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -192,6 +193,16 @@ it('imports a frozen saved chat as typed domain rows, ready last, and resumes af
       }
     )
   ).toEqual({ kind: 'turn', turnItemId: 'failed' })
+  expect(
+    readJournalDomainItems(
+      db,
+      { sessionId: 'session', epoch: 'epoch' },
+      {
+        kind: 'named-turn',
+        turnId: 'failed'
+      }
+    )
+  ).toEqual({ kind: 'named-turn', turn: { scope: null, removed: true } })
 })
 
 it('keeps a ready chat on its domain rows and never reads the changed or missing frozen source', () => {

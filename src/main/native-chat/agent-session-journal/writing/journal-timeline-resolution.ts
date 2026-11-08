@@ -10,7 +10,6 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import type { JournalResolvedItem } from './journal-item-appender'
 import type { JournalTimelineView } from './journal-timeline-view'
-import type { JournalTextSnapshotPosition } from './journal-text-snapshot-position'
 import { requiresTerminalSettlement } from '../item-lifecycle/journal-terminal-settlement'
 import { relightsProviderTimelineBackgroundTask } from '../../agent-session-timeline/provider-timeline-background-tasks'
 import {
@@ -40,7 +39,6 @@ type TimelineItemResolution =
       kind: 'text-snapshot'
       identity: AgentJournalItemIdentity
       body: AgentJournalMessageItem
-      position?: JournalTextSnapshotPosition
     }
   | {
       kind: 'guarded-item'

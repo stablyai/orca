@@ -36,7 +36,6 @@ import {
   readJournalSqlAcceptedInputs,
   type JournalSqlAcceptedInputs
 } from './journal-sql-accepted-inputs'
-import type { JournalTextSnapshotPosition } from './writing/journal-text-snapshot-position'
 
 type JournalDomainItemFields = {
   identity: AgentJournalItemIdentity
@@ -50,7 +49,6 @@ export type JournalDomainItemWrite = JournalDomainItemFields &
     | {
         kind: 'text-snapshot'
         body: AgentJournalMessageItem
-        position?: JournalTextSnapshotPosition
       }
   )
 
@@ -115,21 +113,19 @@ export function applyJournalDomainItem(
       itemId = agentJournalSubmissionKey(echo.clientMessageId)
     }
   }
-  const position =
+  const blindText =
     input.kind === 'text-snapshot' &&
-    input.position?.itemId === itemId &&
     (input.body.role === 'assistant' || input.body.role === 'reasoning') &&
     input.body.blocks.every((block) => block.type === 'text')
-      ? input.position
-      : undefined
   const stored = db
-    .prepare(`SELECT revision, ordinal, owner_fence, execution_owner, hidden,
-      CASE WHEN revision=? THEN NULL ELSE payload_json END AS payload_json FROM journal_items
+    .prepare(`SELECT revision, ordinal, owner_fence, execution_owner, hidden, placement_json,
+      CASE WHEN ? AND kind='message' AND message_role IN ('assistant','reasoning')
+        THEN NULL ELSE payload_json END AS payload_json FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=?`)
-    .get(position?.revision ?? -1, ...prefix, itemId)
+    .get(Number(blindText), ...prefix, itemId)
   const previous: AgentJournalRenderItem | undefined = stored
-    ? stored.payload_json === null && position
-      ? { ...position, body: input.body }
+    ? stored.payload_json === null
+      ? { ...JSON.parse(String(stored.placement_json)), body: input.body }
       : JSON.parse(String(stored.payload_json))
     : undefined
   const item = (key: string): AgentJournalRenderItem | null => {
@@ -145,9 +141,14 @@ export function applyJournalDomainItem(
   }
   let scope = input.options.turnScope ?? { kind: 'thread' as const }
   for (const key of input.scopeItemIds ?? []) {
-    const related = item(key)
+    const related = db
+      .prepare(`SELECT json_extract(placement_json,'$.turnScope') AS scope_json
+      FROM journal_items WHERE session_id=? AND epoch=? AND item_id=COALESCE(
+        (SELECT item_id FROM journal_item_aliases WHERE session_id=? AND epoch=? AND provider_item_id=?),?)`)
+      .get(...prefix, ...prefix, key, key)
     if (related) {
-      scope = related.turnScope ?? { kind: 'thread' }
+      scope =
+        related.scope_json === null ? { kind: 'thread' } : JSON.parse(String(related.scope_json))
       break
     }
   }

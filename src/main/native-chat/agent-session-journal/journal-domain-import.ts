@@ -18,7 +18,7 @@ import {
 import { journalInputPresentationMember } from './input-order/journal-input-obligations'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { journalOutcomeSource } from './outcomes/journal-outcome-format'
-import { memoryJournalMap } from './journal-memory-collections'
+import { memoryJournalMap, memoryJournalSet } from './journal-memory-collections'
 import type { JournalReducerState } from './projection/journal-reducer'
 import { journalDomainStopNote } from './journal-domain-stop-notes'
 import type { JournalQueuePauseMarks } from './queued-messages/queued-message-pause'
@@ -76,6 +76,7 @@ export type JournalDomainImportPage =
   | { kind: 'cards'; rows: QueuedMessageRow[] }
   | { kind: 'activity'; rows: { fence: number; lastActivityAt: number }[] }
   | { kind: 'queue-clear-members'; rows: { messageId: string }[] }
+  | { kind: 'removed-turns'; rows: { turnId: string }[] }
 
 export type JournalDomainImportHeader = {
   sessionId: string
@@ -220,6 +221,10 @@ function* importPages(
       admittedPersonal: submission.queuedMessageId !== undefined && personal(submission),
       submission
     }))
+  )
+  yield* paged(
+    'removed-turns',
+    [...memoryJournalSet(state.removedTurnIds)].map((turnId) => ({ turnId }))
   )
   yield* paged('receipts', [...memoryJournalMap(state.receipts).values()])
   yield* paged('cards', [...cards.values()])

@@ -1,4 +1,7 @@
+import { journalDomainItemReadColumns } from './journal-domain-item-read-columns'
+import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import type Database from '../../sqlite/sync-database'
+import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { insertJournalDomainQueueRow, journalDomainQueueRow } from './journal-domain-queue-rows'
@@ -46,8 +49,9 @@ export function insertJournalDomainImportPage(
         db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,
         sequence,sequence_index,owner_fence,execution_owner,payload_json,hidden,root,subagent_row,
         subagent_group_key,turn_marker,wire_bytes,turn_item_id,original_stop_note_json,
-        queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
+        queue_command_turn,queue_failed_outcome,queue_failed_at,queue_failure_witnessed_through,queue_failure_report_turn_item_id,
+        placement_json,kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
       for (const {
         ordinal,
         ownerFence,
@@ -86,7 +90,9 @@ export function insertJournalDomainImportPage(
           Number(queueFailedOutcome),
           queueFailedAt,
           queueFailureWitnessedThrough,
-          queueFailureReportTurnItemId
+          queueFailureReportTurnItemId,
+          journalDomainItemPlacement(item),
+          ...journalDomainItemReadColumns(item)
         )
         if (Number(result.changes) > 0) {
           writeJournalDomainItemNames(
@@ -127,8 +133,8 @@ export function insertJournalDomainImportPage(
       const insert =
         db.prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,
         attempt_sequence,attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,
-        fingerprint,dispatch_state,candidate,admitted_personal,payload_json)
-        VALUES(?,?,?,?,0,1,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
+        fingerprint,dispatch_state,candidate,admitted_personal,dispatch_fence,signed_out,payload_json)
+        VALUES(?,?,?,?,0,1,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT DO NOTHING`)
       for (const { ordinal, candidate, admittedPersonal, submission } of page.rows) {
         insert.run(
           ...prefix,
@@ -142,6 +148,11 @@ export function insertJournalDomainImportPage(
           submission.dispatchState,
           Number(candidate),
           Number(admittedPersonal),
+          submission.fence,
+          Number(
+            submission.dispatchState === 'rejected' &&
+              readWholeAgentSessionFailureFact(submission.rejection)?.kind === 'notSignedIn'
+          ),
           JSON.stringify(submission)
         )
       }
@@ -169,6 +180,14 @@ export function insertJournalDomainImportPage(
         VALUES(?,?,?,?) ON CONFLICT DO NOTHING`)
       for (const { fence, lastActivityAt } of page.rows) {
         insert.run(...prefix, fence, lastActivityAt)
+      }
+      break
+    }
+    case 'removed-turns': {
+      const insert = db.prepare(`INSERT INTO journal_removed_turns(session_id,epoch,turn_id)
+        VALUES(?,?,?) ON CONFLICT DO NOTHING`)
+      for (const { turnId } of page.rows) {
+        insert.run(...prefix, turnId)
       }
       break
     }

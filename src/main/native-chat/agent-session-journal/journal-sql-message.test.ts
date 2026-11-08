@@ -3,7 +3,9 @@ import type Database from '../../sqlite/sync-database'
 import { message, messageFixture, target } from './journal-sql-message.test-fixture'
 import { commitJournalSqlMessages, prepareJournalSqlMessages } from './journal-sql-message-commit'
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import { journalDomainItemPlacement } from './journal-domain-item-placement'
 import { applyJournalDomainItem } from './journal-domain-item'
+import { readJournalDomainItems } from './journal-sql-item-reads'
 import { writeJournalDomainCurrentItem } from './journal-domain-current-item'
 
 const databases: Database.Database[] = []
@@ -304,15 +306,7 @@ it('retains a stream placement while honoring a newer moved row and a settled tu
   if (!first?.committed) {
     throw new Error('stream start did not commit')
   }
-  const position = first.value.outcomes[0]
-  if (position?.kind !== 'committed' || !position.position) {
-    throw new Error('stream start returned no placement')
-  }
-  const second = {
-    ...message('second'),
-    kind: 'text-snapshot' as const,
-    position: position.position
-  }
+  const second = { ...message('second'), kind: 'text-snapshot' as const }
   await commit(second)
   expect(item('orca:assistant')).toMatchObject({
     revision: 2,
@@ -328,8 +322,8 @@ it('retains a stream placement while honoring a newer moved row and a settled tu
     observedAt: 50,
     turnScope: { kind: 'turn' as const, turnItemId: 'orca:turn' }
   }
-  db.prepare(`UPDATE journal_items SET revision=3,sequence=8,sequence_index=2,payload_json=?
-    WHERE item_id='orca:assistant'`).run(JSON.stringify(moved))
+  db.prepare(`UPDATE journal_items SET revision=3,sequence=8,sequence_index=2,payload_json=?,placement_json=?
+    WHERE item_id='orca:assistant'`).run(JSON.stringify(moved), journalDomainItemPlacement(moved))
   await commit(second)
   expect(item('orca:assistant')).toMatchObject({
     revision: 4,
@@ -354,4 +348,33 @@ it('retains a stream placement while honoring a newer moved row and a settled tu
     value: { outcomes: [{ kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' }] }
   })
   expect(item('orca:assistant')?.revision).toBe(4)
+})
+
+it('retains removed turn identity when its item is reinserted', () => {
+  const { db, item } = fixture()
+  db.prepare(`INSERT INTO journal_item_tombstones(session_id,epoch,item_id,revision)
+    VALUES(?,?,?,9)`).run(target.sessionId, target.epoch, 'orca:turn')
+  db.prepare(`INSERT INTO journal_removed_turns(session_id,epoch,turn_id)
+    VALUES(?,?,?)`).run(target.sessionId, target.epoch, 'removed-turn')
+  db.exec('BEGIN')
+  applyJournalDomainItem(
+    db,
+    target,
+    {
+      kind: 'item',
+      identity: { provider: 'orca', clientMessageId: 'turn' },
+      body: { kind: 'turn', turnId: 'removed-turn', state: 'completed' },
+      options: { fence: 1, turnScope: { kind: 'thread' } }
+    },
+    100
+  )
+  db.exec('COMMIT')
+  expect(item('orca:turn')).toMatchObject({ revision: 10 })
+  expect(db.prepare('SELECT 1 FROM journal_item_tombstones').get()).toBeUndefined()
+  expect(
+    readJournalDomainItems(db, target, { kind: 'named-turn', turnId: 'removed-turn' })
+  ).toEqual({
+    kind: 'named-turn',
+    turn: { scope: { kind: 'turn', turnItemId: 'orca:turn' }, removed: true }
+  })
 })

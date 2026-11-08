@@ -8,12 +8,7 @@ import type {
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
 import { writeJournalDomainItemNames } from './journal-domain-item-names'
-import {
-  JOURNAL_DOMAIN_ITEM_READ_COLUMNS,
-  JOURNAL_DOMAIN_ITEM_READ_INDEXES,
-  JOURNAL_DOMAIN_TOMBSTONE_READ_COLUMNS,
-  journalDomainItemReadColumns
-} from './journal-domain-item-read-columns'
+import { journalDomainItemReadColumns } from './journal-domain-item-read-columns'
 import { readJournalDomainItems, type JournalDomainItemRead } from './journal-sql-item-reads'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
@@ -28,14 +23,6 @@ function chat() {
   const db = new Database(':memory:')
   databases.push(db)
   migrateJournalDomainSchema(db)
-  // TEMPORARY until the author folds the item-read fragment into frozen 001.
-  for (const column of JOURNAL_DOMAIN_ITEM_READ_COLUMNS) {
-    db.exec(`ALTER TABLE journal_items ADD COLUMN ${column}`)
-  }
-  for (const column of JOURNAL_DOMAIN_TOMBSTONE_READ_COLUMNS) {
-    db.exec(`ALTER TABLE journal_item_tombstones ADD COLUMN ${column}`)
-  }
-  db.exec(JOURNAL_DOMAIN_ITEM_READ_INDEXES)
   db.prepare(
     `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES(?,?,900,1)`
   ).run(target.sessionId, target.epoch)
@@ -51,8 +38,8 @@ function chat() {
       (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json,hidden,
        root,subagent_row,subagent_group_key,turn_marker,wire_bytes,
        kind,message_role,turn_id,opener_item_id,context_clear,goal_transition,
-       producer_agent_id,producer_parent_ref,producer_attempt)
-      VALUES(?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+       producer_agent_id,producer_parent_ref,producer_attempt,prompt,signed_out)
+      VALUES(?,?,?,?,?,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       target.sessionId,
       target.epoch,
       item.itemId,
@@ -83,12 +70,18 @@ function chat() {
         'INSERT INTO journal_item_aliases(session_id,epoch,provider_item_id,item_id) VALUES(?,?,?,?)'
       )
       .run(target.sessionId, target.epoch, providerItemId, itemId)
-  const tombstone = (itemId: string, turnId: string | null = null) =>
-    db
-      .prepare(
-        'INSERT INTO journal_item_tombstones(session_id,epoch,item_id,revision,turn_id) VALUES(?,?,?,9,?)'
+  const tombstone = (itemId: string, turnId: string | null = null) => {
+    db.prepare(
+      'INSERT INTO journal_item_tombstones(session_id,epoch,item_id,revision) VALUES(?,?,?,9)'
+    ).run(target.sessionId, target.epoch, itemId)
+    if (turnId !== null) {
+      db.prepare('INSERT INTO journal_removed_turns(session_id,epoch,turn_id) VALUES(?,?,?)').run(
+        target.sessionId,
+        target.epoch,
+        turnId
       )
-      .run(target.sessionId, target.epoch, itemId, turnId)
+    }
+  }
   const send = (submission: AgentJournalSubmission, ordinal: number) =>
     db
       .prepare(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,attempt_index,

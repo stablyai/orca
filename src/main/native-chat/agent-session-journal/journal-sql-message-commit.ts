@@ -7,7 +7,6 @@ import {
 } from './journal-domain-item'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalStepOutcome } from './writing/journal-writer-step'
-import { journalTextSnapshotPosition } from './writing/journal-text-snapshot-position'
 import { journalSqlFailure, type JournalSqlFailure } from './journal-sql-failure'
 
 export type JournalSqlMessage = JournalDomainItemWrite & { body: AgentJournalMessageItem }
@@ -77,12 +76,7 @@ function applyMessageSteps(
       const commit = applyJournalDomainItem(db, target, step, savedAt)
       db.exec('RELEASE journal_message_step')
       result.cursor = commit.cursor
-      const item = commit.items[0]
-      result.outcomes.push(
-        commit.outcome.kind === 'committed' && item
-          ? { ...commit.outcome, position: journalTextSnapshotPosition(item) }
-          : commit.outcome
-      )
+      result.outcomes.push(commit.outcome)
       result.items.push(...commit.items)
       result.receipts.push(...commit.receipts)
       result.cards.push(...commit.cards)

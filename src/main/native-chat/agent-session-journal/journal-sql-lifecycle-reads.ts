@@ -1,17 +1,16 @@
+import type Database from '../../sqlite/sync-database'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { latestStructuredAgentSessionPrompt } from '../../../shared/agent-session/requests/structured-agent-session-latest-request'
-import {
-  journalStatusReportsSignedOut,
-  readJournalOutgrownChild,
-  readJournalRestartProgress,
-  type JournalLifecycleSnapshot,
-  type JournalOutgrownChild,
-  type JournalOutgrownChildRead,
-  type JournalRestartProgress
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { journalDomainContextHead } from './journal-sql-continuation-context'
+import { newestJournalDomainTurnOrClear } from './journal-sql-item-reads'
+import type {
+  JournalOutgrownChild,
+  JournalOutgrownChildRead,
+  JournalRestartProgress
 } from './journal-lifecycle-reads'
-import { readJournalSqlInput } from './journal-sql-input-reads'
-import type { JournalSqlItemReadContext } from './journal-sql-item-reads'
-import { sqlJournalStatusItems } from './journal-sql-status-items'
 
 export type JournalSqlLifecycleRead =
   | { kind: 'latest-prompt' }
@@ -23,49 +22,65 @@ export type JournalSqlLifecycleReadResult =
   | { kind: 'restart-progress'; progress: JournalRestartProgress }
   | { kind: 'outgrown-child'; child: JournalOutgrownChild }
 
-// Execution ownership wins over creation provenance, as journalItemExecutionFence reads it.
-const ROOT_STATUSES_AT_FENCE = `SELECT item.entry_key FROM journal_proj_items item
-  LEFT JOIN journal_proj_item_execution_owners owner ON owner.session_id=item.session_id
-    AND owner.epoch=item.epoch AND owner.item_id=json_extract(item.entry_key, '$')
-  LEFT JOIN journal_proj_item_fences created ON created.session_id=item.session_id
-    AND created.epoch=item.epoch AND created.item_id=json_extract(item.entry_key, '$')
-  WHERE item.session_id=? AND item.epoch=? AND item.kind='status' AND item.root=1
-    AND item.hidden=0 AND coalesce(owner.fence, created.fence)=?`
-
-/** Each answer comes from the one snapshot the point read opened; only named candidates decode. */
-export function readJournalSqlLifecycle(
-  context: JournalSqlItemReadContext,
+/** Runs synchronously in the caller's existing reader snapshot. */
+export function readJournalDomainLifecycle(
+  db: Database.Database,
+  target: { sessionId: string; epoch: string },
   operation: JournalSqlLifecycleRead
 ): JournalSqlLifecycleReadResult {
-  const { scope } = context
+  const prefix = [target.sessionId, target.epoch] as const
   if (operation.kind === 'latest-prompt') {
-    const prompt = sqlJournalStatusItems(scope, context.item, { kind: 'prompt' })
-      [Symbol.iterator]()
-      .next().value?.item
+    const row = db
+      .prepare(`SELECT payload_json FROM journal_items
+      WHERE session_id=? AND epoch=? AND hidden=0 AND prompt=1
+      ORDER BY sequence DESC,ordinal DESC LIMIT 1`)
+      .get(...prefix)
     return {
       kind: 'latest-prompt',
-      prompt: prompt ? latestStructuredAgentSessionPrompt([prompt]) : ''
+      prompt: row ? latestStructuredAgentSessionPrompt([JSON.parse(String(row.payload_json))]) : ''
     }
   }
-  const snapshot: JournalLifecycleSnapshot = {
-    epoch: context.epoch,
-    input: (read) => readJournalSqlInput(scope, read),
-    itemBody: (itemId) => (context.visible(itemId) ? context.item(itemId)?.body : null),
-    rootStatusSignedOutAt: (fence) => {
-      for (const row of scope.db.prepare(ROOT_STATUSES_AT_FENCE).iterate(...scope.prefix, fence)) {
-        scope.examined(row)
-        const item = context.item(String(JSON.parse(String(row.entry_key))))
-        if (item && journalStatusReportsSignedOut(item.body, item)) {
-          return true
-        }
+  if (operation.kind === 'restart-progress') {
+    return {
+      kind: 'restart-progress',
+      progress: {
+        epoch: journalDomainContextHead(db, target).epoch,
+        acceptedInputs: db
+          .prepare(`SELECT payload_json FROM journal_submission_attempts
+        WHERE session_id=? AND epoch=? AND current=1 AND accepted_sequence>?
+        ORDER BY accepted_sequence,ordinal`)
+          .all(...prefix, operation.cursor.sequence)
+          .map((row) => JSON.parse(String(row.payload_json)))
       }
-      return false
     }
   }
-  return operation.kind === 'restart-progress'
-    ? {
-        kind: 'restart-progress',
-        progress: readJournalRestartProgress(snapshot, operation.cursor)
-      }
-    : { kind: 'outgrown-child', child: readJournalOutgrownChild(snapshot, operation.input) }
+  const { fence, nextClientMessageId } = operation.input
+  const signedOut = Boolean(
+    db
+      .prepare(`SELECT 1 FROM journal_submission_attempts
+      WHERE session_id=? AND epoch=? AND current=1 AND signed_out=1 AND dispatch_fence=? LIMIT 1`)
+      .get(...prefix, fence) ||
+    db
+      .prepare(`SELECT 1 FROM journal_items
+      WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND signed_out=1
+        AND COALESCE(execution_owner,owner_fence)=? LIMIT 1`)
+      .get(...prefix, fence)
+  )
+  const next =
+    nextClientMessageId === undefined
+      ? undefined
+      : db
+          .prepare(`SELECT payload_json
+    FROM journal_items WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
+          .get(...prefix, agentJournalSubmissionKey(nextClientMessageId))
+  const body = next ? (JSON.parse(String(next.payload_json)) as AgentJournalRenderItem).body : null
+  return {
+    kind: 'outgrown-child',
+    child: {
+      signedOut,
+      newestTurnCompletedAt: readAgentJournalTurn(newestJournalDomainTurnOrClear(db, prefix)?.body)
+        ?.completedAt,
+      nextMessage: body?.kind === 'message' ? body : null
+    }
+  }
 }

@@ -150,7 +150,8 @@ export function readJournalDomainItems(
         options: {
           ordinaryMessage: body?.kind === 'message' && !body.command,
           runningTurn:
-            readAgentJournalTurn(newestTurnOrClear(db, prefix)?.body)?.state === 'running'
+            readAgentJournalTurn(newestJournalDomainTurnOrClear(db, prefix)?.body)?.state ===
+            'running'
         }
       }
     }
@@ -166,8 +167,8 @@ export function readJournalDomainItems(
           scope: row ? { kind: 'turn', turnItemId: String(row.item_id) } : null,
           removed: Boolean(
             db
-              .prepare(`SELECT 1 FROM journal_item_tombstones
-              WHERE session_id=? AND epoch=? AND turn_id=? LIMIT 1`)
+              .prepare(`SELECT 1 FROM journal_removed_turns
+              WHERE session_id=? AND epoch=? AND turn_id=?`)
               .get(...prefix, operation.turnId)
           )
         }
@@ -247,7 +248,10 @@ function visibleItem(
 }
 
 /** The input order's newest turn: latest position, then the greatest item ID among ties. */
-function newestTurnOrClear(db: Database.Database, prefix: Prefix): AgentJournalRenderItem | null {
+export function newestJournalDomainTurnOrClear(
+  db: Database.Database,
+  prefix: Prefix
+): AgentJournalRenderItem | null {
   let newest: AgentJournalRenderItem | null = null
   for (const row of db
     .prepare(`SELECT payload_json FROM journal_items INDEXED BY journal_items_turn_marker

@@ -1,3 +1,4 @@
+import { readJournalDomainLifecycle } from './journal-sql-lifecycle-reads'
 import type Database from '../../sqlite/sync-database'
 import type { JournalObserverRead, JournalObserverResult } from './journal-observer-read'
 import { readJournalSqlObserver } from './journal-sql-observer-read'
@@ -45,7 +46,7 @@ import {
   type JournalSqlQueueReadResult
 } from './journal-sql-queued-messages'
 import {
-  readJournalSqlItems,
+  readJournalDomainItems,
   type JournalSqlItemRead,
   type JournalSqlItemReadResult
 } from './journal-sql-item-reads'
@@ -138,12 +139,6 @@ function read(
       values.has('inputs.presentations', identity.clientMessageId)
     )
   }
-  const items = {
-    scope,
-    item: (itemId: string) => values.get<AgentJournalRenderItem>('items', itemId),
-    visible,
-    epoch
-  }
   switch (operation.kind) {
     case 'work':
       return {
@@ -190,10 +185,19 @@ function read(
     case 'history-items':
     case 'claude-history-prompts':
     case 'canonical-item-ids':
+      return readJournalDomainItems(
+        scope.db,
+        { sessionId: scope.sessionId, epoch: scope.epoch },
+        operation
+      )
     case 'latest-prompt':
     case 'restart-progress':
     case 'outgrown-child':
-      return readJournalSqlItems(items, operation)
+      return readJournalDomainLifecycle(
+        scope.db,
+        { sessionId: scope.sessionId, epoch: scope.epoch },
+        operation
+      )
     case 'metadata': {
       const sequence = scalars.get('lastSequence', 0)
       return {
