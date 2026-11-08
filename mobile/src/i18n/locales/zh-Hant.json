@@ -2418,7 +2418,7 @@
       "processing": "處理中",
       "releaseMicHint": "放開按鈕即可停止錄音",
       "startingMic": "正在啟動麥克風",
-      "stopHint": "點一下麥克風即可停止",
+      "stopHint": "點一下停止即可結束",
       "transcribing": "正在電腦上轉錄",
       "uploadingImage": "正在將圖片上傳至主機",
       "uploadingImageTitle": "正在上傳圖片"

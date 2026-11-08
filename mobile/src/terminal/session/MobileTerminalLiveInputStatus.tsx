@@ -40,7 +40,7 @@ export function MobileTerminalLiveInputStatus({
     (dictation.isRecording
       ? dictationMode === 'hold'
         ? t('session.terminalLiveInputStatus.releaseMicHint', 'Release mic to stop')
-        : t('session.terminalLiveInputStatus.stopHint', 'Tap mic to stop')
+        : t('session.terminalLiveInputStatus.stopHint', 'Tap stop to finish')
       : dictation.isProcessing
         ? t('session.terminalLiveInputStatus.transcribing', 'Transcribing on desktop')
         : dictation.isStarting

@@ -2418,7 +2418,7 @@
       "processing": "처리 중",
       "releaseMicHint": "중지하려면 마이크에서 손을 떼세요",
       "startingMic": "마이크 시작 중",
-      "stopHint": "중지하려면 마이크를 탭하세요",
+      "stopHint": "끝내려면 중지를 탭하세요",
       "transcribing": "데스크톱에서 텍스트로 변환 중",
       "uploadingImage": "호스트에 이미지 업로드 중",
       "uploadingImageTitle": "이미지 업로드 중"

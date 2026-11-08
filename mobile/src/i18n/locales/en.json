@@ -1958,7 +1958,7 @@
       "liveInput": "Live input",
       "uploadingImageTitle": "Uploading image",
       "releaseMicHint": "Release mic to stop",
-      "stopHint": "Tap mic to stop",
+      "stopHint": "Tap stop to finish",
       "transcribing": "Transcribing on desktop",
       "preparingMic": "Preparing microphone",
       "uploadingImage": "Uploading image to host"
