@@ -8566,17 +8566,10 @@
           "a4ff6143f8": "Borrar selección de fuente",
           "b661b034ec": "· Por defecto:",
           "ceefb9d7f1": "No se encontraron temas.",
-          "9119fb2268": "Actual",
-          "4e11f87ca6": "Mostrando",
-          "fbb428db98": "Seleccionado:",
-          "cb330ef7f8": " de {{value0}}",
-          "c822571b2e": " que coinciden con \"{{value0}}\"",
           "builtin_themes": "Integrados",
-          "imported_from": "Importado desde {{value0}}",
           "imported_themes": "Importados",
           "search_terminal_themes": "Buscar temas de terminal",
-          "plugin_themes": "Plugins",
-          "from_plugin": "De {{value0}}"
+          "plugin_themes": "Plugins"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",

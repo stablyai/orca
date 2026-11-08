@@ -9262,18 +9262,10 @@
           "b661b034ec": "· Default:",
           "builtin_themes": "Built-in",
           "ceefb9d7f1": "No themes found.",
-          "imported_from": "Imported from {{value0}}",
           "imported_themes": "Imported",
-          "9119fb2268": "Current",
-          "4e11f87ca6": "Showing",
-          "fbb428db98": "Selected:",
           "search_terminal_themes": "Search terminal themes",
-          "cb330ef7f8": " of {{value0}}",
-          "c822571b2e": " matching \"{{value0}}\"",
           "plugin_themes": "Plugins",
-          "from_plugin": "From {{value0}}",
-          "delete_imported_theme": "Delete {{value0}}",
-          "delete_theme": "Delete theme"
+          "delete_imported_theme": "Delete {{value0}}"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",

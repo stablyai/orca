@@ -4,6 +4,7 @@ import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { filterSearchableSelectGroups } from './settings-form-option-filter'
@@ -16,6 +17,7 @@ export type SettingsSearchableSelectOption = {
   detail?: React.ReactNode
   keywords?: readonly string[]
   disabled?: boolean
+  action?: Omit<SettingsSearchableSelectAction, 'key'>
 }
 
 export type SettingsSearchableSelectGroup = {
@@ -38,7 +40,12 @@ type SettingsSearchableSelectProps = {
   onValueChange: (value: string) => void
   searchPlaceholder: string
   emptyText?: string
+  open?: boolean
   onOpenChange?: (open: boolean) => void
+  query?: string
+  onQueryChange?: (query: string) => void
+  /** Reapplying a theme can clear its custom color overrides. */
+  allowReselect?: boolean
   /** Non-selectable rows after the options, e.g. a loading indicator. */
   status?: React.ReactNode
   /** Footer rows that run a command instead of picking a value. */
@@ -53,13 +60,26 @@ export function SettingsSearchableSelect({
   onValueChange,
   searchPlaceholder,
   emptyText,
+  open: controlledOpen,
   onOpenChange,
+  query: controlledQuery,
+  onQueryChange,
+  allowReselect = false,
   status,
   actions
 }: SettingsSearchableSelectProps): React.JSX.Element {
   const t = useTranslate()
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
+  const [internalOpen, setOpen] = useState(false)
+  const [internalQuery, setInternalQuery] = useState('')
+  const open = controlledOpen ?? internalOpen
+  const query = controlledQuery ?? internalQuery
+  const setQuery = useCallback(
+    (next: string) => {
+      setInternalQuery(next)
+      onQueryChange?.(next)
+    },
+    [onQueryChange]
+  )
   const [commandSelection, setCommandSelection] = useState<{
     value: string
     selectedValue: string
@@ -93,7 +113,7 @@ export function SettingsSearchableSelect({
       setCommandSelection({ value, selectedValue: value, query: '' })
       onOpenChange?.(next)
     },
-    [onOpenChange, value]
+    [onOpenChange, setQuery, value]
   )
 
   const close = (): void => handleOpenChange(false)
@@ -180,32 +200,62 @@ export function SettingsSearchableSelect({
             {visibleGroups.map((group) => (
               <CommandGroup key={group.key} heading={group.heading}>
                 {group.options.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={option.value}
-                    disabled={option.disabled}
-                    data-checked={option.value === value}
-                    onSelect={() => {
-                      close()
-                      if (option.value !== value) {
-                        onValueChange(option.value)
-                      }
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        'size-4 shrink-0',
-                        option.value === value ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                    {option.icon}
-                    <span className="min-w-0 truncate">{option.label}</span>
-                    {option.detail ? (
-                      <span className="ml-auto flex shrink-0 items-center text-xs text-muted-foreground">
-                        {option.detail}
-                      </span>
+                  <div key={option.value} className="flex items-center gap-1">
+                    <CommandItem
+                      value={option.value}
+                      disabled={option.disabled}
+                      data-checked={option.value === value}
+                      className="min-w-0 flex-1"
+                      onSelect={() => {
+                        close()
+                        if (allowReselect || option.value !== value) {
+                          onValueChange(option.value)
+                        }
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          'size-4 shrink-0',
+                          option.value === value ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      {option.icon}
+                      <span className="min-w-0 truncate">{option.label}</span>
+                      {option.detail ? (
+                        <span className="ml-auto flex shrink-0 items-center text-xs text-muted-foreground">
+                          {option.detail}
+                        </span>
+                      ) : null}
+                    </CommandItem>
+                    {option.action ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="mr-1 shrink-0"
+                            aria-label={option.action.label}
+                            disabled={option.disabled}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.stopPropagation()
+                              }
+                            }}
+                            onClick={() => {
+                              option.action?.onSelect()
+                              inputRef.current?.focus()
+                            }}
+                          >
+                            {option.action.icon}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" sideOffset={4}>
+                          {option.action.label}
+                        </TooltipContent>
+                      </Tooltip>
                     ) : null}
-                  </CommandItem>
+                  </div>
                 ))}
               </CommandGroup>
             ))}

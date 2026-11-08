@@ -7388,16 +7388,9 @@
           "b661b034ec": "· Padrão:",
           "builtin_themes": "Integrado",
           "ceefb9d7f1": "Nenhum tema encontrado.",
-          "imported_from": "Importado de {{value0}}",
           "imported_themes": "Importado",
-          "9119fb2268": "Atual",
-          "4e11f87ca6": "Exibindo",
-          "fbb428db98": "Selecionado:",
           "search_terminal_themes": "Pesquisar temas de terminal",
-          "cb330ef7f8": " de {{value0}}",
-          "c822571b2e": " correspondendo a \"{{value0}}\"",
-          "plugin_themes": "Plugins",
-          "from_plugin": "De {{value0}}"
+          "plugin_themes": "Plugins"
         },
         "auto": {
           "rename": {

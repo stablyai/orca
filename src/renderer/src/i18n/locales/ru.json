@@ -9319,16 +9319,9 @@
           "b661b034ec": "· По умолчанию:",
           "builtin_themes": "Встроенные",
           "ceefb9d7f1": "Темы не найдены.",
-          "imported_from": "Импортировано из {{value0}}",
           "imported_themes": "Импортированные",
-          "9119fb2268": "Текущая",
-          "4e11f87ca6": "Показано",
-          "fbb428db98": "Выбрано:",
           "search_terminal_themes": "Поиск тем терминала",
-          "cb330ef7f8": " из {{value0}}",
-          "c822571b2e": " по запросу «{{value0}}»",
-          "plugin_themes": "Плагины",
-          "from_plugin": "Из {{value0}}"
+          "plugin_themes": "Плагины"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",

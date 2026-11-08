@@ -8272,17 +8272,10 @@
           "a4ff6143f8": "글꼴 선택 지우기",
           "b661b034ec": "· 기본:",
           "ceefb9d7f1": "테마를 찾을 수 없습니다.",
-          "9119fb2268": "현재",
-          "4e11f87ca6": "표시 중",
-          "fbb428db98": "선택됨:",
-          "cb330ef7f8": "/{{value0}}",
-          "c822571b2e": " \"{{value0}}\"과(와) 일치",
           "builtin_themes": "기본 제공",
-          "imported_from": "{{value0}}에서 가져옴",
           "imported_themes": "가져옴",
           "search_terminal_themes": "터미널 테마 검색",
-          "plugin_themes": "플러그인",
-          "from_plugin": "{{value0}}에서"
+          "plugin_themes": "플러그인"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",

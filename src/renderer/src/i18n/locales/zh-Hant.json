@@ -8786,16 +8786,9 @@
           "b661b034ec": "· 預設：",
           "builtin_themes": "內建",
           "ceefb9d7f1": "未找到主題。",
-          "imported_from": "從 {{value0}} 匯入",
           "imported_themes": "已匯入",
-          "9119fb2268": "目前",
-          "4e11f87ca6": "顯示中",
-          "fbb428db98": "已選擇：",
           "search_terminal_themes": "搜尋終端機主題",
-          "cb330ef7f8": "/{{value0}}",
-          "c822571b2e": " 符合「{{value0}}」",
-          "plugin_themes": "外掛",
-          "from_plugin": "來自 {{value0}}"
+          "plugin_themes": "外掛"
         },
         "SettingsSidebar": {
           "e0900f83e7": "SSH",
