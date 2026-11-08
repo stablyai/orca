@@ -12,7 +12,7 @@ import {
   type WorktreeHeadIdentityScope
 } from './worktree-head-identity-scope'
 import { cachedWorktreePathsForScope } from './worktree-head-identity-cached-paths'
-import { clearGitStatusLineStatsCache } from '../../../../shared/git/status/git-status-line-stats-cache'
+import { invalidateGitStatusReads } from '../../../git/source-control/git-read-cache-invalidation'
 import { notifyWorktreeGitStatusMetadataChanged } from '../../worktree-remote'
 import {
   notifyGitStatusChangedForRemoteClients,
@@ -96,8 +96,8 @@ export function scheduleWorktreeBaseNotification(
       : null
     clearPendingWorktreeBaseNotifications(watch)
     if (pendingStructure.length > 0 || sourceControlRepoIds.size > 0) {
-      // Staging can keep a file's status letters, so counts reused by letters must not outlive an index change.
-      clearGitStatusLineStatsCache()
+      // Staging can keep a file's status letters, and a phone's re-read must not join a read begun before the change.
+      invalidateGitStatusReads()
     }
     for (const repoId of pendingStructure) {
       notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)

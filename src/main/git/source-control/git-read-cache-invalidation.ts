@@ -36,6 +36,12 @@ export function invalidateGitReadCaches(): void {
   resolvedUpstreamNameCache.clear()
 }
 
+// A change made outside Orca: later status reads must neither join a read begun before it nor reuse its line counts.
+export function invalidateGitStatusReads(): void {
+  statusReadLeaseOwner.invalidate()
+  clearGitStatusLineStatsCache()
+}
+
 export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>): Promise<T> {
   invalidateGitReadCaches()
   try {
