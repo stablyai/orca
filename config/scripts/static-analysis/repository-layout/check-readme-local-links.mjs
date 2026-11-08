@@ -84,13 +84,24 @@ function* localTargets(markdown) {
   }
 }
 
+// Decode only valid escape runs so a literal `%` in a file name stays as written.
+function decodePercentEscapes(value) {
+  return value.replace(/(?:%[0-9a-f]{2})+/gi, (escapes) => {
+    try {
+      return decodeURIComponent(escapes)
+    } catch {
+      return escapes
+    }
+  })
+}
+
 function resolveTarget(readme, target) {
   const bare = target.split(/[?#]/)[0]
   if (!bare) {
     return null
   }
   const resolved = path.posix.normalize(
-    path.posix.join(path.posix.dirname(readme), decodeURIComponent(bare))
+    path.posix.join(path.posix.dirname(readme), decodePercentEscapes(bare))
   )
   return resolved.startsWith('../') ? null : resolved
 }

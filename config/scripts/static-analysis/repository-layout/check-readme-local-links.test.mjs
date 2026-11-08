@@ -40,4 +40,11 @@ describe('findBrokenReadmeLinks with angle-bracket destinations', () => {
     ])
     expect(findBrokenReadmeLinks(root).map((link) => link.resolved)).toEqual(['docs/b (2).png'])
   })
+  it('keeps a literal percent sign in the path', () => {
+    const root = repoWith(
+      '[present](<docs/100% done.png>)\n[absent](<docs/50% done.png>)\n[encoded](<docs/a%20b.png>)\n',
+      ['docs/100% done.png', 'docs/a b.png']
+    )
+    expect(findBrokenReadmeLinks(root).map((link) => link.resolved)).toEqual(['docs/50% done.png'])
+  })
 })
