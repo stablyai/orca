@@ -1,11 +1,13 @@
-import { Fragment } from 'react'
+import { Fragment, useCallback } from 'react'
 import { DetailCardFocusBoundary } from '../components/detail-card-host'
-import { Platform, Pressable, Text } from 'react-native'
-import type { SessionTitleCard } from './use-session-title-card'
+import { Platform, Pressable, StyleSheet, Text, type View } from 'react-native'
+import type { SessionTitleCard } from './tabs/use-session-title-card'
 import { StatusDot } from '../components/StatusDot'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import { styles } from './mobile-session-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { pressedStyle } from '../theme/mobile-theme'
+import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 
 /** The session's title and status line. A tap opens a card with the full name, where it lives
  *  and its host, as desktop's tab card does, because a sideways phone cuts the title short. */
@@ -14,6 +16,7 @@ export function MobileSessionTitleBlock({
   connState,
   details,
   meta,
+  centered = false,
   showConnectionRetry,
   onRetry
 }: {
@@ -21,20 +24,38 @@ export function MobileSessionTitleBlock({
   connState: ConnectionState
   details: SessionTitleCard
   meta: string
+  /** Sits in NavBar's centre slot rather than beside the tabs. */
+  centered?: boolean
   showConnectionRetry: boolean
   onRetry: () => void
 }): React.JSX.Element {
   const t = useMobileTranslation()
+  // Why: opening the card must keep a focused field's keyboard. 'always' because the whole block
+  // is one button; 'handled' would let its own text through.
+  const titleKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const { openerRef } = details
+  const attachOpener = useCallback(
+    (view: View | null) => {
+      openerRef.current = view
+      titleKeepsKeyboard(view)
+    },
+    [openerRef, titleKeepsKeyboard]
+  )
   return (
     <>
       <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={details.active} />
       <Fragment key="title">
         <Pressable
-          style={[
-            styles.sessionTitleBlock,
-            details.besideTabs && styles.sessionTitleBlockBesideTabs
+          style={({ pressed }) => [
+            centered
+              ? centeredStyles.block
+              : [
+                  styles.sessionTitleBlock,
+                  details.besideTabs && styles.sessionTitleBlockBesideTabs
+                ],
+            pressed && pressedStyle
           ]}
-          ref={details.openerRef}
+          ref={attachOpener}
           onLayout={details.onAnchorLayout}
           onPress={details.toggle}
           aria-expanded={details.requestedOpen}
@@ -48,13 +69,13 @@ export function MobileSessionTitleBlock({
             ref={details.titleRef}
             onLayout={details.onAnchorLayout}
             onPress={Platform.OS === 'web' ? details.toggle : undefined}
-            style={styles.sessionTitle}
+            style={[styles.sessionTitle, centered && centeredStyles.title]}
             numberOfLines={1}
           >
             {title}
           </Text>
           <Pressable
-            style={styles.sessionMetaRow}
+            style={({ pressed }) => [styles.sessionMetaRow, pressed && pressedStyle]}
             disabled={!showConnectionRetry}
             onPress={onRetry}
             accessibilityRole={showConnectionRetry ? 'button' : undefined}
@@ -75,3 +96,14 @@ export function MobileSessionTitleBlock({
     </>
   )
 }
+
+const centeredStyles = StyleSheet.create({
+  block: {
+    maxWidth: '100%',
+    alignItems: 'center'
+  },
+  // NavBar's title size, so the session bar reads like every other screen's.
+  title: {
+    fontSize: 16
+  }
+})

@@ -1,11 +1,16 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
+import { clearDisclosuresForTests } from '../worktree/agent-child-disclosure'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { WorktreeAgentSummary } from './WorktreeAgentSummary'
 import { WorktreeAgentList } from './WorktreeAgentList'
 
+// Disclosures persist in a module cache across list remounts; isolate each test.
+beforeEach(clearDisclosuresForTests)
+
 vi.mock('react-native', () => ({
+  AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
@@ -21,7 +26,7 @@ vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 it('renders production-built canonical assignments as nested rows and groups only roots', async () => {
   const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
   const { publicLineageFixture, canonicalChatRow, LINEAGE_PARENT, LINEAGE_CHILD } =
-    await import('../../../src/main/runtime/runtime-agent-lineage.test-fixture')
+    await import('../../../src/main/runtime/workspaces/process-listing/runtime-agent-lineage.test-fixture')
   const { flattenAgentRowLineage } = await import('../worktree/agent-row-lineage')
   const f = publicLineageFixture()
   let tree: ReactTestRenderer | undefined
@@ -35,12 +40,15 @@ it('renders production-built canonical assignments as nested rows and groups onl
       tree = create(
         createElement(WorktreeAgentList, {
           agents,
-          now: 1_800_000_000_000,
           unvisited: false,
           statusLive: true
         })
       )
     })
+    const toggle = tree?.root.find(
+      (node) => node.props.accessibilityLabel === 'Show 1 child agent' && node.props.onPress
+    )
+    await act(async () => toggle?.props.onPress({ stopPropagation: vi.fn() }))
     expect(
       tree?.root
         .findAll((node) => node.props.agent !== undefined)
@@ -65,7 +73,6 @@ it('renders production-built canonical assignments as nested rows and groups onl
       tree?.update(
         createElement(WorktreeAgentList, {
           agents: [...agents, orphan],
-          now: 1_800_000_000_000,
           unvisited: false
         })
       )

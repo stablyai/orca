@@ -1,6 +1,6 @@
 import type { GitLabPagedResult, GitLabWorkItem } from '../../../shared/gitlab-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 
 type GitLabSourceLookupArgs = {
   repoPath: string

@@ -2,14 +2,17 @@ import type {
   AgentJournalMessageItem,
   AgentJournalSkillRef,
   AgentJournalSubmission
-} from './agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from './agent-session-queued-message-wire'
+} from './agent-session/journal/agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from './agent-session/requests/agent-session-queued-message-wire'
 import {
   pickedSkillsInText,
   agentSessionSendBodyFingerprint
-} from './structured-agent-session-send-mutation'
-import { MAX_SKILL_REFS } from './rpc-contract/structured-agent-session-message-params'
-import { MAX_BLOCKS, MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-params'
+} from './agent-session/requests/structured-agent-session-send-mutation'
+import {
+  MAX_SKILL_REFS,
+  MAX_BLOCKS,
+  MAX_PROMPT_BYTES
+} from './rpc-contract/structured-agent-session-message-params'
 import {
   imageReferenceInsertion,
   withoutImageReference

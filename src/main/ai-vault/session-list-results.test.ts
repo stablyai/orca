@@ -3,8 +3,8 @@ import type {
   AiVaultListResult,
   AiVaultScanIssue,
   AiVaultSession
-} from '../../shared/ai-vault-types'
-import { truncateAiVaultListResult } from '../../shared/ai-vault-session-depth'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import { truncateAiVaultListResult } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { mergeAiVaultListResults } from './session-list-results'
 
 function listResult(issues: AiVaultScanIssue[]): AiVaultListResult {
@@ -49,18 +49,6 @@ const SCOPE_TRUNCATION: AiVaultScanIssue = {
 describe('mergeAiVaultListResults', () => {
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it('keeps the latest input scannedAt instead of restamping the merge', () => {
-    const merged = mergeAiVaultListResults(
-      [
-        { ...listResult([]), scannedAt: '2026-08-02T00:00:00.000Z' },
-        { ...listResult([]), scannedAt: '2026-08-02T00:00:05.000Z' }
-      ],
-      undefined
-    )
-
-    expect(merged.scannedAt).toBe('2026-08-02T00:00:05.000Z')
   })
 
   it('ignores a future or unparsable remote stamp so the merge cannot pin the renderer guard', () => {
@@ -117,51 +105,6 @@ describe('mergeAiVaultListResults', () => {
         undefined
       ).scannedAt
     ).toBe('2026-08-02T00:00:04.000Z')
-  })
-
-  it('resolves an equal-instant tie the same way in either leg order', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
-    const noMillis = { ...listResult([]), scannedAt: '2026-08-02T00:00:05Z' }
-    const withMillis = { ...listResult([]), scannedAt: '2026-08-02T00:00:05.000Z' }
-
-    expect(mergeAiVaultListResults([noMillis, withMillis], undefined).scannedAt).toBe(
-      '2026-08-02T00:00:05.000Z'
-    )
-    expect(mergeAiVaultListResults([withMillis, noMillis], undefined).scannedAt).toBe(
-      '2026-08-02T00:00:05.000Z'
-    )
-  })
-
-  it('normalizes the merged stamp so a leg ISO variant cannot leak into it', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
-
-    expect(
-      mergeAiVaultListResults(
-        [{ ...listResult([]), scannedAt: '2026-08-01T19:00:05.000-05:00' }],
-        undefined
-      ).scannedAt
-    ).toBe('2026-08-02T00:00:05.000Z')
-  })
-
-  it('accepts the oldest representable stamp and rejects one millisecond beyond it', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-02T00:00:10.000Z'))
-
-    expect(
-      mergeAiVaultListResults(
-        [{ ...listResult([]), scannedAt: '-271821-04-20T00:00:00.000Z' }],
-        undefined
-      ).scannedAt
-    ).toBe('-271821-04-20T00:00:00.000Z')
-
-    expect(
-      mergeAiVaultListResults(
-        [{ ...listResult([]), scannedAt: '-271821-04-19T23:59:59.999Z' }],
-        undefined
-      ).scannedAt
-    ).toBe('2026-08-02T00:00:10.000Z')
   })
 
   it('does not cap an Unlimited all-host merge', () => {

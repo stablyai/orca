@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostDirectoryListing } from '../../../shared/filesystem-entry-types'
-import type { Store } from '../../persistence'
-import { isPathAllowed, resolveAuthorizedPath } from './filesystem-auth'
+import type { HostDirectoryListing } from '../../../shared/file-listing/host-directory-browse'
+import type { Store } from '../../persistence/loading-store/store'
+import { isPathAllowed, resolveAuthorizedPath } from './access/filesystem-auth'
 import {
   registerFilesystemHostBrowseHandlers,
   resolveHostBrowseEntry

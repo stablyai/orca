@@ -1,8 +1,8 @@
-import { bundledSkillSetupAttentionMessage } from '@/components/settings/bundled-skill-setup-result-copy'
+import { bundledSkillSetupAttentionMessage } from '@/components/skills/setup/bundled-skill-setup-result-copy'
 import {
   bundledSkillSetupChanges,
   type BundledSkillSetupChanges
-} from '@/components/settings/bundled-skill-setup-copy'
+} from '@/components/skills/setup/bundled-skill-setup-copy'
 import { useCallback, useRef, useState } from 'react'
 import {
   bundledSkillInstallAction,
@@ -19,7 +19,7 @@ import {
   executeBundledSkillsOnTarget,
   planBundledSkillsOnTarget,
   type BundledSkillUnsupportedReason
-} from '@/runtime/runtime-bundled-skills-client'
+} from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { notifyInstalledAgentSkillsChanged } from './installed-agent-skill-discovery'
 import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
 import { useMountedRef } from './useMountedRef'

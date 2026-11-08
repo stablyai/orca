@@ -1,3 +1,4 @@
+import * as reticle from '../src/pairing/pairing-scan-reticle-dimensions'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   AppState,
@@ -12,15 +13,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, Clipboard as ClipboardIcon, QrCode } from 'lucide-react-native'
-import { decodePairingUrl, parsePairingCode } from '../src/transport/pairing'
-import { getPairingScanErrorMessage } from '../src/transport/pairing-scan-error-message'
+import { decodePairingUrl, parsePairingCode } from '../src/pairing/pairing'
+import { getPairingScanErrorMessage } from '../src/pairing/pairing-scan-error-message'
 import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
-} from '../src/transport/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry, PairingOffer } from '../src/transport/types'
-import { useRefreshHostClient } from '../src/transport/host-client-hooks'
-import { colors, spacing } from '../src/theme/mobile-theme'
+} from '../src/pairing/pre-profile-pairing-coordinator'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import type { PairingOffer } from '../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
+import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
 import { TextInputModal } from '../src/components/TextInputModal'
@@ -30,23 +32,19 @@ import {
   mobileOnboardingDestination
 } from '../src/onboarding/mobile-onboarding-plan'
 import { pairScanStyles as styles } from '../src/pair-scan-styles'
+import {
+  PAIRING_SUCCESS_HOLD_MS,
+  PairingProgress,
+  SCAN_DECODE_BEAT_MS,
+  ScanReticle,
+  Step,
+  waitForBeat
+} from '../src/pairing/pairing-visuals'
+import { triggerSuccess } from '../src/platform/haptics'
+import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 // Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
-const SCAN_RETICLE_SCALE = 0.62
-const SCAN_RETICLE_MAX_SIZE = 360
-
-function Step({ number, text }: { number: number; text: string }) {
-  useMobileColorScheme()
-  return (
-    <View style={styles.step}>
-      <View style={styles.stepBadge}>
-        <Text style={styles.stepNumber}>{number}</Text>
-      </View>
-      <Text style={styles.stepText}>{text}</Text>
-    </View>
-  )
-}
 
 export default function PairScanScreen() {
   useMobileColorScheme()
@@ -56,6 +54,8 @@ export default function PairScanScreen() {
   const insets = useSafeAreaInsets()
   const [permission, requestPermission, getPermission] = useCameraPermissions()
   const [status, setStatus] = useState<'scanning' | 'connecting' | 'error'>('scanning')
+  const [decoded, setDecoded] = useState(false)
+  const [paired, setPaired] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [pasteVisible, setPasteVisible] = useState(false)
   const [cameraBounds, setCameraBounds] = useState({ width: 0, height: 0 })
@@ -100,7 +100,8 @@ export default function PairScanScreen() {
         return
       }
 
-      void testAndSave(offer)
+      setDecoded(true)
+      void waitForBeat(SCAN_DECODE_BEAT_MS).then(() => testAndSave(offer))
     },
     [router, t]
   )
@@ -145,6 +146,10 @@ export default function PairScanScreen() {
   }, [])
 
   async function testAndSave(offer: PairingOffer) {
+    // A decoded QR waits out the reticle beat; the screen may have left meanwhile.
+    if (!mountedRef.current) {
+      return
+    }
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
@@ -176,7 +181,12 @@ export default function PairScanScreen() {
       }
       // Re-pair reuses host id; close cached client so it reloads the persisted endpoint/relay (STA-1840).
       refreshHostClient(hostId)
-      const onboardingSteps = await loadMobileOnboardingSteps()
+      setPaired(true)
+      triggerSuccess()
+      const [onboardingSteps] = await Promise.all([
+        loadMobileOnboardingSteps(),
+        waitForBeat(PAIRING_SUCCESS_HOLD_MS)
+      ])
       if (!mountedRef.current) {
         return
       }
@@ -194,15 +204,13 @@ export default function PairScanScreen() {
       console.warn('[pair] connect failed', err)
       setStatus('error')
       setErrorMessage(
-        timedOut
-          ? t(
-              'app.pairScan.connectTimedOut',
-              "Couldn't connect within {{seconds}}s — see log below for where it stalled",
-              { seconds: PAIRING_OVERALL_TIMEOUT_MS / 1000 }
-            )
-          : t('app.pairScan.pairingFailed', 'Pairing failed: {{error}}', {
-              error: err instanceof Error ? err.message : String(err)
-            })
+        getPairingFailureMessage({
+          screen: 'scan',
+          error: err,
+          timedOut,
+          timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+          t
+        })
       )
       processingRef.current = false
     }
@@ -210,6 +218,7 @@ export default function PairScanScreen() {
 
   function retry() {
     setStatus('scanning')
+    setDecoded(false)
     setErrorMessage('')
     logsRef.current = []
     setLogs([])
@@ -223,8 +232,8 @@ export default function PairScanScreen() {
   }
   // Keep QR guide square even on rectangular iPad previews.
   const reticleSize = Math.min(
-    Math.round(Math.min(cameraBounds.width, cameraBounds.height) * SCAN_RETICLE_SCALE),
-    SCAN_RETICLE_MAX_SIZE
+    Math.round(Math.min(cameraBounds.width, cameraBounds.height) * reticle.SCALE),
+    reticle.MAX_SIZE
   )
 
   if (!permission) {
@@ -240,7 +249,7 @@ export default function PairScanScreen() {
     return (
       <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
         <Pressable
-          style={styles.backButton}
+          style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
           onPress={() => router.back()}
           hitSlop={8}
           accessibilityRole="button"
@@ -266,7 +275,7 @@ export default function PairScanScreen() {
                 )}
           </Text>
           <Pressable
-            style={styles.primaryButton}
+            style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
             onPress={canAskAgain ? requestPermission : () => void Linking.openSettings()}
           >
             {canAskAgain && <QrCode size={16} color={colors.bgBase} />}
@@ -307,7 +316,7 @@ export default function PairScanScreen() {
   return (
     <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
       <Pressable
-        style={styles.backButton}
+        style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
         onPress={() => router.back()}
         hitSlop={8}
         accessibilityRole="button"
@@ -336,14 +345,7 @@ export default function PairScanScreen() {
                 barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
                 onBarcodeScanned={handleBarCodeScanned}
               />
-              <View style={styles.reticle} pointerEvents="none">
-                <View style={[styles.reticleFrame, { width: reticleSize, height: reticleSize }]}>
-                  <View style={[styles.corner, styles.cornerTL]} />
-                  <View style={[styles.corner, styles.cornerTR]} />
-                  <View style={[styles.corner, styles.cornerBL]} />
-                  <View style={[styles.corner, styles.cornerBR]} />
-                </View>
-              </View>
+              <ScanReticle size={reticleSize} decoded={decoded} />
             </View>
           )}
           {pasteVisible && <View style={styles.cameraPlaceholder} />}
@@ -361,8 +363,11 @@ export default function PairScanScreen() {
 
       {status === 'connecting' && (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.textSecondary} />
-          <Text style={styles.connectingText}>{t('app.pairScan.connecting', 'Connecting…')}</Text>
+          <PairingProgress
+            succeeded={paired}
+            connectingLabel={t('app.pairScan.connecting', 'Connecting…')}
+            labelStyle={styles.connectingText}
+          />
           <View style={styles.logSlot}>
             <ConnectionLog entries={logs} title={t('app.pairScan.pairingLog', 'Pairing log')} />
           </View>
@@ -378,7 +383,10 @@ export default function PairScanScreen() {
             </View>
           )}
           <View style={styles.errorActions}>
-            <Pressable style={styles.primaryButton} onPress={retry}>
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+              onPress={retry}
+            >
               <Text style={styles.primaryButtonText}>
                 {t('app.pairScan.tryAgain', 'Try Again')}
               </Text>

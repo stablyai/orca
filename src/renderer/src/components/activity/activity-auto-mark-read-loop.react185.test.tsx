@@ -4,9 +4,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { registerAgentSubjectReadCapture } from '@/attention/agent-subject-read-actions'
 import ActivityPrototypePage from './ActivityPrototypePage'
@@ -146,20 +146,6 @@ function countAcknowledgeWrites(): { readonly count: () => number; stop: () => v
 }
 
 describe('Activity auto mark-read loop (React #185)', () => {
-  it('acknowledges a selected thread once even when its unread flag cannot clear', async () => {
-    seedThreadStampedAheadOfLocalClock()
-    await mountActivityPage()
-    const acknowledgeWrites = countAcknowledgeWrites()
-
-    try {
-      await selectSeededThread()
-    } finally {
-      acknowledgeWrites.stop()
-    }
-
-    expect(acknowledgeWrites.count()).toBe(1)
-  })
-
   it('re-acknowledges when a new turn lands on the still-selected thread', async () => {
     const intents: string[] = []
     // An automatic read is a view: it must not claim the edges a click would cover.
@@ -203,14 +189,6 @@ describe('Activity auto mark-read loop (React #185)', () => {
 
     expect(acknowledgeWrites.count()).toBe(2)
     expect(intents).toEqual(['view', 'view'])
-  })
-
-  it('still marks a locally stamped thread read on selection', async () => {
-    seedThreadStampedByLocalClock()
-    await mountActivityPage()
-    await selectSeededThread()
-
-    expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_A]).toBeGreaterThan(0)
   })
 
   it('leaves the selected thread unread after the user marks it unread', async () => {

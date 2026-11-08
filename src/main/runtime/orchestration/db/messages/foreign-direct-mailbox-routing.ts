@@ -1,5 +1,5 @@
-import { parsePaneKey } from '../../../../../shared/stable-pane-id'
-import type { DispatchContextRow, MessageType } from '../../types'
+import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import type { DispatchContextRow, MessageType } from '../orchestration-records'
 import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL, paneKeyMatchSuffix } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'

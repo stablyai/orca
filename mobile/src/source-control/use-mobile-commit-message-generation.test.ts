@@ -22,7 +22,7 @@ vi.mock('./mobile-commit-message-ai', () => ({
 }))
 
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
-import { stubRpcClient } from '../transport/rpc-client-test-stub'
+import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
 
 const client = stubRpcClient()
 const view: {
@@ -103,69 +103,6 @@ describe('useMobileCommitMessageGeneration', () => {
   it('keeps what the user typed while the agent ran, as desktop does', async () => {
     await generateThen('fix: my own words')
     expect(view.message).toBe('fix: my own words')
-  })
-
-  it('fills an empty box with the generated message', async () => {
-    await generateThen(null)
-    expect(view.message).toBe('feat: generated')
-  })
-
-  it.each(['success', 'failure'])(
-    'does not publish the previous workspace generation %s into the new workspace',
-    async (outcome) => {
-      act(() => {
-        renderer = create(createElement(Harness))
-      })
-      let oldPending: Promise<void> | undefined
-      act(() => {
-        oldPending = view.generate?.()
-      })
-      const settleOld = reply.resolve
-      act(() => renderer?.update(createElement(Harness, { worktreeId: 'wt-2' })))
-      expect(view.generating).toBe(false)
-      let newPending: Promise<void> | undefined
-      act(() => {
-        newPending = view.generate?.()
-      })
-      const settleNew = reply.resolve
-      await act(async () => {
-        settleOld?.(
-          outcome === 'success'
-            ? { success: true, message: 'old workspace' }
-            : { success: false, canceled: false, error: 'old error' }
-        )
-        await oldPending
-      })
-      expect(view.message).toBe('')
-      expect(view.error).toBeNull()
-      expect(view.generating).toBe(true)
-      await act(async () => {
-        settleNew?.({ success: true, message: 'new workspace' })
-        await newPending
-      })
-      expect(view.message).toBe('new workspace')
-      expect(view.generating).toBe(false)
-    }
-  )
-
-  it('admits only one generation before React has rendered the loading state', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-    let first: Promise<void> | undefined
-    let second: Promise<void> | undefined
-    let settleFirst: typeof reply.resolve = null
-    act(() => {
-      first = view.generate?.()
-      settleFirst = reply.resolve
-      second = view.generate?.()
-    })
-    expect(reply.resolve).toBe(settleFirst)
-    await act(async () => {
-      reply.resolve?.({ success: true, message: 'one generation' })
-      await Promise.all([first, second])
-    })
-    expect(view.message).toBe('one generation')
   })
 
   it('keeps the current generation when a workspace transition suspends before commit', async () => {

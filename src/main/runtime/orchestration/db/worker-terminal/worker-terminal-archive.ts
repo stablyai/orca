@@ -5,7 +5,7 @@ import {
   type WorkerTerminalArchiveRow,
   type WorkerTerminalArchiveStatus,
   type WorkerTerminalRetainedReason
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 
@@ -234,7 +234,7 @@ export function retainWorkerTerminalResource(
   })
 }
 
-/** The execution host's half of a forwarded worker-retain. */
+/** The execution host's half of a forwarded worker-keep-open. */
 export function retainRemoteAttachmentTerminalResource(
   this: OrchestrationDb,
   dispatchId: string

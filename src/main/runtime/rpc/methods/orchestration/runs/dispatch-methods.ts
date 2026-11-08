@@ -1,26 +1,29 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
-import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
+import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
 import { resolveDispatchCreator } from './dispatch-creator'
 import {
   injectRejectedError,
   taskNotFoundError,
   taskNotStartableError
-} from '../../../../orchestration/task-dispatch-refusal'
+} from '../../../../orchestration/coordinator/dispatch/task-dispatch-refusal'
 import { resolveRunScope } from './run-scope'
-import { DispatchParams, DispatchShowParams } from '../schemas'
+import {
+  DispatchParams,
+  DispatchShowParams
+} from '../../../../../../shared/rpc-contract/orchestration-params'
 import {
   orcaSessionIdOrHandle,
   resolveDispatchAssigneeParty
-} from '../../../../orchestration/orchestration-party'
+} from '../../../../orchestration/addressing/orchestration-party'
 import {
   admitChatAssignee,
   chatAssigneeOf,
   refuseChatSelfAssignment
 } from '../chat-assignee-admission'
 import { sendChatTask } from '../chat-task-delivery'
-import { dispatchTaskSource } from '../../../../orchestration/dispatch-task-source'
+import { dispatchTaskSource } from '../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
@@ -184,8 +187,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
               db,
               dispatch: ctx,
               from: params.from,
-              senderName: (party, reported) =>
-                runtime.orchestrationSenderNames.nameOf(party, reported)
+              senderSnapshot: (party, reported) =>
+                runtime.orchestrationSenderNames.snapshotOf(party, reported)
             })
             await sendChatTask({ db, dispatch: ctx, from, preamble })
           } else {

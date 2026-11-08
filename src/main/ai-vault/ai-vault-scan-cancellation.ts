@@ -1,4 +1,4 @@
-import { AI_VAULT_SCAN_CANCELLED_MESSAGE } from '../../shared/ai-vault-types'
+import { AI_VAULT_SCAN_CANCELLED_MESSAGE } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 export function throwIfAiVaultScanCancelled(signal?: AbortSignal): void {
   if (!signal?.aborted) {

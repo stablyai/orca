@@ -1,8 +1,8 @@
 import { useAppStore } from '@/store'
 import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { AgentSkillSetupPanel } from '../settings/AgentSkillSetupPanel'
+import { AgentSkillSetupPanel } from '../skills/setup/AgentSkillSetupPanel'
 import type { useMobileEmulatorAgentSetupState } from './use-mobile-emulator-agent-setup-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type MobileEmulatorAgentSetupGuideStepsProps = {
   setup: ReturnType<typeof useMobileEmulatorAgentSetupState>
@@ -11,12 +11,13 @@ type MobileEmulatorAgentSetupGuideStepsProps = {
 export function MobileEmulatorAgentSetupGuideSteps({
   setup
 }: MobileEmulatorAgentSetupGuideStepsProps): React.JSX.Element {
+  const t = useTranslate()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   return (
     <div className="py-2.5">
       <p className="text-sm font-medium">
-        {translate(
+        {t(
           'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.21f5687c07',
           'Orca CLI skill'
         )}
@@ -25,11 +26,11 @@ export function MobileEmulatorAgentSetupGuideSteps({
         variant="inline"
         hideHeader
         className="min-w-0"
-        title={translate(
+        title={t(
           'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.21f5687c07',
           'Orca CLI skill'
         )}
-        description={translate(
+        description={t(
           'auto.components.emulator.pane.MobileEmulatorAgentSetupGuideSteps.64fb057667',
           'Teaches agents the orca emulator commands for this worktree.'
         )}

@@ -119,3 +119,13 @@ export const editorExternalChangeConflictActionSchema = z
     transport: z.enum(['local', 'ssh', 'runtime'])
   })
   .strict()
+
+// Why: counts toast actions run above a modal (the escape hatch) so we know when that flow needs a redesign.
+export const toastActionOverModalSchema = z
+  .object({
+    // Developer-chosen static toast ids only; dynamic or unnamed toasts report 'unnamed'.
+    toast_id: z.string().regex(/^[a-z][a-z-]{0,63}$/),
+    modal_kind: z.enum(['dialog', 'sheet']),
+    raised_by: z.enum(['click', 'new_toast'])
+  })
+  .strict()

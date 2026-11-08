@@ -1,41 +1,48 @@
+import { retainAutomationReselectionContexts } from './automation-host-reselection'
+import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import type { Repo } from '../../../shared/repo-types'
+import { findAutomationRepoForWrite } from '../../../shared/automations/ownership/automation-repo-target'
 import {
   applyAutomationLaunchSetupPatch,
   automationWithLaunchSetup
-} from '../../../shared/automation-launch-setup'
+} from '../../../shared/automations/launch/automation-launch-setup'
+import { automationCanonicalLaunchSetup } from '../../../shared/automations/launch/automation-canonical-launch-setup'
 import { randomUUID } from 'node:crypto'
-import { invalidateLocalWorktreeMetadataPruneInputs } from '../../local-worktree-metadata-prune-gate'
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationRun,
   AutomationUpdateInput
-} from '../../../shared/automations-types'
+} from '../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceRunContext } from '../../../shared/task-source-context'
-import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
+import { normalizeAutomationPrecheck } from '../../../shared/automations/launch/automation-precheck'
 import {
   assertAutomationExtraAgentArgs,
   storedExtraAgentArgs
-} from '../../../shared/automation-extra-agent-args-record'
-import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
+} from '../../../shared/automations/launch/automation-extra-agent-args-record'
+import { nextAutomationOccurrenceAfter } from '../../../shared/automations/scheduling/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
   deriveAutomationExecutionTargetForCreate,
   deriveAutomationExecutionTargetForUpdate
-} from '../../../shared/automation-execution-target'
+} from '../../../shared/automations/ownership/automation-execution-target'
 import {
   assertAutomationDestination,
   assertAutomationOwnerFence,
+  assertAutomationWorkspaceModePrecondition,
   assertExecutionTargetMatchesDestination,
   type AutomationDestination,
-  type AutomationOwnerPrecondition
-} from '../../../shared/automation-owner-precondition'
+  type AutomationUpdatePreconditions
+} from '../../../shared/automations/ownership/automation-owner-precondition'
 import {
   getAutomationContextsForRepo,
+  automationContextAfterUpdate,
   getAutomationSchedulerOwner,
+  applyAutomationSetupTrust,
   normalizeAutomationSessionReuse,
   normalizeAutomationSetupDecisionForWorkspaceMode
 } from './automation-context-migration'
+import { refuseManagedOrcadHost } from '../../automations/orcad-fenced-automation'
 import {
   automationProjectionContext,
   automationWorkspaceSshPin,
@@ -60,7 +67,7 @@ export function listAutomations(state: PersistedState): Automation[] {
 export function createAutomation(
   operations: AutomationDefinitionOperations,
   input: AutomationCreateInput,
-  options?: { destination?: AutomationDestination }
+  options?: { destination?: AutomationDestination; resolvedRepo?: Repo }
 ): Automation {
   if (input.creationKey) {
     const existing = (operations.state.automations ?? []).find(
@@ -70,15 +77,24 @@ export function createAutomation(
       return automationWithLaunchSetup(existing)
     }
   }
-  const repo = operations.state.repos.find((entry) => entry.id === input.projectId)
+  const repo = findAutomationRepoForWrite(
+    operations.state.repos,
+    input.projectId,
+    input.runContext,
+    options?.resolvedRepo
+  )
   const now = Date.now()
   const workspaceId = input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, workspaceId)
   const executionTarget = deriveAutomationExecutionTargetForCreate({
     repo,
-    sshTargetGeneration: sshTargetGenerationForConnection(operations.state, repo?.connectionId),
+    sshTargetGeneration: sshTargetGenerationForConnection(
+      operations.state,
+      repo ? getRepoSshConnectionId(repo) : undefined
+    ),
     workspaceSshPin
   })
+  refuseManagedOrcadHost(operations.state, executionTarget, workspaceSshPin)
   if (options?.destination) {
     const context = automationProjectionContext(
       operations.state,
@@ -100,6 +116,10 @@ export function createAutomation(
     precheck: normalizeAutomationPrecheck(input.precheck),
     agentId: input.agentId,
     ...(setup.surface ? { surface: setup.surface } : {}),
+    ...(setup.launchPreferences !== undefined
+      ? { launchPreferences: setup.launchPreferences }
+      : {}),
+    ...(setup.agentArgs !== undefined ? { agentArgs: setup.agentArgs } : {}),
     ...(extraAgentArgs !== undefined ? { extraAgentArgs } : {}),
     // Prefer authority-local contexts; client-assigned runtime IDs cannot identify this store's host.
     runContext: contexts.runContext ?? input.runContext ?? null,
@@ -125,6 +145,7 @@ export function createAutomation(
     createdAt: now,
     updatedAt: now
   }
+  applyAutomationSetupTrust(automation, input)
   assertAutomationExtraAgentArgs(automation)
   operations.state.automations = [...(operations.state.automations ?? []), automation]
   operations.recordCreated()
@@ -136,7 +157,7 @@ export function updateAutomation(
   operations: AutomationDefinitionOperations,
   id: string,
   updates: AutomationUpdateInput,
-  options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
+  options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
 ): Automation {
   const index = (operations.state.automations ?? []).findIndex((entry) => entry.id === id)
   if (index === -1) {
@@ -157,17 +178,30 @@ export function updateAutomation(
   if (options?.destination) {
     assertAutomationDestination(options.destination, projectionContext)
   }
+  assertAutomationWorkspaceModePrecondition(current, options?.expectedWorkspaceMode)
+  const retainContexts = retainAutomationReselectionContexts(
+    operations.state,
+    current,
+    updates,
+    options?.destination,
+    projectionContext
+  )
+  const launchSetupUpdate = applyAutomationLaunchSetupPatch(updates, current)
   // Ignore undefined values preserved by structuredClone; explicit clears use null.
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: filtering removes only undefined entries from the validated patch and retains every remaining field's type.
   const definedUpdates = Object.fromEntries(
-    Object.entries(applyAutomationLaunchSetupPatch(updates)).filter(
-      ([, value]) => value !== undefined
-    )
+    Object.entries(launchSetupUpdate).filter(([, value]) => value !== undefined)
   ) as Omit<AutomationUpdateInput, 'launchSetupPatch'> & Pick<Automation, 'surface'>
   const repoId = updates.projectId ?? current.projectId
-  const repo = operations.state.repos.find((entry) => entry.id === repoId)
   const selectorMoveRequested =
     updates.projectId !== undefined || options?.destination !== undefined
+  const repo = findAutomationRepoForWrite(
+    operations.state.repos,
+    repoId,
+    updates.runContext ?? (selectorMoveRequested ? undefined : current.runContext),
+    options?.resolvedRepo,
+    !!updates.runContext
+  )
   const schedulerOwner =
     selectorMoveRequested && repo ? getAutomationSchedulerOwner(repo) : current.schedulerOwner
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
@@ -175,10 +209,6 @@ export function updateAutomation(
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
-  // Omitted preserves; empty or whitespace clears.
-  const extraAgentArgs = Object.hasOwn(definedUpdates, 'extraAgentArgs')
-    ? storedExtraAgentArgs(definedUpdates.extraAgentArgs)
-    : storedExtraAgentArgs(current.extraAgentArgs)
   const merged: Automation = {
     ...current,
     ...definedUpdates,
@@ -187,19 +217,25 @@ export function updateAutomation(
       ? normalizeAutomationPrecheck(definedUpdates.precheck)
       : normalizeAutomationPrecheck(current.precheck),
     projectId: repoId,
-    // Rebuild moved contexts from this authority's registry; otherwise preserve stored values or explicit null.
-    runContext:
-      definedUpdates.runContext === null
-        ? null
-        : selectorMoveRequested
-          ? (contexts.runContext ?? definedUpdates.runContext ?? null)
-          : (current.runContext ?? contexts.runContext),
-    sourceContext:
-      definedUpdates.sourceContext === null
-        ? null
-        : selectorMoveRequested
-          ? (contexts.sourceContext ?? definedUpdates.sourceContext ?? null)
-          : (current.sourceContext ?? contexts.sourceContext),
+    // Why the wire object is ignored: contexts are the storing authority's own
+    // registry speaking. A move restates them from that registry, anything else
+    // keeps the stored value; an explicit null still clears.
+    runContext: retainContexts
+      ? current.runContext
+      : automationContextAfterUpdate(
+          current.runContext,
+          definedUpdates.runContext,
+          contexts.runContext,
+          selectorMoveRequested
+        ),
+    sourceContext: retainContexts
+      ? current.sourceContext
+      : automationContextAfterUpdate(
+          current.sourceContext,
+          definedUpdates.sourceContext,
+          contexts.sourceContext,
+          selectorMoveRequested
+        ),
     schedulerOwner,
     workspaceMode,
     workspaceId:
@@ -214,15 +250,12 @@ export function updateAutomation(
           ? (definedUpdates.baseBranch ?? null)
           : (current.baseBranch ?? null)
         : null,
-    setupDecision:
-      workspaceMode === 'new_per_run'
-        ? Object.hasOwn(definedUpdates, 'setupDecision')
-          ? normalizeAutomationSetupDecisionForWorkspaceMode(
-              workspaceMode,
-              definedUpdates.setupDecision
-            )
-          : normalizeAutomationSetupDecisionForWorkspaceMode(workspaceMode, current.setupDecision)
-        : undefined,
+    setupDecision: normalizeAutomationSetupDecisionForWorkspaceMode(
+      workspaceMode,
+      Object.hasOwn(definedUpdates, 'setupDecision')
+        ? definedUpdates.setupDecision
+        : current.setupDecision
+    ),
     reuseSession:
       workspaceMode === 'existing'
         ? (updates.reuseSession ?? current.reuseSession ?? false)
@@ -234,11 +267,15 @@ export function updateAutomation(
       : current.nextRunAt,
     updatedAt: Date.now()
   }
-  if (extraAgentArgs === undefined) {
-    delete merged.extraAgentArgs
-  } else {
-    merged.extraAgentArgs = extraAgentArgs
+  if (retainContexts && !Object.hasOwn(current, 'sourceContext')) {
+    delete merged.sourceContext
   }
+  applyAutomationSetupTrust(merged, definedUpdates, current)
+  delete merged.launchSetup
+  for (const key of ['surface', 'launchPreferences', 'agentArgs', 'extraAgentArgs'] as const) {
+    delete merged[key]
+  }
+  Object.assign(merged, automationCanonicalLaunchSetup(launchSetupUpdate))
   assertAutomationExtraAgentArgs(merged)
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, merged.workspaceId)
@@ -247,10 +284,14 @@ export function updateAutomation(
     current,
     repo,
     selectorMoveRequested,
-    sshTargetGeneration: sshTargetGenerationForConnection(operations.state, repo?.connectionId),
+    sshTargetGeneration: sshTargetGenerationForConnection(
+      operations.state,
+      repo ? getRepoSshConnectionId(repo) : undefined
+    ),
     workspaceSshPin,
     workspaceSshPinMoved
   })
+  refuseManagedOrcadHost(operations.state, executionTarget, workspaceSshPin, current, previousPin)
   if (options?.destination) {
     assertExecutionTargetMatchesDestination(executionTarget, options.destination, workspaceSshPin)
   }
@@ -267,46 +308,6 @@ export function updateAutomation(
   return automationWithLaunchSetup(updated)
 }
 
-/** Stamp legacy targets once without retargeting user- or migration-owned contexts. */
-export function stampLegacyAutomationRunContext(
-  operations: AutomationDefinitionOperations,
-  id: string,
-  runContext: WorkspaceRunContext
-): boolean {
-  const current = (operations.state.automations ?? []).find((entry) => entry.id === id)
-  if (!current || current.runContext) {
-    return false
-  }
-  // Replace the array to invalidate identity-keyed list projections.
-  operations.state.automations = operations.state.automations.map((entry) =>
-    entry.id === id ? { ...entry, runContext } : entry
-  )
-  operations.flush()
-  return true
-}
+export { stampLegacyAutomationRunContext } from './automation-context-migration'
 
-export function deleteAutomation(
-  operations: AutomationDefinitionOperations,
-  id: string,
-  options?: { expectedOwner?: AutomationOwnerPrecondition }
-): void {
-  const automation = (operations.state.automations ?? []).find((entry) => entry.id === id)
-  if (automation) {
-    assertAutomationOwnerFence({
-      automation,
-      expectedOwner: options?.expectedOwner,
-      operation: 'mutate',
-      context: automationProjectionContext(operations.state, operations.storageAuthority, false)
-    })
-  }
-  operations.state.automations = (operations.state.automations ?? []).filter(
-    (entry) => entry.id !== id
-  )
-  operations.state.automationRuns = (operations.state.automationRuns ?? []).filter(
-    (entry) => entry.automationId !== id
-  )
-  operations.recordAutomationRunsMutation?.(operations.state.automationRuns)
-  // Removing definitions and unfinished runs releases their workspace claims (#17775).
-  invalidateLocalWorktreeMetadataPruneInputs()
-  operations.flush()
-}
+export { deleteAutomation } from './automation-definition-removal'

@@ -17,7 +17,7 @@ import {
   admitSshConnectionStateForAuthorityReconciliation,
   admitSshDetectedPorts
 } from '../../shared/ssh-retained-payload-admission'
-import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../shared/file-access/filesystem-path-flavor'
 import type { PreloadApi } from '../api-types'
 
 export const sshApi = {
@@ -90,6 +90,13 @@ export const sshApi = {
     }
     ipcRenderer.on('ssh:state-changed', listener)
     return () => ipcRenderer.removeListener('ssh:state-changed', listener)
+  },
+
+  onTargetRemoved: (callback: (data: { targetId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { targetId: string }): void =>
+      callback(data)
+    ipcRenderer.on('ssh:target-removed', listener)
+    return () => ipcRenderer.removeListener('ssh:target-removed', listener)
   },
 
   addPortForward: (args: {

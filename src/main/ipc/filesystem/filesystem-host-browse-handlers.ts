@@ -5,8 +5,8 @@ import { relativePathInsideRoot } from '../../../shared/cross-platform-path'
 import type {
   HostBrowseEntryResolution,
   HostDirectoryListing
-} from '../../../shared/filesystem-entry-types'
-import { browseServerDirectory } from '../../runtime/runtime-server-environment-commands'
+} from '../../../shared/file-listing/host-directory-browse'
+import { browseServerDirectory } from '../../runtime/files/server-browse/runtime-server-environment-commands'
 
 async function canonicalRelativePath(
   realPath: string,

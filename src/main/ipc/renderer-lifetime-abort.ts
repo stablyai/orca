@@ -1,4 +1,4 @@
-import { addFanoutListeners, type FanoutEventSource } from '../event-listener-fanout'
+import { addFanoutListeners, type FanoutEventSource } from '../runtime/events/event-listener-fanout'
 
 export type RendererLifetimeSender = FanoutEventSource
 

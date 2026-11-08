@@ -2,12 +2,12 @@ import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_pr
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { endSubprocessStdin } from '../../../shared/subprocess-stdin-write'
 import { runProcess } from '@orca/process-host'
-import { resolveSelectedLocalCommand } from '../../ipc/command-path-resolver'
+import { resolveSelectedLocalCommand } from '../../ipc/command-path/command-path-resolver'
 import type { WslProcessGroupTermination } from '../wsl-process-group-termination'
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
-import { DEFAULT_GIT_MAX_BUFFER } from './git-exec-options'
-import type { GitAdmissionTier } from './git-exec-options'
+import { DEFAULT_GIT_MAX_BUFFER, type GitAdmissionTier } from './git-exec-options'
+
 import { workerExecFile } from './worker-exec-file'
 import type { WorkerThreadChildProcess } from '../../worker-thread-child-process/worker-thread-child-process'
 
@@ -30,7 +30,7 @@ export async function execFileCaptureToTermination(
   command: string,
   args: string[],
   // Why: runProcess owns this child's streams; git-exec-file refuses onStderr with a barrier.
-  options: Omit<ExecFileCaptureOptions, 'onStderr'>,
+  options: Omit<ExecFileCaptureOptions, 'onStderr' | 'stdin'> & { stdin?: string | Uint8Array },
   termination?: WslProcessGroupTermination
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
   // runProcess already reports spawn cost through spawnProcess.

@@ -3,7 +3,7 @@ import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { runBrowserRouteEgressElectron } from '../../browser/browser-route-egress-electron-launch'
+import { runBrowserRouteEgressElectron } from '../../browser/network/egress/browser-route-egress-electron-launch'
 import { buildPluginPanelShellHtml } from '../../../shared/plugins/frames/plugin-panel-shell'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../shared/plugins/frames/plugin-frame-bridge'
 
@@ -65,10 +65,10 @@ app.whenReady().then(async () => {
 })
 `
 
-// Why a tripwire, not a guard: it pins the residual documented in plugin-panel-shell.ts. The
-// shell fences the panel's own window, but a child srcdoc frame is a new realm that commits
-// without will-frame-navigate, and Electron 43 has no per-frame WebRTC switch. When a fix
-// lands, flip the nested-frame assertion to expect no connection.
+// Why a tripwire, not a guard: it pins the residual documented in plugin-panel-shell.ts for the
+// srcdoc iframe browser clients still use. The shell fences the panel's own window, but a child
+// srcdoc frame is a new realm that commits without will-frame-navigate, and Electron 43 has no
+// per-frame WebRTC switch. Desktop guests close it (plugin-frame-guest-egress.electron.test.ts).
 describe('plugin panel WebRTC under Electron', () => {
   // Why the 60s timeout: a real Electron window negotiates WebRTC against two local TURN relays.
   it('blocks the panel window but not a nested srcdoc frame', async () => {

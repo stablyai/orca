@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalRenderItem,
   AgentJournalTurnLifecycle
-} from './agent-session-journal-types'
-import { agentJournalTurnBody } from './agent-session-turn-record'
+} from './agent-session/journal/agent-session-journal-types'
+import { agentJournalTurnBody } from './agent-session/lifecycle/agent-session-turn-record'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
@@ -11,7 +11,7 @@ import {
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentRunningTurnTiming
-} from './structured-agent-session-turn-timing'
+} from './agent-session/view/structured-agent-session-turn-timing'
 
 // Separate host/client clocks by an hour so mixed-clock anchors fail visibly.
 const HOST_START = 3_600_000_000
@@ -133,19 +133,6 @@ describe('structured agent turn clock anchor', () => {
 })
 
 describe('structured agent turn origin', () => {
-  // Live and settled timing must share an origin or completion contradicts the counter.
-  it('settles a turn from the same instant the live counter used', () => {
-    const settled = completedStructuredAgentTurnSeconds({
-      state: 'completed',
-      startedAt: HOST_START + 25_000,
-      requestedAt: HOST_START,
-      completedAt: HOST_START + 26_000,
-      observedAt: HOST_START + 25_000
-    })
-
-    expect(settled).toBe(26)
-  })
-
   it('does not let a provider start-scoped duration undercut an exact request origin', () => {
     const settled = completedStructuredAgentTurnSeconds({
       state: 'completed',

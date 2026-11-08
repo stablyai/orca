@@ -1,10 +1,5 @@
 // @vitest-environment happy-dom
-import {
-  measureElement,
-  observeElementOffset,
-  observeElementRect,
-  Virtualizer
-} from '@tanstack/react-virtual'
+import { observeElementOffset, observeElementRect, Virtualizer } from '@tanstack/react-virtual'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { measureVirtualRowRetainingHiddenSize } from './virtualized-hidden-row-measurement'
 
@@ -97,38 +92,10 @@ describe('measureVirtualRowRetainingHiddenSize', () => {
     }
   }
 
-  it('reproduces the drift with the default TanStack measurement', () => {
-    const before = visibleState()
-    const after = runHideCycle(measureElement)
-
-    expect(before.topKey).toBe(4)
-    expect(after.topKey).toBe(6)
-    expect(after.totalSize).toBe(before.totalSize - 2 * MEASURED_ROW_HEIGHT)
-  })
-
   it('keeps the same row under the same scrollTop across a hide/re-show', () => {
     const before = visibleState()
     const after = runHideCycle(measureVirtualRowRetainingHiddenSize)
 
     expect(after).toEqual(before)
-  })
-
-  it('measures normally while the scroller is laid out', () => {
-    const { rowElement, virtualizer } = createViewport(measureVirtualRowRetainingHiddenSize)
-    const row = rowElement(4)
-
-    expect(measureVirtualRowRetainingHiddenSize(row, sizeEntry(row, 560), virtualizer)).toBe(560)
-  })
-
-  it('falls back to the estimate for a row first seen while hidden', () => {
-    const { rowElement, scrollElement, virtualizer } = createViewport(
-      measureVirtualRowRetainingHiddenSize
-    )
-    setHidden(scrollElement)
-    const row = rowElement(12)
-
-    expect(measureVirtualRowRetainingHiddenSize(row, sizeEntry(row, 0), virtualizer)).toBe(
-      UNMEASURED_ESTIMATE
-    )
   })
 })

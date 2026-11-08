@@ -4,7 +4,7 @@ import { X } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
+import { isSubmittableCommentBody } from '../../source-control/review/pr-comment-actions'
 import { MessageBox } from '../composer-input/MessageBox'
 import { composerInputStyles } from '../composer-input/composer-input-styles'
 
@@ -19,6 +19,7 @@ type Props = {
   onSubmit: (body: string) => Promise<boolean>
   onCancel?: () => void
   autoFocus?: boolean
+  inline?: boolean
 }
 
 export function PRCommentComposer({
@@ -28,7 +29,8 @@ export function PRCommentComposer({
   initialBody,
   onSubmit,
   onCancel,
-  autoFocus
+  autoFocus,
+  inline
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -59,6 +61,7 @@ export function PRCommentComposer({
       placeholder={placeholder}
       editable={!submitting}
       autoFocus={autoFocus}
+      inline={inline}
       onSend={() => void submit()}
       canSend={isSubmittableCommentBody(body)}
       sending={submitting}

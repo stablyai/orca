@@ -1,11 +1,12 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readRunRemovedWork } from '../../../../orchestration/db/reset/removed-orchestration-work-read'
+import { boundRunWorkerNext } from '../../../../orchestration/db/runs/worker-run-binding'
 import { assertCallerHandleMatchesEvidence, resolveOrchestrationCaller } from './run-scope'
 import { exposeRun } from './run-receipt'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
-import type { RunRow } from '../../../../orchestration/types'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
+import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import { currentDispatchAssigneeRun } from '../messaging/recipient-routing'
 import {
   RunCreateParams,
@@ -118,9 +119,12 @@ export const ORCHESTRATION_RUN_METHODS = [
       runtime.cancelMessageWaiters(params.from)
       cancelBoundDispatchWaiters(runtime, caller, run.id)
       // run-use keeps only this Run, so every Run it held before has a new or no consumer.
-      for (const runId of new Set([params.id, ...priorRuns.map((prior) => prior.id)])) {
-        runtime.cancelMessageWaiters(`run:${runId}`)
-      }
+      const moved = [...new Set([params.id, ...priorRuns.map((prior) => prior.id)])].map(
+        (runId) => `run:${runId}`
+      )
+      moved.forEach((mailbox) => runtime.cancelMessageWaiters(mailbox))
+      // The former coordinator's waiting report cards are the new one's mail now.
+      runtime.withdrawStaleChatMail(moved)
       return { run: exposeRun(run) }
     }
   }),
@@ -135,8 +139,13 @@ export const ORCHESTRATION_RUN_METHODS = [
         callerSession: orchestrationCaller,
         requireStablePane: true
       })
-      const run = runtime.getOrchestrationDb().getCurrentRunForCoordinator(caller)
-      return { run: run ? exposeRun(run) : null }
+      const db = runtime.getOrchestrationDb()
+      const run = db.getCurrentRunForCoordinator(caller)
+      if (!run) {
+        return { run: null }
+      }
+      const next = boundRunWorkerNext(db, caller, run.id)
+      return { run: exposeRun(run), ...(next ? { next } : {}) }
     }
   }),
   defineMethod({

@@ -3,14 +3,14 @@ import {
   USER_KEPT_WORKER_TERMINAL_SQL,
   WORKER_SETTLED_STATES,
   type WorkerTerminalResourceRow
-} from '../../worker-terminal-ownership'
+} from '../../terminal-authority/release/worker-terminal-ownership'
 import {
   isEquivalentPaneKey,
   paneKeyMatchSuffix,
   WORKER_TERMINAL_PANE_KEY_MATCH_SUFFIX_SQL
 } from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { WorkerAutoCloseState } from '../../../../../shared/worker-auto-close'
+import type { WorkerAutoCloseState } from '../../../../../shared/orchestration/workers/worker-auto-close'
 import { exposeUtcTimestamp, toSqliteUtcTimestamp } from '../utc-timestamp'
 import { OrchestrationError } from '../../orchestration-error'
 import { retainTerminalResourceInTransaction } from './worker-terminal-archive'
@@ -51,7 +51,7 @@ const KEEPABLE_RESOURCE_SQL = `ownership_state = 'owned' AND (release_state = 'n
 
 const KEPT_RESOURCE_SQL = `ownership_state = 'owned' AND ${USER_KEPT_WORKER_TERMINAL_SQL}`
 
-/** Keep open: neither Orca nor the coordinator closes or reuses the worker until the user allows auto-close. */
+/** Keep open: neither Orca nor the coordinator closes the worker until the user allows auto-close; follow-ups keep it kept. */
 export function keepWorkerTerminalOpen(this: OrchestrationDb, paneKey: string): number {
   this.db.exec('BEGIN IMMEDIATE')
   try {

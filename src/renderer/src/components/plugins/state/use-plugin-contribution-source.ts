@@ -1,22 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import { usePluginIconThemes } from '@/store/plugin-icon-themes'
+import { usePluginIconThemes } from '@/store/plugins/appearance/plugin-icon-themes'
 import {
   ensurePluginLanguagePacksLoaded,
   usePluginLanguagePackStore
-} from '@/store/plugin-language-packs'
+} from '@/store/plugins/localization/plugin-language-packs'
 import {
   pluginSyntaxRevisionKey,
   usePluginSyntaxFailureStore
-} from '@/store/plugin-syntax-failures'
-import { usePluginSyntaxes } from '@/store/plugin-syntax-packs'
-import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugin-themes'
+} from '@/store/plugins/syntax/plugin-syntax-failures'
+import { usePluginSyntaxes } from '@/store/plugins/syntax/plugin-syntax-packs'
+import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import {
   EMPTY_CONTRIBUTION_SOURCE,
   manifestContributionSource,
   type PluginContributionSource
 } from '../presentation/plugin-contributions'
+import { statusBarItemTitles } from '../presentation/plugin-contribution-row-labels'
 
 /** What an installed plugin adds right now, from Orca's live registrations; empty for others. */
 function useInstalledPluginContributionSource(
@@ -41,6 +42,7 @@ function useInstalledPluginContributionSource(
       themes: ours(appThemes),
       terminalThemes: ours(terminalThemes),
       iconThemes: ours(iconThemes),
+      fonts: plugin.fonts?.map((font) => font.family) ?? [],
       syntaxes: ours(syntaxes).map((syntax) => ({
         ...syntax,
         failed: Boolean(failures[pluginSyntaxRevisionKey(syntax)])
@@ -49,7 +51,8 @@ function useInstalledPluginContributionSource(
       panels: plugin.panels.map((panel) => panel.title),
       customEditors: plugin.customEditors ?? [],
       vmRecipes: plugin.vmRecipes?.map((recipe) => recipe.name) ?? [],
-      newFiles: plugin.newFiles ?? []
+      newFiles: plugin.newFiles ?? [],
+      statusBarItems: statusBarItemTitles(plugin.statusBarItems)
     }
   }, [plugin, appThemes, terminalThemes, iconThemes, syntaxes, languagePacks, failures])
 }

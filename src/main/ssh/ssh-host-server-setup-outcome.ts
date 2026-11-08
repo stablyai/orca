@@ -56,7 +56,10 @@ export function deferred(
 ): Promise<HostServerOnConnectResult> {
   console.warn(`[ssh] Managed Orca server setup deferred (${result.code}):`, result.reason)
   const unavailable = classifyOrcadHostUnavailable({ code: result.code })
-  return unfinished(target, deps, unavailable, empty, 'deferred', { detail: result.reason })
+  return unfinished(target, deps, unavailable, empty, 'deferred', {
+    detail: result.reason,
+    code: result.code
+  })
 }
 
 /** Release failed setup claims/fences only with absence proof; record definitive host incompatibility separately. */
@@ -82,6 +85,7 @@ async function unfinished(
       route: 'unserved',
       reason,
       detail: boundedDetail(failure.detail),
+      ...(failure.code ? { code: failure.code } : {}),
       ...(failure.contactLost ? { contactLost: true as const } : {}),
       ...(failure.nodeDownloadBlocked ? { nodeDownloadBlocked: failure.nodeDownloadBlocked } : {}),
       ...(held ? { held: true as const } : {})

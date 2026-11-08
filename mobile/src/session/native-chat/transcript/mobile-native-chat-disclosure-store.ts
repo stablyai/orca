@@ -1,8 +1,8 @@
 // Store disclosures above recycled transcript rows so opened tools remain open when rows remount.
 
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState } from 'react'
-import { MobileNativeChatScrollRoots } from '../../mobile-native-chat-scroll-roots'
-import type { MobileNativeChatRootPosition } from '../../mobile-native-chat-scroll-root-handle'
+import { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
+import type { MobileNativeChatRootPosition } from './mobile-native-chat-scroll-root-handle'
 
 export type MobileNativeChatRunScroll = MobileNativeChatRootPosition
 
@@ -16,6 +16,9 @@ export type MobileNativeChatDisclosureStore = {
 
 export const MobileNativeChatDisclosureContext =
   createContext<MobileNativeChatDisclosureStore | null>(null)
+
+/** The transcript row a Markdown body draws in, so reader choices inside it outlive the row's mount. */
+export const MobileNativeChatMarkdownRowKeyContext = createContext<string | undefined>(undefined)
 
 export const MAX_DISCLOSURES = 512
 

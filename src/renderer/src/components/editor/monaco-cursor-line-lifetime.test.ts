@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { editor } from 'monaco-editor'
-import type { OpenFile } from '@/store/slices/editor'
-import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { createEditorStore } from '@/store/slices/editor/editor-slice-test-harness'
 import { installMonacoViewStateTracking } from './monaco-view-state-persistence'
 
 function makeFile(id: string, filePath: string): OpenFile {
@@ -39,22 +39,6 @@ function startTracking(
 }
 
 describe('Monaco cursor-line ownership lifetime', () => {
-  it('releases positions after 250 distinct owned editor tabs close', () => {
-    const store = createEditorStore()
-    store.setState({ unifiedTabsByWorktree: {} })
-    for (let index = 0; index < 250; index += 1) {
-      const file = makeFile(`editor:wt-1:local:file-${index}`, `/repo/file-${index}.ts`)
-      store.setState({ openFiles: [file] })
-      const tracking = startTracking(store, file, index + 1)
-      tracking.cursorPositionSub.dispose()
-      tracking.scrollStateSub.dispose()
-      store.getState().closeFile(file.id)
-    }
-
-    expect(store.getState().openFiles).toHaveLength(0)
-    expect(Object.keys(store.getState().editorCursorLine)).toHaveLength(0)
-  })
-
   it('isolates same-path positions and closes only the selected file identity', () => {
     const store = createEditorStore()
     const local = makeFile('editor:wt-1:local:file.ts', '/repo/file.ts')

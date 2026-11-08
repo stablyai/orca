@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -65,7 +65,7 @@ export async function tryAcquireRelayGcClaim(
       { signal }
     )
     if (created.trim().endsWith('OK')) {
-      return writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
+      return await writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
     }
     const stolen = await execHostCommand(
       conn,
@@ -76,7 +76,7 @@ export async function tryAcquireRelayGcClaim(
     if (!stolen.trim().endsWith('OK')) {
       return null
     }
-    return writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
+    return await writeRelayGcClaimOwner(conn, remoteRelayDir, host, signal)
   } catch (error) {
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error

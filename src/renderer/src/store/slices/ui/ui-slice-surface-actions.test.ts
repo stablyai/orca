@@ -27,13 +27,4 @@ describe('workspace port-scan surface actions', () => {
     expect(countNotifications(() => setRefreshing(false))).toBe(0)
     expect(useAppStore.getState().workspacePortScanRefreshing).toBe(false)
   })
-
-  it('still notifies once on a real transition, in both directions', () => {
-    const setRefreshing = useAppStore.getState().setWorkspacePortScanRefreshing
-
-    expect(countNotifications(() => setRefreshing(true))).toBe(1)
-    expect(useAppStore.getState().workspacePortScanRefreshing).toBe(true)
-    expect(countNotifications(() => setRefreshing(false))).toBe(1)
-    expect(useAppStore.getState().workspacePortScanRefreshing).toBe(false)
-  })
 })

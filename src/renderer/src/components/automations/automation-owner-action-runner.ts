@@ -3,20 +3,23 @@
 import type {
   Automation,
   AutomationCreateInput,
-  AutomationRun,
-  AutomationRunsPage,
   AutomationUpdateInput
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
+import type {
+  AutomationRun,
+  AutomationRunsPage
+} from '../../../../shared/automations/history/automation-run'
 import {
   automationOwnerConflictMessage,
+  matchAutomationOwnerConflict,
   stripAutomationOwnerConflictCode,
   type AutomationOwnerConflictCode
-} from '../../../../shared/automation-owner-conflict'
+} from '../../../../shared/automations/ownership/automation-owner-conflict'
 import type {
   AutomationAuthorityRef,
   AutomationOwnerRef
-} from '../../../../shared/automation-owner-ref'
-import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
 import type {
   AutomationActionAvailability,
@@ -31,9 +34,9 @@ import {
   listAutomationRunsForOwner,
   listAutomationRunsPageForOwner,
   listAutomationsForOwner,
+  listScopedAutomations,
   listOrphanAutomationRuns,
   listOrphanAutomationRunsPage,
-  matchAutomationOwnerConflict,
   runAutomationNowForOwner,
   updateAutomationForOwner,
   updateOrphanAutomation
@@ -61,12 +64,27 @@ const CONFLICT_RECOVERY: Record<AutomationOwnerConflictCode, AutomationHostRecov
     automation_destination_invalid: 'retry'
   }
 
-function conflictOutcome(code: AutomationOwnerConflictCode): AutomationActionOutcome<never> {
+function conflictOutcome(
+  code: AutomationOwnerConflictCode,
+  error: unknown
+): AutomationActionOutcome<never> {
+  const message =
+    typeof error === 'string'
+      ? error
+      : error &&
+          typeof error === 'object' &&
+          'message' in error &&
+          typeof error.message === 'string'
+        ? error.message
+        : null
   return {
     status: 'conflict',
     conflict: {
       code,
-      message: automationOwnerConflictMessage(code),
+      message:
+        message && message.trim() !== code
+          ? stripAutomationOwnerConflictCode(message)
+          : automationOwnerConflictMessage(code),
       recovery: CONFLICT_RECOVERY[code]
     }
   }
@@ -75,7 +93,7 @@ function conflictOutcome(code: AutomationOwnerConflictCode): AutomationActionOut
 function classify(error: unknown): AutomationActionOutcome<never> {
   const conflict = matchAutomationOwnerConflict(error)
   if (conflict) {
-    return conflictOutcome(conflict)
+    return conflictOutcome(conflict, error)
   }
   if (error instanceof AutomationHostScopeUnsupportedError) {
     return {
@@ -150,7 +168,7 @@ export async function updateOwnedAutomation(
   return await attempt(
     availability,
     (owner) => updateAutomationForOwner(owner, id, updates, destination),
-    () => updateOrphanAutomation(authority, id, updates)
+    () => updateOrphanAutomation(authority, id, updates, destination)
   )
 }
 
@@ -176,12 +194,22 @@ export async function runOwnedAutomationNow(
 /** Re-read edit data within its captured scope so a moved row cannot silently become another authority’s same-ID record. */
 export async function showOwnedAutomation(
   availability: AutomationActionAvailability,
-  id: string
+  id: string,
+  authority?: AutomationAuthorityRef
 ): Promise<AutomationActionResult<Automation | null>> {
-  return await attempt(availability, async (owner) => {
-    const result = await listAutomationsForOwner(owner)
-    return result.automations.find((automation) => automation.id === id) ?? null
-  })
+  return await attempt(
+    availability,
+    async (owner) => {
+      const result = await listAutomationsForOwner(owner)
+      return result.automations.find((automation) => automation.id === id) ?? null
+    },
+    authority
+      ? async () => {
+          const result = await listScopedAutomations(authority, { kind: 'orphan' })
+          return result.automations.find((automation) => automation.id === id) ?? null
+        }
+      : undefined
+  )
 }
 
 export async function listOwnedAutomationRuns(

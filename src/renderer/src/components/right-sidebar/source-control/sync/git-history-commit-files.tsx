@@ -1,7 +1,8 @@
 import { createElement } from 'react'
 import type React from 'react'
-import { ArrowUpRight, RefreshCw } from 'lucide-react'
-import { STATUS_COLORS, STATUS_LABELS } from '../../status-display'
+import { ArrowUpRight } from 'lucide-react'
+import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import {
   toPermanentSourceControlRowOpenEvent,
   toSourceControlRowOpenEvent,
@@ -9,10 +10,10 @@ import {
 } from '../listing/split-open'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname } from '@/lib/path'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatGitHistoryTimestamp } from './git-history-format'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitFileStatus } from '../../../../../../shared/git-status-types'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 
 export type GitHistoryCommitFilesState =
   | { status: 'loading' }
@@ -45,9 +46,24 @@ function CommitFileRow({
         className: 'size-3.5 shrink-0',
         style: { color: STATUS_COLORS[status] }
       })}
-      <span className="min-w-0 flex-1 truncate">
-        <span className="text-foreground">{fileName}</span>
-        {dirPath && <span className="ml-1.5 text-[11px] text-muted-foreground">{dirPath}</span>}
+      <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+        <span className="min-w-0 truncate text-left text-foreground" dir="rtl">
+          <bdi>{fileName}</bdi>
+        </span>
+        {dirPath && (
+          <span
+            className="min-w-0 flex-1 truncate text-left text-2xs text-muted-foreground"
+            dir="rtl"
+          >
+            <bdi>{dirPath}</bdi>
+          </span>
+        )}
+      </span>
+      <span className="shrink-0 font-mono text-2xs text-[color:var(--git-decoration-added)]">
+        {entry.added !== undefined ? `+${entry.added}` : ''}
+      </span>
+      <span className="shrink-0 font-mono text-2xs text-[color:var(--git-decoration-deleted)]">
+        {entry.removed !== undefined ? `−${entry.removed}` : ''}
       </span>
       <span
         className="w-4 shrink-0 text-center text-[10px] font-bold"
@@ -68,18 +84,9 @@ function CommitFilesBody({
   onOpenFile: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (state.status === 'loading') {
-    return (
-      <div className="flex items-center gap-2 py-1 pl-9 pr-3 text-[11px] text-muted-foreground">
-        <RefreshCw className="size-3 animate-spin" />
-        <span>
-          {translate(
-            'auto.components.right.sidebar.GitHistoryCommitFiles.a1b2c3d4e5',
-            'Loading files…'
-          )}
-        </span>
-      </div>
-    )
+    return <div className="h-6" />
   }
 
   if (state.status === 'error') {
@@ -93,7 +100,7 @@ function CommitFilesBody({
   if (state.entries.length === 0) {
     return (
       <div className="py-1 pl-9 pr-3 text-[11px] text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.right.sidebar.GitHistoryCommitFiles.b2c3d4e5f6',
           'No file changes in this commit'
         )}
@@ -114,7 +121,7 @@ function CommitFilesBody({
         >
           <ArrowUpRight className="size-3 shrink-0" />
           <span>
-            {translate(
+            {t(
               'auto.components.right.sidebar.GitHistoryCommitFiles.c3d4e5f6a7',
               'Open all changes together'
             )}
@@ -138,7 +145,10 @@ export function GitHistoryCommitFiles({
   onOpenFile: (entry: GitBranchChangeEntry, event: SourceControlRowOpenEvent) => void
   onOpenAll?: () => void
 }): React.JSX.Element {
-  const meta = [author, formatGitHistoryTimestamp(timestamp)].filter(Boolean).join(' · ')
+  const intlLocale = useIntlLocale()
+  const meta = [author, formatGitHistoryTimestamp(timestamp, intlLocale)]
+    .filter(Boolean)
+    .join(' · ')
   return (
     <div className="border-l border-border/60 bg-muted/20">
       {meta && <div className="py-1 pl-9 pr-3 text-[11px] text-muted-foreground">{meta}</div>}

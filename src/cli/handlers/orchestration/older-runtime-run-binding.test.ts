@@ -33,7 +33,8 @@ describe('an older Orca server that binds one Run per coordinator', () => {
 
     await expect(
       ORCHESTRATION_HANDLERS['orchestration worker-start']({
-        flags: new Map([
+        flags: new Map<string, string | boolean>([
+          ['full', true],
           ['spec', 'audit'],
           ['from', 'term_coord']
         ]),
@@ -66,7 +67,8 @@ describe('an older Orca server that binds one Run per coordinator', () => {
     })
 
     await ORCHESTRATION_HANDLERS['orchestration run-create']({
-      flags: new Map([
+      flags: new Map<string, string | boolean>([
+        ['full', true],
         ['objective', 'second'],
         ['from', 'term_coord']
       ]),

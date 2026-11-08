@@ -1,3 +1,5 @@
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { agentReadsSkill } from '@/lib/agent-skill-coverage'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
@@ -24,6 +26,7 @@ import {
 } from './installed-agent-skills-change-event'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Placeholder key while the owning runtime is unknown; nothing is cached under it. */
 const UNRESOLVED_RUNTIME_DISCOVERY_KEY = 'runtime:unresolved'
@@ -35,6 +38,7 @@ export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
 ] as const satisfies readonly SkillSourceKind[]
 
 type InstalledAgentSkillOptions = {
+  agent?: TuiAgent
   runtimeTarget?: RuntimeClientTarget | null
   enabled?: boolean
   discoveryTarget?: SkillDiscoveryTarget
@@ -42,6 +46,8 @@ type InstalledAgentSkillOptions = {
 }
 
 type InstalledAgentSkillMatchOptions = {
+  agent?: TuiAgent
+  sources?: readonly SkillDiscoverySource[]
   sourceKinds?: readonly SkillSourceKind[]
 }
 
@@ -85,6 +91,9 @@ export function hasInstalledAgentSkillNamed(
 ): boolean {
   const expected = new Set(skillNames.map(normalizeSkillName))
   return skills.some((skill) => {
+    if (options.agent && !agentReadsSkill(options.agent, skill, options.sources ?? [])) {
+      return false
+    }
     if (!skill.installed) {
       return false
     }
@@ -93,6 +102,7 @@ export function hasInstalledAgentSkillNamed(
     }
     return (
       expected.has(normalizeSkillName(skill.name)) ||
+      (skill.bundledName !== undefined && expected.has(normalizeSkillName(skill.bundledName))) ||
       expected.has(normalizeSkillName(basenameFromPath(skill.directoryPath)))
     )
   })
@@ -115,7 +125,8 @@ export function useInstalledAgentSkillNames(
   skillNames: readonly string[],
   options: InstalledAgentSkillOptions = {}
 ): InstalledAgentSkillState {
-  const { enabled = true, discoveryTarget, sourceKinds } = options
+  const t = useTranslate()
+  const { enabled = true, discoveryTarget, sourceKinds, agent } = options
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const activeRuntimeTarget = useActiveSkillDiscoveryRuntimeTarget()
@@ -214,7 +225,9 @@ export function useInstalledAgentSkillNames(
           sourceKinds
         )
         installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
-          sourceKinds
+          sourceKinds,
+          agent,
+          sources: next.sources
         })
         writeIfCurrent(() => {
           setResult(next)
@@ -237,6 +250,7 @@ export function useInstalledAgentSkillNames(
       return installedAfterRefresh
     },
     [
+      agent,
       candidateSkillNames,
       discoveryTargetKey,
       enabled,
@@ -284,8 +298,10 @@ export function useInstalledAgentSkillNames(
 
   const installed = useMemo(
     () =>
-      enabled ? hasInstalledAgentSkillNamed(skills, candidateSkillNames, { sourceKinds }) : false,
-    [candidateSkillNames, enabled, skills, sourceKinds]
+      enabled
+        ? hasInstalledAgentSkillNamed(skills, candidateSkillNames, { sourceKinds, agent, sources })
+        : false,
+    [agent, candidateSkillNames, enabled, skills, sourceKinds, sources]
   )
 
   const settled = enabled && resultForRender !== null
@@ -311,7 +327,7 @@ export function useInstalledAgentSkillNames(
     installed,
     loading: loadingForRender,
     settled,
-    ...getInstalledAgentSkillVerdict(scan),
+    ...getInstalledAgentSkillVerdict(scan, t),
     skills,
     sources,
     refresh: forceRefresh

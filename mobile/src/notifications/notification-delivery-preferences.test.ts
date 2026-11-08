@@ -2,11 +2,12 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { AppState } from 'react-native'
 import {
   DEFAULT_NOTIFICATION_DELIVERY,
-  loadNotificationDeliveryPreferences,
-  notificationPreferencesFilter,
-  saveNotificationDeliveryPreferences
+  loadNotificationDeliveryPreferences
 } from './notification-delivery-preferences'
 import {
+  notificationViewingOfRoute,
+  sessionOfPageLocation,
+  setHostDocumentSession,
   setNotificationViewingWorkspace,
   shouldSuppressNotificationWhileViewing
 } from './notification-viewing-policy'
@@ -14,10 +15,7 @@ import {
 const storage = new Map<string, string>()
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
-    setItem: vi.fn(async (key: string, value: string) => {
-      storage.set(key, value)
-    })
+    getItem: vi.fn(async (key: string) => storage.get(key) ?? null)
   }
 }))
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
@@ -25,42 +23,6 @@ beforeEach(() => {
   storage.clear()
   setNotificationViewingWorkspace(null)
   AppState.currentState = 'background'
-})
-
-it('persists only phone-specific delivery preferences', async () => {
-  expect(await loadNotificationDeliveryPreferences()).toEqual(DEFAULT_NOTIFICATION_DELIVERY)
-  const value = {
-    ...DEFAULT_NOTIFICATION_DELIVERY,
-    onlyWhenDesktopAway: false,
-    sound: false
-  }
-  await saveNotificationDeliveryPreferences(value)
-  expect(await loadNotificationDeliveryPreferences()).toEqual(value)
-  expect(notificationPreferencesFilter(value)).toEqual({
-    onlyWhenDesktopAway: false,
-    sound: false
-  })
-})
-
-it('ignores unrelated stored preferences', async () => {
-  storage.set(
-    'orca:notificationDeliveryPreferences',
-    JSON.stringify({
-      onlyWhenDesktopAway: false,
-      sound: false,
-      suppressWhileViewing: false,
-      unrelatedSetting: false
-    })
-  )
-  expect(await loadNotificationDeliveryPreferences()).toEqual({
-    onlyWhenDesktopAway: false,
-    sound: false,
-    suppressWhileViewing: false
-  })
-  expect(notificationPreferencesFilter(await loadNotificationDeliveryPreferences())).toEqual({
-    onlyWhenDesktopAway: false,
-    sound: false
-  })
 })
 
 it('suppresses only the workspace being viewed on this phone, and never while backgrounded', async () => {
@@ -78,6 +40,17 @@ it('suppresses only the workspace being viewed on this phone, and never while ba
   ).toBe(false)
   AppState.currentState = 'background'
   expect(await shouldSuppressNotificationWhileViewing(event, 'ssh-host', true)).toBe(false)
+})
+
+it('suppresses the session a host list document shows inside itself, until its page moves on', () => {
+  // Jump back in and notification taps open the session in the host route's document, so the native route stays /h/<host>.
+  const event = { source: 'terminal-bell', worktreeId: 'repo::/work' }
+  setNotificationViewingWorkspace(notificationViewingOfRoute('/h/host-1', { hostId: 'host-1' }))
+  AppState.currentState = 'active'
+  setHostDocumentSession('host-1', sessionOfPageLocation('/h/host-1/session/repo%3A%3A%2Fwork'))
+  expect(shouldSuppressNotificationWhileViewing(event, 'host-1', true)).toBe(true)
+  setHostDocumentSession('host-1', sessionOfPageLocation('/h/host-1'))
+  expect(shouldSuppressNotificationWhileViewing(event, 'host-1', true)).toBe(false)
 })
 
 it('recovers defaults from malformed stored preferences', async () => {

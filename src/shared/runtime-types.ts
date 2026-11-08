@@ -82,17 +82,7 @@ export type {
   BrowserViewportResult,
   BrowserWaitResult
 } from './runtime-browser-contracts'
-export type {
-  RuntimeFileListEntry,
-  RuntimeFileListResult,
-  RuntimeFileOpenResult,
-  RuntimeFilePreviewResult,
-  RuntimeFileReadChunkResult,
-  RuntimeFileReadResult,
-  RuntimeNativeChatFileContext,
-  RuntimeTerminalPathOpenTarget,
-  RuntimeTerminalPathResolution
-} from './runtime-file-contracts'
+
 export {
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage,
@@ -190,6 +180,7 @@ export type {
 } from './runtime-terminal-contracts'
 export type {
   RuntimeGitCheckoutResult,
+  RuntimeGitSwitchResult,
   RuntimeGitLocalBranches,
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
@@ -198,11 +189,8 @@ export type {
   RuntimeWorktreeAgentRow,
   RuntimeWorktreeCreateResult,
   RuntimeWorktreeListResult,
-  RuntimeWorktreePsConditionalResult,
   RuntimeWorktreePsResult,
-  RuntimeWorktreePsSnapshotResult,
   RuntimeWorktreePsSummary,
-  RuntimeWorktreePsUnchangedResult,
   RuntimeWorktreeRecord,
   RuntimeWorktreeRemoveResult,
   RuntimeWorktreeSetResult,

@@ -4,6 +4,57 @@
   "family": "git.changes-load",
   "namedDeltas": [],
   "values": {
+    "01ca1551d26f": {
+      "name": "git.branchCompare#1",
+      "ordinal": 9,
+      "args": [
+        {
+          "name": "method",
+          "value": "git.branchCompare"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "origin/dev",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "entries": [
+              {
+                "added": 2,
+                "path": "src/app.ts",
+                "removed": 1,
+                "status": "modified"
+              }
+            ],
+            "summary": {
+              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+              "baseRef": "origin/dev",
+              "changedFiles": 1,
+              "compareRef": "feature",
+              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
+              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
+              "status": "ready"
+            }
+          }
+        }
+      }
+    },
     "1d461278a0ae": {
       "branchCompareState": {
         "kind": "ready",
@@ -56,68 +107,12 @@
         }
       }
     },
-    "2bf960db8adf": {
-      "name": "git.status#1",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\",\"includeLineStats\":false}}"
-    },
-    "35cc9e325d08": {
+    "2b017ef94a43": {
       "name": "git.branchCompare#1",
-      "ordinal": 11,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.branchCompare"
-        },
-        {
-          "name": "params",
-          "value": {
-            "baseRef": "origin/dev",
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-5",
-          "ok": true,
-          "result": {
-            "entries": [
-              {
-                "added": 2,
-                "path": "src/app.ts",
-                "removed": 1,
-                "status": "modified"
-              }
-            ],
-            "summary": {
-              "baseOid": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
-              "baseRef": "origin/dev",
-              "changedFiles": 1,
-              "compareRef": "feature",
-              "headOid": "f0e1d2c3b4a5968778695a4b3c2d1e0f98765432",
-              "mergeBase": "0123456789abcdef0123456789abcdef01234567",
-              "status": "ready"
-            }
-          }
-        }
-      }
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
     },
-    "3ca74b9dc048": {
-      "name": "repo.baseRefDefault#1",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"repo.baseRefDefault\",\"params\":{\"repo\":\"id:repo42\"}}"
-    },
-    "4fadbf6b1661": {
+    "30285bd9f487": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -134,7 +129,81 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "38d7fa10de1a": {
+      "name": "worktree.show#1",
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "3976c7351120": {
+      "name": "repo.list#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "repos": []
+          }
+        }
+      }
+    },
+    "426eeb659928": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -152,7 +221,7 @@
         }
       }
     },
-    "54cc20e9cfbc": {
+    "4fc2f95abddf": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -169,7 +238,75 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "617610cd7106": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "baseRef": "origin/dev"
+            }
+          }
+        }
+      }
+    },
+    "66a89310ad0f": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -183,7 +320,7 @@
         }
       }
     },
-    "587de4c7f7fc": {
+    "680d7579d052": {
       "name": "repo.list#1",
       "ordinal": 6,
       "args": [
@@ -194,13 +331,13 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -209,7 +346,7 @@
         "startedAt": 0
       }
     },
-    "6d220bb7b42a": {
+    "6dba53ff4646": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -226,33 +363,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "7440046c1348": {
-      "name": "worktree.show#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -272,39 +383,33 @@
         }
       }
     },
-    "7689d7b4e8e2": {
-      "name": "worktree.show#1",
-      "ordinal": 5,
+    "7bbf41738660": {
+      "name": "repo.baseRefDefault#1",
+      "ordinal": 9,
       "args": [
         {
           "name": "method",
-          "value": "worktree.show"
+          "value": "repo.baseRefDefault"
         },
         {
           "name": "params",
           "value": {
-            "worktree": "id:repo42::/p"
+            "repo": "id:repo42"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
       "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "",
-          "isRpcDeliveryUnknown": true
-        }
+        "status": "pending",
+        "startedAt": 0
       }
     },
-    "8c8e528ca222": {
+    "807a43a7e698": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -321,7 +426,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -333,14 +438,13 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "worktree": {
-              "baseRef": "origin/dev"
-            }
+            "error": "inner refused",
+            "ok": false
           }
         }
       }
     },
-    "8cf0ca1cc85d": {
+    "88e04c44f994": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -357,7 +461,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -369,8 +473,95 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "$rpc": "null"
+            "error": "refused"
           }
+        }
+      }
+    },
+    "891438a18444": {
+      "name": "settings.get#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8ac3c8b29916": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "8e2a39a4381a": {
+      "name": "worktree.show#1",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
         }
       }
     },
@@ -407,54 +598,17 @@
         }
       }
     },
-    "9536c968b88a": {
+    "973ac78137f2": {
+      "name": "git.status#1",
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"git.status\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "9916ac6863ce": {
       "name": "repo.list#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.list"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-4",
-          "ok": true,
-          "result": {
-            "repos": []
-          }
-        }
-      }
-    },
-    "a0e527bdf205": {
-      "branchCompareState": {
-        "kind": "idle"
-      },
-      "screenState": {
-        "kind": "loading"
-      }
-    },
-    "a6482f604002": {
-      "name": "source-control.status-load-success",
       "ordinal": 8,
-      "value": {}
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
     },
-    "aa8c5813ba8a": {
+    "9cb2ba41c834": {
       "name": "git.status#1",
       "ordinal": 2,
       "args": [
@@ -465,14 +619,13 @@
         {
           "name": "params",
           "value": {
-            "includeLineStats": false,
             "worktree": "id:repo42::/p"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -511,12 +664,7 @@
         }
       }
     },
-    "ad2a2a1df35b": {
-      "name": "worktree.show#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
-    },
-    "ae3822726c00": {
+    "9e1ef68264fd": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -533,104 +681,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "ae602a492660": {
-      "name": "git.status#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "git.status"
-        },
-        {
-          "name": "params",
-          "value": {
-            "includeLineStats": false,
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "b7a249bf3627": {
-      "name": "worktree.show#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "method_not_found",
-            "message": "Unknown method"
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "bb66129d9391": {
-      "name": "worktree.show#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -642,26 +693,20 @@
           "id": "frame-3",
           "ok": true,
           "result": {
-            "error": "refused"
+            "$rpc": "null"
           }
         }
       }
     },
-    "c2212473f0c1": {
-      "name": "repo.list#1",
-      "ordinal": 10,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
-    },
-    "d11f484ecaf5": {
-      "name": "source-control.action-error",
-      "ordinal": 7,
-      "value": {
-        "message": {
-          "$rpc": "null"
-        }
+    "a0e527bdf205": {
+      "branchCompareState": {
+        "kind": "idle"
+      },
+      "screenState": {
+        "kind": "loading"
       }
     },
-    "d65d39bc05d3": {
+    "aa0f96450c7a": {
       "name": "worktree.show#1",
       "ordinal": 5,
       "args": [
@@ -678,7 +723,7 @@
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -688,34 +733,34 @@
         "settledAt": 0,
         "error": {
           "category": "Error",
-          "message": "transport failure",
+          "message": "",
           "isRpcDeliveryUnknown": true
         }
       }
     },
-    "e2d7409ece1c": {
-      "name": "git.branchCompare#1",
-      "ordinal": 12,
-      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"git.branchCompare\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"origin/dev\"}}"
+    "b5a1f481b145": {
+      "name": "repo.baseRefDefault#1",
+      "ordinal": 10,
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"repo.baseRefDefault\",\"params\":{\"repo\":\"id:repo42\"}}"
     },
-    "e3973bb12da1": {
-      "name": "settings.get#1",
-      "ordinal": 1,
+    "d16c7a42b81c": {
+      "name": "git.status#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
-          "value": "settings.get"
+          "value": "git.status"
         },
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "worktree": "id:repo42::/p"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -732,67 +777,6 @@
         "$rpc": "undefined"
       }
     },
-    "ecfe4b0cfe19": {
-      "name": "worktree.show#1",
-      "ordinal": 5,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.show"
-        },
-        {
-          "name": "params",
-          "value": {
-            "worktree": "id:repo42::/p"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "error": "inner refused",
-            "ok": false
-          }
-        }
-      }
-    },
-    "f1bc948c977d": {
-      "name": "repo.baseRefDefault#1",
-      "ordinal": 11,
-      "args": [
-        {
-          "name": "method",
-          "value": "repo.baseRefDefault"
-        },
-        {
-          "name": "params",
-          "value": {
-            "repo": "id:repo42"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
     "f648b042d810": {
       "name": "settings.get#1",
       "ordinal": 3,
@@ -805,8 +789,8 @@
       {
         "id": "sc-changes-loaded.prelude:status-pending",
         "observation": {
-          "sender": ["e3973bb12da1", "ae602a492660"],
-          "payloads": ["f648b042d810", "2bf960db8adf"],
+          "sender": ["891438a18444", "d16c7a42b81c"],
+          "payloads": ["f648b042d810", "973ac78137f2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -817,277 +801,277 @@
       {
         "id": "sc-changes-loaded.prelude:compare-pending",
         "observation": {
-          "sender": ["e3973bb12da1", "aa8c5813ba8a", "6d220bb7b42a", "587de4c7f7fc"],
-          "payloads": ["f648b042d810", "2bf960db8adf", "ad2a2a1df35b", "c2212473f0c1"],
+          "sender": ["891438a18444", "9cb2ba41c834", "8ac3c8b29916", "680d7579d052"],
+          "payloads": ["f648b042d810", "973ac78137f2", "38d7fa10de1a", "9916ac6863ce"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.normal:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "8c8e528ca222",
-            "9536c968b88a",
-            "35cc9e325d08"
+            "891438a18444",
+            "9cb2ba41c834",
+            "617610cd7106",
+            "3976c7351120",
+            "01ca1551d26f"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "e2d7409ece1c"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "2b017ef94a43"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "1d461278a0ae",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.result-absent:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "54cc20e9cfbc",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "66a89310ad0f",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.result-null:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "8cf0ca1cc85d",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "9e1ef68264fd",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.inner-ok-missing:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "bb66129d9391",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "88e04c44f994",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.inner-false-string-error:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "ecfe4b0cfe19",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "807a43a7e698",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.inner-false-object-error:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "7440046c1348",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "6dba53ff4646",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.outer-refused:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "ae3822726c00",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "30285bd9f487",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.outer-refused-no-message:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "4fadbf6b1661",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "426eeb659928",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.method-not-found:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "b7a249bf3627",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "8e2a39a4381a",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.transport-rejection:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "d65d39bc05d3",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "4fc2f95abddf",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       },
       {
         "id": "sc-changes-loaded.transport-rejection-no-message:settled",
         "observation": {
           "sender": [
-            "e3973bb12da1",
-            "aa8c5813ba8a",
-            "7689d7b4e8e2",
-            "9536c968b88a",
-            "f1bc948c977d"
+            "891438a18444",
+            "9cb2ba41c834",
+            "aa0f96450c7a",
+            "3976c7351120",
+            "7bbf41738660"
           ],
           "payloads": [
             "f648b042d810",
-            "2bf960db8adf",
-            "ad2a2a1df35b",
-            "c2212473f0c1",
-            "3ca74b9dc048"
+            "973ac78137f2",
+            "38d7fa10de1a",
+            "9916ac6863ce",
+            "b5a1f481b145"
           ],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "8fda864c66d6",
-          "effects": ["d11f484ecaf5", "a6482f604002"]
+          "effects": []
         }
       }
     ]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { nativeChatAskRunSubject, nativeChatAskRunBlocks } from './native-chat-ask-row'
-import type { NativeChatBlock } from '../../native-chat-types'
+import type { NativeChatBlock } from '../native-chat-types'
 
 function askCall(input: unknown, name = 'AskUserQuestion'): NativeChatBlock {
   return { type: 'tool-call', name, input }

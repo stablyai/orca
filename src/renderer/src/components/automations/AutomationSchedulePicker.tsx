@@ -6,15 +6,16 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import type { AutomationSchedulePreset } from '../../../../shared/automations-types'
-import { buildAutomationCronSchedule } from '../../../../shared/automation-schedule-occurrences'
-import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
+import type { AutomationSchedulePreset } from '../../../../shared/automations/automation-definition'
+import { buildAutomationCronSchedule } from '../../../../shared/automations/scheduling/automation-schedule-occurrences'
+import { isValidAutomationSchedule } from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AutomationCustomCronPanel } from './AutomationCustomCronPanel'
-import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
+import { acceptsAutomationDraftSchedule } from '../../../../shared/automations/scheduling/automation-schedule-input-gate'
 import { AutomationTimeField, parseAutomationTime } from './AutomationTimeField'
 import { Field } from './automation-page-parts'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { getUiWeekdayNames } from '@/i18n/weekday-names'
 
 const FIELD_CONTROL_CLASS = 'border-input bg-input/30 shadow-xs dark:bg-input/30'
@@ -28,12 +29,11 @@ export const AUTOMATION_SCHEDULE_PRESET_OPTIONS = [
   ['custom', 'Custom cron', 'auto.components.automations.AutomationSchedulePicker.ddba78647e']
 ] as const satisfies readonly (readonly [AutomationSchedulePreset, string, string])[]
 
-export function getAutomationSchedulePresetLabel([, fallbackLabel, labelKey]: readonly [
-  AutomationSchedulePreset,
-  string,
-  string
-]): string {
-  return translate(labelKey, fallbackLabel)
+export function getAutomationSchedulePresetLabel(
+  [, fallbackLabel, labelKey]: readonly [AutomationSchedulePreset, string, string],
+  t: Translate = translate
+): string {
+  return t(labelKey, fallbackLabel)
 }
 
 function buildCustomScheduleSeed(draft: AutomationDraft): string {
@@ -73,8 +73,10 @@ export function AutomationSchedulePicker({
   validateAdvancedSchedule?: (schedule: string) => boolean
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const customSchedule = draft.customSchedule.trim()
-  const weekdayNames = getUiWeekdayNames()
+  const weekdayNames = getUiWeekdayNames(intlLocale)
   // Match save validation: an untouched legacy cadence is not new input and must not show a strict-validation error.
   const acceptsSchedule = (schedule: string): boolean =>
     acceptsAutomationDraftSchedule({
@@ -105,7 +107,7 @@ export function AutomationSchedulePicker({
         }
       >
         <SelectTrigger
-          aria-label={translate(
+          aria-label={t(
             'auto.components.automations.AutomationSchedulePicker.233b8c94b6',
             'Cadence'
           )}
@@ -116,7 +118,7 @@ export function AutomationSchedulePicker({
         <SelectContent position="popper">
           {AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(([value, fallbackLabel, labelKey]) => (
             <SelectItem key={value} value={value}>
-              {getAutomationSchedulePresetLabel([value, fallbackLabel, labelKey])}
+              {getAutomationSchedulePresetLabel([value, fallbackLabel, labelKey], t)}
             </SelectItem>
           ))}
         </SelectContent>
@@ -132,10 +134,7 @@ export function AutomationSchedulePicker({
         <>
           {draft.preset === 'weekly' ? (
             <Field
-              label={translate(
-                'auto.components.automations.AutomationSchedulePicker.6b914c5fbb',
-                'Day'
-              )}
+              label={t('auto.components.automations.AutomationSchedulePicker.6b914c5fbb', 'Day')}
             >
               <Select
                 value={draft.dayOfWeek}
@@ -158,19 +157,13 @@ export function AutomationSchedulePicker({
           ) : null}
           {draft.preset === 'hourly' ? (
             <Field
-              label={translate(
-                'auto.components.automations.AutomationSchedulePicker.9e677335b0',
-                'Minute'
-              )}
+              label={t('auto.components.automations.AutomationSchedulePicker.9e677335b0', 'Minute')}
             >
               <AutomationTimeField time={draft.time} mode="minute" onTimeChange={setTime} />
             </Field>
           ) : (
             <Field
-              label={translate(
-                'auto.components.automations.AutomationSchedulePicker.d90981f766',
-                'Time'
-              )}
+              label={t('auto.components.automations.AutomationSchedulePicker.d90981f766', 'Time')}
             >
               <AutomationTimeField time={draft.time} mode="time" onTimeChange={setTime} />
             </Field>

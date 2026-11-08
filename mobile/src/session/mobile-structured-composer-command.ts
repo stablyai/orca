@@ -1,21 +1,22 @@
-import type {
-  AgentSessionConversationCommand,
-  AgentSessionConversationCommandResult
+import {
+  agentSessionConversationCommandFields,
+  type AgentSessionConversationCommand,
+  type AgentSessionConversationCommandResult
 } from '../../../src/shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionFailureFact } from '../../../src/shared/agent-session-failure'
+import type { AgentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import {
   dispatchStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionComposerCommand,
+  isStructuredAgentSessionHostCommand,
   type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
-} from '../../../src/shared/structured-agent-session-composer'
+} from '../../../src/shared/agent-session/view/structured-agent-session-composer'
 import {
   conversationCommandReply,
   heldConversationCommandParts,
   structuredConversationCommandHold
 } from '../../../src/shared/structured-conversation-command-hold'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { translate } from '../i18n/mobile-i18n'
 import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
@@ -48,10 +49,11 @@ export async function dispatchMobileStructuredCommand(input: {
   timeoutMs: number
 }): Promise<MobileNativeChatSendOutcome | null> {
   if (
-    !isStructuredAgentSessionComposerCommand(
+    !isStructuredAgentSessionHostCommand(
       input.text,
+      input.controller.changeThreadGoal !== undefined,
       input.controller.agent,
-      input.controller.sessionCommands
+      input.controller.snapshot
     )
   ) {
     return input.pending.current ? 'rejected' : null
@@ -68,7 +70,7 @@ export async function dispatchMobileStructuredCommand(input: {
   let unknown = false
   const outcome = await dispatchStructuredAgentSessionComposerCommand(input.text, {
     ...input.controller,
-    runConversationCommand: async (command) => {
+    runConversationCommand: async (command, instructions) => {
       const held = (hold: Parameters<typeof heldConversationCommandParts>[1]) =>
         mobileAgentSessionWriteNoticeText(heldConversationCommandParts(command, hold))
       // A command on its way is the agent's work in flight.
@@ -104,7 +106,10 @@ export async function dispatchMobileStructuredCommand(input: {
             expectedRuntimeFence: input.fence,
             method: 'agentSession.conversationCommand',
             fingerprintMethod: 'agentSession.conversationCommand',
-            fields: waitsInLine ? { command, delivery: 'queue-if-active' } : { command },
+            fields: agentSessionConversationCommandFields(command, {
+              instructions,
+              delivery: waitsInLine ? 'queue-if-active' : undefined
+            }),
             timeoutMs: Math.max(input.timeoutMs, 195_000)
           })
         if (

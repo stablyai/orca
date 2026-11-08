@@ -28,7 +28,12 @@ import {
   listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
-import { PtyExitProof, type PtyRetirementEvidence } from '../../pty-exit-proof'
+import { noteBridgedExit, settleBridgedExits } from './legacy-relay-move-retry'
+import { legacyRelayChannels } from './legacy-relay-bridge-connections'
+import {
+  PtyExitProof,
+  type PtyRetirementEvidence
+} from '../../pty/process-retirement/pty-exit-proof'
 
 /** How long a connect waits for the first look at its relays before publishing the host. */
 const START_BUDGET_MS = 20_000
@@ -52,7 +57,7 @@ export type LegacyRelayBridgeHost = {
   /** Absent: relay-era `orca` commands are refused, as before this host served them. */
   remoteCli?: {
     runtime: () => OrcaRuntimeService | null
-    /** The per-host "Allow this host's orca CLI to control Orca" switch. */
+    /** The per-host browser-control switch (DESKTOP_BROWSER_BRIDGE_SETTING_LABEL). */
     allowed: (targetId: string) => boolean
   }
 }
@@ -71,6 +76,7 @@ export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): vo
     bridge.dispose()
   }
   bridges.clear()
+  legacyRelayChannels.dispose()
   heldPanes.clear()
   paneOwners.clear()
   paneStops.forEach((stops) => stops.dispose())
@@ -107,6 +113,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
     }
     return conn
   }
+  const channels = legacyRelayChannels.for(targetId, () => installed.connection(targetId))
   const remoteCli = installed.remoteCli
   const cliServer = remoteCli
     ? createLegacyRelayCliServer({
@@ -132,7 +139,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
         cliServer,
         openTransport: async () =>
           waitForSentinel(
-            await connection().exec(endpoint.connectCommand ?? '', {
+            await channels.open(endpoint.connectCommand ?? '', {
               wrapCommand: endpoint.wrapCommand
             })
           )
@@ -144,6 +151,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
         heldPanes.delete(targetId)
         stopsFor(targetId).flush(bridge)
         reportDailyRelayActivity(targetId, bridge.livePaneCount(), installed.report)
+        settleBridgedExits(bridge, () => !bridge.snapshot().length && !hasListedLeases(targetId))
       }
       installed.onPanesChanged(legacyRelayBridgedPanes())
     },
@@ -153,7 +161,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
       stopsFor(targetId).exited(ptyId)
       installed.onExit(ptyId, code)
     },
-    onTerminalExited: () => installed.report(targetId, 'terminal_exited', 0),
+    onTerminalExited: () => noteBridgedExit(bridge, targetId, installed),
     owners: ownersFor(targetId)
   })
   bridges.set(targetId, bridge)
@@ -214,6 +222,7 @@ export function stopLegacyRelayBridge(targetId: string): void {
     // Disposing publishes the list, now with the held panes instead of the bridge's.
     bridge.dispose()
   }
+  legacyRelayChannels.dispose(targetId)
 }
 
 /** The target and its leases are gone, so nothing it served is held any longer. */

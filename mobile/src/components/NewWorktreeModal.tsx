@@ -10,13 +10,13 @@ import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-p
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
 import { useWorktreeCreateBasePrefetch } from '../tasks/use-worktree-create-base-prefetch'
-import { useHostDescriptor } from '../transport/host-descriptor-store'
+import { useHostDescriptor } from '../transport/hosts/host-descriptor-store'
 import { isSameMobileWorkspaceRepo } from '../worktree/new-workspace-dialog-repo-selection'
 import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
 } from '../worktree/use-retired-worktree-names'
-import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
+import { BottomDrawerModalHost } from './bottom-drawer/bottom-drawer-modal-host'
 import {
   getMobileWorkspaceRepoBadgeColor,
   type MobileWorkspaceRepo,
@@ -71,12 +71,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onCreated,
     onClose
   } = props
-  const { repos, allRepos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
-    client: desktopClient,
-    serverClients,
-    hostId,
-    visible
-  })
+  const { repos, allRepos, selectedRepo, setSelectedRepo, loading, loadError, retryLoad } =
+    useNewWorkspaceRepositories({
+      client: desktopClient,
+      serverClients,
+      hostId,
+      visible
+    })
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
@@ -239,6 +240,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         interactive={navigation.formSheetInteractive}
         loading={loading}
         hasRepos={repos.length > 0}
+        loadError={loadError}
+        onRetryLoad={retryLoad}
         project={selectedProject}
         runTarget={selectedRunTarget}
         projectBadgeColor={selectedRepo ? getMobileWorkspaceRepoBadgeColor(selectedRepo) : null}

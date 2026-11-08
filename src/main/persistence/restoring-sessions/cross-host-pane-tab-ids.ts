@@ -1,5 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { buildWorktreeIdByTabId } from '../../../shared/workspace-session-host-records'
+import { buildWorktreeIdByTabId } from '../../../shared/workspace-session/workspace-session-host-records'
 import { isWslMoveWorkspaceHostOwned } from '../moving-wsl-projects/wsl-move-scope-guard'
 
 /**

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Button } from '@/components/ui/button'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { CsvColumnResizeHandle } from './CsvColumnResizeHandle'
 import { CsvGridCell } from './CsvGridCell'
 import type { CsvGridInteraction } from './csv-grid-interaction'
@@ -34,6 +34,8 @@ export function CsvGrid({
   columnWidths?: CsvColumnWidths
   onColumnWidthsChange?: (widths: CsvColumnWidths) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const scrollRef = useRef<HTMLDivElement>(null)
   const gridRef = useRef<HTMLDivElement>(null)
   const gridId = useId()
@@ -209,7 +211,7 @@ export function CsvGrid({
           data-testid="csv-grid"
           data-csv-owner={interaction?.ownerId}
           tabIndex={interaction ? 0 : undefined}
-          aria-label={interaction ? translate('csv.editor', 'CSV editor') : undefined}
+          aria-label={interaction ? t('csv.editor', 'CSV editor') : undefined}
           aria-activedescendant={
             activeMounted ? `${gridId}-${active.row}-${active.column}` : undefined
           }
@@ -307,9 +309,7 @@ export function CsvGrid({
                     <CsvGridCell
                       key={column.key}
                       id={`${gridId}-${index + 1}-${column.index}`}
-                      value={
-                        row ? (row[column.index] ?? '') : translate('csv.loadingCell', 'Loading…')
-                      }
+                      value={row ? (row[column.index] ?? '') : t('csv.loadingCell', 'Loading…')}
                       row={index + 1}
                       column={column.index}
                       interaction={interaction}
@@ -332,14 +332,12 @@ export function CsvGrid({
             disabled={windowStart === 0}
             onClick={() => moveWindow(Math.max(0, windowStart - SCROLL_WINDOW_ROWS))}
           >
-            {translate('csv.previousRows', 'Previous rows')}
+            {t('csv.previousRows', 'Previous rows')}
           </Button>
           <span>
-            {translate('csv.rowWindow', 'Rows {{first}}–{{last}}', {
-              first: (windowStart + 1).toLocaleString(getIntlLocale()),
-              last: Math.min(rowCount, windowStart + SCROLL_WINDOW_ROWS).toLocaleString(
-                getIntlLocale()
-              )
+            {t('csv.rowWindow', 'Rows {{first}}–{{last}}', {
+              first: (windowStart + 1).toLocaleString(intlLocale),
+              last: Math.min(rowCount, windowStart + SCROLL_WINDOW_ROWS).toLocaleString(intlLocale)
             })}
           </span>
           <Button
@@ -348,7 +346,7 @@ export function CsvGrid({
             disabled={windowStart + SCROLL_WINDOW_ROWS >= rowCount}
             onClick={() => moveWindow(windowStart + SCROLL_WINDOW_ROWS)}
           >
-            {translate('csv.nextRows', 'Next rows')}
+            {t('csv.nextRows', 'Next rows')}
           </Button>
         </div>
       )}

@@ -43,19 +43,6 @@
       ]
     },
     {
-      "manifestOperation": "main:mobile/src/home/mobile-home-host-requests.ts:fetchMobileHomeTaskProviders:settings.get:76",
-      "manifestScenarioIds": [
-        "main:mobile/src/home/mobile-home-host-requests.ts:fetchMobileHomeTaskProviders:settings.get:76:fulfilled",
-        "main:mobile/src/home/mobile-home-host-requests.ts:fetchMobileHomeTaskProviders:settings.get:76:refused",
-        "main:mobile/src/home/mobile-home-host-requests.ts:fetchMobileHomeTaskProviders:settings.get:76:transport-error"
-      ],
-      "scenarios": [
-        "settings-home-providers-fulfilled",
-        "settings-home-providers-refused",
-        "settings-home-providers-transport-error"
-      ]
-    },
-    {
       "manifestOperation": "main:mobile/src/host-screen/use-host-repo-metadata.ts:fetchRepoMetadata:settings.get:124",
       "manifestScenarioIds": [
         "main:mobile/src/host-screen/use-host-repo-metadata.ts:fetchRepoMetadata:settings.get:124:fulfilled",

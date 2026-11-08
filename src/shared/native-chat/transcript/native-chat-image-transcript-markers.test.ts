@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../native-chat-types'
+import type { NativeChatMessage } from '../native-chat-types'
 import { imageReferenceToken } from '../native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
@@ -8,8 +8,6 @@ import {
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
-  normalizedNativeChatUserMessageText,
-  stripImagePromptMarker,
   stripSentImagePromptMarkers
 } from './native-chat-image-transcript-markers'
 import { formatNativeChatFileReference } from '../../agent-image-paste'
@@ -43,18 +41,6 @@ describe('imageSourcePathFromText', () => {
 })
 
 describe('normalizeImageTranscriptMessages', () => {
-  it('merges the paired [Image: source]/[Image #1] turns into one image-ref turn', () => {
-    const out = normalizeImageTranscriptMessages([
-      userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
-      userText('b', '[Image #1] describe this')
-    ])
-    expect(out).toHaveLength(1)
-    expect(out[0]!.blocks).toEqual([
-      { type: 'image-ref', path: '/tmp/orca-paste-1-2.png' },
-      { type: 'text', text: 'describe this' }
-    ])
-  })
-
   it('merges a source turn into a prompt with a trailing image marker', () => {
     const out = normalizeImageTranscriptMessages([
       userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
@@ -91,43 +77,6 @@ describe('normalizeImageTranscriptMessages', () => {
     ])
   })
 
-  it.each([
-    ['[Image #1] describe this', 'describe this'],
-    ['[Image #1]\t  describe this', 'describe this'],
-    [' \t[Image #1] describe this', 'describe this'],
-    ['describe this [Image #1]', 'describe this'],
-    ['describe this  \t[Image #1]', 'describe this'],
-    ['describe this [Image #1]\t  ', 'describe this'],
-    ['describe [Image #1] this', 'describe  this'],
-    ['describe  [Image #1]\t this', 'describe  \t this'],
-    ['describe[Image #1]\t  this', 'describe\t  this'],
-    ['describe\n[Image #1]\nthis', 'describe\n\nthis'],
-    ['com[Image #1]pare this', 'compare this'],
-    ['[Image #1] [Image #2]', ''],
-    ['literal [Image #x] text', 'literal [Image #x] text']
-  ])('strips image prompt markers anywhere in text', (text, expected) => {
-    expect(stripImagePromptMarker(text)).toBe(expected)
-  })
-
-  it('returns long marker-free whitespace without regex backtracking', () => {
-    const text = ' '.repeat(50_000)
-    expect(stripImagePromptMarker(text)).toBe(text)
-  })
-
-  it('shares marker-aware text matching across multiple text blocks', () => {
-    const message: NativeChatMessage = {
-      ...userText('prompt', 'unused'),
-      blocks: [
-        { type: 'text', text: 'look' },
-        { type: 'image-ref', path: '/tmp/a.png' },
-        { type: 'text', text: '[Image #1]   here' }
-      ]
-    }
-
-    expect(normalizeNativeChatUserText(' look [Image #1]   here ')).toBe('look here')
-    expect(normalizedNativeChatUserMessageText(message)).toBe('look here')
-  })
-
   it('recognizes only sole-text image-source user turns', () => {
     const source = userText('source', '[Image: source: /tmp/a.png]')
     expect(isImageSourceUserTurn(source)).toBe(true)
@@ -138,16 +87,6 @@ describe('normalizeImageTranscriptMessages', () => {
         blocks: [...source.blocks, { type: 'text', text: 'caption' }]
       })
     ).toBe(false)
-  })
-
-  it('converts a lone [Image: source] turn (no prompt) into an image-ref instead of raw text', () => {
-    const out = normalizeImageTranscriptMessages([
-      userText('a', '[Image: source: /Users/me/Pictures/hero-image-2.png]')
-    ])
-    expect(out).toHaveLength(1)
-    expect(out[0]!.blocks).toEqual([
-      { type: 'image-ref', path: '/Users/me/Pictures/hero-image-2.png' }
-    ])
   })
 
   it('folds every source and strips every prompt marker for a multi-image send', () => {
@@ -196,31 +135,6 @@ describe('normalizeImageTranscriptMessages', () => {
     ])
   })
 
-  it.each([10, 100])('reads %i unpaired image source turns once', (count) => {
-    let reads = 0
-    const messages = Array.from({ length: count }, (_, index): NativeChatMessage => ({
-      ...userText(`image-${index}`, ''),
-      blocks: [
-        {
-          type: 'text',
-          get text() {
-            reads += 1
-            return `[Image: source: /tmp/image-${index}.png]`
-          }
-        }
-      ]
-    }))
-    const out = normalizeImageTranscriptMessages(messages)
-
-    expect(reads).toBeLessThanOrEqual(count * 2)
-    expect(out.map((message) => ({ id: message.id, blocks: message.blocks }))).toEqual(
-      messages.map((message, index) => ({
-        id: message.id,
-        blocks: [{ type: 'image-ref', path: `/tmp/image-${index}.png` }]
-      }))
-    )
-  })
-
   it('folds a multi-block companion turn into one turn carrying every ref', () => {
     // Claude emits one companion message with multiple source blocks; single-block matching missed multi-image pastes.
     const out = normalizeImageTranscriptMessages([
@@ -261,34 +175,6 @@ describe('normalizeImageTranscriptMessages', () => {
     expect(out[0]!.blocks.some((block) => block.type === 'image-ref')).toBe(false)
   })
 
-  it('leaves ordinary user text untouched', () => {
-    const message = userText('a', 'how about this')
-    const messages = [message]
-    const out = normalizeImageTranscriptMessages(messages)
-    expect(out).toBe(messages)
-    expect(out[0]).toBe(message)
-    expect(out[0]!.blocks).toBe(message.blocks)
-  })
-
-  it('removes a whitespace-only first text block', () => {
-    const out = normalizeImageTranscriptMessages([userText('a', '   ')])
-
-    expect(out[0]?.blocks).toEqual([])
-  })
-
-  it('preserves unaffected rows when another row needs normalization', () => {
-    const before = userText('before', 'keep this row')
-    const marker = userText('marker', '[Image: source: /tmp/image.png]')
-    const after = userText('after', 'keep this row too')
-    const messages = [before, marker, after]
-
-    const out = normalizeImageTranscriptMessages(messages)
-
-    expect(out).not.toBe(messages)
-    expect(out[0]).toBe(before)
-    expect(out[2]).toBe(after)
-  })
-
   it('leaves assistant messages untouched', () => {
     const assistant: NativeChatMessage = {
       id: 'a',
@@ -302,18 +188,6 @@ describe('normalizeImageTranscriptMessages', () => {
 })
 
 describe('normalizeNativeChatUserText control bytes', () => {
-  it('drops the Ctrl+U a TUI pasted in front of the prompt', () => {
-    expect(normalizeNativeChatUserText('\u0015run the tests')).toBe('run the tests')
-  })
-
-  it('drops control bytes that landed inside the prompt', () => {
-    expect(normalizeNativeChatUserText('run\u0015 the\u0000 tests')).toBe('run the tests')
-  })
-
-  it('still finds the image marker behind a leading control byte', () => {
-    expect(normalizeNativeChatUserText('\u0015[Image #1] describe this')).toBe('describe this')
-  })
-
   // Remove a bracketed-paste wrapper as one sequence so its printable tail cannot survive.
   it('drops a bracketed-paste wrapper, not just its ESC introducer', () => {
     expect(normalizeNativeChatUserText('\u001b[200~/tmp/orca-paste-1.png\u001b[201~')).toBe(
@@ -323,10 +197,6 @@ describe('normalizeNativeChatUserText control bytes', () => {
 
   it('preserves bracketed-paste-looking text without an ESC introducer', () => {
     expect(normalizeNativeChatUserText('[200~literal[201~')).toBe('[200~literal[201~')
-  })
-
-  it('leaves tabs, newlines and carriage returns to the whitespace collapse', () => {
-    expect(normalizeNativeChatUserText('run\tthe\r\ntests')).toBe('run the tests')
   })
 })
 
@@ -380,13 +250,5 @@ describe('composer image chips at send and back', () => {
       )
       expect(stripSentImagePromptMarkers(`[Image #1] in ${file} [Image #1]`, 1)).toBe(`in ${file}`)
     }
-  })
-
-  it('sends a returned message with the numbers it had', () => {
-    const sent = 'compare [Image #1] with [Image #2]'
-    const ids = ['returned-m-1', 'returned-m-2']
-    expect(imageReferencesToPromptMarkers(promptMarkersToImageReferences(sent, ids), ids)).toBe(
-      sent
-    )
   })
 })

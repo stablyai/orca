@@ -1,11 +1,16 @@
+import {
+  CURSOR_SHOW_SEQUENCE,
+  CURSOR_HIDE_SEQUENCE,
+  containsCursorRestore
+} from '../../../../shared/terminal/protocol/escape/terminal-cursor-restore'
+
 type CursorQueueEntry = {
   chunks: { data: string }[]
   chunkIndex: number
 }
 
 export const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
-const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
-const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
+
 const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 
 function findCursorPositionSequenceEnd(
@@ -78,31 +83,6 @@ export function removeTransientCursorShowSequences(data: string): string {
     showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
   }
   return offset === 0 ? data : result + data.slice(offset)
-}
-
-function containsCursorPositionSequence(data: string): boolean {
-  let offset = data.indexOf('\x1b[')
-  while (offset !== -1) {
-    let index = offset + 2
-    while (index < data.length) {
-      const char = data[index]
-      if (char === 'G' || char === 'H' || char === 'f') {
-        return true
-      }
-      if ((char < '0' || char > '9') && char !== ';') {
-        break
-      }
-      index += 1
-    }
-    offset = data.indexOf('\x1b[', offset + 2)
-  }
-  return false
-}
-
-function containsCursorRestore(data: string): boolean {
-  const hideIndex = data.indexOf(CURSOR_HIDE_SEQUENCE)
-  const showIndex = data.lastIndexOf(CURSOR_SHOW_SEQUENCE)
-  return hideIndex !== -1 && showIndex > hideIndex && containsCursorPositionSequence(data)
 }
 
 export function containsDrainableCursorRestore(data: string): boolean {

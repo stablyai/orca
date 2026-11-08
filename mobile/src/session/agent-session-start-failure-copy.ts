@@ -1,10 +1,16 @@
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues
-} from '../../../src/shared/agent-session-failure-copy'
+} from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
 import { translate } from '../i18n/mobile-i18n'
 
 export const START_FAILURE_COPY = {
+  savedConversationMissing: (values) =>
+    translate(
+      'session.failure.savedConversationMissing',
+      "{{agent}} couldn't find this chat's saved conversation.",
+      values
+    ),
   theAgent: (values) => translate('session.failure.theAgent', 'The agent', values),
   providerStartFailed: (values) =>
     translate(
@@ -118,6 +124,12 @@ export const START_FAILURE_COPY = {
     translate(
       'session.failure.antigravityNotSignedIn',
       "Antigravity isn't signed in. Sign in under Settings → Accounts → Antigravity. Then send your message again.",
+      values
+    ),
+  antigravitySystemNotSignedIn: (values) =>
+    translate(
+      'session.failure.antigravitySystemNotSignedIn',
+      "Antigravity isn't signed in. Sign in by running `agy` on the computer running this chat, then send your message again.",
       values
     ),
   agentCommandNotSignedIn: (values) =>

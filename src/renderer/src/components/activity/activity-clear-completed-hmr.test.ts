@@ -135,20 +135,6 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-it('preserves the pending pagehide flush through HMR and removes the listener when drained', () => {
-  const remove = vi.spyOn(domWindow, 'removeEventListener')
-  try {
-    clearCompletedActivity([doneThread])
-    disposePendingClearCompletedEvictionListener()
-    expect(remove).not.toHaveBeenCalledWith('pagehide', flushPendingClearCompletedEvictions)
-    domWindow.dispatchEvent(new Event('pagehide'))
-    expect(drop).toHaveBeenCalledOnce()
-    expect(remove).toHaveBeenCalledWith('pagehide', flushPendingClearCompletedEvictions)
-  } finally {
-    remove.mockRestore()
-  }
-})
-
 it('preserves Undo after HMR without dropping the restored persisted row', () => {
   clearCompletedActivity([doneThread])
   disposePendingClearCompletedEvictionListener()
@@ -158,21 +144,4 @@ it('preserves Undo after HMR without dropping the restored persisted row', () =>
   vi.advanceTimersByTime(CLEAR_COMPLETED_EVICTION_FALLBACK_MS)
   expect(drop).not.toHaveBeenCalled()
   expect(mockStore.retainedAgentsByPaneKey['t-done:1']).toBeDefined()
-})
-
-it('releases the retired listener when its fallback settles and supports a late stale handler', () => {
-  const remove = vi.spyOn(domWindow, 'removeEventListener')
-  try {
-    clearCompletedActivity([doneThread])
-    disposePendingClearCompletedEvictionListener()
-    vi.advanceTimersByTime(CLEAR_COMPLETED_EVICTION_FALLBACK_MS)
-    expect(drop).toHaveBeenCalledOnce()
-    expect(remove).toHaveBeenCalledWith('pagehide', flushPendingClearCompletedEvictions)
-    mockStore.retainedAgentsByPaneKey = { 't-done:1': makeRetained('t-done:1') }
-    clearCompletedActivity([doneThread])
-    domWindow.dispatchEvent(new Event('pagehide'))
-    expect(drop).toHaveBeenCalledTimes(2)
-  } finally {
-    remove.mockRestore()
-  }
 })

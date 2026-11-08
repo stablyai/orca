@@ -1,11 +1,12 @@
-import type { RecentlyClosedTabPosition } from '../../recently-closed-tabs'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { RecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
-} from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type {
   BranchCompareSnapshot,
   CombinedDiffAlternate,
@@ -92,7 +93,7 @@ export type OpenFile = {
   liveTail?: boolean
   /** Why: opened read-only from Explorer Host mode outside the workspace; never persisted, so restore cannot replay its path grant. */
   hostBrowse?: boolean
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'git-graph'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
@@ -121,6 +122,8 @@ export const MAX_RECENT_CLOSED_EDITOR_TABS = 10
 export type EditorTabSelection = 'focus' | 'background' | 'none'
 
 export type EditorOpenTargetOptions = {
+  placementWorkspaceId?: string
+  executionHostId?: ExecutionHostId
   targetGroupId?: string
   preview?: boolean
   runtimeEnvironmentId?: string | null

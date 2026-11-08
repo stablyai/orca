@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { createUnreadBadgeCountSelector } from '@/lib/unread-badge-count-selector'
 import { useAppStore } from '@/store'
-import { selectFloatingWorkspaceHasUnread } from '@/store/selectors'
+import { selectFloatingWorkspaceHasUnread } from '@/store/workspaces/floating/floating-workspace-unread-selector'
 
 function setUnreadDockBadgeCountBestEffort(count: number): void {
   const setBadge = window.api?.app?.setUnreadDockBadgeCount
