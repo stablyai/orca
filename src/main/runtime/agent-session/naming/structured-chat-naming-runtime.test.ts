@@ -24,7 +24,7 @@ vi.mock('../../../text-generation/commit-message-text-generation', async (import
   const actual = await importOriginal<typeof TextGeneration>()
   return { ...actual, generateConversationNameFromContext: mocks.generate }
 })
-vi.mock('../../../agent-hooks/first-work-generation-target', () => ({
+vi.mock('../../../agent-hooks/first-work/first-work-generation-target', () => ({
   resolveGenerationTarget: mocks.target
 }))
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({

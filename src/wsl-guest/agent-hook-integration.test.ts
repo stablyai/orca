@@ -12,7 +12,7 @@ import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-listener/transport/agent-hook-relay'
-import { AgentHookServer } from '../main/agent-hooks/server'
+import { AgentHookServer } from '../main/agent-hooks/server/agent-hook-server'
 import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 
 const LEAF_7 = '77777777-7777-4777-8777-777777777777'

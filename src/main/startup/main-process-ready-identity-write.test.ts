@@ -159,7 +159,7 @@ vi.mock('../git/command-runner/wsl-command-resolution', async (importOriginal) =
   ...(await importOriginal<Record<string, unknown>>()),
   setDefaultWslDistroOverride: vi.fn()
 }))
-vi.mock('../agent-hooks/wsl-hook-relay-manager', () => ({
+vi.mock('../agent-hooks/wsl-relay/wsl-hook-relay-manager', () => ({
   wslHookRelayManager: { setManagedHookSettingsResolver: vi.fn() }
 }))
 vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
