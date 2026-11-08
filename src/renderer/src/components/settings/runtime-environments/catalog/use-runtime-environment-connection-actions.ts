@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { extractRuntimeTransportDiagnostics } from '@/runtime/hosts/connections/runtime-status-probe-diagnostics'
 import { useAppStore } from '@/store/index'
@@ -27,6 +27,7 @@ export function useRuntimeEnvironmentConnectionActions({
   setActiveRuntimeEnvironmentPreference,
   getEnvironmentLabel
 }: RuntimeEnvironmentConnectionActionParams) {
+  const t = useTranslate()
   const [connectingId, setConnectingId] = useState<string | null>(null)
   const [switchingValue, setSwitchingValue] = useState<string | null>(null)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
@@ -53,7 +54,7 @@ export function useRuntimeEnvironmentConnectionActions({
           }
         }))
         toast.success(
-          translate(
+          t(
             'auto.components.settings.RuntimeEnvironmentsPane.disconnectedServer',
             'Disconnected from {{value0}}.',
             { value0: environment.name }
@@ -120,7 +121,7 @@ export function useRuntimeEnvironmentConnectionActions({
       )
       if (mountedRef.current) {
         toast.success(
-          translate(
+          t(
             'auto.components.settings.RuntimeEnvironmentsPane.runtimeReachable',
             '{{value0}} is reachable.',
             { value0: environment.name }
@@ -167,7 +168,7 @@ export function useRuntimeEnvironmentConnectionActions({
       if (switched) {
         if (mountedRef.current) {
           toast.success(
-            translate(
+            t(
               'auto.components.settings.RuntimeEnvironmentsPane.99ac81fb43',
               'Switched to {{value0}}.',
               { value0: getEnvironmentLabel(value) }

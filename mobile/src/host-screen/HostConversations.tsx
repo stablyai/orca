@@ -1,5 +1,6 @@
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMemo, useState } from 'react'
+import { useNow } from '../hooks/use-now'
 import { Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { ArrowDownAZ, ChevronLeft, Settings } from 'lucide-react-native'
@@ -35,6 +36,7 @@ export function HostConversations({
   onWorkspaces: () => void
 }) {
   const t = useMobileTranslation()
+  const now = useNow(30_000)
   const copy = conversationCopy()
   const { hostId, connState, actions, state } = controller
   const data = useProjectConversations(controller)
@@ -90,7 +92,7 @@ export function HostConversations({
         repos: [...controller.sectionsResult.repoById.values()],
         tabs: data.tabs,
         history: data.history,
-        now: controller.now,
+        now: now,
         untitled: copy.untitled,
         query,
         projectCatalog,
@@ -104,7 +106,7 @@ export function HostConversations({
       controller.sectionsResult.repoById,
       data.tabs,
       data.history,
-      controller.now,
+      now,
       copy.untitled,
       query,
       projectCatalog,
@@ -271,7 +273,7 @@ export function HostConversations({
               item.preferenceKey &&
               conversationPreferences.preferences?.entries[item.preferenceKey]?.pinned
             )}
-            now={controller.now}
+            now={now}
             onOpen={open}
             onDetails={setDetails}
           />

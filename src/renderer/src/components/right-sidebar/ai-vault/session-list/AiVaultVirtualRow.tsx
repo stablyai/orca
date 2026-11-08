@@ -34,6 +34,7 @@ import {
   canResumeAiVaultSearchHit,
   hasAiVaultSearchHitPath
 } from '../search/ai-vault-search-session'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type AiVaultListRow =
   | { type: 'group'; group: AiVaultSessionGroup }
@@ -118,6 +119,7 @@ export function AiVaultVirtualRow({
   /** Set in `/resume`'s picker; see VaultSessionRow's `onPick`. */
   onPickSession?: (session: AiVaultSession) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!row) {
     return null
   }
@@ -145,7 +147,7 @@ export function AiVaultVirtualRow({
     row.type === 'session'
       ? aiVaultSessionRowResumeGating(row.session, resumeState)
       : { resumeDisabled: true, canCopyResumeCommand: false }
-  const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState) : ''
+  const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState, t) : ''
   const searchHit = row.type === 'session' ? searchHits?.get(row.session.id) : undefined
   const {
     canJumpToOriginalPane,

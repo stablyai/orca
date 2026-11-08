@@ -4,23 +4,21 @@ import type { InstalledAgentSkillState } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { AgentSkillSetupPanel } from '../skills/setup/AgentSkillSetupPanel'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function OrchestrationSetupCard(props: {
   compact?: boolean
   skill: InstalledAgentSkillState
 }): JSX.Element {
+  const t = useTranslate()
   const { compact, skill } = props
   const activeSkillRuntime = useActiveProjectSkillRuntime()
 
   const setupPanel = (
     <AgentSkillSetupPanel
       className={compact ? 'w-full max-w-[520px]' : undefined}
-      title={translate(
-        'auto.components.settings.OrchestrationSetupCard.2777ff0fdc',
-        'Orchestration skill'
-      )}
-      description={translate(
+      title={t('auto.components.settings.OrchestrationSetupCard.2777ff0fdc', 'Orchestration skill')}
+      description={t(
         'auto.components.settings.OrchestrationSetupCard.e7d2a5146c',
         'Enables agents to hand off context and coordinate work through Orca.'
       )}

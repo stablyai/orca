@@ -25,7 +25,7 @@ const GATED_FAMILIES = [
   },
   { modules: ['@orca/process-host'], advice: { runProcessSync: PROCESS_ADVICE } },
   {
-    modules: ['src/shared/secure-path-windows-acl'],
+    modules: ['src/shared/secure-storage/secure-path-windows-acl'],
     advice: { restrictWindowsPathSync: SECURE_ADVICE }
   },
   {

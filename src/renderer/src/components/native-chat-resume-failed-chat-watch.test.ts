@@ -5,7 +5,7 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
 } from '../../../shared/agent-session/agent-session-wire'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import {
   _resetNativeChatRestartOffer,
   continueNativeChatRestartOffer,
@@ -19,8 +19,11 @@ const mocks = vi.hoisted(() => ({
   subscribeStatus: vi.fn(),
   unsubscribe: vi.fn()
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.rpc,
+vi.mock('../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.rpc
+}))
+
+vi.mock('../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribeStatus
 }))
 

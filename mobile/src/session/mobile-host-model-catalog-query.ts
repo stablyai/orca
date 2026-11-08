@@ -10,8 +10,8 @@ import {
 import { defineHostQuery, useHostQuery } from '../query/host-query'
 import { hostQueryKey } from '../query/host-query-key'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
-import type { RpcClient } from '../transport/rpc-client'
-import { readRuntimeStatusProbe } from '../transport/runtime-status-probe'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { readRuntimeStatusProbe } from '../transport/connection/runtime-status-probe'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import type { HostModelCatalogCache } from './use-mobile-host-model-catalog-upgrade'
 
@@ -72,11 +72,22 @@ export function useHostModelCatalogCache(args: {
           launch
         ),
       // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
-      record: (worktree, catalog) =>
-        queryClient.setQueryData<HostModelCatalogSnapshot | null>(
-          queryKey,
-          (snapshot) => withHostModelCatalogAnswer(snapshot ?? undefined, worktree, catalog) ?? null
-        )
+      record: (worktree, catalog) => {
+        const held =
+          queryClient.getQueryData<HostModelCatalogSnapshot | null>(queryKey) ?? undefined
+        const next = withHostModelCatalogAnswer(held, worktree, catalog)
+        if (next === held) {
+          return
+        }
+        queryClient.setQueryData<HostModelCatalogSnapshot | null>(queryKey, next ?? null)
+        // A preload sent before this list is older; cancelling it keeps the list just set.
+        if (
+          next?.byWorktree.has(worktree) &&
+          queryClient.isFetching({ queryKey, exact: true }) > 0
+        ) {
+          void queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
+        }
+      }
     }
   }, [agent, exec, hostId, queryClient])
 }

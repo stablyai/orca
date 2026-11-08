@@ -2,7 +2,7 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 export type AgentHistoryScreenState =
   | { kind: 'loading' }

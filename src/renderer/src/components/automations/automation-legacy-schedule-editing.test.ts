@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
-import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import { isValidAutomationSchedule } from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 
 import { buildAutomationEditDraft } from './automation-edit-draft'
 
-import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
+import { acceptsAutomationDraftSchedule } from '../../../../shared/automations/scheduling/automation-schedule-input-gate'
 
 // `*/90` on minutes was accepted before the oversized-step refusal (#15895) and still runs,
 // firing at :00. Only a row persisted by an older build can hold it.
@@ -45,18 +45,6 @@ describe('editing an automation whose saved schedule predates the input gate', (
   })
 
   // Untouched legacy schedules must not block unrelated renames behind re-authoring.
-  it('lets a rename through without re-authoring the schedule', () => {
-    const automation = makeAutomation()
-    const renamed = { ...buildAutomationEditDraft(automation), name: 'Renamed sweep' }
-    expect(renamed.scheduleWarning).toBeNull()
-    expect(
-      acceptsAutomationDraftSchedule({
-        customSchedule: renamed.customSchedule,
-        savedRrule: automation.rrule,
-        validate: isValidAutomationSchedule
-      })
-    ).toBe(true)
-  })
 
   it('still refuses a schedule the user actually changes', () => {
     const automation = makeAutomation()

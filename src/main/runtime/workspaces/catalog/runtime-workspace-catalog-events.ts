@@ -1,5 +1,5 @@
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
-import { OrcaRuntimeWithGetStatus } from '../../orca-runtime-get-status'
+import { OrcaRuntimeWithGetStatus } from '../../hosts/runtime-status'
 
 export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetStatus {
   abstract invalidateResolvedWorktreeCache(): void

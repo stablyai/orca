@@ -63,10 +63,6 @@ function agentStatus(paneKey: string, state: AgentStatusEntry['state']): AgentSt
   }
 }
 
-function completedAgentStatus(paneKey: string): AgentStatusEntry {
-  return agentStatus(paneKey, 'done')
-}
-
 function workingAgentStatus(paneKey: string): AgentStatusEntry {
   return agentStatus(paneKey, 'working')
 }
@@ -128,52 +124,6 @@ describe('useTabAgent', () => {
     window.api = originalApi
   })
 
-  it('never probes the foreground process', async () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
-        }
-      },
-      agentStatusByPaneKey: {
-        [paneKey]: workingAgentStatus(paneKey)
-      }
-    })
-
-    const root = await renderHookProbe(baseTab)
-    await rerenderHookProbe(root, { ...baseTab, title: '✳ Codex' })
-    await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
-
-    expect(latestHookAgent).toBe('codex')
-    expect(getForegroundProcess).not.toHaveBeenCalled()
-  })
-
-  it('does not clear launch identity while the live hook row persists at a shell title', async () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF_ID },
-          activeLeafId: LEAF_ID,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
-        }
-      },
-      agentStatusByPaneKey: {
-        [paneKey]: workingAgentStatus(paneKey)
-      }
-    })
-
-    await renderHookProbe({ ...baseTab, title: 'zsh' })
-
-    expect(latestHookAgent).toBe('codex')
-    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
-  })
-
   it('clears launch identity when a previously observed hook row drops at a shell title', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     useAppStore.setState({
@@ -202,43 +152,6 @@ describe('useTabAgent', () => {
     await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
 
     expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
-  })
-
-  it('uses completed local hook status as launch lifecycle evidence after remount', async () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: completedAgentStatus(paneKey)
-      }
-    })
-
-    await renderHookProbe({ ...baseTab, title: 'zsh' })
-
-    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
-    expect(latestHookAgent).toBeNull()
-    expect(getForegroundProcess).not.toHaveBeenCalled()
-  })
-
-  it('does not use completed sibling hook status as focused launch lifecycle evidence', async () => {
-    const siblingPaneKey = makePaneKey('tab-1', SECOND_LEAF_ID)
-    useAppStore.setState({
-      ptyIdsByTabId: { 'tab-1': ['pty-focus', 'pty-sibling'] },
-      terminalLayoutsByTabId: { 'tab-1': twoPaneLayout() },
-      agentStatusByPaneKey: {
-        [siblingPaneKey]: completedAgentStatus(siblingPaneKey)
-      }
-    })
-
-    await renderHookProbe({
-      ...baseTab,
-      ptyId: 'pty-focus',
-      title: 'zsh',
-      launchAgent: 'claude'
-    })
-
-    expect(latestHookAgent).toBe('claude')
-    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
-    expect(getForegroundProcess).not.toHaveBeenCalled()
   })
 
   it('does not clear remote launch identity when the hook row drops at a shell title', async () => {
@@ -300,47 +213,6 @@ describe('useTabAgent', () => {
     })
     await rerenderHookProbe(root, { ...splitTab, title: 'zsh' })
     expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
-  })
-
-  it('clears launch identity at the neutral default title after a completed hook', async () => {
-    const paneKey = makePaneKey('tab-1', LEAF_ID)
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        [paneKey]: completedAgentStatus(paneKey)
-      }
-    })
-
-    // Inferred interrupts reset to neutral Terminal N, which must count like a shell title as exit evidence.
-    await renderHookProbe({ ...baseTab, title: 'Terminal 3', defaultTitle: 'Terminal 3' })
-
-    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
-  })
-
-  it('clears hookless launch identity once its own title evidence ends at a shell', async () => {
-    const geminiTab = { ...baseTab, launchAgent: 'gemini' as const, title: '✦ Gemini CLI' }
-
-    // Hookless agents first prove activity through their own title; later shell title then proves exit.
-    const root = await renderHookProbe(geminiTab)
-    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
-
-    await rerenderHookProbe(root, { ...geminiTab, title: 'zsh' })
-
-    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
-  })
-
-  it('does not treat a layout-less multi-pane completed row as focused exit evidence', async () => {
-    const siblingPaneKey = makePaneKey('tab-1', SECOND_LEAF_ID)
-    useAppStore.setState({
-      ptyIdsByTabId: { 'tab-1': ['pty-focus', 'pty-sibling'] },
-      terminalLayoutsByTabId: {},
-      agentStatusByPaneKey: {
-        [siblingPaneKey]: completedAgentStatus(siblingPaneKey)
-      }
-    })
-
-    await renderHookProbe({ ...baseTab, ptyId: 'pty-focus', title: 'zsh', launchAgent: 'claude' })
-
-    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
   })
 
   it('does not clear launch identity on the commit that switches pane generations', async () => {

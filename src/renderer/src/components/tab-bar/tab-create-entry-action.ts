@@ -51,7 +51,7 @@ export {
 } from './tab-create-entry-local-path'
 import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import { openHtmlFilePreview } from '@/lib/open-html-file-preview'
-import { selectFileListWorktree } from '@/store/selectors'
+import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance

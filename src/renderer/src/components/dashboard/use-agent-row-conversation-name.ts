@@ -1,10 +1,10 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getAgentRowConversationName } from '../../../../shared/agent-status/presentation/agent-row-conversation-name'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'
 import { resolveAgentRowPaneLiveTitle } from './agent-row-pane-live-title'
 import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
-import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
+import { useStructuredChatTabConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
 import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from './useDashboardData'
 

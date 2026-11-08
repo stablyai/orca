@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { notificationPaneTab } from './notification-pane-tab'
+import { notificationPaneTab } from './tabs/notification-pane-tab'
 import type { MobileSessionTab } from './mobile-session-route-types'
 
 const leaf = '10000000-0000-4000-8000-000000000001'

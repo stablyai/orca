@@ -9,7 +9,7 @@ import {
 } from '../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { actionableStructuredPrompts } from './mobile-structured-actionable-prompt'
-import { useRouteRelaysCapability } from '../transport/workspace-server-context'
+import { useRouteRelaysCapability } from '../worktree/workspace-server-context'
 import { sayMobileNativeChatRewind } from './native-chat/mobile-native-chat-rewind-copy'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import { requestStructuredAgentSessionMutation } from './mobile-structured-agent-session-rpc'

@@ -1,4 +1,4 @@
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
   StructuredSessionOpenSource,

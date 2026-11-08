@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { findActivityTerminalPortal } from './activity/activity-terminal-portal'
-import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import { shouldSeedDefaultSurface } from '@/lib/workspace/activation/initial-surface/automatic-default-surface'
 import { findPendingWorktreeCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   canWatcherCoverParkedTerminalTab,
@@ -252,11 +252,11 @@ export function useTerminalWatcherEffects(controller: TerminalWatcherController)
       // Why: the activation gate reconciles durable/live agent state first; only an actually empty, never-visited workspace receives a default shell.
       const { renderableTabCount } = reconcileWorktreeTabModel(activeWorktreeId)
       // Only recorded closes preserve emptiness; reread at decision time because rows can change while waiting.
-      const activeWorktreeHasTerminalState = isTerminalWorkspaceEmptiedOnPurpose(
+      const emptiedOnPurpose = isTerminalWorkspaceEmptiedOnPurpose(
         useAppStore.getState(),
         activeWorktreeId
       )
-      if (shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
+      if (shouldSeedDefaultSurface(activeWorktreeId, renderableTabCount, emptiedOnPurpose)) {
         if (
           ORCA_LAYOUT_OWNER_IS_MAIN &&
           createInitialTerminalThroughLayoutOwner(useAppStore.getState, activeWorktreeId, () =>

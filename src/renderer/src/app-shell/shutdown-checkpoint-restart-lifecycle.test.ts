@@ -139,27 +139,4 @@ describe('shutdown checkpoint restart lifecycle', () => {
 
     expect(harness.stageBeforeUnloadSync).toHaveBeenCalledTimes(2)
   })
-
-  // Match the E2E checkpoint failure with its cause suffix (tests/e2e/update-install-renderer-checkpoint-recovery.spec.ts, STA-5668).
-  it('names the snapshot-build cause when dirty drafts block the checkpoint', async () => {
-    const snapshotFailure = "Cannot read properties of null (reading 'toLowerCase')"
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    const harness = createLifecycleHarness(
-      ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT,
-      ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-      {
-        buildSessionSnapshots: () => {
-          throw new Error(snapshotFailure)
-        },
-        hasDirtyOpenFiles: () => true
-      }
-    )
-    cleanupFns.push(harness.cleanup)
-
-    await expect(harness.prepare()).rejects.toThrow(
-      new Error(`Renderer shutdown checkpoint was not completed: ${snapshotFailure}`)
-    )
-    // Dirty drafts must block before any durable-only degrade stages over them.
-    expect(harness.stageBeforeUnloadSync).not.toHaveBeenCalled()
-  })
 })

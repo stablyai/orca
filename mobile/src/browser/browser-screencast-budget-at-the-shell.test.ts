@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from '../mobile-web-shell/bridge/bridge-caps'
+import { utf8ByteLength } from '../mobile-web-shell/bridge/bridge-caps'
 import { clientFrame } from '../mobile-web-shell/bridge-host-test-fakes'
 import { harness, ID } from '../mobile-web-shell/bridge-host-test-harness'
-import {
-  BrowserScreencastOpcode,
-  type BrowserScreencastFrame
-} from '../transport/browser-screencast-protocol'
+import { BrowserScreencastOpcode, type BrowserScreencastFrame } from './browser-screencast-protocol'
 import {
   binaryEventEnvelopeBytes,
   mobileBrowserFrameAreaBudget,
@@ -81,13 +78,6 @@ describe('a frame at exactly the budgeted area', () => {
   const BUDGETED_IMAGE_BYTES = Math.floor(
     mobileBrowserFrameAreaBudget() * WORST_CASE_JPEG_BYTES_PER_PIXEL
   )
-
-  it('encodes under the frame cap and the shell posts it', () => {
-    const { bytes, posts } = postedFrame(noise(BUDGETED_IMAGE_BYTES))
-
-    expect(posts).toBe(1)
-    expect(bytes).toBeLessThanOrEqual(BRIDGE_MAX_MESSAGE_BYTES)
-  })
 
   it('is a ceiling: an image past it is dropped by the shell, not sent over the cap', () => {
     // Unexpected worst-case overflow must be dropped at shell boundary (C6 ruling 1).

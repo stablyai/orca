@@ -4,8 +4,8 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { GetProjectViewTableArgs } from '../../../../../shared/github/project-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,

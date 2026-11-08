@@ -10,8 +10,6 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { createUsageWorktreeResolver } from '../usage/usage-worktree-resolver'
-import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
 import { parseCodexUsageRecord } from './codex-usage-record-parser'
 
 describe('parseCodexUsageRecord', () => {
@@ -160,78 +158,5 @@ describe('parseCodexUsageRecord', () => {
       reasoningOutputTokens: 100,
       totalTokens: 2_500
     })
-  })
-})
-
-describe('attributeCodexUsageEvent', () => {
-  it('attributes nested cwd paths to the nearest containing worktree', async () => {
-    const attributed = await attributeCodexUsageEvent(
-      {
-        sessionId: 'session-1',
-        timestamp: '2026-04-09T10:00:00.000Z',
-        eventKey: 'event-1',
-        cwd: '/workspace/repo/app2/subdir',
-        model: 'gpt-5.2-codex',
-        hasInferredPricing: false,
-        longContextInputTokens: 0,
-        longContextCachedInputTokens: 0,
-        longContextOutputTokens: 0,
-        inputTokens: 100,
-        cachedInputTokens: 10,
-        outputTokens: 25,
-        reasoningOutputTokens: 10,
-        totalTokens: 125
-      },
-      await createUsageWorktreeResolver([
-        {
-          repoId: 'repo-1',
-          worktreeId: 'repo-1::/workspace/repo/app',
-          path: '/workspace/repo/app',
-          displayName: 'App'
-        },
-        {
-          repoId: 'repo-2',
-          worktreeId: 'repo-2::/workspace/repo/app2',
-          path: '/workspace/repo/app2',
-          displayName: 'App 2'
-        }
-      ])
-    )
-
-    expect(attributed?.projectKey).toBe('worktree:repo-2::/workspace/repo/app2')
-    expect(attributed?.projectLabel).toBe('App 2')
-    expect(attributed?.worktreeId).toBe('repo-2::/workspace/repo/app2')
-  })
-
-  it('does not attribute true parent-directory escapes to the worktree', async () => {
-    const attributed = await attributeCodexUsageEvent(
-      {
-        sessionId: 'session-1',
-        timestamp: '2026-04-09T10:00:00.000Z',
-        eventKey: 'event-1',
-        cwd: '/workspace/repo/../other/session',
-        model: 'gpt-5.2-codex',
-        hasInferredPricing: false,
-        longContextInputTokens: 0,
-        longContextCachedInputTokens: 0,
-        longContextOutputTokens: 0,
-        inputTokens: 100,
-        cachedInputTokens: 10,
-        outputTokens: 25,
-        reasoningOutputTokens: 10,
-        totalTokens: 125
-      },
-      await createUsageWorktreeResolver([
-        {
-          repoId: 'repo-1',
-          worktreeId: 'repo-1::/workspace/repo',
-          path: '/workspace/repo',
-          displayName: 'Repo'
-        }
-      ])
-    )
-
-    expect(attributed?.projectKey).toBe('cwd:/workspace/repo/../other/session')
-    expect(attributed?.worktreeId).toBeNull()
   })
 })

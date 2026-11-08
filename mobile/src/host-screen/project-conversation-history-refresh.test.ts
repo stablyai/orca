@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import { conversationHistory } from './project-conversations.test-fixture'
 import { refreshProjectConversationHistory } from './project-conversation-history-refresh'
 

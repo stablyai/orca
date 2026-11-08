@@ -13,22 +13,25 @@ import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { useWorkspaceClient } from '../transport/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/use-workspace-client'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useSessionScreenHandlers } from '../session/session-screen-handlers'
 import { worktreeCatalogRead } from '../worktree/worktree-catalog-operations'
-import { getWorktreeLabel } from '../session/worktree-label'
+import { getWorktreeLabel } from '../worktree/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
   readMobileAiVaultResumeHost,
   readMobileRuntimeTerminalWindowsShell,
   resumeAiVaultSessionInTerminal
-} from '../session/ai-vault-resume-launch'
-import { prepareMobileAiVaultSessionResume } from '../session/ai-vault-resume-preparation'
+} from './ai-vault-resume-launch'
+import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
+import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
+import { useRefreshHint } from '../query/refresh-hint'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
@@ -93,7 +96,7 @@ function MobileAgentSessionHistoryPanelContent({
     scope,
     screenState,
     refreshing,
-    hostStatusResult,
+    revalidating,
     activeWorktreePath,
     scopeFilterPaths,
     onSelectScope,
@@ -155,14 +158,7 @@ function MobileAgentSessionHistoryPanelContent({
     [sessions, effectiveQuery, conversationId, scope, scopeFilterPaths, activeWorktreePath, now, t]
   )
 
-  const resumeHost = useMemo(
-    () => readMobileAiVaultResumeHost(hostStatusResult),
-    [hostStatusResult]
-  )
-  const hostTerminalWindowsShell = useMemo(
-    () => readMobileRuntimeTerminalWindowsShell(hostStatusResult),
-    [hostStatusResult]
-  )
+  const showRefreshLine = useRefreshHint(revalidating)
 
   const resumeActionStateBySessionId = useMemo(
     () => buildMobileAgentHistoryResumeActionState(sessions, resumingSessionId),
@@ -218,6 +214,14 @@ function MobileAgentSessionHistoryPanelContent({
           triggerError()
           return
         }
+        // Read at resume, not on open: the Windows shell setting can change while connected.
+        const statusReply = await agentHistoryHostStatusRead.request(client)
+        assertCurrentOwner()
+        const hostStatus = interpretOrThrowRefusalMessage(
+          () => agentHistoryHostStatusRead.interpret(statusReply),
+          t('agentHistory.useAgentHistoryState.hostUnreachable', 'Unable to reach host')
+        )
+        const resumeHost = readMobileAiVaultResumeHost(hostStatus)
         const preparedTarget = await prepareMobileHistoryResumeTarget({
           client,
           session,
@@ -240,7 +244,7 @@ function MobileAgentSessionHistoryPanelContent({
         const launch = buildMobileAiVaultResumeLaunch({
           session: preparedSession,
           workspacePlatform: platform,
-          hostTerminalWindowsShell,
+          hostTerminalWindowsShell: readMobileRuntimeTerminalWindowsShell(hostStatus),
           settings
         })
         const resumed = await resumeAiVaultSessionInTerminal(
@@ -289,8 +293,6 @@ function MobileAgentSessionHistoryPanelContent({
       hostId,
       origin,
       sessionBelow,
-      resumeHost,
-      hostTerminalWindowsShell,
       router,
       worktreeId,
       worktrees,
@@ -317,6 +319,7 @@ function MobileAgentSessionHistoryPanelContent({
               : t('agentHistory.panel.title', 'Agent Session History')
           }
           subtitle={worktreeLabel}
+          refreshing={showRefreshLine}
           trailing={
             <NavBarButton
               icon={RefreshCw}

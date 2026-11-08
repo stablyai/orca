@@ -1,3 +1,4 @@
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
@@ -13,18 +14,37 @@ export function buildWorktreeCreationStartupOpt(
   backendSpawned: boolean
 ): WorktreeStartupPayload | undefined {
   const plan = request.startupPlan
-  if (!plan || backendSpawned) {
+  if ((!plan && !request.creationStartup) || !request.agent || backendSpawned) {
     return undefined
   }
+  const intent = request.creationStartup
+  const freshAgentLaunch = !request.ephemeralVmRecipe
+    ? {
+        ...request.launchInputs,
+        prompt: request.launchDraftPrompt ?? request.quickPrompt,
+        promptDelivery: request.launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const),
+        recovery: true as const,
+        legacy: () =>
+          intent?.legacy().promptPlan ?? {
+            startupPlan: plan ?? null,
+            pasteDraftAfterLaunch: plan?.draftPrompt ?? plan?.followupPrompt ?? null,
+            submitPastedPrompt: Boolean(plan?.followupPrompt)
+          }
+      }
+    : undefined
+  const launchToken = intent ? (intent.launchToken ??= createBrowserUuid()) : plan?.launchToken
   return {
-    command: plan.launchCommand,
-    ...(plan.env ? { env: plan.env } : {}),
-    launchConfig: plan.launchConfig,
-    ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
+    command: plan?.launchCommand ?? '',
+    ...(freshAgentLaunch ? { freshAgentLaunch } : {}),
+    ...(plan?.env ? { env: plan?.env } : {}),
+    launchConfig: plan?.launchConfig,
+    ...(launchToken ? { launchToken } : {}),
     ...(request.agent ? { launchAgent: request.agent } : {}),
-    ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
+    ...(plan?.draftPrompt ? { draftPrompt: plan?.draftPrompt } : {}),
     // This view-only marker identifies unsent TUI context even for argv-prefill plans without draftPrompt.
-    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
+    ...(plan?.startupCommandDelivery
+      ? { startupCommandDelivery: plan?.startupCommandDelivery }
+      : {}),
     // Command Code needs prompt status before its first hook; carry it through startup.
     ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
       ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }

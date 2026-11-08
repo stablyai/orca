@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
-import { ownerKey } from '../../../../shared/automation-owner-key'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
 import {
   getAutomationHostTargetKey,

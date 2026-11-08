@@ -56,6 +56,8 @@ const queuedChange = z.object({
   holdReason: value,
   options: legacyOptions,
   attempt: value,
+  deliveryMode: value,
+  unattended: value,
   returned: z.object({ reason: value, rejection: storedFailureFact.optional() }).optional()
 })
 const otherQueueChanges = [

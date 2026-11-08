@@ -13,7 +13,7 @@ import { createRuntimeEnvironmentMobileRelayHosts } from '../ipc/runtime-environ
 import { getLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { registerHeadlessPtyRuntime } from '../ipc/pty/register-headless-runtime'
 import { LocalPtyProvider } from '../providers/local-pty/local-pty-provider'
-import { publishHeadlessRuntimeGraph } from '../runtime/headless-runtime-graph'
+import { publishHeadlessRuntimeGraph } from '../runtime/session-graph/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../browser/backends/offscreen-browser-backend'
 import { browserManager } from '../browser/browser-manager'
 import { getDesktopRelayStatus } from './main-process-relay-status'

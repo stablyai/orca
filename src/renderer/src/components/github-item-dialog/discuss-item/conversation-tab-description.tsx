@@ -8,7 +8,7 @@ import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownCompos
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function ConversationTabDescription({
   imageUploadAddress,
@@ -43,6 +43,8 @@ export function ConversationTabDescription({
   setBodyEditing: (value: boolean) => void
   onSaveBody: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const [uploading, setUploading] = useState(false)
   const save = () => {
     if (!uploading) {
@@ -54,8 +56,8 @@ export function ConversationTabDescription({
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
         <span className="font-medium text-foreground">{authorLabel}</span>
         <span>
-          {translate('auto.components.GitHubItemDialog.updatedRelativeTime', 'updated {{time}}', {
-            time: formatRelativeTime(item.updatedAt)
+          {t('auto.components.GitHubItemDialog.updatedRelativeTime', 'updated {{time}}', {
+            time: formatRelativeTime(item.updatedAt, intlLocale)
           })}
         </span>
         {canEditBody && !loading && detailsLoaded ? (
@@ -73,7 +75,7 @@ export function ConversationTabDescription({
                 }}
               >
                 <X className="size-3.5" />
-                {translate('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
+                {t('auto.components.GitHubItemDialog.675bc0d638', 'Cancel')}
               </Button>
               <Button
                 type="button"
@@ -87,7 +89,7 @@ export function ConversationTabDescription({
                 ) : (
                   <Check className="size-3.5" />
                 )}
-                {translate('auto.components.GitHubItemDialog.9df4e74bdf', 'Save')}
+                {t('auto.components.GitHubItemDialog.9df4e74bdf', 'Save')}
               </Button>
             </div>
           ) : (
@@ -102,16 +104,13 @@ export function ConversationTabDescription({
                     setBodyDraft(body)
                     setBodyEditing(true)
                   }}
-                  aria-label={translate(
-                    'auto.components.GitHubItemDialog.4d555d3796',
-                    'Edit description'
-                  )}
+                  aria-label={t('auto.components.GitHubItemDialog.4d555d3796', 'Edit description')}
                 >
                   <Pencil className="size-3.5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {translate('auto.components.GitHubItemDialog.4d555d3796', 'Edit description')}
+                {t('auto.components.GitHubItemDialog.4d555d3796', 'Edit description')}
               </TooltipContent>
             </Tooltip>
           )
@@ -128,7 +127,7 @@ export function ConversationTabDescription({
             onImageUploadPendingChange={setUploading}
             value={resolvedBodyDraft}
             onChange={setBodyDraft}
-            placeholder={translate('auto.components.GitHubItemDialog.52b20b56f7', 'Description')}
+            placeholder={t('auto.components.GitHubItemDialog.52b20b56f7', 'Description')}
             disabled={bodySaving}
             autoFocus
             minHeightClassName="min-h-64"
@@ -143,7 +142,7 @@ export function ConversationTabDescription({
           />
         ) : (
           <span className="italic text-muted-foreground">
-            {translate('auto.components.GitHubItemDialog.9b9cb55994', 'No description provided.')}
+            {t('auto.components.GitHubItemDialog.9b9cb55994', 'No description provided.')}
           </span>
         )}
       </div>

@@ -4,7 +4,7 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConversationRow } from './project-conversations'
 
 const revealSchema = z.object({

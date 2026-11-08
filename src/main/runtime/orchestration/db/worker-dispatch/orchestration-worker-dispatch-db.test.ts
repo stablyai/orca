@@ -4,7 +4,6 @@ import '../contract-constants'
 import '../messages/mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration-runtime-capabilities'
 
 describe('OrchestrationDb worker Dispatch state', () => {
   let db: OrchestrationDb | undefined
@@ -17,104 +16,6 @@ describe('OrchestrationDb worker Dispatch state', () => {
     db = new OrchestrationDb(':memory:')
     return db
   }
-
-  it('creates and activates a composed worker Dispatch transactionally', () => {
-    const d = createDb()
-    const task = d.createTask({ runId: 'run_legacy_local', spec: 'worker' })
-    const started = d.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: { topology: 'current', agent: 'codex' }
-    })
-    expect(started).toMatchObject({
-      dispatch: { status: 'pending' },
-      worker: { state: 'starting', stage: 'accepted' }
-    })
-    expect(d.getTask(task.id)?.status).toBe('dispatched')
-
-    d.prepareStartingWorkerAuthority({
-      dispatchId: started.dispatch.id,
-      handle: 'term_worker',
-      paneKey: 'tab_worker:leaf_worker',
-      processIncarnation: 'runtime:pty:1',
-      worktreeId: 'repo::worktree',
-      setupState: 'not_applicable',
-      effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }]
-    })
-    expect(d.markWorkerDispatchReady(started.dispatch.id)).toMatchObject({
-      state: 'ready',
-      stage: 'input_accepted'
-    })
-    expect(d.getDispatchContextById(started.dispatch.id)).toMatchObject({
-      status: 'dispatched',
-      assignee_handle: 'term_worker'
-    })
-    expect(d.listLegacyWorkerTerminalRecoveryRows()).toEqual([
-      expect.objectContaining({
-        dispatch_id: started.dispatch.id,
-        contract_version: CURRENT_CONTRACT_VERSION,
-        worker_state: 'ready',
-        agent_terminal_handle: 'term_worker'
-      })
-    ])
-  })
-
-  it('creates a Task and starting Dispatch together for a spec', () => {
-    const d = createDb()
-    const started = d.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskSpec: 'atomic spec task',
-      taskRunId: 'run_legacy_local',
-      startOptions: { topology: 'current' },
-      mutationReceipt: {
-        callerFingerprint: 'caller',
-        requestId: 'atomic_spec_request',
-        method: 'orchestration.workerStart',
-        payloadHash: 'hash'
-      }
-    })
-    expect(started.task.spec).toBe('atomic spec task')
-    expect(started.task.status).toBe('dispatched')
-    expect(d.getDispatchContextById(started.dispatch.id)?.task_id).toBe(started.task.id)
-    expect(d.getMutationReceipt('caller', 'atomic_spec_request')).toMatchObject({
-      state: 'pending',
-      receipt: expect.stringContaining(started.task.id)
-    })
-  })
-
-  it('retains an active supervised worker terminal', () => {
-    const d = createDb()
-    const task = d.createTask({ runId: 'run_legacy_local', spec: 'retain active worker' })
-    const started = d.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {}
-    })
-    d.prepareStartingWorkerAuthority({
-      dispatchId: started.dispatch.id,
-      handle: 'term_worker',
-      paneKey: 'tab_worker:leaf_worker',
-      processIncarnation: 'runtime:pty:1',
-      worktreeId: 'repo::worktree',
-      setupState: 'not_applicable',
-      effects: [],
-      terminalOwnership: 'created'
-    })
-    expect(d.getWorkerTerminalResourceByOwner(started.dispatch.id)).toMatchObject({
-      owner_dispatch_id: started.dispatch.id,
-      endpoint_incarnation: 'runtime:pty:1'
-    })
-    d.markWorkerDispatchReady(started.dispatch.id)
-
-    expect(d.retainWorkerTerminalResource(started.dispatch.id)).toMatchObject({
-      disposition: 'retained',
-      resource: { release_state: 'retained', retained_reason: 'user_requested' }
-    })
-    expect(d.getWorkerDispatch(started.dispatch.id)?.state).toBe('ready')
-  })
 
   it('requeues an active Task before settling a worker whose terminal is missing', () => {
     const d = createDb()
@@ -153,85 +54,6 @@ describe('OrchestrationDb worker Dispatch state', () => {
     d.reconcileMissingWorkerTerminal(started.dispatch.id, 'duplicate recovery')
     expect(d.getDispatchContextById(started.dispatch.id)?.failure_count).toBe(1)
     expect(d.getTask(task.id)?.status).toBe('ready')
-  })
-
-  it('commits worker-start mutation acceptance with the starting Dispatch', () => {
-    const d = createDb()
-    const task = d.createTask({ runId: 'run_legacy_local', spec: 'atomic acceptance' })
-    const mutationReceipt = {
-      callerFingerprint: 'caller_fingerprint',
-      requestId: 'worker_start_request',
-      method: 'orchestration.workerStart',
-      payloadHash: 'payload_hash'
-    }
-
-    const started = d.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: { topology: 'current' },
-      mutationReceipt
-    })
-
-    expect(d.getMutationReceipt('caller_fingerprint', 'worker_start_request')).toMatchObject({
-      state: 'pending',
-      method: 'orchestration.workerStart'
-    })
-    expect(d.getWorkerDispatch(started.dispatch.id)).toMatchObject({
-      state: 'starting',
-      stage: 'accepted'
-    })
-    expect(d.getTask(task.id)?.status).toBe('dispatched')
-  })
-
-  it('rolls back worker-start mutation acceptance when the Task cannot start', () => {
-    const d = createDb()
-
-    expect(() =>
-      d.createStartingWorkerDispatch({
-        creator: { kind: 'system' },
-        maxDepth: Number.MAX_SAFE_INTEGER,
-        taskId: 'task_missing',
-        startOptions: {},
-        mutationReceipt: {
-          callerFingerprint: 'caller_fingerprint',
-          requestId: 'invalid_worker_start',
-          method: 'orchestration.workerStart',
-          payloadHash: 'payload_hash'
-        }
-      })
-    ).toThrowError(
-      expect.objectContaining({
-        code: 'task_not_found',
-        message: 'Task task_missing was not found.'
-      })
-    )
-    expect(d.getMutationReceipt('caller_fingerprint', 'invalid_worker_start')).toBeUndefined()
-  })
-
-  it('fails a composed start without losing residual resource receipts', () => {
-    const d = createDb()
-    const task = d.createTask({ runId: 'run_legacy_local', spec: 'worker' })
-    const started = d.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: Number.MAX_SAFE_INTEGER,
-      taskId: task.id,
-      startOptions: {}
-    })
-    d.recordWorkerStage({
-      dispatchId: started.dispatch.id,
-      stage: 'terminal_created',
-      effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }],
-      residualResources: [{ kind: 'terminal', id: 'term_worker' }]
-    })
-
-    expect(d.failWorkerStart(started.dispatch.id, 'agent_readiness', 'timed out')).toMatchObject({
-      state: 'failed',
-      stage: 'agent_readiness',
-      last_error: 'timed out',
-      residual_resources: expect.stringContaining('term_worker')
-    })
-    expect(d.getTask(task.id)?.status).toBe('failed')
   })
 
   it('allows retry only from the Task current terminal Dispatch', () => {

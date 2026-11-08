@@ -5,7 +5,8 @@ import { createHookListenerState } from '../../src/shared/agent-hook-listener/li
 import { getAgentResumeArgv } from '../../src/shared/agent-launch/startup/agent-resume-argv'
 import { buildAgentResumeStartupPlan } from '../../src/shared/agent-launch/startup/tui-agent-resume-startup'
 import { sleepingAgentSessionsByPaneKeySchema } from '../../src/shared/workspace-session/workspace-session-sleeping-agents'
-import { createTestStore, makeTab } from '../../src/renderer/src/store/slices/store-test-helpers'
+import { createTestStore } from '../../src/renderer/src/store/testing/app-store-test-fixture'
+import { makeTab } from '../../src/renderer/src/store/terminals/terminal-tab.test-fixture'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'
 const ROOT_SESSION = '22222222-2222-4222-8222-222222222222'

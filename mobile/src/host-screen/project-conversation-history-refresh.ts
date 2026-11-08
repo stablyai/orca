@@ -1,5 +1,5 @@
 import { AI_VAULT_CANONICAL_PROJECT_SEARCH_CAPABILITY } from '../../../src/shared/ai-vault/contracts/ai-vault-runtime-capabilities'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   agentHistoryHostStatusRead,
   agentHistorySessionScan

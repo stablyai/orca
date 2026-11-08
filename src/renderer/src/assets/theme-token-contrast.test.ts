@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { contrastRatio, type Rgba } from '../lib/plugin-theme-tokens'
+import { contrastRatio, type Rgba } from '../../../shared/color/rgba-contrast'
 import { CHAT_SELECTION_MIX, chatSelectionMixOver } from '../lib/chat-selection-mix'
 
 const css = readFileSync(new URL('./main.css', import.meta.url), 'utf8').replace(

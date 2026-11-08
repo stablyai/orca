@@ -1,11 +1,9 @@
 import { useMobileTasksSelection } from './github-task-identity'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
   type GitHubRepoSlugCacheEntry,
-  type RpcClient,
-  type TaskProvider,
-  normalizeVisibleTaskProviders,
   useHostClient,
   useHostRepoList,
   useMemo,
@@ -19,7 +17,11 @@ import {
   useSafeAreaInsets,
   useState
 } from './mobile-tasks-dependencies'
-import { newTabRepoListRead } from '../session/mobile-session-read-operations'
+import {
+  type TaskProvider,
+  normalizeVisibleTaskProviders
+} from '../../../src/shared/work-items/task-providers'
+import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useTaskHostRepos } from './use-task-host-repos'
 import {
@@ -44,9 +46,9 @@ import {
   type TaskItem,
   type TaskResumeState,
   type TaskSort,
-  type TasksSupportState,
-  getTaskPresetQuery
+  type TasksSupportState
 } from './mobile-tasks-legacy-foundation'
+import { getTaskPresetQuery } from '../../../src/shared/work-items/task-preset-query'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
 import { useMobileJiraConnectionState } from './use-mobile-jira-connection-state'
 import type { JiraIssueFilter } from '../../../src/shared/jira/jira-types'

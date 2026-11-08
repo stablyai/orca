@@ -6,6 +6,7 @@ import type {
   AiVaultSession
 } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type {
+  OpenCodeForkCoverageRequest,
   OpenCodeNativeChatReadRequest,
   OpenCodeNativeChatReadValue,
   OpenCodeSqliteCaptureValue,
@@ -197,6 +198,20 @@ export class OpenCodeSqliteWorkerClient {
     )
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only this build's internal worker dispatch constructs page/signal results; they are not client-supplied paths or frames.
     return value as OpenCodeNativeChatReadValue
+  }
+
+  async readForkCoverage(
+    args: Omit<OpenCodeForkCoverageRequest, 'id' | 'kind'>,
+    signal?: AbortSignal
+  ): Promise<string[]> {
+    const value = await this.dispatch(
+      (id) => ({ ...args, id, kind: 'fork-coverage' }),
+      PARSE_TIMEOUT_MS,
+      signal,
+      'native-chat'
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This build's bundled reader constructs the private coverage result.
+    return value as string[]
   }
 
   dispose(): void {

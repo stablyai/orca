@@ -12,7 +12,7 @@ import {
 const harness =
   'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts'
 const structuredSessionHarness =
-  'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+  'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
 
 const unitHarnesses = [
   harness,
@@ -20,12 +20,12 @@ const unitHarnesses = [
   'src/renderer/src/store/slices/editor/editor-slice-test-harness.ts',
   'src/renderer/src/store/slices/browser/browser-slice-test-harness.ts',
   'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts',
-  'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts'
+  'src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness.ts'
 ]
 const supportBridges = new Set([
   // Launch request suites' store rig; it takes the terminal harness's workspace layout.
   'src/renderer/src/runtime/hosted-terminals/creation/agent-launch/web-runtime-agent-launch-options.test-fixture.ts',
-  'src/renderer/src/runtime/web-runtime-browser-creation-placement-test-rig.ts',
+  'src/renderer/src/runtime/browser/creation/testing/web-runtime-browser-creation-placement-test-rig.ts',
   'src/renderer/src/components/editor/model-lifetime/retention/editor-model-lifetime-fixture.ts',
   // Autosave suites' store rig; it takes the editor harness's tab-layout maps.
   'src/renderer/src/components/editor/autosave/editor-autosave-controller-test-fixture.ts',

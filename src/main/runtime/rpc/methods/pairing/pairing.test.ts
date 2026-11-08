@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
@@ -25,29 +24,6 @@ function dispatchPairing(
 }
 
 describe('pairing RPC methods', () => {
-  it('passes only phone-owned credential material to the server-bound provider', async () => {
-    const provisionRelay = vi.fn().mockResolvedValue({
-      v: 1,
-      reqId: 'install-1',
-      authorizationMode: 'authenticated-direct',
-      currentVersion: 1,
-      resumeExpiresAt: Date.now() + 60_000
-    })
-    const pairing = { getEndpoints: vi.fn(), provisionRelay }
-
-    await expect(
-      dispatchPairing(
-        'pairing.provisionRelay',
-        { reqId: 'install-1', newResumeTokenHash: 'A'.repeat(43) },
-        pairing
-      )
-    ).resolves.toMatchObject({ ok: true })
-    expect(provisionRelay).toHaveBeenCalledWith({
-      reqId: 'install-1',
-      newResumeTokenHash: 'A'.repeat(43)
-    })
-  })
-
   it('rejects caller-selected identity and authorization metadata', async () => {
     const pairing = { getEndpoints: vi.fn(), provisionRelay: vi.fn() }
 

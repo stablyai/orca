@@ -1,13 +1,11 @@
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
 
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 
-import {
-  makeFolderWorkspace,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { clearHostAgentMenuSettingsForTests } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import {
   launchSourceControlRecoveryAgentWithDefault,

@@ -3,16 +3,16 @@ import {
   type ProjectConversationHistorySnapshot
 } from './project-conversation-history-refresh'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import {
   rpcClientForExecutionHost,
   reachableServerClients
-} from '../transport/execution-host-scoped-rpc-client'
+} from '../worktree/execution-host-scoped-rpc-client'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
 import { isConversationHistoryNotice } from './conversation-records'
-import { sessionTabsListRead } from '../session/mobile-session-read-operations'
+import { sessionTabsListRead } from '../session/tabs/mobile-session-tab-read-operations'
 import type { HostScreenController } from './use-host-screen-controller'
 import {
   readConversationTabs,

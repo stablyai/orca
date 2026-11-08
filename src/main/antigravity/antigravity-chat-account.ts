@@ -8,12 +8,12 @@ import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
 } from '../../shared/antigravity-account-types'
-import { hostFolderAccountBinding } from '../acp/acp-account-binding'
-import type { AcpAgentConnection } from '../acp/acp-agent-connection'
+import { hostFolderAccountBinding } from '../acp/launch/acp-account-binding'
+import type { AcpAgentConnection } from '../acp/process/acp-agent-connection'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
-import { RevisionedState } from '../runtime/revisioned-state'
+import { RevisionedState } from '../runtime/events/revisioned-state'
 import { antigravityBrowserHelperWorks } from './antigravity-browser-helper'
-import { AcpLaunchGate } from '../acp/acp-launch-gate'
+import { AcpLaunchGate } from '../acp/launch/acp-launch-gate'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 

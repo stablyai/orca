@@ -1,4 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // Dispatched chats retain their mailbox while starting nested helpers; unhandled mail returns to the Run coordinator on settlement.
 
 import { describe, expect, it, vi } from 'vitest'

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { ConversationPreferencesSchema } from '../../../src/shared/conversation-navigation-preferences'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import {
   hostPlatformSchema,
   hostRepoCatalogSnapshotSchema,

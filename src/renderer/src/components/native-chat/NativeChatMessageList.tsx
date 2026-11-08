@@ -2,57 +2,63 @@ import { copyChatMathSelection } from '../sidebar/chat-markdown-math-selection'
 import {
   nativeChatTranscriptOuterClass,
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
-} from './native-chat-appearance-style'
-import { NativeChatJumpToLatest } from './NativeChatJumpToLatest'
-import { useNativeChatRowTypography } from './use-native-chat-row-typography'
+} from './appearance/native-chat-appearance-style'
+import { NativeChatJumpToLatest } from './viewport/scroll/NativeChatJumpToLatest'
+import { withoutPullRequestEventRows } from '../../../../shared/native-chat/native-chat-pull-request-event'
+import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   nativeChatScrollsToLatestOnSend,
+  nativeChatShowsCiResultLines,
   nativeChatShowsTurnDiffSummary
 } from '../../../../shared/native-chat/native-chat-appearance-settings'
-import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import { useNativeChatTranscriptProjection } from './use-native-chat-transcript-projection'
-import { desktopStructuredTranscript } from './structured-agent-session-message-projection'
+import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
+import { useNativeChatTranscriptProjection } from './conversation/projection/use-native-chat-transcript-projection'
+import { desktopStructuredTranscript } from './conversation/projection/structured-agent-session-message-projection'
 import { nativeChatTaskListPredecessors } from '../../../../shared/native-chat/input/native-chat-task-list-history'
-import { NativeChatDockedTaskList } from './NativeChatDockedTaskList'
-import { useNativeChatTurnStatus } from './use-native-chat-turn-status'
-import { NativeChatAwaitingInputRow } from './NativeChatAwaitingInputRow'
+import { NativeChatDockedTaskList } from './tools/tasks/NativeChatDockedTaskList'
+import { useNativeChatTurnStatus } from './conversation/turns/use-native-chat-turn-status'
+import { NativeChatAwaitingInputRow } from './prompts/NativeChatAwaitingInputRow'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
-import { NativeChatTurnActivityLine } from './NativeChatTurnActivityLine'
+import { NativeChatTurnActivityLine } from './messages/reasoning/NativeChatTurnActivityLine'
 import {
   NativeChatDisclosureContext,
   useNativeChatDisclosures
-} from './native-chat-disclosure-store'
+} from './messages/disclosure/native-chat-disclosure-store'
 import {
   NativeChatTranscriptItems,
   NativeChatWaitingTranscriptItems
-} from './NativeChatTranscriptItems'
-import { useNativeChatTranscriptRowContext } from './use-native-chat-transcript-row-context'
-import type { StructuredAgentSessionHostWork } from './use-structured-agent-session-transport-state'
-import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
-import { splitNativeChatSlotsWaitingBehindLiveTurn } from './native-chat-transcript-slots'
-import { useNativeChatTranscriptSlots } from './use-native-chat-transcript-slots'
-import { useNativeChatTranscriptWindow } from './use-native-chat-transcript-window'
-import { useNativeChatHistoryRetention } from './use-native-chat-history-retention'
-import { useNativeChatSubagentSections } from './use-native-chat-subagent-sections'
-import { toggleNativeChatExpandedKey } from './native-chat-expanded-keys'
-import { useNativeChatTurnMembership } from './use-native-chat-turn-membership'
-import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scroll'
-import { useNativeChatOlderHistoryAutoload } from './use-native-chat-older-history-autoload'
-import { NativeChatOlderHistoryRow } from './NativeChatOlderHistoryRow'
-import { useNativeChatMessageRail } from './use-native-chat-message-rail'
-import { NativeChatMessageRail } from './NativeChatMessageRail'
-import { useNativeChatRailWake } from './use-native-chat-rail-wake'
-import type { NativeChatRailOutlineEntry } from './native-chat-message-rail-items'
+} from './viewport/virtualization/NativeChatTranscriptItems'
+import { useNativeChatTranscriptRowContext } from './conversation/slots/use-native-chat-transcript-row-context'
+import type { StructuredAgentSessionHostWork } from './session/structured/use-structured-agent-session-transport-state'
+import type { NativeChatDeliveryNotice } from './messages/rows/NativeChatMessageRow'
+import { splitNativeChatSlotsWaitingBehindLiveTurn } from './conversation/slots/native-chat-transcript-slot-selection'
+import { useNativeChatTranscriptSlots } from './conversation/slots/use-native-chat-transcript-slots'
+import { useNativeChatTranscriptWindow } from './viewport/virtualization/use-native-chat-transcript-window'
+import { useNativeChatHistoryRetention } from './viewport/history/use-native-chat-history-retention'
+import { useNativeChatSubagentSections } from './subagents/use-native-chat-subagent-sections'
+import { toggleNativeChatExpandedKey } from './messages/disclosure/native-chat-expanded-keys'
+import { useNativeChatTurnMembership } from './conversation/slots/use-native-chat-turn-membership'
+import {
+  useNativeChatSideChatForkOffer,
+  useNativeChatSideChatForkPointReport
+} from './messages/actions/use-native-chat-side-chat'
+import { useNativeChatTranscriptScroll } from './viewport/scroll/use-native-chat-transcript-scroll'
+import { useNativeChatOlderHistoryAutoload } from './viewport/history/use-native-chat-older-history-autoload'
+import { NativeChatOlderHistoryRow } from './viewport/history/NativeChatOlderHistoryRow'
+import { useNativeChatMessageRail } from './viewport/rail/use-native-chat-message-rail'
+import { NativeChatMessageRail } from './viewport/rail/NativeChatMessageRail'
+import { useNativeChatRailWake } from './viewport/rail/use-native-chat-rail-wake'
+import type { NativeChatRailOutlineEntry } from './viewport/rail/native-chat-message-rail-items'
 import {
   useNativeChatNavigation,
   useNativeChatNavigationRequest
-} from './use-native-chat-transcript-navigation'
-import { useNativeChatReaderScrollInput } from './native-chat-reader-scroll-input'
-import { useNativeChatMessageListHandle } from './use-native-chat-reveal-latest'
+} from './viewport/navigation/use-native-chat-transcript-navigation'
+import { useNativeChatReaderScrollInput } from './viewport/scroll/native-chat-reader-scroll-input'
+import { useNativeChatMessageListHandle } from './messages/actions/use-native-chat-reveal-latest'
 
 import type {
   AgentJournalRenderItem,
@@ -61,10 +67,10 @@ import type {
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import { isStructuredAgentSessionThinking } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
-import { useNativeChatTurnDiffs } from './use-native-chat-turn-diffs'
-import { useNativeChatTurnOpenedPullRequests } from './use-native-chat-turn-opened-pull-requests'
-import { NativeChatPullRequestChangeContext } from './NativeChatOpenedPullRequestCard'
-import { transcriptTailRow } from './native-chat-transcript-tail-row'
+import { useNativeChatTurnDiffs } from './tools/diffs/use-native-chat-turn-diffs'
+import { useNativeChatTurnOpenedPullRequests } from './tools/pull-requests/use-native-chat-turn-opened-pull-requests'
+import { NativeChatPullRequestChangeContext } from './tools/pull-requests/NativeChatOpenedPullRequestCard'
+import { transcriptTailRow } from './conversation/slots/native-chat-transcript-tail-row'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 export function NativeChatMessageList({
@@ -117,6 +123,7 @@ export function NativeChatMessageList({
   stopping?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const receipts = useMemo(
     () =>
       journalItems ? desktopStructuredTranscript.transcript(journalItems).receipts : new Map(),
@@ -165,7 +172,14 @@ export function NativeChatMessageList({
     journalSubmissions,
     latestTurn
   )
-  const { messages: rows, turnKeys, liveTurnKey } = turnRows
+  const { liveTurnKey } = turnRows
+  const showCiResultLines = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
+  // Hidden lines leave the transcript entirely, so they reserve no row or gap.
+  const { messages: rows, turnKeys } = useMemo(
+    () => (showCiResultLines ? turnRows : withoutPullRequestEventRows(turnRows)),
+    [showCiResultLines, turnRows]
+  )
+  const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turnDiffs = useNativeChatTurnDiffs(
     showTurnDiffs ? turnRows : null,
@@ -190,7 +204,8 @@ export function NativeChatMessageList({
   const tailRow = transcriptTailRow(isWorking, awaitingInput)
   const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
-  const { slots: allSlots, liveLine } = useNativeChatTranscriptSlots({
+  const forkOffer = useNativeChatSideChatForkOffer(latestTurnKey)
+  const transcript = useNativeChatTranscriptSlots({
     typography,
     messages: rows,
     unresolvedRowIds: turnRows.unresolvedRowIds,
@@ -205,6 +220,7 @@ export function NativeChatMessageList({
     lifecycleWorking,
     subagentSections,
     subagentChoices,
+    forkOffer,
     line: {
       draws: tailRow === 'activity',
       thinking: turnStatuses.active?.thinking === true,
@@ -212,6 +228,8 @@ export function NativeChatMessageList({
       activityText: turnActivity?.text
     }
   })
+  const { slots: allSlots, liveLine } = transcript
+  useNativeChatSideChatForkPointReport(transcript.forkPoint)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
   const { slots, waitingSlots } = useMemo(
     () =>
@@ -336,7 +354,7 @@ export function NativeChatMessageList({
     revealedDiff: navigationRequest.revealedDiff,
     taskListPredecessors,
     expandedTurnIds,
-    latestTurnKey: turnKeys.findLast((key) => key !== undefined),
+    latestTurnKey,
     deliveryNotices,
     runtimeContext,
     onToggleExpandedTurn: toggleExpandedTurn,
@@ -357,7 +375,7 @@ export function NativeChatMessageList({
               {...readerInput.scrollerProps}
               // Measurement finds this named scroll root independently of utility classes.
               data-native-chat-scroll
-              aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
+              aria-label={t('components.native-chat.transcriptLabel', 'Conversation')}
               // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
               className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
             >

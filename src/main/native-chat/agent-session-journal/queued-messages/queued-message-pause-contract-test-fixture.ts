@@ -68,7 +68,8 @@ export function createFixture() {
       payloadFingerprint: `fp-${id}`,
       body: message(id),
       fence: 0,
-      handoverRecorded: true
+      handoverRecorded: true,
+      source: { kind: 'user' }
     })
     if (accept) {
       await acceptTurn(journal, id)

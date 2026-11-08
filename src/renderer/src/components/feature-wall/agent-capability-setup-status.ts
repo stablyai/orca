@@ -14,6 +14,7 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { isAgentCapabilitiesDone } from './feature-wall-setup-progress'
 
 export type AgentCapabilityInstallStatusTone =
@@ -137,14 +138,17 @@ export function getAgentCapabilityStatusClassName(tone: AgentCapabilityInstallSt
   }
 }
 
-function getSkillInstallStatus(skill: {
-  installed: boolean
-  loading: boolean
-  error: string | null
-}): AgentCapabilityInstallStatus {
+function getSkillInstallStatus(
+  skill: {
+    installed: boolean
+    loading: boolean
+    error: string | null
+  },
+  t: Translate = translate
+): AgentCapabilityInstallStatus {
   if (skill.loading) {
     return {
-      label: translate(
+      label: t(
         'auto.components.feature.wall.agent.capability.setup.status.9b33e7fb13',
         'Checking install'
       ),
@@ -153,7 +157,7 @@ function getSkillInstallStatus(skill: {
   }
   if (skill.error) {
     return {
-      label: translate(
+      label: t(
         'auto.components.feature.wall.agent.capability.setup.status.aa8e143a2f',
         'Could not check install'
       ),
@@ -162,7 +166,7 @@ function getSkillInstallStatus(skill: {
   }
   if (skill.installed) {
     return {
-      label: translate(
+      label: t(
         'auto.components.feature.wall.agent.capability.setup.status.8eccfcb314',
         'Installed'
       ),
@@ -171,7 +175,7 @@ function getSkillInstallStatus(skill: {
     }
   }
   return {
-    label: translate(
+    label: t(
       'auto.components.feature.wall.agent.capability.setup.status.notInstalled',
       'Not installed'
     ),
@@ -196,15 +200,16 @@ function getComputerUseInstallStatus(
     ready: boolean
     checking: boolean
     unavailableReason: string | null
-  }
+  },
+  t: Translate = translate
 ): AgentCapabilityInstallStatus {
-  const skillStatus = getSkillInstallStatus(skill)
+  const skillStatus = getSkillInstallStatus(skill, t)
   if (skillStatus.tone !== 'ready') {
     return skillStatus
   }
   if (permissions.checking) {
     return {
-      label: translate(
+      label: t(
         'auto.components.feature.wall.agent.capability.setup.status.5c9293e51a',
         'checking app access'
       ),
@@ -216,11 +221,11 @@ function getComputerUseInstallStatus(
     return {
       label:
         permissions.unavailableReason === 'web_client'
-          ? translate(
+          ? t(
               'auto.components.feature.wall.agent.capability.setup.status.requiresOrcaDesktop',
               'Requires Orca Desktop'
             )
-          : translate(
+          : t(
               'auto.components.feature.wall.agent.capability.setup.status.6d2b0a84e1',
               'Unavailable in this build'
             ),
@@ -230,7 +235,7 @@ function getComputerUseInstallStatus(
   }
   if (!permissions.ready) {
     return {
-      label: translate(
+      label: t(
         'auto.components.feature.wall.agent.capability.setup.status.needsMacAccess',
         'Needs macOS access'
       ),
@@ -239,10 +244,7 @@ function getComputerUseInstallStatus(
     }
   }
   return {
-    label: translate(
-      'auto.components.feature.wall.agent.capability.setup.status.8eccfcb314',
-      'Installed'
-    ),
+    label: t('auto.components.feature.wall.agent.capability.setup.status.8eccfcb314', 'Installed'),
     tone: 'ready',
     installed: true
   }
