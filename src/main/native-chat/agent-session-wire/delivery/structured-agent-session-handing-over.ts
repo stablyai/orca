@@ -3,9 +3,12 @@
 
 import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 
 /** The chat's journal, which identifies the conversation for as long as it is held. */
-type HandoverJournal = Pick<AgentSessionJournal, 'identity'>
+type HandoverJournal =
+  | Pick<AgentSessionJournal, 'itemFence'>
+  | Pick<SqlAgentSessionJournal, 'reads'>
 
 type HandoverInput = {
   owner: () => void
@@ -83,7 +86,7 @@ export function continuingStructuredAgentSessionInput(
 }
 
 export function markStructuredAgentSessionInputUnadmitted(
-  journal: Pick<AgentSessionJournal, 'identity' | 'submissions' | 'submission'>,
+  journal: Pick<AgentSessionJournal, 'itemFence' | 'submissions' | 'submission'>,
   clientMessageId: string,
   owner: () => void,
   unadmitted: boolean,
