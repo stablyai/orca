@@ -2,6 +2,7 @@ package expo.modules.orcamobilewebshell
 
 import android.content.ActivityNotFoundException
 import android.content.ComponentCallbacks2
+import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
@@ -15,6 +16,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 class OrcaMobileWebShellModule : Module() {
   private val main = Handler(Looper.getMainLooper())
+  // Kept so teardown unregisters from the same context after React has let go of it.
+  private var callbacksContext: Context? = null
 
   // A spare is the first thing to give back: nothing is shown by it. UI_HIDDEN, above RUNNING_LOW, is
   // the app leaving the foreground; an activity pause is not, since a notification tap or deep link
@@ -39,11 +42,14 @@ class OrcaMobileWebShellModule : Module() {
     Name("OrcaMobileWebShell")
 
     OnCreate {
-      appContext.reactContext?.applicationContext?.registerComponentCallbacks(memoryCallbacks)
+      callbacksContext = appContext.reactContext?.applicationContext?.also {
+        it.registerComponentCallbacks(memoryCallbacks)
+      }
     }
 
     OnDestroy {
-      appContext.reactContext?.applicationContext?.unregisterComponentCallbacks(memoryCallbacks)
+      callbacksContext?.unregisterComponentCallbacks(memoryCallbacks)
+      callbacksContext = null
       discardSpare()
     }
 
