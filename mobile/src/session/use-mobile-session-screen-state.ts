@@ -9,7 +9,6 @@ import {
   getVisibleTerminalAccessoryKeys
 } from '../terminal/terminal-accessory-layout'
 import type { CustomKey } from '../terminal/terminal-custom-keys'
-import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { AppliedSnapshotMarker } from './session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from './use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
@@ -20,7 +19,6 @@ import type {
   FileDocState,
   MarkdownDocState,
   MobileDisplayMode,
-  MobileNewTabAgentLoadState,
   MobileSessionTab,
   Terminal
 } from './mobile-session-route-types'
@@ -73,9 +71,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   )
   const [showCreateTabDrawer, setShowCreateTabDrawer] = useState(false)
   const [showQuickCommands, setShowQuickCommands] = useState(false)
-  const [createTabAgentLoadState, setCreateTabAgentLoadState] =
-    useState<MobileNewTabAgentLoadState>('idle')
-  const [createTabAgentOptions, setCreateTabAgentOptions] = useState<MobileNewTabAgentOption[]>([])
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
   const [showTerminalLayout, setShowTerminalLayout] = useState(false)
@@ -171,10 +166,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateTabDrawer,
     showQuickCommands,
     setShowQuickCommands,
-    createTabAgentLoadState,
-    setCreateTabAgentLoadState,
-    createTabAgentOptions,
-    setCreateTabAgentOptions,
     showCreateBrowserModal,
     setShowCreateBrowserModal,
     showHeaderMoreActions,

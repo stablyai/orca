@@ -3,6 +3,7 @@ import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
+import type { SendRequestOptions } from '../transport/unvalidated-rpc-request-port'
 import {
   PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
   WORKSPACE_ON_OTHER_RUNTIME
@@ -16,9 +17,16 @@ import type { MobileNewTabAgentLoadState } from './mobile-session-route-types'
 import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 
 const claude: RpcResponse = { id: '1', ok: true, result: ['claude'] }
+const hostError: RpcResponse = {
+  id: '1',
+  ok: false,
+  error: { code: 'runtime_error', message: 'boom' },
+  _meta: { runtimeId: 'r' }
+}
 
 type FakeHost = {
   agents: () => RpcResponse | Promise<RpcResponse>
+  repos?: () => RpcResponse
   settings?: unknown
   connectedAt?: number
 }
@@ -26,19 +34,25 @@ type FakeHost = {
 type FakeClient = RpcClient & { sendRequest: ReturnType<typeof vi.fn> }
 
 function createClient(host: FakeHost): FakeClient {
-  const sendRequest = vi.fn(async (method: string) => {
-    if (method === 'settings.get') {
-      return { ok: true, result: { settings: host.settings ?? {} } }
+  const sendRequest = vi.fn(
+    async (method: string, _params?: unknown, options?: SendRequestOptions) => {
+      options?.beforeSend?.()
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: host.settings ?? {} } }
+      }
+      if (method === 'repo.list' && host.repos) {
+        return host.repos()
+      }
+      if (method === 'preflight.detectAgents') {
+        return host.agents()
+      }
+      if (method === 'preflight.refreshAgents') {
+        const reply = await host.agents()
+        return reply.ok ? { ...reply, result: { agents: reply.result } } : reply
+      }
+      throw new Error(`unexpected request: ${method}`)
     }
-    if (method === 'preflight.detectAgents') {
-      return host.agents()
-    }
-    if (method === 'preflight.refreshAgents') {
-      const reply = await host.agents()
-      return reply.ok ? { ...reply, result: { agents: reply.result } } : reply
-    }
-    throw new Error(`unexpected request: ${method}`)
-  })
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Test double implements the members the hook and loader call.
   return {
     sendRequest,
@@ -60,26 +74,27 @@ type DrawerProps = {
   open: boolean
   prefetch?: boolean
   executionHost?: ExecutionHostId
+  worktreeId?: string
 }
 
 // One page document: every mount shares its query client, as screens in one document do.
 function mountDrawer(queryClient: QueryClient) {
   const states: MobileNewTabAgentLoadState[] = []
   let options: MobileNewTabAgentOption[] = []
-  function Probe({ client, open, prefetch = false }: DrawerProps) {
-    useMobileNewTabAgentOptions({
+  function Probe({ client, open, prefetch = false, worktreeId = 'folder:fw-1' }: DrawerProps) {
+    const sheet = useMobileNewTabAgentOptions({
       client,
       connState: 'connected',
       hostId: 'host-1',
       hostCapabilities: [PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY],
-      worktreeId: 'folder:fw-1',
+      worktreeId,
       open,
-      prefetch,
-      setLoadState: (state) => states.push(state),
-      setOptions: (next) => {
-        options = next
-      }
+      prefetch
     })
+    if (states.at(-1) !== sheet.loadState) {
+      states.push(sheet.loadState)
+    }
+    options = sheet.options
     return null
   }
   let renderer: ReactTestRenderer | undefined
@@ -190,5 +205,45 @@ describe('useMobileNewTabAgentOptions', () => {
     expect(drawer.states).toEqual(['loaded', 'other-runtime'])
     expect(drawer.options()).toEqual([])
     drawer.unmount()
+  })
+
+  it('reads an empty list an earlier screen loaded again, so a new install shows', async () => {
+    const host: FakeHost = { agents: () => ({ id: '1', ok: true, result: [] }) }
+    const client = createClient(host)
+    const earlier = mountDrawer(queryClient)
+    await earlier.render({ client, open: true })
+    earlier.unmount()
+
+    host.agents = () => claude
+    vi.advanceTimersByTime(1_000)
+    const drawer = mountDrawer(queryClient)
+    await drawer.render({ client, open: true })
+
+    expect(probes(client)).toEqual(['preflight.detectAgents', 'preflight.detectAgents'])
+    expect(drawer.options()).toEqual([{ agent: 'claude', label: 'Claude' }])
+    drawer.unmount()
+  })
+
+  it('refreshes on a later screen when an earlier refresh failed before reaching the host', async () => {
+    const repoList: RpcResponse = { id: '1', ok: true, result: { repos: [{ id: 'repo-1' }] } }
+    const host: FakeHost = { agents: () => claude, repos: () => repoList, connectedAt: 1 }
+    const client = createClient(host)
+    const worktreeId = 'repo-1::/wt'
+    for (const repos of [repoList, hostError, repoList, repoList]) {
+      host.repos = () => repos
+      vi.advanceTimersByTime(1_000)
+      const screen = mountDrawer(queryClient)
+      await screen.render({ client, open: true, worktreeId })
+      expect(screen.options()).toEqual([{ agent: 'claude', label: 'Claude' }])
+      screen.unmount()
+    }
+
+    expect(probes(client)).toEqual([
+      'repo.list',
+      'preflight.detectAgents',
+      'repo.list',
+      'repo.list',
+      'preflight.refreshAgents'
+    ])
   })
 })
