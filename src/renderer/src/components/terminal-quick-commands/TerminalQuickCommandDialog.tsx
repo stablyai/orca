@@ -9,7 +9,8 @@ import {
   getTerminalQuickCommandAction,
   getTerminalQuickCommandScope,
   isTerminalAgentQuickCommand,
-  supportsTerminalAgentQuickCommand
+  supportsTerminalAgentQuickCommand,
+  withoutCloseTabOnSuccess
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
@@ -147,6 +148,22 @@ export function TerminalQuickCommandDialog({
     )
   }
 
+  const toggleCloseTabOnSuccess = (): void => {
+    setDraft((current) => {
+      if (isTerminalAgentQuickCommand(current)) {
+        return current
+      }
+      const closeTabOnSuccess = current.closeTabOnSuccess !== true
+      draftMemoryRef.current = {
+        ...draftMemoryRef.current,
+        terminalCloseTabOnSuccess: closeTabOnSuccess
+      }
+      return closeTabOnSuccess
+        ? { ...current, closeTabOnSuccess: true }
+        : withoutCloseTabOnSuccess(current)
+    })
+  }
+
   const saveDraft = async (): Promise<void> => {
     if (savingRef.current) {
       return
@@ -166,6 +183,7 @@ export function TerminalQuickCommandDialog({
           action: 'terminal-command',
           command: draft.command.trimEnd(),
           appendEnter: draft.appendEnter,
+          ...(draft.closeTabOnSuccess ? { closeTabOnSuccess: true } : {}),
           scope: selectedScope
         }
     if (
@@ -283,6 +301,7 @@ export function TerminalQuickCommandDialog({
             draftMemoryRef={draftMemoryRef}
             setDraft={setDraft}
             toggleAppendEnter={toggleAppendEnter}
+            toggleCloseTabOnSuccess={toggleCloseTabOnSuccess}
           />
 
           <TerminalQuickCommandAdvancedSection

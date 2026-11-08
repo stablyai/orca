@@ -21,6 +21,8 @@ export type TerminalCommandQuickCommand = TerminalQuickCommandBase & {
   action?: 'terminal-command'
   command: string
   appendEnter: boolean
+  // Omitted unless true so older clients' exact-key checks accept untouched commands.
+  closeTabOnSuccess?: true
 }
 
 export type TerminalAgentQuickCommand = TerminalQuickCommandBase & {

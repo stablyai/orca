@@ -173,7 +173,7 @@ export function createParkedTerminalCommandStatusPolicy(options: {
         return
       }
       // Commands can change HEAD/index; nudge git UI immediately rather than wait for polling.
-      dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode)
+      dispatchTerminalCommandFinishedEvent(worktreeId, bestEffortExitCode, tabId)
       void retireForegroundAgentUnlessConfirmed()
       // Mirror SSH’s unprobed same-turn drop; local PTYs require mounted foreground confirmation against nested-shell 133;D.
       if (parseAppSshPtyId(ptyId) === null) {

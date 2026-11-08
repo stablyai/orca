@@ -4104,6 +4104,8 @@
               "agent_toolbar_hint": "Supports /goal, skills, paths",
               "agent_footer_hint": "Multi-line prompts are fine — keep them focused.",
               "resize_hint": "Drag corner to resize",
+              "close_tab_on_success": "Close tab after success",
+              "close_tab_on_success_aria": "Toggle close tab after success",
               "length_over_limit": "Too long to save.",
               "length_count": "{{value0}} / {{value1}} characters",
               "prompt_over_host_limit": "Too long for this host. Update Orca on the host to save longer prompts.",

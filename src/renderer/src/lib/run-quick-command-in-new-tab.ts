@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { closeQuickCommandTabOnSuccess } from '@/lib/quick-command-close-tab-on-success'
 import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand,
@@ -93,6 +94,9 @@ export function runQuickCommandInNewTab({
     quickCommandLabel: command.label,
     pendingStartup: { command: flattenTerminalQuickCommand(command).command }
   })
+  if (command.closeTabOnSuccess) {
+    closeQuickCommandTabOnSuccess(tab.id, worktreeId)
+  }
 
   // Switch to terminal view like the + button; otherwise an editor keeps the new tab invisible.
   store.setActiveTabType('terminal', worktreeId)

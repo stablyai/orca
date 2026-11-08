@@ -5,11 +5,15 @@ import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-com
 import {
   applyTerminalQuickCommandMutation,
   parseNormalizedTerminalQuickCommands,
+  withoutCloseTabOnSuccess,
   type TerminalQuickCommandMutation
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import '../../../../shared/protocol-version'
-import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
+import {
+  TERMINAL_QUICK_COMMAND_CLOSE_TAB_ON_SUCCESS_RUNTIME_CAPABILITY,
+  TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-capabilities'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { translate } from '@/i18n/i18n'
@@ -258,7 +262,18 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
     if (!parsed || parsed.kind !== 'runtime') {
       return mutateLocalCommands(get, { type: 'upsert', command })
     }
-    return mutateRemoteCommands(set, parsed.environmentId, { type: 'upsert', command })
+    // Older hosts' strict schema rejects the field; save the command without auto-close instead.
+    const hostRejectsCloseTabOnSuccess =
+      'closeTabOnSuccess' in command &&
+      !(await runtimeEnvironmentSupportsCapability(
+        parsed.environmentId,
+        TERMINAL_QUICK_COMMAND_CLOSE_TAB_ON_SUCCESS_RUNTIME_CAPABILITY,
+        15_000
+      ))
+    return mutateRemoteCommands(set, parsed.environmentId, {
+      type: 'upsert',
+      command: hostRejectsCloseTabOnSuccess ? withoutCloseTabOnSuccess(command) : command
+    })
   },
 
   deleteTerminalQuickCommand: async (hostId, commandId) => {
