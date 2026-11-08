@@ -6536,7 +6536,6 @@
       "src/renderer/src/lib/agent-message-send.test.ts": 182,
       "src/renderer/src/lib/agent-paste-draft-submit-retry.test.ts": 315,
       "src/renderer/src/lib/agent-paste-draft.test.ts": 445,
-      "src/renderer/src/lib/agent-picker-search.test.ts": 265,
       "src/renderer/src/lib/agent-resume-launch-target.test.ts": 3911,
       "src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-after-failure.test.ts": 870,
       "src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-close-race.test.ts": 983,
