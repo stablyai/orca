@@ -5988,25 +5988,25 @@
           "removeBatchMixed_other": "Orca'dan <target>{{count}} çalışma alanı</target> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
           "removeBatchGit_one": "git'ten <target>{{count}} çalışma alanı</target> kaldır ve çalışma alanı klasörünü sil.",
           "removeBatchGit_other": "git'ten <target>{{count}} çalışma alanı</target> kaldır ve ilgili çalışma alanı klasörlerini sil.",
-          "removeSingleFolder": "Orca'dan <target/> öğesini kaldır. Diskteki proje klasörü silinmeyecek.",
-          "removeSingleGit": "git'ten <target/> öğesini kaldır ve çalışma alanı klasörünü sil.",
           "removeWithChildrenFolder_one": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeWithChildrenFolder_other": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Diskteki proje klasörleri silinmeyecek.",
           "removeWithChildrenMixed_one": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
           "removeWithChildrenMixed_other": "Orca'dan <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır. Git worktree'leri git'ten ve diskten de kaldırılacak; klasör çalışma alanlarında yalnızca Orca kaydı kaldırılacak.",
           "removeWithChildrenGit_one": "git'ten <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır ve ilgili çalışma alanı klasörlerini sil.",
-          "removeWithChildrenGit_other": "git'ten <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır ve ilgili çalışma alanı klasörlerini sil."
+          "removeWithChildrenGit_other": "git'ten <target/> ve <descendants>{{count}} alt çalışma alanı</descendants> kaldır ve ilgili çalışma alanı klasörlerini sil.",
+          "removeSingleFolderFromOrca": "Orca'dan kaldırır. Diskteki klasör korunur.",
+          "deleteSingleWorktreeAndBranch": "Worktree'yi ve branch'ini siler (birleştirilmemişse branch korunur)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Yüklenen yolları göster",
           "loadedPathsNotice": "Yüklenen yollar eksik veya güncelliğini yitirmiş olabilir.",
           "loadedChangedPaths": "Yüklenen değişmiş yollar",
           "unresolvedConflict": "Çözülmemiş çakışma",
-          "changeCount_one": "{{count}} commit'lenmemiş veya izlenmeyen değişiklik",
-          "changeCount_other": "{{count}} commit'lenmemiş veya izlenmeyen değişiklik",
-          "changes": "Commit'lenmemiş veya izlenmeyen değişiklikler",
           "moreLoadedPaths_other": "ve yüklenmiş {{count}} yol daha",
-          "moreLoadedPaths_one": "ve yüklenmiş {{count}} yol daha"
+          "moreLoadedPaths_one": "ve yüklenmiş {{count}} yol daha",
+          "changesLost_one": "{{count}} commit'lenmemiş değişiklik kaybolacak",
+          "changesLost_other": "{{count}} commit'lenmemiş değişiklik kaybolacak",
+          "uncountedChangesLost": "Commit'lenmemiş değişiklikler kaybolacak"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "Alt çalışma alanları silinecek",
@@ -6014,9 +6014,6 @@
           "alsoDeletesChildren_one": "Bu çalışma alanı silindiğinde {{count}} alt çalışma alanı da silinir.",
           "moreChildren_other": "+{{count}} tane daha",
           "moreChildren_one": "+{{count}} tane daha"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Tekrar sorma"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Bu, <strong>ana worktree</strong> (ilk klonlama dizini)."
@@ -20484,11 +20481,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Git çalışma alanlarındaki commit edilmemiş veya izlenmeyen tüm değişiklikler kalıcı olarak silinecek.",
-          "clean": "Commit edilmemiş veya izlenmeyen değişiklik yok",
           "unavailable": "Değişiklikler kontrol edilemedi",
           "checking": "Değişiklikler kontrol ediliyor…",
           "checkingDetails": "Kontrol ediliyor…",
-          "unavailableDetails": "Ayrıntılar mevcut değil"
+          "unavailableDetails": "Ayrıntılar mevcut değil",
+          "none": "Commit'lenmemiş değişiklik yok"
         },
         "unsavedEdits": {
           "discarded_one": "{{count}} dosyadaki kaydedilmemiş değişiklikler atılacak:",
@@ -21825,7 +21822,10 @@
     "alwaysForceDeleteTooltip": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreBranchActions": "Diğer branch silme seçenekleri",
     "alwaysForceDeleteBranches": "Korunan branch'leri her zaman sil",
-    "alwaysForceDeleteBranchesTooltip": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır."
+    "alwaysForceDeleteBranchesTooltip": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır.",
+    "moreDeleteOptions": "Diğer silme seçenekleri",
+    "alwaysDelete": "Her zaman sil",
+    "alwaysDeleteTooltip": "Bundan sonraki silme işlemlerinde bu onayı atla."
   },
   "worktree": {
     "nestedRemoval": {

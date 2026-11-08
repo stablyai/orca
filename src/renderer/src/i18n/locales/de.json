@@ -6004,25 +6004,25 @@
           "removeBatchMixed_other": "<target>{{count}} Arbeitsbereiche</target> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
           "removeBatchGit_one": "<target>{{count}} Arbeitsbereich</target> aus git entfernen und seinen Arbeitsbereichsordner löschen.",
           "removeBatchGit_other": "<target>{{count}} Arbeitsbereiche</target> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
-          "removeSingleFolder": "<target/> aus Orca entfernen. Der Projektordner auf dem Datenträger wird nicht gelöscht.",
-          "removeSingleGit": "<target/> aus git entfernen und seinen Arbeitsbereichsordner löschen.",
           "removeWithChildrenFolder_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeWithChildrenFolder_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus Orca entfernen. Projektordner auf dem Datenträger werden nicht gelöscht.",
           "removeWithChildrenMixed_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
           "removeWithChildrenMixed_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus Orca entfernen. Git-Worktrees werden auch aus git und vom Datenträger entfernt; bei Ordner-Arbeitsbereichen wird nur der Orca-Eintrag entfernt.",
           "removeWithChildrenGit_one": "<target/> und <descendants>{{count}} untergeordneten Arbeitsbereich</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
-          "removeWithChildrenGit_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen."
+          "removeWithChildrenGit_other": "<target/> und <descendants>{{count}} untergeordnete Arbeitsbereiche</descendants> aus git entfernen und ihre Arbeitsbereichsordner löschen.",
+          "removeSingleFolderFromOrca": "Entfernt ihn aus Orca. Der Ordner auf der Festplatte bleibt erhalten.",
+          "deleteSingleWorktreeAndBranch": "Löscht den Worktree und seinen Branch (bleibt erhalten, falls nicht gemergt)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Geladene Pfade anzeigen",
           "loadedPathsNotice": "Geladene Pfade sind möglicherweise unvollständig oder veraltet.",
           "loadedChangedPaths": "Geladene geänderte Pfade",
           "unresolvedConflict": "Ungelöster Konflikt",
-          "changeCount_one": "{{count}} nicht committete oder nicht verfolgte Änderung",
-          "changeCount_other": "{{count}} nicht committete oder nicht verfolgte Änderungen",
-          "changes": "Nicht committete oder nicht verfolgte Änderungen",
           "moreLoadedPaths_one": "und {{count}} weiterer geladener Pfad",
-          "moreLoadedPaths_other": "und {{count}} weitere geladene Pfade"
+          "moreLoadedPaths_other": "und {{count}} weitere geladene Pfade",
+          "changesLost_one": "{{count}} nicht committete Änderung geht verloren",
+          "changesLost_other": "{{count}} nicht committete Änderungen gehen verloren",
+          "uncountedChangesLost": "Nicht committete Änderungen gehen verloren"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "Untergeordnete Arbeitsbereiche werden gelöscht",
@@ -6030,9 +6030,6 @@
           "alsoDeletesChildren_other": "Beim Löschen dieses Arbeitsbereichs werden auch {{count}} untergeordnete Arbeitsbereiche gelöscht.",
           "moreChildren_one": "+{{count}} weiterer",
           "moreChildren_other": "+{{count}} weitere"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Nicht erneut fragen"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Dies ist der <strong>Haupt-Worktree</strong> (das ursprüngliche Klonverzeichnis)."
@@ -20502,11 +20499,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Alle nicht committeten oder nicht versionierten Änderungen in Git-Arbeitsbereichen werden endgültig gelöscht.",
-          "clean": "Keine nicht committeten oder nicht versionierten Änderungen",
           "unavailable": "Änderungen konnten nicht geprüft werden",
           "checking": "Änderungen werden geprüft…",
           "checkingDetails": "Wird geprüft…",
-          "unavailableDetails": "Details nicht verfügbar"
+          "unavailableDetails": "Details nicht verfügbar",
+          "none": "Keine nicht committeten Änderungen"
         },
         "unsavedEdits": {
           "discarded_one": "Nicht gespeicherte Änderungen in {{count}} Datei werden verworfen:",
@@ -21844,7 +21841,10 @@
     "alwaysForceDeleteTooltip": "Gilt für alle zukünftigen Löschvorgänge von Arbeitsbereichen.",
     "moreBranchActions": "Weitere Optionen zum Löschen von Branches",
     "alwaysForceDeleteBranches": "Beibehaltene Branches immer löschen",
-    "alwaysForceDeleteBranchesTooltip": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden."
+    "alwaysForceDeleteBranchesTooltip": "Gilt für Branches, die nach zukünftigen Löschvorgängen von Arbeitsbereichen beibehalten werden.",
+    "moreDeleteOptions": "Weitere Löschoptionen",
+    "alwaysDelete": "Immer löschen",
+    "alwaysDeleteTooltip": "Diese Bestätigung bei zukünftigen Löschvorgängen überspringen."
   },
   "worktree": {
     "nestedRemoval": {

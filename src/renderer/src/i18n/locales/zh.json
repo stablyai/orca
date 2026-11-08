@@ -5369,29 +5369,26 @@
           "removeBatchFolder_other": "从 Orca 移除<target>{{count}} 个工作区</target>。磁盘上的项目文件夹不会被删除。",
           "removeBatchMixed_other": "从 Orca 移除<target>{{count}} 个工作区</target>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目。",
           "removeBatchGit_other": "从 git 移除<target>{{count}} 个工作区</target>，并删除其工作区文件夹。",
-          "removeSingleFolder": "从 Orca 移除 <target/>。磁盘上的项目文件夹不会被删除。",
-          "removeSingleGit": "从 git 移除 <target/>，并删除其工作区文件夹。",
           "removeWithChildrenFolder_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。磁盘上的项目文件夹不会被删除。",
           "removeWithChildrenMixed_other": "从 Orca 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>。Git 工作树也会从 git 和磁盘中移除；文件夹工作区只会移除 Orca 中的工作区条目。",
-          "removeWithChildrenGit_other": "从 git 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>，并删除其工作区文件夹。"
+          "removeWithChildrenGit_other": "从 git 移除 <target/> 和<descendants>{{count}} 个子工作区</descendants>，并删除其工作区文件夹。",
+          "removeSingleFolderFromOrca": "将其从 Orca 中移除。磁盘上的文件夹会保留。",
+          "deleteSingleWorktreeAndBranch": "删除工作树及其分支（未合并的分支会保留）。"
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "显示已加载的路径",
           "loadedPathsNotice": "已加载的路径可能不完整或已过时。",
           "loadedChangedPaths": "已加载的更改路径",
           "unresolvedConflict": "未解决的冲突",
-          "changeCount_one": "{{count}} 处未提交或未跟踪的更改",
-          "changeCount_other": "{{count}} 处未提交或未跟踪的更改",
-          "changes": "未提交或未跟踪的更改",
-          "moreLoadedPaths_other": "以及另外 {{count}} 个已加载的路径"
+          "moreLoadedPaths_other": "以及另外 {{count}} 个已加载的路径",
+          "changesLost_one": "{{count}} 项未提交的更改将丢失",
+          "changesLost_other": "{{count}} 项未提交的更改将丢失",
+          "uncountedChangesLost": "未提交的更改将丢失"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "子工作区将被删除",
           "alsoDeletesChildren_other": "删除此工作区也会删除 {{count}} 个子工作区。",
           "moreChildren_other": "另有 {{count}} 个"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "不要再问"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "这是<strong>主工作树</strong>（最初的克隆目录）。"
@@ -19730,11 +19727,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Git 工作区中任何未提交或未跟踪的更改都将被永久删除。",
-          "clean": "没有未提交或未跟踪的更改",
           "unavailable": "无法检查更改",
           "checking": "正在检查更改…",
           "checkingDetails": "检查…",
-          "unavailableDetails": "详细信息不可用"
+          "unavailableDetails": "详细信息不可用",
+          "none": "没有未提交的更改"
         },
         "unsavedEdits": {
           "discarded_one": "{{count}} 个文件中未保存的编辑将被放弃：",
@@ -21681,7 +21678,10 @@
     "alwaysForceDeleteTooltip": "适用于今后所有工作区删除操作。",
     "alwaysForceDeleteBranchesTooltip": "适用于将来删除工作区后保留的分支。",
     "moreBranchActions": "更多分支删除选项",
-    "alwaysForceDeleteBranches": "始终删除保留的分支"
+    "alwaysForceDeleteBranches": "始终删除保留的分支",
+    "moreDeleteOptions": "更多删除选项",
+    "alwaysDelete": "始终删除",
+    "alwaysDeleteTooltip": "今后删除时跳过此确认。"
   },
   "workspace": {
     "branchChoice": {

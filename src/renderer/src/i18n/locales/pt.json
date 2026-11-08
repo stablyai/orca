@@ -12210,8 +12210,6 @@
           "removeBatchGit_one": "Remover <target>{{count}} espaço de trabalho</target> do git e excluir sua pasta de espaço de trabalho.",
           "removeBatchGit_other": "Remover <target>{{count}} espaços de trabalho</target> do git e excluir suas pastas de espaço de trabalho.",
           "removeBatchGit_many": "Remover <target>{{count}} espaços de trabalho</target> do git e excluir suas pastas de espaço de trabalho.",
-          "removeSingleFolder": "Remover <target/> do Orca. A pasta do projeto no disco não será excluída.",
-          "removeSingleGit": "Remover <target/> do git e excluir sua pasta de espaço de trabalho.",
           "removeWithChildrenFolder_one": "Remover <target/> e <descendants>{{count}} espaço de trabalho filho</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
           "removeWithChildrenFolder_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
           "removeWithChildrenFolder_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. As pastas dos projetos no disco não serão excluídas.",
@@ -12220,7 +12218,9 @@
           "removeWithChildrenMixed_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do Orca. Os worktrees Git também serão removidos do git e do disco; nos espaços de trabalho de pasta, apenas a entrada no Orca será removida.",
           "removeWithChildrenGit_one": "Remover <target/> e <descendants>{{count}} espaço de trabalho filho</descendants> do git e excluir suas pastas de espaço de trabalho.",
           "removeWithChildrenGit_other": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
-          "removeWithChildrenGit_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho."
+          "removeWithChildrenGit_many": "Remover <target/> e <descendants>{{count}} espaços de trabalho filhos</descendants> do git e excluir suas pastas de espaço de trabalho.",
+          "removeSingleFolderFromOrca": "Remove-o do Orca. A pasta no disco é mantida.",
+          "deleteSingleWorktreeAndBranch": "Exclui o worktree e sua branch (mantida se não mesclada)."
         },
         "ImportedWorktreesVisibilityLine": {
           "b7a87dc32f": "Mostrar na lista de worktrees",
@@ -12648,16 +12648,13 @@
           "loadedPathsNotice": "Os caminhos carregados podem estar incompletos ou desatualizados.",
           "loadedChangedPaths": "Caminhos alterados carregados",
           "unresolvedConflict": "Conflito não resolvido",
-          "changeCount_one": "{{count}} alteração não commitada ou não rastreada",
-          "changeCount_other": "{{count}} alterações não commitadas ou não rastreadas",
-          "changeCount_many": "{{count}} alterações não commitadas ou não rastreadas",
-          "changes": "Alterações não commitadas ou não rastreadas",
           "moreLoadedPaths_one": "e mais {{count}} caminho carregado",
           "moreLoadedPaths_other": "e mais {{count}} caminhos carregados",
-          "moreLoadedPaths_many": "e mais {{count}} caminhos carregados"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "Não perguntar novamente"
+          "moreLoadedPaths_many": "e mais {{count}} caminhos carregados",
+          "changesLost_one": "{{count}} alteração não commitada será perdida",
+          "changesLost_other": "{{count}} alterações não commitadas serão perdidas",
+          "changesLost_many": "{{count}} alterações não commitadas serão perdidas",
+          "uncountedChangesLost": "As alterações não commitadas serão perdidas"
         },
         "ScrollToCurrentWorkspaceToolbarButton": {
           "23989bb663": "Revelar espaço de trabalho ativo"
@@ -21489,11 +21486,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Quaisquer alterações sem commit ou não rastreadas nos espaços de trabalho Git serão excluídas permanentemente.",
-          "clean": "Nenhuma alteração sem commit ou não rastreada",
           "unavailable": "Não foi possível verificar as alterações",
           "checking": "Verificando alterações…",
           "checkingDetails": "Verificando…",
-          "unavailableDetails": "Detalhes indisponíveis"
+          "unavailableDetails": "Detalhes indisponíveis",
+          "none": "Nenhuma alteração não commitada"
         },
         "unsavedEdits": {
           "discarded_one": "As alterações não salvas em {{count}} arquivo serão descartadas:",
@@ -22207,7 +22204,10 @@
     "alwaysForceDeleteTooltip": "Aplica-se a todas as futuras exclusões de espaços de trabalho.",
     "moreBranchActions": "Mais opções de exclusão de branches",
     "alwaysForceDeleteBranches": "Sempre excluir branches preservadas",
-    "alwaysForceDeleteBranchesTooltip": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho."
+    "alwaysForceDeleteBranchesTooltip": "Aplica-se às branches mantidas após futuras exclusões de espaços de trabalho.",
+    "moreDeleteOptions": "Mais opções de exclusão",
+    "alwaysDelete": "Sempre excluir",
+    "alwaysDeleteTooltip": "Pular esta confirmação em futuras exclusões."
   },
   "worktree": {
     "nestedRemoval": {

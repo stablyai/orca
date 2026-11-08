@@ -5590,8 +5590,6 @@
           "removeBatchGit_one": "Eliminar <target>{{count}} espacio de trabajo</target> de git y borrar su carpeta de espacio de trabajo.",
           "removeBatchGit_other": "Eliminar <target>{{count}} espacios de trabajo</target> de git y borrar sus carpetas de espacio de trabajo.",
           "removeBatchGit_many": "Eliminar <target>{{count}} espacios de trabajo</target> de git y borrar sus carpetas de espacio de trabajo.",
-          "removeSingleFolder": "Eliminar <target/> de Orca. La carpeta del proyecto en disco no se borrará.",
-          "removeSingleGit": "Eliminar <target/> de git y borrar su carpeta de espacio de trabajo.",
           "removeWithChildrenFolder_one": "Eliminar <target/> y <descendants>{{count}} espacio de trabajo secundario</descendants> de Orca. Las carpetas de los proyectos en disco no se borrarán.",
           "removeWithChildrenFolder_other": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de Orca. Las carpetas de los proyectos en disco no se borrarán.",
           "removeWithChildrenFolder_many": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de Orca. Las carpetas de los proyectos en disco no se borrarán.",
@@ -5600,20 +5598,22 @@
           "removeWithChildrenMixed_many": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de Orca. Los worktrees de Git también se eliminarán de git y del disco; para los espacios de trabajo de carpeta solo se eliminará la entrada en Orca.",
           "removeWithChildrenGit_one": "Eliminar <target/> y <descendants>{{count}} espacio de trabajo secundario</descendants> de git y borrar sus carpetas de espacio de trabajo.",
           "removeWithChildrenGit_other": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo.",
-          "removeWithChildrenGit_many": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo."
+          "removeWithChildrenGit_many": "Eliminar <target/> y <descendants>{{count}} espacios de trabajo secundarios</descendants> de git y borrar sus carpetas de espacio de trabajo.",
+          "removeSingleFolderFromOrca": "Lo quita de Orca. La carpeta en el disco se conserva.",
+          "deleteSingleWorktreeAndBranch": "Elimina el worktree y su rama (se conserva si no está fusionada)."
         },
         "DeleteWorktreeDirtyChangeHint": {
           "showLoadedPaths": "Mostrar rutas cargadas",
           "loadedPathsNotice": "Las rutas cargadas pueden estar incompletas o desactualizadas.",
           "loadedChangedPaths": "Rutas modificadas cargadas",
           "unresolvedConflict": "Conflicto sin resolver",
-          "changeCount_one": "{{count}} cambio sin confirmar o sin seguimiento",
-          "changeCount_other": "{{count}} cambios sin confirmar o sin seguimiento",
-          "changeCount_many": "{{count}} cambios sin confirmar o sin seguimiento",
-          "changes": "Cambios sin confirmar o sin seguimiento",
           "moreLoadedPaths_one": "y {{count}} ruta cargada más",
           "moreLoadedPaths_other": "y {{count}} rutas cargadas más",
-          "moreLoadedPaths_many": "y {{count}} rutas cargadas más"
+          "moreLoadedPaths_many": "y {{count}} rutas cargadas más",
+          "changesLost_one": "Se perderá {{count}} cambio sin confirmar",
+          "changesLost_other": "Se perderán {{count}} cambios sin confirmar",
+          "changesLost_many": "Se perderán {{count}} cambios sin confirmar",
+          "uncountedChangesLost": "Se perderán los cambios sin confirmar"
         },
         "DeleteWorktreeLineageNotice": {
           "a940f3c96e": "Se eliminarán los espacios de trabajo secundarios",
@@ -5623,9 +5623,6 @@
           "moreChildren_one": "+{{count}} más",
           "moreChildren_other": "+{{count}} más",
           "moreChildren_many": "+{{count}} más"
-        },
-        "DeleteWorktreeSkipConfirmOption": {
-          "29aefb7e52": "No volver a preguntar"
         },
         "DeleteWorktreeWarningPanels": {
           "mainWorktreeNotice": "Este es el <strong>worktree principal</strong> (el directorio de clonación original)."
@@ -20313,11 +20310,11 @@
       "delete": {
         "changes": {
           "permanentLoss": "Los cambios sin confirmar o sin seguimiento en los espacios de trabajo de Git se eliminarán de forma permanente.",
-          "clean": "No hay cambios sin confirmar ni sin seguimiento",
           "unavailable": "No se pudieron comprobar los cambios",
           "checking": "Comprobando si hay cambios…",
           "checkingDetails": "Comprobando…",
-          "unavailableDetails": "Detalles no disponibles"
+          "unavailableDetails": "Detalles no disponibles",
+          "none": "No hay cambios sin confirmar"
         },
         "unsavedEdits": {
           "discarded_one": "Se descartarán las ediciones sin guardar de {{count}} archivo:",
@@ -22403,7 +22400,10 @@
     "alwaysForceDeleteTooltip": "Se aplica a todas las futuras eliminaciones de espacios de trabajo.",
     "moreBranchActions": "Más opciones para eliminar ramas",
     "alwaysForceDeleteBranchesTooltip": "Se aplica a las ramas conservadas tras futuras eliminaciones de espacios de trabajo.",
-    "alwaysForceDeleteBranches": "Eliminar siempre las ramas conservadas"
+    "alwaysForceDeleteBranches": "Eliminar siempre las ramas conservadas",
+    "moreDeleteOptions": "Más opciones de eliminación",
+    "alwaysDelete": "Eliminar siempre",
+    "alwaysDeleteTooltip": "Omitir esta confirmación en futuras eliminaciones."
   },
   "workspace": {
     "branchChoice": {
