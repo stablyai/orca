@@ -6391,7 +6391,6 @@
       "src/renderer/src/hooks/useIpcEvents-runtime-environment-selectors.test.ts": 530,
       "src/renderer/src/hooks/useIpcEvents-session-tab-close-request.test.ts": 2252,
       "src/renderer/src/hooks/useIpcEvents-ssh-disconnect-cleanup.test.ts": 1581,
-      "src/renderer/src/hooks/useIpcEvents-terminal-create-surfacing.test.ts": 1778,
       "src/renderer/src/hooks/useIssueMetadata.test.tsx": 344,
       "src/renderer/src/hooks/useMacTccAttributionSeveredNotice.test.tsx": 2358,
       "src/renderer/src/hooks/useMetadataListRequest.test.tsx": 266,
