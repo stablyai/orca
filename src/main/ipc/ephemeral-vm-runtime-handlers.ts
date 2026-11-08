@@ -22,7 +22,10 @@ import {
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
-import { forgetInterruptedEphemeralVmProvision } from '../ephemeral-vm/runtime-provisioning-persistence'
+import {
+  forgetInterruptedEphemeralVmProvision,
+  isEphemeralVmProvisionLive
+} from '../ephemeral-vm/runtime-provisioning-persistence'
 
 export type EphemeralVmCleanupCommandResult = {
   runtimeId: string
@@ -64,6 +67,10 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       )
       if (!runtime) {
         throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
+      }
+      if (runtime.status === 'provisioning' && isEphemeralVmProvisionLive(runtime.id)) {
+        // Why: don't mark a create in flight as cleanup_failed; its own outcome settles the row.
+        throw new Error(`Ephemeral VM runtime is still provisioning: ${runtime.id}`)
       }
       let result
       if (runtime.cleanupStatus === 'succeeded') {

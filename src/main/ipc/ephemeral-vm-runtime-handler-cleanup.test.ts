@@ -234,9 +234,19 @@ it('destroys from the recorded snapshot and repo path when the repo id no longer
   const recipe = {
     id: 'cloud-sandbox',
     name: 'Cloud Sandbox',
-    create: 'unused',
+    create: './create.sh',
     destroy: `"${process.execPath}" destroy.js`
   }
+  // The checkout still defines the recipe the VM was created from.
+  writeFileSync(
+    join(repoPath, 'orca.yaml'),
+    [
+      'environmentRecipes:',
+      '  - id: cloud-sandbox',
+      '    name: Cloud Sandbox',
+      '    create: ./create.sh'
+    ].join('\n')
+  )
   upsertEphemeralVmRuntime(userDataPath, {
     id: 'runtime-stale-repo',
     recipeId: 'cloud-sandbox',
@@ -263,6 +273,54 @@ it('destroys from the recorded snapshot and repo path when the repo id no longer
     handlers.get('ephemeralVm:cleanup')?.(null, { runtimeId: 'runtime-stale-repo' })
   ).resolves.toMatchObject({ status: 'cleaned', cleanupStatus: 'succeeded' })
   expect(existsSync(destroyedPath)).toBe(true)
+})
+
+it('refuses the recorded repo path once a different checkout sits there', async () => {
+  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-handler-'))
+  const repoPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-repo-'))
+  tempDirs.push(userDataPath, repoPath)
+  getPathMock.mockReturnValue(userDataPath)
+  const ranPath = join(repoPath, 'ran.txt')
+  writeFileSync(
+    join(repoPath, 'destroy.js'),
+    `require('fs').writeFileSync(${JSON.stringify(ranPath)}, 'x')`
+  )
+  writeFileSync(
+    join(repoPath, 'orca.yaml'),
+    [
+      'environmentRecipes:',
+      '  - id: cloud-sandbox',
+      '    name: Other',
+      '    create: ./other.sh'
+    ].join('\n')
+  )
+  upsertEphemeralVmRuntime(userDataPath, {
+    id: 'runtime-moved-repo',
+    recipeId: 'cloud-sandbox',
+    recipe: {
+      id: 'cloud-sandbox',
+      name: 'Cloud Sandbox',
+      create: './create.sh',
+      destroy: `"${process.execPath}" destroy.js`
+    },
+    repoId: 'removed-repo',
+    repoPath,
+    status: 'running',
+    cleanupStatus: 'not_started',
+    createdAt: 1,
+    updatedAt: 1,
+    recipeResult: {
+      schemaVersion: 1,
+      connection: { type: 'orca-server', pairingCode: 'unused', projectRoot: '/workspace/repo' }
+    }
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these cleanup paths only read getRepo from the store.
+  registerEphemeralVmRuntimeHandlers({ getRepo: vi.fn(() => undefined) } as never)
+
+  await expect(
+    handlers.get('ephemeralVm:cleanup')?.(null, { runtimeId: 'runtime-moved-repo' })
+  ).resolves.toMatchObject({ status: 'cleanup_failed', cleanupLastErrorCode: 'repoNotFound' })
+  expect(existsSync(ranPath)).toBe(false)
 })
 
 it('still refuses cleanup when the repo id is stale and no repo path was recorded', async () => {

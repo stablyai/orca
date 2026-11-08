@@ -107,9 +107,16 @@ export function getRuntimeRecipeContext(
   const repo = runtime.repoId ? getRecipeRepo(store, runtime.repoId) : null
   if (!repo?.ok) {
     // Why: a re-added or removed repo must not strand the VM; the snapshot plus recorded checkout
-    // path are everything destroy needs (stablyai/orca#17293).
-    if (runtime.recipe && runtime.repoPath && existsSync(runtime.repoPath)) {
-      return { runtime, repoPath: runtime.repoPath, recipe: runtime.recipe }
+    // path are everything destroy needs (stablyai/orca#17293). Only trust the path while it still
+    // holds the same recipe, so a different checkout later placed there can't run its scripts.
+    const fallback = runtime.recipe && runtime.repoPath ? runtime.recipe : null
+    if (fallback && runtime.repoPath && existsSync(runtime.repoPath)) {
+      const sameRecipe = (loadHooks(runtime.repoPath)?.environmentRecipes ?? []).some(
+        (entry) => entry.id === fallback.id && entry.create === fallback.create
+      )
+      if (sameRecipe) {
+        return { runtime, repoPath: runtime.repoPath, recipe: fallback }
+      }
     }
     throw new EphemeralVmFailureError(
       repo ? repo.failure : ephemeralVmFailure('runtimeRepoMissing', { runtimeId })

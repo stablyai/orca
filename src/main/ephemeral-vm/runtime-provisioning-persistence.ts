@@ -122,7 +122,7 @@ export async function persistProvisionedEphemeralVmRuntime(
       ...baseRuntimeRecord(args, writeAhead),
       status: 'running',
       connectionMode: connection.type,
-      updatedAt: writeAhead.createdAt,
+      updatedAt: args.now ?? Date.now(),
       recipeResult: start.result
     })
   } catch (error) {

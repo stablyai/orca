@@ -60,16 +60,13 @@ export function getEphemeralVmRuntimeStatusLabel(
       'Cleanup running'
     )
   }
+  if (runtime.status === 'provisioning') {
+    return t('auto.components.settings.EphemeralVmRuntimesSection.provisioning', 'Provisioning')
+  }
   if (runtime.cleanupStatus === 'disabled') {
     return t(
       'auto.components.settings.EphemeralVmRuntimesSection.cleanupDisabled',
       'Cleanup disabled'
-    )
-  }
-  if (runtime.status === 'provisioning') {
-    return t(
-      'auto.components.settings.EphemeralVmRuntimesSection.provisioning',
-      'Provisioning'
     )
   }
   if (runtime.status === 'running') {

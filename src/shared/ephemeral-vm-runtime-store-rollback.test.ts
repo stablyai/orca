@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -147,10 +147,8 @@ describe('ephemeral VM runtime store rollback projection', () => {
       }),
       expect.objectContaining({ id: 'ordinary-runtime' })
     ])
-    expect(
-      JSON.parse(readFileSync(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath), 'utf8'))
-        .runtimes
-    ).toEqual([])
+    // An empty sidecar is removed rather than rewritten on every store write.
+    expect(existsSync(getEphemeralVmWriteAheadRuntimeStorePath(userDataPath))).toBe(false)
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([running, ordinary])
     expect(running).toEqual(provisionedRootRecord())
   })
@@ -165,6 +163,25 @@ describe('ephemeral VM runtime store rollback projection', () => {
     )
 
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([running])
+  })
+
+  it('never overwrites a write-ahead file it cannot read', () => {
+    const userDataPath = makeUserDataPath()
+    upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+    const sidecarPath = getEphemeralVmWriteAheadRuntimeStorePath(userDataPath)
+    const unreadable = '{"version":2,"runtimes":[{"id":"from-a-newer-build"}]}'
+    writeFileSync(sidecarPath, unreadable)
+
+    // Tracked VMs keep working, and the unreadable records survive the write.
+    updateEphemeralVmRuntimeStatus(userDataPath, 'ordinary-runtime', { status: 'suspended' })
+    expect(readFileSync(sidecarPath, 'utf8')).toBe(unreadable)
+
+    // A new record that could not be kept is refused before its create starts.
+    const { recipeResult: _recipeResult, ...writeAhead } = runtimeRecord({ id: 'new-runtime' })
+    expect(() =>
+      upsertEphemeralVmRuntime(userDataPath, { ...writeAhead, status: 'provisioning' })
+    ).toThrow()
+    expect(readFileSync(sidecarPath, 'utf8')).toBe(unreadable)
   })
 
   it('never offers a result-less write-ahead record to workspace suspend or resume', () => {
