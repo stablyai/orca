@@ -66,6 +66,34 @@ describe('what the journal already holds stands', () => {
       state: 'completed'
     })
   })
+
+  it('retains a writer-refused reopen as closed before accepting trailing text', async () => {
+    const rig = await openProviderTimelineRig()
+    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
+    rig.assembler.apply({
+      type: 'item.close',
+      item: 'tool',
+      body: { ...runningTool('read'), state: 'completed' }
+    })
+    await rig.rows()
+    const blind = rig.assemble({ sink: { ...rig.sink, journalItems: () => null } })
+    blind.apply({ type: 'item.open', item: 'tool', body: runningTool('read') })
+    await rig.rows()
+    expect(
+      blind.apply({
+        type: 'text.delta',
+        item: { id: 'tool' },
+        channel: 'assistant',
+        text: 'Late text'
+      }).dropped
+    ).toBe('item-settled')
+    blind.flush()
+    expect((await rig.row(providerItemId('item', 'tool')))?.body).toMatchObject({
+      kind: 'tool-call',
+      state: 'completed'
+    })
+    blind.dispose()
+  })
 })
 
 describe('requests', () => {

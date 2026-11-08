@@ -49,7 +49,7 @@ export function decideItem(
         resolution: { kind: 'guarded-item', identity: row.identity, body: event.body, change },
         onResolved: (outcome) => {
           if (outcome.kind === 'dropped' && state.items.get(key) === opened) {
-            state.items.delete(key)
+            state.close(key, placed)
           }
         }
       }

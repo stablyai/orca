@@ -76,6 +76,7 @@ describe('ACP recovered history boundaries', () => {
           (step) =>
             step.kind === 'command' &&
             step.step.kind === 'resolved-item' &&
+            step.step.resolution.body.kind === 'message' &&
             step.step.resolution.body.role === 'assistant'
         )
       ) {
