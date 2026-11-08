@@ -1,4 +1,4 @@
-import type { LinearIssueRead } from './linear-issue-publication'
+import type { LinearIssueRead } from './linear-issue-read-lifecycle'
 import type { LinearReadScope } from './linear-slice-scope'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -16,7 +16,7 @@ import type {
   LinearViewer,
   LinearWorkspaceSelection
 } from '../../../../../shared/linear/workspace-types'
-import type { CacheEntry } from '../../github/cache-model'
+import type { CacheEntry } from '../../github/cache/cache-model'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { LinearIssueAttributeFilter } from '../../../../../shared/linear/issue-attribute-filter'
 

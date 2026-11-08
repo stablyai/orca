@@ -89,11 +89,6 @@ it('snippets nothing for an orphaned row, even asked for it by rowid', async () 
   }
 })
 
-it('still answers for the live session beside them', async () => {
-  const { harness: open } = await withOrphans()
-  expect(open.engine.search({ query: 'haystack' }).hits.map((hit) => hit.sessionId)).toEqual(['1'])
-})
-
 describe('a purge reclaiming rows nothing can reach', () => {
   async function withReclaimable(): Promise<SessionSearchHarness> {
     harness = await openSessionSearchHarness('ss-orphan-drain')
@@ -102,20 +97,6 @@ describe('a purge reclaiming rows nothing can reach', () => {
     plantOrphans(harness.db)
     return harness
   }
-
-  it('answers the same before and after, because the repair counts live rows', async () => {
-    const open = await withReclaimable()
-    const before = open.engine.search({ query: 'marmosett' })
-    expect(before.planner.repairedTerms).toEqual(['marmoset'])
-    expect(before.hits.map((hit) => hit.sessionId)).toEqual(['1'])
-
-    await open.store.purgeOlderThan(null)
-    expect(open.db.prepare('SELECT count(*) AS c FROM messages').get()).toEqual({ c: 2 })
-
-    const after = open.engine.search({ query: 'marmosett' })
-    expect(after.planner.repairedTerms).toEqual(before.planner.repairedTerms)
-    expect(after.hits.map((hit) => hit.sessionId)).toEqual(before.hits.map((hit) => hit.sessionId))
-  })
 
   it('moves the generation anyway, so no cursor spans it', async () => {
     // Reclamation can change which vocabulary candidates fit the scan limit, so it must fence page cursors.

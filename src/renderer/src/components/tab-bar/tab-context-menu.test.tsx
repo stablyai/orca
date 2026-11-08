@@ -11,7 +11,7 @@ import EditorFileTab from './EditorFileTab'
 import SortableTab from './SortableTab'
 import { TabDragPointerSensor } from '../tab-group/tab-drag-pointer-sensor'
 import { TAB_DRAG_ACTIVATION_DISTANCE_PX } from '../tab-group/useTabDragSplit'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import { bootWindowFromPartitions } from '../../app-shell/startup-window-view.test-fixture'
 import {
   addWorkspace,
@@ -21,25 +21,25 @@ import {
   SSH_KEY,
   leaf
 } from '../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
-import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
-import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { loadMainLayoutModel } from '@/runtime/workspace-layout/testing/main-loaded-layout-frames.test-fixture'
+import { endLayoutFramePositions } from '@/runtime/workspace-layout/frames/layout-frame-position'
+import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout/frames/workspace-layout-frame-sync'
 import { isTabStripPointerGestureActive } from './tab-strip-pointer-gesture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/runtime/workspace-layout-frame-sync', async (original) => ({
+vi.mock('@/runtime/workspace-layout/frames/workspace-layout-frame-sync', async (original) => ({
   ...(await original<object>()),
   showStartupLayoutFrames: () => {}
 }))

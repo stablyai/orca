@@ -7,7 +7,7 @@ import {
   useRef,
   useSyncExternalStore
 } from 'react'
-import { sameSourceControlSetupSelection } from '../../lib/source-control-agent-launch-picker'
+import { sameSourceControlSetupSelection } from '../../lib/source-control/ai/source-control-agent-launch-picker'
 import { shallow } from 'zustand/shallow'
 import {
   agentPickerDraft,
@@ -18,17 +18,16 @@ import {
 
 import {
   type AgentPickerRetainedSetup as RetainedSetup,
-  currentAgentPickerDraft
+  currentAgentPickerDraft,
+  launchAgentPickerDraft
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { retireAgentPickerSetups } from './agent-launch-picker-retirement'
 import {
   launchDraftSource,
   nativeChatLaunchPromptDraftScopeKey
-} from '../native-chat/native-chat-launch-draft-source'
-import {
-  subscribeToNativeChatComposerDraft,
-  writeLaunchSetupOptions
-} from '../native-chat/native-chat-composer-draft-store'
+} from '../native-chat/drafts/native-chat-launch-draft-source'
+import { subscribeToNativeChatComposerDraft } from '../native-chat/drafts/native-chat-composer-draft-store'
+import { writeLaunchSetupOptions } from '../native-chat/drafts/native-chat-composer-draft-memory'
 
 export type AgentPickerSetupIdentity = { model: string; effort?: string }
 const appSession: AgentPickerDraftOwner = {}
@@ -230,7 +229,10 @@ export function useAgentPickerSetup({
   }, [open, read, acquire, retained, mode])
   let record = retained && matches(retained) ? retained : undefined
   const currentDraft = (draft: AgentPickerDraft) => {
-    const current = currentAgentPickerDraft(entry, draft)
+    const current =
+      mode === 'launch'
+        ? launchAgentPickerDraft(entry, draft)
+        : currentAgentPickerDraft(entry, draft)
     return currentSurface && currentSurface !== current.surface
       ? { ...current, surface: currentSurface }
       : current

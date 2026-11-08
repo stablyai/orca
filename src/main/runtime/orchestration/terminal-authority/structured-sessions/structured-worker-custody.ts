@@ -4,15 +4,15 @@
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../../../shared/orchestration-task-display'
 import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
-import { canonicalOrcaSessionId } from '../../canonical-orca-session-id'
-import type { RunningStructuredSession } from '../../structured-session-lineage'
+import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
+import type { RunningStructuredSession } from '../../addressing/session-lineage/structured-session-lineage'
 import type { OrchestrationDb } from '../../db/orchestration-db'
-import type { WorkerDispatchState } from '../../types'
+import type { WorkerDispatchState } from '../../db/orchestration-records'
 import {
   deriveWorkerTerminalListState,
   type WorkerTerminalResourceRow
-} from '../../worker-terminal-ownership'
-import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
+} from '../release/worker-terminal-ownership'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   structuredWorkerHostScope,
   structuredWorkerProcessIncarnation,

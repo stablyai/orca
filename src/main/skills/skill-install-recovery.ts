@@ -1,6 +1,6 @@
 import { lstat, rm } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
-import { readNodeFileWithinLimit } from '../../shared/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
 import {
   skillInstallStateKey,
   writeSkillInstallReceipt,

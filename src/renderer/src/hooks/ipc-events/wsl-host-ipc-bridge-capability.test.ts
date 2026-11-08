@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { WslHostCapability } from '../../../../shared/wsl-host-types'
-import { seedStore } from '../../store/slices/store-test-helpers'
+import { seedStore } from '../../store/testing/app-store-test-fixture'
 
 vi.mock('../../store', async () => {
-  const { createTestStore } = await import('../../store/slices/store-test-helpers')
+  const { createTestStore } = await import('../../store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 

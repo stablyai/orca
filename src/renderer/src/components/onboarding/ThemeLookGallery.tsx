@@ -1,8 +1,8 @@
 import type React from 'react'
 import { useMemo } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugin-themes'
+import { usePluginTerminalThemes, usePluginThemes } from '@/store/plugins/appearance/plugin-themes'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
 import { buildThemeLooks, type ThemeLook, type ThemeLookBase } from './onboarding-theme-looks'
@@ -19,6 +19,7 @@ export function useThemeLooks(
   selected: Record<ThemeLookBase, string | null>
   pluginTerminalThemes: ReturnType<typeof usePluginTerminalThemes>
 } {
+  const t = useTranslate()
   const pluginThemes = usePluginThemes()
   const pluginTerminalThemes = usePluginTerminalThemes()
   const languageRevision = useUiLanguageRevision()
@@ -27,18 +28,18 @@ export function useThemeLooks(
       return { dark: [], light: [] }
     }
     const labels = {
-      orca: translate('components.onboarding.theme.looks.sourceBuiltIn', 'Built in'),
-      community: translate('components.onboarding.theme.looks.sourceCommunity', 'Terminal palette'),
+      orca: t('components.onboarding.theme.looks.sourceBuiltIn', 'Built in'),
+      community: t('components.onboarding.theme.looks.sourceCommunity', 'Terminal palette'),
       builtIn: (base: ThemeLookBase) =>
         base === 'dark'
-          ? translate('components.onboarding.theme.looks.orcaDark', 'Orca Dark')
-          : translate('components.onboarding.theme.looks.orcaLight', 'Orca Light')
+          ? t('components.onboarding.theme.looks.orcaDark', 'Orca Dark')
+          : t('components.onboarding.theme.looks.orcaLight', 'Orca Light')
     }
     const build = (base: ThemeLookBase): ThemeLook[] =>
-      buildThemeLooks({ base, pluginThemes, pluginTerminalThemes, baseline, labels })
+      buildThemeLooks({ base, pluginThemes, pluginTerminalThemes, baseline, labels }, t)
     return { dark: build('dark'), light: build('light') }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- languageRevision re-reads translated labels
-  }, [baseline, pluginThemes, pluginTerminalThemes, languageRevision])
+  }, [baseline, pluginThemes, pluginTerminalThemes, languageRevision, t])
   const selected = {
     dark: settings ? selectedThemeLookId(settings, 'dark', looks.dark) : null,
     light: settings ? selectedThemeLookId(settings, 'light', looks.light) : null
@@ -56,21 +57,22 @@ export function ThemeSlotControl({
   osBase: ThemeLookBase
   onChange: (base: ThemeLookBase) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const label = (base: ThemeLookBase): React.ReactNode => (
     <span className="flex items-center gap-1.5 whitespace-nowrap">
       {base === 'dark'
-        ? translate('components.onboarding.theme.looks.darkLook', 'Dark look')
-        : translate('components.onboarding.theme.looks.lightLook', 'Light look')}
+        ? t('components.onboarding.theme.looks.darkLook', 'Dark look')
+        : t('components.onboarding.theme.looks.lightLook', 'Light look')}
       {base === osBase && (
         <span className="text-2xs font-normal text-muted-foreground">
-          {translate('components.onboarding.theme.looks.activeNow', 'now')}
+          {t('components.onboarding.theme.looks.activeNow', 'now')}
         </span>
       )}
     </span>
   )
   return (
     <SettingsSegmentedControl
-      ariaLabel={translate('components.onboarding.theme.looks.slotLabel', 'Look to edit')}
+      ariaLabel={t('components.onboarding.theme.looks.slotLabel', 'Look to edit')}
       value={value}
       onChange={onChange}
       equalWidth

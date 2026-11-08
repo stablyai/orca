@@ -8,9 +8,12 @@ import { CompareUnavailable } from '../sync/compare-summary'
 import { SourceControlCommitSurface } from './commit-surface'
 import { SourceControlForkPushNotice } from './fork-push-notice'
 import type { SourceControlPanelReadyProps } from './panel-props'
+import { useSourceControlScope } from './worktree-scope'
 
 export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
   const { activeWorktree, currentWorktreeId, model, worktreePath } = props
+  // Folder sections sit in cards, so the dock matches the card instead of the sidebar.
+  const dockBackground = useSourceControlScope() ? 'bg-card/95' : 'bg-sidebar/95'
   const {
     activeConnectionId,
     activeOpenRowKeys,
@@ -224,8 +227,11 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
 
       {isGitHistoryVisible && (
         // Dock history as reference context while the rest of the pane scrolls.
-        <div className="sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border bg-sidebar/95 backdrop-blur-sm">
+        <div
+          className={`sticky bottom-0 z-10 mt-auto shrink-0 border-t border-border ${dockBackground} backdrop-blur-sm`}
+        >
           <GitHistoryPanel
+            worktreeId={currentWorktreeId ?? undefined}
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
             onToggle={() => toggleSection('history')}

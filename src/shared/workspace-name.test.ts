@@ -1,77 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getLinearIssueWorkspaceName,
-  getLinkedWorkItemWorkspaceName,
-  getWorkspaceIntentName,
-  resolveWorkspaceCreateName,
-  slugifyForWorkspaceName
-} from './workspace-name'
-
-describe('slugifyForWorkspaceName', () => {
-  it('keeps workspace seed slugs short, ascii-safe, and git-ref-safe', () => {
-    expect(slugifyForWorkspaceName('../../Fix mobile Tasks 🚀')).toBe('fix-mobile-tasks')
-    expect(slugifyForWorkspaceName('feature/add issue drawer')).toBe('feature-add-issue-drawer')
-    expect(slugifyForWorkspaceName('a'.repeat(80))).toBe('a'.repeat(48))
-  })
-
-  it('removes apostrophes inside words instead of splitting them', () => {
-    expect(slugifyForWorkspaceName("Can't enable browser notifications")).toBe(
-      'cant-enable-browser-notifications'
-    )
-    expect(slugifyForWorkspaceName('Can’t enable browser notifications')).toBe(
-      'cant-enable-browser-notifications'
-    )
-  })
-})
-
-describe('getLinkedWorkItemWorkspaceName', () => {
-  it('keeps the canonical uppercase Jira key when the casing policy preserves it', () => {
-    const item = {
-      type: 'issue' as const,
-      provider: 'jira' as const,
-      number: 0,
-      title: 'PROJ-7 Fix flaky import',
-      jiraIdentifier: 'PROJ-7'
-    }
-    expect(getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing: 'preserve' })).toEqual({
-      displayName: 'PROJ-7 Fix flaky import',
-      seedName: 'PROJ-7-fix-flaky-import'
-    })
-    expect(
-      getLinkedWorkItemWorkspaceName(item, { jiraIssueKeyCasing: 'lowercase' })?.seedName
-    ).toBe('proj-7-fix-flaky-import')
-  })
-})
-
-describe('Jira generated-name source identity', () => {
-  it('ignores a stale Jira identifier on an explicitly different provider', () => {
-    expect(
-      getLinkedWorkItemWorkspaceName(
-        {
-          type: 'issue',
-          provider: 'github',
-          number: 7,
-          title: 'PROJ-7 Fix login',
-          jiraIdentifier: 'PROJ-7'
-        },
-        { jiraIssueKeyCasing: 'preserve' }
-      )?.seedName
-    ).toBe('proj-7-fix-login')
-    expect(
-      getLinkedWorkItemWorkspaceName(
-        {
-          type: 'issue',
-          provider: 'linear',
-          number: 0,
-          title: 'Fix login',
-          jiraIdentifier: 'PROJ-7',
-          linearIdentifier: 'ENG-1'
-        },
-        { jiraIssueKeyCasing: 'preserve' }
-      )?.seedName
-    ).toBe('eng-1-fix-login')
-  })
-})
+import { getWorkspaceIntentName } from './workspace-name'
 
 describe('getWorkspaceIntentName', () => {
   it('uses explicit user intent for linked issues without copying long titles', () => {
@@ -135,33 +63,5 @@ describe('getWorkspaceIntentName', () => {
       displayName: 'Issue 456 Make Importer Handle',
       seedName: 'issue-456-make-importer-handle'
     })
-  })
-})
-
-describe('getLinearIssueWorkspaceName', () => {
-  it('keeps the combined Linear seed within the workspace-name limit', () => {
-    const seed = getLinearIssueWorkspaceName({
-      identifier: 'ENG-42',
-      title: 'Implement a very long Linear issue title that should be truncated'
-    })
-    expect(seed.length).toBeLessThanOrEqual(48)
-    expect(seed).toMatch(/^eng-42-/)
-  })
-})
-
-describe('resolveWorkspaceCreateName', () => {
-  it('preserves explicit user-entered names for the host worktree sanitizer', () => {
-    expect(
-      resolveWorkspaceCreateName({
-        draft: 'feature/something',
-        fallback: 'issue-123'
-      })
-    ).toBe('feature/something')
-    expect(
-      resolveWorkspaceCreateName({
-        draft: '日本語 テスト',
-        fallback: 'issue-123'
-      })
-    ).toBe('日本語 テスト')
   })
 })

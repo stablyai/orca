@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { relativePathInsideRoot } from '../../../../src/shared/cross-platform-path'
 import {
   githubReferenceRepo,
@@ -13,7 +13,7 @@ import {
 import {
   createPathExistenceBatch,
   requirePathExistenceResults
-} from '../../../../src/shared/path-existence-batch'
+} from '../../../../src/shared/file-access/path-existence-batch'
 import { resolveTerminalFileLink } from '../../../../src/shared/terminal/links/terminal-links'
 import { getRepoIdFromWorktreeId } from '../../../../src/shared/worktree/id'
 import {

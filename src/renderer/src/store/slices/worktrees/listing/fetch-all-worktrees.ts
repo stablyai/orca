@@ -1,4 +1,4 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import { isStaleWorktreeCatalogPublication } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import {
@@ -15,7 +15,7 @@ import { fetchKnownSshWorktreesForRepo } from './known-ssh-worktree-fetch'
 import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
-import { selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 import { purgeHydratedWorktrees } from './hydrated-worktree-purge'
 import type { WorktreeRefreshResult } from './worktree-refresh-result'
 

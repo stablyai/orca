@@ -15,6 +15,7 @@ import {
   shouldHandleTextControlPaste
 } from '@/lib/text-control-paste'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ComposerParentWorktreePicker } from './ComposerParentWorktreePicker'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
@@ -95,6 +96,7 @@ export function NewWorkspaceComposerAdvancedSection({
   onSparseSelectPreset,
   canUseSparseCheckout
 }: NewWorkspaceComposerAdvancedSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const handleNotePaste = React.useCallback((event: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const text = event.clipboardData.getData('text/plain')
     const byteLengthMeasurement = measureTextControlPasteByteLength(text, {
@@ -150,13 +152,13 @@ export function NewWorkspaceComposerAdvancedSection({
           {smartNameSelection ? (
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground">
-                {translate('auto.components.NewWorkspaceComposerCard.2688050e4b', 'Name')}
+                {t('auto.components.NewWorkspaceComposerCard.2688050e4b', 'Name')}
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(event) => onNameValueChange(event.target.value)}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.NewWorkspaceComposerCard.0ee17638fe',
                   'Workspace name'
                 )}
@@ -174,14 +176,14 @@ export function NewWorkspaceComposerAdvancedSection({
                 htmlFor={branchNameInputId}
                 className="text-xs font-medium text-muted-foreground"
               >
-                {translate('auto.components.NewWorkspaceComposerCard.branchName', 'Branch name')}
+                {t('auto.components.NewWorkspaceComposerCard.branchName', 'Branch name')}
               </label>
               <input
                 id={branchNameInputId}
                 type="text"
                 value={branchNameOverride ?? ''}
                 onChange={(event) => onBranchNameOverrideChange(event.target.value)}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.NewWorkspaceComposerCard.branchNamePlaceholder',
                   'feature/my-branch'
                 )}
@@ -204,16 +206,13 @@ export function NewWorkspaceComposerAdvancedSection({
 
           <div className="space-y-1">
             <label className="text-xs font-medium text-muted-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.f8728aa4f9', 'Note')}
+              {t('auto.components.NewWorkspaceComposerCard.f8728aa4f9', 'Note')}
             </label>
             <textarea
               value={note}
               onChange={(event) => onNoteChange(event.target.value)}
               onPaste={handleNotePaste}
-              placeholder={translate(
-                'auto.components.NewWorkspaceComposerCard.090cfedeb4',
-                'Write a note'
-              )}
+              placeholder={t('auto.components.NewWorkspaceComposerCard.090cfedeb4', 'Write a note')}
               rows={1}
               className="w-full min-w-0 resize-none overflow-y-auto scrollbar-sleek rounded-md border border-input bg-transparent px-3 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [field-sizing:content] max-h-40"
             />
@@ -222,7 +221,7 @@ export function NewWorkspaceComposerAdvancedSection({
           {setupControlsEnabled && setupConfig ? (
             <WorkspaceSetupSection
               setupConfig={setupConfig}
-              copy={selectWorkspaceSetupCopy(setupConfig, getComposerWorkspaceSetupLabels())}
+              copy={selectWorkspaceSetupCopy(setupConfig, getComposerWorkspaceSetupLabels(t))}
               requiresExplicitSetupChoice={requiresExplicitSetupChoice}
               resolvedSetupDecision={resolvedSetupDecision}
               setupDecision={setupDecision}
@@ -233,7 +232,7 @@ export function NewWorkspaceComposerAdvancedSection({
                   ? {
                       value: setupAgentStartupPolicy,
                       onChange: onSetupAgentStartupPolicyChange,
-                      label: getComposerSetupStartupLabel()
+                      label: getComposerSetupStartupLabel(t)
                     }
                   : undefined
               }
@@ -243,10 +242,7 @@ export function NewWorkspaceComposerAdvancedSection({
           {sparseControlsEnabled ? (
             <div className="space-y-1.5">
               <label className="text-xs font-medium text-muted-foreground">
-                {translate(
-                  'auto.components.NewWorkspaceComposerCard.d861de981b',
-                  'Sparse checkout'
-                )}
+                {t('auto.components.NewWorkspaceComposerCard.d861de981b', 'Sparse checkout')}
               </label>
               <SparseCheckoutPresetSelect
                 key={repoId}
@@ -259,7 +255,7 @@ export function NewWorkspaceComposerAdvancedSection({
               />
               {!canUseSparseCheckout ? (
                 <p className="text-[11px] text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.NewWorkspaceComposerCard.cbb47ee0dc',
                     'Only available for local Git projects.'
                   )}

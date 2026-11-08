@@ -9,7 +9,7 @@ import {
 import { latchHostToE2EEV2 } from './e2ee-v2-host-latch'
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
-import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { receiveBinaryAsBase64, websocketPayloadToUint8 } from './websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
 import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
 
@@ -58,7 +58,7 @@ export class MobileRelayE2eeLink {
 
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
-    this.socket = (options.createSocket ?? ((url) => new WebSocket(url)))(
+    this.socket = (options.createSocket ?? ((url) => receiveBinaryAsBase64(new WebSocket(url))))(
       relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
     )
     const session = MobileE2EEV2ClientSession.create({

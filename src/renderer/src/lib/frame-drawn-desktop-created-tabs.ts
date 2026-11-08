@@ -1,6 +1,6 @@
 // Project desktop-created tab exceptions into current server-frame groups; keep this outside the record so store slices need no frame-runtime imports.
 
-import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspaces'
+import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
 import { desktopCreatedServerTabEnvironments } from './desktop-created-server-tabs'
 
 /** By tab-bar or entity id. Such a tab moves only within the server's groups: it never splits off. */

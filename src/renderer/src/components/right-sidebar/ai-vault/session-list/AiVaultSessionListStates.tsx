@@ -1,18 +1,19 @@
 import { ArchiveRestore, LoaderCircle } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function SessionLoadingState({
   showLabel = true
 }: {
   showLabel?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="px-3 py-3" aria-busy="true">
       {showLabel ? (
         <div className="mb-3 flex items-center gap-2 text-[11px] text-muted-foreground">
           <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
           <span>
-            {translate(
+            {t(
               'auto.components.right.sidebar.AiVaultPanelControls.scanningSessions',
               'Scanning sessions'
             )}

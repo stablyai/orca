@@ -1,4 +1,3 @@
-import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { closeTestStores, createStore, testState, writeDataFile } from '../persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'

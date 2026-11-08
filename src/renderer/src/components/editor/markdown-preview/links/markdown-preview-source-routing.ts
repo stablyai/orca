@@ -1,7 +1,7 @@
 import { getConnectionIdForFile } from '@/lib/connection-context'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { dirname } from '@/lib/path'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { MarkdownPreviewSourceOpenFile } from '../render-tree/markdown-preview-types'
@@ -161,7 +161,7 @@ export function resolveMarkdownPreviewSourceWorktree(
   filePath: string
 ): Worktree | null {
   const sourceWorktree = sourceWorktreeId
-    ? (findWorktreeById(worktreesByRepo, sourceWorktreeId) ?? null)
+    ? (findFirstIndexedWorktree(worktreesByRepo, sourceWorktreeId) ?? null)
     : null
 
   return sourceWorktree ?? findWorktreeForMarkdownPreviewPath(worktreesByRepo, filePath)

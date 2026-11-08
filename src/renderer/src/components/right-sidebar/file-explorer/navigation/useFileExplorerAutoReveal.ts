@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useAppStore } from '@/store/index'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
 
 type UseFileExplorerAutoRevealParams = {

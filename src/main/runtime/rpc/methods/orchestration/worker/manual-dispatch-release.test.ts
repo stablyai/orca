@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../../../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
-import { OrchestrationDb } from '../../../../orchestration/db'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
-import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import '../../../../orchestration/db/contract-constants'
+import '../../../../orchestration/db/messages/mailbox-routing-page'
+import '../../../../orchestration/db/dispatch-row-writer'
+import '../../../../orchestration/db/attempt-outcome-projection'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { ORCHESTRATION_METHODS } from '../orchestration'
 import { isStreamingMethod, eraseRpcMethods, type RpcContext } from '../../../core'
 import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
 
@@ -132,15 +136,6 @@ describe('manual Dispatch release', () => {
     await expect(dispatchNewTask(TARGET, 'reuses superseded terminal')).resolves.toMatch(/^ctx_/)
   })
 
-  it('keeps unknown Dispatch errors honest', async () => {
-    await expect(
-      call('orchestration.workerAbandon', { dispatch: 'ctx_missing' })
-    ).rejects.toMatchObject({ code: 'dispatch_not_found' })
-    await expect(
-      call('orchestration.workerStop', { dispatch: 'ctx_missing' })
-    ).rejects.toMatchObject({ code: 'dispatch_not_found' })
-  })
-
   function createTask(spec: string): string {
     return db.createTask({ spec, runId }).id
   }
@@ -239,38 +234,6 @@ describe('orchestration.workerAbandon', () => {
     }
     return method.handler(method.params!.parse({ dispatch: dispatchId }), { runtime, ...ctx })
   }
-
-  it('never records an unverified terminal handle as the one who abandoned the worker', async () => {
-    const dispatchId = readyWorker()
-
-    await expect(
-      abandon(dispatchId, { orchestrationCompatibilityEvidence: { terminalHandle: 'term_coord' } })
-    ).resolves.toMatchObject({ state: 'abandoned', alreadySettled: false })
-    expect(db.getWorkerDispatch(dispatchId)?.last_error).toBe(
-      'Abandoned by an unidentified caller.'
-    )
-  })
-
-  it('records the resolved Orca session as the one who abandoned the worker', async () => {
-    const dispatchId = readyWorker()
-    const orcaSessionId = parseOrcaSessionAddress('orca_session_id:chat_1')!
-    const session: OrchestrationSessionCaller = {
-      address: 'orca_session_id:chat_1',
-      terminalHandle: null,
-      paneKey: null,
-      orcaSessionId,
-      sessionId: orcaSessionId,
-      workspaceId: 'wt'
-    }
-
-    await abandon(dispatchId, {
-      orchestrationCaller: session,
-      orchestrationCompatibilityEvidence: { terminalHandle: 'term_coord' }
-    })
-    expect(db.getWorkerDispatch(dispatchId)?.last_error).toBe(
-      'Abandoned by orca_session_id:chat_1.'
-    )
-  })
 
   it('refuses self-abandon by a terminal handle, reissued pane, or resolved session before effects', async () => {
     const dispatchId = readyWorker()

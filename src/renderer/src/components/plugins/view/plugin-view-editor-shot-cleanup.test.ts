@@ -2,7 +2,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const activate = vi.hoisted(() => vi.fn())
 const store: { state: Record<string, unknown> } = vi.hoisted(() => ({ state: {} }))
-vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree: activate }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
+  activateAndRevealWorktree: activate
+}))
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store.state } }))
 
 import { planEditorShotCleanup, runEditorShotCleanup } from './plugin-view-editor-shot-cleanup'

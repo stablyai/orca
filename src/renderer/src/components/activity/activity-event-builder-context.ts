@@ -1,5 +1,6 @@
-import { findIndexedRepoOwnerForHost } from '@/lib/worktree-runtime-owner-index'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import {
   getConnectionExecutionHostId,
@@ -14,12 +15,13 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
-} from '@/runtime/structured-chat-tab-name'
+} from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { tabFromWorktreeAttributedStatusEntry } from '../sidebar/workspace-card/activity/worktree-agent-row-fallback-tab'
 import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
 import { standaloneActivityWorktree } from './activity-standalone-worktree'
+import type { Translate } from '@/i18n/use-translate'
 
 export type ActivityTabContext = { worktreeId: string; tab: TerminalTab }
 export type ActivityEventOwner = { worktree: Worktree; repo: Repo | null; knownWorktree: boolean }
@@ -140,7 +142,8 @@ export function resolveActivityEventOwner(
   entry: AgentStatusEntry,
   terminalPtyId: string | null | undefined,
   tabHostIndex: ActivityTabHostIndex,
-  ownerCache: Map<string, ActivityEventOwner>
+  ownerCache: Map<string, ActivityEventOwner>,
+  t?: Translate
 ): ActivityEventOwner {
   const executionHostId = resolveActivityExecutionHostId(
     context,
@@ -159,7 +162,7 @@ export function resolveActivityEventOwner(
   const worktree =
     resolvedWorktree ??
     mappedWorktree ??
-    standaloneActivityWorktree(context.worktreeId, executionHostId)
+    standaloneActivityWorktree(context.worktreeId, executionHostId, t)
   let repo =
     executionHostId && args.repos
       ? findIndexedRepoOwnerForHost(args.repos, worktree.repoId, executionHostId)

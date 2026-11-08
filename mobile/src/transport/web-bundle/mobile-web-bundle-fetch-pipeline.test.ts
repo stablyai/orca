@@ -189,6 +189,20 @@ describe('fetchMobileWebBundle chunk pipeline', () => {
     expect(error instanceof MobileWebBundleFetchError ? error.refusal : null).toBe('fetch-stopped')
   })
 
+  it('shares one connection’s four host read slots between two fetches of the same build', async () => {
+    // Two shells on one host share its client, as when two pages see the same update.
+    const host = waveHost(syntheticBundle())
+
+    const both = Promise.allSettled([
+      fetchMobileWebBundle({ client: host.client }),
+      fetchMobileWebBundle({ client: host.client })
+    ])
+    await host.runWaves(both)
+
+    expect((await both).map((outcome) => outcome.status)).toEqual(['fulfilled', 'fulfilled'])
+    expect(host.refusalCount()).toBe(0)
+  })
+
   it('refuses a chunk short of its slot that does not end the asset', async () => {
     // Offsets are planned, not chained, so a short middle chunk would leave a hole.
     const host = waveHost(

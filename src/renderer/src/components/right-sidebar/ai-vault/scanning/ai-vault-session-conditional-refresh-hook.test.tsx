@@ -20,9 +20,9 @@ import {
 } from './ai-vault-session-refresh'
 
 import type { AgentSessionStatusEvent } from '../../../../../../shared/agent-session/agent-session-wire'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 const statusFrames = vi.hoisted(() => ({ emit: (_event: AgentSessionStatusEvent): void => {} }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: async (
     _target: unknown,
     emit: typeof statusFrames.emit
@@ -151,6 +151,7 @@ function Probe({
       onOpenLog={unused}
       onRevealLog={unused}
       onOpenCwd={unused}
+      onRevealArtifacts={unused}
       onRequestDelete={unused}
     />
   )

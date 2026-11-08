@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn()
 }))
 
-vi.mock('@/runtime/gitlab-owner-api', () => ({
+vi.mock('@/runtime/repository-gitlab/gitlab-owner-api', () => ({
   gitLabApiFor: () => ({ mergeMR: mocks.mergeMR })
 }))
 

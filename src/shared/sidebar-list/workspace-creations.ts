@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 const WorkspaceCreationSchema = z.object({
   repoId: z.string(),

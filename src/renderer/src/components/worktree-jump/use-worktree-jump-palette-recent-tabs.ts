@@ -21,7 +21,7 @@ import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-w
 import {
   getPaletteWorktreeExecutionHostId,
   getPaletteWorktreeIdentity
-} from '@/lib/palette-repo-resolution'
+} from '@/lib/workspace/search/palette-repo-resolution'
 import { encodePaletteIdentity } from '../../../../shared/palette-match/palette-ranking'
 
 type WorktreeJumpPaletteRecentTabsInput = WorktreeJumpPaletteStoreState &

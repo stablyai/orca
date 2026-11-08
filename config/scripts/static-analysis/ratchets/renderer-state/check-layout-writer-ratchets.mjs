@@ -138,7 +138,7 @@ export const RATCHETS = [
     // The three writers the plan allows: applyFromRuntime, the frozen mirror's store patch and
     // the frozen setters for remote-server workspaces.
     allowed: (rel) =>
-      rel === 'src/renderer/src/store/workspace-layout-cache.ts' ||
+      rel === 'src/renderer/src/store/workspace-layout/workspace-layout-cache.ts' ||
       rel === 'src/renderer/src/runtime/web-session-tabs-sync/store-patch.ts' ||
       rel.startsWith('src/renderer/src/runtime/remote-workspace-frozen/'),
     header: [

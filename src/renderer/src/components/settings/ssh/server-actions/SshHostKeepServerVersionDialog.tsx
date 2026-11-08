@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
@@ -29,6 +29,7 @@ export function SshHostKeepServerVersionDialog({
   onOpenChange: (open: boolean) => void
   onChanged: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const api = getManagedOrcadApi()
   const mountedRef = useMountedRef()
   const [busy, setBusy] = useState(false)
@@ -64,10 +65,10 @@ export function SshHostKeepServerVersionDialog({
       <DialogContent showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.keepServer.title', 'Keep the server’s version')}
+            {t('auto.components.settings.keepServer.title', 'Keep the server’s version')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.keepServer.description',
               'This host keeps using its Orca server as it is. What the older version of Orca added or changed here is not moved; it stays only in this computer’s saved settings until they are cleaned up.'
             )}
@@ -76,10 +77,10 @@ export function SshHostKeepServerVersionDialog({
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setKeeping(false)} disabled={busy}>
-            {translate('auto.components.settings.keepServer.cancel', 'Cancel')}
+            {t('auto.components.settings.keepServer.cancel', 'Cancel')}
           </Button>
           <Button onClick={() => void keepServerVersion()} disabled={busy}>
-            {translate('auto.components.settings.keepServer.confirm', 'Keep the server’s version')}
+            {t('auto.components.settings.keepServer.confirm', 'Keep the server’s version')}
           </Button>
         </DialogFooter>
       </DialogContent>

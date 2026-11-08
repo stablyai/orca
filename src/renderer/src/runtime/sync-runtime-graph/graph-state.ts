@@ -1,5 +1,5 @@
 import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionSnapshotTab,

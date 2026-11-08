@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { hostname, uptime } from 'node:os'
 import { dirname, join } from 'node:path'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 
 export const ORCAD_HELD_FENCE_TOKENS_FILE_NAME = 'orcad-held-fence-tokens.json'
 // Older entries are leaks from releases never confirmed; the fence went stale long ago anyway.

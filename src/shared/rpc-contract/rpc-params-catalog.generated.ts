@@ -7,6 +7,7 @@ import {
   AiVaultSearchStatusRequestSchema,
   AiVaultSetSearchEnabledParamsSchema
 } from '../ai-vault/search/ai-vault-search-contract'
+import { AntigravityChatAuthConfigSchema } from '../antigravity-chat-auth-config'
 import {
   BrowserClientFileChannelAbortParams,
   BrowserClientFileChannelReadParams,
@@ -40,6 +41,8 @@ import {
 import { OrcadTerminalCensusParamsSchema } from '../orcad-terminal-census'
 import { CrewSubscribeParams } from '../orchestration-crew'
 import { RegisterDeviceKeyParamsSchema } from '../remote-runtime/pairing/device-key-registration-contract'
+import { PairingCreateOfferParamsSchema } from '../remote-runtime/pairing/pairing-create-offer-contract'
+import { ExchangePairingTicketParamsSchema } from '../remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
@@ -154,7 +157,7 @@ import {
   Viewport,
   Wait
 } from './browser-params'
-import { ScreencastUnsubscribe } from './browser-screencast-params'
+import { ScreencastAck, ScreencastUnsubscribe } from './browser-screencast-params'
 import { BrowserOpenUrlParams, BrowserTabCreateParams } from './browser-tab-create-params'
 import { ClientEventsSubscribeParams, ClientEventsUnsubscribeParams } from './client-events-params'
 import {
@@ -260,8 +263,8 @@ import {
 } from './files-terminal-artifact-params'
 import {
   FolderWorkspaceCreate,
+  FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
-  FolderWorkspaceSelector,
   FolderWorkspaceUpdate
 } from './folder-workspace-params'
 import {
@@ -283,15 +286,18 @@ import {
   GitHistory,
   GitPush,
   GitRebaseFromBase,
+  GitRefs,
   GitRemoteCommitUrl,
   GitRemoteFileUrl,
   GitResolveConflict,
   GitStatusParams,
   GitSubmoduleStatus,
+  GitSwitchBranch,
   GitTargetedRemote,
   WorktreeSelector as WorktreeSelectorOfGitParams
 } from './git-params'
 import { BindableAccounts, ValidateAccountBinding } from './github-account-binding-params'
+import { UploadGitHubAttachment } from './github-attachment-params'
 import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github-issue-params'
 import {
   ClearProjectItemField,
@@ -515,12 +521,15 @@ import {
 import { WorkerStartParams } from './orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration-worker-stop-params'
 import {
+  PluginCatalogAddParams,
+  PluginCatalogRemoveParams,
   PluginDevEmitParams,
   PluginDevInspectParams,
   PluginDevLoadParams,
   PluginDevRequestParams,
   PluginDevUnloadParams,
   PluginGetLogsParams,
+  PluginInstallParams,
   PluginInvokeCommandParams,
   PluginOpenParams,
   PluginReadPanelEntryParams,
@@ -532,6 +541,8 @@ import {
   PluginShotEditorParams,
   PluginShotParams,
   PluginShotReplayParams,
+  PluginUninstallParams,
+  PluginUpdateParams,
   PluginsPanelActionParams
 } from './plugins-params'
 import {
@@ -549,6 +560,7 @@ import {
   ProjectHostSetupUpdate,
   ProjectUpdate
 } from './project-runtime-params'
+import { RecipeVmWakeParams } from './recipe-vm-wake-params'
 import { ReferenceFind, ReferenceList } from './reference-params'
 import {
   ProjectGroupCreate,
@@ -629,7 +641,6 @@ import {
   QueuedMessageActionParams,
   QueuedMessagesResumeParams,
   RespondParams,
-  RespondToQuestionParams,
   RestartResumableParams,
   RestartResumeParams,
   RevealParams,
@@ -637,22 +648,25 @@ import {
   SendParams,
   SetOptionParams,
   SleepWorkspaceParams,
-  SubscribeParams,
   SubscribeTurnCompletionsParams,
   ThreadGoalParams,
   UnsubscribeParams
 } from './structured-agent-session-params'
+import { RespondToQuestionParams } from './structured-agent-session-question-params'
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageMoveParams,
   QueuedMessageUpdateParams
 } from './structured-agent-session-queued-edit-params'
 import { RenameParams } from './structured-agent-session-rename-params'
+import { SendRecordedParams } from './structured-agent-session-send-recorded-params'
+import { SubscribeParams } from './structured-agent-session-subscribe-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal-daemon-params'
 import { TerminalLimitUpdateParams } from './terminal-limit-params'
 import { TerminalAdoptOrphans } from './terminal-orphan-params'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-params'
 import {
+  TerminalAckOutput,
   TerminalMultiplex,
   TerminalResizeForClient,
   TerminalSubscribe
@@ -721,8 +735,9 @@ import {
   WorktreeResolveCallerParent,
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
-  WorktreeSelector as WorktreeSelectorOfWorktreeParams,
+  WorktreeRunApprovedSetup,
   WorktreeSet,
+  WorktreeShow,
   WorktreeSleepParams,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams
@@ -751,6 +766,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'accounts.addCodexFromHome': AddCodexFromHomeParams,
   'accounts.addDataFromHome': AddDataAccountParams,
   'accounts.antigravityAddCurrent': AntigravityAccountTargetParams,
+  'accounts.antigravityChatAuthApply': AntigravityChatAuthConfigSchema,
+  'accounts.antigravityChatAuthGet': null,
   'accounts.antigravityChatSignInCancel': AntigravityChatSignInFlowParams,
   'accounts.antigravityChatSignInComplete': AntigravityChatSignInCompleteParams,
   'accounts.antigravityChatSignInStart': null,
@@ -829,6 +846,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.reveal': RevealParams,
   'agentSession.rewind': RewindParams,
   'agentSession.send': SendParams,
+  'agentSession.sendRecorded': SendRecordedParams,
   'agentSession.setOption': SetOptionParams,
   'agentSession.sleepWorkspace': SleepWorkspaceParams,
   'agentSession.subscribe': SubscribeParams,
@@ -928,6 +946,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'browser.profileList': null,
   'browser.reload': ExpectUrlBrowserTarget,
   'browser.screencast': Screencast,
+  'browser.screencast.ack': ScreencastAck,
   'browser.screencast.unsubscribe': ScreencastUnsubscribe,
   'browser.screenshot': Screenshot,
   'browser.scroll': Scroll,
@@ -1042,6 +1061,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.search': FileSearch,
   'files.searchPaths': FilePathSearch,
   'files.stat': FileTreePath,
+  'files.statTerminalArtifact': TerminalArtifactFile,
   'files.unwatch': FileUnwatch,
   'files.watch': FileWatch,
   'files.write': FileWrite,
@@ -1050,7 +1070,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'files.writeIfUnchanged': FileWriteIfUnchanged,
   'files.writeTerminalArtifact': TerminalArtifactFileWrite,
   'folderWorkspace.create': FolderWorkspaceCreate,
-  'folderWorkspace.delete': FolderWorkspaceSelector,
+  'folderWorkspace.delete': FolderWorkspaceDelete,
   'folderWorkspace.getPathStatus': FolderWorkspacePathStatus,
   'folderWorkspace.list': null,
   'folderWorkspace.update': FolderWorkspaceUpdate,
@@ -1084,12 +1104,14 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
   'git.rebaseFromBase': GitRebaseFromBase,
+  'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
   'git.remoteFileUrl': GitRemoteFileUrl,
   'git.resolveConflict': GitResolveConflict,
   'git.stage': GitFilePath,
   'git.status': GitStatusParams,
   'git.submoduleStatus': GitSubmoduleStatus,
+  'git.switchBranch': GitSwitchBranch,
   'git.unstage': GitFilePath,
   'git.upstreamStatus': GitTargetedRemote,
   'github.addIssueComment': IssueComment,
@@ -1141,6 +1163,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.updatePR': UpdatePr,
   'github.updatePRState': UpdatePrState,
   'github.updatePRTitle': UpdatePrTitle,
+  'github.uploadAttachment': UploadGitHubAttachment,
   'github.validateAccountBinding': ValidateAccountBinding,
   'github.workItem': WorkItem,
   'github.workItemByOwnerRepo': WorkItemByOwnerRepo,
@@ -1343,10 +1366,15 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerStart': WorkerStartParams,
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerSubjectParams,
+  'pairing.createOffer': PairingCreateOfferParamsSchema,
   'pairing.delegatedMobileDevice.sync': DelegatedMobileDeviceSyncParamsSchema,
+  'pairing.exchangeTicket': ExchangePairingTicketParamsSchema,
   'pairing.getEndpoints': PairingGetEndpointsParamsSchema,
   'pairing.provisionRelay': PairingProvisionRelayParamsSchema,
   'pairing.registerDeviceKey': RegisterDeviceKeyParamsSchema,
+  'plugins.catalogAdd': PluginCatalogAddParams,
+  'plugins.catalogList': null,
+  'plugins.catalogRemove': PluginCatalogRemoveParams,
   'plugins.consent': PluginRpcConsentParams,
   'plugins.devEmit': PluginDevEmitParams,
   'plugins.devHook': PluginDevEmitParams,
@@ -1355,6 +1383,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.devRequest': PluginDevRequestParams,
   'plugins.devUnload': PluginDevUnloadParams,
   'plugins.getLogs': PluginGetLogsParams,
+  'plugins.install': PluginInstallParams,
   'plugins.invokeCommand': PluginInvokeCommandParams,
   'plugins.list': null,
   'plugins.open': PluginOpenParams,
@@ -1368,6 +1397,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'plugins.shotChrome': PluginShotChromeParams,
   'plugins.shotEditor': PluginShotEditorParams,
   'plugins.shotReplay': PluginShotReplayParams,
+  'plugins.uninstall': PluginUninstallParams,
+  'plugins.update': PluginUpdateParams,
   'preflight.check': PreflightCheck,
   'preflight.detectAgents': PreflightProjectAgentDetection,
   'preflight.detectRemoteAgents': PreflightDetectRemoteAgents,
@@ -1416,6 +1447,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'runtime.clientCapabilities.update': ClientCapabilitiesUpdate,
   'runtime.clientEvents.subscribe': ClientEventsSubscribeParams,
   'runtime.clientEvents.unsubscribe': ClientEventsUnsubscribeParams,
+  'runtimeEnvironment.wakeRecipeVm': RecipeVmWakeParams,
   'session.readTerminalScrollback': SessionReadTerminalScrollbackParams,
   'session.tabs.activate': ActivateTab,
   'session.tabs.close': CloseTab,
@@ -1491,6 +1523,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'ssh.updateTarget': SshTargetUpdate,
   'stats.summary': null,
   'status.get': StatusGetParams,
+  'terminal.ackOutput': TerminalAckOutput,
   'terminal.adoptOrphans': TerminalAdoptOrphans,
   'terminal.agentStatus': TerminalHandle,
   'terminal.clearBuffer': TerminalHandle,
@@ -1571,8 +1604,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.resolveMrBase': WorktreeResolveMrBase,
   'worktree.resolvePrBase': WorktreeResolvePrBase,
   'worktree.rm': WorktreeRemove,
+  'worktree.runApprovedSetup': WorktreeRunApprovedSetup,
   'worktree.set': WorktreeSet,
-  'worktree.show': WorktreeSelectorOfWorktreeParams,
+  'worktree.show': WorktreeShow,
   'worktree.sleep': WorktreeSleepParams,
   'worktree.teardownMissingTerminals': WorktreeTeardownMissingTerminalsParams
 } as const

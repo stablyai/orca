@@ -4,7 +4,7 @@ import {
   withProviderDiagnostic
 } from '../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../shared/agent-session/options/agent-session-execution-options'
-import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/structured-agent-session-option-error'
+import { AgentSessionOptionRejectedError } from '../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { compareAppVersions } from '../../shared/app-version'
 import { AcpAgentError } from './acp-errors'
 import { AcpModelCommandRefusedError } from './acp-model-command'
@@ -21,7 +21,7 @@ export async function applyAcpMessageOptions(
   setOption: (key: 'model' | 'effort', value: string) => Promise<unknown>,
   isCurrent: () => boolean,
   signal?: AbortSignal,
-  /** The agent's own model command, tried only once the agent rejects the model option. */
+  /** The agent's own model command when its model option is absent or rejects the value. */
   modelCommand?: (value: string) => Promise<void>
 ): Promise<boolean> {
   if (!options) {
@@ -29,19 +29,31 @@ export async function applyAcpMessageOptions(
   }
   for (const key of ['model', 'effort'] as const) {
     const value = options[key]
-    if (value === undefined || session.options.appliedInput.get(key) === value) {
+    if (
+      value === undefined ||
+      session.options.appliedInput.get(key) === value ||
+      (key === 'model' && session.options.matchesNativeRestoredModel(value)) ||
+      (key === 'effort' && !session.options.offersEffort(value))
+    ) {
       continue
     }
     try {
-      await setOption(key, value).catch((error: unknown) =>
-        key === 'model' &&
-        modelCommand &&
-        error instanceof AcpAgentError &&
-        session.spec.dialect.modelCommand?.refusedByOption(error) &&
-        isCurrent()
-          ? modelCommand(value)
-          : Promise.reject(error)
-      )
+      if (key === 'model' && !session.options.write(key, value)) {
+        if (!modelCommand) {
+          continue
+        }
+        await modelCommand(value)
+      } else {
+        await setOption(key, value).catch((error: unknown) =>
+          key === 'model' &&
+          modelCommand &&
+          error instanceof AcpAgentError &&
+          session.spec.dialect.modelCommand?.refusedByOption(error) &&
+          isCurrent()
+            ? modelCommand(value)
+            : Promise.reject(error)
+        )
+      }
     } catch (error) {
       signal?.throwIfAborted()
       if (!isCurrent()) {

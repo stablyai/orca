@@ -178,6 +178,24 @@ describe('pre-profile pairing coordinator', () => {
     expect(deps.recordDescriptorFromStatus).not.toHaveBeenCalled()
   })
 
+  it('saves the exchanged token, not the scanned code, when the desktop exchanges it', async () => {
+    const deps = { ...dependencies(fakeClient([success({})]), []), exchangeTicket: vi.fn() }
+    deps.exchangeTicket.mockResolvedValue('exchanged-token')
+    const attempt = startPreProfilePairing({
+      offer: directOffer,
+      timeoutMs: 5_000,
+      dependencies: deps
+    })
+
+    await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+    expect(deps.exchangeTicket).toHaveBeenCalledWith(
+      expect.objectContaining({ ticket: 'device-token' })
+    )
+    expect(deps.savePairedHost).toHaveBeenCalledWith(
+      expect.objectContaining({ deviceToken: 'exchanged-token' })
+    )
+  })
+
   it('still resolves a saved pairing when descriptor recording throws', async () => {
     const events: string[] = []
     const client = fakeClient([success({ machineName: 'm4airs-Air', hostPlatform: 'darwin' })])
@@ -357,6 +375,49 @@ describe('pre-profile pairing coordinator', () => {
     expect(deps.writeCredentialBundle).toHaveBeenCalledWith(
       expect.objectContaining({ current: expect.objectContaining({ version: 1 }) })
     )
+  })
+
+  it('journals the exchanged Relay token before publishing it, and keeps the code if that fails', async () => {
+    for (const journalWriteFails of [false, true]) {
+      const events: string[] = []
+      const direct = fakeClient([])
+      ;(direct.sendRequest as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('LAN down'))
+      let journal: MobileRelayPairingJournal | null = null
+      const relay = relayProvisioningClient(() => journal!)
+      const deps = { ...dependencies(direct, events), exchangeTicket: vi.fn() }
+      deps.exchangeTicket.mockResolvedValue('exchanged-token')
+      deps.connectRelay.mockReturnValue(relay)
+      deps.saveJournal.mockImplementation(async (value) => {
+        if (journal && journalWriteFails) {
+          throw new Error('keychain locked')
+        }
+        journal = value
+        events.push(`save-journal:${value.secrets.deviceToken}`)
+      })
+
+      const attempt = startPreProfilePairing({
+        offer: relayOffer,
+        timeoutMs: 5_000,
+        dependencies: deps
+      })
+      await expect(attempt.result).resolves.toEqual({ hostId: `host-${now}` })
+
+      const token = journalWriteFails ? 'device-token' : 'exchanged-token'
+      expect(events.filter((event) => event.startsWith('save-journal'))).toEqual(
+        journalWriteFails
+          ? ['save-journal:device-token']
+          : ['save-journal:device-token', 'save-journal:exchanged-token']
+      )
+      expect(events.indexOf('write-credential')).toBeGreaterThan(
+        events.lastIndexOf(`save-journal:${token}`)
+      )
+      expect(deps.writeCredentialBundle).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceToken: token })
+      )
+      expect(deps.savePairedHost).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceToken: token })
+      )
+    }
   })
 
   it('lets a stale journal recover before the new scan journals, and releases it on failure', async () => {

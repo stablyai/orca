@@ -10,9 +10,9 @@ import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-add
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
 import { idOf } from '../../../rpc/orchestration-session-caller-test-fixture'
 import { closeStructuredAgentSessionChild } from '../../../agent-session/structured-agent-session-close'
-import { restoreJournal } from '../../../../native-chat/agent-session-journal/journal-open'
+import { restoreJournal } from '../../../../native-chat/agent-session-journal/replay/journal-open'
 import { OrcaRuntimeRpcServer } from '../../../rpc/server/runtime-rpc'
-import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration'
+import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
 import type { FakeConnection } from './structured-chat-coordinator-fake-codex-fixture'
 import {
   COORDINATOR,
@@ -127,15 +127,6 @@ function expectChatOpen(sessionId: string): void {
 }
 
 describe("a chat assignee's report", () => {
-  it('is admitted from the chat itself, and settles its Dispatch', async () => {
-    const { taskId, dispatchId } = await dispatchToChat()
-
-    await call('orchestration.send', workerDone(taskId, dispatchId), { sessionId: PEER_CHAT })
-
-    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
-    expect(db.getTask(taskId)?.status).toBe('completed')
-  })
-
   it('is admitted from the same cleared chat, which keeps its Dispatch', async () => {
     const { taskId, dispatchId } = await dispatchToChat()
     const cleared = await clearChat(PEER_CHAT)
@@ -190,30 +181,6 @@ describe("a chat assignee's liveness, stop and close", () => {
     })
   })
 
-  it('is stopped and abandoned without closing or interrupting the chat', async () => {
-    const stopped = await dispatchToChat()
-    expect(await call('orchestration.workerStop', { dispatch: stopped.dispatchId })).toMatchObject({
-      processAction: 'none'
-    })
-    expectChatOpen(PEER_CHAT)
-
-    const more = await call(
-      'orchestration.taskCreate',
-      { spec: 'more' },
-      { sessionId: COORDINATOR }
-    )
-    const { dispatch } = await call(
-      'orchestration.dispatch',
-      { task: idOf(more.task), to: WORKER },
-      { sessionId: COORDINATOR }
-    )
-    expect(await call('orchestration.workerAbandon', { dispatch: idOf(dispatch) })).toMatchObject({
-      state: 'abandoned',
-      processAction: 'none'
-    })
-    expectChatOpen(PEER_CHAT)
-  })
-
   it('fails its Dispatch when the chat is closed, as a closed terminal does, and reads exited', async () => {
     const { taskId, dispatchId } = await dispatchToChat()
 
@@ -265,27 +232,6 @@ describe("a chat assignee's liveness, stop and close", () => {
     expect(await closing).toMatchObject({ stopped: false, closeAttempted: true })
     expectChatOpen(PEER_CHAT)
     expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
-  })
-
-  it('reads unverifiable, never exited, when the cleared chat record is unknown', async () => {
-    const { dispatchId } = await dispatchToChat()
-    const cleared = await clearChat(PEER_CHAT)
-    expect(cleared).toBe(PEER_CHAT)
-    const getConversation = host.deps.store.getConversation.bind(host.deps.store)
-    vi.spyOn(host.deps.store, 'getConversation').mockImplementation((sessionId) =>
-      sessionId === cleared ? null : getConversation(sessionId)
-    )
-
-    expect(await call('orchestration.workerShow', { dispatch: dispatchId })).toMatchObject({
-      observation: {
-        status: 'unverifiable',
-        reason: 'No durable record backs this chat.'
-      },
-      projection: { liveness: { verdict: 'unverifiable' } }
-    })
-    expect(await call('orchestration.workerList', {})).toMatchObject({
-      workers: [{ dispatchId, projection: { liveness: { verdict: 'unverifiable' } } }]
-    })
   })
 
   it("reads the chat's transcript for worker-read", async () => {

@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isQueuedAgentJournalSubmission } from '../../shared/agent-session/requests/agent-session-queued-submission'
-import type { StructuredAgentSessionHistoryJournal } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionHistoryJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 /** Pi entries through entry are accounted for through this journal epoch/sequence; encoded in the Pi resume cursor. */
 export type PiHistoryClaim = { entry: string; epoch: string; sequence: number }

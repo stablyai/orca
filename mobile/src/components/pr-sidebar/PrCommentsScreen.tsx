@@ -38,6 +38,7 @@ const COMMENT_PAGE = 12
 export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: ScreenProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  // The tab keeps the PR it shows through reloads, so the open thread and typed comments stay with it.
   const data = readyPrData(tab)
   const details = livePrDetails(data?.details ?? null)
   const now = useNow(60_000)

@@ -1,5 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
+import type {
+  AntigravityAccountUsage,
+  ProviderRateLimits,
+  RateLimitRuntimeTarget
+} from '../../shared/rate-limit-types'
+import {
+  ANTIGRAVITY_USAGE_HOST_TARGET,
+  type AntigravityUsageLogin,
+  type AntigravityUsageReadFinish,
+  type AntigravityUsageReadStart
+} from '../rate-limits/antigravity-account-usage'
+import {
+  antigravityUsageLogin,
+  storedAntigravityReading,
+  withStoredAntigravityReading
+} from './native-account-usage-reading'
 import {
   parseAntigravityNativeCredential,
   type AntigravityNativeCredential
@@ -43,7 +59,8 @@ export class AntigravityAccountService {
     private readonly store: AntigravityAccountStore,
     private readonly backend: AntigravityCredentialBackend,
     private readonly now: () => number = Date.now,
-    private readonly lookupIdentity = fetchGoogleIdentity
+    private readonly lookupIdentity = fetchGoogleIdentity,
+    private readonly target: RateLimitRuntimeTarget = ANTIGRAVITY_USAGE_HOST_TARGET
   ) {}
 
   listAccounts(): Promise<AntigravityAccountState> {
@@ -155,6 +172,62 @@ export class AntigravityAccountService {
     })
   }
 
+  beginUsageRead(): Promise<AntigravityUsageReadStart | null> {
+    return this.serialize(async () => {
+      if (this.store.read().accounts.length === 0) {
+        return null
+      }
+      const { vault, current } = await this.reconcile()
+      return { login: current && this.login(vault, current), accounts: this.usage(vault, current) }
+    })
+  }
+
+  /** Keeps a successful reading only when the login that started the read is still signed in. */
+  finishUsageRead(
+    login: AntigravityUsageLogin,
+    limits: ProviderRateLimits
+  ): Promise<AntigravityUsageReadFinish> {
+    return this.serialize(async () => {
+      const { vault, current } = await this.reconcile()
+      const now = current && this.login(vault, current)
+      if (!now || now.key !== login.key) {
+        return { switched: true }
+      }
+      const account = vault.accounts.find((entry) => entry.id === now.accountId)
+      if (account && now.accountId === login.accountId && limits.status === 'ok') {
+        account.usage = withStoredAntigravityReading(account, this.target, limits)
+        this.store.write(vault)
+      }
+      return {
+        switched: false,
+        account: { id: now.accountId, email: now.email },
+        accounts: this.usage(vault, current)
+      }
+    })
+  }
+
+  private login(
+    vault: AntigravityAccountVault,
+    current: AntigravityNativeCredential
+  ): AntigravityUsageLogin {
+    return antigravityUsageLogin(
+      vault.accounts.find((entry) => this.matches(entry, current)),
+      current
+    )
+  }
+
+  private usage(
+    vault: AntigravityAccountVault,
+    current: AntigravityNativeCredential | null
+  ): AntigravityAccountUsage[] {
+    return vault.accounts.map((account) => ({
+      accountId: account.id,
+      email: account.email,
+      active: current !== null && this.matches(account, current),
+      rateLimits: storedAntigravityReading(account, this.target)
+    }))
+  }
+
   private matches(
     account: StoredAntigravityAccount,
     current: AntigravityNativeCredential
@@ -206,7 +279,10 @@ export class AntigravityAccountService {
       : undefined
     const subject = current?.identity?.subject ?? active?.subject ?? null
     return {
-      accounts: vault.accounts.map(({ credentials: _credentials, ...account }) => account),
+      accounts: vault.accounts.map((account) => {
+        const { credentials: _credentials, usage: _usage, ...summary } = account
+        return { ...summary, usage: storedAntigravityReading(account, this.target) }
+      }),
       activeAccountId: active?.id ?? null,
       selectedAccountId: vault.selectedAccountId,
       currentAccount: current

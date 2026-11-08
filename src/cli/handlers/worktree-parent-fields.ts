@@ -1,17 +1,21 @@
 import type { RuntimeStatus, RuntimeWorktreeRecord } from '../../shared/runtime-types'
-import { isWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
 } from '../../shared/worktree/lineage-types'
+import { crossStoreParentRefOfRow } from '../../shared/worktree/lineage-row-identity'
 import {
   assertCrossStoreLineageSupported,
+  assertFolderParentSetSupported,
   supportsCrossStoreLineage
 } from '../../shared/worktree-runtime-capabilities'
 import { getOptionalStringFlag } from '../flags'
 import { RuntimeClient, RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveWorktreeCreateCwdContext } from '../selectors'
+import { mayNameFolderWorkspace } from '../folder-workspace-selector'
 import { parentCwdNextSteps, withWorktreeSelectorRecovery } from '../worktree-selector-recovery'
+import { getOptionalParentSelector } from '../caller-folder-workspace'
 
 const CALLER_PARENT_INFERENCE_BUDGET_MS = 3_000
 
@@ -47,19 +51,14 @@ async function readCallerParentRef(
   ).result.worktree
   const { installationId } = (await local.call<{ installationId?: string }>('worktree.lineageList'))
     .result
-  if (isWorkspaceKey(parent.id) || !parent.instanceId || !installationId) {
+  const ref = crossStoreParentRefOfRow(installationId, parent)
+  if (!ref) {
     throw new RuntimeClientError(
       'invalid_argument',
-      isWorkspaceKey(parent.id)
-        ? "A folder workspace can't parent a workspace on another machine yet."
-        : "Couldn't confirm the parent's machine or workspace identity. Refresh it and try again."
+      "Couldn't confirm the parent's machine or workspace identity. Refresh it and try again."
     )
   }
-  return {
-    installationId,
-    workspaceKey: worktreeWorkspaceKey(parent.id),
-    instanceId: parent.instanceId
-  }
+  return ref
 }
 
 function serverLabel(client: RuntimeClient): string {
@@ -89,6 +88,10 @@ export async function resolveCreateParentFields(
   }
   const targetParent = {
     parentWorktree: explicitParent.parentWorktree,
+    // The runtime classifies path:/name: parents by kind; older runtimes strip this.
+    ...(explicitParent.parentWorktree && mayNameFolderWorkspace(explicitParent.parentWorktree)
+      ? { matchFolderWorkspaces: true }
+      : {}),
     ...(explicitParent.parentWorkspace ? { parentWorkspace: explicitParent.parentWorkspace } : {}),
     noParent
   }
@@ -184,8 +187,16 @@ export async function resolveSetParentFields(
   flags: Map<string, string | boolean>,
   cwd: string,
   client: RuntimeClient
-): Promise<{ crossStoreParent?: CrossStoreParentRef; parentWorktree?: string }> {
+): Promise<{
+  crossStoreParent?: CrossStoreParentRef
+  parentWorktree?: string
+  matchFolderWorkspaces?: true
+}> {
   const raw = getOptionalStringFlag(flags, 'parent-worktree')
+  const rawKey = raw?.startsWith('id:') ? raw.slice('id:'.length) : raw
+  if (rawKey && parseWorkspaceKey(rawKey)?.type === 'folder') {
+    return { parentWorktree: await assertFolderParentSetSupportedBy(client, rawKey) }
+  }
   if (client.isRemote && (raw === 'active' || raw === 'current')) {
     const selector = await getOptionalWorktreeSelector(
       flags,
@@ -195,11 +206,25 @@ export async function resolveSetParentFields(
     )
     return { crossStoreParent: await resolveCallerCrossStoreParent(client, selector) }
   }
-  return {
-    parentWorktree: await withWorktreeSelectorRecovery(
-      getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
-      parentCwdNextSteps(raw),
-      raw
-    )
+  const parentWorktree = await withWorktreeSelectorRecovery(
+    getOptionalParentSelector(flags, cwd, client),
+    parentCwdNextSteps(raw),
+    raw
+  )
+  if (parentWorktree && parseWorkspaceKey(parentWorktree)?.type === 'folder') {
+    return { parentWorktree: await assertFolderParentSetSupportedBy(client, parentWorktree) }
   }
+  return parentWorktree && mayNameFolderWorkspace(parentWorktree)
+    ? { parentWorktree, matchFolderWorkspaces: true }
+    : { parentWorktree }
+}
+
+/** An older host refuses a folder parent as "not found"; say it needs an update instead. */
+async function assertFolderParentSetSupportedBy(
+  client: RuntimeClient,
+  folderKey: string
+): Promise<string> {
+  const status = (await client.call<RuntimeStatus>('status.get')).result
+  assertFolderParentSetSupported(status.capabilities, client.environmentSelector ?? 'this machine')
+  return folderKey
 }
