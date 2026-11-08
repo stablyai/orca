@@ -2,10 +2,24 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const loadSnapshot = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
+const loadSnapshot = vi.hoisted(() =>
+  vi.fn((_client: unknown, _worktree: string) => new Promise(() => {}))
+)
+// Each build's notes-and-files read; status comes from the shared git.status query, held pending here.
+vi.mock('./mobile-diff-review-snapshot-loader', () => ({
+  startMobileDiffReviewSnapshot: (
+    client: unknown,
+    worktree: string,
+    input: { status: Promise<unknown> }
+  ) => {
+    input.status.catch(() => {})
+    return { snapshot: loadSnapshot(client, worktree), branch: Promise.resolve({ result: null }) }
+  },
+  withMobileDiffReviewBranch: (state: unknown) => state
+}))
 vi.mock('./mobile-diff-review-loaders', () => ({
-  loadMobileDiffReviewSnapshot: loadSnapshot,
-  loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
+  loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' }),
+  mobileReviewDiffInput: vi.fn(() => ({}))
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -17,6 +31,15 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 vi.mock('lucide-react-native', () => ({
+  ArrowDown: 'Icon',
+  ArrowDownUp: 'Icon',
+  ArrowUp: 'Icon',
+  Check: 'Icon',
+  CloudUpload: 'Icon',
+  GitBranch: 'Icon',
+  GitPullRequestArrow: 'Icon',
+  History: 'Icon',
+  RefreshCw: 'Icon',
   ChevronsUpDown: 'Icon',
   CircleAlert: 'Icon',
   FileText: 'Icon',

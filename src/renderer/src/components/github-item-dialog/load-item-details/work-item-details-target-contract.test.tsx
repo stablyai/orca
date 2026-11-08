@@ -1,4 +1,4 @@
-import type * as LocalRuntimeCapabilities from '@/runtime/local-runtime-capabilities'
+import type * as LocalRuntimeCapabilities from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { completePRCheckGraphQLResponse } from '../../../../../shared/github/complete-pr-check-test-fixture'
 import type * as GitRunner from '../../../../../main/git/command-runner/gh-exec-file'
 import type { GitHubRepoContext } from '../../../../../main/github/github-repository-identity'
@@ -40,6 +40,10 @@ import { getWorkItemDetails } from '../../../../../main/github/work-item-details
 import { _resetOriginGitHubApiRepositoryCache } from '../../../../../main/github/github-api-repository'
 import { useGitHubWorkItemDetails } from './use-github-work-item-details'
 
+const { GitHubItemDialogIssueBody } = await vi.importActual<typeof IssueBodyModule>(
+  '../open-dialog/github-item-dialog-issue-body'
+)
+
 type Published = {
   onCommentAdded: (comment: PRComment) => void
   body: string
@@ -55,7 +59,9 @@ vi.mock('../discuss-item/conversation-tab', () => ({
     return <div>{props.body}</div>
   }
 }))
-vi.mock('@/store/selectors', () => ({ useAllWorktrees: () => [] }))
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', () => ({
+  useAllWorktrees: () => []
+}))
 vi.mock('@/lib/work-items/github/github-work-item-workspace-attachment', () => ({
   findGithubPrWorkspaceAttachment: () => null,
   findGithubIssueWorkspaceAttachment: () => null
@@ -156,11 +162,13 @@ vi.mock('@/store', () => {
     })
   }
 })
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: io.rpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: io.rpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => io.capable
 }))
-vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalRuntimeCapabilities>()),
   ensureLocalRuntimeCapabilities: async () => ['github.exact-work-item-target.v1']
 }))
@@ -595,9 +603,6 @@ it('publishes through the actual Tasks PR page and Project dialog using one acce
 it.each(['repo', 'project'] as const)(
   'installs a saved issue representation through the actual parent cache callback (%s)',
   async (origin) => {
-    const { GitHubItemDialogIssueBody } = await vi.importActual<typeof IssueBodyModule>(
-      '../open-dialog/github-item-dialog-issue-body'
-    )
     const opened: GitHubWorkItem = {
       ...item('fork'),
       type: 'issue',

@@ -8,8 +8,8 @@ import {
 } from './tab-create-entry-action'
 import {
   configuredAgentPickerLaunchOption,
-  findMatchingTabAgentLaunchOptions,
-  matchingAgentPickerLaunchOptions
+  matchingAgentLaunchOptions,
+  tabAgentLaunchOptionDisabled
 } from './tab-agent-launch-options'
 import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
@@ -28,7 +28,7 @@ import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-re
 import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
-import { useFileListWorktree } from '@/store/selectors'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { isQuickOpenQueryTooLarge } from '../quick-open-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import { useNetworkSafeTabEntrySelection } from './tab-create-entry-network-selection'
@@ -59,6 +59,7 @@ function TabBarCreateEntrySession({
   onQueryChange,
   onQueueSwitchFocus,
   onSelectMenuOption,
+  terminalPending,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
   const [query, setQuery] = useState('')
@@ -152,11 +153,8 @@ function TabBarCreateEntrySession({
     () =>
       terminalQueryMode
         ? EMPTY_AGENT_OPTIONS
-        : [
-            ...matchingAgentPickerLaunchOptions(agentPickerEntries ?? [], query),
-            ...findMatchingTabAgentLaunchOptions(query, agentOptions)
-          ],
-    [agentOptions, agentPickerEntries, query, terminalQueryMode]
+        : matchingAgentLaunchOptions(agentPickerEntries, agentOptions, query, terminalPending),
+    [agentOptions, agentPickerEntries, query, terminalPending, terminalQueryMode]
   )
 
   const disabled = !onOpenEntry
@@ -236,7 +234,7 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      if (selectedOption.option.disabled) {
+      if (tabAgentLaunchOptionDisabled(selectedOption.option)) {
         return false
       }
       const accepted = onLaunchAgentOption
@@ -389,15 +387,16 @@ function TabBarCreateEntrySession({
                     ? (draft) =>
                         submitOption({
                           kind: 'agent',
-                          option: configuredAgentPickerLaunchOption(option.option, draft)
+                          option: configuredAgentPickerLaunchOption(
+                            option.option,
+                            draft,
+                            terminalPending
+                          )
                         })
                     : undefined
                 }
-                disabled={
-                  disabled ||
-                  pending ||
-                  (option.kind === 'agent' && option.option.disabled === true)
-                }
+                terminalPending={terminalPending}
+                disabled={disabled || pending}
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)

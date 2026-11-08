@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import {
   liveStore,
   mockCreateTab,
@@ -6,10 +7,10 @@ import {
   mockCreateSupport,
   mockCreateStructuredCodexSessionLaunchIntent,
   mockLaunchStructuredCodexSession,
-  structuredLaunchIntent,
   launchErrorMocks,
   mockToastError
 } from './launch-agent-structured-chat-test-fixture'
+import { structuredLaunchIntent } from './structured-session-launch-intent.test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeAll, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
@@ -22,16 +23,16 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { agentLaunchPromptScopeKey } from '@/components/agent/AgentLaunchPromptComposer'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   readNativeChatComposerDraft,
-  updateNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   changePrompt,
   promptEditor
-} from '@/components/native-chat/native-chat-prompt-editor.test-support'
+} from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import * as launcher from './launch-agent-in-new-tab'
 import type * as StructuredLaunch from '../../../launch-structured-agent-session'
@@ -148,7 +149,10 @@ it.each(
     changePrompt(editor(), 'review this change')
     await act(async () => button('Launch terminal').click())
     expect(dispatch).toHaveBeenCalledOnce()
-    expect(dispatch.mock.results[0]).toMatchObject({ type: 'return', value: null })
+    expect(dispatch.mock.results[0]).toMatchObject({
+      type: 'return',
+      value: { refused: { delivered: false, failureNotified: true } }
+    })
     expect(mockCreateTab).not.toHaveBeenCalled()
     expect(readNativeChatComposerDraft(scope).text).toBe('review this change')
     expect(document.querySelector('textarea[aria-label="Arguments"]')).not.toBeNull()
@@ -156,7 +160,10 @@ it.each(
     // The old Arguments Enter gesture reaches the same refusal without consuming its prompt.
     await act(async () => fireEvent.keyDown(argumentsInput, { key: 'Enter' }))
     expect(dispatch).toHaveBeenCalledTimes(2)
-    expect(dispatch.mock.results[1]).toMatchObject({ type: 'return', value: null })
+    expect(dispatch.mock.results[1]).toMatchObject({
+      type: 'return',
+      value: { refused: { delivered: false, failureNotified: true } }
+    })
     expect(readNativeChatComposerDraft(scope).text).toBe('review this change')
 
     fireEvent.change(argumentsInput, { target: { value: '--add-dir docs' } })
@@ -296,7 +303,7 @@ it.each([true, false])(
     )
     await act(async () => button('Launch chat').click())
     const call = dispatch.mock.results[0]
-    const result = call?.type === 'return' ? call.value : null
+    const result = nonRefusedAgentLaunch(call?.type === 'return' ? call.value : null)
     expect(result?.surface.kind).toBe('local-chat')
     expect(await result?.structuredSettlement).toMatchObject({ kind: 'failed' })
     expect(preparationErrors).toEqual([])
@@ -377,8 +384,8 @@ import * as hostPreferences from '@/runtime/agent-launch-settings/use-host-agent
 import * as launchSettings from '@/runtime/agent-launch-settings/agent-launch-settings-transport'
 import * as webEnvironment from '@/runtime/web-runtime-session-environment'
 import * as worktreeHost from '@/lib/workspace/ownership/worktree-runtime-owner'
-import * as terminalCreate from '@/runtime/web-runtime-terminal-create-operation'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as terminalCreate from '@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation'
+import * as runtimeRpc from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type { RuntimeRpcResponse } from '../../../../../../shared/runtime-rpc-envelope'
 
 it.each([

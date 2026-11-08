@@ -10,9 +10,9 @@ import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
 import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
 import type { ChecksPanelBranchActionsState } from './use-checks-panel-branch-actions'
-import { clearPullRequestGenerationRequiresPushBeforeCreate } from '@/store/slices/pull-request-generation'
+import { clearPullRequestGenerationRequiresPushBeforeCreate } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import { translate } from '@/i18n/i18n'
-import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
+import type { PullRequestGenerationFields } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import { useGenerateBeforeCreatePullRequest } from '../../hosted-review/creation/use-generate-before-create-pull-request'
 import { createdReviewIsForeground } from '../../hosted-review/creation/created-review-foreground'
 import {
@@ -39,7 +39,6 @@ type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
     | 'createPrInFlightRef'
     | 'createStackedHostedReview'
     | 'mountedRef'
-    | 'ownerSettings'
     | 'panelContextKey'
     | 'panelContextKeyRef'
     | 'setCreatePrError'
@@ -73,7 +72,6 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     hostedReviewCreateCopy,
     hostedReviewCreateProvider,
     hostedReviewCreation,
-    ownerSettings,
     panelContextKey,
     panelContextKeyRef,
     prAiGenerationEnabled,
@@ -319,8 +317,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     generatePullRequestFields: handleGeneratePullRequestFields,
     generationKey: activePullRequestGenerationKey,
-    repo,
-    settings: ownerSettings
+    repo
   })
   return { handlePullRequestCreated, handleCreatePullRequest }
 }

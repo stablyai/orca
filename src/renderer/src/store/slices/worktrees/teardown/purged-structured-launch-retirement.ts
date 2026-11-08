@@ -13,7 +13,7 @@ import {
 import { discardStructuredAgentSessionChatSends } from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
 import { forgetUnlistedCreatedChat } from '@/lib/agent-session/launch/pane/structured-agent-session-unlisted-created-chats'
 import { readStructuredAgentLaunchRecords } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { clearWebSessionFocusIntentIfMatches } from '@/runtime/web-session-focus-intent'
 import {
   structuredAgentSessionFocusOwner,

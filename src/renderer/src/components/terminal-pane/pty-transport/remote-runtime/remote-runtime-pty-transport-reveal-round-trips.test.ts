@@ -4,8 +4,8 @@ import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
-import { createRemoteRuntimeTransportMocks } from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 // Overlap stream opening with terminal.create and dedupe reveal viewport claims to avoid serial round trips.
 

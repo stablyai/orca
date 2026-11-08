@@ -29,7 +29,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/hooks/useGitHubTaskItems', () => ({
   useGitHubTaskProjectTable: (table: unknown) => table
 }))
-vi.mock('@/runtime/github-slug-owner-api', () => ({
+vi.mock('@/runtime/repository-github/github-slug-owner-api', () => ({
   gitHubSlugApiForTarget: () => ({ projectWorkItemDetailsBySlug: mocks.details })
 }))
 vi.mock('./LabelsEditor', () => ({ LabelsEditor: () => null }))

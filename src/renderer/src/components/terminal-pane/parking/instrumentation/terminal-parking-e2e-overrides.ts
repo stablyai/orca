@@ -5,7 +5,7 @@ import {
 } from '../retention/terminal-hidden-view-parking'
 import '../output-watchers/terminal-parked-tab-watchers'
 import { getParkedTerminalWatcherTabIds } from '../output-watchers/terminal-parked-watcher-registry'
-import { resolveTabScrollbackBuffers } from '../../leaf-scrollback-resolution'
+import { resolveTabScrollbackBuffers } from '../../snapshots/leaf-scrollback-resolution'
 import { useAppStore } from '@/store/index'
 
 export type TerminalWorktreeParkingDebugVerdict = {

@@ -1,3 +1,4 @@
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   mockCreateTab,
@@ -25,6 +26,27 @@ afterEach(() => {
 })
 
 describe('launchAgentInNewTab', () => {
+  it('carries section trust ownership only in the transient pending startup', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    launchAgentInNewTab({
+      requestId: 'section-trust-test',
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      requestedSurface: 'terminal',
+      initialCwd: '/outside/section',
+      trustWorktreeId: 'repo::/outside/section',
+      prompt: 'Resolve conflicts',
+      promptDelivery: 'auto-submit'
+    })
+    expect(queuedStartups()[0]).toMatchObject({
+      trustWorktreeId: 'repo::/outside/section',
+      launchAgent: 'claude'
+    })
+    expect(mockCreateTab.mock.calls[0][0]).toBe('wt-1')
+    expect(mockCreateTab.mock.calls[0][3]).not.toHaveProperty('trustWorktreeId')
+    expect(mockCreateTab.mock.calls[0][3]?.startupCwd).toBe('/outside/section')
+  })
+
   it.each(['created', 'failed'] as const)(
     'settles a %s requested host agent beside existing surfaces using its captured owner',
     async (creation) => {
@@ -237,14 +259,16 @@ describe('launchAgentInNewTab', () => {
       ) => {
         mockCreateTab.mockClear()
         mockCreateWebRuntimeSessionTerminal.mockClear()
-        const result = launchAgentInNewTab({
-          requestId: 'source-parity',
-          agent: 'codex',
-          worktreeId: 'wt-1',
-          requestedSurface: 'terminal',
-          launchPlatform: 'linux',
-          ...input
-        })
+        const result = nonRefusedAgentLaunch(
+          launchAgentInNewTab({
+            requestId: 'source-parity',
+            agent: 'codex',
+            worktreeId: 'wt-1',
+            requestedSurface: 'terminal',
+            launchPlatform: 'linux',
+            ...input
+          })
+        )
         await result?.terminalCompletion
         return {
           startup: queuedStartups()[0],
@@ -269,14 +293,16 @@ describe('launchAgentInNewTab', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const prompt = 'x'.repeat(25_000)
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-17',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt,
-      promptDelivery: 'draft',
-      launchPlatform: 'win32'
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-17',
+        agent: 'claude',
+        worktreeId: 'wt-1',
+        prompt,
+        promptDelivery: 'draft',
+        launchPlatform: 'win32'
+      })
+    )
 
     expect(result?.promptDeliveryResult).toBeDefined()
     expect(queuedStartups()).toContainEqual(
@@ -306,11 +332,13 @@ describe('launchAgentInNewTab', () => {
     const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      ...COMMAND_CODE_CLICK,
-      prompt: 'pending prompt',
-      promptDelivery: 'submit-after-ready'
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        ...COMMAND_CODE_CLICK,
+        prompt: 'pending prompt',
+        promptDelivery: 'submit-after-ready'
+      })
+    )
     store.terminalLayoutsByTabId = {
       'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
     }

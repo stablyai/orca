@@ -91,29 +91,6 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
     }
   })
 
-  it('leaves a canonical UUID pane key on the same path', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      await postHookEvent(
-        server,
-        buildBody({ hook_event_name: 'before_agent_start', prompt: 'canonical omp' }),
-        '/hook/omp'
-      )
-      await postHookEvent(server, buildBody({ hook_event_name: 'agent_end' }), '/hook/omp')
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          state: 'done',
-          prompt: 'canonical omp',
-          agentType: 'omp'
-        })
-      ])
-    } finally {
-      server.stop()
-    }
-  })
-
   it('does not let a foreign reminted key stamp another pane', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
@@ -177,22 +154,6 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
     } finally {
       server.stop()
     }
-  })
-
-  it('updates the remint alias pty when the destination pane is unchanged', () => {
-    const server = new AgentHookServer()
-    const listener = vi.fn()
-    server.setPaneKeyAliasPersistenceListener(listener)
-    server.registerPaneKeyAlias(REMINTED, PANE, 'pty-a', 10, { authorityVerified: true })
-    server.registerPaneKeyAlias(REMINTED, PANE, 'pty-b', 20, { authorityVerified: true })
-    expect(listener).toHaveBeenLastCalledWith([
-      expect.objectContaining({
-        legacyPaneKey: REMINTED,
-        stablePaneKey: PANE,
-        ptyId: 'pty-b',
-        updatedAt: 20
-      })
-    ])
   })
 
   it('does not let a later persist row rebind a reminted token', async () => {

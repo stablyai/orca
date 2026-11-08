@@ -64,7 +64,7 @@ function refreshVisibleRows(
     // xterm unions dirty ranges; use this parse’s span to avoid a full-grid walk on every frame, retaining null as full repaint.
     const start = span ? Math.min(Math.max(span.start, 0), lastRow) : 0
     const end = span ? Math.min(Math.max(span.end, start), lastRow) : lastRow
-    // Windows DOM rewrites need immediate repair; WebGL merges into its queued frame.
+    // Windows DOM rewrites need immediate repair; other renderers merge into their queued frame.
     if (synchronously && typeof terminal._core?.refresh === 'function') {
       terminal._core.refresh(start, end, true)
       return

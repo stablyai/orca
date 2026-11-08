@@ -32,8 +32,9 @@ describe('explicit task refresh conversation reads', () => {
     const result = await getIssueBodyAndComments('/repo', 42, repository, null, {}, true)
     expect(result.body).toBe('current')
     expect(result.comments.map((comment) => comment.body)).toEqual(['first', 'second'])
-    expect(mocks.exec).toHaveBeenCalledTimes(3)
-    for (const [args] of mocks.exec.mock.calls) {
+    for (const [args] of mocks.exec.mock.calls.filter(([args]) =>
+      args.some((arg: string) => arg.startsWith('repos/'))
+    )) {
       expect(args).not.toContain('--cache')
     }
     expect(
@@ -41,6 +42,29 @@ describe('explicit task refresh conversation reads', () => {
         args.some((arg: string) => arg.includes('/comments?'))
       )?.[0]
     ).toEqual(expect.arrayContaining(['--paginate', '--slurp']))
+  })
+  it('marks only the comments the reading gh account wrote', async () => {
+    const comment = (id: number, login: string) => ({
+      id,
+      user: { login, avatar_url: '' },
+      body: 'LGTM',
+      created_at: '',
+      html_url: ''
+    })
+    mocks.exec.mockImplementation(async (args: string[]) => ({
+      stdout: args.includes('user')
+        ? 'Me\n'
+        : args.some((arg) => arg.includes('/comments?'))
+          ? JSON.stringify([[comment(1, 'alice')], [comment(2, 'me')]])
+          : args.some((arg) => arg.includes('/timeline?'))
+            ? ''
+            : JSON.stringify({ body: 'current' })
+    }))
+    const result = await getIssueBodyAndComments('/repo', 42, repository, null, {}, true)
+    expect(result.comments.map((c) => [c.author, c.viewerDidAuthor])).toEqual([
+      ['alice', undefined],
+      ['me', true]
+    ])
   })
   it.each(['body', 'comments', 'timeline'] as const)(
     'fails the whole explicit read if required %s fails',

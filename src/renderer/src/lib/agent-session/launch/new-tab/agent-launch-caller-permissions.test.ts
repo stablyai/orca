@@ -55,13 +55,15 @@ vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(asyn
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => []
 }))
 // A launch the host delivers waits on its reply; these tests read only what was sent.
 const callRuntimeRpc = vi.hoisted(() => vi.fn(() => new Promise(() => {})))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-result', () => ({ RuntimeRpcCallError: Error }))
 
 const CODEX_BYPASS = '--dangerously-bypass-approvals-and-sandbox'
 
@@ -121,6 +123,9 @@ describe('agent launch caller arguments and permission bypass', () => {
         agent: 'codex',
         worktreeId: 'wt-1'
       })
+      if (result && 'refused' in result) {
+        throw new Error('Expected an opened launch')
+      }
 
       expect(result?.startupPlan?.sessionOptions).toBeUndefined()
       const command = queuedStartupCommand(store)

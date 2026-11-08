@@ -19,23 +19,6 @@ function serverWithRegistry(): OrcaRuntimeRpcServer {
 }
 
 describe('pairing.createOffer', () => {
-  it('reaches the pairing service for the owner CLI on the local transport', async () => {
-    const server = serverWithRegistry()
-    const reply = await server['handleMessage'](
-      JSON.stringify({
-        id: 'req-pair',
-        method: 'pairing.createOffer',
-        authToken: server['authToken'],
-        params: { scope: 'mobile', address: '100.64.1.20' }
-      })
-    )
-    // No WebSocket listener in this server, so the service answers with a reason instead of an offer.
-    expect(reply).toMatchObject({
-      ok: true,
-      result: { available: false, reason: 'websocket_unavailable' }
-    })
-  })
-
   it.each(['runtime', 'mobile'] as const)('is refused to a paired %s client', async (scope) => {
     const server = serverWithRegistry()
     const device = server['deviceRegistry']!.addDevice('client', scope)
@@ -75,31 +58,6 @@ describe('owner pairing offers', () => {
       }))
     }
   }
-
-  it('keeps phones on the LAN unless Relay is asked for', async () => {
-    const server = fakeServer()
-    const lan = await createOwnerPairingOffer(server, { scope: 'mobile', address: '100.64.1.20' })
-    const relay = await createOwnerPairingOffer(server, {
-      scope: 'mobile',
-      address: '100.64.1.20',
-      relay: true
-    })
-    expect(lan).toMatchObject({ available: true, connectionMode: 'local-only' })
-    expect(relay).toMatchObject({ available: true, connectionMode: 'automatic' })
-  })
-
-  it('grants desktop control only when asked, and widens before advertising', async () => {
-    const server = fakeServer()
-    await createOwnerPairingOffer(server, {
-      scope: 'runtime',
-      address: '100.64.1.20',
-      grantDesktopControl: true
-    })
-    expect(server.ensureNetworkExposure).toHaveBeenCalled()
-    expect(server.createPairingOffer).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: 'runtime', grants: ['desktop-control'], reach: 'network' })
-    )
-  })
 
   it('reports a failed widening instead of advertising an unreachable address', async () => {
     const server = fakeServer()

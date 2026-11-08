@@ -6,6 +6,7 @@ import { unified } from 'unified'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { mapGraphQLReactionGroups } from '../../comment-reactions'
 import { tailDiffHunk } from '../../../../shared/github/pr-comment-diff-hunk'
+import { viewerAuthorship } from '../../../source-control/comment-viewer-authorship'
 
 const commentSchema = z.object({
   id: z.string(),
@@ -18,6 +19,7 @@ const commentSchema = z.object({
   createdAt: z.string(),
   submittedAt: z.string().nullish(),
   url: z.string(),
+  viewerDidAuthor: z.boolean().nullish().catch(undefined),
   reactionGroups: z
     .array(
       z.object({
@@ -91,6 +93,7 @@ function mapGraphQLComment(
     createdAt: comment.submittedAt ?? comment.createdAt,
     url: comment.url,
     isBot: comment.author?.__typename === 'Bot',
+    ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {}),
     reactionSubjectId: comment.id,
     reactions: mapGraphQLReactionGroups(comment.reactionGroups)
   }
@@ -190,22 +193,24 @@ const restCommentSchema = z.object({
   html_url: z.string()
 })
 
-export function parseRestPRComments(stdout: string, reviews: boolean): PRComment[] {
+export function parseRestPRComments(
+  stdout: string,
+  reviews: boolean,
+  viewerLogin: string | null
+): PRComment[] {
   return z
     .array(restCommentSchema)
     .parse(JSON.parse(stdout))
     .filter((c) => !reviews || hasVisibleReviewBody(c.body))
-    .map((c) => {
-      const mapped: PRComment = {
-        id: c.id,
-        author: c.user?.login ?? 'ghost',
-        authorAvatarUrl: c.user?.avatar_url ?? '',
-        body: c.body ?? '',
-        bodyImageUrls: githubBodyImageUrls(c.body, c.body_html),
-        createdAt: (reviews ? c.submitted_at : c.created_at) ?? '',
-        url: c.html_url,
-        isBot: c.user?.type === 'Bot'
-      }
-      return mapped
-    })
+    .map((c) => ({
+      id: c.id,
+      author: c.user?.login ?? 'ghost',
+      authorAvatarUrl: c.user?.avatar_url ?? '',
+      body: c.body ?? '',
+      bodyImageUrls: githubBodyImageUrls(c.body, c.body_html),
+      createdAt: (reviews ? c.submitted_at : c.created_at) ?? '',
+      url: c.html_url,
+      isBot: c.user?.type === 'Bot',
+      ...viewerAuthorship(c.user?.login, viewerLogin)
+    }))
 }

@@ -26,6 +26,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
               bodyHTML
               createdAt
               url
+              viewerDidAuthor
               path
               reactionGroups {
                 content
@@ -47,6 +48,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           bodyHTML
           createdAt
           url
+          viewerDidAuthor
           reactionGroups {
             content
             viewerHasReacted

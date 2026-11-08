@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { defaultScopeHost } from '@/lib/default-creation-host'
@@ -10,8 +11,8 @@ export type ProviderHostScope = {
   description: string
 }
 
-function remoteServerScopeLabel(name: string): string {
-  return translate(
+function remoteServerScopeLabel(name: string, t: Translate = translate): string {
+  return t(
     'auto.components.settings.providerAccountScope.remoteServer',
     'Remote server: {{value0}}',
     { value0: name }
@@ -25,17 +26,17 @@ function providerHostScopeLabel(target: RuntimeClientTarget): string {
 }
 
 /** Accounts-pane scope while a remote server owns the roster (#8186). */
-export function getRemoteAccountsPaneScope(serverName: string | null): ProviderHostScope {
+export function getRemoteAccountsPaneScope(
+  serverName: string | null,
+  t: Translate = translate
+): ProviderHostScope {
   const name = serverName?.trim()
   return {
     // Unloaded server names need bare fallback labels; interpolation would repeat Remote server.
     label: name
-      ? remoteServerScopeLabel(name)
-      : translate(
-          'auto.components.settings.AccountsPane.accountScopeRemoteServerUnnamed',
-          'Remote server'
-        ),
-    description: translate(
+      ? remoteServerScopeLabel(name, t)
+      : t('auto.components.settings.AccountsPane.accountScopeRemoteServerUnnamed', 'Remote server'),
+    description: t(
       'auto.components.settings.AccountsPane.remoteScopeLocalAccountsKeptHostPicker',
       'Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them.'
     )

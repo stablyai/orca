@@ -106,7 +106,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
     pendingActivationSpawn: true,
     onStructuredHostDeclined: () => ({ opened: seedShell() })
   })
-  if (!result) {
+  if (!result || 'refused' in result) {
     return null
   }
   return { primaryTabId: result.surface.kind === 'host-published' ? null : result.surface.tabId }

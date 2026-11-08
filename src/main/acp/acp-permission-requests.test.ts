@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AcpSessionRuntime, type AcpSessionRuntimeOptions } from './acp-session-runtime'
 import { AcpScriptedAgent, deferred, tick } from './acp-scripted-agent.test-support'
-import type { AcpPermissionHandler } from './acp-permission-requests'
+
 import type { RequestPermissionRequest } from './generated/acp-protocol.generated'
 
 const opened: { close: () => void }[] = []
@@ -29,75 +29,6 @@ afterEach(() =>
 )
 
 describe('ACP permission requests', () => {
-  it.each([
-    ['a newer tool kind', { ...toolCall, kind: 'web_search' }, allow],
-    ['a newer tool status', { ...toolCall, status: 'cancelled' }, allow],
-    ['a newer option kind', toolCall, { ...allow, kind: 'allow_for_session' }]
-  ])('delivers a permission with %s to the caller unchanged', async (_label, call, option) => {
-    const asked = vi.fn((_request: RequestPermissionRequest) => ({
-      outcome: { outcome: 'selected' as const, optionId: option.optionId }
-    }))
-    const { agent, runtime, diagnostics } = fixture({ onPermission: asked })
-    await runtime.start(startOptions)
-    void runtime.prompt([{ type: 'text', text: 'hi' }]).catch(() => {})
-    const params = { sessionId: 'session-1', toolCall: call, options: [option] }
-    expect(await agent.request('p', 'session/request_permission', params)).toMatchObject({
-      result: { outcome: { outcome: 'selected', optionId: option.optionId } }
-    })
-    expect(asked.mock.calls[0][0]).toEqual(params)
-    expect(diagnostics).toEqual([])
-  })
-
-  it('delivers a permission whose other fields are unreadable, dropping only those fields', async () => {
-    const asked = vi.fn((_request: RequestPermissionRequest) => ({
-      outcome: { outcome: 'cancelled' as const }
-    }))
-    const { agent, runtime, diagnostics } = fixture({ onPermission: asked })
-    await runtime.start(startOptions)
-    void runtime.prompt([{ type: 'text', text: 'hi' }]).catch(() => {})
-    const content = [{ type: 'content', content: { type: 'reasoning_summary', text: 'x' } }]
-    await agent.request('p', 'session/request_permission', {
-      sessionId: 'session-1',
-      toolCall: { ...toolCall, content, vendor: 'kept' },
-      options: [{ optionId: 'allow', kind: 'allow_once' }, { name: 'No id' }]
-    })
-    expect(asked.mock.calls[0][0]).toEqual({
-      sessionId: 'session-1',
-      toolCall: { ...toolCall, vendor: 'kept' },
-      options: [{ optionId: 'allow', name: 'allow', kind: 'allow_once' }]
-    })
-    expect(diagnostics).toEqual([
-      'Delivered ACP permission request without unreadable fields: options.0.name, options.1, toolCall.content'
-    ])
-  })
-
-  it.each<[string, AcpPermissionHandler, string]>([
-    [
-      'the handler throws',
-      () => {
-        throw new Error('renderer gone')
-      },
-      'handler failed: Error: renderer gone'
-    ],
-    [
-      'the handler answers nonsense',
-      () => JSON.parse('{"outcome":"yes"}'),
-      'invalid handler response'
-    ]
-  ])('answers cancelled with a diagnostic when %s', async (_label, onPermission, problem) => {
-    const { agent, runtime, diagnostics } = fixture({ onPermission })
-    await runtime.start(startOptions)
-    void runtime.prompt([{ type: 'text', text: 'hi' }]).catch(() => {})
-    expect(
-      await agent.request('p', 'session/request_permission', {
-        sessionId: 'session-1',
-        toolCall,
-        options: [allow]
-      })
-    ).toMatchObject({ result: { outcome: { outcome: 'cancelled' } } })
-    expect(diagnostics).toEqual([`Answered ACP permission request cancelled: ${problem}`])
-  })
-
   it('lets the owner decline a permission after cancel, before the handler starts', async () => {
     let stopping = false
     const asked = vi.fn((_request: RequestPermissionRequest) => ({

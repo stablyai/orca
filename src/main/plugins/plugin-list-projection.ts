@@ -3,6 +3,7 @@ import { needsReconsent } from '../../shared/plugins/approval/plugin-consent-sta
 import { pluginPanelTabKey } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginLockfile } from '../../shared/plugins/installation/plugin-install-lockfile'
 import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from './plugin-discovery'
+import { pluginFontSlot } from '../../shared/plugins/contributions/plugin-font-contribution'
 import {
   pluginInstalledImageUrl,
   type PluginHostImages
@@ -206,6 +207,20 @@ export async function buildPluginList(
           title: newFile.title,
           extension: newFile.extension,
           ...contributionIcon(`new-file-${index}`, newFile.icon)
+        })),
+        fonts: plugin.manifest.contributes.fonts.map((font, familyIndex) => ({
+          family: font.family,
+          faces: font.faces.map((face, faceIndex) => ({
+            // Why the change count for dev folders: their URL is otherwise fixed, so an edited
+            // font would keep its loaded face.
+            url: `${pluginInstalledImageUrl(
+              plugin.pluginKey,
+              plugin.contentHash ?? 'dev',
+              pluginFontSlot(familyIndex, faceIndex)
+            )}${plugin.isDev ? `?v=${plugin.devChangeCount ?? 0}` : ''}`,
+            weight: face.weight ?? '400',
+            style: face.style ?? 'normal'
+          }))
         })),
         commands: service.contentPacks.commands.preview(plugin.pluginKey).map((command) => ({
           id: command.id,

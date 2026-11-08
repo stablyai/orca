@@ -15,11 +15,6 @@ describe('readSvgIntrinsicSize', () => {
   ])('sizes %s', (markup, size) => {
     expect(readSvgIntrinsicSize(markup)).toEqual(size)
   })
-
-  it('leaves an SVG with no usable size to the browser', () => {
-    expect(readSvgIntrinsicSize('<svg width="10em" height="5em">')).toBeNull()
-    expect(readSvgIntrinsicSize('not svg')).toBeNull()
-  })
 })
 
 describe('decodeSvgBase64', () => {

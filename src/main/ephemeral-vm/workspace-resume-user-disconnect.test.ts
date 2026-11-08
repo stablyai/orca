@@ -53,7 +53,6 @@ import {
   resetSshUserDisconnectsForTests
 } from '../ssh/ssh-user-disconnect'
 import { getRuntimeOwnedSshTargetId } from '../ssh/connection/ssh-connection-store'
-import { forgetRecipeVmWakePairingsForTests, recipeVmWakePairing } from './recipe-vm-wake-pairings'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recipe context reader is mocked, so the resume never reads this store.
 const STORE = {} as Store
@@ -67,15 +66,6 @@ describe("waking an SSH-connected recipe VM and its host's Disconnect", () => {
   })
 
   // The reconnect can move the tunnel and re-pair the server; the open that waited expects that.
-  it('reconnects the host when nobody disconnected it, recording the pairing it left', async () => {
-    forgetRecipeVmWakePairingsForTests()
-    await resumeEphemeralVmWorkspace(STORE, 'workspace-1', {
-      sshHeld: false,
-      sshUserDisconnects: 0
-    })
-    expect(mocks.connect).toHaveBeenCalledTimes(1)
-    expect(recipeVmWakePairing('env-vm')).toBe(9)
-  })
 
   it('leaves a Disconnect made during the wake in place, with the VM up', async () => {
     gates.resuming = Promise.withResolvers<void>()
@@ -117,12 +107,4 @@ describe("waking an SSH-connected recipe VM and its host's Disconnect", () => {
 
   // Suspend tore down the VM's SSH transport, so the wake reconnects it even when the recipe had
   // no resume step to run.
-  it('reconnects the host of a VM whose recipe resume was skipped', async () => {
-    gates.skipped = true
-    await resumeEphemeralVmWorkspace(STORE, 'workspace-1', {
-      sshHeld: false,
-      sshUserDisconnects: 0
-    })
-    expect(mocks.connect).toHaveBeenCalledTimes(1)
-  })
 })

@@ -10,6 +10,7 @@ import {
   safePluginThemeTokens,
   type ColorProbe
 } from './plugin-theme-tokens'
+import { CHAT_SELECTION_MIX_TOKEN, chatSelectionMix } from './chat-selection-mix'
 
 export type DocumentThemePreference = GlobalSettings['theme']
 
@@ -183,7 +184,8 @@ function paintPluginTokens(
   const safe = safePluginThemeTokens(tokens, base, builtIns, probe)
   setPluginTokens(root, {
     ...withFloatingSurfaces(safe),
-    [HOST_PILL_OUTLINE_MIX_TOKEN]: `${hostPillOutlineMix(safe, base, builtIns, probe)}%`
+    [HOST_PILL_OUTLINE_MIX_TOKEN]: `${hostPillOutlineMix(safe, base, builtIns, probe)}%`,
+    [CHAT_SELECTION_MIX_TOKEN]: `${chatSelectionMix(safe, base, builtIns, probe)}%`
   })
   return safe
 }

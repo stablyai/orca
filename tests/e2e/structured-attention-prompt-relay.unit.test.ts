@@ -39,10 +39,11 @@ import { MobileNotificationDismissalStore } from '../../src/main/runtime/push/no
 import { createNotificationDeliveryService } from '../../src/main/notifications/notification-delivery-service'
 import '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
 import { SESSION } from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
-import { makeUnifiedTab, makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { captureAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import { useAppStore } from '@/store'
-import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/StructuredAgentSessionAttentionBridge'
+import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
 import { notificationDeliveryId } from '../../src/shared/notification-delivery-id'
 import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session/lifecycle/agent-session-record'
 

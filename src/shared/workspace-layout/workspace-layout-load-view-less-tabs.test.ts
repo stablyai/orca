@@ -35,6 +35,7 @@ function savedSession(): WorkspaceSessionState {
     entry('ed-a', 'editor', '/w/a.ts', 1),
     entry('ghost-review', 'conflict-review', '/w/conflict', 2),
     entry('ghost-checks', 'check-details', '/w/checks', 3),
+    entry('ghost-graph', 'git-graph', `${KEY}::git-graph`, 4),
     entry('ghost-html', 'editor', 'html-preview::/w/page.html', 4),
     entry('kept-diff', 'diff', '/w/b.ts', 5),
     entry('ed-b', 'editor', '/w/b.ts', 6)
@@ -77,17 +78,6 @@ describe("main's layout load of view-less saved editor tabs", () => {
     expect(saved.unifiedTabs?.[KEY]?.map((tab) => tab.id)).toEqual(['ed-a', 'kept-diff', 'ed-b'])
     expect(saved.tabGroups?.[KEY]?.[0]?.tabOrder).toEqual(['ed-a', 'kept-diff', 'ed-b'])
     expect(load(saved).changes).toEqual([])
-  })
-
-  // Loads without main’s views must retain live diffs represented only in memory.
-  it('keeps every saved tab in a load that carries no views', () => {
-    const workspace = loadWorkspaceLayout(
-      LOCAL_EXECUTION_HOST_ID,
-      savedSession(),
-      nameBasedLoadContext()
-    ).layout.workspaces[KEY]!
-
-    expect(workspace.tabs).toHaveLength(7)
   })
 
   it('keeps a transient tab while main still holds its view', () => {

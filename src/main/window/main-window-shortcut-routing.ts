@@ -210,14 +210,15 @@ export function installMainWindowShortcutRouting(args: {
       return
     }
 
-    // TipTap owns bare Cmd/Ctrl+B only; preserve modifier variants (docs/markdown-cmd-b-bold-design.md).
-    const modForBold = process.platform === 'darwin' ? input.meta : input.control
+    // TipTap owns bare Cmd/Ctrl+B and Cmd/Ctrl+K; preserve modifier variants.
+    const modForMarkdown = process.platform === 'darwin' ? input.meta : input.control
     if (
       focus.isMarkdownEditorFocused() &&
-      input.code === 'KeyB' &&
+      (input.code === 'KeyB' || input.key.toLowerCase() === 'k') &&
       !input.alt &&
       !input.shift &&
-      modForBold
+      (process.platform === 'darwin' ? !input.control : !input.meta) &&
+      modForMarkdown
     ) {
       return
     }

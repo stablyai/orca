@@ -240,6 +240,9 @@ async function startOrcadRuntime(
   startAgentStateRulesLiveUpdates(profileStore, (rules) =>
     console.info(`[orcad] agent state rules ${rules.version} (${rules.source})`)
   )
+  // Paired phones dictate through this host; keep its model loaded the same way the desktop does.
+  const { startSpeechModelWarmup } = await import('../speech/speech-model-warmup')
+  startSpeechModelWarmup(profileStore)
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
     const { repairDuplicatePtyPanesOnStart } = await import('../runtime/moved-pane-owner-rekey')
     // Wait behind earlier writes and persist repair before reconciliation/RPC admission.
@@ -310,6 +313,8 @@ async function startOrcadRuntime(
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())
+  // The daemon has no window to wait for; its CI-line watches start with the runtime.
+  runtime.startPullRequestWatches()
   startOrcadAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,

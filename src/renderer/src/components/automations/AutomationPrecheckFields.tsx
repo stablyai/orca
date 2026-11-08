@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/select'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import type { AutomationDraft } from './AutomationEditorDialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AutomationPrecheckFieldsProps = {
   draft: AutomationDraft
@@ -22,22 +22,17 @@ export function AutomationPrecheckFields({
   pickerTriggerClassName,
   onDraftChange
 }: AutomationPrecheckFieldsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Field
       label={
         <span className="flex items-center justify-between gap-2">
           <span className={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}>
-            {translate(
-              'auto.components.automations.AutomationPrecheckFields.c2a762a180',
-              'Precheck'
-            )}
+            {t('auto.components.automations.AutomationPrecheckFields.c2a762a180', 'Precheck')}
           </span>
           <span className="flex shrink-0 items-center gap-2">
             <span className={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}>
-              {translate(
-                'auto.components.automations.AutomationPrecheckFields.bb2dfb3629',
-                'Timeout'
-              )}
+              {t('auto.components.automations.AutomationPrecheckFields.bb2dfb3629', 'Timeout')}
             </span>
             <Select
               value={draft.precheckTimeoutSeconds}
@@ -47,7 +42,7 @@ export function AutomationPrecheckFields({
               }
             >
               <SelectTrigger
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.automations.AutomationPrecheckFields.bb2dfb3629',
                   'Timeout'
                 )}
@@ -58,34 +53,19 @@ export function AutomationPrecheckFields({
               </SelectTrigger>
               <SelectContent position="popper" side="bottom" align="end" sideOffset={4}>
                 <SelectItem value="30">
-                  {translate(
-                    'auto.components.automations.AutomationPrecheckFields.51e28cdad9',
-                    '30 sec'
-                  )}
+                  {t('auto.components.automations.AutomationPrecheckFields.51e28cdad9', '30 sec')}
                 </SelectItem>
                 <SelectItem value="60">
-                  {translate(
-                    'auto.components.automations.AutomationPrecheckFields.c820119736',
-                    '1 min'
-                  )}
+                  {t('auto.components.automations.AutomationPrecheckFields.c820119736', '1 min')}
                 </SelectItem>
                 <SelectItem value="120">
-                  {translate(
-                    'auto.components.automations.AutomationPrecheckFields.d84d3765fd',
-                    '2 min'
-                  )}
+                  {t('auto.components.automations.AutomationPrecheckFields.d84d3765fd', '2 min')}
                 </SelectItem>
                 <SelectItem value="300">
-                  {translate(
-                    'auto.components.automations.AutomationPrecheckFields.bf49585b3c',
-                    '5 min'
-                  )}
+                  {t('auto.components.automations.AutomationPrecheckFields.bf49585b3c', '5 min')}
                 </SelectItem>
                 <SelectItem value="600">
-                  {translate(
-                    'auto.components.automations.AutomationPrecheckFields.d2a2ac89ac',
-                    '10 min'
-                  )}
+                  {t('auto.components.automations.AutomationPrecheckFields.d2a2ac89ac', '10 min')}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -96,7 +76,7 @@ export function AutomationPrecheckFields({
       <textarea
         value={draft.precheckCommand}
         disabled={disabled}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.automations.AutomationPrecheckFields.99a577306c',
           "gh pr list --json number -q '.[0].number'"
         )}

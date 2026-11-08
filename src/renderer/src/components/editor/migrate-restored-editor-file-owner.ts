@@ -10,7 +10,7 @@ import {
   type EditorFileOperationProvenance
 } from '@/lib/editor-file-operation-owner'
 import { requestEditorSaveQuiesce } from './autosave/editor-autosave'
-import type { RestoredEditorOwnerResult } from '@/store/slices/editor'
+import type { RestoredEditorOwnerResult } from '@/store/slices/editor/types/restored-editor-owner'
 import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
 import { afterPendingEntityTabs } from '@/runtime/layout-owner-pending-tabs'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'

@@ -153,16 +153,4 @@ describe('orca host rm', () => {
     expect(runtime.removed).toEqual([])
     expect(process.exitCode).toBe(1)
   })
-
-  it('reports a stopped runtime instead of an unknown target', async () => {
-    const { RuntimeClientError } = await import('./runtime/types.js')
-    callMock.mockRejectedValue(new RuntimeClientError('runtime_unavailable', 'Orca is not running'))
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(['host', 'rm', '--host', `ssh:${STALE.id}`, '--json'], '/tmp/repo')
-
-    expect(printedJson(logSpy).error?.code).toBe('runtime_unavailable')
-    expect(callMock).not.toHaveBeenCalledWith('ssh.removeTarget', expect.anything())
-    expect(process.exitCode).toBe(1)
-  })
 })

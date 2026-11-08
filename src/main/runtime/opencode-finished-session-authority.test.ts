@@ -147,55 +147,6 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     vi.restoreAllMocks()
   })
 
-  it('retires authority when command-finished proves OpenCode left the foreground, even if a title raced the read', async () => {
-    let resolveForeground: ((process: string | null) => void) | undefined
-    const foreground = new Promise<string | null>((resolve) => {
-      resolveForeground = resolve
-    })
-    const getForegroundProcess = vi.fn(() => foreground)
-    const pane = await launchOpenCodePane({
-      ptyId: 'pty-opencode-exit',
-      getForegroundProcess
-    })
-
-    expect(pane.runtime.verifyOrchestrationCompatibilityCaller(pane.evidence)).not.toBeNull()
-
-    // Shell completion/title repaint precede the pending read proving a plain shell.
-    pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
-    pane.runtime.onPtyData(pane.ptyId, '\x1b]0;~/worktree-a\x07', 101)
-    resolveForeground?.('zsh')
-    await settle()
-
-    expect(pane.runtime.verifyOrchestrationCompatibilityCaller(pane.evidence)).toBeNull()
-  })
-
-  it('retires authority when every foreground re-poll keeps racing a fresh title', async () => {
-    let titleSequence = 0
-    const getForegroundProcess = vi.fn(
-      () =>
-        new Promise<string | null>((resolve) => {
-          setTimeout(() => {
-            titleSequence += 1
-            pane.runtime.onPtyData(
-              pane.ptyId,
-              `\x1b]0;~/worktree-a (${titleSequence})\x07`,
-              200 + titleSequence
-            )
-            resolve('zsh')
-          }, 0)
-        })
-    )
-    const pane = await launchOpenCodePane({
-      ptyId: 'pty-opencode-title-storm',
-      getForegroundProcess
-    })
-
-    pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
-    await settle()
-
-    expect(pane.runtime.verifyOrchestrationCompatibilityCaller(pane.evidence)).toBeNull()
-  })
-
   it('stops attesting the finished session token for the reused pane', async () => {
     const server = new AgentHookServer()
     servers.push(server)

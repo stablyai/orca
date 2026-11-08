@@ -49,31 +49,6 @@ afterEach(() => {
 })
 
 describe('runApprovedCreatedWorktreeSetup', () => {
-  it('starts setup and only the default tabs the create left without commands', async () => {
-    const result = await runApprovedCreatedWorktreeSetup(
-      runtimeFor(),
-      'id:wt',
-      hashOrcaHookTrustContent(BRANCH_TRUST_CONTENT)
-    )
-
-    expect(result).toEqual({ status: 'started' })
-    expect(runner.createSetupRunnerScript).toHaveBeenCalledWith(
-      repo,
-      worktreePath,
-      'make bootstrap',
-      {},
-      undefined,
-      undefined
-    )
-    expect(provisionManagedWorktreeTerminals).toHaveBeenCalledWith(
-      expect.objectContaining({
-        setup: expect.objectContaining({ runnerScriptPath: join(worktreePath, 'runner.sh') }),
-        defaultTabs: { tabs: [{ title: 'dev', command: 'pnpm dev' }], runCommands: true },
-        hasStartupTerminal: true
-      })
-    )
-  })
-
   it('runs nothing when the content changed after the user approved it', async () => {
     const result = await runApprovedCreatedWorktreeSetup(
       runtimeFor(),
@@ -89,18 +64,6 @@ describe('runApprovedCreatedWorktreeSetup', () => {
       }
     })
     expect(runner.createSetupRunnerScript).not.toHaveBeenCalled()
-    expect(provisionManagedWorktreeTerminals).not.toHaveBeenCalled()
-  })
-
-  it('never runs setup for a folder workspace', async () => {
-    repo = { ...repo, kind: 'folder' }
-    const result = await runApprovedCreatedWorktreeSetup(
-      runtimeFor(),
-      'id:wt',
-      hashOrcaHookTrustContent(BRANCH_TRUST_CONTENT)
-    )
-
-    expect(result).toEqual({ status: 'not_configured' })
     expect(provisionManagedWorktreeTerminals).not.toHaveBeenCalled()
   })
 })

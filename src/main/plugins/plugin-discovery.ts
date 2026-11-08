@@ -23,6 +23,7 @@ import {
   requiresPluginContentApproval
 } from '../../shared/plugins/approval/plugin-consent-fingerprint'
 import { validateDeclaredPluginArtifacts } from './plugin-artifact-validation'
+import { validatePluginFontArtifacts } from './plugin-font-files'
 import { readPluginManifestText } from './plugin-manifest-file'
 import { readPluginCurrentPointer } from './installation/plugin-current-pointer'
 import { hashPluginTree } from './plugin-content-hash'
@@ -136,6 +137,11 @@ async function readManifestDir(
       error: `invalid declared artifact: ${artifacts.error}`,
       isDev
     }
+  }
+  // Why dev only: install already ran this on installed trees, which never change in place.
+  const fonts = isDev ? await validatePluginFontArtifacts(rootDir, manifest) : { ok: true as const }
+  if (!fonts.ok) {
+    return { pluginKey, rootDir, error: `invalid declared artifact: ${fonts.error}`, isDev }
   }
   let consentContentIdentity: string | undefined
   if (installedContentHash && requiresPluginContentApproval(manifest)) {

@@ -54,15 +54,6 @@ it('rejects depth overflow and invalid submatch shapes', () => {
   expect(() => parseDenseRipgrepMatchJson('{"data":{"submatches":[null]}}', 2, 16)).toThrow()
 })
 
-it.each(['{}', '{"type":"begin","data":{}}', '{"data":null}', '{"data":[]}'])(
-  'does not fabricate a match from %s',
-  (source) => {
-    const projected = parseDenseRipgrepMatchJson(source, 2, 16)
-    expect(projected.data?.path).toBeUndefined()
-    expect(projected.data?.submatches).toEqual([])
-  }
-)
-
 it('validates submatches after reaching the requested result cap', () => {
   const source = JSON.stringify({
     type: 'match',

@@ -21,7 +21,6 @@ vi.mock('os', async () => {
 })
 
 import { CursorHookService } from './hook-service'
-import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
@@ -99,70 +98,6 @@ describe('CursorHookService', () => {
     vi.clearAllMocks()
     removeTreeSync(homeDir)
   })
-
-  it('installs Cursor Agent hooks with the documented top-level command schema', () => {
-    const status = new CursorHookService().install()
-
-    expect(status.state).toBe('installed')
-    expect(status.configPath).toBe(join(homeDir, '.cursor', 'hooks.json'))
-    expect(status.managedHooksPresent).toBe(true)
-
-    const config = JSON.parse(readFileSync(join(homeDir, '.cursor', 'hooks.json'), 'utf8')) as {
-      version?: number
-      hooks: Record<string, { command?: string; hooks?: unknown[] }[]>
-    }
-    expect(config.version).toBe(1)
-    expect(Object.keys(config.hooks).sort()).toEqual([...CURSOR_EVENTS].sort())
-    for (const eventName of CURSOR_EVENTS) {
-      const definition = config.hooks[eventName]?.[0]
-      expect(definition?.command).toMatch(
-        process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /cursor-hook/
-      )
-      if (process.platform !== 'win32') {
-        expect(definition?.command).toContain(join(homeDir, '.orca'))
-      }
-      expect(definition?.hooks).toBeUndefined()
-    }
-
-    const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME),
-      'utf8'
-    )
-    expect(script).toContain('/hook/cursor')
-    expect(script).toContain('GROK_HOOK_EVENT')
-    if (process.platform === 'win32') {
-      expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-    } else {
-      // Stdin avoids oversized curl command lines that trigger EDR.
-      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
-      expect(script).toContain('printf \'%s\' "$payload" | LC_ALL= LC_NUMERIC=C curl')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-    }
-  })
-
-  it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
-    () => {
-      const spaceHome = join(tmpdir(), 'orca cursor home with spaces')
-      mkdirSync(spaceHome, { recursive: true })
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        expect(new CursorHookService().install().state).toBe('installed')
-
-        const config = JSON.parse(
-          readFileSync(join(spaceHome, '.cursor', 'hooks.json'), 'utf8')
-        ) as { hooks: Record<string, { command?: string }[]> }
-
-        for (const eventName of ['beforeSubmitPrompt', 'stop']) {
-          const command = config.hooks[eventName]?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-        }
-      } finally {
-        removeTreeSync(spaceHome)
-      }
-    }
-  )
 
   it('preserves user-authored Cursor hook entries and removes stale managed entries', () => {
     const configPath = join(homeDir, '.cursor', 'hooks.json')

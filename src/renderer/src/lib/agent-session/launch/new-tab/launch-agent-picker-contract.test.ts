@@ -1,3 +1,4 @@
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import {
   useAgentPickerSetup,
   useAgentPickerDraftScope
@@ -43,11 +44,13 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 const inventory = vi.hoisted(() => ({ settings: vi.fn(), legacy: vi.fn(), session: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: async (...args: unknown[]) =>
     args[1] === 'settings.getAgentLaunch'
       ? { settings: await inventory.settings(...args) }
-      : inventory.legacy(...args),
+      : inventory.legacy(...args)
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => true,
   runtimeEnvironmentSupportsCapabilities: async () => [false, false]
 }))
@@ -306,7 +309,7 @@ describe('picker window launch contract', () => {
           })
         }
         const call = dispatch.mock.results.at(-1)
-        const result = call?.type === 'return' ? call.value : undefined
+        const result = nonRefusedAgentLaunch(call?.type === 'return' ? call.value : undefined)
         await result?.terminalCompletion
         cleanup()
         return {
@@ -362,7 +365,8 @@ describe('picker window launch contract', () => {
 })
 
 it('keeps pristine, edited and reopened historical-host picker launches free of desktop defaults', async () => {
-  const operation = await import('@/runtime/web-runtime-terminal-create-operation')
+  const operation =
+    await import('@/runtime/hosted-terminals/creation/web-runtime-terminal-create-operation')
   vi.spyOn(operation, 'createWebRuntimeSessionTerminalResult').mockImplementation(
     async ({ legacyAgentLaunch, ...request }) => ({
       outcome: await mockCreateWebRuntimeSessionTerminal({

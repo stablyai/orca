@@ -4,11 +4,11 @@ import { worktreeActivate } from '../host-screen/host-screen-operations'
 import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activation-result'
 import { createInitialSessionAutoCreateState } from './use-initial-session-terminal-autocreate'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
 import type { RpcResponse } from '../transport/types'
 
 export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) {
   const {
-    hostId,
     worktreeId,
     created,
     isFloatingWorkspaceRoute,
@@ -17,6 +17,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setTerminals,
     terminalsRef,
     setSessionTabs,
+    readLastSessionTabs,
     appliedSnapshotMarkerRef,
     closedTabTombstonesRef,
     setTerminalsLoaded,
@@ -74,7 +75,9 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     setActiveHandle(null)
     setTerminals([])
     terminalsRef.current = []
-    setSessionTabs([])
+    // Paint the last strip until the host's snapshot replaces it (which treats it as the previous strip); offline keeps the empty-state body.
+    const lastTabs = connState === 'connected' ? readLastSessionTabs() : undefined
+    setSessionTabs(lastTabs ? withoutSessionTabHostOwnership(lastTabs) : [])
     setActiveSessionTabId(null)
     clearPendingLiveInputCommit()
     setMarkdownDocs(new Map())
@@ -92,8 +95,7 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
     clearTerminalCache,
     setSplitTerminalHandles,
     terminalPaneViewportsRef,
-    hostId,
-    worktreeId
+    readLastSessionTabs
   ])
 
   // Every setTimeout goes through addTimer into `timers`, which the returned cleanup clears.
@@ -145,19 +147,12 @@ export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) 
           .then(reportActivationOutcome)
           .catch(() => null)
       }
-      if (disposed) {
-        return
-      }
-      await ensureSessionTabs().catch(() => null)
-      if (disposed) {
-        return
-      }
+      // Both join the focus refresh's in-flight reads; its 2 s tick re-lists while the tab stream is unconfirmed or a handle is pending.
+      void ensureSessionTabs().catch(() => null)
       await fetchTerminals({ allowEmptyLoaded: false })
       if (disposed) {
         return
       }
-      addTimer(() => void fetchTerminals({ allowEmptyLoaded: false }), 750)
-      addTimer(() => void fetchTerminals({ allowEmptyLoaded: true }), 1500)
       if (client && created === '1' && !isFloatingWorkspaceRoute) {
         addTimer(() => {
           if (activeHandleRef.current) {

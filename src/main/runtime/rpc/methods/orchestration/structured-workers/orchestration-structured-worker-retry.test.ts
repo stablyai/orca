@@ -119,7 +119,8 @@ async function createWorker() {
       coordinatorHandle: 'term_coordinator',
       devMode: false,
       requestId: 'request-retry',
-      readinessTimeoutMs: 2000
+      // Why: real-time budget; five refused opens can outlast 2s on a loaded host and turn refusal into a timeout.
+      readinessTimeoutMs: 20_000
     })
   return { runtime, created, workerRuntime, deliverPreamble }
 }

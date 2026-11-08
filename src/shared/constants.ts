@@ -8,6 +8,7 @@ import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-at
 import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 import type { VoiceSettings } from './speech-types'
 import { DICTATION_LANGUAGE_AUTO } from './dictation-language'
+import { DEFAULT_UNLOAD_MODEL_AFTER_MINUTES } from './voice-model-unload'
 import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
 import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
@@ -20,6 +21,7 @@ import { getDefaultNotificationSettings } from './notification-settings-defaults
 import { getDefaultOnboardingState } from './onboarding-defaults'
 import {
   defaultTerminalFontFamily,
+  defaultTerminalFontWeight,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
 } from './terminal/appearance/terminal-platform-defaults'
@@ -99,6 +101,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     primarySelectionDefaultedForLinux:
       typeof process !== 'undefined' && process.platform === 'linux',
     terminalFontFamily: defaultTerminalFontFamily(),
+    terminalFontWeight: defaultTerminalFontWeight(),
+    // Fresh Windows profiles start on Regular, so a later 500 is a choice, not the old default.
+    terminalFontWeightWindowsRegular:
+      typeof process !== 'undefined' && process.platform === 'win32' ? 'done' : undefined,
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),
@@ -118,7 +124,8 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     userModels: [],
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,
-    microphoneDeviceLabel: null
+    microphoneDeviceLabel: null,
+    unloadModelAfterMinutes: DEFAULT_UNLOAD_MODEL_AFTER_MINUTES
   }
 }
 

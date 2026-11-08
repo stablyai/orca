@@ -103,6 +103,13 @@ export function installMultiplexSlotFrames(state: TerminalMultiplexConnection): 
       }
       return
     }
+    if (frame.opcode === TerminalStreamOpcode.SetOutputCadence && stream.supportsOutputCadence) {
+      const payload = decodeTerminalStreamJson<{ cadence?: unknown }>(frame.payload)
+      if (payload?.cadence === 'focused' || payload?.cadence === 'background') {
+        stream.outputBatcher.setCadence(payload.cadence)
+      }
+      return
+    }
     if (frame.opcode === TerminalStreamOpcode.Resize && stream.client) {
       const viewport = decodeViewportFrame(frame.payload)
       if (!viewport) {

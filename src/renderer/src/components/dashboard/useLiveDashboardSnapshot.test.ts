@@ -1,9 +1,13 @@
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
 
 const transport = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: transport.call }))
-vi.mock('@/runtime/runtime-rpc-subscribe', () => ({ subscribeRuntimeRpc: transport.subscribe }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: transport.call
+}))
+vi.mock('@/runtime/rpc/subscriptions/runtime-rpc-subscribe', () => ({
+  subscribeRuntimeRpc: transport.subscribe
+}))
 // @vitest-environment happy-dom
 import { cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

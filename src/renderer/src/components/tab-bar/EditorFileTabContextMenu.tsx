@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import { translate } from '@/i18n/i18n'
 import { LocalOnlyMenuHint } from '@/components/local-only-menu-hint'
 import {

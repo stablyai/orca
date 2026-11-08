@@ -111,6 +111,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           // The paired client's own create: its user's act.
           wslUserAct: true,
           ...startupCommand,
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           cwd,
           identity: {
             tabId: deterministicAgentSessionUuid(`mobile-qoder-tab\0${seed}`),
@@ -139,6 +140,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           envToDelete: startupCommand.envToDelete,
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           launchAgent: startupCommand.launchAgent,
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           viewMode: opts.viewMode,
           targetGroupId: opts.targetGroupId,
           ...mainPlacedAfter(
@@ -204,6 +206,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
           ...(startupCommand.envToDelete ? { envToDelete: startupCommand.envToDelete } : {}),
           ...(startupCommand.launchConfig ? { launchConfig: startupCommand.launchConfig } : {}),
           ...(startupCommand.launchAgent ? { launchAgent: startupCommand.launchAgent } : {}),
+          ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
@@ -267,6 +270,7 @@ export abstract class OrcaRuntimeWithRunCreateMobileSessionTerminal extends Orca
             startupCommandDelivery: startupCommand.startupCommandDelivery,
             identity: { tabId: pendingSurface.tab.parentTabId, leafId: pendingSurface.tab.leafId },
             launchAgent: startupCommand.launchAgent,
+            ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
             viewMode: opts.viewMode,
             targetGroupId: opts.targetGroupId,
             supportsSplitGroupPlacement: opts.supportsSplitGroupPlacement,

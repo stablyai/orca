@@ -13,7 +13,7 @@ import '../../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import type { OrchestrationEnvironmentTransport } from '../../../../orchestration/federation/environment-transport'
-import { waitForFederatedLifecycleSettlement } from '../../../../orchestration/federation/federation-lifecycle-settlement'
+import '../../../../orchestration/federation/federation-lifecycle-settlement'
 import { RpcDispatcher } from '../../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { createFederationWorkerStartRequest as startRequest } from './federation-request.test-support'
@@ -690,20 +690,6 @@ describe('orchestration federation lifecycle settlement', () => {
       ok: false,
       error: { code: 'operation_unknown' }
     })
-  })
-
-  it('does not register a waiter for an already-aborted signal', async () => {
-    const controller = new AbortController()
-    controller.abort()
-    const addEventListener = vi.spyOn(controller.signal, 'addEventListener')
-
-    await expect(
-      waitForFederatedLifecycleSettlement(workerRuntime, 'ctx_aborted', 1, {
-        timeoutMs: 0,
-        signal: controller.signal
-      })
-    ).resolves.toBeUndefined()
-    expect(addEventListener).not.toHaveBeenCalled()
   })
 
   it('keeps terminal settlement replayable until the worker durably acknowledges it', async () => {

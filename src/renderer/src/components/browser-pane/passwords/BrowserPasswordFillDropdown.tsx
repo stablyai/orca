@@ -8,7 +8,7 @@ import {
   CommandItem,
   CommandGroup
 } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   BrowserPasswordFieldFocusEvent,
   BrowserPasswordSuggestion
@@ -103,6 +103,7 @@ function BrowserPasswordFillList({
   anchor: React.CSSProperties
   onEscape: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [selectedEntryId, setSelectedEntryId] = useState(field.suggestions[0]?.entryId ?? '')
   const focusPicker = useCallback(
     (node: HTMLInputElement | null) => {
@@ -144,7 +145,7 @@ function BrowserPasswordFillList({
       <KeyRound className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 flex-1">
         <span className="block truncate">
-          {suggestion.username || translate('browser.passwords.fill.noUsername', '(no username)')}
+          {suggestion.username || t('browser.passwords.fill.noUsername', '(no username)')}
         </span>
         {suggestion.exactOrigin ? null : (
           <span className="block truncate text-xs text-muted-foreground">
@@ -170,7 +171,7 @@ function BrowserPasswordFillList({
         onCloseAutoFocus={(event) => event.preventDefault()}
       >
         <Command
-          label={translate('browser.passwords.fill.title', 'Saved logins')}
+          label={t('browser.passwords.fill.title', 'Saved logins')}
           shouldFilter={false}
           value={selectedEntryId}
           onValueChange={setSelectedEntryId}
@@ -186,15 +187,12 @@ function BrowserPasswordFillList({
         >
           <CommandInput ref={focusPicker} readOnly wrapperClassName="sr-only" />
           <CommandList>
-            <CommandGroup heading={translate('browser.passwords.fill.title', 'Saved logins')}>
+            <CommandGroup heading={t('browser.passwords.fill.title', 'Saved logins')}>
               {exact.map(renderRow)}
             </CommandGroup>
             {sameSite.length > 0 ? (
               <CommandGroup
-                heading={translate(
-                  'browser.passwords.fill.otherLogins',
-                  'Other logins on this site'
-                )}
+                heading={t('browser.passwords.fill.otherLogins', 'Other logins on this site')}
               >
                 {sameSite.map(renderRow)}
               </CommandGroup>

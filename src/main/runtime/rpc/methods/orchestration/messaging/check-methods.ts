@@ -1,6 +1,6 @@
 import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { CheckParams } from '../schemas'
+import { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { parseMessageTypes } from '../routing'
 import { checkRunMailbox } from './check-run'
 import { checkWorkerMailbox } from './check-worker'

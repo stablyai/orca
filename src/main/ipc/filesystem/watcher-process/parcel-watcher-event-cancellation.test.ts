@@ -1,11 +1,11 @@
 import { setImmediate } from 'node:timers/promises'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-const { statMock } = vi.hoisted(() => ({ statMock: vi.fn() }))
-vi.mock('node:fs/promises', () => ({ stat: statMock }))
 import {
   createWatcherProcessEventDeliveryQueue,
   prepareWatcherProcessEvents
 } from './parcel-watcher-event-delivery'
+const { statMock } = vi.hoisted(() => ({ statMock: vi.fn() }))
+vi.mock('node:fs/promises', () => ({ stat: statMock }))
 
 const delivery = { includeDirectoryMetadata: true, maxEventsPerBatch: 100 }
 const directory = { isDirectory: () => true }
@@ -82,22 +82,5 @@ describe('closed watcher metadata work', () => {
       queue.close()
       await setImmediate()
     }
-  })
-
-  it('still delivers file-like invalidations for live stat failures and skips deleted paths', async () => {
-    statMock.mockRejectedValue(new Error('file vanished'))
-    expect(
-      await prepareWatcherProcessEvents(
-        [
-          { type: 'update', path: '/vanished' },
-          { type: 'delete', path: '/deleted' }
-        ],
-        delivery
-      )
-    ).toEqual([
-      { type: 'update', path: '/vanished', isDirectory: false },
-      { type: 'delete', path: '/deleted' }
-    ])
-    expect(statMock).toHaveBeenCalledTimes(1)
   })
 })

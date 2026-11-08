@@ -10,7 +10,7 @@ import type { PairedTerminalTabCloseIntentsByEnvironment } from './paired-termin
 import {
   getRuntimeEnvironmentRevision,
   isRuntimeEnvironmentContinuationPending
-} from './runtime-environment-revision'
+} from './rpc/environment-revisions/runtime-environment-revision'
 import {
   clearWebSessionCloseIntent,
   makeWebSessionCloseIntentDurable,

@@ -25,6 +25,12 @@ export function githubBodyImageCandidates(body: string): Map<string, URL> {
 const imageId = new RegExp(UUID, 'i')
 export const GITHUB_BODY_MEDIA_TYPE = 'Accept: application/vnd.github.full+json'
 
+type GitHubBodyHtmlObject = Record<string, unknown>
+
+function isGitHubBodyHtmlObject(value: unknown): value is GitHubBodyHtmlObject {
+  return value !== null && typeof value === 'object'
+}
+
 export function removeFailedGitHubBodyHtml<T>(
   data: unknown,
   errors: T[] | undefined
@@ -63,24 +69,15 @@ export function removeFailedGitHubBodyHtml<T>(
     }
     let target = data
     for (const part of path.slice(0, -1)) {
-      if (
-        !target ||
-        typeof target !== 'object' ||
-        (typeof part === 'number' && !Array.isArray(target))
-      ) {
+      if (!isGitHubBodyHtmlObject(target) || (typeof part === 'number' && !Array.isArray(target))) {
         return true
       }
-      target = Reflect.get(target, part)
+      target = target[part]
     }
-    if (
-      !target ||
-      typeof target !== 'object' ||
-      !('body' in target) ||
-      typeof target.body !== 'string'
-    ) {
+    if (!isGitHubBodyHtmlObject(target) || typeof target.body !== 'string') {
       return true
     }
-    Reflect.deleteProperty(target, 'bodyHTML')
+    delete target.bodyHTML
     return false
   })
 }

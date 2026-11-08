@@ -6,7 +6,10 @@ import type { QueuedMessageRow } from './queued-message-table'
 
 /** A card's own fields as a `queued` change: its text, place, time and options. */
 export function queuedChangeOf(
-  card: Pick<QueuedMessageRow, 'body' | 'position' | 'queuedAt' | 'options' | 'recovers'>
+  card: Pick<
+    QueuedMessageRow,
+    'body' | 'position' | 'queuedAt' | 'options' | 'recovers' | 'deliveryMode' | 'unattended'
+  >
 ): JournalQueuedChange {
   return {
     op: 'queued',
@@ -14,6 +17,8 @@ export function queuedChangeOf(
     position: card.position,
     queuedAt: card.queuedAt,
     ...(card.options ? { options: card.options } : {}),
+    ...(card.deliveryMode !== undefined ? { deliveryMode: card.deliveryMode } : {}),
+    ...(card.unattended !== undefined ? { unattended: card.unattended } : {}),
     ...(card.recovers ? { recovers: card.recovers } : {})
   }
 }

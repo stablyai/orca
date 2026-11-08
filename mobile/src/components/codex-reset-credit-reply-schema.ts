@@ -1,14 +1,6 @@
-import { z } from 'zod'
-import { salvagedOptional } from '../../../src/shared/zod-salvage'
+import * as z from 'zod'
 
 // Reset-credit schemas match runtime status.get and accounts.consumeCodexResetCredit handlers.
-
-// Missing/unreadable capabilities mean unsupported; optional string array drops malformed list whole. object-result-or-null keeps foreign payload nonthrowing.
-export const codexResetCapabilityListSchema = z
-  .looseObject({
-    capabilities: salvagedOptional('capabilities', z.array(z.string()))
-  })
-  .transform((reply) => reply.capabilities)
 
 // Forward opaque redeem reply: decodeResetResult owns scope/status/outcome/retryDisposition validation and user sentence; duplicate reader checks would split refusal rule.
 export const codexResetCreditReplySchema = z.unknown()

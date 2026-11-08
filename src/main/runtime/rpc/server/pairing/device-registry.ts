@@ -2,8 +2,14 @@
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
 import { mintTokenDevice } from './device-credential'
 import { planDeviceKeyFork } from './device-key-fork'
+import {
+  isExchangeSignIn,
+  planForkedTicketRetirement,
+  planTicketExchange,
+  promoteExchangedTicket
+} from './pairing-ticket-exchange'
 import { planIdleEphemeralPrune } from './ephemeral-device-rows'
-import { DeviceRegistryStore } from './device-registry-store'
+import { DeviceRegistrySightings } from './device-registry-sightings'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../../../../shared/runtime-pairing-reach'
@@ -31,15 +37,8 @@ import {
   type TokenDeviceEntry
 } from './device-entry'
 import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
-import type { NetworkSourceClass } from '../../network-source-class'
 
-// Coalesce reconnect bookkeeping: each Windows save otherwise spawns synchronous ACL PowerShell twice.
-const LAST_SEEN_FLUSH_DELAY_MS = 250
-
-export class DeviceRegistry extends DeviceRegistryStore {
-  /** First sightings this session, kept even when their persist failed. */
-  private readonly seenDeviceIds = new Set<string>()
-
+export class DeviceRegistry extends DeviceRegistrySightings {
   addDevice(
     name: string,
     scope: DeviceScope = 'mobile',
@@ -200,7 +199,47 @@ export class DeviceRegistry extends DeviceRegistryStore {
 
   validateToken(token: string): DeviceEntry | null {
     this.adoptExternalEdits()
-    return findTokenDevice(this.devices, token, this.seenDeviceIds)
+    const device = findTokenDevice(this.devices, token, this.seenDeviceIds)
+    return device && isExchangeSignIn(device, token) ? this.retirePairingToken(device) : device
+  }
+
+  /** Durable before the reply, so a client that stores the replacement can always sign in with it. */
+  exchangePairingTicket(deviceId: string, presentedToken: string, exchangeToken: string): void {
+    this.adoptExternalEdits()
+    const next = planTicketExchange(this.devices, deviceId, presentedToken, exchangeToken)
+    this.devices = this.save(next, { durable: true })
+  }
+
+  /** After an authenticated key sign-in; a failed write is retried on the next one. */
+  retireForkedTicket(signedInDeviceId: string): void {
+    const next = planForkedTicketRetirement(this.devices, signedInDeviceId)
+    if (next) {
+      this.saveOrLog(
+        { durable: true },
+        'retire a pairing code a browser replaced',
+        this.devices,
+        next
+      )
+    }
+  }
+
+  /** First sign-in with the replacement; a failed write keeps both tokens and retries next sign-in. */
+  private retirePairingToken(device: DeviceEntry & { exchangeToken: string }): DeviceEntry {
+    const promoted = promoteExchangedTicket(device)
+    try {
+      this.devices = this.save(
+        this.devices.map((d) => (d === device ? promoted : d)),
+        { durable: true }
+      )
+      return this.getDevice(device.deviceId) ?? promoted
+    } catch (error) {
+      console.error('[runtime] Failed to retire an exchanged pairing token:', error)
+      return {
+        ...device,
+        token: device.exchangeToken,
+        callerFingerprint: promoted.callerFingerprint
+      }
+    }
   }
 
   // Clients erase keys on unknown; reserve that verdict for readable absence.
@@ -227,7 +266,15 @@ export class DeviceRegistry extends DeviceRegistryStore {
       options
     )
     if (fork.created) {
-      this.devices = this.save(fork.nextDevices, { durable: true })
+      // Remembered so the link is never reported as an outdated client once session keys are gone.
+      const next = options.ephemeral
+        ? fork.nextDevices.map((device) =>
+            device.deviceId === legacyDeviceId && device.servesSessionBrowsers !== true
+              ? { ...device, servesSessionBrowsers: true as const }
+              : device
+          )
+        : fork.nextDevices
+      this.devices = this.save(next, { durable: true })
     }
     return fork.entry
   }
@@ -245,47 +292,4 @@ export class DeviceRegistry extends DeviceRegistryStore {
     this.adoptExternalEdits()
     return findPrincipalDevice(this.devices, principal)
   }
-
-  updateLastSeen(deviceId: string, sourceClass?: NetworkSourceClass): void {
-    // Persist first sighting inline or rotation could delete a paired row still pending on disk.
-    this.seenDeviceIds.add(deviceId)
-    const seenAt = Date.now()
-    this.replaceRow(deviceId, ({ offerExpiresAt: _paired, ...device }) =>
-      seen(device, seenAt, sourceClass)
-    )
-  }
-
-  /** Defer repeat sightings to avoid synchronous Windows ACL saves during E2EE auth.
-   * First sighting must persist inline so pending-offer rotation cannot revoke a paired device. */
-  updateLastSeenDeferred(deviceId: string, sourceClass?: NetworkSourceClass): void {
-    const existing = this.getDevice(deviceId)
-    if (!existing || existing.lastSeenAt === 0) {
-      return existing ? this.updateLastSeen(deviceId, sourceClass) : undefined
-    }
-    const seenAt = Date.now()
-    this.devices = this.devices.map((device) =>
-      device === existing ? seen(device, seenAt, sourceClass) : device
-    )
-    if (this.pendingLastSeenFlush) {
-      return
-    }
-    this.pendingLastSeenFlush = setTimeout(
-      () => this.flushPendingLastSeen(),
-      LAST_SEEN_FLUSH_DELAY_MS
-    )
-    this.pendingLastSeenFlush.unref?.()
-  }
-
-  flushPendingLastSeen(): void {
-    if (!this.pendingLastSeenFlush) {
-      return
-    }
-    this.cancelPendingLastSeenFlush()
-    // Failed bookkeeping must not terminate the runtime.
-    this.saveOrLog({}, 'persist device lastSeen')
-  }
-}
-
-function seen(device: DeviceEntry, seenAt: number, sourceClass?: NetworkSourceClass): DeviceEntry {
-  return { ...device, lastSeenAt: seenAt, ...(sourceClass ? { lastSourceClass: sourceClass } : {}) }
 }
