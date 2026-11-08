@@ -9,13 +9,8 @@ import {
 } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
-import {
-  getRepoExecutionHostId,
-  getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
+import { getSettingsFocusedExecutionHostId } from '../../../../../../shared/execution-host'
 import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace-scope'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import {
@@ -55,8 +50,12 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
 } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useProjectRowActions } from './use-project-row-actions'
+import { buildSidebarRailRows } from '../../rail/sidebar-rail-rows'
+import { SidebarRailWorktreeList } from '../../rail/SidebarRailWorktreeList'
 
 type WorktreeListProps = {
+  presentation?: 'cards' | 'rail'
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
   workspaceBoardOpen?: boolean
@@ -74,6 +73,7 @@ const useSidebarListModel =
     : useWindowSidebarListModel
 
 const WorktreeList = React.memo(function WorktreeList({
+  presentation = 'cards',
   scrollOffsetRef,
   scrollAnchorRef,
   workspaceBoardOpen = false,
@@ -102,9 +102,6 @@ const WorktreeList = React.memo(function WorktreeList({
   const boardStatuses = useWorkspaceBoardStatuses()
   const sortBy = useAppStore((s) => s.sortBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
-  const openModal = useAppStore((s) => s.openModal)
-  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
-  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   const pendingRevealWorktree = useAppStore((s) => s.pendingRevealWorktree)
@@ -166,6 +163,13 @@ const WorktreeList = React.memo(function WorktreeList({
     [rowModel.occurrencePlan]
   )
   const effectiveCollapsedGroups = rowModel.effectiveCollapsedGroups
+  const railRows = useMemo(
+    () =>
+      presentation === 'rail'
+        ? buildSidebarRailRows(rowModel.sectionRows, pinnedDisplayPolicy, effectiveCollapsedGroups)
+        : [],
+    [effectiveCollapsedGroups, pinnedDisplayPolicy, presentation, rowModel.sectionRows]
+  )
   const projectCollapseKeys = useMemo(
     () => (groupBy === 'repo' ? getRenderedProjectCollapseKeys(rowModel.sectionRows) : []),
     [groupBy, rowModel.sectionRows]
@@ -209,41 +213,7 @@ const WorktreeList = React.memo(function WorktreeList({
     markSidebarWorktreeActiveImmediately(worktreeId, rowKey)
   }, [])
 
-  const handleOpenRepoSettings = useCallback(
-    (projectId: string, sectionId?: string) => {
-      openSettingsTarget({ pane: 'repo', repoId: projectId, ...(sectionId ? { sectionId } : {}) })
-      openSettingsPage()
-    },
-    [openSettingsPage, openSettingsTarget]
-  )
-  const handleOpenWorktreeVisibility = useCallback(
-    (repo: Repo) => {
-      openModal('worktree-visibility', { repoId: repo.id, hostId: getRepoExecutionHostId(repo) })
-    },
-    [openModal]
-  )
-  const handleRemoveProject = useCallback(
-    (repo: Repo) => {
-      openModal('confirm-remove-folder', {
-        repoId: repo.id,
-        displayName: repo.displayName,
-        hostId: getRepoExecutionHostId(repo)
-      })
-    },
-    [openModal]
-  )
-  const handleCreateFolderWorkspace = useCallback(
-    (projectGroup: ProjectGroup) => {
-      if (!projectGroup.parentPath) {
-        return
-      }
-      openModal('new-workspace-composer', {
-        initialProjectGroupId: projectGroup.id,
-        telemetrySource: 'sidebar'
-      })
-    },
-    [openModal]
-  )
+  const projectRowActions = useProjectRowActions()
 
   useSidebarRevealRequests({
     groupBy,
@@ -283,6 +253,25 @@ const WorktreeList = React.memo(function WorktreeList({
     },
     [announceProjectCollapse, toggleGroup]
   )
+  if (presentation === 'rail') {
+    return (
+      <SidebarRailWorktreeList
+        rows={railRows}
+        activeWorktreeId={
+          activeView === 'tasks' || activeView === 'activity' ? null : currentSidebarWorktreeId
+        }
+        activeWorkspaceExecutionHostId={activeWorkspaceExecutionHostId}
+        selectedWorktreeIds={selection.selectedWorktreeIds}
+        workspaceStatuses={boardStatuses}
+        toggleGroup={handleToggleGroup}
+        onSelectionGesture={selection.updateSelectionForGesture}
+        onContextMenuSelect={selection.selectForContextMenu}
+        onImmediateActivate={handleImmediateWorktreeActivate}
+        onWorktreeCardClick={onWorktreeCardClick}
+      />
+    )
+  }
+
   // Clear Filters must outrank empty project headers when filtering hides every workspace.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
     return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
@@ -315,7 +304,7 @@ const WorktreeList = React.memo(function WorktreeList({
         onConfirmSuppressExternalWorktreeInbox={() => {
           void externalWorktreeCards.handleConfirmSuppressExternalWorktreeInbox()
         }}
-        onOpenWorktreeVisibility={handleOpenWorktreeVisibility}
+        onOpenWorktreeVisibility={projectRowActions.handleOpenWorktreeVisibility}
       />
       <VirtualizedWorktreeViewport
         // Wake moves status headers; preserve viewport identity across those changes.
@@ -337,8 +326,8 @@ const WorktreeList = React.memo(function WorktreeList({
         onToggleAllProjects={projectCollapseKeys.length > 0 ? handleToggleAllProjects : undefined}
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={openHeaderCreateComposer}
-        handleOpenRepoSettings={handleOpenRepoSettings}
-        handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
+        handleOpenRepoSettings={projectRowActions.handleOpenRepoSettings}
+        handleOpenWorktreeVisibility={projectRowActions.handleOpenWorktreeVisibility}
         handleShowImportedWorktrees={externalWorktreeCards.handleShowImportedWorktrees}
         handleKeepImportedWorktreesHidden={externalWorktreeCards.handleKeepImportedWorktreesHidden}
         importedWorktreeCardActionState={externalWorktreeCards.importedWorktreeCardActionState}
@@ -348,14 +337,14 @@ const WorktreeList = React.memo(function WorktreeList({
         newExternalWorktreeInboxActionState={
           externalWorktreeCards.newExternalWorktreeInboxActionState
         }
-        handleRemoveProject={handleRemoveProject}
+        handleRemoveProject={projectRowActions.handleRemoveProject}
         handleCreateGroupFromRepo={projectGroupDialogs.handleCreateGroupFromRepo}
         handleMoveProjectToGroup={projectGroupDialogs.handleMoveProjectToGroup}
         handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
         handleRefreshProjectGroup={projectGroupDialogs.handleRefreshProjectGroup}
-        handleCreateFolderWorkspace={handleCreateFolderWorkspace}
+        handleCreateFolderWorkspace={projectRowActions.handleCreateFolderWorkspace}
         activeModal={activeModal}
         pendingRevealWorktree={pendingRevealWorktree}
         pendingRevealSidebarRow={pendingRevealSidebarRow}

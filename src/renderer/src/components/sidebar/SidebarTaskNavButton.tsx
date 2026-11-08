@@ -13,19 +13,67 @@ import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
-import { useTranslate } from '@/i18n/use-translate'
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getTaskPresetQuery } from '../../../../shared/work-items/task-preset-query'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
-  resolveVisibleTaskProvider
+  resolveVisibleTaskProvider,
+  type TaskProvider
 } from '../../../../shared/work-items/task-providers'
+import { SidebarRailTooltip, sidebarRailButtonClassName } from './sidebar-rail-control'
 
-function HideTaskSidebarMenu({ onHide }: { onHide: () => void }): React.JSX.Element {
+type TaskProviderShortcutEntry = {
+  provider: TaskProvider
+  label: string
+  icon: React.ReactNode
+}
+
+function getTaskProviderShortcutEntries(t: Translate = translate): TaskProviderShortcutEntry[] {
+  return [
+    {
+      provider: 'github',
+      label: t('auto.components.sidebar.SidebarNav.0ccba862b8', 'Open GitHub tasks'),
+      icon: <Github className="size-3.5" aria-hidden />
+    },
+    {
+      provider: 'gitlab',
+      label: t('auto.components.sidebar.SidebarNav.196c1b5362', 'Open GitLab tasks'),
+      icon: <Gitlab className="size-3.5" aria-hidden />
+    },
+    {
+      provider: 'linear',
+      label: t('auto.components.sidebar.SidebarNav.c39ab10000', 'Open Linear tasks'),
+      icon: <LinearIcon className="size-3.5" />
+    },
+    {
+      provider: 'jira',
+      label: t('auto.components.sidebar.SidebarNav.e7ad3c540d', 'Open Jira tasks'),
+      icon: <JiraIcon className="size-3.5" />
+    }
+  ]
+}
+
+function HideTaskSidebarMenu({
+  onHide,
+  providerShortcuts,
+  onOpenProvider
+}: {
+  onHide: () => void
+  providerShortcuts?: TaskProviderShortcutEntry[]
+  onOpenProvider?: (provider: TaskProvider) => void
+}): React.JSX.Element {
   const t = useTranslate()
   return (
     <ContextMenuContent>
+      {providerShortcuts?.map((entry) => (
+        <ContextMenuItem key={entry.provider} onSelect={() => onOpenProvider?.(entry.provider)}>
+          {entry.icon}
+          {entry.label}
+        </ContextMenuItem>
+      ))}
       <ContextMenuItem onSelect={onHide}>
         <EyeOff className="size-3.5" />
         {t('auto.components.sidebar.SidebarNav.d599269755', 'Hide from sidebar')}
@@ -55,7 +103,11 @@ function TaskProviderShortcut({
   )
 }
 
-export function SidebarTaskNavButton(): React.JSX.Element | null {
+export function SidebarTaskNavButton({
+  compact = false
+}: {
+  compact?: boolean
+}): React.JSX.Element | null {
   const t = useTranslate()
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -154,6 +206,39 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   }
 
   const tasksActive = activeView === 'tasks'
+  const tasksLabel = t('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')
+  const providerShortcuts = getTaskProviderShortcutEntries(t).filter((entry) =>
+    visibleTaskProviders.includes(entry.provider)
+  )
+  const openProviderTasks = (provider: TaskProvider): void => openTaskPage({ taskSource: provider })
+
+  if (compact) {
+    return (
+      <ContextMenu>
+        <SidebarRailTooltip label={tasksLabel} shortcutActionId="view.tasks">
+          <ContextMenuTrigger asChild>
+            <button
+              type="button"
+              onClick={() => openTaskPage()}
+              onPointerEnter={handlePrefetch}
+              onFocus={handlePrefetch}
+              aria-current={tasksActive ? 'page' : undefined}
+              aria-label={tasksLabel}
+              data-contextual-tour-target="sidebar-tasks"
+              className={sidebarRailButtonClassName(tasksActive)}
+            >
+              <List className="size-4 shrink-0" strokeWidth={tasksActive ? 2.25 : 1.75} />
+            </button>
+          </ContextMenuTrigger>
+        </SidebarRailTooltip>
+        <HideTaskSidebarMenu
+          onHide={hideTasksButton}
+          providerShortcuts={providerShortcuts}
+          onOpenProvider={openProviderTasks}
+        />
+      </ContextMenu>
+    )
+  }
 
   return (
     <ContextMenu>
@@ -181,43 +266,18 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
               )}
               strokeWidth={tasksActive ? 2.25 : 1.75}
             />
-            <span className="flex-1">
-              {t('auto.components.sidebar.SidebarNav.fee535205b', 'Tasks')}
-            </span>
+            <span className="flex-1">{tasksLabel}</span>
           </button>
           <span className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 can-hover:pointer-events-none can-hover:opacity-0 can-hover:group-hover:pointer-events-auto can-hover:group-hover:opacity-100 can-hover:group-focus-within:pointer-events-auto can-hover:group-focus-within:opacity-100">
-            {visibleTaskProviders.includes('github') ? (
+            {providerShortcuts.map((entry) => (
               <TaskProviderShortcut
-                label={t('auto.components.sidebar.SidebarNav.0ccba862b8', 'Open GitHub tasks')}
-                onOpen={() => openTaskPage({ taskSource: 'github' })}
+                key={entry.provider}
+                label={entry.label}
+                onOpen={() => openProviderTasks(entry.provider)}
               >
-                <Github className="size-3.5" aria-hidden />
+                {entry.icon}
               </TaskProviderShortcut>
-            ) : null}
-            {visibleTaskProviders.includes('gitlab') ? (
-              <TaskProviderShortcut
-                label={t('auto.components.sidebar.SidebarNav.196c1b5362', 'Open GitLab tasks')}
-                onOpen={() => openTaskPage({ taskSource: 'gitlab' })}
-              >
-                <Gitlab className="size-3.5" aria-hidden />
-              </TaskProviderShortcut>
-            ) : null}
-            {visibleTaskProviders.includes('linear') ? (
-              <TaskProviderShortcut
-                label={t('auto.components.sidebar.SidebarNav.c39ab10000', 'Open Linear tasks')}
-                onOpen={() => openTaskPage({ taskSource: 'linear' })}
-              >
-                <LinearIcon className="size-3.5" />
-              </TaskProviderShortcut>
-            ) : null}
-            {visibleTaskProviders.includes('jira') ? (
-              <TaskProviderShortcut
-                label={t('auto.components.sidebar.SidebarNav.e7ad3c540d', 'Open Jira tasks')}
-                onOpen={() => openTaskPage({ taskSource: 'jira' })}
-              >
-                <JiraIcon className="size-3.5" />
-              </TaskProviderShortcut>
-            ) : null}
+            ))}
           </span>
         </div>
       </ContextMenuTrigger>

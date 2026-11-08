@@ -7588,7 +7588,12 @@
           "running": "Running",
           "idle": "Idle"
         },
-        "projectOrderSaveFailed": "Could not save the complete project order"
+        "projectOrderSaveFailed": "Could not save the complete project order",
+        "rail": {
+          "expandGroup": "Expand {{label}} ({{count}})",
+          "collapseGroup": "Collapse {{label}}",
+          "projectsWithActivity": "{{label}}, {{count}} active"
+        }
       },
       "shared": {
         "useDaemonActions": {
@@ -8364,7 +8369,11 @@
           "5cb5475664": "Confirm before closing pinned tabs",
           "36b2a5dc6d": "Show a confirmation dialog before a pinned tab is closed.",
           "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
+          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it.",
+          "sidebarStyle": "Sidebar style",
+          "sidebarStyleDescription": "Rail shows icons only.",
+          "sidebarStyleFull": "Full",
+          "sidebarStyleRail": "Rail"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -10680,7 +10689,11 @@
             "markdownDefaultView": "Default Markdown View",
             "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
             "markdownSourceKw": "source",
-            "markdownRichKw": "rich"
+            "markdownRichKw": "rich",
+            "railKeyword": "rail",
+            "collapseKeyword": "collapse",
+            "compactKeyword": "compact",
+            "iconsKeyword": "icons"
           }
         },
         "git": {

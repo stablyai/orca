@@ -24,6 +24,7 @@ import { LocalGitToolchainScanBanner } from './LocalGitToolchainScanBanner'
 import { SeveredTerminalDaemonBanner } from './SeveredTerminalDaemonBanner'
 import { StalledTerminalDaemonBanner } from './StalledTerminalDaemonBanner'
 import { StartupWorktreeRefreshStatus } from './StartupWorktreeRefreshStatus'
+import { SIDEBAR_RAIL_SNAP_THRESHOLD, SIDEBAR_RAIL_WIDTH } from './rail/sidebar-rail-geometry'
 
 // Load the shared Activity badge/list pipeline after the sidebar shell.
 const SidebarAgentsList = lazyWithRetry(() => import('./SidebarAgentsList'))
@@ -66,6 +67,8 @@ function Sidebar({
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
+  const sidebarRail = useAppStore((s) => s.sidebarRail)
+  const setSidebarRail = useAppStore((s) => s.setSidebarRail)
   const repos = useAppStore((s) => s.repos)
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
@@ -146,15 +149,27 @@ function Sidebar({
     }
   }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, showAgentDashboard])
 
-  const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
-    isOpen: sidebarOpen,
-    width: sidebarWidth,
-    minWidth: MIN_WIDTH,
-    maxWidth: MAX_WIDTH,
-    deltaSign: 1,
-    setWidth: setSidebarWidth,
-    onDraftWidthChange: setSidebarLiveWidth
-  })
+  const railSnap = useMemo(
+    () => ({
+      isRail: sidebarRail,
+      railWidth: SIDEBAR_RAIL_WIDTH,
+      threshold: SIDEBAR_RAIL_SNAP_THRESHOLD,
+      setRail: setSidebarRail
+    }),
+    [setSidebarRail, sidebarRail]
+  )
+  const { containerRef, onResizeStart, isResizing, isRailRendered } =
+    useSidebarResize<HTMLDivElement>({
+      isOpen: sidebarOpen,
+      width: sidebarWidth,
+      minWidth: MIN_WIDTH,
+      maxWidth: MAX_WIDTH,
+      deltaSign: 1,
+      setWidth: setSidebarWidth,
+      onDraftWidthChange: setSidebarLiveWidth,
+      railSnap
+    })
+  const showRail = sidebarOpen && isRailRendered
 
   const drawerCoversSeam =
     workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)
@@ -164,9 +179,9 @@ function Sidebar({
   const sidebarRef = React.useCallback(
     (node: HTMLDivElement | null) => {
       containerRef.current = node
-      dropOwnerRef(sidebarOpen ? node : null)
+      dropOwnerRef(sidebarOpen && !sidebarRail ? node : null)
     },
-    [containerRef, dropOwnerRef, sidebarOpen]
+    [containerRef, dropOwnerRef, sidebarOpen, sidebarRail]
   )
 
   return (
@@ -175,11 +190,40 @@ function Sidebar({
       <div className="relative flex min-h-0 flex-shrink-0 scrollbar-sleek-parent">
         <div
           ref={sidebarRef}
-          className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden"
+          className={
+            showRail
+              ? 'relative z-30 min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-visible'
+              : 'relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden'
+          }
           style={leftSidebarStyle}
           {...dropHandlers}
         >
-          {sidebarOpen && (
+          {showRail ? (
+            <div className="flex min-h-0 flex-1 flex-col" data-sidebar-rail="">
+              <SidebarNav compact />
+              <SidebarHeader
+                compact
+                onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
+                activityOptionsTarget={setAgentOptionsTarget}
+              />
+              <SeveredTerminalDaemonBanner />
+              <StalledTerminalDaemonBanner />
+              <WorktreeList
+                presentation="rail"
+                scrollOffsetRef={worktreeScrollOffsetRef}
+                scrollAnchorRef={worktreeScrollAnchorRef}
+                workspaceBoardOpen={workspaceBoardOpen}
+                onWorktreeCardClick={closeWorkspaceBoard}
+              />
+              <SidebarToolbar
+                compact
+                workspaceBoardOpen={workspaceBoardOpen}
+                workspaceBoardDragPreviewOpen={workspaceBoardDragPreviewOpen}
+                onWorkspaceBoardToggle={toggleWorkspaceBoard}
+              />
+            </div>
+          ) : null}
+          {sidebarOpen && !showRail && (
             <>
               <SidebarNav />
               <SidebarHeader
@@ -238,7 +282,7 @@ function Sidebar({
             </>
           )}
 
-          {sidebarOpen && affordance.visible ? (
+          {sidebarOpen && !showRail && affordance.visible ? (
             <div
               className={cn(
                 'pointer-events-none absolute inset-2 z-20 flex flex-col items-center justify-center gap-1.5 rounded-md border bg-worktree-sidebar-accent/95 px-4 text-center text-worktree-sidebar-accent-foreground shadow-xs',

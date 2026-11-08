@@ -8,19 +8,22 @@ import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/componen
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SidebarRailProjectsMenu } from './rail/SidebarRailProjectsMenu'
 
 type SidebarHeaderProps = {
   activityBadgeTarget?: React.Ref<HTMLSpanElement>
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
   projectsCollapseTarget?: React.Ref<HTMLDivElement>
+  compact?: boolean
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
   activityBadgeTarget,
   onWorkspaceBoardMenuOpenChange,
   activityOptionsTarget,
-  projectsCollapseTarget
+  projectsCollapseTarget,
+  compact = false
 }: SidebarHeaderProps) {
   const t = useTranslate()
   // Subscribe this memoized header to locale changes before using translate().
@@ -50,6 +53,17 @@ const SidebarHeader = React.memo(function SidebarHeader({
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
   )
+
+  if (compact) {
+    return (
+      <div className="mt-2 flex shrink-0 justify-center px-1.5 text-muted-foreground">
+        <SidebarRailProjectsMenu
+          label={sidebarTitle}
+          onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="group/sidebar-header mt-2 flex h-8 min-w-0 shrink-0 items-center justify-between gap-1.5 px-2">

@@ -124,6 +124,7 @@ export function usePersistedUIWriter(): void {
       gitGraphFiltersByWorktree: s.gitGraphFiltersByWorktree,
       sidebarWidth: s.sidebarWidth,
       sidebarOpen: s.sidebarOpen,
+      sidebarRail: s.sidebarRail,
       rightSidebarOpen: s.rightSidebarOpen,
       rightSidebarTab: s.rightSidebarTab,
       rightSidebarExplorerView: s.rightSidebarExplorerView,

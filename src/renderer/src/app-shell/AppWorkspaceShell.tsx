@@ -158,7 +158,7 @@ export function AppWorkspaceShell(props: {
               layout.leftTitlebarChromeLayout.shouldMount ? (
                 /* Remove the collapsed header from flex layout so panes reclaim the left edge. */
                 <div
-                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarOpen ? '' : ' relative w-0 overflow-visible'}`}
+                  className={`flex min-h-0 flex-col shrink-0${layout.sidebarExpanded ? '' : layout.sidebarRail ? ' relative overflow-visible' : ' relative w-0 overflow-visible'}`}
                 >
                   <div
                     // The floating header covers the center border; restore the seam and size to its own controls.
@@ -169,15 +169,17 @@ export function AppWorkspaceShell(props: {
                     }`}
                     style={{
                       // Why: custom sidebar appearances are scoped to the sidebar root; mirror those vars onto the header in the same left-column panel.
-                      ...(layout.sidebarOpen ? layout.leftSidebarStyle : undefined),
+                      ...(layout.sidebarExpanded ? layout.leftSidebarStyle : undefined),
                       // Why: size from the wrapper's live width so the header tracks in-flight drag resizes (persisted to Zustand only on mouseup).
-                      width: layout.sidebarOpen ? '100%' : undefined
+                      width: layout.sidebarExpanded ? '100%' : undefined
                     }}
                   >
                     {titlebarLeftControls}
                   </div>
                   {/* Keep a shrinkable flex viewport below the fixed header so the sidebar can scroll. */}
-                  <div className="flex min-h-0 flex-1">
+                  <div
+                    className={`flex min-h-0 flex-1${layout.sidebarRail && layout.leftTitlebarChromeLayout.isFloating ? ' pt-9' : ''}`}
+                  >
                     <WorktreeSidebar layout={layout} scrollRefs={sidebarScrollRefs} />
                   </div>
                 </div>

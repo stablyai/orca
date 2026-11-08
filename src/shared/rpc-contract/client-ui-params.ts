@@ -129,6 +129,7 @@ export const UiUpdateFields = z
     activeView: TopLevelViewSchema.optional(),
     sidebarWidth: z.number().finite().optional(),
     sidebarOpen: z.boolean().optional(),
+    sidebarRail: z.boolean().optional(),
     rightSidebarOpen: z.boolean().optional(),
     rightSidebarTab: RightSidebarTabParam.optional(),
     rightSidebarExplorerView: z.enum(['files', 'search']).optional(),

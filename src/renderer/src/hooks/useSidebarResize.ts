@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
+export type SidebarRailSnap = {
+  isRail: boolean
+  railWidth: number
+  threshold: number
+  setRail: (rail: boolean) => void
+}
+
 type UseSidebarResizeOptions = {
   isOpen: boolean
   width: number
@@ -9,11 +16,13 @@ type UseSidebarResizeOptions = {
   renderedExtraWidth?: number
   setWidth: (width: number) => void
   onDraftWidthChange?: (width: number) => void
+  railSnap?: SidebarRailSnap
 }
 
 type UseSidebarResizeResult<T extends HTMLElement> = {
   containerRef: React.RefObject<T | null>
   isResizing: boolean
+  isRailRendered: boolean
   onResizeStart: (event: React.MouseEvent) => void
 }
 
@@ -48,6 +57,23 @@ export function getNextSidebarResizeWidth({
   return clampSidebarResizeWidth(startWidth + delta, minWidth, maxWidth)
 }
 
+export function resolveSidebarRailDrag({
+  pointerWidth,
+  threshold,
+  minWidth,
+  maxWidth
+}: {
+  pointerWidth: number
+  threshold: number
+  minWidth: number
+  maxWidth: number
+}): { rail: true } | { rail: false; width: number } {
+  if (pointerWidth < threshold) {
+    return { rail: true }
+  }
+  return { rail: false, width: clampSidebarResizeWidth(pointerWidth, minWidth, maxWidth) }
+}
+
 export function useSidebarResize<T extends HTMLElement>({
   isOpen,
   width,
@@ -56,8 +82,11 @@ export function useSidebarResize<T extends HTMLElement>({
   deltaSign,
   renderedExtraWidth = 0,
   setWidth,
-  onDraftWidthChange
+  onDraftWidthChange,
+  railSnap
 }: UseSidebarResizeOptions): UseSidebarResizeResult<T> {
+  const isRail = railSnap?.isRail === true
+  const railWidth = railSnap?.railWidth ?? 0
   const containerRef = useRef<T | null>(null)
   const isResizingRef = useRef(false)
   const startXRef = useRef(0)
@@ -66,6 +95,8 @@ export function useSidebarResize<T extends HTMLElement>({
   const frameRef = useRef<number | null>(null)
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const [isResizing, setIsResizing] = useState(false)
+  const draftRailRef = useRef(isRail)
+  const [draftRail, setDraftRail] = useState(isRail)
 
   const removeDragOverlay = useCallback(() => {
     const overlay = overlayRef.current
@@ -100,9 +131,11 @@ export function useSidebarResize<T extends HTMLElement>({
     }
 
     draftWidthRef.current = width
-    applyRenderedWidth(width)
-    onDraftWidthChange?.(width)
-  }, [applyRenderedWidth, onDraftWidthChange, width])
+    draftRailRef.current = isRail
+    const renderedWidth = isRail ? railWidth : width
+    applyRenderedWidth(renderedWidth)
+    onDraftWidthChange?.(renderedWidth)
+  }, [applyRenderedWidth, onDraftWidthChange, width, isRail, railWidth])
 
   const stopResize = useCallback(() => {
     if (!isResizingRef.current) {
@@ -120,12 +153,25 @@ export function useSidebarResize<T extends HTMLElement>({
     resetDocumentStyles()
 
     const finalWidth = draftWidthRef.current
-    applyRenderedWidth(finalWidth)
-    onDraftWidthChange?.(finalWidth)
-    if (finalWidth !== width) {
+    const finalRail = draftRailRef.current
+    const renderedWidth = finalRail ? railWidth : finalWidth
+    applyRenderedWidth(renderedWidth)
+    onDraftWidthChange?.(renderedWidth)
+    if (!finalRail && finalWidth !== width) {
       setWidth(finalWidth)
     }
-  }, [applyRenderedWidth, onDraftWidthChange, resetDocumentStyles, setWidth, width])
+    if (railSnap && finalRail !== railSnap.isRail) {
+      railSnap.setRail(finalRail)
+    }
+  }, [
+    applyRenderedWidth,
+    onDraftWidthChange,
+    railSnap,
+    railWidth,
+    resetDocumentStyles,
+    setWidth,
+    width
+  ])
 
   const handleMouseMove = useCallback(
     (event: MouseEvent) => {
@@ -133,30 +179,50 @@ export function useSidebarResize<T extends HTMLElement>({
         return
       }
 
-      const nextWidth = getNextSidebarResizeWidth({
-        clientX: event.clientX,
-        startX: startXRef.current,
-        startWidth: startWidthRef.current,
-        deltaSign,
-        minWidth,
-        maxWidth
-      })
-      if (nextWidth === draftWidthRef.current) {
+      let nextWidth = draftWidthRef.current
+      let nextRail = false
+      if (railSnap) {
+        const resolved = resolveSidebarRailDrag({
+          pointerWidth: startWidthRef.current + (event.clientX - startXRef.current) * deltaSign,
+          threshold: railSnap.threshold,
+          minWidth,
+          maxWidth
+        })
+        nextRail = resolved.rail
+        if (!resolved.rail) {
+          nextWidth = resolved.width
+        }
+      } else {
+        nextWidth = getNextSidebarResizeWidth({
+          clientX: event.clientX,
+          startX: startXRef.current,
+          startWidth: startWidthRef.current,
+          deltaSign,
+          minWidth,
+          maxWidth
+        })
+      }
+      if (nextWidth === draftWidthRef.current && nextRail === draftRailRef.current) {
         return
       }
 
       draftWidthRef.current = nextWidth
+      if (nextRail !== draftRailRef.current) {
+        draftRailRef.current = nextRail
+        setDraftRail(nextRail)
+      }
       if (frameRef.current !== null) {
         return
       }
 
       frameRef.current = window.requestAnimationFrame(() => {
         frameRef.current = null
-        applyRenderedWidth(draftWidthRef.current)
-        onDraftWidthChange?.(draftWidthRef.current)
+        const renderedWidth = draftRailRef.current ? railWidth : draftWidthRef.current
+        applyRenderedWidth(renderedWidth)
+        onDraftWidthChange?.(renderedWidth)
       })
     },
-    [applyRenderedWidth, deltaSign, maxWidth, minWidth, onDraftWidthChange]
+    [applyRenderedWidth, deltaSign, maxWidth, minWidth, onDraftWidthChange, railSnap, railWidth]
   )
 
   useEffect(() => {
@@ -185,9 +251,11 @@ export function useSidebarResize<T extends HTMLElement>({
       isResizingRef.current = true
       setIsResizing(true)
       startXRef.current = event.clientX
-      startWidthRef.current = width
+      startWidthRef.current = isRail ? railWidth : width
       draftWidthRef.current = width
-      onDraftWidthChange?.(width)
+      draftRailRef.current = isRail
+      setDraftRail(isRail)
+      onDraftWidthChange?.(isRail ? railWidth : width)
       document.body.style.cursor = 'col-resize'
       document.body.style.userSelect = 'none'
 
@@ -203,8 +271,13 @@ export function useSidebarResize<T extends HTMLElement>({
         overlayRef.current = overlay
       }
     },
-    [onDraftWidthChange, width]
+    [isRail, onDraftWidthChange, railWidth, width]
   )
 
-  return { containerRef, isResizing, onResizeStart }
+  return {
+    containerRef,
+    isResizing,
+    isRailRendered: isResizing ? draftRail : isRail,
+    onResizeStart
+  }
 }

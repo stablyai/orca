@@ -127,9 +127,11 @@ export type UiViewHistory =
 export type UISliceCore = {
   sidebarOpen: boolean
   sidebarWidth: number
+  sidebarRail: boolean
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
+  setSidebarRail: (rail: boolean) => void
   agentSendPopoverTargetMode: AgentSendPopoverTargetMode | null
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void
