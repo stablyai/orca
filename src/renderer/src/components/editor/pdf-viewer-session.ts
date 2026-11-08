@@ -17,6 +17,8 @@ import {
   createPdfViewPositionRecorder
 } from './pdf-view-position'
 
+const PAGE_WIDTH_REFIT_SETTLE_MS = 150
+
 const USER_SCROLL_INPUT_EVENTS = ['wheel', 'touchstart', 'keydown', 'pointerdown'] as const
 
 function watchUserScrollInput(container: HTMLElement, onInput: () => void): () => void {
@@ -35,7 +37,7 @@ export function createPdfViewerSession({
   viewerDiv,
   doc,
   scrollCacheKey,
-  scalePreference,
+  getScalePreference,
   scaleBounds,
   onScaleChanging,
   onWheelZoom
@@ -44,7 +46,7 @@ export function createPdfViewerSession({
   viewerDiv: HTMLDivElement
   doc: pdfjsLib.PDFDocumentProxy
   scrollCacheKey: string | null
-  scalePreference: PdfScalePreference
+  getScalePreference: () => PdfScalePreference
   scaleBounds: { min: number; max: number }
   onScaleChanging: (scale: number) => void
   onWheelZoom: (scale: PdfScalePreference) => void
@@ -87,16 +89,13 @@ export function createPdfViewerSession({
   container.addEventListener(
     'wheel',
     (event) => {
-      const page = viewer.getPageView(viewer.currentPageNumber - 1)
-      // Why: pdf.js's 'page-width' scale, given removePageBorders (no padding) and no spreads.
-      const fitScale = page ? (container.clientWidth / page.width) * page.scale : null
-      const scale = zoomPdfViewerWithWheel(viewer, event, scaleBounds, fitScale)
-      if (scale !== null && scale === fitScale) {
-        // Same scale, so pdf.js only records the preset that split resizes refit to.
-        viewer.currentScaleValue = 'page-width'
-        onWheelZoom('page-width')
-      } else if (scale !== null) {
-        onWheelZoom(scale)
+      const preference = zoomPdfViewerWithWheel(viewer, event, scaleBounds, () => {
+        const page = viewer.getPageView(viewer.currentPageNumber - 1)
+        // Why: pdf.js's 'page-width' scale, given removePageBorders (no padding) and no spreads.
+        return page ? (container.clientWidth / page.width) * page.scale : null
+      })
+      if (preference !== null) {
+        onWheelZoom(preference)
       }
     },
     { passive: false, signal: abortController.signal }
@@ -125,7 +124,7 @@ export function createPdfViewerSession({
 
   const handlePagesInit = (): void => {
     // Why: pdf.js drops a preset scale set before its page views exist, leaving the PDF at 100%.
-    applyPdfScalePreference(viewer, scalePreference, scaleBounds)
+    applyPdfScalePreference(viewer, getScalePreference(), scaleBounds)
     const cached = scrollCacheKey ? pdfViewPositionCache.get(scrollCacheKey) : undefined
     const clamped = cached ? clampPdfViewPosition(cached, viewer.pagesCount) : null
     if (!clamped) {
@@ -183,18 +182,27 @@ export function createPdfViewerSession({
   }
 
   // Why: pdf.js computes 'page-width' once; split resizes and maximize must refit it.
-  let fittedWidth = 0
-  const fitWidthObserver = new ResizeObserver(() => {
-    const width = container.clientWidth
-    if (width === 0 || width === fittedWidth) {
-      return
-    }
-    fittedWidth = width
-    if (viewer.pagesCount > 0 && viewer.currentScaleValue === 'page-width') {
+  let refitTimer: ReturnType<typeof setTimeout> | null = null
+  const refitPageWidth = (): void => {
+    refitTimer = null
+    // Why: a hidden pane measures zero wide and would fit the pages to nothing.
+    if (
+      container.clientWidth > 0 &&
+      viewer.pagesCount > 0 &&
+      viewer.currentScaleValue === 'page-width'
+    ) {
       viewer.currentScaleValue = 'page-width'
     }
+  }
+  const fitWidthObserver = new ResizeObserver(() => {
+    // Why: each refit re-renders the visible pages, so wait for a split drag to settle.
+    if (refitTimer !== null) {
+      clearTimeout(refitTimer)
+    }
+    refitTimer = setTimeout(refitPageWidth, PAGE_WIDTH_REFIT_SETTLE_MS)
   })
-  fitWidthObserver.observe(container)
+  // Why: border-box ignores the scrollbar a refit can toggle, which would refit again in a loop.
+  fitWidthObserver.observe(container, { box: 'border-box' })
 
   eventBus.on('pagesinit', handlePagesInit)
   eventBus.on('pagesloaded', handlePagesLoaded)
@@ -211,6 +219,9 @@ export function createPdfViewerSession({
     detachInputWatcher?.()
     disconnectVisibilityObserver()
     fitWidthObserver.disconnect()
+    if (refitTimer !== null) {
+      clearTimeout(refitTimer)
+    }
     recorder?.dispose()
     eventBus.off('pagesinit', handlePagesInit)
     eventBus.off('pagesloaded', handlePagesLoaded)
@@ -232,7 +243,7 @@ export function createPdfViewerSession({
     viewer.setDocument(doc)
     linkService.setDocument(doc)
     findController.setDocument(doc)
-    applyPdfScalePreference(viewer, scalePreference, scaleBounds)
+    applyPdfScalePreference(viewer, getScalePreference(), scaleBounds)
   } catch (error) {
     dispose()
     throw error
