@@ -127,6 +127,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId)
         })
       : null
+    this.runtime.setPairedWorkspaceContextSource(this.mobileRelayHostCatalog)
   }
 
   private listRelayedPhones(): { phoneKey: string; name: string }[] {

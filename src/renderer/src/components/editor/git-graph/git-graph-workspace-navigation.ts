@@ -3,10 +3,10 @@ import { translate } from '@/i18n/i18n'
 import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
 import { getWorktreeExecutionHostId } from '../../../../../shared/execution-host'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
 import { gitGraphScope } from '@/lib/git-graph-tab'
-import { getRuntimeGitRefs } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitRefs } from '@/runtime/source-control/git/runtime-git-status-client'
 
 export const gitGraphOwnerKey = (scope: ReturnType<typeof gitGraphScope>) =>
   JSON.stringify([scope?.route, scope?.worktree.path])

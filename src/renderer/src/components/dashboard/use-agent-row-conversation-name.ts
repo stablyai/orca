@@ -1,4 +1,4 @@
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getAgentRowConversationName } from '../../../../shared/agent-status/presentation/agent-row-conversation-name'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { structuredChatDisplayName } from '../../../../shared/structured-chat-row-name'

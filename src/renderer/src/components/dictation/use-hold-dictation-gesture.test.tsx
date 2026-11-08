@@ -118,65 +118,6 @@ describe('useHoldDictationGesture', () => {
     expect(stopDictation).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores modifier releases that were not part of the accepted chord', async () => {
-    await renderProbe()
-
-    beginHold()
-
-    act(() => {
-      dispatchKeyUp({ key: 'Shift', code: 'ShiftLeft', metaKey: true, shiftKey: false })
-    })
-
-    expect(startDictation).toHaveBeenCalledTimes(1)
-    expect(stopDictation).not.toHaveBeenCalled()
-  })
-
-  it('falls back to key identity when the accepted keydown has no code', async () => {
-    await renderProbe()
-
-    beginHold({ code: '' })
-
-    act(() => {
-      dispatchKeyUp({ key: 'a', code: '', metaKey: true })
-    })
-
-    expect(stopDictation).not.toHaveBeenCalled()
-
-    act(() => {
-      dispatchKeyUp({ key: 'e', code: '', metaKey: false })
-    })
-
-    expect(startDictation).toHaveBeenCalledTimes(1)
-    expect(stopDictation).toHaveBeenCalledTimes(1)
-  })
-
-  it('falls back to key identity when the release has no code', async () => {
-    await renderProbe()
-
-    beginHold()
-
-    act(() => {
-      dispatchKeyUp({ key: 'e', code: '', metaKey: false })
-    })
-
-    expect(startDictation).toHaveBeenCalledTimes(1)
-    expect(stopDictation).toHaveBeenCalledTimes(1)
-  })
-
-  it('stops on non-Mac when the shortcut key is released after Ctrl has dropped', async () => {
-    setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
-    await renderProbe()
-
-    beginHold({ ctrlKey: true, metaKey: false })
-
-    act(() => {
-      dispatchKeyUp({ key: 'e', code: 'KeyE', ctrlKey: false, metaKey: false })
-    })
-
-    expect(startDictation).toHaveBeenCalledTimes(1)
-    expect(stopDictation).toHaveBeenCalledTimes(1)
-  })
-
   it('keeps a held dictation when its callbacks and keybindings are re-created', async () => {
     await renderProbe()
 

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/appearance/terminal-appearance'
 import { subscribeToPublishedTerminalViewAttributes } from '../components/terminal-pane/appearance/terminal-view-attributes-publisher'
-import { remoteRuntimeTerminalColorPush } from '../runtime/remote-runtime-terminal-color-push'
+import { remoteRuntimeTerminalColorPush } from '../runtime/hosted-terminals/streams/remote-runtime-terminal-color-push'
 import { useAppStore } from '../store'
 
 /** Reports this window's terminal theme to its own host and to every paired host. */

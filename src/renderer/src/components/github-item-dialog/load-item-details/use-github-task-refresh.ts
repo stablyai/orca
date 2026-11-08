@@ -1,7 +1,7 @@
 import { useGitHubItemTargetIdentity } from './github-work-item-target-context'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
 import { GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY } from '../../../../../shared/task-source-runtime-capabilities'
 import { githubTaskExecutionIdentity, captureGitHubTaskTarget } from '@/lib/github-task-target'

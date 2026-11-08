@@ -1,5 +1,6 @@
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import type { RpcClient } from './rpc-client'
+import { hostConnectionEpoch } from '../query/host-status-query'
 
 type WireReady = Extract<RuntimeClientEventStreamMessage, { type: 'ready' }>
 
@@ -134,5 +135,5 @@ function connectionKey(client: SharedClientEventsClient): string | null {
   if (client.getState() !== 'connected') {
     return null
   }
-  return `${client.getGeneration?.() ?? 0}:${client.getLastConnectedAt() ?? ''}`
+  return hostConnectionEpoch(client)
 }

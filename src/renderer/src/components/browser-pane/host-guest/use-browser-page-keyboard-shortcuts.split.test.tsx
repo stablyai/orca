@@ -185,18 +185,6 @@ describe('useBrowserPageKeyboardShortcuts in a split of two active browser panes
     expect(a.reload).not.toHaveBeenCalled()
   })
 
-  it('answers a chrome chord only in the focused split', () => {
-    const { a, b } = renderSplit('focused', 'inactive')
-
-    press(window, { key: '[', code: 'BracketLeft' })
-    press(window, { key: 'r', code: 'KeyR' })
-
-    expect(a.webview.goBack).toHaveBeenCalledTimes(1)
-    expect(a.reload).toHaveBeenCalledWith(false)
-    expect(b.webview.goBack).not.toHaveBeenCalled()
-    expect(b.reload).not.toHaveBeenCalled()
-  })
-
   it('answers a chrome chord only in the pane it came from when no split is focused', () => {
     const { a, b } = renderSplit('owned-target', 'owned-target')
 

@@ -65,10 +65,7 @@
       },
       "providers": {
         "title": "プロバイダー",
-        "antigravityDescription": "Antigravity チャットは、Orca がこのホストにダウンロードするサーバーで動作します。agy CLI とは別です。",
-        "antigravityNotSignedIn": "サインインしていません。チャットには、ターミナルの agy アカウントとは別の Antigravity サインインが必要です。",
         "antigravityAccount": "アカウント",
-        "antigravitySignInNeeded": "チャットには、ターミナルの agy アカウントとは別の Antigravity サインインが必要です。",
         "searchAgents": "Agent",
         "searchTerminal": "ターミナル",
         "searchCli": "CLI"
@@ -749,7 +746,7 @@
         "insecureOrigin": "Orca はこのページからのペアリングを拒否しました。このページが別のマシン上の平文 http であるため、ネットワーク経路上の誰でも置き換えてペアリングコードを奪う可能性があります。https で、このコンピュータの localhost で、または SSH トンネル経由で Web クライアントを開いてください。それでも許可するには、サーバーの管理者が ORCA_ALLOW_INSECURE_WEB_PAIRING=1 を指定して Orca を再起動できます。",
         "deviceDowngraded": "この Orca サーバーはこのブラウザのサインインキーをサポートしなくなりました (ダウングレードされた可能性があります)。サーバーを更新するか、このブラウザを再度ペアリングしてください。",
         "unauthorized": "未認証です。この Web クライアントを再度ペアリングしてください。",
-        "unauthorizedNewLink": "未認証です。新規ペアリングリンクを依頼してください。"
+        "unauthorizedLinkUsedOrExpired": "未認証です。このペアリングリンクは期限切れか、すでに使用された可能性があります。Orca で新規ペアリングリンクを作成して開いてください。"
       }
     },
     "store": {
@@ -1452,13 +1449,6 @@
       }
     },
     "hooks": {
-      "useAutomationDispatchEvents": {
-        "59718b120b": "ターゲットワークスペースは使用できなくなりました。",
-        "16a21d6413": "SSH の再接続には対話型の認証情報が必要です。",
-        "386db94f3e": "対象のプロジェクトは利用できなくなりました。",
-        "3ad7d77f57": "対象ワークスペースは、この自動化実行ターゲットとは別のホスト上にあります。",
-        "workspaceHostUnresolved": "ターゲットワークスペースは複数のホストにまたがっているため、この実行では使用する単一のホストがありません。"
-      },
       "useComposerState": {
         "b2ead86962": "PR ベースを解決できませんでした。",
         "3db83fc58a": "このホスト上に、添付に使用できるプロジェクトパスがありません。",
@@ -7719,7 +7709,8 @@
           "diagnosticsCopyFailed": "診断情報のコピーに失敗しました",
           "5e2c7a1f84": "スマートフォンでターミナルを使用している間、Orca はスマートフォンの画面に合わせてターミナルを縮小します。アプリを閉じるか別のアプリに切り替えるときに、アプリをスマートフォンサイズのままにするか (インタラクティブ CLI ツールがリフローしないように)、サイズを変更してデスクトップに戻るかを制御します。バナーの [復元] または [すべて復元] を使用すると、いつでも手動でサイズを変更できます。",
           "codeRefreshesAutomatically": "コードは自動的に更新されます。コピーしたコードは最大10分間有効です。",
-          "legacyEncryption": "古い暗号化方式を使用しています。このデバイスの Orca アプリを更新してください。"
+          "legacyEncryption": "古い暗号化方式を使用しています。このデバイスの Orca アプリを更新してください。",
+          "olderPairingMethod": "古いペアリング方式を使用しています。この電話の Orca アプリを更新してください。"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "アプリストア",
@@ -8120,6 +8111,7 @@
           "6f6d5188ed": "{{value0}}を取り消す",
           "434e4a6af6": "現在のリンク",
           "df142657a5": "まだ使用されていません",
+          "olderPairingMethod": "古いペアリング方式を使用しています。このリンクを使用しているデバイスの Orca を更新してください。",
           "b18d1764ef": "最後に使用したのは {{value0}}",
           "linkName": "リンク · {{value0}}",
           "activeLinks": "有効なリンク",
@@ -10647,7 +10639,11 @@
               "micDefault": "システムのデフォルト",
               "dictationLanguageTitle": "音声入力の言語",
               "dictationLanguageDescription": "話す言語を音声モデルに伝えます。",
-              "dictationLanguageKeyword": "言語"
+              "dictationLanguageKeyword": "言語",
+              "modelUnloadTitle": "音声モデルの解放",
+              "modelUnloadDescription": "ローカル音声モデルをメモリから解放するタイミングを選びます。",
+              "modelUnloadKeyword": "解放",
+              "modelMemoryKeyword": "メモリ"
             }
           }
         },
@@ -14083,6 +14079,7 @@
             "openLog": "ログを開く",
             "revealLog": "ログを表示",
             "openWorkingDirectory": "作業ディレクトリを開く",
+            "revealArtifactsFolder": "成果物フォルダを表示",
             "copySessionId": "セッション ID をコピー",
             "copyLogPath": "ログパスをコピー",
             "messageCount": "{{value0}} 件のメッセージ",
@@ -16901,7 +16898,10 @@
           "reuseLiveSession": "実行中のセッションを再利用",
           "freshEachRun": "実行ごとに新規作成",
           "precheckEnabled": "有効、{{timeout}}",
-          "precheckNone": "なし"
+          "precheckNone": "なし",
+          "migrate": "移行",
+          "migrateNotice": "{{host}} は新しいリモートホストにアップグレードされました。実行を続けるには、この自動化を移行してください。",
+          "needsMigration": "移行が必要"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "キャンセル",
@@ -19213,7 +19213,6 @@
       "queuedMessages": {
         "alreadySent": "このメッセージはすでに送信されています。",
         "listLabel": "キュー内のメッセージ",
-        "behindReturnedHold": "待機中 — 前のメッセージの対応が必要です",
         "steer": "今すぐ送信",
         "send": "送信",
         "steerHint": "モデルを中断せずに送信します",
@@ -19946,6 +19945,13 @@
           "description": "話す言語です。自動検出では、モデルが毎回言語を判定します。",
           "title": "音声入力の言語",
           "auto": "自動検出"
+        },
+        "modelUnload": {
+          "title": "音声モデルの解放",
+          "description": "音声入力を終えたあと、ローカルモデルをメモリに残しておく時間です。読み込まれている間は音声入力がすぐに始まります。「すぐに」を選ぶとメモリを解放し、毎回モデルの読み込みを待ってから音声入力が始まります。",
+          "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
+          "never": "しない",
+          "immediately": "すぐに"
         }
       }
     },
@@ -20987,6 +20993,29 @@
       "loading": "サブモジュールの変更を読み込み中…",
       "empty": "サブモジュールに変更はありません",
       "loadFailed": "サブモジュールの変更を読み込めませんでした"
+    },
+    "branchPicker": {
+      "switch": "ブランチを切り替え: {{branch}}",
+      "search": "ブランチを検索",
+      "recover": "{{branch}} に切り替え",
+      "create": "{{branch}} からブランチ {{name}} を作成",
+      "open": "ワークスペースを開く",
+      "occupied": "{{path}} でチェックアウト済み",
+      "remote": "リモート",
+      "statusFailed": "このチェックアウトの変更を読み取れませんでした。切り替える前にソース管理を更新してください。",
+      "statusUnknown": "切り替える前に、このチェックアウトの変更を読み取ってください。",
+      "conflict": "ブランチを切り替える前に {{operation}} を完了または中止してください。",
+      "dirty_one": "ブランチを切り替える前に、変更された {{count}} 個のファイルをコミットまたは破棄してください。",
+      "dirty_other": "ブランチを切り替える前に、変更された {{count}} 個のファイルをコミットまたは破棄してください。",
+      "agentWorking": "このワークスペースで Agent が作業中です。完了してからブランチを切り替えるか、停止している場合はそのタブを閉じてください。",
+      "listFailed": "ローカルブランチを一覧表示できませんでした。ピッカーを開き直してください。",
+      "discoveryFailed": "リモートブランチが見つかりませんでした。ローカルブランチへの切り替えやブランチの作成は引き続き可能です。",
+      "switchFailed": "ブランチを切り替えられませんでした。もう一度お試しください。",
+      "switchFailedTitle": "ブランチを切り替えられませんでした",
+      "switchFailedIn": "{{workspace}} でブランチを切り替えられませんでした",
+      "switchedIn": "{{workspace}} で",
+      "thisComputer": "このコンピューター",
+      "updateHost": "ここからブランチを切り替えるには、{{host}} の Orca を更新してください。"
     }
   },
   "rendererRecovery": {
@@ -21221,7 +21250,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity チャット",
-      "chatDescription": "チャットは上の agy アカウントとは別の、独自の Antigravity サインインを使用します。このデバイスで一度サインインしてください。",
       "chatSignIn": "サインイン",
       "chatChangeAccount": "アカウントを変更",
       "chatRetry": "サインインを再試行",
@@ -21234,14 +21262,11 @@
       "chatVerifying": "サインインを完了しています…",
       "chatPasteHelp": "サインイン後の最後のページが読み込まれない場合は、ブラウザーからそのページの完全なアドレスをコピーしてここに貼り付けてください。",
       "chatContinue": "続行",
-      "chatSignedInOn": "{{host}} でサインイン済みです。",
       "chatCancelled": "サインインをキャンセルしました。",
       "chatExpired": "サインインがタイムアウトしました。もう一度お試しください。",
       "chatFailed": "サインインに失敗しました。もう一度お試しください。",
-      "chatNotSignedIn": "{{host}} でサインインしていません。",
       "chatOtherClient": "別のクライアントでサインインが進行中です。",
       "chatReadFailed": "{{host}} のサインインを確認できませんでした。",
-      "scope": "{{host}} でネイティブ agy アカウントを管理します。",
       "signIn": "このホストで agy を起動し、ブラウザのサインインを完了して、現在のアカウントを保存します。別のアカウントを追加するには、agy で /logout を使用し、再度サインインします。",
       "docs": "サインイン手順",
       "retry": "再試行",
@@ -21272,11 +21297,9 @@
       "personal": "Google アカウント",
       "gcpProject": "Google Cloud プロジェクト",
       "gcpLocation": "Google Cloud ロケーション",
-      "signInAgainWith": "{{method}} を使用するには、再度サインインしてください。",
       "settingsIncomplete": "Antigravity アカウントの種類を選択し、Google Cloud のプロジェクトとロケーションを入力してください。",
       "settingsLoadFailed": "Orca は Antigravity のサインイン設定を読み込めませんでした。もう一度お試しください。",
       "settingsSaveFailed": "Orca は Antigravity のサインイン設定を保存できませんでした。もう一度お試しください。",
-      "signInWith": "{{host}} で {{method}} を使ってサインインします。",
       "lastReading": "{{reading}} · {{time}} に取得",
       "noReading": "使用量は不明：未取得"
     },
@@ -22764,6 +22787,7 @@
       "noRunnableHost": "このオートメーションには実行するホストがありません。",
       "wslMoveInProgress": "このオートメーションのプロジェクトを WSL ホストへ移動中のため、Orca は今回の実行をスキップしました。移動が完了すると実行が再開されます。",
       "wslMoveOwnedByHost": "このオートメーションのプロジェクトは現在 WSL ホスト上で動作しており、オートメーションもそこで実行されます。Orca はこのローカルコピーを実行しなくなりました。",
+      "managedHostServer": "{{host}} への移行が必要",
       "missedGraceWindow": "Orca が次に確認した時点で、この実行は実行漏れの猶予時間を過ぎていました。",
       "targetMissing": "オートメーションのホストは登録されていないため、このオートメーションを実行する場所がありません。",
       "targetReplaced": "オートメーションのホストが削除され、再登録されたため、実行するにはこのオートメーションを再度関連付ける必要があります。",
@@ -22805,6 +22829,17 @@
         "effortRepeated": "追加の引数で推論レベルが複数回指定されています。"
       },
       "hostUpdateRequired": "追加の引数を使用するには、このホストの Orca を更新してください。"
+    },
+    "setupTrust": {
+      "reviewTitle": "このオートメーションの新しいセットアップコマンドを承認しますか？",
+      "reviewBody": "ブランチの <code>orca.yaml</code> のセットアップコマンドが変更されたため、実行でセットアップがスキップされました。承認すると、以降の実行でこれらのコマンドが使われます。<repo/> を信頼できる場合のみ承認してください。",
+      "approve": "承認",
+      "approved": "セットアップを承認しました。このオートメーションの以降の実行で実行されます。",
+      "skippedSinceApproved": "ブランチの orca.yaml のセットアップコマンドが変更されたため、この実行ではセットアップが実行されませんでした。その後承認されたため、以降の実行では実行されます。",
+      "skippedReview": "セットアップは実行されませんでした。この実行のブランチにある orca.yaml のセットアップコマンドが、このオートメーションで承認済みのものと異なります。以降の実行でセットアップを実行するには、内容を確認してください。",
+      "reviewAction": "セットアップを確認して承認",
+      "listSkipped": "セットアップをスキップ",
+      "listSkippedTitle": "ブランチの orca.yaml のセットアップコマンドが変更されたため、前回の実行でセットアップがスキップされました。アクションメニューから確認してください。"
     }
   },
   "codeHost": {

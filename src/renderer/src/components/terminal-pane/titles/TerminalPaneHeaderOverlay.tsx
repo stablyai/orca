@@ -16,7 +16,7 @@ import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import { TerminalPaneHeaderDropSurface } from '../input/file-drop/TerminalPaneHeaderDropSurface'
 import { TerminalPaneResumeInChatButton } from '../chat/TerminalPaneResumeInChatButton'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { NativeChatSettingsButton } from '../../native-chat/NativeChatSettingsButton'
+import { NativeChatSettingsButton } from '../../native-chat/appearance/NativeChatSettingsButton'
 
 type TerminalPaneHeaderOverlayProps = {
   tabId: string

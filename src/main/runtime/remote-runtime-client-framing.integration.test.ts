@@ -5,7 +5,11 @@ import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { E2EEChannel } from './rpc/e2ee-channel'
-import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
+import {
+  sendRemoteRuntimeRequest,
+  subscribeRemoteRuntimeRequest
+} from '../../shared/remote-runtime/remote-runtime-client'
+import { COMPRESSED_FRAMES_CLIENT_CAPABILITY } from '../../shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
 import { createRemoteRuntimeClientHandshake } from '../../shared/remote-runtime/remote-runtime-client-framing'
 import {
   configureRemoteRuntimeE2EEV2HostLatch,
@@ -14,6 +18,7 @@ import {
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type * as AuthValidation from './rpc/mobile-e2ee-auth-validation'
 import { E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/pairing/device-key-capability'
+import { classifyOrcadTunnelIdentityFailure } from '../managed-server/lifecycle/orcad-managed-tunnel-identity'
 
 // Hosts released between v2 and capability-carrying v2 token auth refused the extra field.
 const TOKEN_FOR_HOST_WITHOUT_V2_TOKEN_CAPABILITIES = 'device-token-v2-exact'
@@ -32,6 +37,9 @@ vi.mock('./rpc/mobile-e2ee-auth-validation', async (importOriginal) => {
   }
 })
 
+// Large and repetitive, so the host sends it as a compressed frame to clients that read them.
+const TERMINAL_OUTPUT = Buffer.from('\x1b[32m$ pnpm test\x1b[0m ok\r\n'.repeat(400))
+
 // current-behind-v2-blocker: a current host behind something on the path that refuses v2 hellos.
 type HostKind = 'current' | 'current-behind-v2-blocker' | 'v2-without-token-capabilities' | 'pre-v2'
 type TestHost = {
@@ -45,7 +53,11 @@ type TestHost = {
 const openHosts: TestHost[] = []
 let userDataPath = ''
 
-async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<TestHost> {
+async function startHost(
+  kind: HostKind,
+  keyPair = nacl.box.keyPair(),
+  options: { revoked?: boolean } = {}
+): Promise<TestHost> {
   const publicKeyB64 = Buffer.from(keyPair.publicKey).toString('base64')
   const token =
     kind === 'v2-without-token-capabilities'
@@ -63,7 +75,7 @@ async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<
     const channel = new E2EEChannel(ws, {
       serverSecretKey: keyPair.secretKey,
       resolveAuthenticatedDevice: (candidate) =>
-        candidate === token
+        candidate === token && !options.revoked
           ? {
               deviceId: 'device-1',
               scope: 'runtime',
@@ -79,11 +91,23 @@ async function startHost(kind: HostKind, keyPair = nacl.box.keyPair()): Promise<
       },
       onError: (code, reason) => ws.close(code, reason)
     })
-    channel.onMessage((plaintext, reply) => {
+    channel.onMessage((plaintext, reply, replyBinary) => {
       const { id, method } = JSON.parse(plaintext)
       requests.push(`${method} over ${channel.transcriptHashB64 ? 'v2' : 'legacy'}`)
-      const result = method === 'status.get' ? { capabilities: hostCapabilities } : 'pong'
+      if (method === 'test.binary') {
+        replyBinary(new Uint8Array([1, 2, 3]))
+        return
+      }
+      const result =
+        method === 'status.get'
+          ? { capabilities: hostCapabilities }
+          : method === 'test.output'
+            ? TERMINAL_OUTPUT.toString()
+            : 'pong'
       reply(JSON.stringify({ id, ok: true, result, _meta: { runtimeId: 'r' } }))
+      if (method === 'test.output') {
+        replyBinary(TERMINAL_OUTPUT, { compressible: true })
+      }
     })
     ws.on('message', (data: Buffer) => {
       const text = data.toString()
@@ -215,5 +239,69 @@ describe('remote runtime client E2EE framing', () => {
     // Only the read-only status check reached the host over legacy; it proved the host is current.
     expect(blocked.requests).toEqual(['status.get over legacy'])
     expect(latchedHosts()).toEqual([current.connection.hostPublicKeyB64])
+  })
+
+  it('reports a revoked device as unauthorized when a latched host was also downgraded', async () => {
+    const keyPair = nacl.box.keyPair()
+    const current = await startHost('current', keyPair)
+    await expect(ping(current)).resolves.toBe('pong')
+    await current.close()
+
+    const downgraded = await startHost('pre-v2', keyPair, { revoked: true })
+    const error = await ping(downgraded).then(
+      () => null,
+      (rejection: unknown) => rejection
+    )
+
+    expect(error).toMatchObject({ code: 'unauthorized', pairingStage: 'access-grant' })
+    expect(error).not.toHaveProperty('closeCode', 4001)
+    expect(String(error)).not.toContain('Update Orca')
+    // Managed orcad reads this as a revoked pairing, not as a different server on its port.
+    expect(classifyOrcadTunnelIdentityFailure(error).verdict).toBe('unpaired')
+    expect(downgraded.requests).toEqual([])
+    expect(latchedHosts()).toEqual([current.connection.hostPublicKeyB64])
+  })
+
+  it('reads compressed text and terminal frames from a v2 host on one-shot and stream sockets', async () => {
+    const host = await startHost('current')
+    await expect(ping(host)).resolves.toBe('pong')
+    expect(host.capabilities[0]).toContain(COMPRESSED_FRAMES_CLIENT_CAPABILITY)
+
+    const response = await sendRemoteRuntimeRequest(
+      host.connection,
+      'test.output',
+      undefined,
+      5_000
+    )
+    expect(response).toMatchObject({ ok: true, result: TERMINAL_OUTPUT.toString() })
+
+    const received: unknown[] = []
+    const subscription = await subscribeRemoteRuntimeRequest(
+      host.connection,
+      'test.output',
+      {},
+      5_000,
+      {
+        onResponse: (frame) => received.push(frame.ok && frame.result),
+        onBinary: (bytes) => received.push(Buffer.from(bytes).toString()),
+        onError: (error) => received.push(error)
+      }
+    )
+    await vi.waitFor(() => expect(received).toHaveLength(2))
+    subscription.close()
+    // In send order: the response, then the terminal frame, each as the host sent it.
+    expect(received).toEqual([TERMINAL_OUTPUT.toString(), TERMINAL_OUTPUT.toString()])
+    expect(host.requests).toContain('test.output over v2')
+  })
+
+  it('reports an authentic binary payload on a one-shot socket as unexpected, not undecryptable', async () => {
+    const host = await startHost('current')
+
+    await expect(
+      sendRemoteRuntimeRequest(host.connection, 'test.binary', undefined, 5_000)
+    ).rejects.toMatchObject({
+      code: 'invalid_runtime_response',
+      message: 'Remote Orca runtime returned an unexpected binary frame.'
+    })
   })
 })

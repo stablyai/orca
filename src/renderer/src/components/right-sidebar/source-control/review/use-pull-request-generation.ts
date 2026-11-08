@@ -11,8 +11,8 @@ import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
 import {
   cancelRuntimeGeneratePullRequestFields,
   generateRuntimePullRequestFields
-} from '@/runtime/runtime-git-generation-client'
-import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-generation-client'
+import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { PullRequestGenerationOutcome } from '../../hosted-review/creation/create-pull-request-dialog-field-model'
 import { settlePullRequestGenerationRequest } from '../../hosted-review/creation/pull-request-generation-request-outcome'
 import { useAppStore } from '@/store'
@@ -23,12 +23,14 @@ import {
   markPullRequestGenerationTerminalSeedRestored,
   resolvePullRequestGenerationCancel,
   resolvePullRequestGenerationFailure,
-  resolvePullRequestGenerationSuccess,
-  type PullRequestFieldRevisions,
-  type PullRequestGenerationContext,
-  type PullRequestGenerationFields
-} from '@/store/slices/pull-request-generation'
-import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+  resolvePullRequestGenerationSuccess
+} from '@/store/slices/hosted-review/generation/pull-request-generation'
+import type {
+  PullRequestFieldRevisions,
+  PullRequestGenerationContext,
+  PullRequestGenerationFields
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
 import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'

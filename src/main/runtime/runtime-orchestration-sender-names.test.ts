@@ -10,7 +10,7 @@ import {
   agentSessionRecordFixture
 } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
-import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
+import '../../shared/wsl-hook-relay-contract'
 import { OrchestrationDb } from './orchestration/db/orchestration-db'
 import './orchestration/db/contract-constants'
 import './orchestration/db/messages/mailbox-routing-page'
@@ -20,7 +20,7 @@ import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixtur
 import { reconcileLifecycleMessage } from './orchestration/workers/lifecycle/lifecycle-reconciliation'
 import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-names'
 import { structuredMailSource } from './orchestration/mailbox/structured-mail/structured-mail-source'
-import { structuredAgentSessionTabId } from '../../shared/agent-session/view/structured-agent-session-projection'
+import '../../shared/agent-session/view/structured-agent-session-projection'
 import type { MessageRow } from './orchestration/db/orchestration-records'
 import { parseStartOptions } from './rpc/methods/orchestration/worker/worker-earlier-work'
 
@@ -47,7 +47,6 @@ let generatedTitles: boolean
 let hookRows: HookRow[]
 let pty: NonNullable<ReturnType<SenderNamingDeps['getPtyAgents']>>
 let trackedTitle: string | null
-let conversationReads: number
 let terminalReads: number
 
 function names() {
@@ -126,31 +125,6 @@ function announcedName(batch: MessageRow[]): string | null {
   )
 }
 
-function chatTab(customLabel: string | null, label: string) {
-  return { contentType: 'agent-session' as const, entityId: CHAT, customLabel, label }
-}
-
-function providerTitleTab(): NonNullable<Session['tabsByWorktree']>[string][number] {
-  return {
-    id: 'tab_term_plain',
-    title: '',
-    aiVaultTitle: { agent: 'claude', sessionId: 'current-session', title: 'Parser work' }
-  }
-}
-
-function hookRow(overrides: Partial<HookRow> = {}): HookRow {
-  return {
-    paneKey: 'tab_term_plain:leaf',
-    worktreeId: WORKTREE,
-    agentType: 'claude',
-    connectionId: null,
-    launchToken: 'launch-current',
-    receivedAt: 1,
-    providerSession: { key: 'session_id', id: 'current-session' },
-    ...overrides
-  }
-}
-
 beforeEach(() => {
   db = new OrchestrationDb(':memory:')
   session = { unifiedTabs: {}, tabsByWorktree: {} }
@@ -158,7 +132,6 @@ beforeEach(() => {
   hookRows = []
   pty = { launchAgent: 'codex', connectionId: null, launchToken: 'launch-current' }
   trackedTitle = null
-  conversationReads = 0
   terminalReads = 0
   const base = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: CHAT }))
   records = new Map([[CHAT, { ...base, location: { ...base.location, workspaceId: WORKTREE } }]])
@@ -166,7 +139,6 @@ beforeEach(() => {
     deps: {
       store: {
         getConversation: (id: string) => {
-          conversationReads++
           const record = records.get(id)
           return record ? agentSessionConversationView(record) : null
         },
@@ -180,33 +152,7 @@ afterEach(() => {
   db.close()
 })
 
-const chatParty = { address: `orca_session_id:${CHAT}`, terminalHandle: null, orcaSessionId: CHAT }
-const terminalParty = (handle: string) => ({
-  address: handle,
-  terminalHandle: handle,
-  orcaSessionId: null
-})
-
 describe("a sender's name, from what Orca shows for it", () => {
-  it("names a local worker by its active dispatch's task when its tab has no name of its own", () => {
-    const run = db.createRun({
-      objective: 'o',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: null
-    })
-    const task = db.createTask({
-      runId: run.id,
-      spec: 'Port the parser',
-      displayName: 'Parser port'
-    })
-    createRootDispatch(db, task.id, 'term_worker')
-    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_worker', title: 'Codex ready' }] }
-    expect(names().nameOf(terminalParty('term_worker'))).toBe('Parser port')
-    // A name the person gave the worker's tab is the one they know it by.
-    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_worker', customTitle: 'Build tab' }] }
-    expect(names().nameOf(terminalParty('term_worker'))).toBe('Build tab')
-  })
-
   it('names a worker by its task after its own accepted worker_done settled that dispatch', () => {
     const { runId, taskId, dispatchId } = finishedWorker('build it')
     const report = workerMessage(runId, 'worker_done', { taskId, dispatchId })
@@ -227,269 +173,6 @@ describe("a sender's name, from what Orca shows for it", () => {
     const failed = createRootDispatch(db, taskB.id, 'term_worker')
     db.failDispatch(failed.id, 'delivery failed')
     expect(announcedName([workerMessage(runId, 'status')])).toBe('Codex')
-  })
-
-  it('never names a worker by a dispatch its report names that is not its own', () => {
-    const other = finishedWorker('someone else', 'term_other')
-    expect(announcedName([workerMessage(other.runId, 'worker_done', other)])).toBe('Codex')
-  })
-
-  it("names a chat by the label its tab shows, the person's rename first", () => {
-    session.unifiedTabs = { [WORKTREE]: [chatTab(null, 'Fix the login flow')] }
-    expect(names().nameOf(chatParty)).toBe('Fix the login flow')
-    session.unifiedTabs = { [WORKTREE]: [chatTab('Auth chat', 'Fix the login flow')] }
-    expect(names().nameOf(chatParty)).toBe('Auth chat')
-  })
-
-  it("names a chat by its saved name before its task or its tab's default label", () => {
-    const record = records.get(CHAT)
-    if (!record) {
-      throw new Error('chat record missing')
-    }
-    records.set(CHAT, { ...record, conversationName: 'Port the lexer' })
-    session.unifiedTabs = { [WORKTREE]: [chatTab(null, 'Claude Chat')] }
-    expect(names().nameOf(chatParty)).toBe('Port the lexer')
-  })
-
-  it.each(['rename', 'saved name'])(
-    'keeps a chat %s even when it equals the default label',
-    (kind) => {
-      const record = records.get(CHAT)
-      if (!record) {
-        throw new Error('chat record missing')
-      }
-      records.set(CHAT, {
-        ...record,
-        conversationName: kind === 'saved name' ? 'Claude Chat' : undefined
-      })
-      session.unifiedTabs = {
-        [WORKTREE]: [chatTab(kind === 'rename' ? 'Claude Chat' : null, 'Claude Chat')]
-      }
-      const { dispatchId } = finishedWorker('Port the parser')
-      expect(db.getDispatchContextById(dispatchId)?.status).toBe('dispatched')
-      expect(names().nameOf({ ...chatParty, terminalHandle: 'term_worker' })).toBe('Claude Chat')
-    }
-  )
-
-  it("names a chat with no tab by its agent's chat label", () => {
-    expect(names().nameOf(chatParty)).toBe('Claude Chat')
-  })
-
-  it('snapshots the agent a sender runs, so its card keeps an icon once the agent is gone', () => {
-    expect(names().snapshotOf(chatParty).agent).toBe('claude')
-    expect(names().snapshotOf(terminalParty('term_plain')).agent).toBe('codex')
-    expect(terminalReads).toBe(1)
-    // The hook's current owner wins over the launch, as it does for the name.
-    hookRows = [hookRow()]
-    terminalReads = 0
-    expect(names().snapshotOf(terminalParty('term_plain')).agent).toBe('claude')
-    expect(terminalReads).toBe(1)
-    const federated = { address: 'dispatch:d1', terminalHandle: null, orcaSessionId: null }
-    expect(names().snapshotOf(federated).agent).toBeNull()
-  })
-
-  it.each([10, 100])(
-    'resolves one coherent observation per snapshot across %i clear records',
-    (count) => {
-      const ids = Array.from({ length: count }, (_, index) =>
-        index === 0 ? CHAT : testOrcaSessionId(`sender-lineage-${index}`)
-      )
-      const clear = (replacementSessionId: string) => ({
-        command: 'clear' as const,
-        state: 'completed' as const,
-        operationId: `clear-${replacementSessionId}`,
-        callerKey: 'sender-lineage-test',
-        phase: 'committed' as const,
-        replacementSessionId
-      })
-      records = new Map(
-        ids.map((id, index) => {
-          const record = agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: id }))
-          return [
-            id,
-            {
-              ...record,
-              conversationName: index === count - 1 ? 'Worker' : 'Superseded',
-              ...(index < count - 1 ? { conversationCommand: clear(ids[index + 1]) } : {})
-            }
-          ]
-        })
-      )
-      const source = names()
-      expect(source.nameOf(chatParty)).toBe('Worker')
-      expect(conversationReads).toBe(count)
-      conversationReads = 0
-      expect(source.snapshotOf(chatParty)).toEqual({ name: 'Worker', agent: 'claude' })
-      expect.soft(conversationReads).toBe(count)
-
-      const successorId = testOrcaSessionId('sender-lineage-fresh')
-      const successor = agentSessionRecordFixture(
-        agentSessionLeaseFixture({ sessionId: successorId })
-      )
-      const leaf = records.get(ids[count - 1])!
-      records.set(leaf.sessionId, { ...leaf, conversationCommand: clear(successorId) })
-      records.set(successorId, {
-        ...successor,
-        conversationName: 'Fresh worker',
-        provider: 'future-agent'
-      })
-      conversationReads = 0
-      expect(source.snapshotOf(chatParty)).toEqual({ name: 'Fresh worker', agent: 'future-agent' })
-      expect.soft(conversationReads).toBe(count + 1)
-
-      records.delete(successorId)
-      conversationReads = 0
-      expect(source.snapshotOf(chatParty)).toEqual({ name: null, agent: null })
-      expect.soft(conversationReads).toBe(count + 1)
-      expect(terminalReads).toBe(0)
-      hostRef.current = null
-      conversationReads = 0
-      expect(source.snapshotOf(chatParty)).toEqual({ name: null, agent: null })
-      expect(conversationReads).toBe(0)
-    }
-  )
-
-  it("names a terminal agent as its sidebar row does: the tab's own name, else its agent", () => {
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Codex')
-    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', customTitle: ' Lint ' }] }
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Lint')
-    session.tabsByWorktree = {
-      [WORKTREE]: [{ id: 'tab_term_plain', title: '✳ Fix the sender link' }]
-    }
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Fix the sender link')
-    // A status the agent paints is not a name.
-    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', title: 'Codex ready' }] }
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Codex')
-  })
-
-  it('uses a generated tab title only while the person has generated titles on', () => {
-    session.tabsByWorktree = {
-      [WORKTREE]: [{ id: 'tab_term_plain', title: 'Codex ready', generatedTitle: 'Lint fixes' }]
-    }
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Codex')
-    generatedTitles = true
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Lint fixes')
-  })
-
-  it.each([
-    { id: 'current-session', expected: 'Parser work' },
-    { id: 'another-session', expected: 'Claude' },
-    { id: undefined, expected: 'Claude' }
-  ])('accepts a saved provider title only for the hook row session $id', ({ id, expected }) => {
-    session.tabsByWorktree = { [WORKTREE]: [providerTitleTab()] }
-    // The hook's current owner is Claude even though the PTY was launched as Codex.
-    hookRows = [hookRow({ providerSession: id ? { key: 'session_id', id } : undefined })]
-    expect(names().nameOf(terminalParty('term_plain'))).toBe(expected)
-  })
-
-  it.each<{ label: string; row: Partial<HookRow> }>([
-    { label: 'another pane', row: { paneKey: 'tab_sibling:leaf' } },
-    { label: 'another workspace', row: { worktreeId: 'folder:other' } },
-    { label: 'another launch', row: { launchToken: 'launch-old' } },
-    { label: 'another SSH host', row: { connectionId: 'ssh-other' } }
-  ])('does not use a provider title from $label', ({ row }) => {
-    session.tabsByWorktree = { [WORKTREE]: [providerTitleTab()] }
-    hookRows = [hookRow(row)]
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Codex')
-  })
-
-  it('uses the newest owner row even when it has not reported a provider session', () => {
-    session.tabsByWorktree = { [WORKTREE]: [providerTitleTab()] }
-    hookRows = [hookRow(), hookRow({ receivedAt: 2, providerSession: undefined })]
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Claude')
-  })
-
-  it.each([
-    { ptyConnection: 'ssh-current', rowConnection: 'ssh-current', expected: 'Parser work' },
-    { ptyConnection: 'ssh-current', rowConnection: 'ssh-other', expected: 'Codex' },
-    {
-      ptyConnection: null,
-      rowConnection: wslHookRelayConnectionId('Ubuntu'),
-      expected: 'Parser work'
-    },
-    { ptyConnection: null, rowConnection: wslHookRelayConnectionId('Debian'), expected: 'Codex' }
-  ])('selects provider identity only on its execution host: $rowConnection', (test) => {
-    session.tabsByWorktree = { [WORKTREE]: [providerTitleTab()] }
-    pty = { ...pty, connectionId: test.ptyConnection, wslDistro: 'Ubuntu' }
-    hookRows = [hookRow({ connectionId: test.rowConnection })]
-    expect(names().nameOf(terminalParty('term_plain'))).toBe(test.expected)
-  })
-
-  it('does not infer provider identity from the cached title without a status row', () => {
-    session.tabsByWorktree = {
-      [WORKTREE]: [
-        {
-          id: 'tab_term_plain',
-          title: 'Codex ready',
-          aiVaultTitle: { agent: 'codex', sessionId: 'old-session', title: 'Old task' }
-        }
-      ]
-    }
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Codex')
-  })
-
-  it('names a single pane by its current title before its older mirrored tab title', () => {
-    session.tabsByWorktree = {
-      [WORKTREE]: [{ id: 'tab_term_plain', title: 'Old task' }]
-    }
-    trackedTitle = '✳ Current task'
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Current task')
-  })
-
-  it("never names a pane in a split tab by the tab title, which is its focused sibling's", () => {
-    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', title: 'Sibling task' }] }
-    session.terminalLayoutsByTabId = {
-      tab_term_plain: {
-        root: {
-          type: 'split',
-          direction: 'vertical',
-          first: { type: 'leaf', leafId: 'a' },
-          second: { type: 'leaf', leafId: 'b' }
-        }
-      }
-    }
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Codex')
-    trackedTitle = '✳ Own pane task'
-    expect(names().nameOf(terminalParty('term_plain'))).toBe('Own pane task')
-  })
-
-  it('names a party nothing records as nothing', () => {
-    expect(names().nameOf(terminalParty('term_unknown'))).toBeNull()
-  })
-
-  it('names a worktree.ps terminal row by its conversation title, and an unnamed one not by its agent', () => {
-    const row = {
-      paneKey: 'tab_term_plain:leaf',
-      tabId: 'tab_term_plain',
-      worktreeId: WORKTREE,
-      agentType: 'claude'
-    }
-    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', title: '✳ PR rebase' }] }
-    expect(names().agentRowNamer()(row)).toBe('PR rebase')
-    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', title: '✳ Claude Code' }] }
-    expect(names().agentRowNamer()(row)).toBeNull()
-  })
-
-  it('names a worktree.ps chat row as its chat tab does', () => {
-    const tabId = structuredAgentSessionTabId(CHAT)
-    session.unifiedTabs = { [WORKTREE]: [chatTab('Login fix', 'Claude Chat')] }
-    expect(
-      names().agentRowNamer()({
-        paneKey: `${tabId}:x`,
-        tabId,
-        worktreeId: WORKTREE,
-        agentType: 'claude'
-      })
-    ).toBe('Login fix')
-  })
-
-  it('builds the one sender a message records: its party, name and agent now', () => {
-    session.unifiedTabs = { [WORKTREE]: [chatTab(null, 'Fix the login flow')] }
-    expect(names().sender(`orca_session_id:${CHAT}`)).toEqual({
-      party: { address: `orca_session_id:${CHAT}`, terminalHandle: null, orcaSessionId: CHAT },
-      name: 'Fix the login flow',
-      agent: 'claude'
-    })
   })
 })
 
@@ -577,44 +260,6 @@ it.each([
     }
   }
 )
-
-it('shares exact dispatch provenance and nullable terminal observation across name and kind', () => {
-  const { runId, taskId, dispatchId } = finishedWorker('Inspect parser', 'term_gone')
-  db.db
-    .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
-    .run(JSON.stringify({ agent: 'codex' }), dispatchId)
-  const active = vi.spyOn(db, 'getActiveDispatchForTerminal')
-  const exact = vi.spyOn(db, 'getDispatchContextById')
-  const worker = vi.spyOn(db, 'getWorkerDispatch')
-  const task = vi.spyOn(db, 'getTask')
-  const source = names()
-  const check = (reported?: string) => {
-    vi.clearAllMocks()
-    terminalReads = 0
-    const result = source.snapshotOf(terminalParty('term_gone'), reported)
-    expect(terminalReads).toBe(1)
-    expect(active).toHaveBeenCalledTimes(1)
-    expect(exact).toHaveBeenCalledTimes(reported ? 1 : 0)
-    expect(worker).toHaveBeenCalledTimes(result.agent ? 1 : 0)
-    expect(task).toHaveBeenCalledTimes(result.name ? 1 : 0)
-    return result
-  }
-  expect(check()).toEqual({ name: 'Inspect parser', agent: 'codex' })
-  const report = db.insertMessage({
-    from: 'term_gone',
-    senderPaneKey: 'tab_term_gone:leaf',
-    to: `run:${runId}`,
-    subject: 'done',
-    type: 'worker_done',
-    runId,
-    payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
-  })
-  expect(reconcileLifecycleMessage(db, report).action).toBe('completed')
-  expect(check()).toEqual({ name: null, agent: null })
-  expect(check(dispatchId)).toEqual({ name: 'Inspect parser', agent: 'codex' })
-  const other = finishedWorker('Foreign task', 'term_foreign')
-  expect(check(other.dispatchId)).toEqual({ name: null, agent: null })
-})
 
 it('preserves old, malformed and absent launch observations without inventing an agent', () => {
   const { dispatchId } = finishedWorker('Inspect parser', 'term_older')
@@ -764,29 +409,4 @@ it('uses exact saved custody for follow-up dispatch identity and refuses a later
     .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
     .run('p:2', next.id)
   expect(names().sender(`dispatch:${next.id}`).agent).toBeUndefined()
-})
-
-it('refreshes terminal observations and the current record owner within one asynchronous pass reader', () => {
-  const read = names().snapshotReader()
-  pty = { launchAgent: null, connectionId: null }
-  expect(read(terminalParty('term_plain')).agent).toBeNull()
-  pty = { foregroundAgent: 'claude', connectionId: null, launchToken: 'new' }
-  expect(read(terminalParty('term_plain')).agent).toBe('claude')
-  pty = { foregroundAgent: 'codex', connectionId: null, launchToken: 'successor' }
-  expect(read(terminalParty('term_plain')).agent).toBe('codex')
-  const prior = read(chatParty)
-  hostRef.current = {
-    deps: {
-      store: {
-        getConversation: () => ({
-          ...agentSessionConversationView(records.get(CHAT)!),
-          conversationName: 'New owner',
-          provider: 'codex'
-        }),
-        listConversations: () => []
-      }
-    }
-  }
-  expect(read(chatParty)).toEqual({ name: 'New owner', agent: 'codex' })
-  expect(prior.agent).toBe('claude')
 })

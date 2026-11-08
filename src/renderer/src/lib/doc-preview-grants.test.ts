@@ -20,7 +20,8 @@ import {
   ensureDocPreviewGrant,
   releaseDocPreviewGrant
 } from './doc-preview-grants'
-import { createTestStore, makeWorktree } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 beforeEach(() => {
   vi.clearAllMocks()

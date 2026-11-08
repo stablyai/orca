@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: vi.fn() } }))
 
-const { createTestStore } = await import('@/store/slices/store-test-helpers')
+const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
 const store = createTestStore()
 
 vi.mock('@/store', () => ({ useAppStore: store }))

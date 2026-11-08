@@ -35,8 +35,10 @@ import {
   renderWorktreeLineageDescendants,
   type WorktreeItemRowContext
 } from './item-row'
-import { renderWorktreeSectionHeaderRow, type SectionHeaderRowContext } from './SectionHeader'
+import { renderWorktreeSectionHeaderRow } from './SectionHeader'
+import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { WorktreeRowDragState } from '../drag/row-state'
+import type { Translate } from '@/i18n/use-translate'
 
 export type WorktreeVirtualRowContext = {
   renderRows: RenderRow[]
@@ -177,26 +179,30 @@ function renderLineageGroupVirtualRow(
 export function renderWorktreeVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: RenderRow,
-  vItem: VirtualItem
+  vItem: VirtualItem,
+  t?: Translate
 ): React.JSX.Element | null {
   if (row.type === 'host-header') {
     return renderHostHeaderVirtualRow(ctx, row, vItem)
   }
 
   if (row.type === 'header') {
-    return renderWorktreeSectionHeaderRow({
-      ctx: ctx.header,
-      row,
-      vItem,
-      isActiveStickyHeader: ctx.activeStickyHeaderIndexRef.current === vItem.index,
-      hasStickyHost: ctx.activeStickyHostIndexRef.current !== null,
-      hasHeaderTopSpacing: shouldUseHeaderTopSpacing({
-        rows: ctx.renderRows,
-        index: vItem.index,
-        firstHeaderIndex: ctx.firstHeaderIndex
-      }),
-      measureVirtualRowElement: ctx.measureVirtualRowElement
-    })
+    return renderWorktreeSectionHeaderRow(
+      {
+        ctx: ctx.header,
+        row,
+        vItem,
+        isActiveStickyHeader: ctx.activeStickyHeaderIndexRef.current === vItem.index,
+        hasStickyHost: ctx.activeStickyHostIndexRef.current !== null,
+        hasHeaderTopSpacing: shouldUseHeaderTopSpacing({
+          rows: ctx.renderRows,
+          index: vItem.index,
+          firstHeaderIndex: ctx.firstHeaderIndex
+        }),
+        measureVirtualRowElement: ctx.measureVirtualRowElement
+      },
+      t
+    )
   }
 
   if (row.type === 'lineage-group') {

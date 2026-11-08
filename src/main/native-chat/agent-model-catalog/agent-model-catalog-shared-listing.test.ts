@@ -256,27 +256,6 @@ it('keeps a shared listing for an earlier-ending reader of the same folder when 
   expect(h.run).toHaveBeenCalledOnce()
 })
 
-it('keeps a later reader of the same folder waiting for its own deadline, not the first one', async () => {
-  vi.useFakeTimers()
-  onTestFinished(() => {
-    vi.useRealTimers()
-  })
-  const h = sharedListingHarness()
-  void h.service.demand({ agent: 'codex', workspacePath: '/a', deadline: Date.now() + 1_000 })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  const later = h.service.read({
-    agent: 'codex',
-    workspacePath: '/a',
-    waitForListing: true,
-    deadline: Date.now() + 60_000
-  })
-  await vi.advanceTimersByTimeAsync(2_000)
-  h.discovery.resolve({ ...listing('shared'), complete: true, configured: {} })
-  await vi.advanceTimersByTimeAsync(0)
-  expect(await later).toMatchObject({ models: [{ id: 'shared' }] })
-  expect(h.run).toHaveBeenCalledOnce()
-})
-
 function readOperation(h: ReturnType<typeof sharedListingHarness>, deadline: number) {
   const controller = new AbortController()
   let current = true

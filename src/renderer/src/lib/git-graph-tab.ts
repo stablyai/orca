@@ -11,20 +11,19 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteForHost,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { openWorkspaceEditorItem } from '@/store/slices/editor/tabs/workspace-editor-item'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../../shared/source-control/runtime/git-graph-capabilities'
-import {
-  readCachedRuntimeEnvironmentCapability,
-  runtimeEnvironmentSupportsCapability
-} from '@/runtime/runtime-rpc-client'
+import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import {
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
@@ -106,7 +105,7 @@ export async function probeGitGraphSupport(worktreeId: string): Promise<boolean 
     : runtimeEnvironmentSupportsCapability(scope.target.environmentId, GIT_GRAPH_TAB_CAPABILITY)
 }
 
-export function gitGraphUpdateMessage(worktreeId: string): string {
+export function gitGraphUpdateMessage(worktreeId: string, t: Translate = translate): string {
   const scope = gitGraphScope(worktreeId)
   const state = useAppStore.getState()
   const environmentId =
@@ -115,7 +114,7 @@ export function gitGraphUpdateMessage(worktreeId: string): string {
     scope?.target.kind === 'environment'
       ? state.runtimeEnvironments?.find((entry) => entry.id === environmentId)
       : undefined
-  return translate('gitGraph.updateHost', 'Update Orca on {{host}} to open the Git Graph', {
+  return t('gitGraph.updateHost', 'Update Orca on {{host}} to open the Git Graph', {
     host: environment?.name ?? scope?.route.executionHostId ?? ''
   })
 }

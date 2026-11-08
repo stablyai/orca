@@ -1,4 +1,4 @@
-import { githubCandidateOwner } from '@/store/github/source-collections'
+import { githubCandidateOwner } from '@/store/github/sources/source-preference-ownership'
 import { getTaskPageRepoSourceContext } from '@/lib/task-repo-source-context'
 export {
   getTaskPageRepoSourceContext,

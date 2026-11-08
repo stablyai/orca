@@ -10,17 +10,17 @@ import {
   isUnifiedTabPinned,
   resolvePinnedTabLabel,
   shouldConfirmPinnedTabClose
-} from '@/store/pinned-tab-close-guard'
+} from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
-} from '@/store/slices/terminal-tab-retirement'
+} from '@/store/terminals/terminal-tab-retirement'
 import {
   guardRunningTerminalClose,
   shouldConfirmRunningTerminalClose
 } from './running-terminal-close-guard'
 import { closeLocalTerminalTabState } from './close-local-terminal-tab-state'
-import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
+import { runAsAutomaticDeselection } from '@/store/workspaces/selection/active-worktree-deselection-intent'
 import { getTerminalIncarnationHandle } from './terminal-close-incarnation'
 import {
   terminalTabCloseStoreReason,

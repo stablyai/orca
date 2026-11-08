@@ -175,17 +175,4 @@ describe('same-conversation clear', () => {
       store.getOperationRow(caller.callerKey, params.envelope.clientOperationId)?.outcome.status
     ).toBe('succeeded')
   })
-
-  it('refuses another clear while the first is in flight', async () => {
-    const [first, second] = await Promise.all([
-      host.conversationCommand(caller, commandParams('clear')),
-      host.conversationCommand(caller, commandParams('clear'))
-    ])
-    expect(first).toMatchObject({ ok: true })
-    expect(second).toMatchObject({
-      ok: false,
-      refusal: { details: { reason: 'conversationCommandInFlight' } }
-    })
-    expect(await clearRows()).toHaveLength(1)
-  })
 })

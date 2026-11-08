@@ -15,7 +15,7 @@ vi.mock('@/components/terminal/terminal-tab-actions', () => ({
   closeTerminalTab: closeTerminalTabMock
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
@@ -39,7 +39,8 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
       current: null
     }
-    const { createEditorTabsStore } = await import('../store/slices/editor-slice-test-harness')
+    const { createEditorTabsStore } =
+      await import('../store/slices/editor/editor-slice-test-harness')
     const store = createEditorTabsStore()
 
     await useIpcEventsForCloseRouting({

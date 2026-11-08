@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { untrackedTaskOperation, type TaskChange } from '@/store/github/task-change'
+import { untrackedTaskOperation, type TaskChange } from '@/store/github/task-records/task-change'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 

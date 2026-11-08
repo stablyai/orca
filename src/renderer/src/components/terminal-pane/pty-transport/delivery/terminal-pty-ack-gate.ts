@@ -1,8 +1,5 @@
 import { e2eConfig } from '@/lib/e2e-config'
-import {
-  deliverTerminalDataWithDeferredCredit,
-  takeCurrentTerminalDeliveryCredit
-} from '@/lib/pane-manager/terminal-delivery-credit'
+import { deliverTerminalDataWithDeferredCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 
 type E2eTerminalPtyAckGateSnapshot = {
   gatedPtyCount: number
@@ -87,10 +84,6 @@ export function deliverPtyDataWithDeferredAck(
   deliver: () => void
 ): void {
   deliverTerminalDataWithDeferredCredit(() => ackPtyData(ptyId, chars), deliver)
-}
-
-export function takeCurrentPtyDeliveryAckCredit(): (() => void) | null {
-  return takeCurrentTerminalDeliveryCredit()
 }
 
 export function getProcessedPtyCharTotals(): Record<string, number> {

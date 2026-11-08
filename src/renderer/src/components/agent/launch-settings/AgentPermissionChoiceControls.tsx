@@ -4,6 +4,7 @@ import type { Ref } from 'react'
 import type { AgentChatPermissionMode } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentPermissionChoice } from '../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
@@ -14,22 +15,23 @@ import {
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { nativeChatPermissionModeLabel } from '../../native-chat/native-chat-permission-mode-labels'
+import { nativeChatPermissionModeLabel } from '../../native-chat/session/options/controls/native-chat-permission-mode-labels'
 import { AgentPermissionChoiceItems, AgentPermissionChoiceName } from './AgentPermissionChoiceItems'
 
 /** Use chat-mode wording; own names the agent when available. */
 export function agentPermissionChoiceLabel(
   choice: AgentPermissionChoice,
-  agentLabel: string | null
+  agentLabel: string | null,
+  t: Translate = translate
 ): string {
   if (choice !== 'own') {
-    return nativeChatPermissionModeLabel(choice)
+    return nativeChatPermissionModeLabel(choice, t)
   }
   return agentLabel
-    ? translate('settings.agents.permissionOwnAgent', "Use {{agent}}'s own settings", {
+    ? t('settings.agents.permissionOwnAgent', "Use {{agent}}'s own settings", {
         agent: agentLabel
       })
-    : translate('settings.agents.permissionOwnAll', "Agents' own settings")
+    : t('settings.agents.permissionOwnAll', "Agents' own settings")
 }
 
 export function AllAgentsPermissionSetting({

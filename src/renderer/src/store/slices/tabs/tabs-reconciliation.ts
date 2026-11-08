@@ -2,13 +2,14 @@ import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-a
 import type { AppState } from '../../types'
 import type { Tab } from '../../../../../shared/tab-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
-import { ensureGroup, sanitizeRecentTabIds, updateGroup } from '../tab-group-state'
-import { pruneTabGroupLayoutForGroups } from '../tabs-hydration'
+import { ensureGroup, updateGroup } from './tab-group-state'
+import { sanitizeRecentTabIds } from './tab-selection-history'
+import { pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import {
   buildOrphanTerminalCleanupPatch,
   getOrphanTerminalIds,
   terminalTabHasReconnectablePty
-} from '../terminal-orphan-helpers'
+} from '../../terminals/terminal-orphan-cleanup'
 import {
   writeBatchedWorkspaceRecordEntry,
   type WorktreeTabModelReconciliationBatch

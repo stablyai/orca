@@ -2,7 +2,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -15,7 +15,7 @@ import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktr
 import { isTwinWorkspace, namedHostForOwnerRef, resolveOwner } from '@/lib/resolve-owner'
 import { authorityKey } from '../../../shared/host-authority'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
-import { runtimeRpcTargetForAuthorityKey } from './runtime-client-target'
+import { runtimeRpcTargetForAuthorityKey } from './rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 /**

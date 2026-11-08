@@ -73,9 +73,11 @@ vi.mock('@/store', () => ({
   }
 }))
 
-vi.mock('@/store/selectors', () => ({
-  getAllWorktreesFromState: () => Array.from(mocks.state.worktreeMap.values()),
-  getWorktreeMapFromState: () => mocks.state.worktreeMap,
+vi.mock('@/store/slices/worktrees/listing/worktree-catalog-index', () => ({
+  getIndexedAllWorktrees: () => Array.from(mocks.state.worktreeMap.values()),
+  getIndexedWorktreeMap: () => mocks.state.worktreeMap
+}))
+vi.mock('@/store/workspaces/selection/worktree-on-host-selector', () => ({
   // Match declared hosts even though this fixture indexes only one worktree per ID.
   getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
     const row = mocks.state.worktreeMap.get(worktreeId)

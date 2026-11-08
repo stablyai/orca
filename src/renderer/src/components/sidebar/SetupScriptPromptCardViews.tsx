@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { getDetectedSetupScriptTextareaRows } from '@/lib/script-textarea-rows'
 import { getSetupScriptFirstLine } from '@/lib/setup-script-prompt'
 
@@ -13,6 +14,7 @@ type DismissButtonProps = {
 }
 
 function DismissButton({ onDismiss }: DismissButtonProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -20,7 +22,7 @@ function DismissButton({ onDismiss }: DismissButtonProps): React.JSX.Element {
           type="button"
           variant="ghost"
           size="icon-xs"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.sidebar.SetupScriptPromptCardViews.5bfd5c8779',
             'Dismiss setup scripts'
           )}
@@ -31,7 +33,7 @@ function DismissButton({ onDismiss }: DismissButtonProps): React.JSX.Element {
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
-        {translate('auto.components.sidebar.SetupScriptPromptCardViews.822ff300ad', 'Dismiss')}
+        {t('auto.components.sidebar.SetupScriptPromptCardViews.822ff300ad', 'Dismiss')}
       </TooltipContent>
     </Tooltip>
   )
@@ -50,21 +52,19 @@ function DetectedSetupSection({
   provenance: string | null
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="mt-3 border-t border-worktree-sidebar-border pt-3">
       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
         <PackageCheck className="size-3.5" />
-        {translate(
-          'auto.components.sidebar.SetupScriptPromptCardViews.7275f674cc',
-          'Detected setup'
-        )}
+        {t('auto.components.sidebar.SetupScriptPromptCardViews.7275f674cc', 'Detected setup')}
       </div>
       {children}
       {provenance ? (
         <p className="mt-1.5 text-[11px] text-muted-foreground">
           <Trans
             i18n={i18n}
-            defaults={translate(
+            defaults={t(
               'auto.components.sidebar.SetupScriptPromptCardViews.detectedFromSource',
               'Detected from <source>{{source}}</source>'
             )}
@@ -82,11 +82,12 @@ export function DetectedSetupPreview({
   onSetupChange,
   provenance
 }: DetectedSetupPreviewProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DetectedSetupSection provenance={provenance}>
       <textarea
         value={setup}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.sidebar.SetupScriptPromptCardViews.fdbc6cb064',
           'Detected setup script'
         )}
@@ -124,6 +125,7 @@ export type ReviewSetupActionProps = {
 }
 
 export function ReviewSetupAction({ onReview }: ReviewSetupActionProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button
       type="button"
@@ -134,7 +136,7 @@ export function ReviewSetupAction({ onReview }: ReviewSetupActionProps): React.J
     >
       <ScrollText className="size-3.5" />
       <span className="truncate">
-        {translate(
+        {t(
           'auto.components.sidebar.SetupScriptPromptCardViews.reviewSetupScript',
           'Review setup script'
         )}
@@ -154,6 +156,7 @@ export function PackageManagerActions({
   onSave,
   onConfigure
 }: PackageManagerActionsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="mt-3 flex flex-col gap-2">
       <Button
@@ -170,7 +173,7 @@ export function PackageManagerActions({
           <Check className="size-3.5" />
         )}
         <span className={cn('truncate', isSaving && 'text-muted-foreground')}>
-          {translate('auto.components.sidebar.SetupScriptPromptCardViews.ca4efcbc25', 'Save')}
+          {t('auto.components.sidebar.SetupScriptPromptCardViews.ca4efcbc25', 'Save')}
         </span>
       </Button>
       <Button
@@ -182,10 +185,7 @@ export function PackageManagerActions({
       >
         <Settings className="size-3.5" />
         <span className="truncate">
-          {translate(
-            'auto.components.sidebar.SetupScriptPromptCardViews.eefa756190',
-            'Configure manually'
-          )}
+          {t('auto.components.sidebar.SetupScriptPromptCardViews.eefa756190', 'Configure manually')}
         </span>
       </Button>
     </div>
@@ -205,10 +205,11 @@ export function SetupScriptPromptBody({
   isPackageManagerSuggestion,
   candidateSource
 }: SetupScriptPromptBodyProps): React.JSX.Element {
+  const t = useTranslate()
   if (isInspectionError) {
     return (
       <>
-        {translate(
+        {t(
           'auto.components.sidebar.SetupScriptPromptCardViews.0155fb9ed3',
           "Couldn't verify this repo's setup script right now."
         )}
@@ -219,7 +220,7 @@ export function SetupScriptPromptBody({
     return (
       <Trans
         i18n={i18n}
-        defaults={translate(
+        defaults={t(
           'auto.components.sidebar.SetupScriptPromptCardViews.ignoresSharedSetup',
           'This repo ignores shared <yaml>orca.yaml</yaml> setup scripts. Add a local command, or change the source in Settings.'
         )}
@@ -230,7 +231,7 @@ export function SetupScriptPromptBody({
   if (isPackageManagerSuggestion) {
     return (
       <>
-        {translate(
+        {t(
           'auto.components.sidebar.SetupScriptPromptCardViews.aef6c0a213',
           'Save the detected command to run it whenever Orca creates a worktree.'
         )}
@@ -241,7 +242,7 @@ export function SetupScriptPromptBody({
     return (
       <Trans
         i18n={i18n}
-        defaults={translate(
+        defaults={t(
           'auto.components.sidebar.SetupScriptPromptCardViews.foundSetupCommandIn',
           'Found a setup command in <source>{{source}}</source>. Save it to run for new worktrees.'
         )}
@@ -252,7 +253,7 @@ export function SetupScriptPromptBody({
   }
   return (
     <>
-      {translate(
+      {t(
         'auto.components.sidebar.SetupScriptPromptCardViews.0a98169776',
         'Add a setup command to run when Orca creates new worktrees.'
       )}
@@ -269,6 +270,7 @@ export function InspectionErrorActions({
   onRetry,
   onConfigure
 }: InspectionErrorActionsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="mt-3 flex gap-2">
       <Button
@@ -280,7 +282,7 @@ export function InspectionErrorActions({
       >
         <RefreshCw className="size-3.5" />
         <span className="truncate">
-          {translate('auto.components.sidebar.SetupScriptPromptCardViews.4a98f907ae', 'Retry')}
+          {t('auto.components.sidebar.SetupScriptPromptCardViews.4a98f907ae', 'Retry')}
         </span>
       </Button>
       <Button
@@ -292,7 +294,7 @@ export function InspectionErrorActions({
       >
         <Settings className="size-3.5" />
         <span className="sr-only">
-          {translate('auto.components.sidebar.SetupScriptPromptCardViews.31b8b01a45', 'Settings')}
+          {t('auto.components.sidebar.SetupScriptPromptCardViews.31b8b01a45', 'Settings')}
         </span>
       </Button>
     </div>
@@ -304,6 +306,7 @@ export type ConfigureOnlyActionProps = {
 }
 
 export function ConfigureOnlyAction({ onConfigure }: ConfigureOnlyActionProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button
       type="button"
@@ -314,7 +317,7 @@ export function ConfigureOnlyAction({ onConfigure }: ConfigureOnlyActionProps): 
     >
       <Settings className="size-3.5" />
       <span className="truncate">
-        {translate('auto.components.sidebar.SetupScriptPromptCardViews.3933401d28', 'Configure')}
+        {t('auto.components.sidebar.SetupScriptPromptCardViews.3933401d28', 'Configure')}
       </span>
     </Button>
   )

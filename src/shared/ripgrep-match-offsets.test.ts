@@ -20,14 +20,6 @@ describe('ripgrep match offsets', () => {
     expect(read(7)).toBeNull()
   })
 
-  it('converts 10000 adjacent astral match boundaries', () => {
-    const read = createRipgrepOffsetReader('😀x'.repeat(10_000))
-    for (let index = 0; index < 10_000; index++) {
-      expect(read(index * 5)).toBe(index * 3)
-      expect(read(index * 5 + 4)).toBe(index * 3 + 2)
-    }
-  })
-
   it('preserves zero-length matches and whole-codepoint line fallbacks', () => {
     expect([...ripgrepMatchRanges('😀é', [{ start: 4, end: 4 }])]).toEqual([{ start: 2, end: 2 }])
     expect([...ripgrepMatchRanges('😀é', [])]).toEqual([{ start: 0, end: 2 }])

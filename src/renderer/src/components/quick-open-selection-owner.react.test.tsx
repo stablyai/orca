@@ -4,7 +4,7 @@ import { it, expect, afterEach, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { DetectedWorktree } from '../../../shared/worktree/types'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { useQuickOpenInteraction } from './use-quick-open-interaction'
 import {
   captureFileExplorerOperationGuard,

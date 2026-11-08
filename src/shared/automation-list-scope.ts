@@ -43,6 +43,7 @@ export const AUTOMATION_ORPHAN_ISSUES = {
   targetMissing: 'Its SSH host is no longer registered.',
   targetReplaced: 'Its SSH host was removed and re-added, so it must be re-adopted.',
   scheduledElsewhere: 'It is stored here but scheduled against a remote runtime.',
+  workspaceOnPairedServer: 'Its workspace belongs to a paired server, so it cannot run here.',
   projectMissing: 'Its project no longer exists, so its host cannot be resolved.',
   projectUnverified: 'Its project could not be checked from here, so its host is unconfirmed.',
   workspaceHostAmbiguous: 'Its workspace spans more than one host, so it has no single owner.',
@@ -142,7 +143,7 @@ export function projectAutomationSelector(
     return orphan(AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous)
   }
   if (workspaceHost.kind === 'runtime') {
-    return orphan(AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere)
+    return orphan(AUTOMATION_ORPHAN_ISSUES.workspaceOnPairedServer)
   }
   // A pinned workspace is where the run actually goes, so the row belongs to that host, not Self.
   if (workspaceHost.kind === 'ssh') {
@@ -167,6 +168,7 @@ export type AutomationCapturedHostIssue =
   | typeof AUTOMATION_ORPHAN_ISSUES.targetMissing
   | typeof AUTOMATION_ORPHAN_ISSUES.targetReplaced
   | typeof AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous
+  | typeof AUTOMATION_ORPHAN_ISSUES.workspaceOnPairedServer
   | typeof AUTOMATION_ORPHAN_ISSUES.malformed
   | typeof AUTOMATION_ORPHAN_ISSUES.hostReselection
 
@@ -177,7 +179,9 @@ const CAPTURED_HOST_ISSUES: Record<AutomationCapturedHostIssue, true> = {
   [AUTOMATION_ORPHAN_ISSUES.hostReselection]: true,
   [AUTOMATION_ORPHAN_ISSUES.targetReplaced]: true,
   // No single owner is as unrunnable as no owner: dispatching would pick a host the user never chose.
-  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]: true
+  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]: true,
+  // A local record never routes to the server that now owns its folder.
+  [AUTOMATION_ORPHAN_ISSUES.workspaceOnPairedServer]: true
 }
 
 function isCapturedHostIssue(issue: string): issue is AutomationCapturedHostIssue {

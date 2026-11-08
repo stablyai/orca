@@ -8,8 +8,8 @@ import type {
   CrossStoreParentRef
 } from '../../../../../../shared/worktree/lineage-types'
 import { supportsCrossStoreLineage } from '../../../../../../shared/worktree-runtime-capabilities'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '../../../../runtime/runtime-rpc-result'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '../../../../runtime/rpc/calls/runtime-rpc-result'
 
 /** The CLI's budget for caller inference: optional nesting never holds up the create. */
 const NOTE_PARENT_INFERENCE_BUDGET_MS = 3_000

@@ -1,8 +1,9 @@
+import { BridgeReplyRefusedError } from '../mobile-web-shell/bridge/bridge-client-errors'
 import { isLogicalClientSuspendedError } from '../transport/logical-client-suspended-error'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 
-const CUTOVER_RETRY_DELAY_MS = 250
+export const CUTOVER_RETRY_DELAY_MS = 250
 
 // failWhenDisconnected rejects with a plain Error that the page bridge rebuilds, so match the message.
 export function isHostNotConnectedError(error: unknown): boolean {
@@ -17,6 +18,10 @@ export function isHostNotConnectedError(error: unknown): boolean {
 function retryDelayFor(error: unknown): number | null {
   if (isLogicalClientCutoverError(error)) {
     return CUTOVER_RETRY_DELAY_MS
+  }
+  // The shell refused an unreadable reply: a second read gets the same answer.
+  if (error instanceof BridgeReplyRefusedError) {
+    return null
   }
   if (isRpcDeliveryUnknown(error) && !isHostNotConnectedError(error)) {
     return 0

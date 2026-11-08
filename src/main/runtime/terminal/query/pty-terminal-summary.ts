@@ -153,6 +153,18 @@ export abstract class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntime
     return { pty }
   }
 
+  /** The PTY a runtime or window-pane handle names; a reloading graph is unknown, not gone, so it throws. */
+  getTerminalPtyIdForHandle(handle: string): string | null {
+    try {
+      return this.getTerminalPtyForHandle(handle).pty.ptyId
+    } catch (error) {
+      if (error instanceof Error && error.message === 'runtime_unavailable') {
+        throw error
+      }
+      return null
+    }
+  }
+
   /** A pane-issued handle outlives the graph (a reload) while its PTY keeps the incarnation it was issued for. */
   protected getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined {
     const pty = this.getPaneAliasPty(handle)

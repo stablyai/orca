@@ -63,7 +63,9 @@ async function wireCodexAccountKey(settings: ReturnType<typeof createSettings>) 
     readCodexLaunchHome: codexStructuredLaunchHomeResolvers.resolveCodexStructuredLaunchHome,
     workspaceTrustSettings: () => settings,
     workspaceTrustRepoDecision: () => undefined,
-    stateDirectory: '/orca-data'
+    stateDirectory: '/orca-data',
+    hostLaunchEnvironment: async () => ({}),
+    hostSettings: () => ({})
   }
   const resolve = (purpose: 'launch' | 'read') =>
     codex.resolveAccountHome(
