@@ -201,7 +201,8 @@ export async function observeAutomationChatRun(
               (turn &&
                 !turnItemId &&
                 !item.agentId &&
-                (turn.userItemId === providerItemId ||
+                (providerItemId === null ||
+                  turn.userItemId === providerItemId ||
                   turn.userItemId === agentJournalSubmissionKey(submissionId)))
             )
           })
