@@ -8271,7 +8271,6 @@
       "src/main/skills/install/skill-install-destinations.test.ts": 58,
       "src/main/skills/install/skill-install-discovery-verification.test.ts": 143,
       "src/main/skills/transaction-state/skill-install-lock.test.ts": 354,
-      "src/main/skills/install/skill-install-preview.test.ts": 224,
       "src/main/skills/install/skill-install-operation-error.test.ts": 86,
       "src/main/skills/install/skill-install-recovery.test.ts": 454,
       "src/main/skills/install/skill-install-request.test.ts": 508,
@@ -8279,7 +8278,6 @@
       "src/main/skills/install/skill-install-transaction.test.ts": 1436,
       "src/main/skills/observability/skill-operation-observability.test.ts": 197,
       "src/main/skills/package-archive/skill-package-creation.test.ts": 414,
-      "src/main/skills/package-archive/skill-package-deterministic-gzip.test.ts": 50,
       "src/main/skills/package-download/skill-package-download.test.ts": 177,
       "src/main/skills/package-archive/skill-package-identity.test.ts": 108,
       "src/main/skills/package-archive/skill-package-tar.test.ts": 111,
@@ -8288,7 +8286,6 @@
       "src/main/skills/provider-placement/skill-placement-reconciliation.test.ts": 157,
       "src/main/skills/provider-placement/skill-placement-transaction.test.ts": 225,
       "src/main/skills/providers/skill-provider-runtime-roots.test.ts": 98,
-      "src/main/skills/runtime-transfer/skill-remote-install-cancellation.test.ts": 46,
       "src/main/skills/managed-remove/skill-remove-transaction.test.ts": 664,
       "src/main/skills/discovery/skill-root-file-walk.test.ts": 76,
       "src/main/skills/discovery/skill-scan-coalescer.test.ts": 56,
@@ -8303,8 +8300,7 @@
       "src/main/skills/skill-delete/skill-wsl-delete.integration.test.ts": 85,
       "src/main/skills/filesystem/skill-wsl-install-filesystem.test.ts": 60,
       "src/main/skills/install/skill-wsl-install-transaction.integration.test.ts": 250,
-      "src/main/skills/filesystem/skill-wsl-posix-semantics.integration.test.ts": 254,
-      "src/main/skills/providers/skill-wsl-provider-detection.test.ts": 62
+      "src/main/skills/filesystem/skill-wsl-posix-semantics.integration.test.ts": 254
     }
   },
   "e2e": {
