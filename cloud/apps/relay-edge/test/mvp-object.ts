@@ -40,6 +40,7 @@ import {
   waitFor,
   type Host
 } from './harness-mvp-object'
+import { drainCheck, heartbeatCheck } from './mvp-object-hardening'
 
 async function mainRemote(): Promise<void> {
   // Deployed Worker: inline test JWKS (spike keys), no issuer check, no local dev server.
@@ -103,6 +104,7 @@ async function main(): Promise<void> {
       await sleep(500)
     }
     await run(host, privateKey, () => jwksHits)
+    await Promise.all([heartbeatCheck(privateKey), drainCheck(privateKey)])
     await sweepCheck()
     await preAuthCheck(stateDir)
   } catch (error) {
