@@ -15,11 +15,13 @@ import { ORCHESTRATION_TASK_HANDLERS } from './orchestration/task-handlers'
 import { ORCHESTRATION_WORKER_LAUNCH_HANDLER } from './orchestration/worker-launch-handler'
 import { ORCHESTRATION_WORKER_OBSERVATION_HANDLERS } from './orchestration/worker-observation-handlers'
 import { ORCHESTRATION_WORKER_TERMINAL_HANDLERS } from './orchestration/worker-terminal-handlers'
+import { ORCHESTRATION_WATCH_HANDLER } from './orchestration/watch-handler'
 
 export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   ...ORCHESTRATION_RUN_HANDLERS,
   ...ORCHESTRATION_SEND_HANDLER,
   ...ORCHESTRATION_CHECK_HANDLER,
+  ...ORCHESTRATION_WATCH_HANDLER,
   ...ORCHESTRATION_INBOX_HANDLERS,
   ...ORCHESTRATION_TASK_HANDLERS,
   ...ORCHESTRATION_WORKER_LAUNCH_HANDLER,

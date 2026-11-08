@@ -120,6 +120,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration run-show',
       'orchestration send',
       'orchestration check',
+      'orchestration watch',
       'orchestration reply',
       'orchestration inbox',
       'orchestration task-create',
