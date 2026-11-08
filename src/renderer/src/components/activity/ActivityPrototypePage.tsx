@@ -28,8 +28,6 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 
-export * from './activity-prototype-page-exports'
-
 export default function ActivityPrototypePage(): React.JSX.Element {
   const [query, setQuery] = useState('')
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
