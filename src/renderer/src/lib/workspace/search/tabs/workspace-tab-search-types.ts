@@ -15,7 +15,7 @@ import type { TerminalAgent } from '../../../../../../shared/agent-status/identi
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
-import type { StructuredChatTabNames } from '@/runtime/structured-chat-tab-name'
+import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
 import './workspace-tab-palette-results'
 

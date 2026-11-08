@@ -17,10 +17,12 @@ import {
 } from '../browser-pane/browser-client-page-retained-host-fixture'
 import { useTabDragSplit, type TabDragItemData } from './useTabDragSplit'
 
-vi.mock('../../runtime/web-runtime-session-environment', () => ({
+vi.mock('../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: vi.fn(() => false)
 }))
-vi.mock('../../runtime/web-runtime-session-tab-move', () => ({ moveWebRuntimeSessionTab: vi.fn() }))
+vi.mock('../../runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move', () => ({
+  moveWebRuntimeSessionTab: vi.fn()
+}))
 
 const WT = 'wt-1'
 const mounted: { container: HTMLDivElement; root: Root }[] = []

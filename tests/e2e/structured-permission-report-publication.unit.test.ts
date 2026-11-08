@@ -11,10 +11,19 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { SDKStatusMessage } from '@anthropic-ai/claude-agent-sdk'
 const transport = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: transport.call,
-  subscribeStructuredAgentSessionStatus: transport.subscribe
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: transport.call
+  })
+)
+
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSessionStatus: transport.subscribe
+  })
+)
 import { useStructuredAgentSessionOptionStamp } from '../../src/renderer/src/components/native-chat/session/status/structured-agent-session-status-hooks'
 import { useStructuredAgentSessionOptions } from '../../src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-options'
 import { loadMobileStructuredOptions } from './__mocks__/mobile-structured-options'
@@ -41,8 +50,8 @@ import {
 } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-permission-modes-capability'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { acpLaunchSpecFor } from '../../src/main/acp/acp-launch-specs'
 import { openHostRig, launch } from '../../src/main/acp/acp-structured-host.test-support'
 import { GROK_CONFIG_OPTIONS } from '../../src/main/acp/acp-structured-adapter.test-support'

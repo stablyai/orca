@@ -7,7 +7,7 @@ import {
   selectClientHostedBrowserRow,
   useActiveClientHostedBrowserRowId
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
-import { closeClientHostedBrowserRow } from '../../runtime/client-hosted-browser-row-close'
+import { closeClientHostedBrowserRow } from '../../runtime/browser/closing/client-hosted-browser-row-close'
 import ClientHostedBrowserTab from './ClientHostedBrowserTab'
 
 /** Append paired-client pages outside persisted tab ordering so they cannot acquire drag/pin/group ownership. */

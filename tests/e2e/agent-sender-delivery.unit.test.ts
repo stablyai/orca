@@ -20,8 +20,8 @@ type SenderGraphReply = Pick<
 import {
   agentSenderIndexWorkForTest,
   selectAgentSenderAssociation
-} from '@/runtime/agent-sender-associations'
-import { agentSenderAliasWorkForTest } from '@/runtime/agent-sender-alias-projection'
+} from '@/runtime/native-chat/agent-senders/agent-sender-associations'
+import { agentSenderAliasWorkForTest } from '@/runtime/native-chat/agent-senders/agent-sender-alias-projection'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { resetLocalStructuredSessionVersionForTests } from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 import { handleGlobalSessionEvent } from '@/runtime/web-session-tabs-sync/global-session-events'

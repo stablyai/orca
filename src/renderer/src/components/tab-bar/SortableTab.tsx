@@ -36,7 +36,7 @@ import {
 import { useTerminalTabActivity } from './use-terminal-tab-activity'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
 import type { NativeChatTabSession } from './tab-session-history-switch'
-import type { StructuredChatTabNamingFailure } from '@/runtime/structured-conversation-name'
+import type { StructuredChatTabNamingFailure } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'
 import { NativeChatNamingErrorBlock, NativeChatNamingFailedDialog } from './NativeChatNamingFailure'
 

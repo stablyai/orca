@@ -1,4 +1,7 @@
-import { pendingTabRevision, pendingEntityWorkspaceIds } from '@/runtime/layout-owner-pending-tabs'
+import {
+  pendingTabRevision,
+  pendingEntityWorkspaceIds
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { editorPlacementIndex } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/resolve-owner'
 import { hostSessionTabIdsByLocalTabForWorktree } from '../web-session-tabs-sync/tracking-mappings'

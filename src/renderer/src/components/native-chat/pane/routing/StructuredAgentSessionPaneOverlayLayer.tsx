@@ -6,7 +6,7 @@ import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { RetainedPaneHost } from '../../../tab-group/RetainedPaneHost'
 import NativeChatView from '../../NativeChatView'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'

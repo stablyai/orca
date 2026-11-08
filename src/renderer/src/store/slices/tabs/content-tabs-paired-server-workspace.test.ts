@@ -9,7 +9,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../../shared/execution-host'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { createTestStore, seedStore } from '../../testing/app-store-test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
@@ -40,9 +40,9 @@ vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', async (import
     ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
   }
 })
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('@/store/index', () => ({
