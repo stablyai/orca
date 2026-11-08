@@ -45,12 +45,18 @@ vi.mock('../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host
   getPairedRuntimeBrowserClientRouteIdentity: routeIdentityMock
 }))
 
-vi.mock('../../browser/cookies/browser-cookie-import', () => ({
+vi.mock('../../browser/cookies/sources/browser-cookie-detection', () => ({
   detectInstalledBrowsers: detectBrowsersMock,
-  importCookiesFromBrowser: vi.fn(),
-  importCookiesFromFile: vi.fn(),
-  pickCookieFile: vi.fn(),
   selectBrowserProfile: vi.fn()
+}))
+vi.mock('../../browser/cookies/browser-cookie-import', () => ({
+  importCookiesFromBrowser: vi.fn()
+}))
+vi.mock('../../browser/cookies/imports/import-cookie-file', () => ({
+  importCookiesFromFile: vi.fn()
+}))
+vi.mock('../../browser/cookies/imports/cookie-file-picker', () => ({
+  pickCookieFile: vi.fn()
 }))
 
 import { registerBrowserHandlers } from './browser'

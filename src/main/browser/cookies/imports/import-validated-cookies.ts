@@ -1,60 +1,23 @@
-import { translateMain } from '../../i18n/main-i18n'
-import { dialog, session, type BrowserWindow } from 'electron'
-import { summarizePartitionSkips } from './browser-cookie-partition-summary'
-import { browserCookieImportFailure } from '../../../shared/browser-cookie-import-failure-copy'
+import { summarizePartitionSkips } from '../browser-cookie-partition-summary'
 import type {
   BrowserCookieImportResult,
   BrowserCookieImportSummary
-} from '../../../shared/browser-workspace-types'
+} from '../../../../shared/browser-workspace-types'
 import {
   isGoogleSourceBoundCookie,
-  isNonTransplantableCookieDomain,
-  normalizeCookieImportDomain
-} from './browser-cookie-import-policy'
-import {
-  acquireCookieMutationLock,
-  type CookieClearStore,
-  type CookieImportWriteStore
-} from './browser-cookie-import-clear'
-import { openCookieClearStore } from './browser-cookie-clear-store'
+  isNonTransplantableCookieDomain
+} from '../policy/cookie-import-exclusions'
+import { normalizeCookieImportDomain } from '../policy/cookie-domain'
+import { acquireCookieMutationLock } from '../mutation/cookie-mutation-lock'
 import {
   emptyImportWritePhase,
   planImportWrites,
   writeImportedCookies,
   type ImportWritePhase
-} from './browser-cookie-import-write'
-import { readFile } from 'node:fs/promises'
-import { diag } from './browser-cookie-import-diagnostics'
-import {
-  validateCookieEntry,
-  type RawCookieEntry,
-  type ValidatedCookie
-} from './sources/browser-cookie-validation'
-
-export type CookieImportSessionStore = CookieClearStore &
-  CookieImportWriteStore & { dispose: () => void }
-
-export type CookieImportTarget = {
-  partition: string
-  // Reuse the Electron Session as the lock key across import paths; a fresh adapter would not serialize.
-  mutationLockOwner: object
-  openWriteStore: () => CookieImportSessionStore
-  flushStore?: () => Promise<void>
-}
-
-export type CookieImportOptions = {
-  canReportPartitionSkippedCookies?: boolean
-}
-
-export function cookieImportTarget(targetPartition: string): CookieImportTarget {
-  const targetSession = session.fromPartition(targetPartition)
-  return {
-    partition: targetPartition,
-    mutationLockOwner: targetSession,
-    openWriteStore: () => openCookieClearStore(targetSession),
-    flushStore: () => targetSession.cookies.flushStore()
-  }
-}
+} from '../browser-cookie-import-write'
+import { diag } from '../browser-cookie-import-diagnostics'
+import type { ValidatedCookie } from '../sources/browser-cookie-validation'
+import type { CookieImportTarget, CookieImportOptions } from './cookie-import-contracts'
 
 export async function importValidatedCookies(
   cookies: ValidatedCookie[],
@@ -144,72 +107,4 @@ export async function importValidatedCookies(
   }
 
   return { ok: true, profileId: '', summary }
-}
-
-// Main owns the file picker so a compromised renderer cannot request arbitrary file reads.
-export async function pickCookieFile(parentWindow: BrowserWindow | null): Promise<string | null> {
-  const opts = {
-    title: translateMain('native.dialog.importCookies', 'Import Cookies'),
-    filters: [
-      { name: translateMain('native.dialog.cookieFiles', 'Cookie Files'), extensions: ['json'] },
-      { name: translateMain('native.dialog.allFiles', 'All Files'), extensions: ['*'] }
-    ],
-    properties: ['openFile' as const]
-  }
-  const result = parentWindow
-    ? await dialog.showOpenDialog(parentWindow, opts)
-    : await dialog.showOpenDialog(opts)
-
-  if (result.canceled || result.filePaths.length === 0) {
-    return null
-  }
-  return result.filePaths[0]
-}
-
-export async function importCookiesFromFile(
-  filePath: string,
-  targetPartition: string
-): Promise<BrowserCookieImportResult> {
-  let rawContent: string
-  try {
-    rawContent = await readFile(filePath, 'utf-8')
-  } catch {
-    return browserCookieImportFailure('fileUnreadable')
-  }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(rawContent)
-  } catch {
-    return browserCookieImportFailure('fileInvalidJson')
-  }
-
-  if (!Array.isArray(parsed)) {
-    return browserCookieImportFailure('fileNotArray')
-  }
-
-  if (parsed.length === 0) {
-    return browserCookieImportFailure('fileEmpty')
-  }
-
-  const validated: ValidatedCookie[] = []
-  let skipped = 0
-  for (const entry of parsed) {
-    if (typeof entry !== 'object' || entry === null) {
-      skipped++
-      continue
-    }
-    const cookie = validateCookieEntry(entry as RawCookieEntry)
-    if (cookie) {
-      validated.push(cookie)
-    } else {
-      skipped++
-    }
-  }
-
-  if (validated.length === 0) {
-    return browserCookieImportFailure('fileNoValidCookies', { count: skipped })
-  }
-
-  return importValidatedCookies(validated, parsed.length, cookieImportTarget(targetPartition))
 }

@@ -6,13 +6,13 @@ import { BrowserWindow, ipcMain } from 'electron'
 import { browserSessionRegistry } from '../../browser/sessions/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
+import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
+import { importCookiesFromFile } from '../../browser/cookies/imports/import-cookie-file'
 import {
-  pickCookieFile,
-  importCookiesFromFile,
   detectInstalledBrowsers,
-  selectBrowserProfile,
-  importCookiesFromBrowser
-} from '../../browser/cookies/browser-cookie-import'
+  selectBrowserProfile
+} from '../../browser/cookies/sources/browser-cookie-detection'
+import { importCookiesFromBrowser } from '../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,

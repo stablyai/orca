@@ -52,9 +52,15 @@ vi.mock('../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime', 
   getPairedRuntimeBrowserClientRouteIdentity: mocks.route
 }))
 vi.mock('./browser-cookie-import', () => ({
-  importCookiesFromBrowser: mocks.import,
-  importCookiesFromFile: mocks.import,
-  pickCookieFile: mocks.pick,
+  importCookiesFromBrowser: mocks.import
+}))
+vi.mock('./imports/import-cookie-file', () => ({
+  importCookiesFromFile: mocks.import
+}))
+vi.mock('./imports/cookie-file-picker', () => ({
+  pickCookieFile: mocks.pick
+}))
+vi.mock('./sources/browser-cookie-detection', () => ({
   detectInstalledBrowsers: mocks.detect,
   selectBrowserProfile: vi.fn()
 }))
@@ -104,7 +110,7 @@ const { captureGoogleCookieClearTarget, confirmAndClearGoogleCookies } = await v
 import { registerBrowserHandlers } from '../../ipc/browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../../ipc/browser/browser-renderer-trust'
 import { importCookiesIntoClientRoutePartition } from './client-route/browser-client-route-cookie-import'
-import { acquireCookieMutationLock } from './browser-cookie-import-clear'
+import { acquireCookieMutationLock } from './mutation/cookie-mutation-lock'
 import * as bindingFile from '../routing/partitions/browser-route-partition-binding-file'
 
 const profile: BrowserSessionProfile = {

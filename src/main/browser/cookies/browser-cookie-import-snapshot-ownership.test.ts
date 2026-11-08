@@ -102,7 +102,7 @@ import {
   createChromiumCookieTestDatabase,
   encryptMacChromiumCookie
 } from './browser-cookie-import-test-database'
-import { acquireCookieMutationLock } from './browser-cookie-import-clear'
+import { acquireCookieMutationLock } from './mutation/cookie-mutation-lock'
 import * as cookieDecryption from './sources/browser-cookie-decryption'
 
 const PARTITION = 'persist:test'

@@ -6,12 +6,9 @@ import {
   browserCookieImportFailure,
   type BrowserCookieImportFailure
 } from '../../../../shared/browser-cookie-import-failure-copy'
-import {
-  detectInstalledBrowsers,
-  importCookiesFromBrowser,
-  importCookiesFromFile,
-  selectBrowserProfile
-} from '../browser-cookie-import'
+import { detectInstalledBrowsers, selectBrowserProfile } from '../sources/browser-cookie-detection'
+import { importCookiesFromBrowser } from '../browser-cookie-import'
+import { importCookiesFromFile } from '../imports/import-cookie-file'
 import type { DetectedBrowser } from '../sources/browser-cookie-source-profiles'
 
 import { recordClientRouteCookieImportSource } from './client-route-cookie-import-source-store'

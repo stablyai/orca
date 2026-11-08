@@ -20,9 +20,9 @@ import { ipcMain } from 'electron'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import {
   detectInstalledBrowsers,
-  importCookiesFromBrowser,
   selectBrowserProfile
-} from '../../../browser/cookies/browser-cookie-import'
+} from '../../../browser/cookies/sources/browser-cookie-detection'
+import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
