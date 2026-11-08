@@ -3,6 +3,7 @@ import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { claudeStructuredAuthPolicyForSettings } from '../../../claude-accounts/claude-structured-auth-policy'
+import { readUsageLimitAccountReading } from '../../../rate-limits/usage-limit-account-reading'
 import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
 import { structuredAgentConfiguredArgs } from '../../../native-chat/structured-agent-configured-args'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
@@ -72,7 +73,20 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
       isEnabled: () =>
         this.requireStore().getSettings().nativeChatAutoContinueAfterUsageLimit === true,
       subscribe: (changed) => this.requireStore().onSettingsChanged?.(changed) ?? (() => {}),
-      isWorkspaceAsleep: (workspaceId) => this.isWorktreeTerminalSleepHeld(workspaceId)
+      isWorkspaceAsleep: (workspaceId) => this.isWorktreeTerminalSleepHeld(workspaceId),
+      // Chats launch under the selected account, whose usage is the active reading.
+      readAccountUsage: (provider) => {
+        const state = this.accounts.usageRateLimits()?.getState()
+        const limits =
+          provider === 'claude' ? state?.claude : provider === 'codex' ? state?.codex : undefined
+        return limits === undefined ? null : readUsageLimitAccountReading(limits)
+      },
+      refreshAccountUsage: () => {
+        void this.accounts
+          .usageRateLimits()
+          ?.refresh()
+          .catch(() => {})
+      }
     }
   }
 

@@ -20,6 +20,16 @@ export function usageLimitContinueStateForCut(
     : undefined
 }
 
+/** When the host will send for exactly this cut, if the account's usage holds it past its reset. */
+export function usageLimitContinueAtForCut(
+  published: PublishedUsageLimitContinue,
+  cut: Pick<NativeChatUsageLimitCut, 'turnItemId' | 'resetsAt'> | null | undefined
+): number | undefined {
+  return usageLimitContinueStateForCut(published, cut) === 'scheduled'
+    ? published?.continueAt
+    : undefined
+}
+
 /** Null hides the line. "Off" only points at this machine's own setting, so other hosts hide it. */
 export function nativeChatUsageLimitAutoContinueKind(
   state: NativeChatUsageLimitContinueState | undefined,
