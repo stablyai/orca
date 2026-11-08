@@ -28,6 +28,7 @@ import {
   refineAgentJournalQuotaTurnEnd,
   type AgentJournalFailureVoice
 } from '../../agent-session-timeline/agent-journal-turn-failure-revision'
+import { resolveClaudeBackgroundTaskIdentity } from '../../../claude/claude-background-task-identity'
 import {
   resolveCodexGoalIdentity,
   type CodexGoalRowChoice
@@ -64,6 +65,8 @@ export type JournalTimelineItemResolution =
       body: AgentJournalItemBody
       voice: AgentJournalFailureVoice
     }
+  /** A background-task row whose generation follows the task's saved incarnations. */
+  | { kind: 'background-task'; taskId: string; toolUseId?: string; body: AgentJournalItemBody }
   /** A provider goal row whose identity follows the thread's newest saved goal row. */
   | { kind: 'thread-goal'; choice: CodexGoalRowChoice }
   | {
@@ -119,6 +122,15 @@ export function resolveJournalTimelineItem(
           })
         : nothing
     }
+    case 'background-task':
+      return resolved({
+        identity: resolveClaudeBackgroundTaskIdentity(
+          view.withKeyPrefix,
+          resolution.taskId,
+          resolution.toolUseId
+        ),
+        body: resolution.body
+      })
     case 'thread-goal': {
       const identity = resolveCodexGoalIdentity(view.newestWithKeyPrefix, resolution.choice)
       return identity ? resolved({ identity, body: resolution.choice.body }) : nothing

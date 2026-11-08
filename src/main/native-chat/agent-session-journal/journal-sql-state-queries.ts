@@ -165,6 +165,21 @@ export function sqlJournalStateQueries(
       scope.examined(row)
       return context.read<AgentJournalRenderItem>('items', String(row.entry_key)) ?? null
     },
+    *itemsWithKeyPrefix(_state, prefix) {
+      facts.flush()
+      const start = JSON.stringify(prefix).slice(0, -1)
+      const rows = scope.db
+        .prepare(`SELECT entry_key FROM journal_proj_items
+        WHERE session_id=? AND epoch=? AND entry_key>=? AND entry_key<? AND hidden=0 ORDER BY ordinal`)
+        .all(...scope.prefix, start, `${start}\uffff`)
+      for (const row of rows) {
+        scope.examined(row)
+        const item = context.read<AgentJournalRenderItem>('items', String(row.entry_key))
+        if (item) {
+          yield item
+        }
+      }
+    },
     newestItemWithKeyPrefix(_state, prefix) {
       facts.flush()
       // Keys are stored JSON-encoded; a prefix of the key is a prefix of its encoding up to the quote.

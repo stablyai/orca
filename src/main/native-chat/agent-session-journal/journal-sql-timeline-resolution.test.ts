@@ -8,6 +8,7 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
+import { claudeBackgroundTaskIdentity } from '../../claude/claude-background-task-identity'
 import {
   codexGoalJournalDigest,
   codexGoalJournalIdentity
@@ -187,5 +188,48 @@ it("follows a thread's newest saved goal row when choosing a goal identity", asy
   expect(await sql.reads.item(secondRow)).toMatchObject({
     revision: 1,
     body: { text: 'Goal set: Next' }
+  })
+})
+
+it("chooses a background task's generation from its saved incarnations on the writer", async () => {
+  const sql = await journal()
+  const task = (state: 'working' | 'done', parentToolUseId: string) => ({
+    kind: 'resolved-item' as const,
+    resolution: {
+      kind: 'background-task' as const,
+      taskId: 'task-1',
+      toolUseId: parentToolUseId,
+      body: {
+        kind: 'message' as const,
+        role: 'system' as const,
+        blocks: [
+          {
+            type: 'background-task' as const,
+            taskId: 'task-1',
+            kind: 'command' as const,
+            label: 'Build',
+            state,
+            parentToolUseId
+          }
+        ]
+      }
+    },
+    options: { fence: 1, turnScope: { kind: 'thread' as const } },
+    reservedBytes: 8192
+  })
+  await sql.appendSteps([
+    task('working', 'tool-1'),
+    task('done', 'tool-1'),
+    task('working', 'tool-2')
+  ])
+  const first = agentJournalItemKey(claudeBackgroundTaskIdentity('task-1'))
+  const second = agentJournalItemKey(claudeBackgroundTaskIdentity('task-1', 2))
+  expect(await sql.reads.item(first)).toMatchObject({
+    revision: 2,
+    body: { blocks: [{ state: 'done', parentToolUseId: 'tool-1' }] }
+  })
+  expect(await sql.reads.item(second)).toMatchObject({
+    revision: 1,
+    body: { blocks: [{ state: 'working', parentToolUseId: 'tool-2' }] }
   })
 })

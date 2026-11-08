@@ -16,6 +16,7 @@ export type JournalTimelineView = {
   /** The most recently written turn row. */
   newestTurn(): AgentJournalRenderItem | null
   newestWithKeyPrefix(prefix: string): AgentJournalRenderItem | null
+  withKeyPrefix(prefix: string): Iterable<AgentJournalRenderItem>
   contextWindowHeld(): boolean
   /** Running turns and calls, pending prompts and live work in insertion order; null spans the chat. */
   unsettled(turnItemId: string | null): Iterable<AgentJournalRenderItem>
@@ -36,6 +37,7 @@ export function journalTimelineView(state: JournalReducerState): JournalTimeline
     itemBody: (itemId) => item(itemId)?.body ?? null,
     newestTurn: () => state.queries.newestTurnItem(state),
     newestWithKeyPrefix: (prefix) => state.queries.newestItemWithKeyPrefix(state, prefix),
+    withKeyPrefix: (prefix) => state.queries.itemsWithKeyPrefix(state, prefix),
     contextWindowHeld: () => state.queries.contextWindowHeld(state),
     unsettled: (turnItemId) => state.queries.unsettledItems(state, turnItemId),
     stopDecidesTurn: (turnId, endedAt) => personStopDecidesTurn(state, turnId, endedAt)
@@ -52,6 +54,13 @@ export function journalTimelineItemsView(
     item,
     itemBody: (itemId) => item(itemId)?.body ?? null,
     newestTurn: () => newestJournalTimelineTurn(items()),
+    withKeyPrefix: function* (prefix) {
+      for (const item of items()) {
+        if (item.itemId.startsWith(prefix)) {
+          yield item
+        }
+      }
+    },
     newestWithKeyPrefix: (prefix) => {
       let newest: AgentJournalRenderItem | null = null
       for (const item of items()) {

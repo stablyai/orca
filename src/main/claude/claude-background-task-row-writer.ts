@@ -4,10 +4,7 @@ import type {
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeBackgroundTaskRow } from './claude-background-task-row-lifecycle'
-import {
-  ClaudeBackgroundTaskIdentityResolver,
-  writeClaudeBackgroundTaskRow
-} from './claude-background-task-row-journal'
+import { writeClaudeBackgroundTaskRow } from './claude-background-task-row-journal'
 
 const MAX_PENDING_TASK_WRITES = 512
 
@@ -16,7 +13,6 @@ export class ClaudeBackgroundTaskRowWriter {
     string,
     { id: string; row: ClaudeBackgroundTaskRow; lifecycle: boolean }
   >()
-  private readonly identities = new ClaudeBackgroundTaskIdentityResolver()
 
   constructor(
     private readonly sink: StructuredAgentSessionEventSink,
@@ -32,7 +28,6 @@ export class ClaudeBackgroundTaskRowWriter {
   ): void {
     const admission = writeClaudeBackgroundTaskRow(
       this.sink,
-      this.identities,
       id,
       row,
       this.turnScope,

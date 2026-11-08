@@ -9,10 +9,7 @@ import {
   isBackgroundTaskBlock,
   isSubagentBlock
 } from '../../../../../shared/native-chat/native-chat-types'
-import {
-  ClaudeBackgroundTaskIdentityResolver,
-  writeClaudeBackgroundTaskRow
-} from '../../../../claude/claude-background-task-row-journal'
+import { writeClaudeBackgroundTaskRow } from '../../../../claude/claude-background-task-row-journal'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { StructuredAgentSessionCurrentWork } from '../structured-agent-session-current-work'
 import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
@@ -73,14 +70,12 @@ it('keeps a resumed subagent and background task working when the run that creat
       throw error
     }
   })
-  const tasks = new ClaudeBackgroundTaskIdentityResolver()
   const run = async () => {
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({ journal, fence, publish: () => {} })
     rows.changed('session-1', deferred.sink)
     writeClaudeBackgroundTaskRow(
       deferred.sink,
-      tasks,
       'task-1',
       {
         block: {

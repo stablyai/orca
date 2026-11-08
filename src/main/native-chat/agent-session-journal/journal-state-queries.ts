@@ -28,6 +28,11 @@ export type JournalStateQueries = {
   newestTurnBySequence: (state: JournalReducerState) => AgentJournalTurnLifecycle | null
   latestItemForTurn: (state: JournalReducerState, turnId: string) => AgentJournalRenderItem | null
   newestTurnItem: (state: JournalReducerState) => AgentJournalRenderItem | null
+  /** Visible items whose key starts with this prefix, in insertion order. */
+  itemsWithKeyPrefix: (
+    state: JournalReducerState,
+    prefix: string
+  ) => Iterable<AgentJournalRenderItem>
   /** The most recently written visible item whose key starts with this prefix. */
   newestItemWithKeyPrefix: (
     state: JournalReducerState,

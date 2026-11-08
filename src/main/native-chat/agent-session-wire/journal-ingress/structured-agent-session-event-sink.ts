@@ -20,7 +20,6 @@ import {
 } from './structured-agent-session-transition'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type {
-  StructuredAgentSessionIdentityResolver,
   StructuredAgentSessionHistoryJournal,
   StructuredAgentSessionLinkageJournal
 } from './structured-agent-session-journal-views'
@@ -93,16 +92,15 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     body: AgentJournalItemBody,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
+  /** The writer chooses the identity at its position; the bound sizes any choice. */
   tryAppendResolvedItem?(
     identitySizeBound: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionIdentityResolver,
+    resolution: Extract<JournalTimelineItemResolution, { kind: 'background-task' }>,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
   tryAppendResolvedItemAndPublish?(
     identitySizeBound: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionIdentityResolver,
+    resolution: Extract<JournalTimelineItemResolution, { kind: 'background-task' }>,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
   /** The writer resolves the revision at its position; reserved bytes must bound it. */

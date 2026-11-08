@@ -80,6 +80,13 @@ export const memoryJournalStateQueries: JournalStateQueries = {
     return latest
   },
   newestTurnItem: (state) => newestJournalTimelineTurn(presentedItems(state)),
+  *itemsWithKeyPrefix(state, prefix) {
+    for (const item of presentedItems(state)) {
+      if (item.itemId.startsWith(prefix)) {
+        yield item
+      }
+    }
+  },
   newestItemWithKeyPrefix(state, prefix) {
     let newest: AgentJournalRenderItem | null = null
     for (const item of presentedItems(state)) {
