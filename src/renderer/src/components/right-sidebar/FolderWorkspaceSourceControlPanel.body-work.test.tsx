@@ -8,7 +8,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type * as WorktreeGitCopy from '@/lib/worktree-git-copy'
 import type * as GitStatusClient from '@/runtime/source-control/git/runtime-git-status-client'
 import type * as GitDiffClient from '@/runtime/source-control/git/runtime-git-diff-client'
-import type * as RepoClient from '@/runtime/runtime-repo-client'
+import type * as RepoClient from '@/runtime/source-control/references/runtime-repo-client'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -65,7 +65,7 @@ vi.mock('@/runtime/source-control/git/runtime-git-diff-client', async (original)
     }
   }
 }))
-vi.mock('@/runtime/runtime-repo-client', async (original) => ({
+vi.mock('@/runtime/source-control/references/runtime-repo-client', async (original) => ({
   ...(await original<typeof RepoClient>()),
   watchRuntimeRepoBaseRefDefault: () => () => {},
   searchRuntimeRepoBaseRefs: async () => ['feature/live']

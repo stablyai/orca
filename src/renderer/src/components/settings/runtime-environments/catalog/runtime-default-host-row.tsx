@@ -1,6 +1,6 @@
 import { Monitor, Server } from 'lucide-react'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { getActiveServerModeDescription } from './runtime-environment-host-details'
@@ -21,6 +21,7 @@ export function RuntimeDefaultHostRow({
   isBusy,
   onValueChange
 }: RuntimeDefaultHostRowProps): React.JSX.Element {
+  const t = useTranslate()
   const savedEnvironments = useAppStore((state) => state.runtimeEnvironments)
   // Retain unlisted active defaults such as WSL distros so users can change them.
   const unlistedActive =
@@ -37,7 +38,7 @@ export function RuntimeDefaultHostRow({
         data-settings-section="default-runtime"
         className="scroll-mt-8 text-xs text-muted-foreground"
       >
-        {translate(
+        {t(
           'auto.components.settings.serverList.defaultHostEmptyLine',
           'New projects open on this computer until you add a server.'
         )}
@@ -51,13 +52,10 @@ export function RuntimeDefaultHostRow({
     >
       <div className="min-w-0 space-y-0.5">
         <div id="runtime-active-server-label" className="text-sm font-medium">
-          {translate(
-            'auto.components.settings.serverList.defaultHostLabel',
-            'New projects open on'
-          )}
+          {t('auto.components.settings.serverList.defaultHostLabel', 'New projects open on')}
         </div>
         <p className="text-xs text-muted-foreground">
-          {getActiveServerModeDescription(allowLocalRuntime)}
+          {getActiveServerModeDescription(allowLocalRuntime, t)}
         </p>
       </div>
       <div className="shrink-0">
@@ -77,11 +75,11 @@ export function RuntimeDefaultHostRow({
             {allowLocalRuntime ? (
               <SelectItem value={LOCAL_RUNTIME_VALUE}>
                 <Monitor />
-                {translate('auto.components.settings.serverList.thisComputer', 'This computer')}
+                {t('auto.components.settings.serverList.thisComputer', 'This computer')}
               </SelectItem>
             ) : options.length === 0 ? (
               <SelectItem value={NO_RUNTIME_VALUE} disabled>
-                {translate(
+                {t(
                   'auto.components.settings.RuntimeEnvironmentsPane.b07070ed3c',
                   'No server connected'
                 )}

@@ -26,12 +26,12 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 // Main answers the window's chat-tab commands and its frames draw them (switch-on builds).
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -54,13 +54,13 @@ import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../../tabs/tab-group.test-fixture'
 import {
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import {
   addNativeChatPendingAttachment,
   settleNativeChatPendingAttachment
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 const WT1 = 'repo1::/path/wt1'
 const WT2 = 'repo1::/path/wt2'

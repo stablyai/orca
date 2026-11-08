@@ -20,7 +20,7 @@ import { useSkillInstallDetectedAgents } from './use-skill-install-detected-agen
 import type { SkillInstallProviderId } from '../../../../shared/skill-install-providers'
 import { skillInstallWorkspaceChoices } from './skill-install-workspace-choices'
 import { useSkillInstallProgress } from './skill-install-progress-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { checklistItemsFromVersion } from './skill-package-checklist-items'
 import { summarizeSkillInstallRisk } from './skill-package-install-risk'
 import { retryableSkillIds } from './skill-bundle-retry-selection'
@@ -49,6 +49,7 @@ export function SkillBundleInstallFlow(props: {
   onClose(): void
   onBusyChange(busy: boolean): void
 }): React.JSX.Element {
+  const t = useTranslate()
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
   const runtimeStatus = useAppStore((state) => state.runtimeStatusByEnvironmentId)
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
@@ -132,8 +133,8 @@ export function SkillBundleInstallFlow(props: {
     if (!target || requestedIds.size === 0) {
       setError(
         target
-          ? translate('auto.components.skills.install.selectSkill', 'Select at least one skill.')
-          : translate('auto.components.skills.install.chooseWorkspace', 'Choose a workspace.')
+          ? t('auto.components.skills.install.selectSkill', 'Select at least one skill.')
+          : t('auto.components.skills.install.chooseWorkspace', 'Choose a workspace.')
       )
       return
     }
@@ -197,7 +198,7 @@ export function SkillBundleInstallFlow(props: {
       } else if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? translate(
+            ? t(
                 'auto.components.skills.install.reconnectBeforeInstalling',
                 'Reconnect your Orca account before installing.'
               )
@@ -216,7 +217,7 @@ export function SkillBundleInstallFlow(props: {
     } catch (cause) {
       console.warn('[skills] bundle install failed:', cause)
       setError(
-        translate(
+        t(
           'auto.components.skills.install.bundleVerificationFailed',
           'Installation failed before Orca could verify the requested bundle.'
         )
@@ -238,7 +239,7 @@ export function SkillBundleInstallFlow(props: {
     })
     if (!cancelled.cancelled) {
       setError(
-        translate(
+        t(
           'auto.components.skills.install.destinationAlreadyFinished',
           'The destination had already finished this installation.'
         )
@@ -333,14 +334,11 @@ export function SkillBundleInstallFlow(props: {
       ) : null}
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={props.onClose} disabled={busy}>
-          {translate('auto.components.skills.SkillBundleInstallFlow.01c5a13e01', 'Close')}
+          {t('auto.components.skills.SkillBundleInstallFlow.01c5a13e01', 'Close')}
         </Button>
         {busy && installProgress.activeOperationId ? (
           <Button type="button" variant="secondary" onClick={() => void cancelInstall()}>
-            {translate(
-              'auto.components.skills.SkillBundleInstallFlow.01c5a13e02',
-              'Cancel installation'
-            )}
+            {t('auto.components.skills.SkillBundleInstallFlow.01c5a13e02', 'Cancel installation')}
           </Button>
         ) : null}
         {!result || retryIds.size ? (
@@ -354,10 +352,10 @@ export function SkillBundleInstallFlow(props: {
           >
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
             {busy
-              ? translate('auto.components.skills.SkillBundleInstallFlow.01c5a13e03', 'Installing…')
+              ? t('auto.components.skills.SkillBundleInstallFlow.01c5a13e03', 'Installing…')
               : result
-                ? retrySkillsActionLabel(retryIds.size)
-                : installSkillsActionLabel(selectedSkillIds.size)}
+                ? retrySkillsActionLabel(retryIds.size, t)
+                : installSkillsActionLabel(selectedSkillIds.size, t)}
           </Button>
         ) : null}
       </DialogFooter>

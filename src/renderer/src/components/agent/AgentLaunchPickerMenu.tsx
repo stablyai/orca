@@ -22,6 +22,7 @@ import type {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 
 export function AgentLaunchPickerMenu({
+  model,
   draftScope,
   shortcutLabels,
   disabled,
@@ -85,6 +86,7 @@ export function AgentLaunchPickerMenu({
       mode
     )
   }, [entries, draftScope, mode, setupDisabled])
+  const terminalBlocked = mode !== 'select' && model?.state === 'settled' && model.terminalPending
   const [query, setQuery] = useState(initialQuery)
   const [searchFocused, setSearchFocused] = useState(false)
   const [activeSetup, setActiveSetup] = useState<{
@@ -195,6 +197,7 @@ export function AgentLaunchPickerMenu({
               selected={value?.agent === setup.entry.agent ? value : undefined}
               onSelectAgent={onSelectAgent}
               disabled={disabled}
+              terminalBlocked={terminalBlocked}
               runLaunch={runLaunch}
             />
           )
@@ -214,6 +217,7 @@ export function AgentLaunchPickerMenu({
               openSetup={openSetup}
               onSetupOpenChange={setActiveSetup}
               disabled={disabled}
+              terminalBlocked={terminalBlocked}
               runLaunch={runLaunch}
               onSelectAgent={onSelectAgent}
               isDefault={defaultAgent === entry.agent}

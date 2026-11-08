@@ -1,4 +1,4 @@
-import { isRuntimeProviderSearchQueryWithinLimit } from '@/runtime/runtime-provider-search-bounds'
+import { isRuntimeProviderSearchQueryWithinLimit } from '@/runtime/issue-search/runtime-provider-search-bounds'
 import type { JiraIssue, JiraProject } from '../../../../../shared/jira/jira-types'
 import { withCurrentSprintClause } from '../../../../../shared/jira/jira-jql-predicate'
 import {

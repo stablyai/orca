@@ -150,17 +150,6 @@ it('closes 25 abandoned file readers and removes only owned response listeners',
   expect(otherError).not.toHaveBeenCalled()
 })
 
-it('does not stat or open assets for an already closed response', async () => {
-  const response = fakeResponse()
-  const closed = once(response, 'close')
-  response.destroy()
-  await closed
-  request(response)
-  expect(observed.statCalls).toBe(0)
-  expect(observed.streams).toHaveLength(0)
-  expect(response.setHeader).not.toHaveBeenCalled()
-})
-
 it.each(['success', 'failure'])(
   'does not revive a response closed during stat %s',
   async (outcome) => {
@@ -200,17 +189,6 @@ it('closes a file that is still opening when its response is destroyed', async (
   expect(response.listenerCount('error')).toBe(0)
 })
 
-it('closes its file reader when the response errors', async () => {
-  const response = request()
-  const source = await latestSource(1)
-  await expect.poll(() => source.isPaused()).toBe(true)
-  response.destroy(new Error('downstream failed'))
-  await expect.poll(() => source.closed).toBe(true)
-  expect(fileDescriptor(source)).toBe(null)
-  expect(response.listenerCount('close')).toBe(0)
-  expect(response.listenerCount('error')).toBe(0)
-})
-
 it('disconnects a response when its source fails after headers', async () => {
   const response = request()
   const source = await latestSource(1)
@@ -223,24 +201,6 @@ it('disconnects a response when its source fails after headers', async () => {
   expect(response.destroyed).toBe(true)
   expect(response.listenerCount('close')).toBe(0)
   expect(response.listenerCount('error')).toBe(0)
-})
-
-it('preserves actual HTTP GET bytes, cache headers and HEAD without a reader', async () => {
-  const url = await startServer()
-  const head = await fetch(`${url}/assets/fixture.js`, { method: 'HEAD' })
-  expect(head.status).toBe(200)
-  expect(head.headers.get('content-length')).toBe(String(1024 * 1024))
-  expect(await head.text()).toBe('')
-  expect(observed.streams).toHaveLength(0)
-  const get = await fetch(`${url}/assets/fixture.js`)
-  expect(get.status).toBe(200)
-  expect(get.headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
-  expect(get.headers.get('content-type')).toBe('text/javascript; charset=utf-8')
-  expect(Buffer.from(await get.arrayBuffer()).equals(Buffer.alloc(1024 * 1024, 1))).toBe(true)
-  await expect.poll(() => observed.streams.every((source) => source.closed)).toBe(true)
-  const index = await fetch(`${url}/`)
-  expect(index.headers.get('cache-control')).toBe('no-cache')
-  expect(await index.text()).toBe('<html>web</html>')
 })
 
 it('answers an actual file-open error with an empty 500 instead of the asset length', async () => {

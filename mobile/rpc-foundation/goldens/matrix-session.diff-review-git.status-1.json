@@ -1027,8 +1027,8 @@
       {
         "id": "diff-review-snapshot.method-not-found:snapshot",
         "observation": {
-          "sender": ["45d1ea7c0b42", "5dd74fdeb001", "9affac551982", "c0f7fd87f4a5"],
-          "payloads": ["8db27b0778a5", "5dbd52d6a1c7", "648638103acb", "622e5aadb43d"],
+          "sender": ["45d1ea7c0b42", "5dd74fdeb001", "9affac551982"],
+          "payloads": ["8db27b0778a5", "5dbd52d6a1c7", "648638103acb"],
           "settlements": {
             "snapshot": "14804a5e414f"
           },

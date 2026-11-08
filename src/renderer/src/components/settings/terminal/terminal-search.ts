@@ -10,6 +10,7 @@ import {
   getTerminalPaneInteractionSearchEntries
 } from './appearance/terminal-pane-appearance-search'
 import {
+  getClaudeCodeThemeSyncSearchEntry,
   getTerminalDarkThemeSearchEntries,
   getTerminalLightThemeSearchEntries,
   getTerminalThemeTargetSearchEntries,
@@ -52,12 +53,14 @@ const getTerminalAppearanceSearchEntriesWithoutImports = createLocalizedCatalog(
 )
 
 // Compose catalogs because translated titles cannot reliably identify desktop-only entries.
+// Claude Code theme sync writes this computer's Claude config, so web clients do not offer it.
 const getTerminalAppearanceSearchEntriesWithImports = createLocalizedCatalog(
   (): SettingsSearchEntry[] => [
     ...getTerminalAppearanceSearchEntriesWithoutImports(),
     ...getTerminalConfigImportSearchEntries(),
     ...getTerminalWarpImportSearchEntries(),
-    ...getTerminalYamlImportSearchEntries()
+    ...getTerminalYamlImportSearchEntries(),
+    ...getClaudeCodeThemeSyncSearchEntry()
   ]
 )
 

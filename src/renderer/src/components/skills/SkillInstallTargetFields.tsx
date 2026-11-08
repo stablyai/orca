@@ -13,6 +13,7 @@ import { SkillInstallAgentPicker } from './SkillInstallAgentPicker'
 import { SkillInstallWorkspaceCombobox } from './SkillInstallWorkspaceCombobox'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { HostCombobox, type HostComboboxOption } from '../host-picker/HostCombobox'
 
 export function SkillInstallTargetFields(props: {
@@ -34,6 +35,7 @@ export function SkillInstallTargetFields(props: {
   onProvidersChange(next: Set<SkillInstallProviderId>): void
   busy?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const [wslDistros, setWslDistros] = useState<string[]>([])
   const fieldId = useId()
 
@@ -67,7 +69,7 @@ export function SkillInstallTargetFields(props: {
       <section className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor={`${fieldId}-machine`}>
-            {translate('auto.components.skills.SkillInstallTargetFields.b8a0b706ad', 'Machine')}
+            {t('auto.components.skills.SkillInstallTargetFields.b8a0b706ad', 'Machine')}
           </Label>
           <HostCombobox
             id={`${fieldId}-machine`}
@@ -77,13 +79,13 @@ export function SkillInstallTargetFields(props: {
               props.onWorkspaceChange('')
               props.onExecutionTargetChange(null)
             }}
-            options={skillInstallMachineOptions(props)}
+            options={skillInstallMachineOptions(props, t)}
             className="min-w-0"
           />
         </div>
         <div className="space-y-2">
           <Label htmlFor={`${fieldId}-destination`}>
-            {translate('auto.components.skills.SkillInstallTargetFields.63cc9e31fe', 'Destination')}
+            {t('auto.components.skills.SkillInstallTargetFields.63cc9e31fe', 'Destination')}
           </Label>
           <Select
             value={props.scope}
@@ -94,16 +96,10 @@ export function SkillInstallTargetFields(props: {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="global">
-                {translate(
-                  'auto.components.skills.SkillInstallTargetFields.c779621aa0',
-                  'Global skills'
-                )}
+                {t('auto.components.skills.SkillInstallTargetFields.c779621aa0', 'Global skills')}
               </SelectItem>
               <SelectItem value="workspace">
-                {translate(
-                  'auto.components.skills.SkillInstallTargetFields.a4dfd33095',
-                  'One workspace'
-                )}
+                {t('auto.components.skills.SkillInstallTargetFields.a4dfd33095', 'One workspace')}
               </SelectItem>
             </SelectContent>
           </Select>
@@ -113,7 +109,7 @@ export function SkillInstallTargetFields(props: {
       {props.scope === 'global' && wslDistros.length > 0 ? (
         <section className="space-y-2">
           <Label htmlFor={`${fieldId}-execution`}>
-            {translate(
+            {t(
               'auto.components.skills.SkillInstallTargetFields.cb47652227',
               'Execution environment'
             )}
@@ -131,14 +127,14 @@ export function SkillInstallTargetFields(props: {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="host">
-                {translate(
+                {t(
                   'auto.components.skills.SkillInstallTargetFields.e5b0d15e64',
                   'Host operating system'
                 )}
               </SelectItem>
               {wslDistros.map((distro) => (
                 <SelectItem key={distro} value={distro}>
-                  {translate('auto.components.skills.SkillInstallTargetFields.0c10a406fb', 'WSL ·')}{' '}
+                  {t('auto.components.skills.SkillInstallTargetFields.0c10a406fb', 'WSL ·')}{' '}
                   {distro}
                 </SelectItem>
               ))}
@@ -150,7 +146,7 @@ export function SkillInstallTargetFields(props: {
       {props.scope === 'workspace' ? (
         <section className="space-y-2">
           <Label htmlFor={`${fieldId}-workspace`}>
-            {translate('auto.components.skills.SkillInstallTargetFields.0e5b43a9e3', 'Workspace')}
+            {t('auto.components.skills.SkillInstallTargetFields.0e5b43a9e3', 'Workspace')}
           </Label>
           <SkillInstallWorkspaceCombobox
             id={`${fieldId}-workspace`}
@@ -161,7 +157,7 @@ export function SkillInstallTargetFields(props: {
           />
           {props.workspaceChoices.length === 0 ? (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.skills.SkillInstallTargetFields.8e6a972229',
                 'No workspaces are known on this machine.'
               )}
@@ -182,15 +178,18 @@ export function SkillInstallTargetFields(props: {
   )
 }
 
-function skillInstallMachineOptions(props: {
-  runtimeEnvironments: readonly { id: string; name: string }[]
-  runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
-  sshConnections: readonly { id: string; label: string; connected: boolean }[]
-  requiredCapability?: string
-}): HostComboboxOption[] {
+function skillInstallMachineOptions(
+  props: {
+    runtimeEnvironments: readonly { id: string; name: string }[]
+    runtimeStatus: Map<string, { status: { capabilities?: string[] } | null }>
+    sshConnections: readonly { id: string; label: string; connected: boolean }[]
+    requiredCapability?: string
+  },
+  t: Translate = translate
+): HostComboboxOption[] {
   const local: HostComboboxOption = {
     id: 'local',
-    label: translate('auto.components.skills.SkillInstallTargetFields.8562dd1e6e', 'This computer')
+    label: t('auto.components.skills.SkillInstallTargetFields.8562dd1e6e', 'This computer')
   }
   const environments = props.runtimeEnvironments.map((environment): HostComboboxOption => {
     const status = props.runtimeStatus.get(environment.id)?.status
@@ -203,10 +202,7 @@ function skillInstallMachineOptions(props: {
       label: environment.name,
       disabled: unsupported,
       detail: unsupported
-        ? translate(
-            'auto.components.skills.SkillInstallTargetFields.0785d0a503',
-            '— update required'
-          )
+        ? t('auto.components.skills.SkillInstallTargetFields.0785d0a503', '— update required')
         : undefined
     }
   })
@@ -215,8 +211,8 @@ function skillInstallMachineOptions(props: {
     label: connection.label,
     disabled: !connection.connected,
     detail: connection.connected
-      ? translate('auto.components.skills.SkillInstallTargetFields.85d85880df', '· SSH')
-      : translate('auto.components.skills.SkillInstallTargetFields.71eefd7660', '— disconnected')
+      ? t('auto.components.skills.SkillInstallTargetFields.85d85880df', '· SSH')
+      : t('auto.components.skills.SkillInstallTargetFields.71eefd7660', '— disconnected')
   }))
   return [local, ...environments, ...ssh]
 }

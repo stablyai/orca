@@ -65,6 +65,7 @@ export type RunSourceControlAgentActionStartArgs = {
     commandInput: string
     /** Omitted when CLI arguments do not apply, so the launch resolves the global setting. */
     agentArgs?: string
+    actionAgentArgs?: string
     /** The action's saved choice, on either route. */
     sessionOptions?: Readonly<Record<string, string>>
     chatSessionOptions?: Readonly<Record<string, string>>
@@ -220,6 +221,7 @@ export async function runSourceControlAgentActionStart({
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
       agentArgs: launchAgentArgs,
+      ...(actionAgentArgs !== undefined ? { actionAgentArgs } : {}),
       ...launchOptions,
       ...(launchChoice ? { launchChoice } : {})
     })
@@ -255,8 +257,11 @@ export async function runSourceControlAgentActionStart({
       launchPlatform,
       launchSource
     })
-    launched = Boolean(result)
-    if (result?.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
+    if (!result || 'refused' in result) {
+      return false
+    }
+    launched = true
+    if (result.surface.kind === 'local-terminal' && (!placementWorkspaceId || inPlace)) {
       focusTerminalTabSurface(result.surface.tabId)
     }
     // Park launch state before slow submit-after-ready completes; host writes still wait for delivery.

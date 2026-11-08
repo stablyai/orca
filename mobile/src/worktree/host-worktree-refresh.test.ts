@@ -22,8 +22,7 @@ type RefreshArgs = Parameters<typeof startHostWorktreeRefresh>[0]
 
 describe('startHostWorktreeRefresh', () => {
   let eventListener: ((payload: unknown) => void) | null
-  let fetchWorktrees: ReturnType<typeof vi.fn<RefreshArgs['fetchWorktrees']>>
-  let fetchRepoMetadata: ReturnType<typeof vi.fn<RefreshArgs['fetchRepoMetadata']>>
+  let refreshWorktrees: ReturnType<typeof vi.fn<RefreshArgs['refreshWorktrees']>>
   let syncViewSettings: ReturnType<typeof vi.fn<RefreshArgs['syncViewSettings']>>
   let unsubscribe: ReturnType<typeof vi.fn<() => void>>
   let stop: (() => void) | null
@@ -34,8 +33,7 @@ describe('startHostWorktreeRefresh', () => {
     appState.listener = null
     appState.remove.mockClear()
     eventListener = null
-    fetchWorktrees = vi.fn<RefreshArgs['fetchWorktrees']>().mockResolvedValue(undefined)
-    fetchRepoMetadata = vi.fn<RefreshArgs['fetchRepoMetadata']>().mockResolvedValue(undefined)
+    refreshWorktrees = vi.fn<RefreshArgs['refreshWorktrees']>()
     syncViewSettings = vi.fn<RefreshArgs['syncViewSettings']>().mockResolvedValue(undefined)
     unsubscribe = vi.fn<() => void>()
     stop = null
@@ -52,8 +50,7 @@ describe('startHostWorktreeRefresh', () => {
     })
     stop = startHostWorktreeRefresh({
       client,
-      fetchWorktrees,
-      fetchRepoMetadata,
+      refreshWorktrees,
       syncViewSettings,
       sidebarFeed,
       appState: AppState
@@ -65,77 +62,22 @@ describe('startHostWorktreeRefresh', () => {
     vi.useRealTimers()
   })
 
-  it('keeps the worktree poll active but skips ticks while backgrounded', async () => {
+  it('reads nothing on change notices while hidden and catches up once on return', () => {
     start()
-    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
-
-    appState.currentState = 'background'
-    await vi.advanceTimersByTimeAsync(6_000)
-    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
-
-    appState.currentState = 'active'
-    await vi.advanceTimersByTimeAsync(3_000)
-    expect(fetchWorktrees).toHaveBeenCalledTimes(2)
-
-    stop?.()
-    stop = null
-    fetchWorktrees.mockClear()
-    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
-    await vi.advanceTimersByTimeAsync(3_000)
-    expect(fetchWorktrees).not.toHaveBeenCalled()
-    expect(unsubscribe).toHaveBeenCalledOnce()
-    expect(appState.remove).toHaveBeenCalledOnce()
-  })
-
-  it('refreshes worktrees on worktreesChanged and both snapshots after stream replay', () => {
-    start()
-    fetchWorktrees.mockClear()
-    fetchRepoMetadata.mockClear()
-
-    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
-    expect(fetchWorktrees).toHaveBeenCalledTimes(1)
-
-    eventListener?.({ type: 'ready', subscriptionId: 'events-1' })
-    eventListener?.({ type: 'ready', subscriptionId: 'events-2' })
-    expect(fetchWorktrees).toHaveBeenCalledTimes(2)
-    expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
-  })
-
-  it('reads nothing on change notices while hidden and catches up once on return', async () => {
-    start()
-    fetchWorktrees.mockClear()
-    fetchRepoMetadata.mockClear()
     syncViewSettings.mockClear()
 
     appState.currentState = 'background'
-    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
-    eventListener?.({ type: 'reposChanged' })
     eventListener?.({ type: 'workspaceViewChanged' })
-    eventListener?.({
-      type: 'sshStateChanged',
-      targetId: 'ssh-1',
-      state: { targetId: 'ssh-1', status: 'connected' }
-    })
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(fetchWorktrees).not.toHaveBeenCalled()
-    expect(fetchRepoMetadata).not.toHaveBeenCalled()
+    eventListener?.({ type: 'workspaceViewChanged' })
     expect(syncViewSettings).not.toHaveBeenCalled()
 
     appState.currentState = 'active'
     appState.listener?.('active')
-    expect(fetchWorktrees).toHaveBeenCalledExactlyOnceWith({
-      allowDuringModal: true,
-      queueIfInFlight: true
-    })
-    expect(fetchRepoMetadata).toHaveBeenCalledExactlyOnceWith({
-      force: true,
-      queueIfInFlight: true
-    })
     expect(syncViewSettings).toHaveBeenCalledExactlyOnceWith({ resend: true })
   })
 
   describe('with the host’s sidebar feed', () => {
-    it('reads it at start, on every ready and on foreground, and never polls', async () => {
+    it('reads it at start, on every ready and on foreground', () => {
       const sidebarFeed = { refresh: vi.fn(), changed: vi.fn(), onInstalled: vi.fn(() => () => {}) }
       start(sidebarFeed)
       expect(sidebarFeed.refresh).toHaveBeenCalledTimes(1)
@@ -146,10 +88,6 @@ describe('startHostWorktreeRefresh', () => {
       expect(syncViewSettings).toHaveBeenCalledWith({ resend: true })
       appState.listener?.('active')
       expect(sidebarFeed.refresh).toHaveBeenCalledTimes(4)
-
-      fetchWorktrees.mockClear()
-      await vi.advanceTimersByTimeAsync(30_000)
-      expect(fetchWorktrees).not.toHaveBeenCalled()
     })
   })
 })

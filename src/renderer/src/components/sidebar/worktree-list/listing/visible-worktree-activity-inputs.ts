@@ -2,7 +2,7 @@ import type { BrowserWorkspace } from '../../../../../../shared/browser-workspac
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
-import { getStructuredAgentSessionTabs } from '@/components/native-chat/structured-agent-session-tabs'
+import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 import type { StructuredChatSleptAtByPaneKey } from '@/store/slices/agent-status/structured-chat-slept-at'
 

@@ -57,7 +57,7 @@ vi.mock('../../../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({ scheduleRuntimeGraphSync }))
 
 vi.mock('@/lib/agent-draft-readiness', () => ({ waitForAgentDraftInputReady }))
 

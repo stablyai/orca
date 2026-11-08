@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './dispatcher'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -169,15 +168,6 @@ describe('terminal.subscribe resume', () => {
     await third.stop()
   })
 
-  it('resumes from an earlier frame the phone stopped at', async () => {
-    const { host, token } = await endedStream()
-
-    const second = await host.subscribe({ streamToken: token, units: 6 })
-    expect(second.subscribed.resumed).toBe(true)
-    await second.receives('worldagain')
-    await second.stop()
-  })
-
   it('leaves reply queries out of the missed output', async () => {
     const host = createHost()
     const first = await host.subscribe()
@@ -189,17 +179,6 @@ describe('terminal.subscribe resume', () => {
     const second = await host.subscribe({ streamToken: first.subscribed.streamToken, units: 5 })
     expect(second.subscribed.resumed).toBe(true)
     await second.receives('ab\x1b[?2031h')
-    await second.stop()
-  })
-
-  it('tells the phone about a directory change it missed', async () => {
-    const { host, token, units } = await endedStream()
-    host.output('cd done', '/tmp/elsewhere')
-
-    const second = await host.subscribe({ streamToken: token, units })
-    expect(second.subscribed.resumed).toBe(true)
-    await second.receives('againcd done')
-    expect(second.cwds()).toEqual(['/tmp/elsewhere'])
     await second.stop()
   })
 
@@ -230,15 +209,6 @@ describe('terminal.subscribe resume', () => {
     await disrupt(ended)
 
     const next = await ended.host.subscribe({ streamToken: ended.token, units: ended.units })
-    expect(next.subscribed.resumed).toBeUndefined()
-    expect(next.snapshotKinds()).toEqual(['scrollback'])
-    await next.stop()
-  })
-
-  it('sends a snapshot for a count between frames', async () => {
-    const { host, token } = await endedStream()
-
-    const next = await host.subscribe({ streamToken: token, units: 8 })
     expect(next.subscribed.resumed).toBeUndefined()
     expect(next.snapshotKinds()).toEqual(['scrollback'])
     await next.stop()

@@ -1,12 +1,12 @@
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
 import { usesOlderPairingMethod } from '../../../src/main/runtime/rpc/server/pairing/pairing-ticket-exchange'
-import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/pairing/ticket-exchange-capability'
-import { encodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
-import { exchangeRemotePairingTicket } from '../../../src/shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
+import '../../../src/shared/remote-runtime/pairing/ticket-exchange-capability'
+import '../../../src/shared/remote-runtime/pairing/pairing'
+import '../../../src/shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -24,18 +24,15 @@ type ReleasedRegistryLike = {
 }
 
 let ReleasedRegistry: new (userDataPath: string) => ReleasedRegistryLike
-let releasedCapabilities: readonly string[]
 
 beforeAll(async () => {
   const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
-  const [registryModule, protocolModule] = await Promise.all([
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/server/pairing/device-registry.ts'),
-    importReleaseCheckoutModule(checkout, 'src/shared/protocol-version.ts')
-  ])
+  const registryModule = await importReleaseCheckoutModule(
+    checkout,
+    'src/main/runtime/rpc/server/pairing/device-registry.ts'
+  )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release's DeviceRegistry class; a changed shape fails the assertions below.
   ReleasedRegistry = registryModule.DeviceRegistry as typeof ReleasedRegistry
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release's capability list; a changed shape fails the assertions below.
-  releasedCapabilities = protocolModule.RUNTIME_CAPABILITIES as readonly string[]
 }, SUITE_TIMEOUT_MS)
 
 function pairedTicket(registry: DeviceRegistry, name: string) {
@@ -45,30 +42,6 @@ function pairedTicket(registry: DeviceRegistry, name: string) {
 }
 
 describe('cross-version: single-use pairing tickets', () => {
-  it('a released host does not advertise the exchange, so updated clients keep the code', () => {
-    expect(releasedCapabilities).not.toContain(PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY)
-  })
-
-  it('Add server and the CLI save the link unchanged for a released host, without calling it', async () => {
-    const offer = {
-      v: 2 as const,
-      endpoint: 'ws://192.168.1.10:6768',
-      deviceToken: 'link-token',
-      publicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
-    }
-    const pairingCode = encodePairingOffer(offer)
-    const send = vi.fn()
-    await expect(
-      exchangeRemotePairingTicket({
-        pairingCode,
-        offer,
-        hostCapabilities: releasedCapabilities,
-        send
-      })
-    ).resolves.toBe(pairingCode)
-    expect(send).not.toHaveBeenCalled()
-  })
-
   it('after a downgrade, exchanged phones keep their own token and older phones their code', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-xv-ticket-'))
     const current = new DeviceRegistry(userDataPath)

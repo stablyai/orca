@@ -1,18 +1,19 @@
-import { continueFolderLaunchDrafts } from '@/components/native-chat/native-chat-launch-draft-continuity'
+import { continueFolderLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
-import type { FetchedFolderWorkspaceCatalog } from './folder-workspace-catalog'
-import type { HostCatalogFence } from '../host-catalog/host-catalog-fence'
+
 import type { RepoSlice } from '../repos/repo-state'
 import { arrayElementsUnchanged } from '../../lib/catalog-reconciliation/catalog-identity'
 import {
+  type HostCatalogFence,
   claimHostCatalogFence,
   isHostCatalogFenceCurrent,
   loadRuntimeHostCatalogs
 } from '../host-catalog/host-catalog-fence'
 import {
+  type FetchedFolderWorkspaceCatalog,
   clearRestoredFolderWorkspaceSessionOwners,
   fetchFolderWorkspaceCatalogForTarget,
   getFolderWorkspaceCatalogReplacementIdentities,

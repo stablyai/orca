@@ -1,4 +1,4 @@
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/structured-agent-session-tabs'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext

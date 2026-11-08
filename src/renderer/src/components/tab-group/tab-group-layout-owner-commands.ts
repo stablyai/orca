@@ -2,16 +2,16 @@
 
 import { useAppStore } from '@/store'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import type { WindowLayoutCommand } from '@/runtime/layout-apply-send'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
+import type { WindowLayoutCommand } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import { isPaneColumnSplitDropNoOp } from '../../../../shared/workspace-layout/pane-column-split-drop-no-op'
 import { mirrorWebRuntimeTabMove } from '../tab-bar/web-runtime-tab-move-mirror'
 import {
   expectMovedTabSelection,
   type MovedTabSelection
-} from '@/runtime/layout-owner-pane-intents'
+} from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
-import { layoutFramesFlowing } from '@/runtime/layout-frame-position'
+import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { splitRatioIntentAt } from '../../../../shared/workspace-layout/split-ratio-intents'
 import { serverTabCount } from '@/lib/frame-drawn-desktop-created-tabs'
 import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'

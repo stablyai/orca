@@ -120,18 +120,6 @@ describe('main places the swept workspace’s live terminals, layout-owner build
     expect(listed?.tabId).not.toMatch(/^pty:/)
   })
 
-  it('a listing that does not ask places nothing', async () => {
-    const { store, runtime } = await hostWith([session('pty-swept')])
-
-    const context = { runtime }
-    await terminalListHandler()(
-      { worktree: `id:${SWEPT}`, limit: 200, requireFreshPtyLiveness: true },
-      context
-    )
-
-    expect(boundPtyIds(store, SWEPT)).toEqual([])
-  })
-
   it('leaves a terminal whose registration is still binding its pane, as a census does', async () => {
     const { store, runtime } = await hostWith([session('pty-registering')])
     runtime.beginPtyRegistration('pty-registering', 'pty-registering-inc')

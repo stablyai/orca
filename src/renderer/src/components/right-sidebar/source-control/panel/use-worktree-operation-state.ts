@@ -48,6 +48,16 @@ export function useSourceControlWorktreeOperationState({
       writeWorktreeCommitDraft(operationStore, update),
     [operationStore]
   )
+  // A landed switch clears the last action error, which belonged to the previous branch.
+  const recordBranchSwitchOutcome = useCallback(
+    (refresh?: () => Promise<void>): void => {
+      if (operationStore.getState().remoteActionError) {
+        operationStore.setState({ remoteActionError: null })
+      }
+      void refresh?.().catch(() => {})
+    },
+    [operationStore]
+  )
 
   useEffect(() => {
     // Terminal conflict resolution must clear stale failure banners once status observes the operation ending.
@@ -75,6 +85,7 @@ export function useSourceControlWorktreeOperationState({
     isCreatePrIntentInFlight,
     isCreatingPr,
     operationStore,
+    recordBranchSwitchOutcome,
     remoteActionError,
     updateCommitDraft
   }

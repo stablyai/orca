@@ -27,3 +27,8 @@ export function isClaudeProjectDirInScope(
   }
   return false
 }
+
+/** Transcripts sit in project buckets (depth 0); `<session id>/` folders below hold only subagent and tool output. */
+export function isClaudeProjectBucketDirectory(_name: string, depth: number): boolean {
+  return depth === 0
+}

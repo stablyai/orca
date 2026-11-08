@@ -16,9 +16,11 @@ import { hasConnectedTerminalAbsentFromSessionTabs } from './mobile-terminal-rec
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-markdown-actions'
 import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
+import { useMobileSessionLastTabs } from './mobile-session-last-tabs'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     connState,
@@ -49,12 +51,16 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   const [parkedPendingTerminalContext, setParkedPendingTerminalContext] = useState<string | null>(
     null
   )
+  const { readLastSessionTabs, rememberLastSessionTabs, forgetLastSessionTab } =
+    useMobileSessionLastTabs(hostId, worktreeId)
   const consumeAcceptedSessionTabs = useCallback(
     (
       _result: SessionTabsResult,
       effectiveTabs: readonly MobileSessionTab[],
       source: SessionTabsStreamSource
     ): void => {
+      // Only host-accepted strips; the controller is per worktree, so the key is always this snapshot's.
+      rememberLastSessionTabs(effectiveTabs)
       runAcceptedMobileSessionTabsEffects<MobileSessionTab>({
         effectiveTabs,
         source,
@@ -76,7 +82,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
         }
       })
     },
-    []
+    [rememberLastSessionTabs]
   )
   const hasSessionTabsRecoveryNeed = useCallback(
     () =>
@@ -200,6 +206,8 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     })
   }, [client, connState])
   return {
+    readLastSessionTabs,
+    forgetLastSessionTab,
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,
     getSessionTabsApplicationRevision,

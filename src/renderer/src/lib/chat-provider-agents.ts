@@ -6,7 +6,7 @@ import {
   readHostStructuredAgents,
   subscribeHostStructuredAgents,
   type HostStructuredAgentsStatuses
-} from '@/runtime/host-structured-agents'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 
 const BUILT_IN_CHAT_AGENTS: readonly TuiAgent[] = ['claude', 'codex']
 

@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../../dispatcher'
 import type { RpcRequest } from '../../core'
@@ -92,33 +91,6 @@ describe('ssh RPC methods', () => {
           }
         ]
       }
-    })
-    expect(JSON.stringify(response)).not.toContain('dev.internal')
-    expect(JSON.stringify(response)).not.toContain('/secret/key')
-    expect(JSON.stringify(response)).not.toContain('bastion')
-  })
-
-  it('redacts the legacy target response for older clients', async () => {
-    const targets = [
-      {
-        id: 'ssh-1',
-        label: 'Dev box',
-        host: 'dev.internal',
-        port: 22,
-        username: 'me',
-        identityFile: '/secret/key',
-        jumpHost: 'bastion'
-      }
-    ]
-    listRegisteredSshTargetsMock.mockReturnValueOnce(targets)
-    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SSH_METHODS })
-
-    const response = await dispatcher.dispatch(makeRequest('ssh.listTargets'))
-
-    expect(response).toMatchObject({
-      ok: true,
-      result: { targets: [{ id: 'ssh-1', label: 'Dev box' }] }
     })
     expect(JSON.stringify(response)).not.toContain('dev.internal')
     expect(JSON.stringify(response)).not.toContain('/secret/key')

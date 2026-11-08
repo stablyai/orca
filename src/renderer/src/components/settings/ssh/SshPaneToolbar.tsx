@@ -10,7 +10,7 @@ import {
   Trash2,
   X
 } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ImeInput } from '@/lib/ime-text-field'
 import { Button } from '../../ui/button'
 import {
@@ -31,6 +31,7 @@ export function SshHostsHeaderActions({
   onAdd: () => void
   onRestoreRemoved: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   // Read ssh/config only on menu opening; null means the count is loading.
   const [removedCount, setRemovedCount] = useState<number | null>(null)
   // Reject stale reads from quick close/reopen cycles.
@@ -52,21 +53,15 @@ export function SshHostsHeaderActions({
   // An ellipsis promises a dialog, so only the enabled item carries one.
   const restoreLabel =
     removedCount === null
-      ? translate(
-          'auto.components.settings.SshPaneToolbar.restoreRemovedLoading',
-          'Restore removed hosts'
-        )
+      ? t('auto.components.settings.SshPaneToolbar.restoreRemovedLoading', 'Restore removed hosts')
       : removedCount === 0
-        ? translate(
+        ? t(
             'auto.components.settings.SshPaneToolbar.restoreRemovedNone',
             'No removed hosts to restore'
           )
         : removedCount < 0
-          ? translate(
-              'auto.components.settings.SshPaneToolbar.restoreRemoved',
-              'Restore removed hosts…'
-            )
-          : translate(
+          ? t('auto.components.settings.SshPaneToolbar.restoreRemoved', 'Restore removed hosts…')
+          : t(
               'auto.components.settings.SshPaneToolbar.restoreRemovedCount',
               'Restore removed hosts ({{count}})…',
               { count: removedCount }
@@ -76,21 +71,18 @@ export function SshHostsHeaderActions({
     <>
       <Button variant="outline" size="sm" onClick={onSync} disabled={syncing}>
         {syncing ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-        {translate('auto.components.settings.SshPaneToolbar.sync', 'Sync ~/.ssh/config')}
+        {t('auto.components.settings.SshPaneToolbar.sync', 'Sync ~/.ssh/config')}
       </Button>
       <Button variant="outline" size="sm" onClick={onAdd}>
         <Plus />
-        {translate('auto.components.settings.SshPane.addHost', 'Add host')}
+        {t('auto.components.settings.SshPane.addHost', 'Add host')}
       </Button>
       <DropdownMenu modal={false} onOpenChange={(open) => open && loadRemovedCount()}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={translate(
-              'auto.components.settings.SshPaneToolbar.more',
-              'More SSH host actions'
-            )}
+            aria-label={t('auto.components.settings.SshPaneToolbar.more', 'More SSH host actions')}
           >
             <MoreHorizontal />
           </Button>
@@ -129,6 +121,7 @@ type SshHostsListToolbarProps = {
 
 /** Keep filtering stable during selection; swap only fixed-slot bulk actions on the right. */
 export function SshHostsListToolbar(props: SshHostsListToolbarProps): React.JSX.Element {
+  const t = useTranslate()
   const filtering = props.filter.trim() !== ''
   return (
     <div className="flex min-h-8 flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -137,7 +130,7 @@ export function SshHostsListToolbar(props: SshHostsListToolbarProps): React.JSX.
           <SshHostFilterField value={props.filter} onChange={props.onFilterChange} />
         ) : (
           <span className="text-xs text-muted-foreground">
-            {translate('auto.components.settings.SshPaneToolbar.hostCount', '{{count}} hosts', {
+            {t('auto.components.settings.SshPaneToolbar.hostCount', '{{count}} hosts', {
               count: props.totalCount
             })}
           </span>
@@ -146,7 +139,7 @@ export function SshHostsListToolbar(props: SshHostsListToolbarProps): React.JSX.
       {props.selectedCount > 0 ? (
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <span className="mr-1 text-xs font-medium tabular-nums" aria-live="polite">
-            {translate('auto.components.settings.SshPaneToolbar.selected', '{{count}} selected', {
+            {t('auto.components.settings.SshPaneToolbar.selected', '{{count}} selected', {
               count: props.selectedCount
             })}
           </span>
@@ -157,19 +150,17 @@ export function SshHostsListToolbar(props: SshHostsListToolbarProps): React.JSX.
             disabled={props.allVisibleSelected}
           >
             {filtering
-              ? translate(
+              ? t(
                   'auto.components.settings.SshPaneToolbar.selectMatching',
                   'Select all {{count}} matching',
                   { count: props.visibleCount }
                 )
-              : translate(
-                  'auto.components.settings.SshPaneToolbar.selectAll',
-                  'Select all {{count}}',
-                  { count: props.totalCount }
-                )}
+              : t('auto.components.settings.SshPaneToolbar.selectAll', 'Select all {{count}}', {
+                  count: props.totalCount
+                })}
           </Button>
           <Button variant="ghost" size="xs" onClick={props.onClearSelection}>
-            {translate('auto.components.settings.SshPaneToolbar.clear', 'Clear')}
+            {t('auto.components.settings.SshPaneToolbar.clear', 'Clear')}
           </Button>
           <Button
             variant="outline"
@@ -179,7 +170,7 @@ export function SshHostsListToolbar(props: SshHostsListToolbarProps): React.JSX.
             disabled={props.busy || props.testing}
           >
             {props.testing ? <Loader2 className="animate-spin" /> : <PlugZap />}
-            {translate('auto.components.settings.SshPaneToolbar.testSelected', 'Test')}
+            {t('auto.components.settings.SshPaneToolbar.testSelected', 'Test')}
           </Button>
           <Button
             variant="destructive"
@@ -189,23 +180,21 @@ export function SshHostsListToolbar(props: SshHostsListToolbarProps): React.JSX.
           >
             <Trash2 />
             <span className="tabular-nums">
-              {translate(
-                'auto.components.settings.SshPaneToolbar.removeSelected',
-                'Remove {{count}}',
-                { count: props.selectedCount }
-              )}
+              {t('auto.components.settings.SshPaneToolbar.removeSelected', 'Remove {{count}}', {
+                count: props.selectedCount
+              })}
             </span>
           </Button>
         </div>
       ) : props.hiddenDeselectedCount > 0 ? (
         <span className="ml-auto text-xs text-muted-foreground" aria-live="polite">
           {props.hiddenDeselectedCount === 1
-            ? translate(
+            ? t(
                 'auto.components.settings.SshPaneToolbar.hiddenDeselectedSingular',
                 '{{count}} hidden host deselected',
                 { count: 1 }
               )
-            : translate(
+            : t(
                 'auto.components.settings.SshPaneToolbar.hiddenDeselectedPlural',
                 '{{count}} hidden hosts deselected',
                 { count: props.hiddenDeselectedCount }
@@ -223,8 +212,9 @@ function SshHostFilterField({
   value: string
   onChange: (value: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
-  const label = translate('auto.components.settings.SshPaneToolbar.filter', 'Filter hosts')
+  const label = t('auto.components.settings.SshPaneToolbar.filter', 'Filter hosts')
   // Wrap icon/input/clear together because Input’s fixed padding cannot host them; mirror its border/focus tokens.
   return (
     <div className="flex h-8 max-w-64 items-center gap-2 rounded-md border border-input px-2.5 shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 dark:bg-input/30">
@@ -251,10 +241,7 @@ function SshHostFilterField({
           variant="ghost"
           size="icon-xs"
           className="-mr-1.5"
-          aria-label={translate(
-            'auto.components.settings.SshPaneToolbar.clearFilter',
-            'Clear filter'
-          )}
+          aria-label={t('auto.components.settings.SshPaneToolbar.clearFilter', 'Clear filter')}
           // Prevent clear-button focus because clearing unmounts it.
           onMouseDown={(event) => event.preventDefault()}
           onClick={() => {

@@ -6,7 +6,7 @@ import {
   localAccess
 } from '../runtime-file-routing'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '../../runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import type { LocalFileAccess } from '../../../../../shared/local-file-access'
 
 export async function listRuntimeMarkdownDocuments(

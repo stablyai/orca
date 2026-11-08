@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 
 export type StructuredActivationInventory = {

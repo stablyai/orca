@@ -29,6 +29,7 @@ import {
 import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -44,7 +45,6 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -216,6 +216,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         const restoreUserAgent = temporarilySetNavigatorUserAgent(
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
+        await loadFreshTerminalModules()
         const ptyId = 'pty-wsl-no-confirm'
         const tabId = `tab-${ptyId}`
         mockStoreState.tabsByWorktree = {
@@ -256,6 +257,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         const restoreUserAgent = temporarilySetNavigatorUserAgent(
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
         )
+        await loadFreshTerminalModules()
         const ptyId = 'pty-global-wsl-no-confirm'
         const tabId = `tab-${ptyId}`
         mockStoreState.tabsByWorktree = {

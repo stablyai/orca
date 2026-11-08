@@ -10,7 +10,10 @@ import {
 // One root navigator needs one pending transition so Resume and Tasks pushes can cancel each other.
 let pendingNavigation: PendingHostStackNavigation | null = null
 
-export function useOpenHostStackRoute(): (hostId: string, target: HostStackRouteTarget) => void {
+// Jump back in and notification taps open a session inside its host's document instead of a second one.
+export function useOpenHostStackRoute(
+  openInHostDocument = false
+): (hostId: string, target: HostStackRouteTarget) => void {
   const navigation = useNavigation<HostStackRootNavigation>()
   const router = useRouter()
   // Unmount may cancel only its own transition, never another screen’s notification push.
@@ -34,10 +37,11 @@ export function useOpenHostStackRoute(): (hostId: string, target: HostStackRoute
         navigation,
         router,
         hostId,
-        target
+        target,
+        openInHostDocument
       )
       armedRef.current = pendingNavigation
     },
-    [navigation, router]
+    [navigation, openInHostDocument, router]
   )
 }

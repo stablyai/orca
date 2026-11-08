@@ -63,7 +63,7 @@
 2 src/renderer/src/components/linear-item-drawer-comment-footer.tsx
 15 src/renderer/src/components/linear-item-drawer-edit-controller.tsx
 1 src/renderer/src/components/linear-item-drawer-edit-section.tsx
-1 src/renderer/src/components/native-chat/NativeChatVisualFrame.tsx
+1 src/renderer/src/components/native-chat/media/visuals/NativeChatVisualFrame.tsx
 1 src/renderer/src/components/new-workspace/use-jira-source-connection.ts
 7 src/renderer/src/components/new-workspace/use-linear-source-connection.ts
 1 src/renderer/src/components/new-workspace/use-smart-workspace-name-field-controller.ts
@@ -215,7 +215,6 @@
 7 src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 1 src/renderer/src/hooks/useUnreadDockBadge.ts
 2 src/renderer/src/hooks/useWindowsTerminalCapabilityOwnerKey.ts
-1 src/renderer/src/lib/agent-session/launch/new-tab/launch-agent-in-new-tab.ts
 6 src/renderer/src/lib/browser/navigation/http-link-destinations.ts
 1 src/renderer/src/lib/browser/navigation/http-link-localhost-route.ts # extracted from http-link-routing.ts
 1 src/renderer/src/lib/browser/navigation/http-link-routing.ts
@@ -246,13 +245,13 @@
 8 src/renderer/src/runtime/linear/runtime-linear-client.ts
 6 src/renderer/src/runtime/linear/runtime-linear-issue-client.ts
 12 src/renderer/src/runtime/linear/runtime-linear-project-client.ts
-5 src/renderer/src/runtime/use-runtime-session-mirror-environment-key.ts
-2 src/renderer/src/runtime/web-runtime-browser-creation.ts
+5 src/renderer/src/runtime/web-session-tabs-sync/subscriptions/use-runtime-session-mirror-environment-key.ts
+2 src/renderer/src/runtime/browser/creation/web-runtime-browser-creation.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap-dispatch.ts
-1 src/renderer/src/runtime/web-runtime-session-tab-lifecycle.ts
-1 src/renderer/src/runtime/web-runtime-session-tab-move.ts
+1 src/renderer/src/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle.ts
+1 src/renderer/src/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move.ts
 1 src/renderer/src/runtime/hosted-terminals/creation/web-runtime-terminal-creation.ts
-1 src/renderer/src/runtime/web-runtime-worktree-activation.ts
+1 src/renderer/src/runtime/web-session-tabs-sync/actions/web-runtime-worktree-activation.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/active-session-subscription.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/global-session-subscription.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/tracking-decisions.ts

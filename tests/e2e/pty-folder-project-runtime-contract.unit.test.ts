@@ -54,7 +54,9 @@ vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof React>()),
   useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
 }))
-vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
+  scheduleRuntimeGraphSync: vi.fn()
+}))
 vi.mock(
   '@/components/terminal-pane/render-health/recovery/terminal-pane-recovery',
   async (importOriginal) => ({

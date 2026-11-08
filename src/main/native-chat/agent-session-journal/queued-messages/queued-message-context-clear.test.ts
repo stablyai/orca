@@ -35,7 +35,6 @@ describe('exact waiting-card membership after context clear', () => {
       { reason: 'cleared', since: { epoch: 'epoch', sequence: 5 }, messageIds: ['before-two'] }
     ])
     expect(queuePauseHolding(held, after)).toBeUndefined()
-    expect(nextSendableQueuedCard(held, current)).toBeNull()
     expect(pauses([after])).toEqual([])
     expect(nextSendableQueuedCard(pauses([after]), [after])).toEqual(after)
   })

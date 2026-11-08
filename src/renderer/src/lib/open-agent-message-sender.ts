@@ -18,20 +18,20 @@ import {
   showLookupFailure,
   type LookupFailure
 } from './open-located-agent-message-sender'
-import { unnamedSenderLabel } from '@/components/native-chat/native-chat-agent-message-sender-label'
+import { unnamedSenderLabel } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-label'
 import {
   agentMessageSenderOpens,
   agentMessageSenderReplacedOnHandle,
   agentMessageSenderUnavailableText,
   resolveAgentMessageSenderTarget
-} from '@/components/native-chat/native-chat-agent-message-sender-target'
+} from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import {
   executionHostIdForStructuredTarget,
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()

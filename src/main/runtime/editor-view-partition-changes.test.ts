@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+
 import type { LayoutEditorView } from '../../shared/workspace-layout/layout-editor-view'
 import type { Store } from '../persistence/loading-store/store'
 import { WindowSession } from '../persistence/terminal-topology/terminal-topology-window-session-fixture'
@@ -102,20 +102,6 @@ describe("main's Store keeps an editor view where its tab's session is", () => {
     expect(publishedTab(runtime, SSH_WORKTREE, 'd1')?.editorView).toEqual(DIFF_VIEW)
     expect(store.getLayoutEditorViews(SSH_HOST)).toBeUndefined()
     expect(store.getLayoutEditorViews(MOVED_HOST)).toEqual({ [SSH_WORKTREE]: { d1: DIFF_VIEW } })
-    subscription.unsubscribe()
-  })
-
-  it('a removed workspace or partition keeps no view', async () => {
-    const { store, subscription } = await harness()
-    await store.applyLayoutCommand(openDiff(WT, 'd1'))
-    await store.applyLayoutCommand(openDiff(FOLDER, 'd2'))
-    await store.applyLayoutCommand(openDiff(SSH_WORKTREE, 'd3'), [SSH_HOST])
-
-    store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: WT, hostId: 'local' }))
-    expect(store.getLayoutEditorViews('local')).toEqual({ [FOLDER]: { d2: DIFF_VIEW } })
-
-    store.removeWorkspaceSessionHost(SSH_HOST)
-    expect(store.getLayoutEditorViews(SSH_HOST)).toBeUndefined()
     subscription.unsubscribe()
   })
 

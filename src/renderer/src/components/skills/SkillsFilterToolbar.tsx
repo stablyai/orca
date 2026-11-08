@@ -11,7 +11,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SkillSourceKind } from '../../../../shared/skills'
 import { resultCountLabel, shareLinkCountLabel, sourceKindLabel } from './skill-display-labels'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
@@ -46,6 +46,7 @@ export function SkillsFilterToolbar({
   onFiltersChange: (next: SkillsFilterState) => void
   onRefresh: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const sharedView = view === 'shared'
   const filtered =
     filters.query.trim() !== '' || filters.sourceKind !== 'all' || filters.agent !== 'all'
@@ -60,13 +61,13 @@ export function SkillsFilterToolbar({
               onChange={(event) => onFiltersChange({ ...filters, query: event.target.value })}
               placeholder={
                 sharedView
-                  ? translate('auto.components.skills.SkillsPage.searchLinks', 'Search links')
-                  : translate('auto.components.skills.SkillsPage.a68dee6a32', 'Search skills')
+                  ? t('auto.components.skills.SkillsPage.searchLinks', 'Search links')
+                  : t('auto.components.skills.SkillsPage.a68dee6a32', 'Search skills')
               }
               aria-label={
                 sharedView
-                  ? translate('auto.components.skills.SkillsPage.searchLinks', 'Search links')
-                  : translate('auto.components.skills.SkillsPage.a68dee6a32', 'Search skills')
+                  ? t('auto.components.skills.SkillsPage.searchLinks', 'Search links')
+                  : t('auto.components.skills.SkillsPage.a68dee6a32', 'Search skills')
               }
               className="h-8 pl-8 text-sm"
             />
@@ -78,7 +79,7 @@ export function SkillsFilterToolbar({
             >
               <SelectTrigger
                 className="h-8 w-[170px]"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.skills.SkillsPage.filterProvider',
                   'Filter by agent'
                 )}
@@ -87,7 +88,7 @@ export function SkillsFilterToolbar({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">
-                  {translate('auto.components.skills.filter.allAgents', 'All agents')}
+                  {t('auto.components.skills.filter.allAgents', 'All agents')}
                 </SelectItem>
                 {agentOptions.map((option) => (
                   <SelectItem key={option.id} value={option.id}>
@@ -106,13 +107,13 @@ export function SkillsFilterToolbar({
                 className="shrink-0 border border-border/50 bg-transparent hover:bg-muted/50"
                 disabled={loading}
                 onClick={onRefresh}
-                aria-label={translate('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
+                aria-label={t('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
               >
                 <RefreshCw className={loading ? 'animate-spin' : undefined} />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
+              {t('auto.components.skills.SkillsPage.cb142070b4', 'Refresh')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -125,13 +126,13 @@ export function SkillsFilterToolbar({
             spacing={1}
             value={view}
             onValueChange={(value) => onViewChange((value || 'skills') as SkillsPageView)}
-            aria-label={translate('auto.components.skills.SkillsPage.viewSwitch', 'Show')}
+            aria-label={t('auto.components.skills.SkillsPage.viewSwitch', 'Show')}
           >
             <ToggleGroupItem value="skills" className="rounded-full px-2.5 text-xs">
-              {translate('auto.components.skills.SkillsPage.f43ad6edf3', 'Skills')}
+              {t('auto.components.skills.SkillsPage.f43ad6edf3', 'Skills')}
             </ToggleGroupItem>
             <ToggleGroupItem value="shared" className="rounded-full px-2.5 text-xs">
-              {translate('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
+              {t('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
             </ToggleGroupItem>
           </ToggleGroup>
           {sharedView ? null : (
@@ -150,13 +151,10 @@ export function SkillsFilterToolbar({
                     sourceKind: (value || 'all') as SkillsFilterState['sourceKind']
                   })
                 }
-                aria-label={translate(
-                  'auto.components.skills.SkillsPage.filterSource',
-                  'Filter by source'
-                )}
+                aria-label={t('auto.components.skills.SkillsPage.filterSource', 'Filter by source')}
               >
                 <ToggleGroupItem value="all" className="gap-1.5 rounded-full px-2.5 text-xs">
-                  {translate('auto.components.skills.SkillsPage.allSources', 'All')}
+                  {t('auto.components.skills.SkillsPage.allSources', 'All')}
                   <span className="tabular-nums text-muted-foreground">{totalCount}</span>
                 </ToggleGroupItem>
                 {SOURCE_KINDS.map((sourceKind) => (
@@ -165,7 +163,7 @@ export function SkillsFilterToolbar({
                     value={sourceKind}
                     className="gap-1.5 rounded-full px-2.5 text-xs"
                   >
-                    {sourceKindLabel(sourceKind)}
+                    {sourceKindLabel(sourceKind, t)}
                     <span className="tabular-nums text-muted-foreground">
                       {sourceCounts[sourceKind]}
                     </span>
@@ -174,7 +172,7 @@ export function SkillsFilterToolbar({
               </ToggleGroup>
               <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
                 <span role="status" aria-live="polite">
-                  {resultCountLabel(resultCount)}
+                  {resultCountLabel(resultCount, t)}
                 </span>
                 {filtered ? (
                   <Button
@@ -189,7 +187,7 @@ export function SkillsFilterToolbar({
                       })
                     }
                   >
-                    {translate('auto.components.skills.SkillsPage.clearFilters', 'Clear filters')}
+                    {t('auto.components.skills.SkillsPage.clearFilters', 'Clear filters')}
                   </Button>
                 ) : null}
               </div>
@@ -201,7 +199,7 @@ export function SkillsFilterToolbar({
               role="status"
               aria-live="polite"
             >
-              {shareLinkCountLabel(linkCount)}
+              {shareLinkCountLabel(linkCount, t)}
             </span>
           ) : null}
         </div>

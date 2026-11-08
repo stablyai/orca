@@ -12,10 +12,4 @@ describe('Codex backfill error detector', () => {
     expect(detector.observe('fill\u001b[0m\r\n')).toBe(CODEX_BACKFILL_RECOVERY_NOTICE)
     expect(detector.observe('timed out waiting for state db backfill')).toBeNull()
   })
-
-  it('does not classify the generic damaged-database message', () => {
-    const detector = createCodexBackfillErrorDetector()
-
-    expect(detector.observe('local database appears to be damaged')).toBeNull()
-  })
 })

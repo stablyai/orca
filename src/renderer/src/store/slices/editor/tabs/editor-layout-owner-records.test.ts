@@ -6,24 +6,24 @@ import { useAppStore } from '@/store/index'
 import { remapOpenEditorTabsForPathChange } from '@/lib/remap-open-editor-tabs-for-path-change'
 import type { AppState } from '@/store/types'
 import type { LayoutCommand } from '../../../../../../shared/workspace-layout/workspace-layout-command-types'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { editorMoveOwnerFromContext, type EditorMoveOwner } from '@/lib/open-editor-move-owner'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
 } from '../../tabs/tabs-drawn-from-main.test-fixture'
-import { contentRekeyOutcome } from '@/runtime/layout-owner-content-rekeys'
-import { hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import { contentRekeyOutcome } from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
+import { hasPendingEntityTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

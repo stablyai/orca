@@ -44,6 +44,7 @@ export const RepoHooksCheck = RepoSelector.extend({
 })
 
 export const RepoSearchRefs = z.object({
+  namespace: z.literal('remote').optional(),
   repo: requiredString('Missing repo selector'),
   query: z
     .unknown()

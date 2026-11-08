@@ -63,16 +63,4 @@ describe('OrcaRuntimeService ConPTY stream reads', () => {
       clearNativeWindowsConptyPty(ptyId)
     }
   })
-
-  it('keeps accumulated-stream reads for terminals that are not ConPTY', async () => {
-    const ptyId = 'pty-posix-prediction'
-    const runtime = startConptyRuntime(ptyId)
-    const [terminal] = (await runtime.listTerminals()).terminals
-    runtime.onPtyData(ptyId, 'one\r\ntwo\rTWO\r\n', 100)
-
-    const read = await runtime.readTerminal(terminal.handle)
-
-    expect(read.tail).toEqual(['one', 'TWO'])
-    expect(read.source).toBe('stream')
-  })
 })

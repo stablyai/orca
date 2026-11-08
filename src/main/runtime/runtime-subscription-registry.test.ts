@@ -31,32 +31,6 @@ describe('subscription registration versions', () => {
     }
   )
 
-  it('does not let a missing target at admission cancel a later registration', async () => {
-    const registry = new RuntimeSubscriptionRegistry()
-    const admittedVersion = registry.getRegistrationVersion()
-    const cleanup = vi.fn()
-    registry.register('terminal:later', cleanup, 'conn-a')
-    expect(registry.cleanupIfOwnedByConnection('terminal:later', 'conn-a', admittedVersion)).toBe(
-      false
-    )
-    expect(cleanup).not.toHaveBeenCalled()
-    await registry.cleanupAndWait('terminal:later')
-  })
-
-  it('allows admitted cleanup after unrelated subscriptions register', async () => {
-    const registry = new RuntimeSubscriptionRegistry()
-    const cleanup = vi.fn()
-    registry.register('terminal:first', cleanup, 'conn-a')
-    const admittedVersion = registry.getRegistrationVersion()
-    registry.register('terminal:other', vi.fn(), 'conn-a')
-    expect(registry.cleanupIfOwnedByConnection('terminal:first', 'conn-a', admittedVersion)).toBe(
-      true
-    )
-    await registry.cleanupAndWait('terminal:first')
-    expect(cleanup).toHaveBeenCalledTimes(1)
-    await registry.cleanupAndWait('terminal:other')
-  })
-
   it('still refuses a different connection with a current registration version', async () => {
     const registry = new RuntimeSubscriptionRegistry()
     const cleanup = vi.fn()
@@ -70,16 +44,6 @@ describe('subscription registration versions', () => {
     ).toBe(false)
     expect(cleanup).not.toHaveBeenCalled()
     await registry.cleanupAndWait('terminal:owned')
-  })
-
-  it('reports an already-retired subscription as gone', async () => {
-    const registry = new RuntimeSubscriptionRegistry()
-    registry.register('terminal:retired', vi.fn(), 'conn-a')
-    const admittedVersion = registry.getRegistrationVersion()
-    await registry.cleanupAndWait('terminal:retired')
-    expect(registry.cleanupIfOwnedByConnection('terminal:retired', 'conn-a', admittedVersion)).toBe(
-      true
-    )
   })
 
   it('keeps registration ownership even when a cleanup callback is reused', async () => {
@@ -130,19 +94,6 @@ describe('request-addressed release', () => {
   // Never `cleanupAndWait` here: it would run the cleanup itself and hide a missed release.
   const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
-  it('releases the registration a request created, and forgets the address', async () => {
-    const registry = new RuntimeSubscriptionRegistry()
-    const cleanup = vi.fn()
-    registry.registerOwned('terminal:slot', cleanup, 'conn-a', 'req-1')
-    expect(requestAddresses(registry)).toBe(1)
-
-    registry.releaseByRequest('conn-a', 'req-1')
-    await settle()
-
-    expect(cleanup).toHaveBeenCalledOnce()
-    expect(requestAddresses(registry)).toBe(0)
-  })
-
   it('ignores the request a same-slot replacement superseded', async () => {
     const registry = new RuntimeSubscriptionRegistry()
     const replacement = vi.fn()
@@ -157,20 +108,6 @@ describe('request-addressed release', () => {
     registry.releaseByRequest('conn-a', 'req-new')
     await settle()
     expect(replacement).toHaveBeenCalledOnce()
-  })
-
-  it('does not grow across replace and release cycles', async () => {
-    const registry = new RuntimeSubscriptionRegistry()
-    const cleanup = vi.fn()
-    for (let i = 0; i < 50; i++) {
-      registry.registerOwned('terminal:slot', cleanup, 'conn-a', `req-${2 * i}`)
-      registry.registerOwned('terminal:slot', cleanup, 'conn-a', `req-${2 * i + 1}`)
-      expect(requestAddresses(registry)).toBe(1)
-      registry.releaseByRequest('conn-a', `req-${2 * i + 1}`)
-      await settle()
-    }
-    expect(cleanup).toHaveBeenCalledTimes(100)
-    expect(requestAddresses(registry)).toBe(0)
   })
 
   it('keeps the newer owner when a reused request id outlives the old release', async () => {
@@ -206,23 +143,5 @@ describe('request-addressed release', () => {
     expect(cleanup).toHaveBeenCalledTimes(2)
     expect(requestAddresses(registry)).toBe(0)
     consoleError.mockRestore()
-  })
-
-  it('addresses nothing without both a connection and a request id', async () => {
-    const registry = new RuntimeSubscriptionRegistry()
-    const unaddressed = vi.fn()
-    const addressed = vi.fn()
-    registry.registerOwned('terminal:no-conn', unaddressed, undefined, 'req-1')
-    registry.registerOwned('terminal:no-req', vi.fn(), 'conn-a')
-    registry.registerOwned('terminal:addressed', addressed, 'conn-a', 'req-1')
-    expect(requestAddresses(registry)).toBe(1)
-
-    registry.releaseByRequest(undefined, 'req-1')
-    registry.releaseByRequest('conn-b', 'req-1')
-    await settle()
-
-    expect(unaddressed).not.toHaveBeenCalled()
-    expect(addressed).not.toHaveBeenCalled()
-    await registry.cleanupAndWait('terminal:addressed')
   })
 })

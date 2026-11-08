@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { expect, it, vi } from 'vitest'
-import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/NativeChatVisualGuestThemePublisher'
+import { publishNativeChatVisualGuestTheme } from '@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 
-vi.mock('@/components/native-chat/NativeChatVisualGuestThemePublisher', () => ({
+vi.mock('@/components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher', () => ({
   publishNativeChatVisualGuestTheme: vi.fn()
 }))
 import { acquireWebviewsDragPassthrough } from '../host-guest/webview-drag-passthrough'

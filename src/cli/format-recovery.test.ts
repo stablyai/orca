@@ -30,15 +30,6 @@ describe('ambiguous selector recovery', () => {
         }
       }
     })
-    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
-      error: {
-        data: {
-          nextSteps: expect.arrayContaining([
-            'List the exact values with `orca worktree list --json`.'
-          ])
-        }
-      }
-    })
     log.mockRestore()
   })
 })

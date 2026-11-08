@@ -574,10 +574,12 @@ export function isUnitTestSupportSource(file) {
     file === 'src/renderer/src/store/slices/linear/linear-slice-test-harness.ts' ||
     file ===
       'src/renderer/src/runtime/hosted-terminals/creation/testing/web-runtime-terminal-create.test-fixture.ts' ||
-    file === 'src/renderer/src/runtime/sync-runtime-graph-test-harness.ts' ||
+    file ===
+      'src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness.ts' ||
     file ===
       'src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture.ts' ||
-    file === 'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx'
+    file ===
+      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx'
   )
 }
 

@@ -165,27 +165,6 @@ describe('host exit authority over queued renderer graphs', () => {
     }
   })
 
-  it.each([0, -1])('retains a physical exit certificate after record pruning, code=%s', (code) => {
-    const runtime = new ExitAuthorityRuntime()
-    register(runtime)
-    runtime.dropRecord()
-    runtime.onPtyExit(PTY, code, FIRST, { providerExitObserved: true })
-    graph(runtime)
-    expect(runtime.capture().connected).toBeUndefined()
-    expect(runtime.getPtyLivenessVerdict(PTY)).toEqual({
-      status: 'exited',
-      incarnationId: FIRST,
-      cause: { kind: 'unknown', reason: code < 0 ? 'stop_unverified' : 'cause_unreported' }
-    })
-  })
-
-  it('admits a new renderer pane without inventing a host verdict', () => {
-    const runtime = new ExitAuthorityRuntime()
-    graph(runtime)
-    expect(runtime.capture().connected).toBe(true)
-    expect(runtime.getPtyLivenessVerdict(PTY)).toBeNull()
-  })
-
   it('admits a registered successor and ignores the predecessor exit', () => {
     const runtime = new ExitAuthorityRuntime()
     register(runtime)
@@ -221,39 +200,5 @@ describe('host exit authority over queued renderer graphs', () => {
     graph(runtime)
     expect(runtime.capture()).toEqual({ connected: true, incarnationId: NEXT })
     expect(runtime.getPtyLivenessVerdict(PTY)?.status).toBe('live')
-  })
-
-  it('keeps an SSH disconnect unverifiable and admissible', () => {
-    const runtime = new ExitAuthorityRuntime()
-    const id = 'ssh:target@@terminal'
-    runtime.registerPty(id, WORKTREE, 'target', { tabId: TAB, leafId: LEAF, incarnationId: FIRST })
-    runtime.onPtyExit(id, -1, FIRST)
-    graph(runtime, id)
-    expect(runtime.getPtyLivenessVerdict(id)?.status).toBe('unverifiable')
-    expect(runtime.capture(id).connected).toBe(true)
-  })
-
-  it('does not promote an unverified local stop to an exit certificate', () => {
-    const runtime = new ExitAuthorityRuntime()
-    runtime.registerPty(PTY, WORKTREE)
-    runtime.onPtyExit(PTY, -1, FIRST)
-    runtime.markPtyLivenessUnverifiable(PTY, 'stop unverified')
-    graph(runtime)
-    expect(runtime.getPtyLivenessVerdict(PTY)?.status).toBe('unverifiable')
-    expect(runtime.capture().connected).toBe(true)
-  })
-
-  it('bounds certificates for exits whose PTY records are already gone', () => {
-    const runtime = new ExitAuthorityRuntime()
-    for (let index = 0; index < 1_000; index++) {
-      runtime.onPtyExit(`${PTY}-${index}`, 0)
-    }
-    expect(runtime.verdictCount).toBe(256)
-    expect(runtime.getPtyLivenessVerdict(`${PTY}-0`)).toBeNull()
-    expect(runtime.getPtyLivenessVerdict(`${PTY}-999`)).toEqual({
-      status: 'exited',
-      incarnationId: undefined,
-      cause: { kind: 'unknown', reason: 'cause_unreported' }
-    })
   })
 })

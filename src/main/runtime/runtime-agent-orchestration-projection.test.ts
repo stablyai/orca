@@ -6,7 +6,6 @@ import '../native-chat/agent-session-journal/store-lifecycle/journal-host-databa
 import './agent-session/records/agent-session-record-store-slot'
 import '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import './orca-runtime'
-import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import './rpc/orchestration-session-caller-test-fixture'

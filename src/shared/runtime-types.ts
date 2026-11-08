@@ -190,6 +190,7 @@ export type {
 } from './runtime-terminal-contracts'
 export type {
   RuntimeGitCheckoutResult,
+  RuntimeGitSwitchResult,
   RuntimeGitLocalBranches,
   RuntimeRepoList,
   RuntimeRepoSearchRefs,
