@@ -19901,7 +19901,9 @@
         "hidden": "Orca 將不再顯示已建立的 PR",
         "many_one": "已建立 {{count}} 個 PR",
         "many_other": "已建立 {{count}} 個 PR"
-      }
+      },
+      "splitRight": "向右分割",
+      "splitDown": "向下分割"
     },
     "tab": {
       "bar": {
@@ -20479,6 +20481,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "無法格式化 {{file}}。將不經格式化直接儲存：{{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "新增代理程式"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "在聊天旁開啟窗格",
+          "action": "分割窗格"
+        }
       }
     }
   },

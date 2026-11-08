@@ -20192,7 +20192,9 @@
         "hidden": "Orca artık oluşturulan pull request’leri göstermeyecek",
         "many_one": "{{count}} pull request oluşturuldu",
         "many_other": "{{count}} pull request oluşturuldu"
-      }
+      },
+      "splitRight": "Sağa Böl",
+      "splitDown": "Aşağı Böl"
     },
     "tab": {
       "bar": {
@@ -20777,6 +20779,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "{{file}} biçimlendirilemedi. Biçimlendirilmeden kaydediliyor: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "Yeni Ajan"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Sohbetin yanında bir bölme açın",
+          "action": "Bölmeyi böl"
+        }
       }
     }
   },

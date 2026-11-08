@@ -20879,7 +20879,9 @@
         "many_other": "Создано запросов на слияние: {{count}}",
         "many_few": "Создано {{count}} запроса на слияние",
         "many_many": "Создано {{count}} запросов на слияние"
-      }
+      },
+      "splitRight": "Разделить вправо",
+      "splitDown": "Разделить вниз"
     },
     "tab": {
       "bar": {
@@ -21484,6 +21486,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "Не удалось отформатировать {{file}}. Сохранение без форматирования: {{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "Новый агент"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "Откройте панель рядом с чатом",
+          "action": "Разделить панель"
+        }
       }
     }
   },

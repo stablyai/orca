@@ -19445,7 +19445,9 @@
         "hidden": "Orca 将不再显示已创建的拉取请求",
         "many_one": "已创建 {{count}} 个拉取请求",
         "many_other": "已创建 {{count}} 个拉取请求"
-      }
+      },
+      "splitRight": "向右拆分",
+      "splitDown": "向下拆分"
     },
     "tab": {
       "bar": {
@@ -20099,6 +20101,19 @@
     "editor": {
       "formatOnSave": {
         "failed": "无法格式化 {{file}}。将不经格式化直接保存：{{reason}}"
+      }
+    },
+    "tabGroup": {
+      "splitPaneLanding": {
+        "newAgent": "新建代理"
+      }
+    },
+    "contextualTours": {
+      "agentSessions": {
+        "splitChatPane": {
+          "title": "在聊天旁打开窗格",
+          "action": "拆分窗格"
+        }
       }
     }
   },
