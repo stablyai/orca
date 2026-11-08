@@ -153,6 +153,7 @@ export async function runJournalWriterOperation(
       return submissionWriter.prepareHandover(operation.input)
     case 'stale-settle':
     case 'dead-generation-settle':
+    case 'unheld-turns-settle':
     case 'prompt-mutate':
       return runJournalWriterSettlementOperation(session, operation, receipt)
     case 'command-settle':

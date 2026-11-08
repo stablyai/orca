@@ -354,6 +354,9 @@ export class AgentSessionJournal {
   settleDeadGeneration = (input: contracts.JournalDeadGenerationSettlementInput) =>
     settlement.settleJournalDeadGeneration(this, this.lifecycleBatchAppender, input)
 
+  settleUnheldTurns = (input: contracts.JournalUnheldTurnsSettlementInput) =>
+    settlement.settleJournalUnheldTurns(() => this.state, this.lifecycleBatchAppender, input)
+
   mutatePrompt = (input: contracts.JournalPromptMutationInput, receipt?: JournalOperationReceipt) =>
     mutateJournalPrompt({ state: () => this.state, writer: this.rowWriter }, input, receipt)
 
@@ -374,14 +377,12 @@ export class AgentSessionJournal {
     this.submissionWriter.settleLate(i)
 
   /** Retire unanswered sends after their execution owner ended, without assuming delivery. */
-  async markPendingSubmissionsUnknown(fence: number, reason?: string): Promise<string[]> {
-    return markJournalPendingSubmissionsUnknown(this, fence, reason)
-  }
+  markPendingSubmissionsUnknown = (fence: number, reason?: string): Promise<string[]> =>
+    markJournalPendingSubmissionsUnknown(this, fence, reason)
 
   /** Failed initialization proves handed-over but unanswered sends never ran. */
-  async rejectPendingSubmissions(fence: number, rejection: AgentJournalDispatchRejection) {
-    return rejectJournalPendingSubmissions(this, fence, rejection)
-  }
+  rejectPendingSubmissions = (fence: number, rejection: AgentJournalDispatchRejection) =>
+    rejectJournalPendingSubmissions(this, fence, rejection)
 
   rejectQueuedSubmissions = (
     fence: number,

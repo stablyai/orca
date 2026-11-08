@@ -1,7 +1,12 @@
 import type {
   JournalStaleSettlementInput,
-  JournalDeadGenerationSettlementInput
+  JournalDeadGenerationSettlementInput,
+  JournalUnheldTurnsSettlementInput
 } from '../journal-store-contracts'
+import type { JournalReducerState } from '../projection/journal-reducer'
+import { journalItemExecutionFence } from '../projection/journal-item-provenance'
+import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
+import { runningTurnLifecycleRevisions } from '../../agent-session-wire/termination/structured-agent-session-stale-turn-verdict'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
 import { STALE_SESSION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import {
@@ -88,4 +93,33 @@ export async function settleJournalDeadGeneration(
     }
   })
   return planned
+}
+
+/** The child is not running these turns; the running population is read at the write position. */
+export async function settleJournalUnheldTurns(
+  state: () => JournalReducerState,
+  lifecycle: Pick<JournalLifecycleBatchAppender, 'appendPlanned'>,
+  input: JournalUnheldTurnsSettlementInput
+): Promise<void> {
+  const { sessionId, fence, generation, liveTurnId } = input
+  await lifecycle.appendPlanned({
+    settlementId: `unheld-turns:${sessionId}:${fence}:${generation}`,
+    fence,
+    recovered: true,
+    plan: () => {
+      const current = state()
+      const unheld = [...current.queries.unsettledItems(current, null)].filter(
+        (item) =>
+          item.body.kind === 'turn' &&
+          item.body.state === 'running' &&
+          item.body.turnId !== liveTurnId &&
+          isRootAgentJournalItem(item) &&
+          journalItemExecutionFence(current, item.itemId) === fence
+      )
+      return {
+        mutations: runningTurnLifecycleRevisions(unheld, { state: 'interrupted' }),
+        dispatches: []
+      }
+    }
+  })
 }
