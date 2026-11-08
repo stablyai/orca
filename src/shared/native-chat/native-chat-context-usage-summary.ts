@@ -7,7 +7,7 @@ export type NativeChatContextUsageSummary = {
   percentage: number
   estimated: boolean
   /** Largest first, as a share of the window; empty rows are dropped. */
-  rows: readonly { name: string; tokens: number; percentage: number }[]
+  rows: readonly { name: string; tokens: number; percentage: number; deferred?: true }[]
 }
 
 /** Past this the window is nearly spent, so the ring turns red to say so. */
@@ -45,14 +45,22 @@ export function summarizeContextUsage(
       .map((row) => ({
         name: row.name,
         tokens: row.tokens,
-        percentage: rowPercentage(row.tokens, usage.windowTokens)
+        percentage: rowPercentage(row.tokens, usage.windowTokens),
+        ...(row.deferred ? { deferred: row.deferred } : {})
       }))
       .sort((left, right) => right.tokens - left.tokens)
   }
 }
 
+export function groupContextUsageRows(rows: NativeChatContextUsageSummary['rows']) {
+  return {
+    used: keyContextUsageRows(rows.filter((row) => !row.deferred)),
+    deferred: keyContextUsageRows(rows.filter((row) => row.deferred))
+  }
+}
+
 /** The CLI can repeat a category name, so a row's key counts which repeat it is. */
-export function keyContextUsageRows(
+function keyContextUsageRows(
   rows: NativeChatContextUsageSummary['rows']
 ): { key: string; row: NativeChatContextUsageSummary['rows'][number] }[] {
   const seen = new Map<string, number>()

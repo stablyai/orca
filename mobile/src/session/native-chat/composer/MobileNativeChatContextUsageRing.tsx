@@ -3,7 +3,8 @@ import { memo, useCallback, useRef, useState } from 'react'
 import Svg, { Circle } from 'react-native-svg'
 import {
   contextUsageRingReadout,
-  keyContextUsageRows,
+  groupContextUsageRows,
+  formatContextTokenCount,
   type NativeChatContextUsageSummary
 } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { AnchoredDetailCardLayer } from '../../../components/AnchoredDetailCard'
@@ -116,6 +117,7 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
     [layerRef, cardKeepsKeyboard]
   )
   const { filled, critical, used, window } = contextUsageRingReadout(usage)
+  const { used: rows, deferred } = groupContextUsageRows(usage.rows)
   const tint = critical ? colors.statusRed : colors.textMuted
   const label = t(
     'chat.contextUsage.label',
@@ -176,14 +178,35 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
         <View style={styles.track}>
           <View style={[styles.fill, critical && styles.fillCritical, { width: `${filled}%` }]} />
         </View>
-        {usage.rows.length > 0 ? (
+        {rows.length > 0 ? (
           <View style={styles.rows}>
-            {keyContextUsageRows(usage.rows).map(({ key, row }) => (
+            {rows.map(({ key, row }) => (
               <View key={key} style={styles.row}>
                 <Text style={styles.rowName} numberOfLines={1}>
                   {row.name}
                 </Text>
                 <Text style={styles.rowValue}>{row.percentage}%</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+        {deferred.length > 0 ? (
+          <View style={styles.deferred}>
+            <Text style={styles.deferredTitle}>
+              {t('chat.contextUsage.deferredTitle', 'Loaded on demand')}
+            </Text>
+            <Text style={styles.deferredDescription}>
+              {t(
+                'chat.contextUsage.deferredDescription',
+                'Not included in current usage. Loaded when needed.'
+              )}
+            </Text>
+            {deferred.map(({ key, row }) => (
+              <View key={key} style={styles.row}>
+                <Text style={styles.rowName} numberOfLines={1}>
+                  {row.name}
+                </Text>
+                <Text style={styles.rowValue}>{formatContextTokenCount(row.tokens)}</Text>
               </View>
             ))}
           </View>
@@ -236,6 +259,22 @@ const styles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize,
     fontVariant: ['tabular-nums']
+  },
+  deferred: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+    gap: spacing.xs
+  },
+  deferredTitle: {
+    color: colors.textPrimary,
+    fontSize: typography.metaSize,
+    fontWeight: '600'
+  },
+  deferredDescription: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize
   },
   estimated: {
     marginTop: spacing.md,

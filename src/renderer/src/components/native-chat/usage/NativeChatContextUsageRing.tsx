@@ -5,7 +5,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import {
   contextUsageRingReadout,
-  keyContextUsageRows,
+  groupContextUsageRows,
+  formatContextTokenCount,
   type NativeChatContextUsageSummary
 } from '../../../../../shared/native-chat/native-chat-context-usage-summary'
 
@@ -76,7 +77,7 @@ export function NativeChatContextUsageRing({
     { used, window, percent: String(usage.percentage) }
   )
   const { open, setOpen, setOpenAfterHover } = useContextCardOpen()
-  const rows = keyContextUsageRows(usage.rows)
+  const { used: rows, deferred } = groupContextUsageRows(usage.rows)
   return (
     <div
       className="flex"
@@ -149,11 +150,15 @@ export function NativeChatContextUsageRing({
           align="end"
           sideOffset={8}
           className="w-72"
+          wheelScroll
           onOpenAutoFocus={(event) => event.preventDefault()}
           // Closing on pointer leave or Escape would otherwise focus the ring and strand typing.
           onCloseAutoFocus={(event) => event.preventDefault()}
         >
-          <div className="p-4">
+          <div
+            className="scrollbar-sleek overflow-y-auto p-4"
+            style={{ maxHeight: 'var(--radix-popover-content-available-height)' }}
+          >
             <div className="flex items-baseline justify-between gap-3 text-sm">
               <span className="font-medium text-foreground">
                 {t('components.native-chat.contextUsage.title', 'Context')}
@@ -174,6 +179,29 @@ export function NativeChatContextUsageRing({
                   </li>
                 ))}
               </ul>
+            ) : null}
+            {deferred.length > 0 ? (
+              <section className="mt-3 border-t border-border pt-3">
+                <h3 className="text-xs font-medium text-foreground">
+                  {t('components.native-chat.contextUsage.deferredTitle', 'Loaded on demand')}
+                </h3>
+                <p className="mt-1 text-2xs text-muted-foreground">
+                  {t(
+                    'components.native-chat.contextUsage.deferredDescription',
+                    'Not included in current usage. Loaded when needed.'
+                  )}
+                </p>
+                <ul className="mt-2 space-y-1 text-xs">
+                  {deferred.map(({ key, row }) => (
+                    <li key={key} className="flex items-baseline justify-between gap-3">
+                      <span className="min-w-0 truncate text-foreground">{row.name}</span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {formatContextTokenCount(row.tokens)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ) : null}
             {usage.estimated ? (
               <p className="mt-3 text-2xs text-muted-foreground">
