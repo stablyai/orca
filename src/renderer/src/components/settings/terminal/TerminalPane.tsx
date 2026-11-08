@@ -11,6 +11,7 @@ import { useAppStore } from '../../../store/index'
 import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
 import { getManageSessionsSearchEntries } from './terminal-window-setup-search'
 import { getTerminalDefaultShellSearchEntry } from './terminal-default-shell-search'
+import { getEmptyWorkspaceSurfaceSearchEntries } from './terminal-empty-workspace-search'
 import {
   getTerminalAdvancedSearchEntries,
   getTerminalMacOptionSearchEntries,
@@ -273,8 +274,44 @@ export function TerminalPane({
       </SettingsGroup>
     ) : null
 
+  const emptyWorkspaceSection = matchesSettingsSearch(
+    searchQuery,
+    getEmptyWorkspaceSurfaceSearchEntries()
+  ) ? (
+    <SettingsGroup
+      key="empty-workspace"
+      title={t('settings.terminal.emptyWorkspace.title', 'When a workspace has no tabs')}
+      description={t(
+        'settings.terminal.emptyWorkspace.description',
+        'What opens when you open or wake a workspace and nothing is restored.'
+      )}
+    >
+      <div className="py-3">
+        <SettingsSegmentedControl
+          ariaLabel={t('settings.terminal.emptyWorkspace.title', 'When a workspace has no tabs')}
+          value={settings.emptyWorkspaceSurface ?? 'default'}
+          onChange={(value) => updateSettings({ emptyWorkspaceSurface: value })}
+          options={[
+            {
+              value: 'default',
+              label: t(
+                'settings.terminal.emptyWorkspace.openDefault',
+                'Open a terminal or default agent'
+              )
+            },
+            {
+              value: 'empty',
+              label: t('settings.terminal.emptyWorkspace.showEmpty', 'Show empty workspace')
+            }
+          ]}
+        />
+      </div>
+    </SettingsGroup>
+  ) : null
+
   const visibleSections = [
     defaultShellSection,
+    emptyWorkspaceSection,
     isWindows &&
     matchesSettingsSearch(searchQuery, getTerminalWindowsAdministratorSearchEntry()) ? (
       <SettingsGroup

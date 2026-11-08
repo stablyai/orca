@@ -32,6 +32,7 @@ import {
   getManageSessionsSearchEntries,
   getTerminalWindowSearchEntries
 } from './terminal-window-setup-search'
+import { getEmptyWorkspaceSurfaceSearchEntries } from './terminal-empty-workspace-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -172,6 +173,7 @@ export function getTerminalPaneSearchEntries(
           ...getTerminalWindowsPowershellImplementationSearchEntry()
         ]
       : []),
+    ...getEmptyWorkspaceSurfaceSearchEntries(),
     ...getTerminalRightClickToPasteSearchEntry(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),

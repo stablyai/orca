@@ -13,7 +13,10 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import type { WorktreeStartupPayload } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
-import { shouldSeedDefaultSurface } from '@/lib/workspace/activation/initial-surface/automatic-default-surface'
+import {
+  shouldSeedDefaultSurface,
+  showEmptyWorkspaceInsteadOfDefaultSurface
+} from '@/lib/workspace/activation/initial-surface/automatic-default-surface'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { SESSION_TABS_EMPTY_WORKTREE_ANSWER_RUNTIME_CAPABILITY } from '../../../shared/session-tabs-runtime-capabilities'
 
@@ -26,6 +29,8 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     activate?: boolean
     /** The caller knows an unlisted workspace is empty: it just created it, or the host never answers. */
     unknownHostCountIsEmpty?: boolean
+    /** A deliberate open with no surface choice; honours the empty-workspace preference. */
+    seedUserDefaultSurface?: boolean
   }
 ): boolean {
   const state = useAppStore.getState()
@@ -102,6 +107,13 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
           renderableTabCount,
           Object.hasOwn(state.tabsByWorktree, worktreeId)
         )
+      ) {
+        return false
+      }
+      if (
+        opts?.seedUserDefaultSurface === true &&
+        !opts.startup &&
+        showEmptyWorkspaceInsteadOfDefaultSurface(worktreeId)
       ) {
         return false
       }

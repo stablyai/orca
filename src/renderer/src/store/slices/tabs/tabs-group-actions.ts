@@ -58,7 +58,11 @@ export function createTabsGroupActions(
   get: TabsSliceGet
 ): Pick<
   TabsSlice,
-  'ensureWorktreeRootGroup' | 'focusGroup' | 'closeEmptyGroup' | 'createEmptySplitGroup'
+  | 'ensureWorktreeRootGroup'
+  | 'focusGroup'
+  | 'closeEmptyGroup'
+  | 'createEmptySplitGroup'
+  | 'showEmptyWorkspaceLanding'
 > {
   return {
     ensureWorktreeRootGroup: (worktreeId, orderSlot) => {
@@ -231,6 +235,15 @@ export function createTabsGroupActions(
       }))
       get().recordFeatureInteraction?.('terminal-panes')
       return newGroupId
+    },
+
+    showEmptyWorkspaceLanding: (worktreeId) => {
+      const groupId = get().ensureWorktreeRootGroup(worktreeId)
+      set((state) =>
+        state.splitLandingGroupIds[groupId] === worktreeId
+          ? state
+          : { splitLandingGroupIds: { ...state.splitLandingGroupIds, [groupId]: worktreeId } }
+      )
     }
   }
 }

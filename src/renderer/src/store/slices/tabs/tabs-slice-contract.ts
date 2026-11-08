@@ -158,6 +158,8 @@ export type TabsSlice = {
     direction: TabSplitDirection,
     opts?: { activate?: boolean; landing?: boolean }
   ) => string | null
+  /** Shows the New Agent/New Terminal chooser in an empty workspace instead of seeding a surface. */
+  showEmptyWorkspaceLanding: (worktreeId: string) => void
   moveUnifiedTabToGroup: (
     tabId: string,
     targetGroupId: string,
