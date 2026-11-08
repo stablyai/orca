@@ -295,4 +295,49 @@ describe('--parent-environment', () => {
       }
     }
   })
+
+  it('names the searched environment and lists it when the parent is ambiguous', async () => {
+    listEnvironmentsMock.mockReturnValue(SAVED)
+    const ambiguous = (code: string) =>
+      new RuntimeClientError(code, 'Several workspaces match name:B Ambiguous.', {
+        candidates: [{ selector: 'folder:one' }, { selector: 'folder:two' }],
+        nextSteps: ['Run `orca worktree ps --json` to compare the choices.']
+      })
+    const parent = ['--parent-worktree', 'name:B Ambiguous', '--parent-environment', 'srv-b']
+    const cases: [string[], Answer][] = [
+      // Same environment as the child: the runtime refuses the set or create.
+      [
+        ['worktree', 'set', '--environment', 'srv-b', '--worktree', 'id:repo-1::/srv/child'],
+        ({ method }) =>
+          method === 'worktree.set' ? ambiguous('LINEAGE_PARENT_AMBIGUOUS') : undefined
+      ],
+      [
+        ['worktree', 'create', '--environment', 'srv-b', '--repo', 'id:repo-1', '--name', 'c'],
+        ({ method }) =>
+          method === 'worktree.create' ? ambiguous('LINEAGE_PARENT_AMBIGUOUS') : undefined
+      ],
+      // Another environment: the lookup there finds several.
+      [
+        ['worktree', 'set', '--worktree', 'id:repo-1::/tmp/child'],
+        ({ environment, method }) =>
+          environment === 'srv-b' && method === 'worktree.show'
+            ? ambiguous('selector_ambiguous')
+            : undefined
+      ]
+    ]
+    for (const [command, answer] of cases) {
+      serve(answer)
+      const { output } = await run([...command, ...parent])
+      const error = JSON.parse(output).error
+      expect(error.code, command[1]).toBe('LINEAGE_PARENT_AMBIGUOUS')
+      expect(error.data.environment).toBe('srv-b')
+      expect(error.data.candidates).toEqual([
+        { selector: 'folder:one' },
+        { selector: 'folder:two' }
+      ])
+      expect(error.data.nextSteps).toEqual([
+        'Compare the choices with `orca worktree ps --environment srv-b --json`, then pass one as --parent-worktree.'
+      ])
+    }
+  })
 })

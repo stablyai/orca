@@ -139,32 +139,62 @@ function unavailableError(error: unknown, environment: ParentEnvironment): unkno
   )
 }
 
+type ParentLookupCode = 'LINEAGE_PARENT_NOT_FOUND' | 'LINEAGE_PARENT_AMBIGUOUS'
+
+function isParentLookupCode(code: string): code is ParentLookupCode {
+  return code === 'LINEAGE_PARENT_NOT_FOUND' || code === 'LINEAGE_PARENT_AMBIGUOUS'
+}
+
+/** The lineage code for a parent lookup's own error, as the runtime reports an explicit parent. */
+function parentLookupCode(error: RuntimeClientError): ParentLookupCode | undefined {
+  if (isParentLookupCode(error.code)) {
+    return error.code
+  }
+  return error.code === 'selector_not_found'
+    ? 'LINEAGE_PARENT_NOT_FOUND'
+    : error.code === 'selector_ambiguous'
+      ? 'LINEAGE_PARENT_AMBIGUOUS'
+      : undefined
+}
+
+/**
+ * Error data for a parent miss or ambiguity: the environment searched, and recovery that lists that
+ * environment. Inherited steps are dropped because they inspect the caller's default route.
+ */
+function searchedEnvironmentData(
+  error: RuntimeClientError,
+  code: ParentLookupCode,
+  environment: { route: string | null; name: string },
+  extraSteps: readonly string[] = []
+): Record<string, unknown> {
+  const list = environment.route
+    ? `orca worktree ps --environment ${quoteCliCommandArgument(environment.route)} --json`
+    : undefined
+  const listStep = list
+    ? code === 'LINEAGE_PARENT_AMBIGUOUS'
+      ? `Compare the choices with \`${list}\`, then pass one as --parent-worktree.`
+      : list
+    : 'This one-off connection has no listing route; save it with `orca environment add --name <name> --pairing-code <code>`, then run `orca worktree ps --environment <name> --json`.'
+  return {
+    ...(error.data && typeof error.data === 'object' ? error.data : {}),
+    environment: environment.route,
+    nextSteps: [listStep, ...extraSteps]
+  }
+}
+
 function parentLookupError(error: unknown, environment: ParentEnvironment): unknown {
   if (!(error instanceof RuntimeClientError)) {
     return error
   }
-  const data = { ...(error.data && typeof error.data === 'object' ? error.data : {}) }
-  if (error.code === 'selector_not_found') {
-    return new RuntimeClientError(
-      'LINEAGE_PARENT_NOT_FOUND',
-      `No workspace in ${environment.name} matched the parent selector. Nothing was changed; no other environment was searched.`,
-      {
-        ...data,
-        environment: environment.route,
-        nextSteps: [
-          `orca worktree ps --environment ${quoteCliCommandArgument(environment.route)} --json`
-        ]
-      }
-    )
+  const code = parentLookupCode(error)
+  if (!code) {
+    return error
   }
-  if (error.code === 'selector_ambiguous') {
-    return new RuntimeClientError(
-      'LINEAGE_PARENT_AMBIGUOUS',
-      `${error.message} (in ${environment.name}; nothing was changed)`,
-      { ...data, environment: environment.route }
-    )
-  }
-  return error
+  const message =
+    code === 'LINEAGE_PARENT_NOT_FOUND'
+      ? `No workspace in ${environment.name} matched the parent selector. Nothing was changed; no other environment was searched.`
+      : `${error.message} (in ${environment.name}; nothing was changed)`
+  return new RuntimeClientError(code, message, searchedEnvironmentData(error, code, environment))
 }
 
 /**
@@ -219,8 +249,8 @@ export async function resolveCrossEnvironmentParent(
   }
 }
 
-/** Sends a create/set; a miss on its same-environment parent names where it looked and how to
- * name a parent elsewhere. */
+/** Sends a create/set; a miss or ambiguity on its same-environment parent names where it looked
+ * and how to list it, and a miss says how to name a parent elsewhere. */
 export async function callNamingParentEnvironment<
   T,
   Params extends { parentWorktree?: string; parentWorkspace?: string; crossStoreParent?: unknown } =
@@ -234,24 +264,29 @@ export async function callNamingParentEnvironment<
     return await client.call<T>(method, params)
   } catch (error) {
     const parentSelector = params.parentWorktree ?? params.parentWorkspace
+    // A selector_* error here may be the child's own selector; only lineage codes name the parent.
     if (
-      !parentSelector ||
-      params.crossStoreParent ||
       !(error instanceof RuntimeClientError) ||
-      error.code !== 'LINEAGE_PARENT_NOT_FOUND'
+      !isParentLookupCode(error.code) ||
+      !parentSelector ||
+      params.crossStoreParent
     ) {
       throw error
     }
+    const code = error.code
     const environment = describeClientEnvironment(client)
-    const data = error.data && typeof error.data === 'object' ? error.data : {}
-    const previousSteps = 'nextSteps' in data && Array.isArray(data.nextSteps) ? data.nextSteps : []
-    throw attachCliErrorData(error, {
-      ...data,
-      environment: environment.id,
-      nextSteps: [
-        ...previousSteps,
-        `Only ${environmentLabel(environment)} was searched for "${parentSelector}". For a parent in another environment, add --parent-environment <local|environment-id> (a row's address.environment from \`orca worktree ps --environment <id> --json\`).`
-      ]
-    })
+    throw attachCliErrorData(
+      error,
+      searchedEnvironmentData(
+        error,
+        code,
+        { route: environment.id, name: environmentLabel(environment) },
+        code === 'LINEAGE_PARENT_NOT_FOUND'
+          ? [
+              `Only ${environmentLabel(environment)} was searched for "${parentSelector}". For a parent in another environment, add --parent-environment <local|environment-id> (a row's address.environment from \`orca worktree ps --environment <id> --json\`).`
+            ]
+          : []
+      )
+    )
   }
 }
