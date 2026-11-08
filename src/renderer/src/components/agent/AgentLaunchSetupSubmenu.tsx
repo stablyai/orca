@@ -127,7 +127,8 @@ export function AgentLaunchSetupSubmenu({
             aria-haspopup="menu"
             aria-expanded={open}
             disabled={disabled}
-            onPointerEnter={(event) => {
+            // Why move, not enter: like Radix's sub-trigger, rows shifting under a resting pointer must not open setup.
+            onPointerMove={(event) => {
               if (!disabled && event.pointerType === 'mouse' && !open) {
                 setFocusPanel(!returnFocus)
                 onOpenChange(true)
@@ -188,8 +189,13 @@ export function AgentLaunchSetupSubmenu({
           const row = trigger.current?.closest('[data-agent-launch-row]')
           const menu = trigger.current?.closest('[data-slot="dropdown-menu-content"]')
           if (returnFocus && event.target === menu) {
-            // Radix focuses the root menu when the pointer leaves the row; keep typing in the caller's input.
-            returnFocus()
+            // Radix focuses the root menu when the pointer leaves the row; keep typing where it was.
+            const previous = event.detail.originalEvent.relatedTarget
+            if (previous instanceof HTMLElement && content.current?.contains(previous)) {
+              previous.focus({ preventScroll: true })
+            } else {
+              returnFocus()
+            }
           }
           // Nested option menus and pointer grace may move focus outside this portal.
           if (

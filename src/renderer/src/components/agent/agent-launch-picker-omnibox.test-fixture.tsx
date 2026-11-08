@@ -94,9 +94,12 @@ export async function verifyOmniboxSetupKeepsSearchFocus(
     const input = document.querySelector('input')!
     fireEvent.change(input, { target: { value: 'Astra low' } })
     input.focus()
-    // A keystroke puts Radix in keyboard mode, as when typing shifts a row under a resting pointer.
+    const configure = await waitForConfigure()
+    // Typing can shift a row under a resting pointer: that boundary crossing alone must not open setup.
     fireEvent.keyDown(input, { key: 'w' })
-    fireEvent.pointerOver(await waitForConfigure(), { pointerType: 'mouse' })
+    fireEvent.pointerOver(configure, { pointerType: 'mouse' })
+    expect(configure.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.pointerMove(configure, { pointerType: 'mouse' })
     await waitFor(() => expect(document.querySelector('textarea')).not.toBeNull())
     expect(document.activeElement).toBe(input)
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
