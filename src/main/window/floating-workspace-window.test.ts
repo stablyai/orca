@@ -9,6 +9,8 @@ const { instances, FakeWindow, acquireMock, releaseMock, trustedRenderer, update
       private handlers: Record<string, ((...args: unknown[]) => void)[]> = {}
       destroyed = false
       visible = false
+      setAlwaysOnTop = vi.fn()
+      setVisibleOnAllWorkspaces = vi.fn()
       webContents = {
         id: created.length + 1,
         send: vi.fn(),
@@ -126,6 +128,8 @@ function requestClose(window: InstanceType<typeof FakeWindow>): { preventDefault
   return event
 }
 
+const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 describe('floating workspace window', () => {
   let events: FloatingWorkspaceWindowEvent[]
   let stopListening: () => void
@@ -147,6 +151,9 @@ describe('floating workspace window', () => {
     destroyFloatingWorkspaceWindow()
     stopListening()
     vi.unstubAllEnvs()
+    if (originalPlatform) {
+      Object.defineProperty(process, 'platform', originalPlatform)
+    }
   })
 
   it('a user close while not quitting hides the window, keeps it and its renderer, and reports a user hide', () => {
@@ -213,4 +220,20 @@ describe('floating workspace window', () => {
     expect(releaseMock).toHaveBeenCalledTimes(1)
     expect(events).toEqual(['destroyed'])
   })
+
+  it.each(['darwin', 'win32', 'linux'] as const)(
+    'on %s it floats above other apps; only macOS gets a panel that cannot go full screen',
+    (platform) => {
+      Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+      const window = showReady()
+      expect(window.setAlwaysOnTop).toHaveBeenCalledWith(true, 'floating')
+      expect(window.options.type).toBe(platform === 'darwin' ? 'panel' : undefined)
+      expect(window.options.fullscreenable).toBe(platform === 'darwin' ? false : undefined)
+      expect(window.setVisibleOnAllWorkspaces.mock.calls).toEqual(
+        platform === 'win32'
+          ? []
+          : [[true, { visibleOnFullScreen: true, skipTransformProcessType: true }]]
+      )
+    }
+  )
 })

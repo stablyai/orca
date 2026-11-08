@@ -154,6 +154,17 @@ export function destroyFloatingWorkspaceWindowWithMainWindow(mainWindow: Browser
   mainWindow.on('closed', destroyFloatingWorkspaceWindow)
 }
 
+function floatOverEverything(window: BrowserWindow): void {
+  window.setAlwaysOnTop(true, 'floating')
+  if (process.platform !== 'win32') {
+    // skipTransformProcessType keeps Orca's Dock icon from flickering out.
+    window.setVisibleOnAllWorkspaces(true, {
+      visibleOnFullScreen: true,
+      skipTransformProcessType: true
+    })
+  }
+}
+
 /** Create or reveal the single window; a repeated show takes no second throttle lease. */
 export function showFloatingWorkspaceWindow(
   store: Store | null,
@@ -175,6 +186,7 @@ export function showFloatingWorkspaceWindow(
   }
 
   const wslArguments = wslHostsWindowArguments()
+  const darwin = process.platform === 'darwin'
   const window = new BrowserWindow({
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
@@ -182,6 +194,8 @@ export function showFloatingWorkspaceWindow(
     minHeight: MIN_HEIGHT,
     title: windowTitle(),
     show: false,
+    // Why: a panel takes key focus without activating Orca, so focusing it never raises the main window; a full-screen-able one would open its own Space.
+    ...(darwin ? { type: 'panel' as const, fullscreenable: false } : {}),
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     webPreferences: {
@@ -193,6 +207,7 @@ export function showFloatingWorkspaceWindow(
       ...(wslArguments.length > 0 ? { additionalArguments: wslArguments } : {})
     }
   })
+  floatOverEverything(window)
   installPrivilegedWindowNavigationPolicy(window.webContents)
   // Isolated sessions do not inherit the main session's deny-by-default permission policy.
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) =>
