@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -85,6 +85,41 @@ describe('getBranchCompare real refs', () => {
         status: 'ready'
       },
       entries: []
+    })
+  })
+
+  it('recounts an unchanged commit pair after a replace ref rewrites its history', async () => {
+    const repo = await mkdtemp(path.join(tmpdir(), 'orca-branch-compare-replace-'))
+    tempRoots.push(repo)
+    git(repo, ['init', '-q'])
+    git(repo, ['config', 'user.email', 'test@example.com'])
+    git(repo, ['config', 'user.name', 'Test User'])
+    git(repo, ['config', 'commit.gpgSign', 'false'])
+    git(repo, ['commit', '--allow-empty', '-qm', 'root'])
+    const rootOid = git(repo, ['rev-parse', 'HEAD'])
+    git(repo, ['branch', 'base'])
+    git(repo, ['checkout', '-qb', 'feature'])
+    git(repo, ['commit', '--allow-empty', '-qm', 'middle'])
+    git(repo, ['commit', '--allow-empty', '-qm', 'tip'])
+    const tipOid = git(repo, ['rev-parse', 'HEAD'])
+
+    expect((await getBranchCompare(repo, 'base')).summary).toMatchObject({
+      status: 'ready',
+      commitsAhead: 2
+    })
+
+    git(repo, ['replace', '--graft', tipOid, rootOid])
+    // Age the new replace ref past the racy-write margin so only the stamp can force a recount.
+    const aged = new Date(Date.now() - 60_000)
+    const replaceDir = path.join(repo, '.git', 'refs', 'replace')
+    await utimes(path.join(replaceDir, tipOid), aged, aged)
+    await utimes(replaceDir, aged, aged)
+
+    expect((await getBranchCompare(repo, 'base')).summary).toMatchObject({
+      status: 'ready',
+      headOid: tipOid,
+      mergeBase: rootOid,
+      commitsAhead: 1
     })
   })
 

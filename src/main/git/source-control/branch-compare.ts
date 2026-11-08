@@ -7,6 +7,7 @@ import { resolveWorktreeAddBaseRef } from '../../../shared/worktree/base-ref'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { resolveWorktreeBaseCommitOid } from '../worktrees/creation/worktree-base-ref-probe'
 import { loadBranchChanges } from './branch-change-entries'
+import { readCommitPairScope, rememberCommitPair } from './commit-pair-cache'
 import {
   countCompareDivergence,
   resolveCompareRef,
@@ -29,6 +30,8 @@ export async function getBranchCompare(
     status: 'loading'
   }
 
+  // Never rejects; read alongside ref resolution so cache hits add no latency.
+  const pairScopePromise = readCommitPairScope(worktreePath, options)
   // Reuse peeled commit OIDs only for branch refs; remote-tracking refs may hold annotated tags.
   const reusableProbedOidByRef = new Map<string, string>()
   const { compareRef, headOidResult, baseOidResult } = await readBranchCompareHead({
@@ -83,9 +86,13 @@ export async function getBranchCompare(
     return { summary, entries: [] }
   }
 
+  // Polls re-resolve only the refs; history walks rerun when a tip moves.
+  const pairScope = await pairScopePromise
   let mergeBase = ''
   try {
-    mergeBase = await resolveMergeBase(worktreePath, baseOid, headOid, options)
+    mergeBase = await rememberCommitPair(pairScope, 'merge-base', baseOid, headOid, () =>
+      resolveMergeBase(worktreePath, baseOid, headOid, options)
+    )
     summary.mergeBase = mergeBase
   } catch {
     summary.status = 'no-merge-base'
@@ -105,7 +112,9 @@ export async function getBranchCompare(
 
     const [entries, divergence] = await Promise.all([
       loadBranchChanges(worktreePath, mergeBase, headOid, options),
-      countCompareDivergence(worktreePath, baseOid, headOid, options)
+      rememberCommitPair(pairScope, 'divergence', baseOid, headOid, () =>
+        countCompareDivergence(worktreePath, baseOid, headOid, options)
+      )
     ])
     summary.changedFiles = entries.length
     summary.commitsAhead = divergence.ahead
