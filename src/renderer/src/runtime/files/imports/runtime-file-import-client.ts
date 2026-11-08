@@ -211,7 +211,8 @@ export async function importExternalPathsToRuntime(
                 ? `ssh:${encodeURIComponent(context.expectedSshTargetId)}`
                 : 'local'),
             sourceUploadId,
-            fileSequence
+            fileSequence,
+            () => stopIfCancelled(handlers, sourceUploadId)
           )
           if (sourceUploadId) {
             trackers.get(sourceUploadId)?.completeFile(entry.byteLength)

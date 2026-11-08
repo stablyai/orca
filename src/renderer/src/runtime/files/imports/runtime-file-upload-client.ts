@@ -37,7 +37,9 @@ export async function uploadRuntimeFileWithoutClobber(
   expectedSshTargetId?: string,
   expectedExecutionHostId?: 'local' | `ssh:${string}`,
   uploadId?: string,
-  fileSequence?: number
+  fileSequence?: number,
+  /** Throws once the user cancelled; commit is the point of no return. */
+  throwIfCancelled?: () => void
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
@@ -63,6 +65,8 @@ export async function uploadRuntimeFileWithoutClobber(
       // Import results expose this text directly; remove Electron’s remote-method wrapper.
       throw new Error(extractIpcErrorMessage(error, 'Upload failed'))
     }
+    // Why: a cancel after the last slice lands only here; the finally still deletes the temp path.
+    throwIfCancelled?.()
     await callRuntimeFileImportMutation(
       session,
       'files.commitUpload',
