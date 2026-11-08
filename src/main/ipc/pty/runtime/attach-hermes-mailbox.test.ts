@@ -2,14 +2,14 @@ import '../../../runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { settledWriteStub } from '../../../providers/settled-pty-write-stub'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
-import { OrchestrationDb } from '../../../runtime/orchestration/db'
+import { OrchestrationDb } from '../../../runtime/orchestration/db/orchestration-db'
 import { createRootDispatch } from '../../../runtime/orchestration/db/root-dispatch-test-fixture'
 import {
   createRuntime,
   PANE_KEY,
   PTY_ID,
   TERMINAL_HANDLE
-} from '../../../runtime/orchestration-mailbox-notification-test-harness'
+} from '../../../runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-notification-test-harness'
 import { ptySizes } from '../delivery/visibility-state'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../provider/registry'
 import { attachPtyFromRuntimeController, getSizeFromRuntimeController } from './operations'
