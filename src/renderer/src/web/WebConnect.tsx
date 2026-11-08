@@ -14,7 +14,7 @@ import {
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { readWebDeviceKeySupport } from './web-device-key-support'
 import { webSessionPairingGuidance } from './web-pairing-security-guidance'
 
@@ -30,6 +30,7 @@ export default function WebConnect({
   confirmReplacingSavedServer = false,
   onConnected
 }: WebConnectProps): React.JSX.Element {
+  const t = useTranslate()
   const existingEnvironment = readStoredWebRuntimeEnvironment()
   const [name, setName] = useState(
     (!confirmReplacingSavedServer && existingEnvironment?.name) || 'Orca Server'
@@ -39,7 +40,7 @@ export default function WebConnect({
   const [connecting, setConnecting] = useState(false)
   const parsedOffer = useMemo(() => parseWebPairingInput(pairingCode), [pairingCode])
   const autoConnectAttempted = useRef(false)
-  const sessionGuidance = webSessionPairingGuidance(readWebDeviceKeySupport())
+  const sessionGuidance = webSessionPairingGuidance(readWebDeviceKeySupport(), t)
   const replacedEnvironment = confirmReplacingSavedServer ? existingEnvironment : null
 
   const connect = async (): Promise<void> => {
@@ -50,7 +51,7 @@ export default function WebConnect({
     }
     if (parsedOffer.scope === 'mobile') {
       setError(
-        translate(
+        t(
           'auto.web.WebConnect.mobileScopeRejected',
           'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.'
         )
@@ -79,7 +80,7 @@ export default function WebConnect({
       // stamps it onto status.get so those links still fail before app entry.
       if ((response.result as RuntimeStatus | null)?.deviceScope === 'mobile') {
         setError(
-          translate(
+          t(
             'auto.web.WebConnect.mobileScopeRejected',
             'This QR code grants limited (mobile) access. To use the full web app, open the browser access link from Settings → Runtime Environments → Share this Orca server → New Link.'
           )
@@ -131,10 +132,10 @@ export default function WebConnect({
           </div>
           <div className="min-w-0">
             <h1 className="text-base font-semibold leading-6">
-              {translate('auto.web.WebConnect.e3bcd082ac', 'Connect to Orca')}
+              {t('auto.web.WebConnect.e3bcd082ac', 'Connect to Orca')}
             </h1>
             <p className="mt-1 text-sm leading-5 text-muted-foreground">
-              {translate(
+              {t(
                 'auto.web.WebConnect.3affe7de3a',
                 'Paste a pairing URL from an Orca server that this browser can reach.'
               )}
@@ -144,7 +145,7 @@ export default function WebConnect({
 
         <div className="grid gap-2">
           <Label htmlFor="web-runtime-name">
-            {translate('auto.web.WebConnect.cb4d287238', 'Server name')}
+            {t('auto.web.WebConnect.cb4d287238', 'Server name')}
           </Label>
           <Input
             id="web-runtime-name"
@@ -156,13 +157,13 @@ export default function WebConnect({
 
         <div className="grid gap-2">
           <Label htmlFor="web-runtime-pairing-code">
-            {translate('auto.web.WebConnect.7a566540de', 'Pairing URL or code')}
+            {t('auto.web.WebConnect.7a566540de', 'Pairing URL or code')}
           </Label>
           <Input
             id="web-runtime-pairing-code"
             value={pairingCode}
             onChange={(event) => setPairingCode(event.target.value)}
-            placeholder={translate('auto.web.WebConnect.27393856e4', 'orca://pair?code=...')}
+            placeholder={t('auto.web.WebConnect.27393856e4', 'orca://pair?code=...')}
             autoComplete="off"
             spellCheck={false}
           />
@@ -172,7 +173,7 @@ export default function WebConnect({
           <div className="flex items-start gap-2 rounded-md border border-border bg-muted px-3 py-2 text-xs leading-5 text-foreground">
             <ShieldAlert size={15} className="mt-0.5 shrink-0" aria-hidden />
             <p className="min-w-0 break-words">
-              {translate(
+              {t(
                 'auto.web.WebConnect.replaceSavedServer',
                 'This link connects to a different server than "{{name}}" ({{endpoint}}). Connect only if you trust the endpoint below.',
                 {
@@ -192,7 +193,7 @@ export default function WebConnect({
 
         {parsedOffer && (
           <div className="rounded-md border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
-            {translate('auto.web.WebConnect.4a4c017be1', 'Endpoint:')}{' '}
+            {t('auto.web.WebConnect.4a4c017be1', 'Endpoint:')}{' '}
             <span className="break-all font-mono text-foreground">{parsedOffer.endpoint}</span>
           </div>
         )}
@@ -206,12 +207,12 @@ export default function WebConnect({
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           {replacedEnvironment ? (
             <Button type="button" variant="outline" onClick={onConnected}>
-              {translate('auto.web.WebConnect.keepSavedServer', 'Keep saved server')}
+              {t('auto.web.WebConnect.keepSavedServer', 'Keep saved server')}
             </Button>
           ) : (
             <Button type="button" variant="outline" onClick={clear} className="gap-2">
               <Trash2 size={15} aria-hidden />
-              {translate('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
+              {t('auto.web.WebConnect.2cf9e5a294', 'Clear saved server')}
             </Button>
           )}
           <Button
@@ -225,7 +226,7 @@ export default function WebConnect({
             ) : (
               <Cable size={15} aria-hidden />
             )}
-            {translate('auto.web.WebConnect.b411ec0069', 'Connect')}
+            {t('auto.web.WebConnect.b411ec0069', 'Connect')}
           </Button>
         </div>
       </div>
