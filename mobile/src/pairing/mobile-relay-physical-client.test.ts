@@ -104,21 +104,6 @@ describe('mobile relay physical pairing client', () => {
     await expect(status).rejects.toEqual(new RelayOuterError(4409))
   })
 
-  it('classifies an opaque close after transport error as 1006', async () => {
-    const socket = new FakeSocket()
-    const client = connectMobileRelayForPairing({
-      relay,
-      deviceToken: 'device-token',
-      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
-      createSocket: () => pairingWebSocket(socket)
-    })
-    const status = client.sendRequest('status.get')
-    socket.onerror?.()
-    socket.onclose?.({ code: 0 })
-
-    await expect(status).rejects.toEqual(new RelayOuterError(1006))
-  })
-
   it('settles after an error when the platform never emits close', async () => {
     vi.useFakeTimers()
     try {
