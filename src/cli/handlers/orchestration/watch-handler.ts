@@ -9,6 +9,7 @@ import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 
 const WATCH_POLL_TIMEOUT_MS = 60_000
 const WATCH_RETRY_MAX_MS = 30_000
+const WATCH_GIVE_UP_MS = 10 * 60_000
 // Long-poll admission was full or a poll outlived the transport timeout; the cursor stays valid.
 const RETRIABLE_CODES = new Set(['runtime_busy', 'runtime_timeout'])
 
@@ -36,7 +37,16 @@ export const ORCHESTRATION_WATCH_HANDLER: Record<string, CommandHandler> = {
       }
       process.exit(0)
     })
+    const withResumeHint = (error: RuntimeClientError): RuntimeClientError =>
+      cursor
+        ? new RuntimeClientError(
+            error.code,
+            `${error.message} Resume with --since ${cursor}.`,
+            error.data
+          )
+        : error
     let retryMs = 0
+    let failingSince: number | undefined
     for (;;) {
       let result: EventsResult
       try {
@@ -60,20 +70,21 @@ export const ORCHESTRATION_WATCH_HANDLER: Record<string, CommandHandler> = {
           process.exitCode = 1
           return
         }
-        if (!RETRIABLE_CODES.has(error.code)) {
-          throw cursor
-            ? new RuntimeClientError(
-                error.code,
-                `${error.message} Resume with --since ${cursor}.`,
-                error.data
-              )
-            : error
+        failingSince ??= Date.now()
+        if (!RETRIABLE_CODES.has(error.code) || Date.now() - failingSince > WATCH_GIVE_UP_MS) {
+          throw withResumeHint(error)
+        }
+        if (retryMs === 0) {
+          process.stderr.write(
+            `Orca is busy (${error.code}); retrying with backoff for up to 10 minutes.\n`
+          )
         }
         retryMs = Math.min(retryMs * 2 || 1_000, WATCH_RETRY_MAX_MS)
         await new Promise((resolve) => setTimeout(resolve, retryMs))
         continue
       }
       retryMs = 0
+      failingSince = undefined
       for (const event of result.events) {
         writeStdoutLine(JSON.stringify(event))
       }
