@@ -99,8 +99,8 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     refreshGitHubChecks,
     renderCommentComposer,
     renderDetailCommentGroup,
+    requestDetailRefresh,
     rerunGitHubChecks,
-    setDetailRefreshSeq,
     setItemCommentDraft,
     setLinearCommentDraft,
     setLinearSubIssueTitle
@@ -116,7 +116,8 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
   ) : detailError ? (
     <MobileLoadErrorState
       error={detailError}
-      onRetry={() => setDetailRefreshSeq((current) => current + 1)}
+      // An explicit read, so a lost comment whose refresh failed can still settle on Retry.
+      onRetry={requestDetailRefresh}
     />
   ) : detailPayload ? (
     <>

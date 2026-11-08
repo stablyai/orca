@@ -176,7 +176,7 @@ export async function getIssueBodyAndComments(
           ghOptions
         ),
         getIssueTimelineItems(repository, issueNumber, ghOptions, fresh),
-        // Only an explicit refresh, the read that settles a phone's lost comment, pays for the viewer lookup.
+        // Only uncached reads (refreshes, including the phone's after a lost comment) pay for the viewer lookup.
         fresh ? readViewerLogin(ghOptions) : null
       ])
       const issue = JSON.parse(issueResult.stdout) as {
