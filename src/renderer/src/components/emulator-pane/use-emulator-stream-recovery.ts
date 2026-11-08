@@ -1,7 +1,7 @@
 import { useCallback, useRef, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { EmulatorPaneSession } from './emulator-pane-types'
 
-/** Retry only explicitly unsupported native streams, once per stream identity, through normal attach ownership. */
+/** Retry native streams only when main requests fallback, once per identity, through normal attach ownership. */
 export function useEmulatorRecovery(
   liveTargetRef: RefObject<string | null>,
   session: EmulatorPaneSession | null,

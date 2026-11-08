@@ -137,7 +137,7 @@ export class EmulatorGrpcSession {
     this.screenshots = stream
     this.firstFrameTimer = setTimeout(() => {
       unavailableUntil.set(this.serial, Date.now() + 30_000)
-      this.close()
+      this.close(true)
     }, 10_000)
     stream.on('data', (image) => {
       if (stream !== this.screenshots) {
@@ -153,7 +153,6 @@ export class EmulatorGrpcSession {
         return
       }
       const { width, height } = image.format
-      clearTimeout(this.firstFrameTimer)
       // The emulator publishes an empty image while the display is asleep.
       if (!width && !height) {
         return
@@ -168,6 +167,7 @@ export class EmulatorGrpcSession {
         this.close()
         return
       }
+      clearTimeout(this.firstFrameTimer)
       const rotation = image.format.rotation?.rotation ?? 0
       if (rotation !== this.rotation) {
         this.release()
@@ -302,7 +302,7 @@ export class EmulatorGrpcSession {
     return true
   }
 
-  /** Idempotently releases owned transports; unsupported screenshot RPCs request a scrcpy retry. */
+  /** Idempotently releases transports; unsupported or stalled screenshot streams request a scrcpy retry. */
   close(retryWithScrcpy = false): Promise<void> {
     if (this.closed) {
       return this.closing
