@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   gitCommitActionsSupported,
   useGitCommitActionsSupport
@@ -27,6 +27,7 @@ export function SequencerRecoveryControls({
   operation: GitCommitAction
   disabled: boolean
 }) {
+  const t = useTranslate()
   const context = useSourceControlWorktreeContext()
   const { supported, reason } = useGitCommitActionsSupport(
     context.activeRepoTarget,
@@ -34,8 +35,8 @@ export function SequencerRecoveryControls({
   )
   const operationLabel =
     operation === 'revert'
-      ? translate('gitGraph.revert', 'Revert')
-      : translate('gitGraph.cherryPick', 'Cherry-pick')
+      ? t('gitGraph.revert', 'Revert')
+      : t('gitGraph.cherryPick', 'Cherry-pick')
   const confirm = useConfirmationDialog()
   const [busy, setBusy] = useState(false)
   const navigation = useRef(0)
@@ -71,14 +72,14 @@ export function SequencerRecoveryControls({
     if (
       action === 'abort' &&
       !(await confirm({
-        title: translate('gitGraph.abortOperationTitle', 'Abort {{operation}}?', {
+        title: t('gitGraph.abortOperationTitle', 'Abort {{operation}}?', {
           operation: operationLabel
         }),
-        description: translate(
+        description: t(
           'gitGraph.abortOperationDescription',
           'This cancels the operation in progress and can discard conflict resolutions made during it.'
         ),
-        confirmLabel: translate('gitGraph.abortOperation', 'Abort {{operation}}', {
+        confirmLabel: t('gitGraph.abortOperation', 'Abort {{operation}}', {
           operation: operationLabel
         }),
         confirmVariant: 'destructive'
@@ -101,15 +102,13 @@ export function SequencerRecoveryControls({
         action === 'abort' ? sequencerAbortRuntimeGit : sequencerContinueRuntimeGit
       )(request, operation)
       if (result?.outcome === 'empty') {
-        toast.message(
-          translate('gitGraph.alreadyApplied', 'Already applied, nothing to cherry-pick')
-        )
+        toast.message(t('gitGraph.alreadyApplied', 'Already applied, nothing to cherry-pick'))
       }
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'gitGraph.recoveryFailed',
               'Could not finish the operation. Refresh Source Control and try again.'
             )
@@ -140,7 +139,7 @@ export function SequencerRecoveryControls({
         disabled={!supported || disabled || busy}
         onClick={() => void run('continue')}
       >
-        {translate('gitGraph.continueOperation', 'Continue {{operation}}', {
+        {t('gitGraph.continueOperation', 'Continue {{operation}}', {
           operation: operationLabel
         })}
       </Button>
@@ -151,7 +150,7 @@ export function SequencerRecoveryControls({
         disabled={!supported || disabled || busy}
         onClick={() => void run('abort')}
       >
-        {translate('gitGraph.abortOperation', 'Abort {{operation}}', { operation: operationLabel })}
+        {t('gitGraph.abortOperation', 'Abort {{operation}}', { operation: operationLabel })}
       </Button>
     </div>
   )

@@ -1,7 +1,9 @@
+import { Input } from '@/components/ui/input'
+import { isBranchNameValid } from '../../../../../shared/git/branch-switch-target'
 import { useStore } from 'zustand'
 import { Button } from '@/components/ui/button'
 import { ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { useGitCommitActionsSupport } from '@/runtime/git-commit-actions-capability'
 import type { GitHistoryItem } from '../../../../../shared/git/history/git-history-types'
 import type { GitGraphCommitActionsController } from './git-graph-commit-actions-controller'
@@ -14,37 +16,43 @@ type Props = {
   menu?: boolean
 }
 export function GitGraphCommitActionControls({ item, controller, support, menu }: Props) {
+  const t = useTranslate()
   const running = useStore(controller.view, (state) => state.running)
   const merge = item.parentIds.length > 1
   const reason =
     support.supported && merge
-      ? translate('gitGraph.cannotApplyMerge', "Can't cherry-pick/revert a merge commit from here")
+      ? t('gitGraph.cannotApplyMerge', "Can't cherry-pick/revert a merge commit from here")
       : support.reason
   return (
     <>
       <div className={menu ? undefined : 'flex flex-wrap gap-1'}>
-        {(['checkout', 'cherry-pick', 'revert'] as const).map((action: GitGraphCommitAction) => {
-          const disabled = running || !support.supported || (merge && action !== 'checkout')
-          return menu ? (
-            <ContextMenuItem
-              key={action}
-              disabled={disabled}
-              onSelect={() => controller.request(action, item)}
-            >
-              {gitGraphActionLabel(action)}
-            </ContextMenuItem>
-          ) : (
-            <Button
-              key={action}
-              variant="outline"
-              size="xs"
-              disabled={disabled}
-              onClick={() => controller.request(action, item)}
-            >
-              {gitGraphActionLabel(action)}
-            </Button>
-          )
-        })}
+        {(['checkout', 'create-branch', 'cherry-pick', 'revert'] as const).map(
+          (action: GitGraphCommitAction) => {
+            const disabled =
+              running ||
+              !support.supported ||
+              (merge && (action === 'cherry-pick' || action === 'revert'))
+            return menu ? (
+              <ContextMenuItem
+                key={action}
+                disabled={disabled}
+                onSelect={() => controller.request(action, item)}
+              >
+                {gitGraphActionLabel(action, t)}
+              </ContextMenuItem>
+            ) : (
+              <Button
+                key={action}
+                variant="outline"
+                size="xs"
+                disabled={disabled}
+                onClick={() => controller.request(action, item)}
+              >
+                {gitGraphActionLabel(action, t)}
+              </Button>
+            )
+          }
+        )}
       </div>
       {reason && <p className="px-2 py-1 text-xs text-muted-foreground">{reason}</p>}
       {menu && <ContextMenuSeparator />}
@@ -56,12 +64,21 @@ export function GitGraphCommitConfirmStrip({
 }: {
   controller: GitGraphCommitActionsController
 }) {
+  const t = useTranslate()
   const { pending } = useStore(controller.view)
   if (!pending) {
     return null
   }
+  const creating = pending.action === 'create-branch'
+  const validName = isBranchNameValid(pending.name ?? '')
   return (
-    <div
+    <form
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!creating || validName) {
+          void controller.confirm()
+        }
+      }}
       className="space-y-2 border-b border-border bg-muted p-3 text-xs"
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
@@ -70,20 +87,29 @@ export function GitGraphCommitConfirmStrip({
       }}
     >
       <p>
-        {translate('gitGraph.confirmCommitAction', '{{action}} {{commit}}?', {
-          action: gitGraphActionLabel(pending.action),
-          commit: pending.item.id.slice(0, 7)
+        {t('gitGraph.confirmCommitAction', '{{action}} {{commit}}?', {
+          action: gitGraphActionLabel(pending.action, t),
+          commit: pending.branchTarget?.name ?? pending.item.id.slice(0, 7)
         })}
       </p>
       <p className="truncate text-muted-foreground">{pending.item.subject}</p>
+      {creating && (
+        <Input
+          autoFocus
+          aria-label={t('gitGraph.branchName', 'Branch name')}
+          aria-invalid={!!pending.name && !validName}
+          value={pending.name ?? ''}
+          onChange={(event) => controller.setBranchName(event.target.value)}
+        />
+      )}
       <div className="flex gap-2">
-        <Button size="xs" onClick={() => void controller.confirm()}>
-          {gitGraphActionLabel(pending.action)}
+        <Button size="xs" type="submit" disabled={creating && !validName}>
+          {gitGraphActionLabel(pending.action, t)}
         </Button>
-        <Button size="xs" variant="ghost" onClick={controller.cancel}>
-          {translate('gitGraph.cancelAction', 'Cancel')}
+        <Button size="xs" type="button" variant="ghost" onClick={controller.cancel}>
+          {t('gitGraph.cancelAction', 'Cancel')}
         </Button>
       </div>
-    </div>
+    </form>
   )
 }

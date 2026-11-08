@@ -1,16 +1,25 @@
+import { switchRuntimeGitBranch } from '@/runtime/source-control/git/runtime-git-branch-client'
+import type { BranchSwitchTarget } from '../../../../../shared/git/branch-switch-target'
 import { createStore } from 'zustand/vanilla'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { gitGraphScope } from '@/lib/git-graph-tab'
 import { gitGraphOwnerKey } from './git-graph-workspace-navigation'
 import { gitCommitActionsSupported } from '@/runtime/git-commit-actions-capability'
-import { cherryPickRuntimeGit, revertRuntimeGit } from '@/runtime/runtime-git-commit-actions-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import {
+  createRuntimeGitBranch,
+  cherryPickRuntimeGit,
+  revertRuntimeGit
+} from '@/runtime/runtime-git-commit-actions-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import type { GitGraphHistoryController } from './git-graph-history-controller'
-import type { GitHistoryItem } from '../../../../../shared/git/history/git-history-types'
+import type {
+  GitHistoryItem,
+  GitHistoryItemRef
+} from '../../../../../shared/git/history/git-history-types'
 import type { GitCommitActionResult } from '../../../../../shared/git/commands/git-commit-action'
 import {
   gitGraphActionOutcome,
@@ -20,6 +29,8 @@ import {
 
 type PendingCommitAction = {
   action: GitGraphCommitAction
+  branchTarget?: BranchSwitchTarget
+  name?: string
   item: GitHistoryItem
   scope: NonNullable<ReturnType<typeof gitGraphScope>>
 }
@@ -31,13 +42,37 @@ export class GitGraphCommitActionsController {
   cancel = () => {
     this.view.setState({ pending: undefined })
   }
-  request = (action: GitGraphCommitAction, item: GitHistoryItem) => {
+  request = (
+    action: GitGraphCommitAction,
+    item: GitHistoryItem,
+    branchTarget?: BranchSwitchTarget
+  ) => {
     const scope = this.history.actionScope
     if (!scope || this.view.getState().running) {
       return
     }
     this.history.select(item.id)
-    this.view.setState({ pending: { action, item, scope } })
+    this.view.setState({ pending: { action, item, scope, branchTarget } })
+  }
+  requestBranch = (item: GitHistoryItem, ref: GitHistoryItemRef) => {
+    const kind = ref.id.startsWith('refs/heads/')
+      ? 'local'
+      : ref.id.startsWith('refs/remotes/')
+        ? 'remote'
+        : null
+    if (!kind) {
+      return
+    }
+    this.request('checkout-branch', item, {
+      kind,
+      name: ref.id.slice(kind === 'local' ? 'refs/heads/'.length : 'refs/remotes/'.length)
+    })
+  }
+  setBranchName = (name: string) => {
+    const pending = this.view.getState().pending
+    if (pending?.action === 'create-branch') {
+      this.view.setState({ pending: { ...pending, name } })
+    }
   }
   private owns(scope: PendingCommitAction['scope']): boolean {
     return (
@@ -79,7 +114,28 @@ export class GitGraphCommitActionsController {
           )
         )
       }
-      if (action === 'checkout') {
+      const context = {
+        target: scope.target,
+        worktreeId: this.history.worktreeId,
+        worktreePath: scope.worktree.path,
+        connectionId: scope.connectionId ?? undefined
+      }
+      if (action === 'checkout-branch' && pending.branchTarget) {
+        const switched = await switchRuntimeGitBranch(
+          context,
+          pending.branchTarget,
+          undefined,
+          checkOwner
+        )
+        result = {
+          outcome: switched.warning ? 'landed-with-warning' : 'landed',
+          branch: switched.branch,
+          commitId: item.id,
+          message: switched.warning
+        }
+      } else if (action === 'create-branch') {
+        result = await createRuntimeGitBranch(context, pending.name ?? '', item.id, checkOwner)
+      } else if (action === 'checkout') {
         await callRuntimeRpc(
           scope.target,
           'git.checkout',
@@ -96,12 +152,7 @@ export class GitGraphCommitActionsController {
         result = { outcome: 'landed', commitId: item.id }
       } else {
         result = await (action === 'cherry-pick' ? cherryPickRuntimeGit : revertRuntimeGit)(
-          {
-            target: scope.target,
-            worktreeId: this.history.worktreeId,
-            worktreePath: scope.worktree.path,
-            connectionId: scope.connectionId ?? undefined
-          },
+          context,
           item.id,
           checkOwner
         )
@@ -136,13 +187,13 @@ export class GitGraphCommitActionsController {
     this.view.setState({ running: false })
     const description = [
       result.outcome === 'landed-with-warning'
-        ? gitGraphActionOutcome({ ...result, outcome: 'landed' })
+        ? gitGraphActionOutcome({ ...result, outcome: 'landed' }, action)
         : '',
       result.outcome === 'empty' ? '' : gitGraphActionMessage(result)
     ]
       .filter(Boolean)
       .join('\n')
-    toast.message(gitGraphActionOutcome(result), {
+    toast.message(gitGraphActionOutcome(result, action), {
       description,
       ...(outside && result.commitId
         ? {
@@ -150,7 +201,7 @@ export class GitGraphCommitActionsController {
               label: translate('gitGraph.showAllBranches', 'Show all branches'),
               onClick: () => {
                 if (this.owns(scope) && this.history.captureActionView()()) {
-                  void this.showAll(result)
+                  void this.showAll(result, action)
                 }
               }
             }
@@ -158,7 +209,10 @@ export class GitGraphCommitActionsController {
         : {})
     })
   }
-  private async showAll(outcome: GitCommitActionResult): Promise<void> {
+  private async showAll(
+    outcome: GitCommitActionResult,
+    action: GitGraphCommitAction
+  ): Promise<void> {
     const commitId = outcome.commitId
     if (!commitId) {
       return
@@ -178,7 +232,7 @@ export class GitGraphCommitActionsController {
     if (current() && result?.items.some((item) => item.id === commitId)) {
       this.history.select(commitId)
     } else if (current()) {
-      toast.message(gitGraphActionOutcome(outcome))
+      toast.message(gitGraphActionOutcome(outcome, action))
     }
   }
 }

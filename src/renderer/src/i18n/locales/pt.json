@@ -23915,6 +23915,11 @@
     "showAllBranches": "Mostrar todas as branches",
     "actionDirty": "Faça commit ou guarde suas alterações no stash e tente novamente.",
     "actionFailed": "O Git não criou um commit. Verifique a cópia de trabalho e tente novamente.",
-    "operationInProgress": "Conclua ou aborte a operação {{operation}} em andamento antes de tentar novamente."
+    "operationInProgress": "Conclua ou aborte a operação {{operation}} em andamento antes de tentar novamente.",
+    "checkoutBranch": "Mudar para a branch",
+    "createBranch": "Criar branch aqui",
+    "branchCreated": "{{branch}} criada em {{commit}}",
+    "branchName": "Nome da branch",
+    "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
   }
 }

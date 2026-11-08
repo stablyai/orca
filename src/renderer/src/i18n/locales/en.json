@@ -24295,7 +24295,12 @@
     "showAllBranches": "Show all branches",
     "actionDirty": "Commit or stash your changes, then try again.",
     "actionFailed": "Git did not create a commit. Check the checkout and try again.",
-    "operationInProgress": "Finish or abort the {{operation}} in progress before trying again."
+    "operationInProgress": "Finish or abort the {{operation}} in progress before trying again.",
+    "checkoutBranch": "Check out branch",
+    "createBranch": "Create branch here",
+    "branchCreated": "Created {{branch}} at {{commit}}",
+    "branchName": "Branch name",
+    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again."
   },
   "macosUpdateRequirement": {
     "title": "Orca updates now need macOS {{macos}}",

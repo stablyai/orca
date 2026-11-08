@@ -1,3 +1,4 @@
+import * as branchActions from '@/runtime/source-control/git/runtime-git-branch-client'
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
 // @vitest-environment happy-dom
@@ -11,7 +12,7 @@ import type { GitHistoryResult } from '../../../../../shared/git/history/git-his
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 
 const { getHistory } = vi.hoisted(() => ({ getHistory: vi.fn() }))
-vi.mock('@/runtime/runtime-git-status-client', async (original) => ({
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (original) => ({
   ...(await original<object>()),
   getRuntimeGitHistory: getHistory
 }))
@@ -117,3 +118,38 @@ it('selects the created commit through the filter reload when showing all branch
   expect(useAppStore.getState().gitGraphFiltersByWorktree?.[workspaceId]).toBe('all')
   expect(controller.view.getState().selectedId).toBe('ccccccc')
 })
+
+it.each([
+  ['refs/heads/feature', 'local', 'feature'],
+  ['refs/remotes/origin/topic', 'remote', 'origin/topic']
+] as const)(
+  'checks out %s through the shared branch switch and reports its landed warning',
+  async (id, kind, name) => {
+    const controller = gitGraphHistoryForTab(workspaceId)
+    detach = controller.attach()
+    await controller.settledResult()
+    const switching = vi.spyOn(branchActions, 'switchRuntimeGitBranch').mockResolvedValue({
+      ok: true,
+      branch: 'my-topic',
+      warning: 'Tracking configured; hook failed.'
+    })
+    const announce = vi.spyOn(toast, 'message')
+    controller.actions.requestBranch(result.items[0]!, { id, name })
+    await controller.actions.confirm()
+    expect(switching).toHaveBeenCalledWith(
+      {
+        target: { kind: 'local' },
+        worktreeId: workspaceId,
+        worktreePath: local.path,
+        connectionId: undefined
+      },
+      { kind, name },
+      undefined,
+      expect.any(Function)
+    )
+    expect(controller.view.getState().selectedId).toBe('a')
+    expect(announce.mock.calls.at(-1)?.[1]?.description).toContain(
+      'Tracking configured; hook failed.'
+    )
+  }
+)

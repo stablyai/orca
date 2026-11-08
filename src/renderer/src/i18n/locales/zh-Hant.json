@@ -23200,6 +23200,11 @@
     "showAllBranches": "顯示所有分支",
     "actionDirty": "請先提交或暫存變更，然後再試一次。",
     "actionFailed": "Git 未建立提交。請檢查工作目錄，然後再試一次。",
-    "operationInProgress": "請先完成或中止進行中的 {{operation}}，然後再試一次。"
+    "operationInProgress": "請先完成或中止進行中的 {{operation}}，然後再試一次。",
+    "checkoutBranch": "切換分支",
+    "createBranch": "在此建立分支",
+    "branchCreated": "已在 {{commit}} 建立 {{branch}}",
+    "branchName": "分支名稱",
+    "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。"
   }
 }

@@ -222,6 +222,9 @@ export function GitGraphTab({ worktreeId }: { worktreeId: string }) {
                       >
                         <div className="flex min-w-0 gap-1 overflow-hidden pr-2">
                           <GitGraphRefs
+                            controller={controller.actions}
+                            support={commitActionSupport}
+                            onCheckout={(ref) => controller.actions.requestBranch(item, ref)}
                             workspaces={workspaces}
                             references={item.references ?? []}
                             onSwitch={controller.switchToWorkspace}

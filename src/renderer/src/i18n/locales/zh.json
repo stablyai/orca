@@ -23251,6 +23251,11 @@
     "showAllBranches": "显示所有分支",
     "actionDirty": "请先提交或暂存更改，然后重试。",
     "actionFailed": "Git 未创建提交。请检查工作目录，然后重试。",
-    "operationInProgress": "请先完成或中止正在进行的 {{operation}}，然后重试。"
+    "operationInProgress": "请先完成或中止正在进行的 {{operation}}，然后重试。",
+    "checkoutBranch": "切换分支",
+    "createBranch": "在此创建分支",
+    "branchCreated": "已在 {{commit}} 创建 {{branch}}",
+    "branchName": "分支名称",
+    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
   }
 }

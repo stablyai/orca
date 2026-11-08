@@ -4,10 +4,10 @@ import { useStructuredAgentSessionHostCapabilityState } from './structured-agent
 import {
   ensureLocalRuntimeCapabilities,
   readLocalRuntimeCapabilitiesOrUnknown
-} from './local-runtime-capabilities'
-import { runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
+} from './hosts/capabilities/local-runtime-capabilities'
+import { runtimeEnvironmentSupportsCapability } from './rpc/compatibility/runtime-capability-proof'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export async function gitCommitActionsSupported(target: RuntimeClientTarget): Promise<boolean> {
   if (target.kind === 'environment') {
@@ -18,6 +18,7 @@ export async function gitCommitActionsSupported(target: RuntimeClientTarget): Pr
 }
 
 export function useGitCommitActionsSupport(target: RuntimeClientTarget | null, hostName?: string) {
+  const t = useTranslate()
   const state = useStructuredAgentSessionHostCapabilityState(target, GIT_COMMIT_ACTIONS_CAPABILITY)
   const environmentName = useAppStore((store) =>
     target?.kind === 'environment'
@@ -29,11 +30,11 @@ export function useGitCommitActionsSupport(target: RuntimeClientTarget | null, h
     supported: state === 'supported',
     reason:
       state === 'unsupported'
-        ? translate('gitGraph.updateActionsHost', 'Update Orca on {{host}} to act on commits', {
+        ? t('gitGraph.updateActionsHost', 'Update Orca on {{host}} to act on commits', {
             host:
               environmentName ??
               (hostName === 'local' ? undefined : hostName) ??
-              translate('gitGraph.thisHost', 'this host')
+              t('gitGraph.thisHost', 'this host')
           })
         : undefined
   }

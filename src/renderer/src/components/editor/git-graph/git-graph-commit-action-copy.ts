@@ -1,8 +1,23 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { GitCommitActionResult } from '../../../../../shared/git/commands/git-commit-action'
 
-export type GitGraphCommitAction = 'checkout' | 'cherry-pick' | 'revert'
+export type GitGraphCommitAction =
+  | 'checkout'
+  | 'checkout-branch'
+  | 'create-branch'
+  | 'cherry-pick'
+  | 'revert'
 export function gitGraphActionMessage(result: GitCommitActionResult): string | undefined {
+  if (
+    result.message ===
+    "Orca couldn't create the branch. Check this repository in a terminal, then try again."
+  ) {
+    return translate(
+      'gitGraph.createBranchFailed',
+      "Orca couldn't create the branch. Check this repository in a terminal, then try again."
+    )
+  }
   if (result.message === 'Commit or stash your changes, then try again.') {
     return translate('gitGraph.actionDirty', 'Commit or stash your changes, then try again.')
   }
@@ -34,19 +49,35 @@ export function gitGraphActionMessage(result: GitCommitActionResult): string | u
   }
   return result.message
 }
-export function gitGraphActionLabel(action: GitGraphCommitAction): string {
+export function gitGraphActionLabel(
+  action: GitGraphCommitAction,
+  t: Translate = translate
+): string {
   switch (action) {
+    case 'checkout-branch':
+      return t('gitGraph.checkoutBranch', 'Check out branch')
+    case 'create-branch':
+      return t('gitGraph.createBranch', 'Create branch here')
     case 'checkout':
-      return translate('gitGraph.checkoutCommit', 'Check out commit')
+      return t('gitGraph.checkoutCommit', 'Check out commit')
     case 'cherry-pick':
-      return translate('gitGraph.cherryPick', 'Cherry-pick')
+      return t('gitGraph.cherryPick', 'Cherry-pick')
     case 'revert':
-      return translate('gitGraph.revert', 'Revert')
+      return t('gitGraph.revert', 'Revert')
   }
 }
-export function gitGraphActionOutcome(result: GitCommitActionResult): string {
+export function gitGraphActionOutcome(
+  result: GitCommitActionResult,
+  action?: GitGraphCommitAction
+): string {
   switch (result.outcome) {
     case 'landed':
+      if (action === 'create-branch') {
+        return translate('gitGraph.branchCreated', 'Created {{branch}} at {{commit}}', {
+          branch: result.branch,
+          commit: result.commitId?.slice(0, 7)
+        })
+      }
       return translate('gitGraph.actionLanded', 'Now at {{commit}} on {{branch}}', {
         commit: result.commitId?.slice(0, 7),
         branch: result.branch || translate('gitGraph.detachedHead', 'detached HEAD')

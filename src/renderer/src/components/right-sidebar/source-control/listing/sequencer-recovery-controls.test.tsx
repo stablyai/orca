@@ -11,7 +11,9 @@ const { status, continued } = vi.hoisted(() => ({ status: vi.fn(), continued: vi
 vi.mock('@/runtime/runtime-git-commit-actions-client', () => ({
   sequencerContinueRuntimeGit: continued
 }))
-vi.mock('@/runtime/runtime-git-status-client', () => ({ getRuntimeGitStatus: status }))
+vi.mock('@/runtime/source-control/git/runtime-git-status-client', () => ({
+  getRuntimeGitStatus: status
+}))
 vi.mock('@/runtime/git-commit-actions-capability', () => ({
   useGitCommitActionsSupport: () => ({ supported: true }),
   gitCommitActionsSupported: async () => true

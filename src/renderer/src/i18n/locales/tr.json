@@ -23515,6 +23515,11 @@
     "showAllBranches": "Tüm dalları göster",
     "actionDirty": "Değişikliklerinizi commit edin veya stash’e alın, ardından yeniden deneyin.",
     "actionFailed": "Git bir commit oluşturmadı. Çalışma kopyasını kontrol edip yeniden deneyin.",
-    "operationInProgress": "Yeniden denemeden önce devam eden {{operation}} işlemini tamamlayın veya iptal edin."
+    "operationInProgress": "Yeniden denemeden önce devam eden {{operation}} işlemini tamamlayın veya iptal edin.",
+    "checkoutBranch": "Dalı kullan",
+    "createBranch": "Burada dal oluştur",
+    "branchCreated": "{{commit}} üzerinde {{branch}} oluşturuldu",
+    "branchName": "Dal adı",
+    "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
   }
 }

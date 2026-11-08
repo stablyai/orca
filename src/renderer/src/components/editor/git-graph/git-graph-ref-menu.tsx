@@ -1,3 +1,6 @@
+import { useStore } from 'zustand'
+import type { GitGraphCommitActionsController } from './git-graph-commit-actions-controller'
+import type { useGitCommitActionsSupport } from '@/runtime/git-commit-actions-capability'
 import { useMemo, useState } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import {
@@ -36,14 +39,21 @@ export function GitGraphRefs({
   references,
   currentRefId,
   workspaces,
-  onSwitch
+  onSwitch,
+  onCheckout,
+  controller,
+  support
 }: {
   references: GitHistoryItemRef[]
   currentRefId?: string
   workspaces: Map<string, Worktree>
   onSwitch: (refId: string) => Promise<void>
+  onCheckout: (ref: GitHistoryItemRef) => void
+  controller: GitGraphCommitActionsController
+  support: ReturnType<typeof useGitCommitActionsSupport>
 }) {
   const t = useTranslate()
+  const running = useStore(controller.view, (state) => state.running)
   const [open, setOpen] = useState(false)
   const [menuRef, setMenuRef] = useState<GitHistoryItemRef>()
   const current = references.find((ref) => ref.id === currentRefId)
@@ -131,6 +141,20 @@ export function GitGraphRefs({
           <ContextMenuItem onSelect={() => void window.api.ui.writeClipboardText(menuRef.name)}>
             {t('gitGraph.copyBranch', 'Copy branch name')}
           </ContextMenuItem>
+          {!workspaces.has(menuRef.id) &&
+            (menuRef.id.startsWith('refs/heads/') || menuRef.id.startsWith('refs/remotes/')) && (
+              <>
+                <ContextMenuItem
+                  disabled={running || !support.supported}
+                  onSelect={() => onCheckout(menuRef)}
+                >
+                  {t('gitGraph.checkoutBranch', 'Check out branch')}
+                </ContextMenuItem>
+                {support.reason && (
+                  <p className="px-2 py-1 text-xs text-muted-foreground">{support.reason}</p>
+                )}
+              </>
+            )}
           {workspaces.has(menuRef.id) && (
             <ContextMenuItem onSelect={() => void onSwitch(menuRef.id)}>
               {t('gitGraph.switchWorkspace', 'Switch to workspace')}
