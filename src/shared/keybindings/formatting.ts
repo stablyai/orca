@@ -14,6 +14,7 @@ import {
   getEffectiveKeybindingsForAction,
   getEffectiveKeybindingsForDefinition,
   getDefaultBindings,
+  isDefaultKeybinding,
   keybindingConflictGroups,
   bindingsOverlap,
   isKeybindingInterceptedBeforeBrowserChords,
@@ -227,13 +228,7 @@ export function findKeybindingConflictsForDefinitions(
           ) ||
           !Array.from(actionIds).every((otherId) => {
             const other = byId.get(otherId)
-            return (
-              otherId === id ||
-              (other &&
-                getDefaultBindings(other, platform).some((ownDefault) =>
-                  bindingsOverlap(definition, binding, other, ownDefault, platform)
-                ))
-            )
+            return otherId === id || (other && isDefaultKeybinding(other, binding, platform))
           })
         )
       })

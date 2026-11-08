@@ -32,8 +32,6 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS } from './worktree-scan-admin-budget'
-import './repo-worktree-row-resolution'
-import '../../../../shared/worktree/identity'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 
 const REPO_ID = 'repo-local'

@@ -1,6 +1,3 @@
-import './resolved-worktree-scan-join'
-import '../../../../shared/repo-host-identity'
-import '../../sidebar-inputs/workspace-git-identity'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Repo } from '../../../../shared/repo-types'

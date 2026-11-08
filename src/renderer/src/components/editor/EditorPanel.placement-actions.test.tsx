@@ -13,12 +13,12 @@ import type { EditorToggleValue } from './view-mode/EditorViewToggle'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
 vi.mock('./useEditorPanelContentState', () => ({
@@ -32,19 +32,16 @@ vi.mock('./EditorPanelShell', () => ({
   EditorPanelShell: ({
     onOpenDiffTargetFile,
     onEditorToggleChange,
-    onOpenMarkdownPreview,
-    onOpenPreviewToSide
+    onOpenMarkdownPreview
   }: {
     onOpenDiffTargetFile: () => void
     onEditorToggleChange: (mode: EditorToggleValue) => void
     onOpenMarkdownPreview: () => void
-    onOpenPreviewToSide: () => void
   }) => (
     <>
       <button onClick={onOpenDiffTargetFile}>Open</button>
       <button onClick={() => onEditorToggleChange('rich')}>Rich</button>
       <button onClick={onOpenMarkdownPreview}>Markdown preview</button>
-      <button onClick={onOpenPreviewToSide}>Side preview</button>
     </>
   )
 }))
@@ -83,71 +80,3 @@ it.each(['Open', 'Rich', 'Markdown preview'])(
     }
   }
 )
-
-it('opens an HTML side preview beside its invoking folder group', async () => {
-  const file = seedEditorPlacementConsumers({
-    filePath: '/repo/index.html',
-    relativePath: 'index.html',
-    language: 'html'
-  })
-  main = await drawEditorPlacementConsumers()
-  const screen = render(<EditorPanel activeFileId={file.id} activeViewStateId="x-source-tab" />)
-  fireEvent.click(screen.getByText('Side preview'))
-  await main.settle()
-  const state = useAppStore.getState()
-  const browser = state.browserTabsByWorktree[EDITOR_PLACEMENT]?.[0]
-  expect(browser?.url).toBe('file:///repo/index.html')
-  expect(
-    state.unifiedTabsByWorktree[EDITOR_PLACEMENT]?.find((tab) => tab.entityId === browser?.id)
-  ).toMatchObject({ groupId: 'x-other' })
-  expect(state.browserTabsByWorktree[EDITOR_OWNER] ?? []).toEqual([])
-})
-
-it('places an SSH document preview in the folder while its document location retains the child', async () => {
-  const file = seedEditorPlacementConsumers({
-    filePath: '/repo/index.html',
-    relativePath: 'index.html',
-    language: 'html'
-  })
-  useAppStore.setState((state) => ({
-    repos: state.repos.map((repo) => ({
-      ...repo,
-      connectionId: 'child-ssh',
-      executionHostId: 'ssh:child-ssh'
-    })),
-    worktreesByRepo: {
-      repo1: state.worktreesByRepo.repo1!.map((worktree) => ({
-        ...worktree,
-        hostId: 'ssh:child-ssh'
-      }))
-    },
-    sshConnectionStates: new Map([
-      [
-        'child-ssh',
-        {
-          targetId: 'child-ssh',
-          status: 'connected',
-          error: null,
-          reconnectAttempt: 0,
-          connectionGeneration: 1
-        }
-      ]
-    ])
-  }))
-  main = await drawEditorPlacementConsumers()
-  const screen = render(<EditorPanel activeFileId={file.id} activeViewStateId="x-source-tab" />)
-  fireEvent.click(screen.getByText('Side preview'))
-  await main.settle()
-  const state = useAppStore.getState()
-  const preview = state.browserTabsByWorktree[EDITOR_PLACEMENT]?.[0]
-  expect(preview?.docLocation).toEqual({
-    kind: 'workspace-doc',
-    worktreeId: EDITOR_OWNER,
-    filePath: '/repo/index.html'
-  })
-  expect(
-    state.unifiedTabsByWorktree[EDITOR_PLACEMENT]?.find((tab) => tab.entityId === preview?.id)
-      ?.groupId
-  ).toBe('x-other')
-  expect(state.browserTabsByWorktree[EDITOR_OWNER] ?? []).toEqual([])
-})

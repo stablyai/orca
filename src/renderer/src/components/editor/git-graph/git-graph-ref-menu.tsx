@@ -12,7 +12,7 @@ import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { gitGraphScope } from '@/lib/git-graph-tab'
 import { gitGraphWorkspaceCatalog } from './git-graph-workspace-navigation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHistoryItemRef } from '../../../../../shared/git/history/git-history-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { cn } from '@/lib/utils'
@@ -43,6 +43,7 @@ export function GitGraphRefs({
   workspaces: Map<string, Worktree>
   onSwitch: (refId: string) => Promise<void>
 }) {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [menuRef, setMenuRef] = useState<GitHistoryItemRef>()
   const current = references.find((ref) => ref.id === currentRefId)
@@ -83,7 +84,7 @@ export function GitGraphRefs({
             <TooltipTrigger asChild>
               <button
                 className="shrink-0"
-                aria-label={translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+                aria-label={t('gitGraph.switchWorkspace', 'Switch to workspace')}
                 onClick={(event) => {
                   event.stopPropagation()
                   void onSwitch(ref.id)
@@ -92,9 +93,7 @@ export function GitGraphRefs({
                 <ArrowUpRight className="size-3" />
               </button>
             </TooltipTrigger>
-            <TooltipContent>
-              {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
-            </TooltipContent>
+            <TooltipContent>{t('gitGraph.switchWorkspace', 'Switch to workspace')}</TooltipContent>
           </Tooltip>
         )}
       </span>
@@ -130,11 +129,11 @@ export function GitGraphRefs({
       {menuRef && (
         <ContextMenuContent>
           <ContextMenuItem onSelect={() => void window.api.ui.writeClipboardText(menuRef.name)}>
-            {translate('gitGraph.copyBranch', 'Copy branch name')}
+            {t('gitGraph.copyBranch', 'Copy branch name')}
           </ContextMenuItem>
           {workspaces.has(menuRef.id) && (
             <ContextMenuItem onSelect={() => void onSwitch(menuRef.id)}>
-              {translate('gitGraph.switchWorkspace', 'Switch to workspace')}
+              {t('gitGraph.switchWorkspace', 'Switch to workspace')}
             </ContextMenuItem>
           )}
         </ContextMenuContent>

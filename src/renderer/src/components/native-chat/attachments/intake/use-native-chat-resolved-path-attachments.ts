@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
-import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../../../shared/native-file-drop'
+import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../../../shared/file-import/native-file-drop'
 import { formatNativeChatFileReference } from '../../../../../../shared/agent-image-paste'
 import type { NativeChatComposerInput } from '../../composer/editor/native-chat-composer-input'
 import { isImageDropPath } from '../../../../../../shared/image-path-paste'

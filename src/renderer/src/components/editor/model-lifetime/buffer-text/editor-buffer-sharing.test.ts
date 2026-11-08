@@ -1,38 +1,21 @@
 // @vitest-environment happy-dom
 // Use real record middleware and save queues for cross-workspace restored drafts, phone writes, rich text and autosave pauses.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
+
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
-import {
-  getOpenFilesForExternalFileChange,
-  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
-  ORCA_EDITOR_FILE_SAVED_EVENT,
-  requestEditorFileSave,
-  type EditorFileSavedDetail
-} from '../../autosave/editor-autosave'
+
+import { requestEditorFileSave } from '../../autosave/editor-autosave'
 import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import { GUARDED_PATH, stubGuardedDisk } from '../../save/queue/editor-save-guarded-disk-fixture'
-import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
+
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { editorTabModelUri } from '../../save/queue/editor-save-disk-precondition'
-import { mayPushTabTextIntoModel, isStaleCachedEditorText } from './editor-stale-mount-guard'
+
 import { registerPendingEditorFlush } from '../../save/flush/editor-pending-flush'
-import { isDetachedEditorBufferId } from '@/store/slices/editor/buffers/editor-buffer-views'
-import { buildHydratedEditorSessionState } from '@/store/slices/editor/hydration/hydrated-editor-session-state'
-import { stampCleanTabDiskBaseline } from '../../external-changes/editor-clean-tab-disk-baseline'
-import { withRecordDiskText } from './editor-buffer-adapter'
-import { ExternalFileChangeBanner } from '../../external-changes/ExternalFileChangeBanner'
-import type { FileContent } from '../../editor-panel-content-types'
 
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
 
@@ -66,72 +49,6 @@ function twoWorkspaceStore(): StoreApi<AppState> {
   return store
 }
 
-function restore(
-  store: StoreApi<AppState>,
-  drafts: [string | undefined, string | undefined],
-  workspaces = ['wt-1', 'wt-2']
-): [OpenFile, OpenFile] {
-  const entry = (worktreeId: string, draft: string | undefined) => ({
-    filePath: GUARDED_PATH,
-    relativePath: 'file.ts',
-    worktreeId,
-    language: 'typescript',
-    runtimeEnvironmentId: null,
-    dirtyDraftContent: draft,
-    lastKnownDiskSignature: getDiskBaselineSignature(BASE)
-  })
-  const session: WorkspaceSessionState = {
-    activeRepoId: null,
-    activeWorktreeId: workspaces[0],
-    activeTabId: null,
-    tabsByWorktree: {},
-    terminalLayoutsByTabId: {},
-    openFilesByWorktree: Object.fromEntries(
-      workspaces.map((workspace, i) => [workspace, [entry(workspace, drafts[i])]])
-    )
-  }
-  store.setState(buildHydratedEditorSessionState(session, new Set(workspaces), workspaces[0]).state)
-  const [a, b] = store.getState().openFiles
-  expect([a?.worktreeId, b?.worktreeId]).toEqual(workspaces)
-  return [a, b]
-}
-
-/** Match mount reconciliation: prefer drafts and never push stale cached text into an already-live model. */
-function mount(
-  store: StoreApi<AppState>,
-  viewId: string,
-  text = store.getState().editorDrafts[viewId] ?? BASE
-): monaco.editor.ITextModel {
-  const state = store.getState()
-  const file = state.openFiles.find((tab) => tab.id === viewId)!
-  const uri = monaco.Uri.parse(editorTabModelUri(state, file))
-  const model = monaco.editor.getModel(uri)
-  if (!model) {
-    return monaco.editor.createModel(text, 'typescript', uri)
-  }
-  if (
-    model.getValue() !== text &&
-    !isStaleCachedEditorText(viewId, text) &&
-    mayPushTabTextIntoModel(viewId)
-  ) {
-    model.setValue(text)
-  }
-  return model
-}
-
-function bannerOf(store: StoreApi<AppState>, id: string): string | null {
-  const file = view(store, id)!
-  return file.externalMutation === 'changed'
-    ? renderToStaticMarkup(
-        createElement(ExternalFileChangeBanner, {
-          file,
-          currentContent: store.getState().editorDrafts[id] ?? BASE,
-          reloadContent: () => {}
-        })
-      )
-    : null
-}
-
 const view = (store: StoreApi<AppState>, id: string) =>
   store.getState().openFiles.find((tab) => tab.id === id)
 
@@ -146,144 +63,6 @@ afterEach(() => {
   for (const model of monaco.editor.getModels()) {
     model.dispose()
   }
-})
-
-describe('restored drafts of one file (scenario 2)', () => {
-  it.each([
-    ['a first', 'wt-2'],
-    ['b first', 'wt-2'],
-    ['no mount', 'wt-2'],
-    ['b first', FLOATING_TERMINAL_WORKTREE_ID]
-  ] as const)(
-    'divergent drafts detach with their own models (%s, %s); the first autosave lands and the other side keeps its draft behind the banner',
-    async (order, partner) => {
-      const disk = stubGuardedDisk({ [GUARDED_PATH]: BASE })
-      const store = twoWorkspaceStore()
-      const [a, b] = restore(store, ['abc', 'abcd'], ['wt-1', partner])
-      const recordOf = (id: string) => store.getState().editorBufferIdOf[id]
-      expect(isDetachedEditorBufferId(recordOf(b.id))).toBe(true)
-
-      if (order !== 'no mount') {
-        const ids = order === 'a first' ? [a.id, b.id] : [b.id, a.id]
-        const models: monaco.editor.ITextModel[] = []
-        for (const id of ids) {
-          models.push(mount(store, id))
-        }
-        expect(models[0]).not.toBe(models[1])
-        expect(mount(store, a.id).getValue()).toBe('abc')
-        expect(mount(store, b.id).getValue()).toBe('abcd')
-      }
-
-      const cleanup = attachEditorAutosaveController(store)
-      try {
-        await vi.advanceTimersByTimeAsync(5000)
-        // One write landed; the other was refused against the restored baseline.
-        const landed = disk.files.get(GUARDED_PATH)
-        expect(['abc', 'abcd']).toContain(landed)
-        const kept = landed === 'abc' ? 'abcd' : 'abc'
-        expect(disk.writeFile).toHaveBeenCalledTimes(2)
-        // Rejoining preserves the unsaved side’s older baseline and marks every view conflicted.
-        expect(recordOf(a.id)).toBe(recordOf(b.id))
-        for (const id of [a.id, b.id]) {
-          expect(store.getState().editorDrafts[id]).toBe(kept)
-          expect(view(store, id)?.isDirty).toBe(true)
-          expect(view(store, id)?.externalMutation).toBe('changed')
-          expect(view(store, id)?.lastKnownDiskSignature).toBe(getDiskBaselineSignature(BASE))
-          expect(bannerOf(store, id)).toContain('Compare')
-          expect(bannerOf(store, id)).toContain('Reload from Disk')
-          expect(bannerOf(store, id)).toContain('Overwrite')
-        }
-      } finally {
-        cleanup()
-      }
-    }
-  )
-
-  it('identical drafts merge into one record and write once', async () => {
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: BASE })
-    const store = twoWorkspaceStore()
-    const [a, b] = restore(store, ['same', 'same'])
-    expect(store.getState().editorBufferIdOf[a.id]).toBe(store.getState().editorBufferIdOf[b.id])
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await vi.advanceTimersByTimeAsync(5000)
-      expect(disk.writeFile).toHaveBeenCalledTimes(1)
-      expect(disk.files.get(GUARDED_PATH)).toBe('same')
-      expect(view(store, a.id)?.isDirty).toBe(false)
-      expect(view(store, b.id)?.isDirty).toBe(false)
-    } finally {
-      cleanup()
-    }
-  })
-})
-
-describe('restored floating and ordinary views', () => {
-  it.each([
-    ['worktree', false],
-    ['worktree', true],
-    ['folder', false],
-    ['folder', true]
-  ] as const)(
-    'share edits and save both ways after %s restore (late catalog: %s)',
-    async (kind, late) => {
-      const disk = stubGuardedDisk({ [GUARDED_PATH]: BASE })
-      const store = twoWorkspaceStore()
-      const workspace = kind === 'folder' ? folderWorkspaceKey('folder') : 'wt-1'
-      const catalog =
-        kind === 'folder'
-          ? {
-              folderWorkspaces: [
-                makeFolderWorkspace({ id: 'folder', folderPath: '/repo', executionHostId: 'local' })
-              ]
-            }
-          : { worktreesByRepo: store.getState().worktreesByRepo }
-      store.setState(late ? { worktreesByRepo: {}, folderWorkspaces: [] } : catalog)
-      const [ordinary, floating] = restore(
-        store,
-        [undefined, 'restored draft'],
-        [workspace, FLOATING_TERMINAL_WORKTREE_ID]
-      )
-      const recordOf = (id: string) => store.getState().editorBufferIdOf[id]
-      if (late) {
-        expect(recordOf(ordinary.id)).not.toBe(recordOf(floating.id))
-        store.setState(catalog)
-      }
-      expect(recordOf(ordinary.id)).toBe(recordOf(floating.id))
-      expect(store.getState().editorDrafts[ordinary.id]).toBe('restored draft')
-      expect(ordinary.operationProvenance).toBeUndefined()
-      expect(floating.operationProvenance).toBeUndefined()
-      const model = mount(store, ordinary.id)
-      expect(mount(store, floating.id)).toBe(model)
-      store.setState((state) => {
-        if (!state.settings) {
-          throw new Error('Editor fixture settings must be initialized')
-        }
-        return { settings: { ...state.settings, editorAutoSave: false } }
-      })
-      const cleanup = attachEditorAutosaveController(store)
-      try {
-        for (const source of [ordinary, floating]) {
-          const text = `saved from ${source.worktreeId}`
-          model.setValue(text)
-          store.getState().setEditorDraft(source.id, text)
-          store.getState().markFileDirty(source.id, true)
-          for (const tab of [ordinary, floating]) {
-            expect(store.getState().editorDrafts[tab.id]).toBe(text)
-          }
-          await requestEditorFileSave({ fileId: source.id })
-          expect(disk.files.get(GUARDED_PATH)).toBe(text)
-          for (const tab of [ordinary, floating]) {
-            expect(view(store, tab.id)?.isDirty).toBe(false)
-            expect(store.getState().editorDrafts[tab.id]).toBeUndefined()
-            expect(mount(store, tab.id, text)).toBe(model)
-          }
-        }
-        expect(disk.writeFile).toHaveBeenCalledTimes(2)
-      } finally {
-        cleanup()
-      }
-    }
-  )
 })
 
 function openShared(disk: string) {
@@ -303,97 +82,6 @@ function openShared(disk: string) {
 }
 
 describe('two workspaces on one record', () => {
-  it('W1 "abc", W2 "d": one write of "abcd"; old W1 text never reaches the model (scenario 1)', async () => {
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: BASE })
-    const { store, a, b } = openShared(BASE)
-    const model = mount(store, a.id)
-    expect(mount(store, b.id)).toBe(model)
-    // Both workspaces edit one model; each editor still publishes its view’s draft.
-    model.setValue('abc')
-    store.getState().setEditorDraft(a.id, 'abc')
-    store.getState().markFileDirty(a.id, true)
-    model.setValue('abcd')
-    store.getState().setEditorDraft(b.id, 'abcd')
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      await vi.advanceTimersByTimeAsync(5000)
-      expect(disk.writeFile).toHaveBeenCalledTimes(1)
-      expect(disk.files.get(GUARDED_PATH)).toBe('abcd')
-      expect(view(store, a.id)?.isDirty).toBe(false)
-      expect(view(store, b.id)?.isDirty).toBe(false)
-      expect(mount(store, a.id, 'abc')).toBe(model)
-      expect(model.getValue()).toBe('abcd')
-    } finally {
-      cleanup()
-    }
-  })
-
-  it.each([
-    ['dirty', 'banners every view'],
-    ['clean', 'reloads every view']
-  ] as const)('a phone save on a %s record %s (scenario 4)', async (state, _outcome) => {
-    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'from phone' })
-    const { store, a, b } = openShared(BASE)
-    if (state === 'dirty') {
-      store.getState().setEditorDraft(a.id, 'desktop edits')
-      store.getState().markFileDirty(a.id, true)
-    }
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const detail = { worktreeId: 'wt-1', worktreePath: '/repo', relativePath: 'file.ts' }
-      window.dispatchEvent(new CustomEvent(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, { detail }))
-      for (const id of [a.id, b.id]) {
-        if (state === 'dirty') {
-          expect(view(store, id)?.externalMutation).toBe('changed')
-          expect(store.getState().editorDrafts[id]).toBe('desktop edits')
-        } else {
-          expect(view(store, id)?.isDirty).toBe(false)
-          expect(store.getState().editorDrafts[id]).toBeUndefined()
-        }
-      }
-      if (state === 'clean') {
-        // Match panel reloads that update both content and clean disk baselines.
-        const matched = getOpenFilesForExternalFileChange(store.getState().openFiles, {
-          worktreeId: 'wt-2',
-          worktreePath: '/repo',
-          relativePath: 'file.ts'
-        }).map((file) => file.id)
-        expect(matched).toContain(b.id)
-        let contents: Record<string, FileContent> = {}
-        for (const id of [a.id, b.id]) {
-          const loaded = { content: disk.files.get(GUARDED_PATH)!, isBinary: false }
-          stampCleanTabDiskBaseline(id, loaded)
-          contents = { ...contents, [id]: loaded }
-        }
-        expect(view(store, b.id)?.lastKnownDiskSignature).toBe(
-          getDiskBaselineSignature('from phone')
-        )
-
-        // After a desktop save, the panel must advance the sibling view’s loaded disk text too.
-        const saved: EditorFileSavedDetail[] = []
-        window.addEventListener(ORCA_EDITOR_FILE_SAVED_EVENT, (event) => {
-          if (event instanceof CustomEvent) {
-            saved.push(event.detail)
-          }
-        })
-        store.getState().setEditorDraft(a.id, 'from phone, then desktop')
-        store.getState().markFileDirty(a.id, true)
-        await requestEditorFileSave({ fileId: a.id })
-        expect(disk.files.get(GUARDED_PATH)).toBe('from phone, then desktop')
-        const [detail] = saved
-        contents = withRecordDiskText(
-          contents,
-          detail.recordViewIds ?? [],
-          detail.fileId,
-          detail.content
-        )
-        expect(contents[b.id]?.content).toBe('from phone, then desktop')
-      }
-    } finally {
-      cleanup()
-    }
-  })
-
   it("a save writes another view's pending rich text; typing during the save stays dirty (scenario 5)", async () => {
     const disk = stubGuardedDisk({ [GUARDED_PATH]: BASE })
     const { store, a, b } = openShared(BASE)

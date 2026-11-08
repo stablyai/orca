@@ -7,20 +7,27 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
-import type { BrowserPageGrabToastState } from '../describe-page/browser-page-types'
+import { useTranslate } from '@/i18n/use-translate'
+import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
+import type {
+  BrowserPageGrabAnnotations,
+  BrowserPageGrabToastState
+} from '../describe-page/browser-page-types'
 
 export function BrowserPageGrabToast({
   grabToast,
   grabToastTimerRef,
   dismissGrabToast,
+  copyGrabScreenshot,
   setGrabToast
 }: {
   grabToast: BrowserPageGrabToastState
   grabToastTimerRef: MutableRefObject<ReturnType<typeof setTimeout> | undefined>
   dismissGrabToast: () => void
+  copyGrabScreenshot: BrowserPageGrabAnnotations['copyGrabScreenshot']
   setGrabToast: Dispatch<SetStateAction<BrowserPageGrabToastState | null>>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="absolute z-30 flex items-center animate-in fade-in zoom-in-95 duration-150"
@@ -74,26 +81,27 @@ export function BrowserPageGrabToast({
                 onSelect={() => {
                   const dataUrl = grabToast.payload?.screenshot?.dataUrl
                   if (dataUrl?.startsWith('data:image/png;base64,')) {
-                    void window.api.ui.writeClipboardImage(dataUrl)
-                    setGrabToast((prev) =>
-                      prev
-                        ? {
-                            ...prev,
-                            message: translate(
-                              'auto.components.browser.pane.BrowserPane.f30d2d35a7',
-                              'Screenshotted'
-                            )
-                          }
-                        : null
+                    copyGrabScreenshot(dataUrl, (copied) =>
+                      setGrabToast((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              type: copied ? 'success' : 'error',
+                              message: copied
+                                ? t(
+                                    'auto.components.browser.pane.BrowserPane.f30d2d35a7',
+                                    'Screenshotted'
+                                  )
+                                : imageCopyFailedMessage()
+                            }
+                          : null
+                      )
                     )
                   }
                 }}
               >
                 <Image className="size-3.5" />
-                {translate(
-                  'auto.components.browser.pane.BrowserPane.1ded0d3168',
-                  'Copy Screenshot'
-                )}
+                {t('auto.components.browser.pane.BrowserPane.1ded0d3168', 'Copy Screenshot')}
                 <DropdownMenuShortcut>S</DropdownMenuShortcut>
               </DropdownMenuItem>
             </DropdownMenuContent>

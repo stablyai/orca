@@ -12,7 +12,7 @@ import { LinearIntegrationCard } from '../../integrations/task-trackers/linear-i
 import { IntegrationCardPresentationProvider } from '../../integrations/presentation/integration-card-presentation'
 import { useIntegrationProviderStatusRefresh } from '../../../hooks/use-integration-provider-status-refresh'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Flat presentation turns each provider into one row: -mx-4 cancels its inset, and inner rules are dropped so only rows divide.
 function ProviderRow({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -24,17 +24,15 @@ function ProviderRow({ children }: { children: React.ReactNode }): React.JSX.Ele
 }
 
 export function IntegrationsPane(): React.JSX.Element {
+  const t = useTranslate()
   useIntegrationProviderStatusRefresh()
 
   return (
     <IntegrationCardPresentationProvider value="setup-guide">
       <div className="space-y-8">
         <SettingsGroup
-          title={translate(
-            'auto.components.settings.IntegrationsPane.298c65ecac',
-            'Review providers'
-          )}
-          description={translate(
+          title={t('auto.components.settings.IntegrationsPane.298c65ecac', 'Review providers')}
+          description={t(
             'auto.components.settings.IntegrationsPane.1683acbac4',
             'Connect the source hosts Orca can use for pull requests, merge requests, checks, and review status.'
           )}
@@ -57,11 +55,8 @@ export function IntegrationsPane(): React.JSX.Element {
         </SettingsGroup>
 
         <SettingsGroup
-          title={translate(
-            'auto.components.settings.IntegrationsPane.70e885705b',
-            'Task providers'
-          )}
-          description={translate(
+          title={t('auto.components.settings.IntegrationsPane.70e885705b', 'Task providers')}
+          description={t(
             'auto.components.settings.IntegrationsPane.3ba07f933b',
             'Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.'
           )}

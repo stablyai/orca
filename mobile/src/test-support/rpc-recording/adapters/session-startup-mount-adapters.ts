@@ -43,7 +43,8 @@ export function sessionStartupMountAdapters(
         terminalPaneViewportsRef: { current: new Map() },
         clearPendingLiveInputCommit: () => effect('clear-pending-live-input-commit', {}),
         clearDelayedActionTimers: () => effect('clear-delayed-action-timers', {}),
-        clearTerminalCache: () => effect('clear-terminal-cache', {})
+        clearTerminalCache: () => effect('clear-terminal-cache', {}),
+        terminalResume: { holdsAny: () => false, anyCatchingUp: () => false }
       }
 
       const hook = hookMount(() => {
@@ -63,6 +64,8 @@ export function sessionStartupMountAdapters(
               sessionTabs = typeof update === 'function' ? update(sessionTabs) : update
             },
             readLastSessionTabs: lastTabs.readLastSessionTabs,
+            watchLastSessionTabs: lastTabs.watchLastSessionTabs,
+            sessionTabsRef: { current: sessionTabs },
             appliedSnapshotMarkerRef,
             closedTabTombstonesRef,
             setTerminalsLoaded: (value: boolean) => {

@@ -7,7 +7,7 @@ import {
   structuredAgentSessionLaunchHasRetainedInput
 } from './agent-session/launch/structured-agent-session-launch-registry'
 import { sendStructuredAgentSessionMessage } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
-import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionTargetForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store'
 
 export type { AgentMessageTarget } from './agent-message-target'

@@ -23,7 +23,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import type { LocalFileAccess } from '../../../../../../shared/local-file-access'
+import type { LocalFileAccess } from '../../../../../../shared/file-access/local-file-access'
 
 export type RichMarkdownImageInsertArgs = {
   editor: Editor

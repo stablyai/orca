@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
-import type * as BoundedReader from '../../node-bounded-file-reader'
-import { __resetSecureFileHardenedPathsForTests } from '../../secure-file'
+import type * as BoundedReader from '../../file-content/node-bounded-file-reader'
+import { __resetSecureFileHardenedPathsForTests } from '../../secure-storage/secure-file'
 import { addEnvironmentFromPairingCode, listEnvironments } from './runtime-environment-store'
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
 
@@ -26,7 +26,7 @@ vi.mock('node:fs', async (importOriginal) => {
     }
   }
 })
-vi.mock('../../node-bounded-file-reader', async (importOriginal) => {
+vi.mock('../../file-content/node-bounded-file-reader', async (importOriginal) => {
   const actual = await importOriginal<typeof BoundedReader>()
   return {
     ...actual,

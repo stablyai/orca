@@ -1,6 +1,6 @@
 import { useState, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { PluginHostListEntry } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { pluginNeedsReview } from '../presentation/plugin-status-presentation'
 
 type PluginMarketplaceLifecycleOptions = {
@@ -31,6 +31,7 @@ export function usePluginMarketplaceLifecycle({
   cancelRollback: () => void
   confirmRollback: (pluginKey: string) => Promise<void>
 } {
+  const t = useTranslate()
   const [rollbackPluginId, setRollbackPluginId] = useState<string | null>(null)
   const [rollbackError, setRollbackError] = useState<string | null>(null)
   const rollbackPlugin = plugins.find((plugin) => plugin.pluginKey === rollbackPluginId) ?? null
@@ -79,7 +80,7 @@ export function usePluginMarketplaceLifecycle({
       console.warn('[plugins] marketplace rollback failed:', cause)
       if (mountedRef.current) {
         setRollbackError(
-          translate(
+          t(
             'auto.components.settings.PluginsSettingsSection.rollbackFailed',
             "Couldn't roll back this plugin."
           )

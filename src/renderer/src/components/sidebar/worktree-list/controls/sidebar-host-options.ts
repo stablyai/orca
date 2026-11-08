@@ -174,13 +174,14 @@ export function shouldShowHostScopeControls(hosts: readonly SidebarHostOption[])
 }
 
 export function buildSidebarHostScopeOptions(
-  allHosts: readonly SidebarHostOption[]
+  allHosts: readonly SidebarHostOption[],
+  t: Translate = translate
 ): SidebarHostScopeOption[] {
   const hosts = pickerExecutionHosts(allHosts)
   return [
     {
       id: ALL_EXECUTION_HOSTS_SCOPE,
-      label: translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts'),
+      label: t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts'),
       detail: hosts.map((host) => host.label).join(', '),
       health: 'mixed'
     },
@@ -195,20 +196,21 @@ export function buildSidebarHostScopeOptions(
 
 export function getSidebarHostVisibilityLabel(
   visibleHostIds: readonly ExecutionHostId[] | null | undefined,
-  hosts: readonly SidebarHostOption[]
+  hosts: readonly SidebarHostOption[],
+  t: Translate = translate
 ): string {
   const rows = pickerExecutionHosts(hosts)
   const checkedRows = visibleHostIds ? getCheckedHostRows(rows, visibleHostIds) : rows
   if (checkedRows.length === rows.length) {
-    return translate('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
+    return t('auto.components.sidebar.sidebarHostOptions.3e102f111c', 'All hosts')
   }
   if (checkedRows.length === 1) {
     return checkedRows[0].label
   }
   if (checkedRows.length === 0) {
-    return translate('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
+    return t('auto.components.sidebar.sidebarHostOptions.hosts', 'Hosts')
   }
-  return translate('auto.components.sidebar.sidebarHostOptions.visibleHosts', '{{count}} hosts', {
+  return t('auto.components.sidebar.sidebarHostOptions.visibleHosts', '{{count}} hosts', {
     count: checkedRows.length,
     defaultValue_one: '{{count}} host'
   })
@@ -216,11 +218,12 @@ export function getSidebarHostVisibilityLabel(
 
 export function getSidebarHostHealthLabel(
   health: SidebarHostScopeOption['health'],
-  blockedReason?: RuntimeHostBlockedReason
+  blockedReason?: RuntimeHostBlockedReason,
+  t: Translate = translate
 ): string {
   return health === 'mixed'
-    ? translate('runtime.health.mixed', 'Mixed')
-    : getExecutionHostHealthLabel(health, blockedReason)
+    ? t('runtime.health.mixed', 'Mixed')
+    : getExecutionHostHealthLabel(health, blockedReason, t)
 }
 
 // Diagnostics do not change host choices; retain every other exposed registry field.

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { useNavigation, useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import {
   coordinateHostStackNavigation,
   type HostStackRootNavigation,
@@ -14,7 +14,17 @@ let pendingNavigation: PendingHostStackNavigation | null = null
 export function useOpenHostStackRoute(
   openInHostDocument = false
 ): (hostId: string, target: HostStackRouteTarget) => void {
-  const navigation = useNavigation<HostStackRootNavigation>()
+  const screenNavigation = useNavigation<HostStackRootNavigation>()
+  const container = useNavigationContainerRef()
+  // Read the whole tree: a navigator's own state omits a freshly mounted host stack until that stack next changes.
+  const navigation = useMemo<HostStackRootNavigation>(
+    () => ({
+      addListener: (event, listener) => screenNavigation.addListener(event, listener),
+      dispatch: (action) => screenNavigation.dispatch(action),
+      getState: () => (container.isReady() ? container.getRootState() : undefined)
+    }),
+    [container, screenNavigation]
+  )
   const router = useRouter()
   // Unmount may cancel only its own transition, never another screen’s notification push.
   const armedRef = useRef<PendingHostStackNavigation | null>(null)

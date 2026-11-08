@@ -191,6 +191,9 @@ describe('OrcaRuntimeService', () => {
       123
     )
     const [terminal] = (await runtime.listTerminals()).terminals
+    // Where a phone viewing this terminal stands before the clear.
+    const { ring } = runtime.retainPublishedTerminalOutput('pty-1')
+    const phonePosition = ring.pointAt(runtime.getPtyOutputSequence('pty-1'))
 
     await expect(runtime.clearTerminalBuffer(terminal.handle)).resolves.toEqual({
       handle: terminal.handle,
@@ -200,6 +203,8 @@ describe('OrcaRuntimeService', () => {
     expect(clearBuffer).toHaveBeenCalledWith('pty-1')
     const snapshot = await runtime.serializeTerminalBuffer('pty-1', { scrollbackRows: 1000 })
     expect(snapshot?.data).not.toContain('line-0')
+    // The phone can't resume onto the cleared scrollback; it gets the snapshot above.
+    expect(ring.covers(phonePosition)).toBe(false)
   })
 
   it('resets input modes through the PTY controller and the headless model', async () => {

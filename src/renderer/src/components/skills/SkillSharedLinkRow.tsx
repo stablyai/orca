@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import type { SkillCloudOwnedShare } from '../../../../shared/skill-cloud-contract'
 import { skillCountLabel } from './skill-display-labels'
 import { isSkillBundleVersion } from './skill-share-version-summary'
@@ -22,11 +23,11 @@ const CREATED_OPTIONS: Intl.DateTimeFormatOptions = {
   day: 'numeric'
 }
 
-function createdLabel(createdAt: string): string {
+function createdLabel(createdAt: string, t: Translate = translate, intlLocale?: string): string {
   const parsed = new Date(createdAt)
   return Number.isNaN(parsed.getTime())
-    ? translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
-    : uiDateTimeFormat(CREATED_OPTIONS).format(parsed)
+    ? t('auto.components.skills.SkillRow.updatedUnknown', 'No date')
+    : uiDateTimeFormat(CREATED_OPTIONS, intlLocale).format(parsed)
 }
 
 /** Fetch package membership only on expansion because the shares endpoint omits it; avoid one request per collapsed link. */
@@ -75,6 +76,8 @@ export function SkillSharedLinkRow({
   onRevoke: () => void
   onDeleted: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const [confirming, setConfirming] = useState<'revoke' | 'delete' | null>(null)
   const [deleting, setDeleting] = useState(false)
   const { names, failed, load } = useShareContents(share)
@@ -85,7 +88,7 @@ export function SkillSharedLinkRow({
       const operation = await window.api.skills.deletePackage(share.packageId)
       if (operation.status !== 'ok') {
         toast.error(
-          translate(
+          t(
             'auto.components.skills.SkillSharedLinkRow.deleteFailed',
             'Orca could not delete this from the Cloud.'
           )
@@ -93,7 +96,7 @@ export function SkillSharedLinkRow({
         return
       }
       toast.success(
-        translate('auto.components.skills.SkillSharedLinkRow.deleted', 'Deleted from the Cloud')
+        t('auto.components.skills.SkillSharedLinkRow.deleted', 'Deleted from the Cloud')
       )
       onDeleted()
     } finally {
@@ -103,7 +106,7 @@ export function SkillSharedLinkRow({
 
   const copy = async (): Promise<void> => {
     await window.api.ui.writeClipboardText(share.url)
-    toast.success(translate('auto.components.settings.shareSkills.linkCopied', 'Share link copied'))
+    toast.success(t('auto.components.settings.shareSkills.linkCopied', 'Share link copied'))
   }
 
   return (
@@ -118,7 +121,7 @@ export function SkillSharedLinkRow({
               </span>
             </span>
             <span className="shrink-0 text-[11px] text-muted-foreground">
-              {createdLabel(share.createdAt)}
+              {createdLabel(share.createdAt, t, intlLocale)}
             </span>
             <ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-data-[state=open]/link:rotate-90" />
           </CollapsibleTrigger>
@@ -130,13 +133,13 @@ export function SkillSharedLinkRow({
                 variant="ghost"
                 className="shrink-0"
                 onClick={() => void copy()}
-                aria-label={translate('auto.components.settings.shareSkills.copyLink', 'Copy link')}
+                aria-label={t('auto.components.settings.shareSkills.copyLink', 'Copy link')}
               >
                 <Clipboard />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate('auto.components.settings.shareSkills.copyLink', 'Copy link')}
+              {t('auto.components.settings.shareSkills.copyLink', 'Copy link')}
             </TooltipContent>
           </Tooltip>
           {confirming ? (
@@ -152,14 +155,8 @@ export function SkillSharedLinkRow({
             >
               {busy || deleting ? <Loader2 className="animate-spin" /> : null}
               {confirming === 'revoke'
-                ? translate(
-                    'auto.components.settings.shareSkills.confirmUnshare',
-                    'Confirm unshare'
-                  )
-                : translate(
-                    'auto.components.skills.SkillSharedLinkRow.confirmDelete',
-                    'Confirm delete'
-                  )}
+                ? t('auto.components.settings.shareSkills.confirmUnshare', 'Confirm unshare')
+                : t('auto.components.skills.SkillSharedLinkRow.confirmDelete', 'Confirm delete')}
             </Button>
           ) : (
             <>
@@ -172,16 +169,13 @@ export function SkillSharedLinkRow({
                     className="shrink-0 text-muted-foreground hover:text-destructive"
                     disabled={busy}
                     onClick={() => setConfirming('revoke')}
-                    aria-label={translate(
-                      'auto.components.settings.shareSkills.unshare',
-                      'Unshare'
-                    )}
+                    aria-label={t('auto.components.settings.shareSkills.unshare', 'Unshare')}
                   >
                     <Link2Off />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {translate('auto.components.settings.shareSkills.unshare', 'Unshare')}
+                  {t('auto.components.settings.shareSkills.unshare', 'Unshare')}
                 </TooltipContent>
               </Tooltip>
               <DropdownMenu>
@@ -192,7 +186,7 @@ export function SkillSharedLinkRow({
                     variant="ghost"
                     className="shrink-0"
                     disabled={busy}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.skills.SkillSharedLinkRow.moreActions',
                       'More actions for {{name}}',
                       { name: share.name }
@@ -205,7 +199,7 @@ export function SkillSharedLinkRow({
                   {/* Deleting the published package is more destructive than unsharing, so keep it in the nested menu. */}
                   <DropdownMenuItem variant="destructive" onSelect={() => setConfirming('delete')}>
                     <Trash2 />
-                    {translate(
+                    {t(
                       'auto.components.skills.SkillSharedLinkRow.deletePackage',
                       'Delete from the Cloud'
                     )}
@@ -218,7 +212,7 @@ export function SkillSharedLinkRow({
         <CollapsibleContent className="collapsible-height-content px-3 pb-3">
           {failed ? (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.skills.SkillSharedLinkRow.contentsUnavailable',
                 'Could not load what this link contains.'
               )}
@@ -226,7 +220,7 @@ export function SkillSharedLinkRow({
           ) : names ? (
             <div className="rounded-md border border-border p-2">
               <p className="pb-1 text-[11px] text-muted-foreground">
-                {skillCountLabel(names.length)}
+                {skillCountLabel(names.length, t)}
               </p>
               <ul className="scrollbar-sleek max-h-48 space-y-0.5 overflow-y-auto">
                 {names.map((name) => (
@@ -239,7 +233,7 @@ export function SkillSharedLinkRow({
           ) : (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-3 animate-spin" />
-              {translate('auto.components.skills.SkillSharedLinkRow.loading', 'Loading contents…')}
+              {t('auto.components.skills.SkillSharedLinkRow.loading', 'Loading contents…')}
             </p>
           )}
         </CollapsibleContent>

@@ -112,7 +112,7 @@ export function BrowserPane({
 
   const selectedSearchEngine = browserDefaultSearchEngine ?? 'google'
 
-  const browserSearchEntries = getBrowserPaneSearchEntries()
+  const browserSearchEntries = getBrowserPaneSearchEntries(undefined, t)
   const showHomePage = matchesSettingsSearch(searchQuery, [browserSearchEntries[0]])
   const showSearchEngine = matchesSettingsSearch(searchQuery, [browserSearchEntries[1]])
   const showDefaultZoom = matchesSettingsSearch(searchQuery, [browserSearchEntries[2]])

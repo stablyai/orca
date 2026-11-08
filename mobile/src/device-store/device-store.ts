@@ -60,7 +60,10 @@ export type DeviceStore = {
     table: DeviceStoreTable,
     ops: readonly DeviceStoreWriteOp[]
   ): Promise<DeviceStoreWriteResult>
-  wipeHost(hostId: string): Promise<void>
+  // Every table by default; a revoked host loses only its cached screens and keeps drafts until removal.
+  wipeHost(hostId: string, tables?: readonly DeviceStoreTable[]): Promise<void>
+  // While a host is revoked its cache refuses writes, so a page's pending flush can't bring a wipe back.
+  fenceHostCache(hostId: string, fenced: boolean): void
   // Loads the key unless it is already loaded; an unavailable store retries here.
   open(): Promise<'ready' | 'unavailable'>
   // The launch pass over both roots. Later runs redo only a pass that missed files.
@@ -166,6 +169,7 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
   }
 
   let maintenance: Promise<void> | null = null
+  const fencedCacheHosts = new Set<string>()
 
   // The first key load heads the queue, so every call runs behind it in call order. An unavailable store
   // stays unavailable until open() runs again (the next foreground), not per call.
@@ -216,7 +220,8 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
       }
       const result = await enqueue(async (): Promise<DeviceStoreWriteResult> => {
         const cryptoKey = key
-        if (!cryptoKey) {
+        // Checked in turn, so a write queued before a revocation's wipe lands before it and is wiped.
+        if (!cryptoKey || (table === 'cache' && fencedCacheHosts.has(hostId))) {
           return UNAVAILABLE
         }
         const index = indexes[table]
@@ -260,9 +265,12 @@ export function createDeviceStore(options: DeviceStoreOptions): DeviceStore {
       }
       return result
     },
-    wipeHost(hostId) {
+    fenceHostCache(hostId, fenced) {
+      void (fenced ? fencedCacheHosts.add(hostId) : fencedCacheHosts.delete(hostId))
+    },
+    wipeHost(hostId, tables = DEVICE_STORE_TABLES) {
       return enqueue(async () => {
-        for (const table of DEVICE_STORE_TABLES) {
+        for (const table of tables) {
           const hostUri = hostDirectoryUri(roots, table, hostId)
           await fs.delete(hostUri)
           forgetIndexedDirectory(indexes[table], hostUri)

@@ -1,10 +1,13 @@
 // Send opens under proposed tab IDs used by emulator attach; surface only after main’s frame draws the tab.
 
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
-import { openContentTabThroughLayoutOwner } from '@/runtime/layout-owner-content-tab-open'
-import { afterPendingTab, isPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
+import {
+  afterPendingTab,
+  isPendingTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { AppState } from '@/store/types'
-import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspaces'
+import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
 import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
 import { noteDesktopCreatedServerTab } from './desktop-created-server-tabs'
 

@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   BuiltInWorktreeVisibilitySourceId,
   CustomWorktreeVisibilitySource,
@@ -63,30 +64,30 @@ const EMPTY_VISIBILITY_DEFAULTS: WorktreeVisibilityDefaults = {}
 const EMPTY_WORKTREES: readonly DetectedWorktree[] = []
 const VISIBILITY_SEGMENTS: readonly ExternalWorktreeVisibility[] = ['show', 'hide']
 
-export function getWorktreeVisibilitySourceLabel(source: WorktreeVisibilitySourceRow): string {
+export function getWorktreeVisibilitySourceLabel(
+  source: WorktreeVisibilitySourceRow,
+  t: Translate = translate
+): string {
   if (source.kind === 'built-in') {
     return source.id === 'claude'
-      ? translate('auto.components.sidebar.WorktreeVisibilitySourceList.claude', 'Claude Code')
-      : translate('auto.components.sidebar.WorktreeVisibilitySourceList.gsd', 'GSD')
+      ? t('auto.components.sidebar.WorktreeVisibilitySourceList.claude', 'Claude Code')
+      : t('auto.components.sidebar.WorktreeVisibilitySourceList.gsd', 'GSD')
   }
   if (source.kind === 'other') {
-    return translate(
-      'auto.components.sidebar.WorktreeVisibilitySourceList.other',
-      'Other locations'
-    )
+    return t('auto.components.sidebar.WorktreeVisibilitySourceList.other', 'Other locations')
   }
   return (
     getRuntimePathBasename(source.source.rootPath) ||
-    translate('auto.components.sidebar.WorktreeVisibilitySourceList.custom', 'Custom location')
+    t('auto.components.sidebar.WorktreeVisibilitySourceList.custom', 'Custom location')
   )
 }
 
-function getSourcePath(source: WorktreeVisibilitySourceRow): string {
+function getSourcePath(source: WorktreeVisibilitySourceRow, t: Translate = translate): string {
   if (source.kind === 'built-in') {
     return source.id === 'claude' ? '.claude/worktrees/*' : '.gsd-workspaces/*'
   }
   if (source.kind === 'other') {
-    return translate(
+    return t(
       'auto.components.sidebar.WorktreeVisibilitySourceList.otherPath',
       'Outside listed sources'
     )
@@ -154,6 +155,7 @@ export default function WorktreeVisibilitySourceList({
   onToggle,
   onUseDefault
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const customSources = useMemo(
     () =>
       normalizeCustomWorktreeVisibilitySources(
@@ -207,10 +209,10 @@ export default function WorktreeVisibilitySourceList({
     <section className="grid min-w-0 gap-2" aria-labelledby="worktree-sources-heading">
       <div>
         <h3 id="worktree-sources-heading" className="text-sm font-medium">
-          {translate('auto.components.sidebar.WorktreeVisibilitySourceList.sources', 'Sources')}
+          {t('auto.components.sidebar.WorktreeVisibilitySourceList.sources', 'Sources')}
         </h3>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.sidebar.WorktreeVisibilitySourceList.sourcesDescription',
             'Shown sources include current and future worktrees in the sidebar.'
           )}
@@ -218,7 +220,7 @@ export default function WorktreeVisibilitySourceList({
       </div>
       <div className="overflow-hidden rounded-lg border border-border bg-muted/30">
         {sources.map((source, index) => {
-          const label = getWorktreeVisibilitySourceLabel(source)
+          const label = getWorktreeVisibilitySourceLabel(source, t)
           const key = worktreeVisibilitySourceRowKey(source)
           const count = sourceCounts.get(key) ?? 0
           const accessibleLabel = getAccessibleSourceLabel(source, label)
@@ -230,8 +232,8 @@ export default function WorktreeVisibilitySourceList({
             repoCustomSourceIds
           )
           const visibility = sourceVisibility(repo, source, visibilityDefaults, repoCustomSourceIds)
-          const note = getWorktreeVisibilitySourceNote(provenance)
-          const overrideNotice = getWorktreeVisibilityOverrideNotice(provenance, visibility)
+          const note = getWorktreeVisibilitySourceNote(provenance, t)
+          const overrideNotice = getWorktreeVisibilityOverrideNotice(provenance, visibility, t)
           const matchingOverride =
             provenance?.kind === 'project-override' && provenance.globalVisibility === visibility
           return (
@@ -245,7 +247,7 @@ export default function WorktreeVisibilitySourceList({
                   <span className="truncate text-[13px] font-medium">{label}</span>
                   {showCounts ? (
                     <span className="shrink-0 text-[11px] text-muted-foreground">
-                      {translate(
+                      {t(
                         'auto.components.sidebar.WorktreeVisibilitySourceList.found',
                         '{{value0}} found',
                         { value0: count }
@@ -254,7 +256,7 @@ export default function WorktreeVisibilitySourceList({
                   ) : null}
                 </span>
                 <span className="block truncate font-mono text-[11px] text-muted-foreground">
-                  {getSourcePath(source)}
+                  {getSourcePath(source, t)}
                 </span>
                 {note ? (
                   <span className="block text-[11px] text-muted-foreground">{note}</span>
@@ -271,7 +273,7 @@ export default function WorktreeVisibilitySourceList({
                         size="icon-xs"
                         className="text-muted-foreground hover:text-destructive"
                         disabled={sourceDisabled}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.sidebar.WorktreeVisibilitySourceList.remove',
                           'Remove {{value0}}',
                           { value0: accessibleLabel }
@@ -282,7 +284,7 @@ export default function WorktreeVisibilitySourceList({
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top" sideOffset={4}>
-                      {translate(
+                      {t(
                         'auto.components.sidebar.WorktreeVisibilitySourceList.removeLocation',
                         'Remove custom location'
                       )}
@@ -296,14 +298,14 @@ export default function WorktreeVisibilitySourceList({
                     size="xs"
                     className="h-auto px-1"
                     disabled={sourceDisabled}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.sidebar.WorktreeVisibilitySourceList.useGlobalFor',
                       'Use global for {{value0}}',
                       { value0: accessibleLabel }
                     )}
                     onClick={() => void onUseDefault(source)}
                   >
-                    {translate(
+                    {t(
                       'auto.components.sidebar.WorktreeVisibilitySourceList.useGlobal',
                       'Use global'
                     )}
@@ -315,7 +317,7 @@ export default function WorktreeVisibilitySourceList({
                   size="sm"
                   value={visibility}
                   disabled={sourceDisabled}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.sidebar.WorktreeVisibilitySourceList.visibility',
                     'Visibility for {{value0}}',
                     { value0: accessibleLabel }
@@ -335,7 +337,7 @@ export default function WorktreeVisibilitySourceList({
                       data-visibility={segment}
                       className="h-7 min-w-11 px-2 text-[11px] data-[state=on]:bg-foreground/10 data-[state=on]:font-semibold data-[state=on]:text-foreground"
                     >
-                      {worktreeVisibilityValueLabel(segment)}
+                      {worktreeVisibilityValueLabel(segment, t)}
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>

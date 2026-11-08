@@ -1,4 +1,7 @@
-import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
+import {
+  readPageDeviceStore,
+  type PageDeviceStore
+} from '../mobile-web-shell/bridge/page-device-store'
 import {
   decodeDeviceStoreValue,
   encodeDeviceStoreValue
@@ -91,6 +94,18 @@ export function deviceStoreDraftBackend(
         ])
       ).written
   }
+}
+
+// An older shell grants no store; there the row lives only as long as the page.
+const MEMORY_BACKEND: DurableDraftRowBackend = {
+  read: async () => ({ ok: true, value: null }),
+  write: async () => true
+}
+
+/** The device store when the shell grants it, else memory only, as before the store existed. */
+export function pageDraftRowBackend(key: string): DurableDraftRowBackend {
+  const store = readPageDeviceStore()
+  return store?.available() ? deviceStoreDraftBackend(store, key) : MEMORY_BACKEND
 }
 
 function enqueue(row: Row, step: () => Promise<void>): Promise<void> {

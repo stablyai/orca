@@ -16,7 +16,6 @@ import {
   resolveNotificationVolumeDraftState,
   sendNotificationSettingsTestNotification
 } from './notification-settings-copy'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 
 type NotificationsPaneProps = {
@@ -106,11 +105,8 @@ export function NotificationsPane({
         </div>
       ) : null}
       <NotificationSettingToggle
-        label={translate(
-          'auto.components.settings.NotificationsPane.841c8c549f',
-          'Enable Notifications'
-        )}
-        description={translate(
+        label={t('auto.components.settings.NotificationsPane.841c8c549f', 'Enable Notifications')}
+        description={t(
           'auto.components.settings.NotificationsPane.deff6d30da',
           'Native system notifications for background events.'
         )}
@@ -143,11 +139,8 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         icon={<Bot className="size-4" />}
-        label={translate(
-          'auto.components.settings.NotificationsPane.ca76d06fd2',
-          'Agent Task Complete'
-        )}
-        description={translate(
+        label={t('auto.components.settings.NotificationsPane.ca76d06fd2', 'Agent Task Complete')}
+        description={t(
           'auto.components.settings.NotificationsPane.55f901a59b',
           'A coding agent finishes and becomes idle.'
         )}
@@ -162,11 +155,8 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         icon={<MessageCircleQuestion className="size-4" />}
-        label={translate(
-          'auto.components.settings.NotificationsPane.63fc5ec9d2',
-          'Agent Needs Input'
-        )}
-        description={translate(
+        label={t('auto.components.settings.NotificationsPane.63fc5ec9d2', 'Agent Needs Input')}
+        description={t(
           'auto.components.settings.NotificationsPane.e1b1724793',
           'A coding agent asks for permission or has a question.'
         )}
@@ -181,8 +171,8 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         icon={<Siren className="size-4" />}
-        label={translate('auto.components.settings.NotificationsPane.591fe605b9', 'Terminal Bell')}
-        description={translate(
+        label={t('auto.components.settings.NotificationsPane.591fe605b9', 'Terminal Bell')}
+        description={t(
           'auto.components.settings.NotificationsPane.b6fc369244',
           'A background terminal emits a bell character.'
         )}
@@ -216,11 +206,11 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         icon={<EyeOff className="size-4" />}
-        label={translate(
+        label={t(
           'auto.components.settings.NotificationsPane.ba07e60f38',
           'Notify About Hidden Workspaces'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.NotificationsPane.e4b5e909ff',
           "When off, workspaces hidden by a Hide switch in the sidebar's Filters menu show no unread dot and send no notifications to this computer or your phone."
         )}
@@ -246,11 +236,8 @@ export function NotificationsPane({
       <Separator />
 
       <NotificationSettingToggle
-        label={translate(
-          'auto.components.settings.NotificationsPane.00cd406dbb',
-          'Suppress While Focused'
-        )}
-        description={translate(
+        label={t('auto.components.settings.NotificationsPane.00cd406dbb', 'Suppress While Focused')}
+        description={t(
           'auto.components.settings.NotificationsPane.2772d2f257',
           'Skip notifications when the triggering worktree is already visible.'
         )}
@@ -272,10 +259,7 @@ export function NotificationsPane({
           className="gap-2"
         >
           <BellRing className="size-3.5" />
-          {translate(
-            'auto.components.settings.NotificationsPane.906b4afebf',
-            'Send Test Notification'
-          )}
+          {t('auto.components.settings.NotificationsPane.906b4afebf', 'Send Test Notification')}
         </Button>
       </div>
     </div>

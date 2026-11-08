@@ -574,7 +574,6 @@
 1 src/renderer/src/components/tab-bar/tab-create-entry-network-selection.ts
 1 src/renderer/src/components/tab-bar/tab-strip-drag-scroll.ts
 1 src/renderer/src/components/tab-bar/tab-strip-pointer-activation.ts
-1 src/renderer/src/components/tab-bar/use-native-chat-naming-failure.ts
 1 src/renderer/src/components/tab-bar/use-new-tab-agent-menu-rows.ts
 1 src/renderer/src/components/tab-bar/use-omnibox-browser-history.ts
 2 src/renderer/src/components/tab-bar/use-open-tab-search.ts
@@ -709,7 +708,7 @@
 1 src/renderer/src/lib/host-chat-program-acquisition.ts
 1 src/renderer/src/lib/quick-open-file-history.ts
 2 src/renderer/src/lib/worker-auto-close.ts
-1 src/renderer/src/runtime/structured-chat-name-observation.ts
+1 src/renderer/src/runtime/native-chat/naming/structured-chat-name-observation.ts
 1 src/renderer/src/store/plugins/appearance/plugin-icon-themes.ts
 5 src/renderer/src/store/retained-views/app-state-view.ts
 2 src/renderer/src/web/WebConnect.tsx

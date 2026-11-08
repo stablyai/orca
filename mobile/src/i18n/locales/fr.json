@@ -1435,6 +1435,13 @@
       "openFailed": "Impossible d'ouvrir ce PDF",
       "opening": "Ouverture du PDF…",
       "updateRequired": "Mettez à jour Orca Mobile pour ouvrir des PDF."
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Modifié sur l'ordinateur depuis vos modifications de {{time}}",
+      "copyMyEdits": "Copier mes modifications",
+      "discard": "Abandonner",
+      "restore": "Restaurer",
+      "unsavedFrom": "Modifications non enregistrées de {{time}}"
     }
   },
   "home": {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { bindPaneFirst } from './bind-first-pane.test-fixture'
-import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
+import { makeAgentStatusStoreWiring } from '../terminal/identity/agent-status-store-wiring.test-fixture'
 import './runtime-test-module-registration.spec'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import { MOCK_GIT_WORKTREES } from '../orca-runtime-test-mocks/setup.spec'
