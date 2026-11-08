@@ -1,3 +1,7 @@
+import {
+  getRootProjectHeaderDragKeys,
+  getRootProjectHeaderOccurrenceKey
+} from '../drag/root-project-header-drop'
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
@@ -70,27 +74,28 @@ export function renderWorktreeSectionHeaderRow(
   const { headerDrag } = ctx
   const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
   const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
-  // Drag keys on the project's anchor and skips copies an earlier host section already drew.
-  const headerRepo = isRepoHeader ? getHeaderDragRepo(row) : undefined
+  const usesRootProjectDrag = Boolean(
+    headerDrag.rootProjectHeaderKeys && (row.projectGroupDepth ?? 0) === 0
+  )
+  const headerRepo = isRepoHeader
+    ? usesRootProjectDrag
+      ? row.repo
+      : getHeaderDragRepo(row)
+    : undefined
   const projectIdForHeader = headerRepo?.id
   const projectGroupIdForHeader =
     isProjectGroupHeader && !row.repo && typeof row.projectGroup?.id === 'string'
       ? row.projectGroup.id
       : undefined
-  const projectGroupDragIdForHeader = row.repeated ? undefined : projectGroupIdForHeader
+  const projectGroupDragIdForHeader =
+    row.repeated && !usesRootProjectDrag ? undefined : projectGroupIdForHeader
   // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
   const projectGroupHostIdForHeader =
     row.projectGroup && 'createdFrom' in row.projectGroup
       ? getProjectGroupHostId(row.projectGroup)
       : undefined
-  const repoHeaderIndex =
-    projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderIndexByRepoId.get(projectIdForHeader)
-      : undefined
-  const repoHeaderBucketKey =
-    projectIdForHeader !== undefined
-      ? headerDrag.repoHeaderBucketByRepoId.get(projectIdForHeader)
-      : undefined
+  const repoHeaderIndex = headerRepo && headerDrag.repoHeaderIndexByRepoId.get(headerRepo.id)
+  const repoHeaderBucketKey = headerRepo && headerDrag.repoHeaderBucketByRepoId.get(headerRepo.id)
   const projectGroupHeaderIndex =
     projectGroupDragIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderIndexByGroupId.get(projectGroupDragIdForHeader)
@@ -99,27 +104,42 @@ export function renderWorktreeSectionHeaderRow(
     projectGroupDragIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
       : undefined
+  const rootProjectHeaderKey = usesRootProjectDrag
+    ? projectIdForHeader
+      ? `repo:${projectIdForHeader}`
+      : projectGroupDragIdForHeader
+        ? `group:${projectGroupDragIdForHeader}`
+        : undefined
+    : undefined
+  const rootProjectHeaderCount = rootProjectHeaderKey
+    ? getRootProjectHeaderDragKeys(
+        headerDrag.rootProjectHeaderKeys,
+        rootProjectHeaderKey,
+        row.hostId
+      )?.length
+    : undefined
   const isDraggableRepoHeader = Boolean(
     headerDrag.canReorderRepoHeaders &&
-    isRepoHeader &&
     projectIdForHeader &&
     repoHeaderBucketKey &&
-    (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1
+    (rootProjectHeaderCount !== undefined
+      ? rootProjectHeaderCount > 1
+      : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)
   )
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupDragIdForHeader &&
     projectGroupHeaderBucketKey &&
-    (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
-      0) > 1
+    (rootProjectHeaderCount !== undefined
+      ? rootProjectHeaderCount > 1
+      : (headerDrag.sidebarProjectGroupHeaderIdsByBucket.get(projectGroupHeaderBucketKey)?.length ??
+          0) > 1)
   )
   const isDraggingThis =
     headerDrag.canReorderRepoHeaders &&
-    headerDrag.repoDrag.state.draggingRepoId !== null &&
     headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
   const isDraggingThisProjectGroup =
     headerDrag.canReorderProjectGroupHeaders &&
-    headerDrag.projectGroupDrag.state.draggingGroupId !== null &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
   const headerWorkspaceStatus =
     ctx.groupBy === 'workspace-status'
@@ -189,6 +209,15 @@ export function renderWorktreeSectionHeaderRow(
           tabIndex={0}
           aria-label={hostContext ? `${label} — ${hostContext.label}` : undefined}
           aria-expanded={showHeaderCollapseAffordance ? !isHeaderCollapsed : undefined}
+          data-root-project-header-key={rootProjectHeaderKey}
+          data-root-project-header-host={rootProjectHeaderKey ? (row.hostId ?? '') : undefined}
+          data-root-project-header-section-end={
+            rootProjectHeaderKey
+              ? headerDrag.rootProjectHeaderSectionEndByKey.get(
+                  getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey, row.hostId)
+                )
+              : undefined
+          }
           data-repo-header-id={projectIdForHeader}
           data-repo-header-index={repoHeaderIndex}
           data-repo-header-bucket={repoHeaderBucketKey}
@@ -212,7 +241,6 @@ export function renderWorktreeSectionHeaderRow(
           data-workspace-status={headerWorkspaceStatus ?? undefined}
           data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
           className={cn(
-            // Keep grab on the title; action buttons use pointer cursors.
             'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
             !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
             ctx.highlightedRevealRowKey === row.key &&

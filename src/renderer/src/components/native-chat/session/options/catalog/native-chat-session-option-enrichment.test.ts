@@ -20,7 +20,7 @@ vi.mock('@/runtime/source-control/git/runtime-git-client-context', () => ({
   getRuntimeGitScope: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.callStructuredAgentSession
 }))
 

@@ -36,6 +36,21 @@ export function enqueueFederationRelay(
   }
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    // A stable message id makes a repeated report a no-op.
+    const queued =
+      params.messageId &&
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * from federation_relay_items is exactly its row type.
+      (this.db
+        .prepare(
+          'SELECT * FROM federation_relay_items WHERE dispatch_id = ? AND direction = ? AND message_id = ?'
+        )
+        .get(params.dispatchId, params.direction, params.messageId) as
+        | FederationRelayItemRow
+        | undefined)
+    if (queued) {
+      this.db.exec('COMMIT')
+      return queued
+    }
     if (params.settleRemoteOutcome) {
       const attachment = this.getRemoteDispatchAttachment(params.dispatchId)
       if (!attachment || !isWorkerStateIn(SETTLEABLE_WORKER_STATES, attachment.state)) {

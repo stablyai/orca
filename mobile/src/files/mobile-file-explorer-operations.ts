@@ -4,8 +4,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant, rpcResultVariants } from '../transport/rpc-operation-result-reader'
-import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../../../src/shared/file-dir-page'
-import { compareDirEntries } from '../../../src/shared/file-name-sort'
+import { FILE_READ_DIR_MAX_PAGE_ENTRIES } from '../../../src/shared/file-listing/file-dir-page'
+import { compareDirEntries } from '../../../src/shared/file-listing/file-name-sort'
 import {
   fileDirectoryEntriesSchema,
   fileDirectoryPageSchema,

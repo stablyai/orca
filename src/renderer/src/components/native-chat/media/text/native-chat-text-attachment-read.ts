@@ -8,7 +8,7 @@ import {
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
-import type { AttachmentTextRead } from '../../../../../../shared/attachment-text-source'
+import type { AttachmentTextRead } from '../../../../../../shared/attachment-text/attachment-text-source'
 import { AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 
 export function createChatAttachmentReader(

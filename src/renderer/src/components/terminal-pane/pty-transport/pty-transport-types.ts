@@ -1,3 +1,4 @@
+import type { TerminalOutputCadence } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
 import type { AgentIdleEdgeMeta } from '../../../../../shared/terminal/output/terminal-output-side-effects'
@@ -225,6 +226,8 @@ export type PtyTransport = {
   claimViewport?: (cols: number, rows: number) => boolean
   /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
   setOutputPaused?: (paused: boolean) => boolean
+  /** Capability-negotiated: lets the host coalesce a visible-but-unfocused pane's output longer. */
+  setOutputCadence?: (cadence: TerminalOutputCadence) => void
   resize: (
     cols: number,
     rows: number,

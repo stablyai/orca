@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {

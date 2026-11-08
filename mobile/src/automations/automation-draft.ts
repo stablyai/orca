@@ -59,6 +59,22 @@ export function newAutomationDraft(current?: MobileAutomation): AutomationDraft 
   }
 }
 
+/** The fields that differ from `original`; null when nothing the user would lose did (the *Edited flags only record how a field changed). */
+export function automationDraftEdits(
+  original: AutomationDraft,
+  draft: AutomationDraft
+): Partial<AutomationDraft> | null {
+  const before = new Map(Object.entries(original))
+  const edits = Object.entries(draft).filter(([key, value]) => value !== before.get(key))
+  return edits.some(([key]) => key !== 'targetEdited' && key !== 'setupDecisionEdited')
+    ? Object.fromEntries(edits)
+    : null
+}
+
+export function automationDraftChanged(original: AutomationDraft, draft: AutomationDraft): boolean {
+  return automationDraftEdits(original, draft) !== null
+}
+
 // The host checks arguments for an agent or surface this build doesn't know.
 function assertKnownExtraAgentArgs(draft: AutomationDraft): void {
   const { agentId, surface } = draft

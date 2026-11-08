@@ -2,7 +2,7 @@ import React, { useMemo } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
-import { svgMarkupDataUri } from '../../../../shared/svg-document'
+import { svgMarkupDataUri } from '../../../../shared/file-preview/svg-document'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
 
 function readSvgImage(svg: string): { xml: string; size: PanZoomSize } | null {

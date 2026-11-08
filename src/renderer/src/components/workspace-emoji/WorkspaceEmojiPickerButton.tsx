@@ -2,7 +2,7 @@ import { memo, useRef, useState, type RefObject } from 'react'
 import { Smile } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { lazyWithPreload } from '@/lib/lazy-with-retry'
 import { insertWorkspaceEmojiAtSelection } from '@/lib/workspace-emoji-shortcodes'
@@ -41,6 +41,7 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
   portalContainer,
   skipTabStop = false
 }: WorkspaceEmojiPickerButtonProps): React.JSX.Element {
+  const t = useTranslate()
   // Why: memo would otherwise keep the label and tooltip in the previous UI language.
   useUiLanguageRevision()
   const [open, setOpen] = useState(false)
@@ -77,7 +78,7 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
     onOpenChange?.(false)
   }
 
-  const label = translate('workspace.links.addEmoji', 'Add emoji')
+  const label = t('workspace.links.addEmoji', 'Add emoji')
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -102,7 +103,7 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
           </PopoverTrigger>
         </TooltipTrigger>
         <TooltipContent side="top">
-          {translate('workspace.links.addEmojiTooltip', 'Add emoji (or type :)')}
+          {t('workspace.links.addEmojiTooltip', 'Add emoji (or type :)')}
         </TooltipContent>
       </Tooltip>
       <PopoverContent

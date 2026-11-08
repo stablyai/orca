@@ -2,7 +2,7 @@
 import { act, cleanup, render } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PreparedDroppedPaths } from '../../../shared/native-file-drop-preparation'
+import type { PreparedDroppedPaths } from '../../../shared/file-import/native-file-drop-preparation'
 
 const electron = vi.hoisted(() => ({
   on: vi.fn(),

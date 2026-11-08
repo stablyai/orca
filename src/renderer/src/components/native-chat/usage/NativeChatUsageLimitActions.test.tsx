@@ -27,23 +27,23 @@ const mocks = vi.hoisted(() => ({
   dialog: vi.fn()
 }))
 let status = new Map<string, Pick<AgentSessionStatusSummary, 'usageLimitContinue'>>()
-vi.mock('@/runtime/structured-agent-session-host-capability', () => ({
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
   useStructuredAgentSessionHostCapabilityState: () => 'supported'
 }))
-vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({
     activate: () => () => {},
     subscribe: () => () => {},
     getSnapshot: () => status
   })
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.options
 }))
-vi.mock('@/runtime/structured-conversation-name', () => ({
+vi.mock('@/runtime/native-chat/naming/structured-conversation-name', () => ({
   useStructuredChatTabConversationName: () => 'My chat'
 }))
-vi.mock('@/runtime/use-worktree-runtime-target', () => ({
+vi.mock('../../../runtime/provider-accounts/ownership/use-active-account-owner', () => ({
   useActiveAccountOwner: () => ({
     target: { kind: 'environment', environmentId: 'other' },
     wslHostDistro: null

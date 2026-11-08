@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronsUpDown, Sparkles } from 'lucide-react-native'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
@@ -50,7 +57,7 @@ export function PrCreateSheet({
 }: {
   tab: MobilePrTab
   kept: PrCreateKept | null
-  onKeep: (kept: PrCreateKept | null) => void
+  onKeep: Dispatch<SetStateAction<PrCreateKept | null>>
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -183,6 +190,7 @@ export function PrCreateSheet({
       return
     }
     createInFlightRef.current = true
+    const createdKey = keepKey
     setCreating(true)
     setMessage(null)
     setCommitFailure(null)
@@ -218,11 +226,10 @@ export function PrCreateSheet({
       }
       triggerSuccess()
       setCreating(false)
-      // The PR exists now, so nothing carries over to the next Create on this branch.
+      // The PR exists now, so nothing carries over to the next Create on this branch, even text kept
+      // when a branch or client change closed this sheet mid-run.
       editedRef.current = false
-      if (restored) {
-        onKeep(null)
-      }
+      onKeep((current) => (current?.key === createdKey ? null : current))
       const created = {
         url: outcome.url,
         warning: outcome.warning ?? null,

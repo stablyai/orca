@@ -1,5 +1,5 @@
 import { pickTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { newAgentLaunchesMayOpenChats } from '@/runtime/local-structured-chats'
+import { newAgentLaunchesMayOpenChats } from '@/runtime/native-chat/local-sessions/local-structured-chats'
 import { acquireAgentLaunchChoices } from '../../../host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
@@ -106,7 +106,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
     pendingActivationSpawn: true,
     onStructuredHostDeclined: () => ({ opened: seedShell() })
   })
-  if (!result) {
+  if (!result || 'refused' in result) {
     return null
   }
   return { primaryTabId: result.surface.kind === 'host-published' ? null : result.surface.tabId }

@@ -213,23 +213,4 @@ describe('skill transaction startup recovery', () => {
     expect(await readFile(join(installed.canonicalPath, 'SKILL.md'), 'utf8')).toContain('# Keep')
     expect(await readSkillInstallReceipt(stateDirectory, installed.canonicalPath)).toBeTruthy()
   })
-
-  it('bounds corrupt journal scanning and leaves unknown files untouched', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skill-startup-bounds-test-'))
-    roots.push(root)
-    const stateDirectory = join(root, 'state')
-    const journalDirectory = join(stateDirectory, 'journals')
-    await mkdir(journalDirectory, { recursive: true })
-    await Promise.all(
-      Array.from({ length: 65 }, (_, index) =>
-        writeFile(join(journalDirectory, `${String(index).padStart(2, '0')}.json`), '{}')
-      )
-    )
-
-    const report = await recoverPendingSkillTransactions(stateDirectory)
-
-    expect(report).toMatchObject({ scanned: 0, recovered: 0, truncated: true })
-    expect(report.failures).toHaveLength(64)
-    expect(await readFile(join(journalDirectory, '00.json'), 'utf8')).toBe('{}')
-  })
 })

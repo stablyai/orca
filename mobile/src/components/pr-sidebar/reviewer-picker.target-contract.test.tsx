@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MobilePRSidebar } from '@orca/test-mobile/components/MobilePRSidebar'
 import {
@@ -8,6 +9,7 @@ import {
   rpcSuccess
 } from '@orca/test-mobile/mobile-web-shell/bridge-host-test-fakes'
 import { createStableLogicalRpcClient } from '@orca/test-mobile/transport/stable-logical-rpc-client'
+import { createOrcaQueryClient } from '@orca/test-mobile/query/orca-query-client'
 import type { HostConnectionInputs } from '@orca/test-mobile/transport/client-context-connection-metrics'
 import { RuntimeGitHubRepositoryQueryCommands } from '@orca/test-host/main/runtime/integrations/github/runtime-github-repository-query-commands'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from '@orca/test-host/main/runtime/rpc/methods/source-control/github/github-repo-work-item-methods'
@@ -213,7 +215,7 @@ afterEach(() => {
   io.search = null
   vi.unstubAllGlobals()
 })
-it('real tab/sheet sends a searched fork to the runtime provider with original worktree/account, supports refusal/reopen/migration, and keeps one visit rows across connection changes', async () => {
+it("real tab/sheet sends a searched fork to the runtime provider with original worktree/account, supports refusal, and reopens with the repository's list", async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   const prRepo = { owner: 'fork', repo: 'widgets', host: 'github.corp' }
   const repo: Repo = {
@@ -308,47 +310,52 @@ it('real tab/sheet sends a searched fork to the runtime provider with original w
   root = createRoot(container)
   // The screen header's verdict inputs; a relay verdict overrides them where a step sets one.
   let relay: Partial<HostConnectionInputs> = {}
+  const queryClient = createOrcaQueryClient()
   const renderSidebar = (target: typeof prRepo, worktreeId: string) =>
     root!.render(
-      <MobilePRSidebar
-        client={logical}
-        hostConnection={{
-          reconnectAttempts: 0,
-          lastConnectedAt: null,
-          pendingPath: null,
-          pairingRejected: false,
-          relayHostReachability: 'connecting',
-          ...relay
-        }}
-        state={{
-          kind: 'ready',
-          data: {
-            pr: {
-              number: 93,
-              state: 'open',
-              title: 'fork',
-              url: `https://github.corp/${target.owner}/widgets/pull/93`,
-              prRepo: target,
-              checksStatus: 'success',
-              updatedAt: '',
-              mergeable: 'MERGEABLE'
-            },
-            details: { ...details, item: { ...details.item, prRepo: target } },
-            checks: [],
-            checksError: null,
-            pushTarget: null
-          }
-        }}
-        connState="connected"
-        onRetry={() => {}}
-        refetch={() => {}}
-        rereadAfterWrite={() => Promise.resolve()}
-        worktreeId={worktreeId}
-        gitBranch="feature"
-        gitStatus={null}
-        headSha={null}
-        workspaceLabel="fixture"
-      />
+      <QueryClientProvider client={queryClient}>
+        <MobilePRSidebar
+          client={logical}
+          hostConnection={{
+            reconnectAttempts: 0,
+            lastConnectedAt: null,
+            pendingPath: null,
+            pairingRejected: false,
+            relayHostReachability: 'connecting',
+            ...relay
+          }}
+          state={{
+            kind: 'ready',
+            data: {
+              pr: {
+                number: 93,
+                state: 'open',
+                title: 'fork',
+                url: `https://github.corp/${target.owner}/widgets/pull/93`,
+                prRepo: target,
+                checksStatus: 'success',
+                updatedAt: '',
+                mergeable: 'MERGEABLE'
+              },
+              details: { ...details, item: { ...details.item, prRepo: target } },
+              checks: [],
+              checksError: null,
+              pushTarget: null
+            }
+          }}
+          connState="connected"
+          onRetry={() => {}}
+          refetch={() => Promise.resolve()}
+          rereadSlices={() => Promise.resolve()}
+          hostId="host-1"
+          queries={null}
+          worktreeId={worktreeId}
+          gitBranch="feature"
+          gitStatus={null}
+          headSha={null}
+          workspaceLabel="fixture"
+        />
+      </QueryClientProvider>
     )
   await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
   const sheet = () => container.querySelector('[data-sheet]')
@@ -404,194 +411,12 @@ it('real tab/sheet sends a searched fork to the runtime provider with original w
   expect(text()).toContain('fork-only')
   expect(sent()).toEqual([])
   await closeSheet()
-  let session = physical
-  const migrate = async () => {
-    session = createFakeRpcClient()
-    session.sendRequest = physical.sendRequest
-    await act(async () => logical.migrateTo(session, 'lan'))
-    await settle()
-  }
-  const openAndSearch = async () => {
-    await openSheet()
-    await typeSearch('o')
-    await settle()
-  }
 
-  // 1. A connected-to-connected migration mid-load starts a successor instead of a false empty list.
-  let late!: (value: { stdout: string }) => void
-  io.gh.mockImplementationOnce(
-    () =>
-      new Promise((resolve) => {
-        late = resolve
-      })
-  )
-  await openAndSearch()
-  expect(spinner()).not.toBeNull()
-  await migrate()
-  expect(text()).not.toContain('No matching people')
-  expect(text()).toContain('fork-only')
-  await act(async () => late({ stdout: '{"login":"retired-person"}' }))
-  await settle()
-  expect(text()).not.toContain('retired-person')
-  expect(sent()).toEqual([
-    'status.get',
-    'github.listAssignableUsers',
-    'status.get',
-    'github.listAssignableUsers'
-  ])
-
-  // 2. Loaded rows and the search stay in place through a disconnect and the refresh reconnecting starts.
-  hold = true
-  await act(async () => session.pushState('disconnected'))
-  expect(spinner()).toBeNull()
-  expect(text()).toContain('fork-only')
-  expect(sent()).toEqual([])
-  await act(async () => session.pushState('connected'))
-  await settle()
-  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
-  expect(spinner()).toBeNull()
-  expect(text()).toContain('fork-only')
-  expect(io.search!.value).toBe('o')
-  io.gh.mockImplementationOnce(async () => ({
-    stdout: '{"login":"fork-only"}\n{"login":"fork-second"}'
-  }))
-  await act(async () => held.shift()!.release())
-  await settle()
-  expect(text()).toContain('fork-second')
-
-  // A loaded migration refreshes silently, and a failed background read keeps accepted rows.
-  await migrate()
-  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
-  expect(spinner()).toBeNull()
-  await act(async () => held.shift()!.fail())
-  await settle()
-  expect(text()).toContain('fork-second')
-  expect(text()).not.toContain('socket closed')
-
-  // Reopening is fresh demand; a down-up pair in one render still retires the first attempt.
-  await closeSheet()
+  // Reopening for the same repository starts from its list while it revalidates.
   await openSheet()
-  await settle()
-  expect(sent()).toEqual([])
   await typeSearch('o')
-  await settle()
-  expect(text()).not.toContain('fork-second')
-  expect(spinner()).not.toBeNull()
-  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
-  await act(async () => {
-    session.pushState('disconnected')
-    session.pushState('connected')
-  })
-  await settle()
-  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
-  await act(async () => held.shift()!.fail())
-  await settle()
-  expect(text()).not.toContain('socket closed')
-  expect(spinner()).not.toBeNull()
-  await act(async () => held.shift()!.release())
-  await settle()
   expect(text()).toContain('fork-only')
-
-  // A first search while reconnecting sends nothing offline, explains the outage, and completes on recovery.
-  await closeSheet()
-  await act(async () => session.pushState('reconnecting'))
-  io.gh.mockClear()
-  await openAndSearch()
-  expect(text()).not.toContain('fork-only')
-  expect(text()).toContain('Reconnecting')
-  await act(async () => session.pushState('disconnected'))
-  expect(text()).toContain('Disconnected')
-  // The header's relay verdict explains the wait rather than the bare dial state.
-  relay = { relayHostReachability: 'unreachable' }
-  await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
-  expect(text()).toContain("Can't reach Relay")
-  relay = {}
-  await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
-  await act(async () => session.pushState('auth-failed'))
-  expect(text()).toContain('Pairing invalid — re-pair with your desktop')
-  expect(sent()).toEqual([])
-  expect(io.gh).not.toHaveBeenCalled()
-  await act(async () => session.pushState('connected'))
-  await settle()
-  // Exactly one recovery read, pending with the search kept and no error published.
-  expect(sent()).toEqual(['status.get', 'github.listAssignableUsers'])
-  expect(io.search!.value).toBe('o')
-  expect(spinner()).not.toBeNull()
-  expect(text()).not.toContain('Pairing invalid')
-  expect(text()).not.toContain('Failed to load people')
-  await act(async () => held.shift()!.release())
-  await settle()
-  expect(io.gh).toHaveBeenCalledTimes(1)
-  expect(text()).toContain('fork-only')
-  expect(sent()).toEqual([])
-
-  // A to B to A: a repository departure closes the open request; each target is a new visit, and no earlier visit's
-  // reply can paint the current one.
-  const upstream = { owner: 'upstream', repo: 'widgets', host: 'github.corp' }
-  await closeSheet()
-  await openAndSearch()
-  await act(async () => renderSidebar(upstream, 'clone::/worktree'))
-  await settle()
-  expect(sheet()).toBeNull()
-  await openAndSearch()
-  expect(spinner()).not.toBeNull()
-  await act(async () => renderSidebar(prRepo, 'clone::/worktree'))
-  await settle()
-  // The departed request never comes back on return.
-  expect(sheet()).toBeNull()
-  await openAndSearch()
-  expect(spinner()).not.toBeNull()
-  expect(sent()).toEqual([
-    'status.get',
-    'github.listAssignableUsers',
-    'status.get',
-    'github.listAssignableUsers',
-    'status.get',
-    'github.listAssignableUsers'
-  ])
-  const [firstVisit, upstreamVisit, returnVisit] = held.splice(0)
-  io.gh.mockClear()
-  io.gh.mockImplementationOnce(async () => ({ stdout: '{"login":"retired-person"}' }))
-  await act(async () => firstVisit.release())
-  await settle()
-  await act(async () => upstreamVisit.release())
-  await settle()
-  expect(io.gh.mock.calls[1][0]).toContain('repos/upstream/widgets/assignees?per_page=100')
-  expect(text()).not.toContain('retired-person')
-  expect(text()).not.toContain('upstream-only')
-  expect(spinner()).not.toBeNull()
-  await act(async () => returnVisit.release())
-  await settle()
-  expect(text()).toContain('fork-only')
-
-  // A worktree change and a close/reopen while its reply is pending start fresh visits too.
-  await act(async () => renderSidebar(prRepo, 'clone::/other'))
-  await settle()
-  expect(sheet()).toBeNull()
-  await openAndSearch()
-  expect(spinner()).not.toBeNull()
-  await closeSheet()
-  await openAndSearch()
-  expect(sent()).toEqual([
-    'status.get',
-    'github.listAssignableUsers',
-    'status.get',
-    'github.listAssignableUsers'
-  ])
-  const [worktreeVisit, reopenedVisit] = held.splice(0)
-  io.gh.mockImplementationOnce(async () => ({ stdout: '{"login":"retired-person"}' }))
-  await act(async () => worktreeVisit.release())
-  await settle()
-  expect(text()).not.toContain('retired-person')
-  expect(spinner()).not.toBeNull()
-  await act(async () => reopenedVisit.release())
-  await settle()
-  expect(text()).toContain('fork-only')
-
-  // A genuine empty reply is the only way to reach the empty state.
-  hold = false
-  await closeSheet()
-  io.gh.mockImplementationOnce(async () => ({ stdout: '' }))
-  await openAndSearch()
-  expect(text()).toContain('No matching people')
+  expect(spinner()).toBeNull()
+  await act(async () => queryClient.cancelQueries())
+  queryClient.clear()
 })

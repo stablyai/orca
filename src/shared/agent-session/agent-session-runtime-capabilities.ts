@@ -82,6 +82,9 @@ export const AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY =
   'agent-session.continuation-context.v1' as const
 // Probe additive item reads before offering full output; older hosts retain only heads.
 export const AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY = 'agent-session.item-detail.v1' as const
+// Probe before asking whether a send is recorded; older hosts answer only through the history pages a client loaded.
+export const AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY =
+  'agent-session.send-recorded.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
 // Why: the rewind UI relies on the next send settling an in-doubt rewind, even with the agent up.
@@ -163,6 +166,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
     AGENT_SESSION_CONTINUATION_CONTEXT_RUNTIME_CAPABILITY,
     AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY,
+    AGENT_SESSION_SEND_RECORDED_RUNTIME_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
     AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
     AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,

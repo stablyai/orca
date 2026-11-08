@@ -1,6 +1,6 @@
 import React from 'react'
 import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
@@ -55,6 +55,7 @@ export function TabBarStaticCreateMenu({
   openMarkdownShortcut: string | null
   queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void
 }): React.ReactNode {
+  const t = useTranslate()
   const {
     newTabMenuOrder = 'default',
     onNewTerminalTab,
@@ -86,8 +87,7 @@ export function TabBarStaticCreateMenu({
           >
             <ShellIcon shell={entry.shell} size={14} />
             <span className="flex-1">
-              {translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')}{' '}
-              {entry.label}
+              {t('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} {entry.label}
             </span>
             {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
           </DropdownMenuItem>
@@ -102,7 +102,7 @@ export function TabBarStaticCreateMenu({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <TerminalSquare className="size-4 text-muted-foreground" />
-        {translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
+        {t('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
         <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     )
@@ -113,7 +113,7 @@ export function TabBarStaticCreateMenu({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <Globe className="size-4 text-muted-foreground" />
-        {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
+        {t('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
         <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
@@ -127,15 +127,12 @@ export function TabBarStaticCreateMenu({
               className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
             >
               <Smartphone className="size-4 text-muted-foreground" />
-              {translate('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
+              {t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
               <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
             </DropdownMenuItem>
           </TooltipTrigger>
           <TooltipContent side="right" sideOffset={8} className="z-[80]">
-            {translate(
-              'auto.components.tab.bar.TabBar.aea43b5748',
-              'Open the existing emulator tab.'
-            )}
+            {t('auto.components.tab.bar.TabBar.aea43b5748', 'Open the existing emulator tab.')}
           </TooltipContent>
         </Tooltip>
       ) : (
@@ -144,7 +141,7 @@ export function TabBarStaticCreateMenu({
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
         >
           <Smartphone className="size-4 text-muted-foreground" />
-          {translate('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')}
+          {t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')}
           <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
       )
@@ -156,7 +153,7 @@ export function TabBarStaticCreateMenu({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <FilePlus className="size-4 text-muted-foreground" />
-        {translate('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')}
+        {t('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')}
         <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     ) : null
@@ -187,7 +184,7 @@ export function TabBarStaticCreateMenu({
         className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
       >
         <FileText className="size-4 text-muted-foreground" />
-        {translate('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')}
+        {t('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')}
         {openMarkdownShortcut ? (
           <DropdownMenuShortcut>{openMarkdownShortcut}</DropdownMenuShortcut>
         ) : null}

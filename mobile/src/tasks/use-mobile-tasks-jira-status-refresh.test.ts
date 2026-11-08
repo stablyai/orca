@@ -46,6 +46,7 @@ function mountRefresh(client: RpcClient, clientRef: { current: RpcClient | null 
       connState: 'connected',
       defaultLinearTeamSelectionRef: { current: null },
       githubKind: 'issues',
+      keepSettings: vi.fn(),
       setJiraConnection,
       jiraStatusRequestIdRef,
       setLinearConnected: vi.fn(),

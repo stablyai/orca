@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { readSvgIntrinsicSize, svgMarkupDataUri } from '../../../src/shared/svg-document'
+import {
+  readSvgIntrinsicSize,
+  svgMarkupDataUri
+} from '../../../src/shared/file-preview/svg-document'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileLoadErrorState } from './MobileStateView'
 import { MobilePanZoomImage } from './MobilePanZoomImage'

@@ -19,10 +19,16 @@ const mocks = vi.hoisted(() => ({
   supports: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
-  subscribeStructuredAgentSession: mocks.subscribe
+vi.mock('../../../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
 }))
+
+vi.mock(
+  '../../../../../runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: mocks.subscribe
+  })
+)
 
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapabilities: mocks.supports

@@ -123,6 +123,23 @@ describe('NativeChatContextUsageRing', () => {
     expect(card()).toBeNull()
   })
 
+  it('dismisses the hover card and cancels pending hover when a context menu opens', async () => {
+    const trigger = await renderRing()
+    const contextMenu = () =>
+      dispatch(trigger, new MouseEvent('contextmenu', { bubbles: true, button: 2 }))
+
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    await contextMenu()
+    await advance(500)
+    expect(card()).toBeNull()
+
+    await dispatch(trigger.parentElement!, pointer('pointerout', 'mouse'))
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    await advance(150)
+    expect(card()).not.toBeNull()
+    await contextMenu()
+    expect(card()).toBeNull()
+  })
   it('does not reopen a card dismissed with Escape once a stale hover would have fired', async () => {
     const trigger = await renderRing()
 

@@ -1,9 +1,7 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import {
-  readStructuredAgentSessionItem,
-  structuredAgentSessionHostCapabilityState
-} from '@/runtime/structured-agent-session-client'
+import { readStructuredAgentSessionItem } from '@/runtime/native-chat/journal/structured-agent-session-journal-reads'
+import { structuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { AGENT_SESSION_ITEM_DETAIL_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import type { NativeChatSubagentRow } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
 import {

@@ -77,7 +77,8 @@ function wireMobileHomeHostSubscriptions(
     if (state === 'connected') {
       unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
       unsubscribeClientEvents ??= subscribeSharedClientEvents(entry.client, (event) => {
-        if (WORKTREE_CHANGE_EVENTS.has(event.type)) {
+        // A replayed ready follows a reopened stream or path switch, which missed notices.
+        if (WORKTREE_CHANGE_EVENTS.has(event.type) || 'replayed' in event) {
           refreshOnChange()
         }
       })

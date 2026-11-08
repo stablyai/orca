@@ -1,6 +1,6 @@
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspace-set'
 import { isWebRuntimeInitialTerminalBootstrapInFlight } from './initial-terminal/web-runtime-initial-terminal-bootstrap'
 import { dispatchWebRuntimeInitialTerminalBootstrap } from './initial-terminal/web-runtime-initial-terminal-bootstrap-dispatch'
 import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'

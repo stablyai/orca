@@ -1,4 +1,4 @@
-import { assertWorkspaceAttachmentWriteCapability } from '../../../../runtime/runtime-workspace-attachment-capabilities'
+import { assertWorkspaceAttachmentWriteCapability } from '../../../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
 import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../../../shared/workspace-attachments/workspace-attachment-legacy'
 import { WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY } from '../../../../../../shared/workspace-attachments/workspace-attachment-capabilities'
@@ -13,7 +13,7 @@ import {
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../../shared/protocol-version'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'

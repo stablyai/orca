@@ -32,7 +32,7 @@ vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', async (import
     STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   ]
 }))
-vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/host-structured-agents', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readHostStructuredAgents: () =>
     ['claude', 'codex', 'grok', 'omp', 'opencode', 'pi'].map((agent) => ({

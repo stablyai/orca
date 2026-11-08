@@ -10,9 +10,12 @@ import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { useAppStore } from '../../store'
-import { afterLayoutFrame, layoutFramesFlowing } from '@/runtime/layout-frame-position'
-import { framesDrawWorkspace } from '@/runtime/workspace-layout-frame-drawn-workspaces'
-import type { RuntimeEditorTabReveal } from '../../../../shared/runtime-file-contracts'
+import {
+  afterLayoutFrame,
+  layoutFramesFlowing
+} from '@/runtime/workspace-layout/frames/layout-frame-position'
+import { framesDrawWorkspace } from '@/runtime/workspace-layout/frames/workspace-layout-frame-drawn-workspaces'
+import type { RuntimeEditorTabReveal } from '../../../../shared/file-access/runtime-editor-file-open'
 import type { AppState } from '../../store/types'
 import type { EditorTabSelection } from '../../store/slices/editor/types/open-file'
 import {

@@ -5,12 +5,12 @@ import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
 import { makeTab } from './terminal-tab.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../testing/app-store-cascade-api.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 

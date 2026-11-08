@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { MobileNetworkInterface } from '../settings/mobile/pairing/mobile-network-interface-selection'
 import {
   HeroFlow,
@@ -106,6 +106,7 @@ export function MobilePageContent({
   stepIdx,
   toggleMobileSidebarButton
 }: MobilePageContentProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="mobile-page-root scrollbar-sleek">
       <MobilePageToolbar
@@ -130,7 +131,7 @@ export function MobilePageContent({
               platform={platform}
               onPlatformChange={setPlatform}
               installQrUrl={installQrUrl}
-              installCopy={getInstallCopy(platform)}
+              installCopy={getInstallCopy(platform, t)}
               onOpenAndroidInstallGuide={openAndroidInstallGuide}
               onOpenInstallUrl={openInstallUrl}
               onCopyInstallUrl={copyInstallUrl}
@@ -167,7 +168,7 @@ export function MobilePageContent({
 
         <div
           className="mp-stage"
-          aria-label={translate('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
+          aria-label={t('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
         >
           <PhoneCarousel />
         </div>

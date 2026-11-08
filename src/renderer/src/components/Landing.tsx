@@ -11,7 +11,7 @@ import {
 } from './landing-preflight-dismissal'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { hasGitHubBackedProject, type PreflightIssue } from './landing-preflight-issues'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 import { useLandingOrcaStarState, type LandingStarState } from './landing-github-star-state'
@@ -37,6 +37,7 @@ function GitHubStarButton({
   state,
   setState
 }: StarButtonProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [menuOpen, setMenuOpen] = useState(false)
   const wrapperRef = useRef<HTMLDivElement | null>(null)
   const mountedRef = useMountedRef()
@@ -115,10 +116,10 @@ function GitHubStarButton({
           />
         )}
         {state === 'starred'
-          ? translate('auto.components.Landing.ec43b38ba7', 'Starred on GitHub')
+          ? t('auto.components.Landing.ec43b38ba7', 'Starred on GitHub')
           : state === 'web-fallback'
-            ? translate('auto.components.Landing.157bb5ecbb', 'Open GitHub')
-            : translate('auto.components.Landing.0d0ace8861', 'Star on GitHub')}
+            ? t('auto.components.Landing.157bb5ecbb', 'Open GitHub')
+            : t('auto.components.Landing.0d0ace8861', 'Star on GitHub')}
       </button>
       {state === 'starred' && menuOpen && (
         <div className="absolute right-0 bottom-[calc(100%+4px)] z-10 min-w-[100px] rounded-md border border-border bg-popover py-1 shadow-floating">
@@ -129,7 +130,7 @@ function GitHubStarButton({
               setState('hidden')
             }}
           >
-            {translate('auto.components.Landing.c1cf168479', 'Hide')}
+            {t('auto.components.Landing.c1cf168479', 'Hide')}
           </button>
         </div>
       )}
@@ -152,6 +153,7 @@ function PreflightBanner({
   issues: PreflightIssue[]
   repos: readonly Repo[]
 }): React.JSX.Element | null {
+  const t = useTranslate()
   // Recheck dismissals when the GitHub project set changes so expired nudges can reappear.
   const githubKey = githubProjectKeys(repos).join('|')
   const [dismissed, setDismissed] = useState<Set<string>>(() =>
@@ -200,7 +202,7 @@ function PreflightBanner({
             <button
               className="-mr-1 -mt-0.5 shrink-0 rounded p-1 text-muted-foreground/70 transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
               onClick={() => dismiss(issue)}
-              aria-label={translate('auto.components.Landing.preflightDismiss', 'Dismiss')}
+              aria-label={t('auto.components.Landing.preflightDismiss', 'Dismiss')}
             >
               <X className="size-3.5" />
             </button>
@@ -212,18 +214,16 @@ function PreflightBanner({
 }
 
 export default function Landing(): React.JSX.Element {
+  const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const openModal = useAppStore((s) => s.openModal)
 
   const createActionLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo))
-      ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
-      : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
-  const moveUpLabel = translate('auto.components.Landing.moveUpWorkspace', 'Move up workspace')
-  const moveDownLabel = translate(
-    'auto.components.Landing.moveDownWorkspace',
-    'Move down workspace'
-  )
+      ? t('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
+      : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
+  const moveUpLabel = t('auto.components.Landing.moveUpWorkspace', 'Move up workspace')
+  const moveDownLabel = t('auto.components.Landing.moveDownWorkspace', 'Move down workspace')
   const hasProjects = repos.length > 0
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
@@ -260,17 +260,17 @@ export default function Landing(): React.JSX.Element {
 
           <p className="text-sm text-muted-foreground text-center">
             {hasProjects
-              ? translate(
+              ? t(
                   'auto.components.Landing.9c00bd4adf',
                   'Select a workspace from the sidebar to begin.'
                 )
-              : translate('auto.components.Landing.cd21242762', 'Add a project to get started.')}
+              : t('auto.components.Landing.cd21242762', 'Add a project to get started.')}
           </p>
 
           <div className="flex items-center justify-center gap-2.5 flex-wrap">
             <button className={LANDING_ACTION_BUTTON_CLASS} onClick={() => openModal('add-repo')}>
               <FolderPlus className="size-3.5" />
-              {translate('auto.components.Landing.f9eaa9e12d', 'Add project')}
+              {t('auto.components.Landing.f9eaa9e12d', 'Add project')}
             </button>
 
             <button

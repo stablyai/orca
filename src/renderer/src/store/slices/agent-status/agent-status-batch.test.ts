@@ -15,7 +15,7 @@ import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
+import { layoutApplyTestDouble } from '@/runtime/workspace-layout/testing/layout-apply-test-double'
 
 const BASE_TIME = 2_000_000
 const FIRST_PANE = 'tab-1:11111111-1111-4111-8111-111111111111'

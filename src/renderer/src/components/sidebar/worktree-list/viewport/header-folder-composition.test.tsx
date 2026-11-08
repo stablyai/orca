@@ -161,7 +161,9 @@ it('composes real dispatched headers, current repo gates and folder cache refres
         projectGroupHeaderIndexByGroupId: new Map(),
         projectGroupHeaderBucketByGroupId: new Map(),
         repoHeaderSectionEndByRepoId: new Map(),
-        projectGroupHeaderSectionEndByGroupId: new Map()
+        projectGroupHeaderSectionEndByGroupId: new Map(),
+        rootProjectHeaderKeys: undefined,
+        rootProjectHeaderSectionEndByKey: new Map()
       },
       projectActions: {
         getWorktreeVisibilityDefaults: () => undefined,

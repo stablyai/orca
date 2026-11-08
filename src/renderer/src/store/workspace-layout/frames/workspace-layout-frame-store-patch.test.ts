@@ -15,7 +15,7 @@ import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeOpenFile } from '../../slices/editor/types/open-file.test-fixture'
 import { makeUnifiedTab } from '../../slices/tabs/tab-group.test-fixture'
 import type { AppState } from '../../types'
-import { beginPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { buildLayoutFrameSlices } from './workspace-layout-frame-slices'
 import { buildLayoutFrameStorePatch } from './workspace-layout-frame-store-patch'
 import {

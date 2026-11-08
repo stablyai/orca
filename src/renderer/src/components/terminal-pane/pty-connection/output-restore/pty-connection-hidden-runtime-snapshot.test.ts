@@ -4,25 +4,25 @@ import { RESET_AFTER_BYTE_GAP } from '../../../../../../shared/terminal/protocol
 import {
   flushAsyncTicks,
   renderHeadlessTerminalState
-} from '../test-fixtures/pty-connection-test-async'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-async'
 import {
   createMockTransport,
   createPane,
   createManager,
   type ConnectCallbacks,
   type MockTransport
-} from '../test-fixtures/pty-connection-test-pane-fixtures'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-pane-fixtures'
 import {
   buildPaneConnectionDeps,
   type PtyConnectionAgentTitleMocks as AgentTitleMocks,
   bindPaneAgentTitleMocks
-} from '../test-fixtures/pty-connection-test-deps'
-import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
-import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-deps'
+import { createInitialStoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-fixtures'
+import type { StoreState } from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from '../test-fixtures/pty-connection-test-environment'
+} from '@/components/terminal-pane/pty-connection/test-fixtures/pty-connection-test-environment'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
@@ -45,7 +45,7 @@ let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 

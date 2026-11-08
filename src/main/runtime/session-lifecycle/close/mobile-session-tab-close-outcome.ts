@@ -3,7 +3,7 @@ import type {
   RuntimeSessionTabCloseReason
 } from '../../../../shared/runtime-session-contracts'
 import type { RuntimePtyTabCloseAuthority } from '../../terminal/records/runtime-terminal-state-records'
-import type { ClientSessionTabSelectionStore } from '../../client-session-tab-selection'
+import type { ClientSessionTabSelectionStore } from '../../client/navigation/client-session-tab-selection'
 
 export type MobileSessionTabCloseOptions = {
   reason?: RuntimeSessionTabCloseReason

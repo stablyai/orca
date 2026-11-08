@@ -1,4 +1,3 @@
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import { RpcDispatcher } from '../../rpc/dispatcher'

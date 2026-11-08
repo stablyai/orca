@@ -11,8 +11,11 @@ import {
   ContextMenuContent,
   ContextMenuItem
 } from '@/components/ui/context-menu'
-import { normalizeSearchFileMatchCount } from '../../../../../../shared/search-match-count'
-import type { SearchFileResult, SearchMatch } from '../../../../../../shared/code-search-types'
+import { normalizeSearchFileMatchCount } from '../../../../../../shared/file-search/search-match-count'
+import type {
+  SearchFileResult,
+  SearchMatch
+} from '../../../../../../shared/file-search/code-search-types'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function ToggleButton({

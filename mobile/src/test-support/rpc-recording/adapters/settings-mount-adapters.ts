@@ -170,6 +170,7 @@ export function settingsMountAdapters(
       const model = observableModel(context, {
         client: context.client,
         connState: 'connected',
+        hostId: 'host-1',
         jiraStatusRequestIdRef: { current: 0 },
         defaultLinearTeamSelectionRef: { current: null },
         taskResumeRef: { current: {} },
@@ -183,6 +184,8 @@ export function settingsMountAdapters(
         resetWorkspaceCreateState: () => context.effect('reset-workspace', null),
         visibleProviders: ['github']
       })
+      // Hydration reads through the query cache; as in settings.repo-metadata, a fault schedule's last read must not leave a notify timer.
+      notifyManager.setScheduler(queueMicrotask)
       const hook = hookMount(() => {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies only the members the hook reads.
         useHydration(model as unknown as Parameters<typeof useHydration>[0])
@@ -202,7 +205,10 @@ export function settingsMountAdapters(
             settings: model.runtimeTaskSettings,
             hydrated: model.taskStateHydrated
           }),
-        dispose: hook.unmount
+        dispose: async () => {
+          await hook.unmount()
+          notifyManager.setScheduler(scheduleNotify)
+        }
       }
     }
   }

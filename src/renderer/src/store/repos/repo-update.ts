@@ -151,6 +151,13 @@ export function createRepoUpdateActions(
                     { timeoutMs: 15_000 }
                   )
                 ).repo
+          if (
+            sanitizedUpdates.projectGroupOrder !== undefined &&
+            (!updatedRepo ||
+              (updatedRepo.projectGroupOrder ?? null) !== sanitizedUpdates.projectGroupOrder)
+          ) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -171,6 +178,7 @@ export function createRepoUpdateActions(
               }
               let mergedRepo: Repo = r
               const {
+                projectGroupOrder: _projectGroupOrder,
                 sourceControlAi,
                 externalWorktreeDiscoverySuppressedAt,
                 ghAccount,
