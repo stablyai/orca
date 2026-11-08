@@ -45,6 +45,7 @@ export async function buildSaveIssueRequest(
     dueDate: flags.has('due-date') ? getNullableDueDateFlag(flags, 'due-date') : undefined,
     labels: flags.has('label') ? getRepeatedStringFlag(flags, 'label') : undefined,
     project: getNullableStringFlag(flags, 'project'),
+    cycle: getNullableStringFlag(flags, 'cycle'),
     parentId: getNullableStringFlag(flags, 'parent-id'),
     writeId: getOptionalWriteId(flags)
   }

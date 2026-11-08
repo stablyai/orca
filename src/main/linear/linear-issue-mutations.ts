@@ -96,6 +96,7 @@ export async function createIssueForAgent(
     id: string
     parentId?: string | null
     projectId?: string | null
+    cycleId?: string | null
     stateId?: string
     assigneeId?: string | null
     priority?: number
@@ -121,6 +122,7 @@ export async function createIssueForAgent(
         title,
         ...(description ? { description } : {}),
         ...(options.parentId ? { parentId: options.parentId } : {}),
+        ...(options.cycleId !== undefined ? { cycleId: options.cycleId } : {}),
         ...(options.projectId ? { projectId: options.projectId } : {}),
         ...(options.stateId ? { stateId: options.stateId } : {}),
         ...(options.assigneeId !== undefined ? { assigneeId: options.assigneeId } : {}),
@@ -205,6 +207,9 @@ export async function updateIssue(
     if (resolvedLabelIds !== undefined) {
       payload.labelIds = resolvedLabelIds
     }
+    if (updates.cycleId !== undefined) {
+      payload.cycleId = updates.cycleId
+    }
     if (updates.projectId !== undefined) {
       payload.projectId = updates.projectId
     }
@@ -268,6 +273,9 @@ export async function updateIssueForAgent(
       }
       if (updates.labelIds !== undefined) {
         payload.labelIds = updates.labelIds
+      }
+      if (updates.cycleId !== undefined) {
+        payload.cycleId = updates.cycleId
       }
       if (updates.projectId !== undefined) {
         payload.projectId = updates.projectId

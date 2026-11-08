@@ -1,3 +1,4 @@
+import { assertLinearCycleSupported } from '../linear-cycle-host-support'
 import type {
   LinearAttachRequest,
   LinearAttachResult,
@@ -240,6 +241,7 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       ...(body !== undefined ? { body } : {}),
       teamInput: getOptionalStringFlag(flags, 'team'),
       projectInput: getOptionalStringFlag(flags, 'project'),
+      cycle: flags.get('cycle') === 'null' ? null : getOptionalStringFlag(flags, 'cycle'),
       state: getOptionalStringFlag(flags, 'state'),
       assignee: getOptionalStringFlag(flags, 'assignee'),
       priority: flags.has('priority') ? getPriorityFlag(flags, 'priority') : undefined,
@@ -254,6 +256,7 @@ export const LINEAR_HANDLERS: Record<string, CommandHandler> = {
       writeId: getOptionalWriteId(flags),
       context: buildLinearCurrentContext(cwd, client.isRemote)
     }
+    await assertLinearCycleSupported(client, request.cycle)
     const response = await client.call<LinearCreateResult>('linear.issueCreate', request, {
       timeoutMs: LINEAR_WRITE_TIMEOUT_MS
     })
