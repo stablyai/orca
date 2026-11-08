@@ -206,6 +206,17 @@ export function readTranscriptFile(
   )
 }
 
+/** An aborted close wait must not replace the read's own outcome or fail stream teardown. */
+function closeTranscriptHandleWithSignal(
+  handle: TranscriptFileHandle,
+  path: string,
+  signal?: AbortSignal
+): Promise<void> {
+  return waitForPromiseWithSignal(closeTranscriptHandle(handle, path), signal).catch(
+    (error: unknown) => (signal?.aborted ? undefined : Promise.reject(error))
+  )
+}
+
 /** Never gated; process-owned handles retire on the client's bounded deadline. */
 export function closeTranscriptHandle(handle: TranscriptFileHandle, path: string): Promise<void> {
   if (isSshTranscriptHandle(handle)) {
@@ -246,7 +257,7 @@ export async function readTranscriptSlice(
     )
     return buffer.subarray(0, bytesRead)
   } finally {
-    await waitForPromiseWithSignal(closeTranscriptHandle(handle, path), signal)
+    await closeTranscriptHandleWithSignal(handle, path, signal)
   }
 }
 
@@ -307,7 +318,7 @@ async function* gatedChunks(
     }
   } finally {
     // Readable.destroy calls generator return, closing handles even after aborted head reads.
-    await waitForPromiseWithSignal(closeTranscriptHandle(handle, path), signal)
+    await closeTranscriptHandleWithSignal(handle, path, signal)
   }
 }
 

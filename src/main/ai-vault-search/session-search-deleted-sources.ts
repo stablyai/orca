@@ -7,6 +7,8 @@ import type { SessionSearchIndexStore } from './session-search-store'
 
 // Walk missing directories upward to seek a listing that proves which component disappeared.
 const MISSING_DIRECTORY = new Set(['ENOENT', 'ENOTDIR'])
+// Cached listings retire without awaiting; drain the worker queue before it fills.
+const REMOVALS_PER_FLUSH = 256
 
 export type SessionSearchRetirement = {
   retired: string[]
@@ -82,6 +84,9 @@ export async function retireDeletedSessionSearchSources(
     if (proof.verdict === 'gone') {
       store.removeFile(path)
       retirement.retired.push(path)
+      if (retirement.retired.length % REMOVALS_PER_FLUSH === 0) {
+        await store.flush?.()
+      }
       continue
     }
     if (proof.verdict === 'present') {
