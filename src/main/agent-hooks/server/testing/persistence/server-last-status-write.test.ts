@@ -1,6 +1,7 @@
+import { readSavedStatus, hasSavedStatus } from './last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
@@ -67,8 +68,8 @@ describe('Last-status persistence', () => {
         )
       )
       server.flushStatusPersistSync()
-      expect(existsSync(lastStatusPath())).toBe(true)
-      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      expect(hasSavedStatus(lastStatusPath())).toBe(true)
+      const file = JSON.parse(readSavedStatus(lastStatusPath()))
       expect(file.version).toBe(2)
       expect(file.entries[PANE]).toMatchObject({
         paneKey: PANE,
@@ -92,7 +93,7 @@ describe('Last-status persistence', () => {
         state: 'done',
         stateStartedAt: expect.any(Number)
       })
-      expect(readFileSync(lastStatusPath(), 'utf8')).not.toContain('launch-bearer-must-not-persist')
+      expect(readSavedStatus(lastStatusPath())).not.toContain('launch-bearer-must-not-persist')
     } finally {
       server.stop()
     }
@@ -135,7 +136,7 @@ describe('Last-status persistence', () => {
       ])
       expect(server.getStatusSnapshotForPane(PANE)[0]?.launchToken).toBeUndefined()
 
-      const persisted = readFileSync(lastStatusPath(), 'utf8')
+      const persisted = readSavedStatus(lastStatusPath())
       expect(persisted).not.toContain(launchToken)
       expect(JSON.parse(persisted).entries[PANE]).toMatchObject({ launchTokenHash })
     } finally {
@@ -192,7 +193,7 @@ describe('Last-status persistence', () => {
     first.flushStatusPersistSync()
     first.stop()
 
-    const afterClear = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+    const afterClear = JSON.parse(readSavedStatus(lastStatusPath()))
     expect(afterClear.entries).toEqual({})
     expect(afterClear.authorityCommitments[PANE]).toMatchObject({
       paneKey: PANE,
@@ -263,7 +264,7 @@ describe('Last-status persistence', () => {
       expect(trackMock).not.toHaveBeenCalledWith('agent_prompt_sent', expect.anything())
 
       firstServer.flushStatusPersistSync()
-      const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))
+      const file = JSON.parse(readSavedStatus(lastStatusPath()))
       expect(file.entries[PANE]).toMatchObject({
         providerSessionOnly: true,
         providerSession: {

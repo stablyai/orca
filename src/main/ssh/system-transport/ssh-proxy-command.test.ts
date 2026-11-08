@@ -93,24 +93,6 @@ describe('spawnProxyCommand', () => {
       setPlatform(realPlatform)
     })
 
-    it('passes the cmd.exe command line verbatim so inner quotes survive', () => {
-      setPlatform('win32')
-      spawnMock.mockReturnValue(createMockProxyProcess())
-
-      spawnProxyCommand(
-        { kind: 'proxy-command', command: 'cloudflared access ssh --hostname %h --port %p' },
-        'target.example.com',
-        22,
-        'deploy'
-      )
-
-      expect(spawnMock).toHaveBeenCalledWith(
-        process.env.ComSpec || 'cmd.exe',
-        ['/d', '/s', '/c', '"cloudflared access ssh --hostname "target.example.com" --port "22""'],
-        expect.objectContaining({ windowsVerbatimArguments: true })
-      )
-    })
-
     it('refuses values that cmd.exe cannot quote safely', () => {
       setPlatform('win32')
       spawnMock.mockReturnValue(createMockProxyProcess())

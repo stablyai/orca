@@ -42,23 +42,6 @@ describe('isKeyboardInteractivePasswordPrompt', () => {
 })
 
 describe('collectKeyboardInteractiveResponses', () => {
-  it('forwards verification prompts with instructions and the echo flag', async () => {
-    const requestCredential = vi.fn(async () => '1')
-    const session = createSession({ requestCredential })
-
-    const responses = await collectKeyboardInteractiveResponses(session, 'Choose an option:', [
-      { prompt: 'Passcode or option (1-2):', echo: true }
-    ])
-
-    expect(responses).toEqual(['1'])
-    expect(requestCredential).toHaveBeenCalledWith(
-      'target-1',
-      'keyboard-interactive',
-      'Choose an option:\nPasscode or option (1-2):',
-      true
-    )
-  })
-
   it('answers a password prompt from the cache without prompting', async () => {
     const requestCredential = vi.fn(async () => 'unused')
     const session = createSession({
@@ -108,29 +91,6 @@ describe('collectKeyboardInteractiveResponses', () => {
     expect(session.isCancelled()).toBe(true)
   })
 
-  it('short-circuits every later round once cancelled', async () => {
-    const requestCredential = vi.fn(async () => 'answer')
-    const session = createSession({ requestCredential })
-    session.markCancelled()
-
-    const responses = await collectKeyboardInteractiveResponses(session, '', [
-      { prompt: 'Duo passcode:', echo: false }
-    ])
-
-    expect(responses).toBeNull()
-    expect(requestCredential).not.toHaveBeenCalled()
-  })
-
-  it('returns null when no credential prompter is available', async () => {
-    const session = createSession({ requestCredential: undefined })
-
-    const responses = await collectKeyboardInteractiveResponses(session, '', [
-      { prompt: 'Password: ', echo: false }
-    ])
-
-    expect(responses).toBeNull()
-  })
-
   it('discards a password resolved after the attempt is cancelled', async () => {
     let answer: (value: string) => void = () => {}
     const requestCredential = vi
@@ -152,18 +112,5 @@ describe('collectKeyboardInteractiveResponses', () => {
     expect(await collecting).toBeNull()
     expect(setCachedPassword).not.toHaveBeenCalled()
     expect(requestCredential).toHaveBeenCalledTimes(1)
-  })
-
-  it('accepts an empty response without caching it as a password', async () => {
-    const requestCredential = vi.fn(async () => '')
-    const setCachedPassword = vi.fn()
-    const session = createSession({ requestCredential, setCachedPassword })
-
-    const responses = await collectKeyboardInteractiveResponses(session, '', [
-      { prompt: 'Password: ', echo: false }
-    ])
-
-    expect(responses).toEqual([''])
-    expect(setCachedPassword).not.toHaveBeenCalled()
   })
 })

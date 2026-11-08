@@ -25,7 +25,9 @@ vi.mock('../browser-extension-management', () => ({
 vi.mock('../installation/browser-extension-list-changes', () => ({
   notifyBrowserExtensionListChanged: mocks.notify
 }))
-vi.mock('./permissions', () => ({ hasBrowserExtensionUserGesture: () => mocks.gesture }))
+vi.mock('../permissions/browser-extension-user-gesture', () => ({
+  hasBrowserExtensionUserGesture: () => mocks.gesture
+}))
 
 const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const { registerManagementNamespace } = await import('./management')

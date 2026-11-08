@@ -27,6 +27,7 @@ import {
 
 type PanelRequest = {
   scopePaths: readonly string[]
+  scopeOnly: boolean
   executionHostScope: string
   sessionLimit: number | 'unlimited'
 }
@@ -53,9 +54,10 @@ vi.mock('./ai-vault-session-refresh', () => ({
   useAiVaultSessionRefresh: (
     scopePaths: PanelRequest['scopePaths'],
     executionHostScope: PanelRequest['executionHostScope'],
-    sessionLimit: PanelRequest['sessionLimit']
+    sessionLimit: PanelRequest['sessionLimit'],
+    scopeOnly: PanelRequest['scopeOnly']
   ) => {
-    panelRequests.push({ scopePaths, executionHostScope, sessionLimit })
+    panelRequests.push({ scopePaths, scopeOnly, executionHostScope, sessionLimit })
     return {
       error: null,
       loading: false,
@@ -140,10 +142,12 @@ it.each([false, true])(
     returned.sessions = [session]
     const { default: AiVaultPanel } = await import('../panel/AiVaultPanel')
     render(<AiVaultPanel workspace={bound ? { worktreeId: folderId } : undefined} />)
+    expect(panelRequests.at(-1)).toMatchObject({ scopeOnly: true })
     expect(panelRequests.at(-1)?.scopePaths).toContain('/var/example')
     expect(panelRows).toEqual([{ session, resume: { available: true, workspaceId: folderId } }])
     expect(panelRows[0].session).toBe(session)
     fireEvent.click(screen.getByRole('radio', { name: /^All$/ }))
+    expect(panelRequests.at(-1)).toMatchObject({ scopeOnly: false })
     expect(panelRequests.at(-1)?.scopePaths).toContain('/var/example')
     expect(panelRows).toEqual([{ session, resume: { available: true, workspaceId: folderId } }])
     expect(panelRows[0].session.cwd).toBe('/private/var/example')

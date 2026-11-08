@@ -59,7 +59,7 @@ vi.mock('./browser-extension-session-loader', () => ({
     attachHook = hooks
   }
 }))
-vi.mock('../browser-extension-web-request', () => ({
+vi.mock('../requests/browser-extension-web-request-observer', () => ({
   installBrowserExtensionWebRequestForwarding: vi.fn(),
   observeBrowserExtensionWebRequests: vi.fn(),
   stopObservingBrowserExtensionWebRequests: vi.fn()

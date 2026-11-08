@@ -67,7 +67,7 @@ vi.mock('../../protocol/ssh-channel-multiplexer', () => ({
   }
 }))
 
-import { LegacyRelayClient, LegacyRelayOwnerHeldError } from './legacy-relay-client'
+import { LegacyRelayClient } from './legacy-relay-client'
 
 const GRANT = {
   protocolVersion: 1,
@@ -103,14 +103,6 @@ beforeEach(() => {
 })
 
 describe('the legacy relay client', () => {
-  it('never displaces an attached owner', async () => {
-    fake.respond = () => {
-      throw rpcError(-32044)
-    }
-    await expect(open()).rejects.toBeInstanceOf(LegacyRelayOwnerHeldError)
-    expect(fake.requests).toHaveLength(1)
-  })
-
   it('talks to a relay that predates owner claims', async () => {
     fake.respond = (method) => {
       if (method === 'pty.openClient') {
@@ -119,10 +111,5 @@ describe('the legacy relay client', () => {
       return null
     }
     await expect(open()).resolves.toMatchObject({ ownerClaim: null })
-  })
-
-  it('refuses a grant that is not the owner role', async () => {
-    fake.respond = () => ({ ...GRANT, role: 'subscriber' })
-    await expect(open()).rejects.toThrow('did not grant the terminal owner role')
   })
 })

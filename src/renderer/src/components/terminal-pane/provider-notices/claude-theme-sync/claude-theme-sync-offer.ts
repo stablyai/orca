@@ -64,7 +64,7 @@ function showClaudeThemeSyncOffer(): void {
   })
 }
 
-/** Offers theme sync to profiles that predate it, once, when Claude Code first runs in an Orca terminal. */
+/** Offers theme sync once, when Claude Code first runs in an Orca terminal. */
 export function useClaudeThemeSyncOffer(): void {
   const due = useAppStore(isOfferDue)
 

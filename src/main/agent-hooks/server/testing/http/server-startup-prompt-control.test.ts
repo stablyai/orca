@@ -1,4 +1,5 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readSavedStatus, hasSavedStatus } from '../persistence/last-status.test-fixtures'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -28,8 +29,8 @@ describe('startup prompt control with status hooks disabled', () => {
           throw new Error('missing status persistence path')
         }
         server.stop()
-        expect(existsSync(statusPath)).toBe(true)
-        expect(JSON.parse(readFileSync(statusPath, 'utf8')).entries[PANE]).toMatchObject({
+        expect(hasSavedStatus(statusPath)).toBe(true)
+        expect(JSON.parse(readSavedStatus(statusPath)).entries[PANE]).toMatchObject({
           paneKey: PANE,
           worktreeId: 'folder-1',
           payload: { state: 'done', prompt: 'terminal status survives quit', agentType: 'opencode' }
