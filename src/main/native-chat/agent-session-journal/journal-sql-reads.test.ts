@@ -100,11 +100,12 @@ it('answers every database-shaped read exactly as the in-memory chat does', asyn
         reads.input({ kind: 'batch', reads: [{ kind: 'input-count' }, { kind: 'newest-turn' }] }),
         reads.pendingSubmissions(),
         reads.newestTurn(),
-        reads.messageOptions('options-message'),
         reads.usageLimitCut(),
         reads.orcaStopCut(),
         reads.statusState(1),
-        reads.statusIndicators({ start: 0, floor: 0 })
+        reads.statusIndicators({ start: 0, floor: 0 }),
+        reads.messageOptions('options-message'),
+        reads.continuationContext()
       ])
     const expected = await answers(memory)
     // Spans more than one reader page.

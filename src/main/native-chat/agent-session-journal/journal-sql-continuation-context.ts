@@ -1,20 +1,10 @@
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { JournalContinuationContext } from './journal-reads'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import { JournalSqlHistoryValues } from './journal-sql-history-values'
 import { JournalSqlScalars } from './journal-sql-scalars'
 import type { JournalSqlScope } from './journal-sql-scope'
 import type { SqliteBindings, SqliteRow } from '../../sqlite/sqlite-statement'
-
-/** The rows a continuation handoff projects: visible items and current sends after the newest `/clear`. */
-export type JournalContinuationContext = {
-  cursor: AgentJournalCursor
-  items: readonly AgentJournalRenderItem[]
-  submissions: readonly AgentJournalSubmission[]
-}
 
 const PAGE = 256
 

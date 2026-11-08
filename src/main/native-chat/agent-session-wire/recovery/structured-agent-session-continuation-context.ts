@@ -1,15 +1,12 @@
 import { projectSavedChatContextItems } from '../../agent-session-saved-prompt-text'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
-import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
 import { buildAgentSessionHandoffContext } from '../../../../shared/agent-session-handoff-context'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { formatWorkerTranscriptMessage } from '../../../../shared/worker-transcript-text'
 import { toLinuxPath } from '../../../../shared/wsl-paths'
 import { writeAgentSessionContextSnapshot } from '../../agent-session-context-snapshots'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { JournalContinuationContext } from '../../agent-session-journal/journal-sql-continuation-context'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -35,7 +32,7 @@ export function continuationContextReader(
       return { status: 'superseded' }
     }
     const session = await conversation(input.sessionId)
-    const context = await continuationContext(session.journal)
+    const context = await session.journal.reads.continuationContext()
     const record = sourceConversation()
     if (
       !record ||
@@ -67,13 +64,4 @@ export function continuationContextReader(
       transcriptPath: record.location.wslDistro ? toLinuxPath(path) : path
     }
   }
-}
-
-// Stand-in until the journal's named continuation read lands; same rows as the SQL export.
-function continuationContext(journal: AgentSessionJournal): Promise<JournalContinuationContext> {
-  const snapshot = journal.snapshot()
-  return Promise.resolve({
-    cursor: snapshot.cursor,
-    ...agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
-  })
 }

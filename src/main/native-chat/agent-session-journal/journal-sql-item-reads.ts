@@ -11,7 +11,12 @@ import {
   type JournalThreadGoalSource
 } from './projection/journal-thread-goal-source'
 import type { JournalSqlScope } from './journal-sql-scope'
-import type { JournalMessageOptions, JournalNamedTurn } from './journal-reads'
+import type {
+  JournalContinuationContext,
+  JournalMessageOptions,
+  JournalNamedTurn
+} from './journal-reads'
+import { readJournalSqlContinuationContext } from './journal-sql-continuation-context'
 import { JournalSqlReadValues } from './journal-sql-read-values'
 import { readJournalSqlInput } from './journal-sql-input-reads'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -31,6 +36,7 @@ export type JournalSqlItemRead =
   | { kind: 'thread-goal-source' }
   | { kind: 'named-turn'; turnId: string }
   | { kind: 'message-options'; clientMessageId: string }
+  | { kind: 'continuation-context' }
 
 export type JournalSqlItemReadResult =
   | { kind: 'items-by-kind'; items: AgentJournalRenderItem[]; nextOrdinal: number | null }
@@ -40,6 +46,7 @@ export type JournalSqlItemReadResult =
   | { kind: 'thread-goal-source'; source: JournalThreadGoalSource }
   | { kind: 'named-turn'; turn: JournalNamedTurn }
   | { kind: 'message-options'; options: JournalMessageOptions }
+  | { kind: 'continuation-context'; context: JournalContinuationContext }
 
 export type JournalSqlItemReadContext = {
   scope: JournalSqlScope
@@ -58,6 +65,8 @@ export function readJournalSqlItems(
 ): JournalSqlItemReadResult {
   const { scope } = context
   switch (operation.kind) {
+    case 'continuation-context':
+      return { kind: 'continuation-context', context: readJournalSqlContinuationContext(scope) }
     case 'message-options': {
       const itemId = agentJournalSubmissionKey(operation.clientMessageId)
       const body = context.visible(itemId) ? context.item(itemId)?.body : undefined

@@ -80,6 +80,7 @@ export function journalSqlReads(
     namedTurn: async (turnId) => (await read({ kind: 'named-turn', turnId })).turn,
     messageOptions: async (clientMessageId) =>
       (await read({ kind: 'message-options', clientMessageId })).options,
+    continuationContext: async () => (await read({ kind: 'continuation-context' })).context,
     contextFloor: async () => (await read({ kind: 'context-floor' })).floor,
     cursor: async () => (await metadata()).cursor,
     physicalCursor: async () => (await metadata()).physicalCursor,

@@ -4,6 +4,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem,
   AgentJournalSubmission,
+  AgentJournalSnapshot,
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -21,6 +22,7 @@ import type { AgentJournalTurnScope } from '../../../shared/agent-session/journa
 import { memoryJournalMap } from './journal-memory-collections'
 import { journalInputPresentationMember } from './input-order/journal-input-obligations'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentSessionCurrentContextRows } from '../../../shared/agent-session/agent-session-context-clear'
 import {
   readJournalStatusIndicators,
   type JournalStatusIndicatorRead,
@@ -38,6 +40,12 @@ export type JournalNamedTurn = {
 }
 
 export type JournalMessageOptions = { ordinaryMessage: boolean; runningTurn: boolean }
+
+export type JournalContinuationContext = {
+  cursor: AgentJournalCursor
+  items: readonly AgentJournalRenderItem[]
+  submissions: readonly AgentJournalSubmission[]
+}
 
 /** Reads a chat answers from its database; scans are filtered so none decodes the whole chat. */
 export type AgentSessionJournalReads = {
@@ -74,6 +82,7 @@ export type AgentSessionJournalReads = {
   newestTurn(): Promise<AgentJournalTurnLifecycle | null>
   namedTurn(turnId: string): Promise<JournalNamedTurn>
   messageOptions(clientMessageId: string): Promise<JournalMessageOptions>
+  continuationContext(): Promise<JournalContinuationContext>
   threadGoalSource(): Promise<JournalThreadGoalSource>
   contextUsage(): Promise<AgentSessionContextUsage>
   visitItems(filter: JournalItemFilter, visit: JournalItemLinkageVisitor): Promise<void>
@@ -89,6 +98,7 @@ type FoldedJournalReads = {
       | 'canonicalItemIds'
       | 'namedTurn'
       | 'messageOptions'
+      | 'continuationContext'
       | 'contextFloor'
       | 'input'
       | 'usageLimitCut'
@@ -100,6 +110,7 @@ type FoldedJournalReads = {
     ...args: Parameters<AgentSessionJournalReads[K]>
   ) => Awaited<ReturnType<AgentSessionJournalReads[K]>>
 } & {
+  snapshot(): AgentJournalSnapshot
   visitItemsWithLinkage(visit: JournalItemLinkageVisitor): void
   // Builder B: context metadata stays fold-backed until the database reader replaces it.
   context: { floor(): AgentJournalCursor | null }
@@ -172,6 +183,13 @@ export function foldedJournalReads(
       return {
         ordinaryMessage: body?.kind === 'message' && !body.command,
         runningTurn: journal.newestTurn()?.state === 'running'
+      }
+    }),
+    continuationContext: now(() => {
+      const snapshot = journal.snapshot()
+      return {
+        cursor: snapshot.cursor,
+        ...agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
       }
     }),
     threadGoalSource: now(journal.threadGoalSource),
