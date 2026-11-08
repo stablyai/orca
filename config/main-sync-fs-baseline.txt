@@ -2,14 +2,15 @@
 # Startup-only or one-shot uses are fine to keep; per-RPC, per-spawn, per-focus or per-poll uses are the target.
 # This is a RATCHET: counts may only go DOWN.
 # Prune after removing calls: pnpm check:main-sync-fs-ratchet --prune
-1 src/main/agent-hooks/first-work-rename-runtime.ts
-2 src/main/agent-hooks/hook-config-write-path.ts
-1 src/main/agent-hooks/hooks-json-read.ts
-20 src/main/agent-hooks/installer-utils.ts
-6 src/main/agent-hooks/locked-executable-rename.ts
+1 src/main/agent-hooks/first-work/first-work-rename-runtime.ts
+2 src/main/agent-hooks/installation/configuration/hook-config-write-path.ts
+1 src/main/agent-hooks/installation/configuration/hooks-json-read.ts
+11 src/main/agent-hooks/installation/configuration/hooks-json-write.ts
+6 src/main/agent-hooks/installation/scripts/locked-executable-rename.ts
+9 src/main/agent-hooks/installation/scripts/managed-hook-script-write.ts
 1 src/main/agent-hooks/server/server-hydration.ts
-1 src/main/agent-hooks/wsl-hook-relay-deps.ts
-3 src/main/agent-hooks/wsl-hook-relay-launch.ts
+1 src/main/agent-hooks/wsl-relay/wsl-hook-relay-deps.ts
+3 src/main/agent-hooks/wsl-relay/wsl-hook-relay-launch.ts
 1 src/main/agent-launch/trust/agent-trust-ownership-ledger.ts
 14 src/main/agent-launch/trust/agent-trust-presets.ts
 2 src/main/agent-launch/trust/antigravity-workspace-trust-ownership.ts
