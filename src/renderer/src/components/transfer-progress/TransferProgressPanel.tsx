@@ -3,8 +3,7 @@ import { ChevronDownIcon, FileIcon, FolderIcon, UploadIcon, XIcon } from 'lucide
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   getTransferSession,
   subscribeToTransferSessions,
@@ -62,12 +61,15 @@ export function TransferProgressPanel({
   }
   const collapsed = session.collapsed
   const summary = summarizeTransferSession(session)
-  const heading = formatTransferProgressHeading({
-    rowCount: session.rows.length,
-    settled: session.settled,
-    doneCount: summary.doneCount,
-    cancelledCount: summary.cancelledCount
-  })
+  const heading = formatTransferProgressHeading(
+    {
+      rowCount: session.rows.length,
+      settled: session.settled,
+      doneCount: summary.doneCount,
+      cancelledCount: summary.cancelledCount
+    },
+    t
+  )
 
   return (
     <div
@@ -145,7 +147,7 @@ function TransferRowItem({
           {row.name}
         </span>
         <span className="truncate text-xs text-muted-foreground tabular-nums">
-          {rowSubLabel(row)}
+          {rowSubLabel(row, t)}
         </span>
       </span>
       {/* Dimmed through a wrapper: <Progress> owns its own effects. */}
@@ -171,18 +173,18 @@ function TransferRowItem({
   )
 }
 
-function rowSubLabel(row: TransferRow): string {
+function rowSubLabel(row: TransferRow, t: Translate): string {
   if (row.status === 'cancelling') {
-    return translate('transferProgress.cancelling', 'Cancelling…')
+    return t('transferProgress.cancelling', 'Cancelling…')
   }
   if (row.status === 'unconfirmed') {
-    return translate('transferProgress.cancelUnconfirmed', 'Cancel sent; remote state unconfirmed')
+    return t('transferProgress.cancelUnconfirmed', 'Cancel sent; remote state unconfirmed')
   }
   if (row.status === 'cancelled') {
-    return translate('transferProgress.cancelled', 'Cancelled')
+    return t('transferProgress.cancelled', 'Cancelled')
   }
   if (row.status === 'failed') {
-    return translate('transferProgress.failed', 'Failed')
+    return t('transferProgress.failed', 'Failed')
   }
   return formatTransferredOfTotal(row.sentBytes, row.totalBytes)
 }
