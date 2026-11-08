@@ -15,6 +15,8 @@ type UseSidebarResizeOptions = {
 
 type UseSidebarResizeResult<T extends HTMLElement> = {
   containerRef: React.RefObject<T | null>
+  /** Attaches the resized element when it is not the caller's own, e.g. a handle's parent. */
+  setContainer: (element: T | null) => void
   isResizing: boolean
   onResizeStart: (event: React.MouseEvent) => void
 }
@@ -215,5 +217,9 @@ export function useSidebarResize<T extends HTMLElement>({
     [applyRenderedWidth, getStartWidth, maxWidth, minWidth, onDraftWidthChange, width]
   )
 
-  return { containerRef, isResizing, onResizeStart }
+  const setContainer = useCallback((element: T | null) => {
+    containerRef.current = element
+  }, [])
+
+  return { containerRef, setContainer, isResizing, onResizeStart }
 }

@@ -1,5 +1,5 @@
 import type React from 'react'
-import { useCallback, useEffect, useLayoutEffect } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -18,33 +18,35 @@ export function TabStripSlotResizeHandle({ tabId }: { tabId: string }): React.JS
   const storedWidth = useAppStore((s) => s.tabWidthsById[tabId])
   const setTabWidth = useAppStore((s) => s.setTabWidth)
   const setWidth = useCallback((width: number) => setTabWidth(tabId, width), [setTabWidth, tabId])
-  const { containerRef, isResizing, onResizeStart } = useSidebarResize<HTMLElement>({
+  const slotRef = useRef<HTMLElement | null>(null)
+  const { setContainer, isResizing, onResizeStart } = useSidebarResize<HTMLElement>({
     isOpen: true,
     width: storedWidth ?? TAB_DEFAULT_WIDTH,
     minWidth: TAB_MIN_WIDTH,
     maxWidth: TAB_MAX_WIDTH,
     deltaSign: 1,
     setWidth,
-    getStartWidth: () => containerRef.current?.getBoundingClientRect().width ?? TAB_DEFAULT_WIDTH
+    getStartWidth: () => slotRef.current?.getBoundingClientRect().width ?? TAB_DEFAULT_WIDTH
   })
   const attachToSlot = useCallback(
     (handle: HTMLDivElement | null) => {
-      containerRef.current = handle?.parentElement ?? null
+      slotRef.current = handle?.parentElement ?? null
+      setContainer(slotRef.current)
     },
-    [containerRef]
+    [setContainer]
   )
 
   useLayoutEffect(() => {
     // Unsized tabs keep their CSS width (content-fit or terminal); the hook pins a default width otherwise.
-    const slot = containerRef.current
+    const slot = slotRef.current
     if (slot && storedWidth === undefined && !isResizing) {
       slot.style.width = ''
     }
-  }, [containerRef, isResizing, storedWidth])
+  }, [isResizing, storedWidth])
 
   useEffect(() => {
     // Release flex sizing and the width cap while dragging so the width shows live.
-    const slot = containerRef.current
+    const slot = slotRef.current
     if (!isResizing || !slot) {
       return
     }
@@ -52,7 +54,7 @@ export function TabStripSlotResizeHandle({ tabId }: { tabId: string }): React.JS
     return () => {
       delete slot.dataset.tabResizing
     }
-  }, [containerRef, isResizing])
+  }, [isResizing])
 
   const handleMouseDown = (event: React.MouseEvent): void => {
     event.stopPropagation()
@@ -81,7 +83,7 @@ export function TabStripSlotResizeHandle({ tabId }: { tabId: string }): React.JS
     }
     event.preventDefault()
     event.stopPropagation()
-    const current = containerRef.current?.getBoundingClientRect().width ?? TAB_DEFAULT_WIDTH
+    const current = slotRef.current?.getBoundingClientRect().width ?? TAB_DEFAULT_WIDTH
     const step = TAB_RESIZE_KEYBOARD_STEP * (event.shiftKey ? 4 : 1)
     setTabWidth(tabId, clampTabWidth(current + (event.key === 'ArrowLeft' ? -step : step)))
   }
