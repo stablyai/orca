@@ -1,4 +1,6 @@
+import * as z from 'zod'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
+import type { MobileRelayHost } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { Query, QueryClient } from '@tanstack/react-query'
 import { defineHostQuery } from '../query/host-query'
 import { hostQueryKey, type HostQueryTarget } from '../query/host-query-key'
@@ -16,7 +18,7 @@ import {
 } from '../worktree/worktree-catalog-snapshot-client'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { getCachedWorktrees } from '../cache/worktree-cache'
-import type { HostRepoCatalogRow } from './host-screen-reply-schema'
+import { hostRepoCatalogRepos, type HostRepoCatalogRow } from './host-screen-reply-schema'
 import { hostPlatformRead, hostRepoCatalogSnapshotRead } from './host-screen-operations'
 import {
   acceptedMetadata,
@@ -31,6 +33,46 @@ export const NO_HOST_LIST_INPUT = {}
 // Agent rows change with no event of their own, so a visible list also polls (host-worktree-catalog).
 export const HOST_LIST_POLL_MS = 3000
 
+// The fields every row the list draws carries; the rest are checked where they are read.
+const storedWorktreeRowSchema = z.looseObject({
+  worktreeId: z.string(),
+  repoId: z.string(),
+  repo: z.string(),
+  branch: z.string(),
+  displayName: z.string(),
+  path: z.string(),
+  liveTerminalCount: z.number(),
+  hasAttachedPty: z.boolean(),
+  unread: z.boolean(),
+  isPinned: z.boolean(),
+  linkedPR: z.looseObject({ number: z.number(), state: z.string() }).nullable()
+})
+const storedWorktreeRow = z.custom<Worktree>(
+  (row) => storedWorktreeRowSchema.safeParse(row).success
+)
+const storedRelayHostSchema = z.looseObject({
+  hostId: z.string().startsWith('runtime:'),
+  label: z.string(),
+  health: z.string(),
+  relay: z.string()
+})
+
+/** Agent attention (running, needs input) is only ever shown from a live read (K1), so rows keep none on disk. */
+function withoutAgentState(row: Worktree): Worktree {
+  const {
+    status: _status,
+    workingMode: _workingMode,
+    sidebarStatus: _sidebarStatus,
+    hasHostSidebarActivity: _hasHostSidebarActivity,
+    agents: _agents,
+    // Terminal output: never stored, and nothing on the page draws it.
+    preview: _preview,
+    lastOutputAt: _lastOutputAt,
+    ...rest
+  } = row
+  return rest
+}
+
 export const hostWorktreeCatalogQuery = defineHostQuery<
   typeof NO_HOST_LIST_INPUT,
   WorktreeCatalogSnapshot
@@ -42,7 +84,13 @@ export const hostWorktreeCatalogQuery = defineHostQuery<
   // A hidden page reads nothing on change events; coming back reads what it missed.
   refetchOnWindowFocus: true,
   // Folder workspace changes publish reposChanged, and worktree.ps carries their rows.
-  signal: { events: ['worktreesChanged', 'reposChanged'], floorMs: HOST_LIST_POLL_MS }
+  signal: { events: ['worktreesChanged', 'reposChanged'], floorMs: HOST_LIST_POLL_MS },
+  persist: {
+    version: 1,
+    dataSchema: z.object({ snapshotId: z.null(), worktrees: z.array(storedWorktreeRow) }),
+    // The snapshot id names rows with their agent state, so stored rows are never a delta base.
+    strip: (data) => ({ snapshotId: null, worktrees: data.worktrees.map(withoutAgentState) })
+  }
 })
 
 export const hostWorktreeCatalogKey = (hostId: string) =>
@@ -78,7 +126,17 @@ export const hostServerWorkspacesQuery = defineHostQuery<{ deltas: boolean }, Se
   staleTime: HOST_LIST_POLL_MS,
   gcTime: 30 * 60_000,
   refetchOnWindowFocus: true,
-  signal: { events: ['worktreesChanged', 'reposChanged'], floorMs: HOST_LIST_POLL_MS }
+  signal: { events: ['worktreesChanged', 'reposChanged'], floorMs: HOST_LIST_POLL_MS },
+  persist: {
+    version: 1,
+    dataSchema: z.object({
+      hosts: z.array(
+        z.custom<MobileRelayHost>((host) => storedRelayHostSchema.safeParse(host).success)
+      ),
+      worktrees: z.array(storedWorktreeRow)
+    }),
+    strip: (data) => ({ hosts: data.hosts, worktrees: data.worktrees.map(withoutAgentState) })
+  }
 })
 
 export type HostRepoCatalog = { snapshotId: string | null; catalog: HostRepoCatalogRow[] }
@@ -110,7 +168,11 @@ export const hostRepoCatalogQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, H
   staleTime: 60_000,
   gcTime: 30 * 60_000,
   refetchOnWindowFocus: true,
-  signal: { events: ['reposChanged'] }
+  signal: { events: ['reposChanged'] },
+  persist: {
+    version: 1,
+    dataSchema: z.object({ snapshotId: z.string().nullable(), catalog: hostRepoCatalogRepos })
+  }
 })
 
 /** Host badges are read only for mixed-host or SSH catalogs. */
