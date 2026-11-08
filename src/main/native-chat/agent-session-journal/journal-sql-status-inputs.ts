@@ -7,7 +7,7 @@ import type {
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 import type { JournalSqlScope } from './journal-sql-scope'
-import { JournalSqlPlaceIndex } from './journal-sql-place-index'
+import { journalDomainLatestSteerId } from './journal-domain-status-inputs'
 
 const PAGE = 128
 
@@ -20,19 +20,18 @@ export function* sqlStatusRelatedInputIds(
   let cursor = [floor, 0, -1]
   for (;;) {
     const rows = scope.db
-      .prepare(`SELECT i.sequence,i.sequence_index,i.ordinal,s.client_message_id
-      FROM journal_proj_items i LEFT JOIN journal_proj_submissions s
-      ON s.session_id=i.session_id AND s.epoch=i.epoch AND s.current=1 AND s.item_key=i.entry_key
-      AND s.input_ordinal>=?
-      WHERE i.session_id=? AND i.epoch=? AND i.hidden=0 AND i.root=1
-      AND i.message_role='user' AND i.command_entry=0 AND i.sequence>?
+      .prepare(`SELECT i.sequence,i.sequence_index,i.ordinal,s.message_id
+      FROM journal_items i LEFT JOIN journal_submission_attempts s
+      ON s.session_id=i.session_id AND s.epoch=i.epoch AND s.current=1 AND s.item_id=i.item_id
+      AND s.ordinal>=?
+      WHERE i.session_id=? AND i.epoch=? AND i.hidden=0 AND i.prompt=1 AND i.sequence>?
       AND (i.sequence,i.sequence_index,i.ordinal)>(?,?,?)
       ORDER BY i.sequence,i.sequence_index,i.ordinal LIMIT ?`)
       .all(start, ...scope.prefix, floor, ...cursor, PAGE)
     for (const row of rows) {
       scope.examined(row)
-      if (row.client_message_id !== null) {
-        yield String(row.client_message_id)
+      if (row.message_id !== null) {
+        yield String(row.message_id)
       }
     }
     const last = rows.at(-1)
@@ -41,23 +40,24 @@ export function* sqlStatusRelatedInputIds(
     }
     cursor = [Number(last.sequence), Number(last.sequence_index), Number(last.ordinal)]
   }
-  let after = -1
+  let after = ''
   for (;;) {
     const rows = scope.db
-      .prepare(`SELECT ordinal,turn_id FROM journal_proj_steer_groups
-      WHERE session_id=? AND epoch=? AND ordinal>? ORDER BY ordinal LIMIT ?`)
+      .prepare(`SELECT steer_turn_item_id FROM journal_submission_attempts
+      WHERE session_id=? AND epoch=? AND current=1 AND steer_turn_item_id IS NOT NULL
+      AND steer_turn_item_id>? GROUP BY steer_turn_item_id ORDER BY steer_turn_item_id LIMIT ?`)
       .all(...scope.prefix, after, PAGE)
     for (const row of rows) {
       scope.examined(row)
       const item = scope.db
-        .prepare(`SELECT entry_key FROM journal_proj_items
-        WHERE session_id=? AND epoch=? AND entry_key=? AND hidden=0`)
-        .get(...scope.prefix, JSON.stringify(row.turn_id))
+        .prepare(`SELECT 1 FROM journal_items
+        WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
+        .get(...scope.prefix, String(row.steer_turn_item_id))
       if (!item) {
         continue
       }
       scope.examined(item)
-      const id = new JournalSqlPlaceIndex(scope, `steers:${JSON.stringify(row.turn_id)}`).lastId()
+      const id = journalDomainLatestSteerId(scope, String(row.steer_turn_item_id))
       if (id !== undefined) {
         yield id
       }
@@ -66,7 +66,7 @@ export function* sqlStatusRelatedInputIds(
     if (rows.length < PAGE || !last) {
       return
     }
-    after = Number(last.ordinal)
+    after = String(last.steer_turn_item_id)
   }
 }
 

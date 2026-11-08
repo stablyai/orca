@@ -4,26 +4,26 @@ import { compareJournalStatusPositions, type JournalStatusItem } from './journal
 
 const PAGE = 128
 
-/** Existence needs no payload; count all reached user metadata, including associated rows. */
+/** Existence seeks headers only; an associated user alone is not evidence of a provider request. */
 export function sqlHasStatusRequestItem(scope: JournalSqlScope): boolean {
   for (const predicate of ['turn_id IS NOT NULL', "message_role='assistant'"]) {
-    const found = scope.db
-      .prepare(`SELECT entry_key FROM journal_proj_items
+    const row = scope.db
+      .prepare(`SELECT 1 FROM journal_items
       WHERE session_id=? AND epoch=? AND hidden=0 AND ${predicate} LIMIT 1`)
       .get(...scope.prefix)
-    if (found) {
-      scope.examined(found)
+    if (row) {
+      scope.examined(row)
       return true
     }
   }
-  let after = ''
+  let after = -1
   for (;;) {
     const rows = scope.db
-      .prepare(`SELECT i.entry_key,
-      EXISTS(SELECT 1 FROM journal_proj_submissions s WHERE s.session_id=i.session_id
-        AND s.epoch=i.epoch AND s.current=1 AND s.item_key=i.entry_key) AS submitted
-      FROM journal_proj_items i WHERE i.session_id=? AND i.epoch=? AND i.hidden=0
-      AND i.message_role='user' AND i.entry_key>? ORDER BY i.entry_key LIMIT ?`)
+      .prepare(`SELECT i.ordinal,
+      EXISTS(SELECT 1 FROM journal_submission_attempts s WHERE s.session_id=i.session_id
+        AND s.epoch=i.epoch AND s.current=1 AND s.item_id=i.item_id) AS submitted
+      FROM journal_items i WHERE i.session_id=? AND i.epoch=? AND i.hidden=0
+      AND i.kind='message' AND i.message_role='user' AND i.ordinal>? ORDER BY i.ordinal LIMIT ?`)
       .all(...scope.prefix, after, PAGE)
     rows.forEach((row) => scope.examined(row))
     if (rows.some((row) => row.submitted === 0)) {
@@ -33,56 +33,63 @@ export function sqlHasStatusRequestItem(scope: JournalSqlScope): boolean {
     if (rows.length < PAGE || !last) {
       return false
     }
-    after = String(last.entry_key)
+    after = Number(last.ordinal)
   }
 }
 
-/** Failure evidence drives the join; only candidate metadata is sorted in render order. */
+/** Failure eligibility precedes the current-item join and render ordering. */
 export function* sqlFailedStatusItems(
   scope: JournalSqlScope,
   item: (id: string) => AgentJournalRenderItem | undefined,
   floor: number
 ): Iterable<JournalStatusItem> {
-  const candidates: { key: string; position: JournalStatusItem['position'] }[] = []
-  let after = ''
-  for (;;) {
-    const rows = scope.db
-      .prepare(`SELECT p.id, s.accepted_seq, i.entry_key, i.sequence,
-      i.sequence_index, i.ordinal, i.hidden, i.root
-      FROM journal_proj_places p
-      LEFT JOIN journal_proj_submissions s ON s.session_id=p.session_id AND s.epoch=p.epoch
-        AND s.client_message_id=p.id AND s.current=1
-      LEFT JOIN journal_proj_items i ON i.session_id=s.session_id AND i.epoch=s.epoch AND i.entry_key=s.item_key
-      WHERE p.session_id=? AND p.epoch=? AND p.index_id='failed-requests' AND p.id>?
-      ORDER BY p.id LIMIT ?`)
-      .all(...scope.prefix, after, PAGE)
-    for (const row of rows) {
-      scope.examined(row)
-      if (
-        typeof row.entry_key === 'string' &&
-        row.hidden === 0 &&
-        row.root === 1 &&
-        (!floor || (Number(row.accepted_seq ?? 0) > floor && Number(row.sequence) > floor))
-      ) {
-        candidates.push({
-          key: row.entry_key,
-          position: {
-            sequence: Number(row.sequence),
-            sequenceIndex: Number(row.sequence_index),
-            ordinal: Number(row.ordinal)
-          }
-        })
+  const candidates: { id: string; position: JournalStatusItem['position'] }[] = []
+  for (const missingSequence of [true, false]) {
+    let after: (string | number)[] | undefined
+    for (;;) {
+      const columns = missingSequence
+        ? 's.ordinal,s.message_id'
+        : 's.accepted_sequence,s.ordinal,s.message_id'
+      const rows = scope.db
+        .prepare(`SELECT s.message_id,s.accepted_sequence,s.ordinal AS input_ordinal,
+        i.item_id,i.sequence,i.sequence_index,i.ordinal
+        FROM journal_submission_attempts s LEFT JOIN journal_items i
+          ON i.session_id=s.session_id AND i.epoch=s.epoch AND i.item_id=s.item_id AND i.hidden=0 AND i.root=1
+        WHERE s.session_id=? AND s.epoch=? AND s.current=1 AND s.request_failure=1
+        AND s.accepted_sequence IS ${missingSequence ? '' : 'NOT '}NULL
+        ${after ? `AND (${columns})>(${after.map(() => '?').join(',')})` : ''}
+        ORDER BY ${columns} LIMIT ?`)
+        .all(...scope.prefix, ...(after ?? []), PAGE)
+      for (const row of rows) {
+        scope.examined(row)
+        if (
+          typeof row.item_id === 'string' &&
+          (!floor || (Number(row.accepted_sequence ?? 0) > floor && Number(row.sequence) > floor))
+        ) {
+          candidates.push({
+            id: row.item_id,
+            position: {
+              sequence: Number(row.sequence),
+              sequenceIndex: Number(row.sequence_index),
+              ordinal: Number(row.ordinal)
+            }
+          })
+        }
       }
+      const last = rows.at(-1)
+      if (rows.length < PAGE || !last) {
+        break
+      }
+      after = [
+        ...(missingSequence ? [] : [Number(last.accepted_sequence)]),
+        Number(last.input_ordinal),
+        String(last.message_id)
+      ]
     }
-    const last = rows.at(-1)
-    if (rows.length < PAGE || !last) {
-      break
-    }
-    after = String(last.id)
   }
   candidates.sort((a, b) => compareJournalStatusPositions(b.position, a.position))
   for (const candidate of candidates) {
-    const current = item(String(JSON.parse(candidate.key)))
+    const current = item(candidate.id)
     if (current) {
       yield { item: current, position: candidate.position }
     }
