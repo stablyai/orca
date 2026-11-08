@@ -10,6 +10,7 @@ import {
 } from './journal-database'
 import { journalOpenRefusalError } from '../replay/journal-open-failure'
 import { JournalCheckpointOwner } from './journal-checkpoint-owner'
+import { readJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
@@ -65,6 +66,10 @@ export class JournalHostDatabase {
       this.rollBackStrandedTransaction(connection)
     }
     return connection
+  }
+
+  async sessionEpoch(sessionId: string): Promise<string | null> {
+    return readJournalSessionEpoch(this.db, sessionId)
   }
 
   /** Streamed text may lose only its trailing suffix on OS crash; the next FULL commit makes it durable. */

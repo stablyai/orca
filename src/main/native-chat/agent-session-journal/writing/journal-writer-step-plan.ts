@@ -26,6 +26,13 @@ export function planJournalWriterStep(
   step: JournalWriterStep,
   onResolved: (outcome: JournalStepOutcome) => void
 ): ((seq: number, ts: number) => JournalRow)[] | null {
+  if (step.kind === 'creation-fact') {
+    const itemId = agentJournalItemKey(step.identity)
+    if (state.epoch !== step.epoch || state.items.has(itemId) || state.tombstones.has(itemId)) {
+      return null
+    }
+    return planJournalWriterStep(state, { ...step, kind: 'item' }, onResolved)
+  }
   if (step.kind === 'resolved-item') {
     const resolved = resolveJournalTimelineItem(
       journalTimelineView(state),

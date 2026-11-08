@@ -1,3 +1,7 @@
+import type {
+  AgentJournalAgentStartItem,
+  AgentJournalAgentHandoffItem
+} from '../../../../shared/agent-session/journal/agent-journal-creation-facts'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalItemAppendInput, JournalItemAppendOptions } from '../journal-store-contracts'
 import type { JournalSqlFailure } from '../journal-sql-failure'
@@ -20,6 +24,12 @@ export type JournalWriterSettlementResolution =
 
 export type JournalWriterStep =
   | ({ kind: 'item'; reservedBytes: number } & JournalItemAppendInput)
+  | (Omit<JournalItemAppendInput, 'body'> & {
+      kind: 'creation-fact'
+      epoch: string
+      reservedBytes: number
+      body: AgentJournalAgentStartItem | AgentJournalAgentHandoffItem
+    })
   | {
       kind: 'resolved-item'
       reservedBytes: number
