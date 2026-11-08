@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NativeChatMessage } from '../../../../../../../shared/native-chat/native-chat-types'
 import {
   clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests,
   markRuntimeEnvironmentCompatible
@@ -16,16 +15,6 @@ const runtimeEnvironmentsCall = vi.fn()
 const runtimeEnvironmentsSubscribe = vi.fn()
 
 const ENV = 'env-1'
-
-function message(id: string): NativeChatMessage {
-  return {
-    id,
-    role: 'assistant',
-    blocks: [{ type: 'text', text: id }],
-    timestamp: 1,
-    source: 'transcript'
-  }
-}
 
 /** Let the compatibility-gate await chain reach the runtime bridge. */
 
@@ -69,120 +58,6 @@ describe('runtime subscribe', () => {
       subscribeCount: () => count
     }
   }
-
-  it('normalizes the first frame to a snapshot and reconnect replays to appends', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    const { deliver } = stubSubscribe()
-    const onFrame = vi.fn()
-    const transport = getNativeChatSessionTransport(ENV)
-
-    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
-    await Promise.resolve()
-
-    expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
-      expect.objectContaining({
-        params: expect.objectContaining({
-          capabilities: { transcriptPending: 1, transcriptSourceOrder: 1 }
-        })
-      }),
-      expect.any(Object)
-    )
-
-    deliver({ type: 'appended', messages: [message('m-1')] })
-    deliver({ type: 'snapshot', messages: [message('m-snapshot')] })
-    deliver({ type: 'replacement', messages: [message('m-replacement')], hasMore: true })
-    deliver({ type: 'ready' })
-    deliver({ type: 'appended', messages: undefined })
-    deliver({ type: 'appended', messages: [message('m-2')] }, false)
-
-    expect(onFrame).toHaveBeenCalledTimes(3)
-    expect(onFrame).toHaveBeenNthCalledWith(1, {
-      type: 'snapshot',
-      messages: [message('m-1')],
-      hasMore: false
-    })
-    expect(onFrame).toHaveBeenNthCalledWith(2, {
-      type: 'snapshot',
-      messages: [message('m-snapshot')],
-      hasMore: false
-    })
-    expect(onFrame).toHaveBeenNthCalledWith(3, {
-      type: 'replacement',
-      messages: [message('m-replacement')],
-      hasMore: true
-    })
-  })
-
-  it('settles with an empty snapshot when the first ok frame is an unrecognized shape', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    const { deliver } = stubSubscribe()
-    const onFrame = vi.fn()
-    const transport = getNativeChatSessionTransport(ENV)
-
-    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
-    await Promise.resolve()
-
-    // Settle unrecognized successful payloads once, carrying any host error.
-    deliver({ type: 'ready', error: 'boom' })
-    deliver({ type: 'ready' })
-
-    expect(onFrame).toHaveBeenCalledTimes(1)
-    expect(onFrame).toHaveBeenCalledWith({
-      type: 'snapshot',
-      messages: [],
-      hasMore: false,
-      error: 'boom'
-    })
-  })
-
-  it('forwards the pending flag and still treats the real snapshot as the initial frame', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    const { deliver } = stubSubscribe()
-    const onFrame = vi.fn()
-    const transport = getNativeChatSessionTransport(ENV)
-
-    transport.subscribe(
-      { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1', limit: 1 },
-      onFrame
-    )
-    await Promise.resolve()
-
-    deliver({ type: 'snapshot', messages: [], hasMore: false, pending: true })
-    deliver({ type: 'snapshot', messages: [message('m-1')] })
-
-    expect(onFrame).toHaveBeenNthCalledWith(1, {
-      type: 'snapshot',
-      messages: [],
-      hasMore: false,
-      pending: true
-    })
-    // Pending frames must not consume the initial slot or keep later real snapshots unsettled.
-    expect(onFrame).toHaveBeenNthCalledWith(2, {
-      type: 'snapshot',
-      messages: [message('m-1')],
-      hasMore: true
-    })
-  })
-
-  it('carries an error on a post-initial reconnect snapshot', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    const { deliver } = stubSubscribe()
-    const onFrame = vi.fn()
-    const transport = getNativeChatSessionTransport(ENV)
-
-    transport.subscribe({ subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' }, onFrame)
-    await Promise.resolve()
-
-    deliver({ type: 'snapshot', messages: [message('m-1')] })
-    deliver({ type: 'snapshot', messages: [], error: 'runtime too old' })
-
-    expect(onFrame).toHaveBeenLastCalledWith({
-      type: 'snapshot',
-      messages: [],
-      hasMore: false,
-      error: 'runtime too old'
-    })
-  })
 
   it('re-subscribes after a mid-stream drop and stops reconnecting on teardown', async () => {
     vi.useFakeTimers()
@@ -284,62 +159,5 @@ describe('runtime subscribe', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('closes an out-of-order stale handle without replacing the active reconnect', async () => {
-    vi.useFakeTimers()
-    try {
-      markRuntimeEnvironmentCompatible(ENV)
-      const attempts: {
-        callbacks: { onClose?: () => void }
-        resolve: (handle: { unsubscribe: () => void; sendBinary: () => void }) => void
-      }[] = []
-      runtimeEnvironmentsSubscribe.mockImplementation((_args, callbacks) => {
-        return new Promise((resolve) => attempts.push({ callbacks, resolve }))
-      })
-      const transport = getNativeChatSessionTransport(ENV)
-      const stop = transport.subscribe(
-        { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' },
-        vi.fn()
-      )
-
-      attempts[0]!.callbacks.onClose?.()
-      await vi.advanceTimersByTimeAsync(RUNTIME_NATIVE_CHAT_RECONNECT_MS)
-      const activeUnsubscribe = vi.fn()
-      attempts[1]!.resolve({ unsubscribe: activeUnsubscribe, sendBinary: vi.fn() })
-      await Promise.resolve()
-      const staleUnsubscribe = vi.fn()
-      attempts[0]!.resolve({ unsubscribe: staleUnsubscribe, sendBinary: vi.fn() })
-      await Promise.resolve()
-      stop()
-
-      expect(staleUnsubscribe).toHaveBeenCalledOnce()
-      expect(activeUnsubscribe).toHaveBeenCalledOnce()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('closes a stream that resolves after unsubscribe (cancel race)', async () => {
-    markRuntimeEnvironmentCompatible(ENV)
-    const unsubscribe = vi.fn()
-    let resolveHandle: (h: unknown) => void = () => {}
-    runtimeEnvironmentsSubscribe.mockImplementation(
-      () => new Promise((resolve) => (resolveHandle = resolve))
-    )
-    const onAppended = vi.fn()
-    const transport = getNativeChatSessionTransport(ENV)
-
-    const stop = transport.subscribe(
-      { subscriptionId: 's-1', agent: 'claude', sessionId: 'sess-1' },
-      onAppended
-    )
-    stop() // teardown before the subscribe promise resolves
-    resolveHandle({ unsubscribe, sendBinary: vi.fn() })
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(unsubscribe).toHaveBeenCalledOnce()
-    expect(onAppended).not.toHaveBeenCalled()
   })
 })

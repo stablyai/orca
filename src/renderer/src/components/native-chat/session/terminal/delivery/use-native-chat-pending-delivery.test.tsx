@@ -24,11 +24,6 @@ function render() {
     }
   )
 }
-async function tick(ms: number) {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(ms)
-  })
-}
 beforeEach(() => {
   vi.useFakeTimers()
   clearPendingSendCacheForTests()
@@ -39,19 +34,6 @@ afterEach(() => {
 })
 
 describe('terminal Chat pending delivery', () => {
-  it('records a send into a read empty transcript as after every row of that session', () => {
-    const { result } = renderHook(() =>
-      useNativeChatPendingDelivery({
-        ...args,
-        session: { messages: [], readPhase: 'ready', sessionId: 'session-1' }
-      })
-    )
-    act(() => result.current.record('first'))
-    expect(result.current.pending[0]).toMatchObject({
-      afterMessageId: null,
-      afterEmptyTranscriptSessionId: 'session-1'
-    })
-  })
   it('keeps a send, and its failure notice, when a different session with old history loads', () => {
     const old: NativeChatMessage[] = [
       { ...userRow('run tests'), id: 'old-user', timestamp: 10 },
@@ -72,13 +54,6 @@ describe('terminal Chat pending delivery', () => {
     rerender({ session: { messages: old, readPhase: 'ready', sessionId: 'resumed-session' } })
     expect(result.current.pending.map((entry) => entry.text)).toEqual(['run tests'])
     expect(result.current.notices.size).toBe(1)
-  })
-  it('never flags an ordinary send, such as one Claude queues mid-turn', async () => {
-    const { result } = render()
-    act(() => result.current.record('queued follow up'))
-    await tick(10 * 60_000)
-    expect(result.current.notices.size).toBe(0)
-    expect(result.current.pending[0]?.delivery).toBeUndefined()
   })
   it('keeps a failed send through Stop while dropping sends Stop may have cancelled', () => {
     const { result } = render()

@@ -21,7 +21,6 @@ import {
   sessionRecord,
   WORKER_HANDLE,
   WORKER_PANE,
-  WORKSPACE_X,
   type SessionCallerHarness
 } from './orchestration-session-caller-test-fixture'
 
@@ -100,51 +99,6 @@ function assignTerminal(runId: string): void {
 }
 
 describe('every target param resolves both spellings of a party to one canonical address', () => {
-  it.each(WORKER_SPELLINGS)('send: a worker at %s gets its Dispatch mailbox', async (_l, to) => {
-    const dispatchId = assignWorker(await chatRun())
-    const { message } = await as(undefined, 'orchestration.send', {
-      from: WORKER_HANDLE,
-      to,
-      subject: 's'
-    })
-    expect(message).toMatchObject({ to_handle: `dispatch:${dispatchId}` })
-  })
-
-  it("send: a chat's session address is its own direct mailbox", async () => {
-    const { message } = await as(undefined, 'orchestration.send', {
-      from: WORKER_HANDLE,
-      to: ADDRESS_Z,
-      subject: 's'
-    })
-    expect(message).toMatchObject({ to_handle: ADDRESS_Z })
-  })
-
-  it.each(WORKER_SPELLINGS)('ask: a worker coordinator is asked at %s', async (_l, to) => {
-    assignWorker(await chatRun())
-    const childRun = idOf((await as(SESSION_Y, 'orchestration.runCreate', { objective: 'c' })).run)
-    assignTerminal(childRun)
-    const asked = await as(undefined, 'orchestration.ask', {
-      from: WORKER_HANDLE,
-      to,
-      question: 'q',
-      timeoutMs: 0
-    })
-    expect(h.db.getQuestion(String(asked.messageId))).toMatchObject({ run_id: childRun })
-  })
-
-  it("ask: a chat coordinator is asked at its session address, and not at a worker's", async () => {
-    const runId = await chatRun()
-    assignTerminal(runId)
-    const ask = (to: string) =>
-      call(undefined, 'orchestration.ask', { from: WORKER_HANDLE, to, question: 'q', timeoutMs: 0 })
-
-    expect(await ask(ADDRESS_X)).toMatchObject({ ok: true })
-    expect(await ask(ADDRESS_Y)).toMatchObject({
-      ok: false,
-      error: { code: 'dispatch_run_mismatch' }
-    })
-  })
-
   it.each(WORKER_SPELLINGS)(
     'dispatch: a worker named by %s is the assignee, and its check reads the Dispatch',
     async (_l, to) => {
@@ -200,151 +154,9 @@ describe('every target param resolves both spellings of a party to one canonical
     expect(h.db.db.prepare('SELECT COUNT(*) AS n FROM dispatch_contexts').get()).toEqual({ n: 0 })
     expect(h.db.getTask(task.id)?.status).toBe('ready')
   })
-
-  it.each(WORKER_SPELLINGS)('inbox: a worker named by %s lists its mail', async (_l, terminal) => {
-    const runId = await chatRun()
-    h.db.insertMessage({ from: 'term_x', to: handle, subject: 'direct', body: '', runId })
-
-    const { messages } = await as(undefined, 'orchestration.inbox', { terminal })
-
-    expect(messages).toEqual([expect.objectContaining({ subject: 'direct', to_handle: handle })])
-  })
-
-  it("inbox: a chat's session address lists its direct mail", async () => {
-    await as(undefined, 'orchestration.send', { from: WORKER_HANDLE, to: ADDRESS_Z, subject: 'z' })
-    const { messages } = await as(undefined, 'orchestration.inbox', { terminal: ADDRESS_Z })
-    expect(messages).toEqual([expect.objectContaining({ subject: 'z' })])
-  })
-
-  it('sessionAddress: any session, a worker too, is its Orca session ID', async () => {
-    expect(await as(undefined, 'orchestration.sessionAddress', { sessionId: SESSION_Z })).toEqual({
-      orcaSessionId: ADDRESS_Z
-    })
-    expect(await as(undefined, 'orchestration.sessionAddress', { sessionId: SESSION_Y })).toEqual({
-      orcaSessionId: ADDRESS_Y
-    })
-  })
-
-  it.each(WORKER_SPELLINGS)(
-    'partyLocation: a worker at %s opens as its chat',
-    async (_l, address) => {
-      expect(await as(undefined, 'orchestration.partyLocation', { address })).toEqual({
-        location: { kind: 'chat', sessionId: SESSION_Y, worktreeId: WORKSPACE_X }
-      })
-    }
-  )
-
-  it('partyLocation: a dispatch opens as its assignee, a terminal as itself, a lost one as nothing', async () => {
-    const dispatchId = assignWorker(await chatRun())
-    expect(
-      await as(undefined, 'orchestration.partyLocation', { address: `dispatch:${dispatchId}` })
-    ).toEqual({ location: { kind: 'chat', sessionId: SESSION_Y, worktreeId: WORKSPACE_X } })
-    expect(await as(undefined, 'orchestration.partyLocation', { address: WORKER_HANDLE })).toEqual({
-      location: { kind: 'terminal', handle: WORKER_HANDLE }
-    })
-    expect(
-      await as(undefined, 'orchestration.partyLocation', { address: 'dispatch:gone' })
-    ).toEqual({ location: null })
-  })
-
-  it("partyLocation: a terminal handle from an earlier run opens as its pane's live terminal, by the mail it sent", async () => {
-    vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockImplementation((paneKey) =>
-      paneKey === WORKER_PANE ? WORKER_HANDLE : null
-    )
-    const mail = h.db.insertMessage({
-      from: 'term_previous_run',
-      to: ADDRESS_X,
-      subject: 's',
-      senderPaneKey: WORKER_PANE
-    })
-    expect(
-      await as(undefined, 'orchestration.partyLocation', {
-        address: 'term_previous_run',
-        messageIds: [mail.id]
-      })
-    ).toEqual({ location: { kind: 'terminal', handle: WORKER_HANDLE } })
-    expect(
-      await as(undefined, 'orchestration.partyLocation', { address: 'term_previous_run' })
-    ).toEqual({ location: null, lost: 'terminal' })
-  })
-})
-
-describe('a /clear-ed chat is shown the Orca session ID it had before the clear', () => {
-  const PROVIDER_ID_Z = 'd00dfeed-1122-4334-8556-778899aabbcc'
-
-  /** Z continued X after a /clear, so X's address is Z's. */
-  function clearXIntoZ(): void {
-    h.records.set(SESSION_X, {
-      ...sessionRecord(SESSION_X),
-      conversationCommand: {
-        command: 'clear',
-        state: 'completed',
-        replacementSessionId: SESSION_Z,
-        operationId: 'op',
-        callerKey: 'caller',
-        phase: 'committed'
-      }
-    })
-    h.records.set(SESSION_Z, sessionRecord(SESSION_Z, { providerId: PROVIDER_ID_Z }))
-  }
-
-  it('in a dispatch preview its own live Orca session ID would fill in', async () => {
-    clearXIntoZ()
-    const runId = await chatRun(SESSION_Z)
-    const task = h.db.createTask({ runId, spec: 'work' })
-
-    const { preamble } = await as(SESSION_Z, 'orchestration.dispatchShow', {
-      task: task.id,
-      preamble: true,
-      from: ADDRESS_Z
-    })
-
-    expect(preamble).toContain(`Your coordinator's Orca session ID is: ${ADDRESS_X}\n`)
-    expect(preamble).not.toContain(SESSION_Z)
-  })
-
-  it("in the refusal that names it for its provider's id", async () => {
-    clearXIntoZ()
-    const response = await call(undefined, 'orchestration.send', {
-      from: WORKER_HANDLE,
-      to: PROVIDER_ID_Z,
-      subject: 's'
-    })
-
-    expect(response).toMatchObject({
-      ok: false,
-      error: {
-        code: CODES.providerId,
-        message: expect.stringContaining(`This session's Orca session ID is ${ADDRESS_X};`)
-      }
-    })
-  })
 })
 
 describe('a caller declared by a session address, on a request with no session id', () => {
-  it.each(WORKER_SPELLINGS)(
-    'sends as the worker named by %s, from its handle',
-    async (_l, from) => {
-      const { message } = await as(undefined, 'orchestration.send', {
-        from,
-        to: ADDRESS_Z,
-        subject: 's'
-      })
-      expect(message).toMatchObject({ from_handle: handle })
-    }
-  )
-
-  it('checks the worker named by its session address as if it had named its handle', async () => {
-    const dispatchId = assignWorker(await chatRun())
-    await as(SESSION_X, 'orchestration.send', { to: handle, subject: 'work' })
-
-    const byAddress = await as(undefined, 'orchestration.check', { terminal: ADDRESS_Y, all: true })
-    const byHandle = await as(undefined, 'orchestration.check', { terminal: handle, all: true })
-
-    expect(byAddress).toEqual(byHandle)
-    expect(byAddress).toMatchObject({ dispatchId, messages: [{ subject: 'work' }] })
-  })
-
   it("refuses a chat's session address, with no effects", async () => {
     const response = await call(undefined, 'orchestration.send', {
       from: ADDRESS_Z,

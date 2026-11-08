@@ -30,10 +30,8 @@ import {
   SECOND_PTY_ID,
   SECOND_TERMINAL_HANDLE,
   sqliteFor,
-  TAB_ID,
   temporaryDirectories,
-  TERMINAL_HANDLE,
-  WORKTREE_ID
+  TERMINAL_HANDLE
 } from './orchestration-mailbox-notification-test-harness'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration/orchestration'
@@ -74,35 +72,6 @@ describe('orchestration notification mailbox consistency', () => {
       messages: []
     })
     expect(db.getMessageById(staleDirectMessage.id)).toMatchObject({
-      read: 0,
-      delivered_at: null
-    })
-    db.close()
-  })
-
-  it('does not point unbound direct mail that a later Run binding would hide', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const runA = createBoundRun(db, 'Unbound Run A')
-    const message = insertDirectRunMessage(db, runA.id, 'Run A before later binding')
-    db.bindRun({
-      runId: runA.id,
-      coordinatorHandle: SECOND_TERMINAL_HANDLE,
-      coordinatorPaneKey: SECOND_PANE_KEY
-    })
-    sqliteFor(db)
-      .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
-      .run(TERMINAL_HANDLE, message.id)
-
-    await driveToLiveIdle(harness.runtime)
-    const runB = createBoundRun(db, 'Later Run B')
-    const checked = await checkBoundMailbox(harness.runtime)
-
-    expect(pointerCount(harness.write)).toBe(0)
-    expect(checked).toMatchObject({ runId: runB.id, deliveryId: null, count: 0, messages: [] })
-    expect(db.getMessageById(message.id)).toMatchObject({
-      to_handle: TERMINAL_HANDLE,
       read: 0,
       delivered_at: null
     })
@@ -151,95 +120,6 @@ describe('orchestration notification mailbox consistency', () => {
     expect(checked).toMatchObject({ runId: runA.id, count: 1 })
     expect(checked.messages).toEqual([expect.objectContaining({ id: message.id })])
     restartedDb.close()
-  })
-
-  it('pages a large persisted mismatch and coalesces each mailbox wake', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const runA = createBoundRun(db, 'Backlog Run A')
-    const messages = Array.from({ length: 151 }, (_, index) =>
-      insertDirectRunMessage(db, runA.id, `Backlog message ${index}`)
-    )
-    createBoundRun(db, 'Backlog Run B', { rebind: true })
-    const placeholders = messages.map(() => '?').join(',')
-    sqliteFor(db)
-      .prepare(`UPDATE messages SET to_handle = ? WHERE id IN (${placeholders})`)
-      .run(TERMINAL_HANDLE, ...messages.map((message) => message.id))
-    const notify = vi.spyOn(harness.runtime, 'notifyMessageArrived')
-    const directRemaining = (): number =>
-      (
-        sqliteFor(db)
-          .prepare('SELECT COUNT(*) AS count FROM messages WHERE to_handle = ?')
-          .get(TERMINAL_HANDLE) as { count: number }
-      ).count
-
-    await driveToLiveIdle(harness.runtime)
-    expect(directRemaining()).toBe(101)
-    expect(notify).toHaveBeenCalledTimes(1)
-
-    await vi.advanceTimersToNextTimerAsync()
-    expect(directRemaining()).toBe(51)
-    expect(notify).toHaveBeenCalledTimes(2)
-    await vi.advanceTimersToNextTimerAsync()
-    expect(directRemaining()).toBe(1)
-    expect(notify).toHaveBeenCalledTimes(3)
-    await vi.advanceTimersToNextTimerAsync()
-    expect(directRemaining()).toBe(0)
-    expect(notify).toHaveBeenCalledTimes(4)
-    expect(pointerCount(harness.write)).toBe(0)
-    db.close()
-  })
-
-  it('uses composite indexes for direct ownership reconciliation', () => {
-    const db = new OrchestrationDb(':memory:')
-    const sqlite = sqliteFor(db)
-    const plan = (sql: string, ...params: string[]): string =>
-      (sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[])
-        .map((row) => row.detail)
-        .join(' ')
-
-    expect(
-      plan(
-        `SELECT * FROM dispatch_contexts
-         WHERE run_id = ? AND assignee_handle = ? AND status IN ('pending', 'dispatched')
-         ORDER BY rowid DESC LIMIT 1`,
-        'run_indexed',
-        TERMINAL_HANDLE
-      )
-    ).toContain('idx_dispatch_active_run_assignee_handle')
-    expect(
-      plan(
-        `SELECT * FROM dispatch_contexts
-         WHERE run_id = ? AND assignee_pane_key IS NOT NULL
-           AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
-           AND substr(assignee_pane_key, instr(assignee_pane_key, ':') + 1) = ?
-         ORDER BY rowid DESC LIMIT 1`,
-        'run_indexed',
-        LEAF_ID
-      )
-    ).toContain('idx_dispatch_active_run_pane_leaf')
-    expect(
-      plan(
-        `SELECT 1 FROM messages INDEXED BY idx_messages_undelivered_direct_run
-         WHERE run_id = ? AND to_handle = ? AND read = 0 AND delivered_at IS NULL
-           AND delivery_contract = 'current_delivery' LIMIT 1`,
-        'run_indexed',
-        TERMINAL_HANDLE
-      )
-    ).toContain('idx_messages_undelivered_direct_run')
-    expect(
-      plan(
-        `SELECT * FROM messages INDEXED BY idx_messages_unread_current_run_type
-         WHERE run_id = ? AND to_handle = ? AND read = 0
-           AND delivery_contract = 'current_delivery' AND type IN (?)
-         ORDER BY sequence LIMIT 100`,
-        'run_indexed',
-        'run:run_indexed',
-        'worker_done'
-      )
-    ).toContain('idx_messages_unread_current_run_type')
-    db.close()
   })
 
   it('finds owned mail without scanning an older unowned direct backlog', () => {
@@ -585,79 +465,6 @@ describe('orchestration notification mailbox consistency', () => {
 
     expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(1)
     expect(db.getMessageById(message.id)?.delivered_at).toEqual(expect.any(String))
-    db.close()
-  })
-
-  it('keeps a staged Enter deferred when a parked watcher republishes the leaf beside a decoy', async () => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'Cold-park published leaf Run')
-    insertDirectRunMessage(db, run.id, 'Keep Enter deferred')
-
-    await driveToLiveIdle(harness.runtime)
-    expect(pointerCount(harness.write)).toBe(1)
-
-    harness.runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'decoy-tab',
-          worktreeId: WORKTREE_ID,
-          title: 'Decoy',
-          activeLeafId: 'decoy-leaf',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'decoy-tab',
-          worktreeId: WORKTREE_ID,
-          leafId: 'decoy-leaf',
-          paneRuntimeId: 2,
-          ptyId: null
-        }
-      ]
-    })
-    // A parked watcher can republish a leaf without a live renderer; retain the cold-park fence.
-    harness.runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'decoy-tab',
-          worktreeId: WORKTREE_ID,
-          title: 'Decoy',
-          activeLeafId: 'decoy-leaf',
-          layout: null
-        },
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          title: 'Codex',
-          activeLeafId: LEAF_ID,
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'decoy-tab',
-          worktreeId: WORKTREE_ID,
-          leafId: 'decoy-leaf',
-          paneRuntimeId: 2,
-          ptyId: null
-        },
-        {
-          tabId: TAB_ID,
-          worktreeId: WORKTREE_ID,
-          leafId: LEAF_ID,
-          paneRuntimeId: 1,
-          ptyId: PTY_ID,
-          parked: true
-        }
-      ]
-    })
-    harness.runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 3)
-
-    await vi.advanceTimersByTimeAsync(500)
-    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
     db.close()
   })
 

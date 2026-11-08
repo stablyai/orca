@@ -4,6 +4,7 @@ import { i18n, setRendererPluginLanguagePacks, loadRendererUiLanguage } from './
 import { usePluginLanguagePacks } from '../store/plugins/localization/plugin-language-packs'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { initializeLanguageDetection, useLanguageReadiness } from './language-readiness'
+import { TranslationScopeProvider } from './translation-scope-provider'
 
 export function I18nProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const uiLanguage = useAppStore((state) => state.settings?.uiLanguage ?? null)
@@ -62,5 +63,5 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
   }, [uiLanguage, activePack, retryCount, systemLocale])
 
   // initReactI18next already binds useTranslation to this instance.
-  return <>{children}</>
+  return <TranslationScopeProvider>{children}</TranslationScopeProvider>
 }

@@ -7,7 +7,7 @@ import type { AgentSessionWriteNoticePart } from '../../../../../../../shared/ag
 import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
 import { readStructuredAgentSessionConversationOutline } from '@/runtime/structured-agent-session-client'
-import { agentSessionWriteNoticeText } from '../../../agent-session-write-notice-text'
+import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
 import { setStructuredAgentSessionSendNotice } from './structured-agent-session-pending-sends'
 // Return legacy unsent copies to the composer only if the host holds neither message nor card; delete only after durable hand-back.

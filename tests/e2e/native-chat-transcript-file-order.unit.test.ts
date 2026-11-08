@@ -288,7 +288,7 @@ describe('canonical source positions', () => {
       const { commandMarkersAsMessages } =
         await import('../../src/renderer/src/components/native-chat/session/terminal/delivery/native-chat-command-marker')
       const { createNativeChatMessageListProjection } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-message-list-projection')
+        await import('../../src/renderer/src/components/native-chat/conversation/projection/native-chat-message-list-projection')
       const pair = (id: string, path: string) => {
         const prompt = record(id, PROMPT.timestamp, `${id} [Image #1]`, 'user')
         const images = [1, 2].map((n) =>

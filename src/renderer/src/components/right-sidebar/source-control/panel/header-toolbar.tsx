@@ -8,7 +8,7 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import {
   HostedReviewToolbarLink,
@@ -92,6 +92,7 @@ export function SourceControlHeaderToolbar({
   manualReviewUrl,
   branchLineTotal
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
+  const t = useTranslate()
   const filterInputRef = useRef<HTMLInputElement>(null)
   const normalizedFilter = filterQuery.trim()
   const showCollapsedToolbar = !filterExpanded
@@ -128,10 +129,10 @@ export function SourceControlHeaderToolbar({
   }, [filterExpanded])
 
   const filterToggleTitle = normalizedFilter
-    ? translate('auto.components.right.sidebar.SourceControl.c8e4a1f902', 'Filter: {{value0}}', {
+    ? t('auto.components.right.sidebar.SourceControl.c8e4a1f902', 'Filter: {{value0}}', {
         value0: filterQuery
       })
-    : translate('auto.components.right.sidebar.SourceControl.b3c8f1a902', 'Filter files by name')
+    : t('auto.components.right.sidebar.SourceControl.b3c8f1a902', 'Filter files by name')
 
   return (
     <div className="border-b border-border px-3 pt-1.5 pb-1">
@@ -201,12 +202,12 @@ export function SourceControlHeaderToolbar({
                     collapseFilter()
                   }
                 }}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.right.sidebar.SourceControl.c35baf2f1e',
                   'Filter files…'
                 )}
                 className="min-w-0 w-full flex-1 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.right.sidebar.SourceControl.c35baf2f1e',
                   'Filter files…'
                 )}
@@ -217,11 +218,11 @@ export function SourceControlHeaderToolbar({
               variant="ghost"
               size="icon-xs"
               className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.right.sidebar.SourceControl.d4f8c2a901',
                 'Clear and close filter'
               )}
-              title={translate(
+              title={t(
                 'auto.components.right.sidebar.SourceControl.d4f8c2a901',
                 'Clear and close filter'
               )}

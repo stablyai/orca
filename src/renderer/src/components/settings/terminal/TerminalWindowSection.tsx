@@ -13,7 +13,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { clampNumber } from '@/lib/terminal-theme'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { WindowMaterialSetting } from '../appearance/WindowMaterialSetting'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
 
@@ -29,6 +29,7 @@ export function TerminalWindowSection({
   updateSettings,
   colorOverrideSlot
 }: TerminalWindowSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const [colorOverridesExpanded, setColorOverridesExpanded] = useState(false)
   const colorOverridesSetting = TERMINAL_COLOR_OVERRIDES_SETTING[colorOverrideSlot]
   const colorOverrides = terminalColorOverridesForSlot(settings, colorOverrideSlot)
@@ -37,10 +38,10 @@ export function TerminalWindowSection({
     <section className="space-y-4">
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">
-          {translate('auto.components.settings.TerminalWindowSection.b96ba13ed1', 'Window')}
+          {t('auto.components.settings.TerminalWindowSection.b96ba13ed1', 'Window')}
         </h3>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.TerminalWindowSection.00eaa6b881',
             'Window appearance and background settings.'
           )}
@@ -49,22 +50,22 @@ export function TerminalWindowSection({
 
       <div className="ml-4 space-y-4">
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.TerminalWindowSection.ea7b1a158e',
             'Background Opacity'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.TerminalWindowSection.03acb60aa0',
             'Controls the transparency of the terminal background.'
           )}
           keywords={['opacity', 'transparency', 'background', 'alpha']}
         >
           <NumberField
-            label={translate(
+            label={t(
               'auto.components.settings.TerminalWindowSection.ea7b1a158e',
               'Background Opacity'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.TerminalWindowSection.809f37738d',
               'Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent.'
             )}
@@ -82,8 +83,8 @@ export function TerminalWindowSection({
 
         {isWebClientLocation() ? null : (
           <SearchableSetting
-            title={translate('settings.windowMaterial.title', 'Window Material')}
-            description={translate(
+            title={t('settings.windowMaterial.title', 'Window Material')}
+            description={t(
               'settings.windowMaterial.description',
               'What shows behind translucent terminals. Requires restart.'
             )}
@@ -95,18 +96,18 @@ export function TerminalWindowSection({
         )}
 
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.TerminalWindowSection.36b8402015',
             'Horizontal Padding'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.TerminalWindowSection.25e2f8e8e1',
             'Horizontal padding around the terminal grid in pixels.'
           )}
           keywords={['padding', 'horizontal', 'spacing', 'margin']}
         >
           <NumberField
-            label={translate(
+            label={t(
               'auto.components.settings.TerminalWindowSection.36b8402015',
               'Horizontal Padding'
             )}
@@ -122,18 +123,15 @@ export function TerminalWindowSection({
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalWindowSection.1afcc1d973',
-            'Vertical Padding'
-          )}
-          description={translate(
+          title={t('auto.components.settings.TerminalWindowSection.1afcc1d973', 'Vertical Padding')}
+          description={t(
             'auto.components.settings.TerminalWindowSection.1846f6ee6a',
             'Vertical padding around the terminal grid in pixels.'
           )}
           keywords={['padding', 'vertical', 'spacing', 'margin']}
         >
           <NumberField
-            label={translate(
+            label={t(
               'auto.components.settings.TerminalWindowSection.1afcc1d973',
               'Vertical Padding'
             )}
@@ -149,11 +147,11 @@ export function TerminalWindowSection({
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate(
+          title={t(
             'auto.components.settings.TerminalWindowSection.3530908ef9',
             'Hide Mouse While Typing'
           )}
-          description={translate(
+          description={t(
             'auto.components.settings.TerminalWindowSection.1d1920dc8a',
             'Hide the mouse cursor when typing in the terminal.'
           )}
@@ -162,14 +160,14 @@ export function TerminalWindowSection({
         >
           <div className="space-y-0.5">
             <Label>
-              {translate(
+              {t(
                 'auto.components.settings.TerminalWindowSection.3530908ef9',
                 'Hide Mouse While Typing'
               )}
             </Label>
           </div>
           <Switch
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.TerminalWindowSection.3530908ef9',
               'Hide Mouse While Typing'
             )}
@@ -183,11 +181,8 @@ export function TerminalWindowSection({
         </SearchableSetting>
 
         <SearchableSetting
-          title={translate(
-            'auto.components.settings.TerminalWindowSection.63f8d9336e',
-            'Color Overrides'
-          )}
-          description={translate(
+          title={t('auto.components.settings.TerminalWindowSection.63f8d9336e', 'Color Overrides')}
+          description={t(
             'auto.components.settings.TerminalWindowSection.e86e09b5c7',
             'Override individual terminal colors.'
           )}
@@ -202,10 +197,7 @@ export function TerminalWindowSection({
               <span className={`transition-transform ${colorOverridesExpanded ? 'rotate-90' : ''}`}>
                 ▶
               </span>
-              {translate(
-                'auto.components.settings.TerminalWindowSection.63f8d9336e',
-                'Color Overrides'
-              )}
+              {t('auto.components.settings.TerminalWindowSection.63f8d9336e', 'Color Overrides')}
             </button>
             <div
               className={`grid overflow-hidden transition-all duration-300 ease-out ${
@@ -215,11 +207,11 @@ export function TerminalWindowSection({
               <div className="min-h-0 space-y-4">
                 <p className="text-xs text-muted-foreground">
                   {colorOverrideSlot === 'light'
-                    ? translate(
+                    ? t(
                         'auto.components.settings.TerminalWindowSection.color_overrides_light_description',
                         'Override individual colors of the light terminal theme.'
                       )
-                    : translate(
+                    : t(
                         'auto.components.settings.TerminalWindowSection.color_overrides_dark_description',
                         'Override individual colors of the dark terminal theme.'
                       )}
@@ -254,11 +246,11 @@ export function TerminalWindowSection({
                   onClick={() => updateSettings({ [colorOverridesSetting]: undefined })}
                 >
                   {colorOverrideSlot === 'light'
-                    ? translate(
+                    ? t(
                         'auto.components.settings.TerminalWindowSection.reset_light_color_overrides',
                         'Reset light color overrides'
                       )
-                    : translate(
+                    : t(
                         'auto.components.settings.TerminalWindowSection.reset_dark_color_overrides',
                         'Reset dark color overrides'
                       )}

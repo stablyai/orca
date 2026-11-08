@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   SSH_CONFIG_HOST_RESULT_LIMIT,
   type SshConfigHostSummary
@@ -42,6 +42,7 @@ export function AddRemoteHostSshConfigPicker({
   onBack: () => void
   onAddAllToOrca: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const queryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(
@@ -63,13 +64,13 @@ export function AddRemoteHostSshConfigPicker({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <DialogHeader className="text-left">
         <DialogTitle>
-          {translate(
+          {t(
             'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerTitle',
             'Choose from ~/.ssh/config'
           )}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerImportDescription',
             'Pick a host to fill the form, or add every new host to Orca’s host list.'
           )}
@@ -86,13 +87,13 @@ export function AddRemoteHostSshConfigPicker({
           }
           queryTimer.current = setTimeout(() => onQueryChange(value), 200)
         }}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerFilter',
           'Filter hosts…'
         )}
         autoFocus
         disabled={filterDisabled}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerFilter',
           'Filter hosts…'
         )}
@@ -110,15 +111,12 @@ export function AddRemoteHostSshConfigPicker({
               onClick={onRetry}
               disabled={isLoading || isBulkImporting}
             >
-              {translate(
-                'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerRetry',
-                'Try again'
-              )}
+              {t('auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerRetry', 'Try again')}
             </Button>
           </div>
         ) : isLoading && hosts.length === 0 ? (
           <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerLoading',
               'Reading ~/.ssh/config…'
             )}
@@ -127,22 +125,22 @@ export function AddRemoteHostSshConfigPicker({
           <div className="px-3 py-8 text-center text-sm text-muted-foreground">
             <p className="font-medium text-foreground">
               {totalHostCount === 0
-                ? translate(
+                ? t(
                     'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerEmpty',
                     'No hosts in ~/.ssh/config'
                   )
-                : translate(
+                : t(
                     'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerNoMatch',
                     'No matching hosts'
                   )}
             </p>
             <p className="mt-1">
               {totalHostCount === 0
-                ? translate(
+                ? t(
                     'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerEmptyHint',
                     'Add a Host entry there, or go back and type the details manually.'
                   )
-                : translate(
+                : t(
                     'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerNoMatchHint',
                     'Try another filter, or go back and type manually.'
                   )}
@@ -151,7 +149,7 @@ export function AddRemoteHostSshConfigPicker({
         ) : (
           // Rows act without selection state, so plain buttons avoid false listbox aria-selected semantics.
           <ul
-            aria-label={translate(
+            aria-label={t(
               'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerHostsLabel',
               'SSH config hosts'
             )}
@@ -185,7 +183,7 @@ export function AddRemoteHostSshConfigPicker({
                   </div>
                   {resolvingAlias === host.alias ? (
                     <span className="mt-0.5 shrink-0 text-[10.5px] text-muted-foreground">
-                      {translate(
+                      {t(
                         'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerResolving',
                         'Reading…'
                       )}
@@ -195,7 +193,7 @@ export function AddRemoteHostSshConfigPicker({
                       variant="outline"
                       className="mt-0.5 shrink-0 border-emerald-500/40 text-[10.5px] text-emerald-400"
                     >
-                      {translate(
+                      {t(
                         'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerInOrca',
                         'In Orca'
                       )}
@@ -205,7 +203,7 @@ export function AddRemoteHostSshConfigPicker({
                       variant="outline"
                       className="mt-0.5 shrink-0 text-[10.5px] text-muted-foreground"
                     >
-                      {translate(
+                      {t(
                         'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerPreviouslyRemoved',
                         'Removed from Orca'
                       )}
@@ -220,7 +218,7 @@ export function AddRemoteHostSshConfigPicker({
 
       {matchesTruncated ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerMoreResults',
             'Showing the first {{value0}} matches. Narrow your filter to find more.',
             { value0: SSH_CONFIG_HOST_RESULT_LIMIT }
@@ -237,23 +235,23 @@ export function AddRemoteHostSshConfigPicker({
           className="w-full sm:w-auto"
         >
           {isBulkImporting
-            ? translate(
+            ? t(
                 'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerAddingAll',
                 'Adding hosts…'
               )
             : newHostCount > 0
-              ? translate(
+              ? t(
                   'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerAddAll',
                   'Add all {{value0}} to Orca',
                   { value0: newHostCount }
                 )
               : // Remaining hosts may be saved or tombstoned; copy must not assume either.
                 totalHostCount > 0
-                ? translate(
+                ? t(
                     'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerNoNewHosts',
                     'No new hosts to add'
                   )
-                : translate(
+                : t(
                     'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerAddAllEmpty',
                     'Add all to Orca'
                   )}
@@ -265,7 +263,7 @@ export function AddRemoteHostSshConfigPicker({
           disabled={isBulkImporting}
           className="w-full sm:w-auto"
         >
-          {translate('auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerBack', 'Back')}
+          {t('auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerBack', 'Back')}
         </Button>
       </div>
     </div>

@@ -1,12 +1,12 @@
 import type {
   NativeChatComposerDraft,
   NativeChatComposerDraftImage
-} from '../../native-chat-composer-draft-storage'
-import { readNativeChatComposerDraft } from '../../native-chat-composer-draft-store'
-import { nativeChatPendingAttachmentSnapshot } from '../../native-chat-pending-attachment-cache'
-import { promptTextContent } from '../../native-chat-prompt-document-text'
-import { nativeChatPastedTextToken } from '../../native-chat-pasted-text-reference'
-import { resolveNativeChatPastedText } from '../../native-chat-composer-pasted-text-references'
+} from '../../drafts/native-chat-composer-draft-storage'
+import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { nativeChatPendingAttachmentSnapshot } from '../../attachments/chips/native-chat-pending-attachment-cache'
+import { promptTextContent } from '../../composer/editor/native-chat-prompt-document-text'
+import { nativeChatPastedTextToken } from '../../paste/native-chat-pasted-text-reference'
+import { resolveNativeChatPastedText } from '../../paste/native-chat-composer-pasted-text-references'
 
 export function sameQueuedEditImage(
   left: NativeChatComposerDraftImage,

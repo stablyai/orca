@@ -1,5 +1,5 @@
 import type React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 import { HeadIdentity } from './head-identity'
 
@@ -14,7 +14,8 @@ function BaseRefButton({
   onClick: () => void
   title: string
 }): React.JSX.Element {
-  const accessibleName = translate(
+  const t = useTranslate()
+  const accessibleName = t(
     'auto.components.right.sidebar.SourceControl.c7d4e2f801',
     'Change base ref: {{value0}}',
     { value0: displayLabel }
@@ -49,6 +50,7 @@ function BaseLine({
   leading?: React.ReactNode
   trailing?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       {leading}
@@ -58,7 +60,7 @@ function BaseLine({
         </span>
       ) : (
         <span className="shrink-0 text-muted-foreground">
-          {translate('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
+          {t('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
         </span>
       )}
       <span className="min-w-0 flex-1">

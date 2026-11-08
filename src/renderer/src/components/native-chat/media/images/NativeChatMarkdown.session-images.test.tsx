@@ -13,7 +13,10 @@ import { resetLocalImageCacheState as resetLocalImageSrcStateForTests } from '@/
 import { useAppStore } from '@/store'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatMarkdownImageOwnerContext } from './native-chat-markdown-image-owner'
-import { repoFixture, worktreeFixture } from '../../native-chat-workspace-test-fixtures'
+import {
+  repoFixture,
+  worktreeFixture
+} from '../../surfaces/integration/native-chat-workspace-test-fixtures'
 
 const mocks = vi.hoisted(() => ({
   callRuntimeRpc: vi.fn(),

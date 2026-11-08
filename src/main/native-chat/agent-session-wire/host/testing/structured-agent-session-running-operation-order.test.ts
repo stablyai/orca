@@ -27,9 +27,10 @@ it.each(['goal', 'rewind'] as const)(
     ).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(compact).toHaveBeenCalledOnce())
     const queued = hostTestMessage('After compact')
+    const queuedEnvelope = envelope('agentSession.send', { body: queued })
     expect(
       await host.send(CALLER, {
-        envelope: envelope('agentSession.send', { body: queued }),
+        envelope: queuedEnvelope,
         body: queued
       })
     ).toMatchObject({ ok: true })
@@ -56,7 +57,12 @@ it.each(['goal', 'rewind'] as const)(
       operation === 'goal' ? { ok: true } : { ok: false, refusal: { rewindReason: 'busy' } }
     )
     expect(dispatch).not.toHaveBeenCalled()
-    expect((await host.journalSnapshot(SESSION)).submissions.at(-1)?.dispatchState).toBe('pending')
+    const row = host
+      .collaboratorsForTests()
+      .sessions.get(SESSION)!
+      .journal.queuedMessages.get(queuedEnvelope.clientOperationId)
+    expect(row).toMatchObject({ state: 'waiting' })
+    expect(row?.consumedAs).toBeNull()
   }
 )
 

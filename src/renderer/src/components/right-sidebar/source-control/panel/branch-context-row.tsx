@@ -3,7 +3,7 @@ import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../../../shared/git/status/git-status-types'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HeadIdentity } from './head-identity'
 import { StackedCompareFlow } from './branch-compare-flow'
@@ -43,13 +43,14 @@ function ManualReviewLinkButton({
 }: {
   url: string | null | undefined
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!url) {
     return null
   }
   return (
     <SourceControlHeaderIconButton
       icon={ExternalLink}
-      label={translate(
+      label={t(
         'auto.components.right.sidebar.SourceControl.4b4a7de138',
         'Open review page in browser'
       )}
@@ -114,6 +115,7 @@ export function SourceControlBranchContextRow({
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const displayedBaseRef = resolveSourceControlDisplayedBaseRef(summary, compareBaseRef)
 
   // Retain head/detached identity without a compare base, replacing the separate identity row (#10215).
@@ -129,18 +131,17 @@ export function SourceControlBranchContextRow({
   }
 
   const baseLabel = formatSourceControlRefLabel(displayedBaseRef)
-  const changeBaseTitle = translate(
+  const changeBaseTitle = t(
     'auto.components.right.sidebar.SourceControl.493f963029',
     'Change base ref'
   )
   const headLabel = resolveHeadFlowLabel(headDisplay)
   const flowLabel =
     headLabel != null
-      ? translate(
-          'auto.components.right.sidebar.SourceControl.b8c2e1a904',
-          '{{value0}} → {{value1}}',
-          { value0: headLabel, value1: baseLabel }
-        )
+      ? t('auto.components.right.sidebar.SourceControl.b8c2e1a904', '{{value0}} → {{value1}}', {
+          value0: headLabel,
+          value1: baseLabel
+        })
       : undefined
 
   if (!summary || summary.status === 'loading') {
@@ -161,7 +162,7 @@ export function SourceControlBranchContextRow({
           trailing={<ManualReviewLinkButton url={manualReviewUrl} />}
         />
         <span className="sr-only">
-          {translate('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}
+          {t('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}
         </span>
       </CompareFlowGroup>
     )
@@ -185,7 +186,7 @@ export function SourceControlBranchContextRow({
               <ManualReviewLinkButton url={manualReviewUrl} />
               <SourceControlHeaderIconButton
                 icon={RefreshCw}
-                label={translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+                label={t('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
                 onClick={onRetry}
               />
             </>
@@ -197,7 +198,7 @@ export function SourceControlBranchContextRow({
           title={summary.errorMessage ?? undefined}
         >
           {summary.errorMessage ??
-            translate(
+            t(
               'auto.components.right.sidebar.SourceControl.715d229c86',
               'Branch compare unavailable'
             )}
@@ -206,7 +207,7 @@ export function SourceControlBranchContextRow({
     )
   }
 
-  const compareStatNodes = buildSourceControlCompareBaseStats(summary, displayedBaseRef).map(
+  const compareStatNodes = buildSourceControlCompareBaseStats(summary, displayedBaseRef, t).map(
     (stat) => <ContextStat key={stat.key} stat={stat} />
   )
 

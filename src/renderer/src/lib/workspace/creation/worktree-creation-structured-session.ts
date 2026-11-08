@@ -18,15 +18,15 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import {
   nativeChatComposerSelection,
   waitForNativeChatComposerHandoff
-} from '@/components/native-chat/native-chat-composer-mount'
-import '@/components/native-chat/use-native-chat-composer-reveal-focus'
-import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/native-chat-composer-focus-intent'
+} from '@/components/native-chat/composer/focus/native-chat-composer-mount'
+import '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
+import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktree-creation-background-mount'
 import {
   captureNativeChatStagedInput,
   hasNativeChatStagedFiles
-} from '@/components/native-chat/native-chat-draft-attachment-staging'
-import { nativeChatComposerHasUserContent } from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 const HANDOFF_READY_TIMEOUT_MS = 5000
 

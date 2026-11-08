@@ -4,7 +4,7 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { PrimaryActionTooltip } from '../review/source-control-primary-action-tooltip'
 import { HostedReviewHeaderLink, HostedReviewIcon } from '../review/hosted-review-header-chrome'
 
@@ -73,14 +73,15 @@ export function SuppressedGitHubPRToolbar({
   number: number
   onRelink: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       <span className="truncate text-[11.5px] text-muted-foreground">
-        {translate('sourceControl.unlinkedPr.status', 'PR #{{number}} unlinked', { number })}
+        {t('sourceControl.unlinkedPr.status', 'PR #{{number}} unlinked', { number })}
       </span>
       <Button type="button" variant="outline" size="xs" onClick={onRelink} className="shrink-0">
         <GitPullRequestArrow className="size-3.5" aria-hidden="true" />
-        {translate('checksPanel.unlinked.relink', 'Link PR #{{number}}', { number })}
+        {t('checksPanel.unlinked.relink', 'Link PR #{{number}}', { number })}
       </Button>
     </div>
   )

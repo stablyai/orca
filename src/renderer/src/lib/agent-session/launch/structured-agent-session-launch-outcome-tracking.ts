@@ -3,7 +3,7 @@ import { settleStructuredLaunchCreateOptions } from './structured-agent-session-
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { useAppStore } from '@/store/index'
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
-import { agentSessionWriteFailureText } from '@/components/native-chat/agent-session-write-notice-text'
+import { agentSessionWriteFailureText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {

@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { Check, ChevronDown, GitBranch, Info } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import type { BranchPickerRow } from './branch-picker-rows'
@@ -19,6 +19,7 @@ export function BranchPicker({
   dirtyOnlyBlocker = false,
   ...options
 }: BranchPickerProps) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const picker = useBranchPicker(options)
   const disabled = blocker !== null || picker.pending
@@ -27,7 +28,7 @@ export function BranchPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label={translate('sourceControl.branchPicker.switch', 'Switch branch: {{branch}}', {
+          aria-label={t('sourceControl.branchPicker.switch', 'Switch branch: {{branch}}', {
             branch
           })}
           className="flex min-w-0 items-center gap-1 rounded-sm font-mono text-[10.5px] font-medium text-foreground outline-none focus-visible:ring-1 focus-visible:ring-ring"
@@ -40,7 +41,7 @@ export function BranchPicker({
       <PopoverContent align="start" className="w-80">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder={translate('sourceControl.branchPicker.search', 'Search branches')}
+            placeholder={t('sourceControl.branchPicker.search', 'Search branches')}
             value={picker.query}
             onValueChange={picker.setQuery}
           />
@@ -91,6 +92,8 @@ const BranchRow = memo(function BranchRow({
   disabled: boolean
   onSelect: (row: BranchPickerRow) => Promise<void>
 }) {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   useUiLanguageRevision()
   return (
     <CommandItem
@@ -102,32 +105,31 @@ const BranchRow = memo(function BranchRow({
     >
       <span className="min-w-0 flex-1 truncate">
         {row.target.kind === 'new'
-          ? translate(
-              'sourceControl.branchPicker.create',
-              'Create branch {{name}} from {{branch}}',
-              { name: row.label, branch }
-            )
+          ? t('sourceControl.branchPicker.create', 'Create branch {{name}} from {{branch}}', {
+              name: row.label,
+              branch
+            })
           : row.label}
       </span>
       {row.current ? (
         <Check className="size-3" />
       ) : row.workspace ? (
         <span className="text-xs text-muted-foreground">
-          {translate('sourceControl.branchPicker.open', 'Open workspace')}
+          {t('sourceControl.branchPicker.open', 'Open workspace')}
         </span>
       ) : row.occupiedPath ? (
         <span className="text-xs text-muted-foreground">
-          {translate('sourceControl.branchPicker.occupied', 'Checked out in {{path}}', {
+          {t('sourceControl.branchPicker.occupied', 'Checked out in {{path}}', {
             path: row.occupiedPath
           })}
         </span>
       ) : row.target.kind === 'remote' ? (
         <span className="text-xs text-muted-foreground">
-          {translate('sourceControl.branchPicker.remote', 'remote')}
+          {t('sourceControl.branchPicker.remote', 'remote')}
         </span>
       ) : row.committedAt ? (
         <span className="text-xs text-muted-foreground">
-          {formatUiRelativeTime(row.committedAt - openedAt)}
+          {formatUiRelativeTime(row.committedAt - openedAt, intlLocale)}
         </span>
       ) : null}
     </CommandItem>

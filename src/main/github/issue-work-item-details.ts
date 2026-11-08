@@ -12,6 +12,8 @@ import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from './gh-util
 import type { LocalGitExecOptions } from './gh-utils'
 import { githubHostExecOptions, type GitHubApiRepository } from './github-api-repository'
 import { getIssueTimelineItems } from './issue-timeline'
+import { readViewerLogin } from './client/fetch/authenticated-viewer'
+import { viewerAuthorship } from '../source-control/comment-viewer-authorship'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 
 export type CollapsedIssueDetails = {
@@ -154,8 +156,8 @@ export async function getIssueBodyAndComments(
         }
         return { body: '', comments: [], assignees: [], timelineItems: [] }
       }
-      noteRepositoryRateLimitSpend(repository, 'core', 2, ghOptions)
-      const [issueResult, commentsResult, timelineItems] = await Promise.all([
+      noteRepositoryRateLimitSpend(repository, 'core', 3, ghOptions)
+      const [issueResult, commentsResult, timelineItems, viewerLogin] = await Promise.all([
         ghExecFileAsync(
           [
             'api',
@@ -173,7 +175,8 @@ export async function getIssueBodyAndComments(
           ],
           ghOptions
         ),
-        getIssueTimelineItems(repository, issueNumber, ghOptions, fresh)
+        getIssueTimelineItems(repository, issueNumber, ghOptions, fresh),
+        readViewerLogin(ghOptions)
       ])
       const issue = JSON.parse(issueResult.stdout) as {
         body?: string | null
@@ -198,7 +201,8 @@ export async function getIssueBodyAndComments(
         body: comment.body ?? '',
         createdAt: comment.created_at,
         url: comment.html_url,
-        isBot: comment.user?.type === 'Bot'
+        isBot: comment.user?.type === 'Bot',
+        ...viewerAuthorship(comment.user?.login, viewerLogin)
       }))
       return {
         body: issue.body ?? '',
@@ -215,23 +219,25 @@ export async function getIssueBodyAndComments(
       ['issue', 'view', String(issueNumber), '--json', 'body,comments,assignees'],
       ghOptions
     )
-    const data = JSON.parse(stdout) as {
+    const data: {
       body?: string
       comments?: {
         author: { login: string }
         body: string
         createdAt: string
         url: string
+        viewerDidAuthor?: boolean
       }[]
       assignees?: { login: string }[]
-    }
+    } = JSON.parse(stdout)
     const comments = (data.comments ?? []).map((comment, index): PRComment => ({
       id: index,
       author: comment.author?.login ?? 'ghost',
       authorAvatarUrl: '',
       body: comment.body ?? '',
       createdAt: comment.createdAt,
-      url: comment.url ?? ''
+      url: comment.url ?? '',
+      ...(comment.viewerDidAuthor === true ? { viewerDidAuthor: true } : {})
     }))
     return {
       body: data.body ?? '',

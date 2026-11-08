@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import {
   isAgentChatPermissionMode,
@@ -13,21 +14,23 @@ import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agen
 export function hostPermissionRefusedText(
   agentLabel: string,
   kind: 'refused' | 'unverified',
-  requested: unknown = useAppStore.getState().settings?.nativeChatPermissionMode
+  requested: unknown = useAppStore.getState().settings?.nativeChatPermissionMode,
+  t: Translate = translate
 ): string {
   return kind === 'unverified'
-    ? translate(
+    ? t(
         'components.native-chat.hostPermission.unverified',
         "Orca couldn't confirm the host's permissions for {{value0}}.",
         { value0: agentLabel }
       )
-    : translate(
+    : t(
         'components.native-chat.hostPermission.outdatedHost',
         'This host runs an older Orca that ignores chat permissions, so {{value0}} would run here without asking. Update Orca on this host to use {{value1}}.',
         {
           value0: agentLabel,
           value1: nativeChatPermissionModeLabel(
-            isAgentChatPermissionMode(requested) ? requested : 'ask'
+            isAgentChatPermissionMode(requested) ? requested : 'ask',
+            t
           )
         }
       )

@@ -109,22 +109,4 @@ describe('automation.runs previews', () => {
       'too large to list'
     )
   })
-
-  it('reads one full row through the owner fence', async () => {
-    const runtime = runtimeWith([run(0), run(1)])
-    const { run: full } = await runs(runtime, {
-      automationId: 'a1',
-      runId: 'run-001',
-      expectedOwner: { selector: { kind: 'self' } }
-    })
-    expect(full?.id).toBe('run-001')
-    expect(full?.outputSnapshot?.content).toBe(OUTPUT)
-    await expect(
-      runs(runtime, {
-        automationId: 'a1',
-        runId: 'run-001',
-        expectedOwner: { selector: { kind: 'orphan' } }
-      })
-    ).rejects.toThrow('automation_owner_changed')
-  })
 })

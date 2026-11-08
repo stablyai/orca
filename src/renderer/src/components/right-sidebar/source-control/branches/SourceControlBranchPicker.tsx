@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { basename } from '@/lib/path'
 import { isWorkspaceSelected } from '@/lib/active-workspace-host'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
@@ -14,6 +15,7 @@ import type { SourceControlPanelModel } from '../panel/use-panel-model'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 
 export function SourceControlBranchPicker({ model }: { model: SourceControlPanelModel }) {
+  const t = useTranslate()
   const {
     activeWorktree,
     activeWorktreeId,
@@ -91,28 +93,28 @@ export function SourceControlBranchPicker({ model }: { model: SourceControlPanel
   }
   // Checking out moves HEAD under the agent, so creating a branch waits too; the host re-checks on switch.
   const blocker = agentWorking
-    ? translate(
+    ? t(
         'sourceControl.branchPicker.agentWorking',
         'An agent is working in this workspace. Switch branches after it finishes, or close its tab if it has stopped.'
       )
     : statusReadError
-      ? translate(
+      ? t(
           'sourceControl.branchPicker.statusFailed',
           "Orca couldn't read this checkout's changes. Refresh Source Control before switching."
         )
       : !statusKnown
-        ? translate(
+        ? t(
             'sourceControl.branchPicker.statusUnknown',
             'Read this checkout’s changes before switching.'
           )
         : conflictOperation !== 'unknown'
-          ? translate(
+          ? t(
               'sourceControl.branchPicker.conflict',
               'Finish or abort the {{operation}} before switching branches.',
               { operation: conflictOperation }
             )
           : entries.length
-            ? translate(
+            ? t(
                 'sourceControl.branchPicker.dirty',
                 'Commit or discard {{count}} changed files before switching branches.',
                 {

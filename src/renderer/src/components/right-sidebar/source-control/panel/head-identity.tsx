@@ -1,7 +1,7 @@
 import React from 'react'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/git-identity-display'
 
 export function HeadIdentity({
@@ -9,6 +9,7 @@ export function HeadIdentity({
 }: {
   display: WorktreeGitIdentityDisplay
 }): React.JSX.Element {
+  const t = useTranslate()
   if (display.kind === 'detached') {
     return (
       <DetachedHeadBadge
@@ -21,7 +22,7 @@ export function HeadIdentity({
     )
   }
 
-  const branchAriaLabel = translate(
+  const branchAriaLabel = t(
     'auto.components.right.sidebar.SourceControl.a4e93c21d7',
     'Current branch: {{value0}}',
     { value0: display.branchName }

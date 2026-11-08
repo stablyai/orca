@@ -43,7 +43,8 @@ import {
   PICKER_VIEWPORT_PADDING
 } from './worktree-parent-picker-placement'
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type WorktreeParentPickerPopoverProps = {
   open: boolean
@@ -119,6 +120,7 @@ export function WorktreeParentPickerPopover({
   anchorElement,
   onOpenChange
 }: WorktreeParentPickerPopoverProps): React.JSX.Element | null {
+  const t = useTranslate()
   const worktrees = useAllWorktrees()
   const worktreeMap = useWorktreeMap()
   const repoMap = useRepoMap()
@@ -328,7 +330,7 @@ export function WorktreeParentPickerPopover({
           <span className="min-w-0 truncate">
             <Trans
               i18n={i18n}
-              defaults={translate(
+              defaults={t(
                 'auto.components.sidebar.WorktreeParentPickerPopover.setParentForName',
                 'Set parent for <name>{{name}}</name>'
               )}
@@ -344,7 +346,7 @@ export function WorktreeParentPickerPopover({
             onValueChange={handleSearchChange}
             onKeyDown={handleKeyDown}
             wrapperClassName="shrink-0"
-            placeholder={translate(
+            placeholder={t(
               'auto.components.sidebar.WorktreeParentPickerPopover.searchPlaceholder',
               'Search worktrees...'
             )}
@@ -352,7 +354,7 @@ export function WorktreeParentPickerPopover({
           <CommandList ref={listRef} className="max-h-72 min-h-0 flex-1">
             {filtered.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.sidebar.WorktreeParentPickerPopover.empty',
                   'No matching eligible worktrees.'
                 )}

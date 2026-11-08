@@ -13,13 +13,14 @@ import { inSendOrder } from '../../../../../../shared/native-chat/native-chat-se
 import { agentSessionRefusalReasonWords } from '../../../../../../shared/agent-session/failures/agent-session-refusal-reason-words'
 import type { AgentSessionWriteRefusal } from '../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../../../shared/agent-session/failures/structured-agent-session-start-failure-row-key'
-import { sayAgentSessionFailureTranslated } from '../../agent-session-failure-words-text'
+import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
 import {
   cliMissingSentence,
   notSignedInSentence
 } from '../../../../../../shared/agent-session/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from '../../host-access/native-chat-antigravity-settings'
-import type { NativeChatComposerNotice } from '../../native-chat-composer-notice'
+import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Why the chat's latest start failed, unless a turn has run since. */
 function failedStartReason(items: readonly AgentJournalRenderItem[] | undefined): string | null {
@@ -71,6 +72,7 @@ export function useNativeChatAvailabilityNotice(input: {
   /** The lines under the chat's messages, by message key: a refused send's says why. */
   deliveryNotices?: ReadonlyMap<string, unknown>
 }): NativeChatComposerNotice | null {
+  const t = useTranslate()
   const { unavailable, journalItems } = input
   const key = !unavailable
     ? null
@@ -109,7 +111,7 @@ export function useNativeChatAvailabilityNotice(input: {
     action:
       unavailable.reason === 'notSignedIn' && input.signIn
         ? {
-            label: nativeChatSignInLabel(input.signIn),
+            label: nativeChatSignInLabel(input.signIn, t),
             primary: true,
             onClick: input.signIn.signIn,
             disabled: input.signIn.signingIn
@@ -133,7 +135,8 @@ export function useNativeChatAvailabilityNotice(input: {
     content: nativeChatAntigravitySignInContent(
       unavailable.reason,
       input.agent,
-      unavailable.reason === 'notSignedIn' ? unavailable.account : undefined
+      unavailable.reason === 'notSignedIn' ? unavailable.account : undefined,
+      t
     ),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }

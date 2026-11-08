@@ -43,6 +43,10 @@ export type MobileNativeChatSessionOptionsController = {
   optionPickerRequest?: { id: string; sequence: number } | null
   snapshot: SessionOptionDescriptor[]
   pendingId: string | null
+  /** Structured picks are taken before the chat attaches and applied when it does. */
+  appliesOnAttach?: boolean
+  /** A pick waits for the chat to attach. */
+  heldPick?: boolean
   setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   invokeAction: (id: string) => Promise<boolean>
   recordCommand: (command: string) => void

@@ -10,7 +10,7 @@ import {
 } from '../../../../../shared/app-icon'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const APP_ICON_URLS = {
   classic: classicIconUrl,
@@ -56,23 +56,24 @@ function IconCycleButton({ label, onClick, children }: IconCycleButtonProps): Re
 }
 
 export function AppIconSelector({ value, onChange }: AppIconSelectorProps): React.JSX.Element {
+  const t = useTranslate()
   const selected = normalizeAppIconId(value)
 
   return (
     <div className="flex items-center justify-center gap-2">
       <IconCycleButton
-        label={translate('auto.components.settings.AppIconSelector.5f5142a62a', 'Previous icon')}
+        label={t('auto.components.settings.AppIconSelector.5f5142a62a', 'Previous icon')}
         onClick={() => onChange(getOffsetIcon(selected, -1))}
       >
         <ChevronLeft className="size-4" />
       </IconCycleButton>
       <img
         src={APP_ICON_URLS[selected]}
-        alt={translate('auto.components.settings.AppIconSelector.415fa76f64', 'Selected app icon')}
+        alt={t('auto.components.settings.AppIconSelector.415fa76f64', 'Selected app icon')}
         className="size-24 rounded-2xl object-contain"
       />
       <IconCycleButton
-        label={translate('auto.components.settings.AppIconSelector.d5a112dc9b', 'Next icon')}
+        label={t('auto.components.settings.AppIconSelector.d5a112dc9b', 'Next icon')}
         onClick={() => onChange(getOffsetIcon(selected, 1))}
       >
         <ChevronRight className="size-4" />

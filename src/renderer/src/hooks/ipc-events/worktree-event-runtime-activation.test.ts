@@ -67,14 +67,20 @@ it.each([false, true])(
   }
 )
 
-import * as drafts from '@/components/native-chat/native-chat-composer-draft-store'
+import * as drafts from '@/components/native-chat/drafts/native-chat-draft-reset'
+import * as draftsOwner1 from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import * as draftsOwner2 from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 it('the conditionally installed qualified rename keeps ordinary setup content and other-host input', async () => {
   drafts.clearNativeChatComposerDraftsForTests()
-  const from = drafts.nativeChatLaunchPromptDraftScopeKey('repo::/old', 'claude', 'local')
-  const twin = drafts.nativeChatLaunchPromptDraftScopeKey('repo::/old', 'claude', 'runtime:other')
-  drafts.updateNativeChatComposerDraft(from, { text: 'moving' }, 'immediate')
-  drafts.updateNativeChatComposerDraft(twin, { text: 'twin' }, 'immediate')
+  const from = draftsOwner1.nativeChatLaunchPromptDraftScopeKey('repo::/old', 'claude', 'local')
+  const twin = draftsOwner1.nativeChatLaunchPromptDraftScopeKey(
+    'repo::/old',
+    'claude',
+    'runtime:other'
+  )
+  draftsOwner2.updateNativeChatComposerDraft(from, { text: 'moving' }, 'immediate')
+  draftsOwner2.updateNativeChatComposerDraft(twin, { text: 'twin' }, 'immediate')
   const fetched = Promise.withResolvers<void>()
   vi.spyOn(initialState, 'fetchWorktrees').mockImplementation(async () => {
     fetched.resolve()
@@ -94,11 +100,11 @@ it('the conditionally installed qualified rename keeps ordinary setup content an
   })
   await fetched.promise
   expect(
-    drafts.readNativeChatComposerDraft(
-      drafts.nativeChatLaunchPromptDraftScopeKey('repo::/new', 'claude', 'local')
+    draftsOwner2.readNativeChatComposerDraft(
+      draftsOwner1.nativeChatLaunchPromptDraftScopeKey('repo::/new', 'claude', 'local')
     ).text
   ).toBe('moving')
-  expect(drafts.readNativeChatComposerDraft(twin).text).toBe('twin')
+  expect(draftsOwner2.readNativeChatComposerDraft(twin).text).toBe('twin')
   unsubs.forEach((unsubscribe) => unsubscribe())
   drafts.clearNativeChatComposerDraftsForTests()
   recentlyRenamedWorktreeIdExpiry.clear()

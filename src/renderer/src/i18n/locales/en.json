@@ -566,10 +566,7 @@
         "searchAgents": "agents",
         "searchCli": "CLI",
         "searchTerminal": "terminal",
-        "antigravityDescription": "Antigravity chats run a server Orca downloads to this host, separate from the agy CLI.",
-        "antigravityNotSignedIn": "Not signed in. Chats need an Antigravity sign-in, separate from your agy terminal account.",
-        "antigravityAccount": "Account",
-        "antigravitySignInNeeded": "Chats need an Antigravity sign-in, separate from your agy terminal account."
+        "antigravityAccount": "Account"
       },
       "permissionsDescriptionOwnAgents": "New chats follow each agent’s permission in Settings → Agents."
     },
@@ -20485,7 +20482,6 @@
       "visualLoading": "Loading visualization",
       "visualOpenInNewTab": "Open in new tab",
       "queuedMessages": {
-        "behindReturnedHold": "Waiting — a message ahead needs attention",
         "steer": "Steer",
         "send": "Send",
         "steerHint": "Submit without interrupting the model",
@@ -20747,7 +20743,11 @@
         "unconfirmedDetail": "It may have opened anyway. Check Session History before forking again.",
         "failed": "{{agent}} couldn't fork this chat",
         "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
-        "failedDetail": "Your chat is unchanged. Try again."
+        "failedDetail": "Your chat is unchanged. Try again.",
+        "commandDescription": "Fork this chat from its latest response",
+        "commandWorking": "Wait for the response to finish, then fork.",
+        "commandNothing": "There’s no response to fork yet.",
+        "commandTakesNoText": "Send /fork on its own, then write in the new chat."
       },
       "usage": {
         "description": "Show usage for this chat’s Codex account",
@@ -20772,6 +20772,13 @@
         "description": "You can change this anytime in",
         "settingsLink": "Settings > Chat UI > Turn activity",
         "failed": "Couldn't save that. You can turn it off in Settings > Chat UI > Turn activity."
+      },
+      "ciResultLine": {
+        "failingLead": "CI failing on",
+        "greenLead": "CI green on",
+        "at": "at",
+        "hide": "Don't show CI result lines",
+        "hidden": "Orca won't show CI result lines anymore"
       },
       "openedPullRequests": {
         "one": "Opened {{name}}",
@@ -21224,6 +21231,10 @@
         "openedPullRequestsCopy": "Shows the pull requests each turn opened, with titles and line counts, below the reply.",
         "openedPullRequestsSearchPr": "PR",
         "openedPullRequestsSearchCard": "pull request card",
+        "ciResultLinesTitle": "CI result lines",
+        "ciResultLinesCopy": "A line in the chat when CI finishes on a pull request the agent opened or pushed to.",
+        "ciResultLinesSearchChecks": "checks",
+        "ciResultLinesSearchPr": "PR",
         "turnActivityTitle": "Turn activity",
         "turnDiffsTitle": "Turn diffs",
         "turnDiffsCopy": "Shows the files each turn changed, with line counts, below the reply.",
@@ -22333,7 +22344,6 @@
     },
     "antigravity": {
       "chatTitle": "Antigravity chats",
-      "chatDescription": "Chats use their own Antigravity sign-in, separate from your agy account above. Sign in once on this device.",
       "chatSignIn": "Sign in",
       "chatChangeAccount": "Change account",
       "chatRetry": "Retry sign-in",
@@ -22346,14 +22356,11 @@
       "chatVerifying": "Finishing sign-in…",
       "chatPasteHelp": "If the last page after signing in doesn't load, copy its full address from your browser and paste it here.",
       "chatContinue": "Continue",
-      "chatSignedInOn": "Signed in on {{host}}.",
       "chatCancelled": "Sign-in cancelled.",
       "chatExpired": "Sign-in timed out. Try again.",
       "chatFailed": "Sign-in failed. Try again.",
-      "chatNotSignedIn": "Not signed in on {{host}}.",
       "chatOtherClient": "Sign-in is in progress in another client.",
       "chatReadFailed": "Could not check the sign-in on {{host}}.",
-      "scope": "Manage the native agy account on {{host}}.",
       "signIn": "Start agy on this host and complete its browser sign-in, then save the current account. To add a different account, use /logout in agy and sign in again.",
       "docs": "Sign-in instructions",
       "retry": "Retry",
@@ -22389,13 +22396,21 @@
       "gcpLocation": "Google Cloud location",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
-      "signInAgainWith": "Sign in again to use {{method}}.",
       "settingsIncomplete": "Choose an Antigravity account type and enter its Google Cloud project and location.",
       "settingsLoadFailed": "Orca couldn't load your Antigravity sign-in settings. Try again.",
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
-      "signInWith": "Signs in with {{method}} on {{host}}.",
       "lastReading": "{{reading}} · Read {{time}}",
-      "noReading": "Usage unknown: not read yet"
+      "noReading": "Usage unknown: not read yet",
+      "personalDescription": "Uses your personal Google AI plan.",
+      "enterpriseDescription": "Uses your organization's Gemini Enterprise license.",
+      "chatSeparate": "Separate from your agy terminal account.",
+      "chatBadgeSigningIn": "Signing in",
+      "chatBadgeSignedIn": "Signed in",
+      "chatBadgeSignedOut": "Not signed in",
+      "chatSignInWith": "Sign in with {{method}}",
+      "chatPasteOpen": "Browser page didn't load?",
+      "chatSwitchMethod": "Sign in again to switch to {{method}}.",
+      "enterpriseFieldsNeeded": "Enter a Google Cloud project and location."
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
