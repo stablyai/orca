@@ -93,3 +93,40 @@ it('includes blank terminal in keyboard results and filters it for agent and mod
   await user.type(screen.getByRole('textbox'), 'astra{Enter}')
   expect(screen.getByLabelText('Selection').textContent).toBe('codex:astra')
 })
+
+it('lists an agent named by the query before other agents’ model setups', () => {
+  const codex: AgentPickerEntry = {
+    agent: 'codex',
+    label: 'Codex',
+    rows: [{ agent: 'codex', kind: 'cli' }],
+    surfaces: ['terminal'],
+    defaultSurface: 'terminal',
+    terminal: {},
+    structured: {},
+    catalog: { origin: 'probe', fetchedAt: 1, models: [] }
+  }
+  const opencode: AgentPickerEntry = {
+    ...codex,
+    agent: 'opencode',
+    label: 'OpenCode',
+    rows: [{ agent: 'opencode', kind: 'cli' }],
+    catalog: {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [{ id: 'gpt-5-codex', label: 'GPT-5 Codex', isDefault: false, efforts: [] }]
+    }
+  }
+  render(
+    <DropdownMenu defaultOpen modal={false}>
+      <DropdownMenuTrigger>Open</DropdownMenuTrigger>
+      <DropdownMenuContent>
+        <AgentLaunchPickerMenu entries={[opencode, codex]} runLaunch={vi.fn()} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'codex' } })
+  const items = screen.getAllByRole('menuitem').map((item) => item.textContent)
+  expect(items[0]).toContain('Codex')
+  expect(items[0]).not.toContain('OpenCode')
+  expect(items.some((text) => text?.includes('OpenCode · GPT-5 Codex'))).toBe(true)
+})
