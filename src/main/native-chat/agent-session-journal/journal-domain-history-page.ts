@@ -11,8 +11,6 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { agentJournalItemSubagentId } from '../../../shared/agent-session/journal/agent-session-journal-producer'
-import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import {
   historyContentBytes,
   oversizedHistoryItem,
@@ -21,14 +19,15 @@ import {
   type HistoryReader
 } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
 import { buildAgentSessionHistoryPage } from '../agent-session-wire/publication/history/agent-session-history-page-result'
-import { offPageSubagentRoster } from '../agent-session-wire/publication/history/agent-session-history-subagent-roster'
 import { CLIENT_HISTORY_READER } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import { readJournalDomainForwardHistory } from './journal-domain-history-after'
+import { readJournalDomainHistoryRoster } from './journal-domain-history-roster'
 import { projectJournalDomainStopNote } from './journal-domain-stop-notes'
 import {
-  journalDomainSequenceGroups,
-  selectJournalDomainHistoryWindow
+  admitJournalDomainHistoryGroups,
+  selectJournalDomainHistoryWindow,
+  type JournalDomainHistoryHeader
 } from './journal-domain-history-window'
 
 export type JournalDomainHistoryRequest = Omit<AgentSessionHistoryRequest, 'direction'> & {
@@ -139,40 +138,18 @@ function historyPage(
     request.direction === 'hydrate'
       ? AGENT_SESSION_HISTORY_MAX_LIMIT
       : resolveHistoryLimit(request.limit)
-  const window = selectJournalDomainHistoryWindow(db, where, prefix, end, limit)
+  const admitted = admitJournalDomainHistoryGroups(
+    selectJournalDomainHistoryWindow(db, where, prefix, end, limit),
+    reader.budgetBytes
+  )
   const submissions = itemSubmissions(
     db,
     head,
-    window.map((header) => header.itemId)
+    admitted.groups.flat().map((header) => header.itemId)
   )
-  const sizes = submissionBytesByItemId(submissions)
-  const body = db.prepare(
-    'SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
-  )
-  const kept: AgentJournalRenderItem[][] = []
-  let total = 0
-  for (const group of journalDomainSequenceGroups(window)) {
-    const formed = group.map((header) =>
-      reader.form(
-        projectJournalDomainStopNote(
-          db,
-          head,
-          JSON.parse(String(body.get(...prefix, header.itemId)!.payload_json))
-        )
-      )
-    )
-    const bytes = historyContentBytes(formed, [], sizes)
-    if (kept.length > 0 && total + bytes > reader.budgetBytes) {
-      break
-    }
-    kept.push(
-      formed.map(({ item }) => (bytes > reader.budgetBytes ? oversizedHistoryItem(item) : item))
-    )
-    total += bytes
-    if (bytes > reader.budgetBytes) {
-      break
-    }
-  }
+  const kept = admitted.oversized
+    ? [admitted.groups[0]!.map((header) => oversizedHistoryItem(itemEnvelope(db, prefix, header)))]
+    : formHistoryGroups(db, head, admitted.groups, submissions, reader)
   const items = kept.toReversed().flat()
   const oldest = items[0]?.sequence ?? end
   const turn = latestTurnItem(db, head)
@@ -196,8 +173,61 @@ function historyPage(
     fallbackCursor: cursor ?? { epoch: head.cursor.epoch, sequence: 0 },
     nextCursor: items[0] ? { epoch: head.cursor.epoch, sequence: items[0].sequence } : undefined,
     fence: request.fence,
-    subagentRoster: historyRoster(db, prefix, items)
+    subagentRoster: readJournalDomainHistoryRoster(db, prefix, items)
   })
+}
+
+/** The existing byte rule, authoritative over admitted groups only. */
+function formHistoryGroups(
+  db: Database.Database,
+  head: JournalDomainHistoryHead,
+  groups: readonly JournalDomainHistoryHeader[][],
+  submissions: readonly AgentJournalSubmission[],
+  reader: HistoryReaderForm
+): AgentJournalRenderItem[][] {
+  const sizes = submissionBytesByItemId(submissions)
+  const body = db.prepare(
+    'SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
+  )
+  const kept: AgentJournalRenderItem[][] = []
+  let total = 0
+  for (const group of groups) {
+    const formed = group.map((header) =>
+      reader.form(
+        projectJournalDomainStopNote(
+          db,
+          head,
+          JSON.parse(String(body.get(head.sessionId, head.epoch, header.itemId)!.payload_json))
+        )
+      )
+    )
+    const bytes = historyContentBytes(formed, [], sizes)
+    if (kept.length > 0 && total + bytes > reader.budgetBytes) {
+      break
+    }
+    kept.push(
+      formed.map(({ item }) => (bytes > reader.budgetBytes ? oversizedHistoryItem(item) : item))
+    )
+    total += bytes
+    if (bytes > reader.budgetBytes) {
+      break
+    }
+  }
+  return kept
+}
+
+/** An oversized group's placeholders keep each row's identity and placement, never its body. */
+function itemEnvelope(
+  db: Database.Database,
+  prefix: readonly [string, string],
+  header: JournalDomainHistoryHeader
+): AgentJournalRenderItem {
+  const row = db
+    .prepare(`SELECT json_remove(payload_json, '$.body') AS envelope FROM journal_items
+      WHERE session_id=? AND epoch=? AND item_id=?`)
+    .get(...prefix, header.itemId)!
+  // The placeholder replaces the omitted body.
+  return JSON.parse(String(row.envelope))
 }
 
 function latestTurnItem(
@@ -245,47 +275,3 @@ function currentRows(
     submissions: itemSubmissions(db, head, wanted)
   }
 }
-
-/** Reads only root rows naming a subagent the page shows but does not name. */
-function historyRoster(
-  db: Database.Database,
-  prefix: readonly [string, string],
-  page: readonly AgentJournalRenderItem[]
-) {
-  const missing = new Set(page.map(agentJournalItemSubagentId).filter((id) => id !== null))
-  for (const item of page) {
-    if (item.agentId === undefined && item.body.kind === 'message') {
-      for (const entry of item.body.blocks.flatMap(namedSubagents)) {
-        missing.delete(entry.id)
-      }
-    }
-  }
-  if (missing.size === 0) {
-    return undefined
-  }
-  const body = db.prepare(
-    'SELECT payload_json FROM journal_items WHERE session_id=? AND epoch=? AND item_id=?'
-  )
-  const named: AgentJournalRenderItem[] = []
-  for (const row of db
-    .prepare(`SELECT item_id, named_subagent_ids FROM journal_items
-      WHERE session_id=? AND epoch=? AND hidden=0 AND root=1 AND named_subagent_ids IS NOT NULL
-      ORDER BY sequence, sequence_index, ordinal`)
-    .iterate(...prefix)) {
-    const ids: string[] = JSON.parse(String(row.named_subagent_ids))
-    if (!ids.some((id) => missing.has(id))) {
-      continue
-    }
-    for (const id of ids) {
-      missing.delete(id)
-    }
-    named.push(JSON.parse(String(body.get(...prefix, String(row.item_id))!.payload_json)))
-    if (missing.size === 0 || named.length >= ROSTER_ROWS) {
-      break
-    }
-  }
-  return offPageSubagentRoster(named, page)
-}
-
-// The roster keeps at most 64 entries; each selected row adds at least one.
-const ROSTER_ROWS = 64

@@ -7,7 +7,11 @@ import {
   subagentFoldKey,
   subagentItemBlock
 } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
-import { isSubagentRow } from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
+import {
+  HISTORY_PAGE_CONTENT_BUDGET_BYTES,
+  isSubagentRow
+} from '../agent-session-wire/publication/history/agent-session-history-page-bounds'
+import { agentJournalItemForWire } from '../agent-session-wire/publication/history/agent-session-item-wire-form'
 
 /** Facts history selects before decoding a body; written from each current item revision. */
 export type JournalDomainHistoryMetadata = {
@@ -16,10 +20,14 @@ export type JournalDomainHistoryMetadata = {
   subagentGroupKey: string | null
   namedSubagentIds: string | null
   turnMarker: number
+  /** Client-form bytes when they differ from the stored payload; null reads the stored length. */
+  wireBytes: number | null
 }
 
+/** Pass the stored payload text when the caller already serialized it. */
 export function journalDomainHistoryMetadata(
-  item: AgentJournalRenderItem
+  item: AgentJournalRenderItem,
+  payloadJson?: string
 ): JournalDomainHistoryMetadata {
   const root = isRootAgentJournalItem(item)
   const block = item.body.kind === 'message' ? subagentItemBlock(item.body) : null
@@ -34,6 +42,22 @@ export function journalDomainHistoryMetadata(
     namedSubagentIds: named.length > 0 ? JSON.stringify(named) : null,
     turnMarker: Number(
       readAgentJournalTurn(item.body) !== null || isAgentSessionContextClear(item.body)
-    )
+    ),
+    wireBytes: wireBytes(item, payloadJson)
   }
+}
+
+// The client form cuts tool/diff heads and whole items over the page budget; skipping the
+// form elsewhere only overstates a size, which shortens a page but never drops content.
+function wireBytes(item: AgentJournalRenderItem, payloadJson: string | undefined): number | null {
+  if (
+    item.body.kind !== 'tool-call' &&
+    item.body.kind !== 'diff' &&
+    Buffer.byteLength(payloadJson ?? JSON.stringify(item), 'utf8') <=
+      HISTORY_PAGE_CONTENT_BUDGET_BYTES
+  ) {
+    return null
+  }
+  const sent = agentJournalItemForWire(item)
+  return sent.item === item ? null : sent.bytes
 }

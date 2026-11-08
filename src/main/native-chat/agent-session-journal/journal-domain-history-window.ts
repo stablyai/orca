@@ -7,7 +7,15 @@ export type JournalDomainHistoryHeader = {
   sequence: number
   own: boolean
   subagentGroupKey: string | null
+  /** Sent item plus current submission bytes, read without loading either body. */
+  bytes: number
 }
+
+/** Requires the item alias; octet_length reads a stored length, never the payload. */
+export const JOURNAL_DOMAIN_HISTORY_ITEM_BYTES = `COALESCE(item.wire_bytes, octet_length(item.payload_json))
+  + COALESCE((SELECT octet_length(attempt.payload_json) FROM journal_submission_attempts attempt
+    WHERE attempt.session_id=item.session_id AND attempt.epoch=item.epoch
+      AND attempt.item_id=item.item_id AND attempt.current=1), 0)`
 
 /** Chooses the page's candidate identities before any body or submission is decoded. */
 export function selectJournalDomainHistoryWindow(
@@ -29,11 +37,14 @@ function selectJournalDomainHistoryHeaders(
   end: number,
   limit: number
 ): JournalDomainHistoryHeader[] {
-  const columns = 'item_id, sequence, root, subagent_row, subagent_group_key'
+  const columns = `item_id, sequence, root, subagent_row, subagent_group_key,
+    ${JOURNAL_DOMAIN_HISTORY_ITEM_BYTES} AS bytes`
   const order = 'ORDER BY sequence DESC, sequence_index DESC, ordinal DESC'
   const cap = 2 * limit
   const rows = db
-    .prepare(`SELECT ${columns} FROM journal_items WHERE ${where} AND sequence<? ${order} LIMIT ?`)
+    .prepare(
+      `SELECT ${columns} FROM journal_items item WHERE ${where} AND sequence<? ${order} LIMIT ?`
+    )
     .all(...prefix, end, cap)
   if (rows.length === cap) {
     const boundary = rows.at(-1)!.sequence
@@ -41,7 +52,7 @@ function selectJournalDomainHistoryHeaders(
     // A source lifecycle row creates at most 200 positions; ordinary domain writes create one.
     const group = db
       .prepare(
-        `SELECT ${columns} FROM journal_items WHERE ${where} AND sequence=? ${order} LIMIT ?`
+        `SELECT ${columns} FROM journal_items item WHERE ${where} AND sequence=? ${order} LIMIT ?`
       )
       .all(...prefix, boundary, MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS + 1)
     if (group.length > MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
@@ -53,7 +64,8 @@ function selectJournalDomainHistoryHeaders(
     itemId: String(row.item_id),
     sequence: Number(row.sequence),
     own: row.root === 1 && row.subagent_row === 0,
-    subagentGroupKey: row.subagent_group_key === null ? null : String(row.subagent_group_key)
+    subagentGroupKey: row.subagent_group_key === null ? null : String(row.subagent_group_key),
+    bytes: Number(row.bytes)
   }))
 }
 
@@ -91,6 +103,27 @@ function historyWindow(
     start = group[0]!.sequence
   }
   return [...headers]
+}
+
+/** Newest whole groups whose stored sizes fit; a lone first group over budget is oversized. */
+export function admitJournalDomainHistoryGroups(
+  window: readonly JournalDomainHistoryHeader[],
+  budgetBytes: number
+): { groups: JournalDomainHistoryHeader[][]; oversized: boolean } {
+  const groups: JournalDomainHistoryHeader[][] = []
+  let total = 0
+  for (const group of journalDomainSequenceGroups(window)) {
+    const bytes = group.reduce((sum, header) => sum + header.bytes, 0)
+    if (groups.length > 0 && total + bytes > budgetBytes) {
+      break
+    }
+    groups.push(group)
+    total += bytes
+    if (bytes > budgetBytes) {
+      return { groups, oversized: true }
+    }
+  }
+  return { groups, oversized: false }
 }
 
 /** Newest group first; each group keeps render order. */
