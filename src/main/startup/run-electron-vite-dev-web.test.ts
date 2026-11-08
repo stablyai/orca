@@ -152,6 +152,8 @@ describe('run-electron-vite-dev web client prepare', () => {
         cwd: resolve('.'),
         env: {
           ...process.env,
+          // Only the fake Node CLI runs; exercise the approved-launch path.
+          CODEX_SANDBOX: undefined,
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_VITE_CLI: fakeVitePath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',
@@ -205,6 +207,8 @@ describe('run-electron-vite-dev web client prepare', () => {
         cwd: resolve('.'),
         env: {
           ...process.env,
+          // Only the fake Node CLI runs; exercise the approved-launch path.
+          CODEX_SANDBOX: undefined,
           ORCA_ELECTRON_VITE_CLI: fakeCliPath,
           ORCA_VITE_CLI: fakeVitePath,
           ORCA_SKIP_DEV_CLI_PREPARE: '1',

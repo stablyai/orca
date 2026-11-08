@@ -4,7 +4,7 @@ import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
 import { createServer as createViteServer } from 'vite'
-import { assertMacGuiLaunchAllowed } from '../macos-gui-launch-preflight.mjs'
+import { assertMacGuiLaunchAllowed } from '../gui-launch/macos-gui-launch-preflight.mjs'
 import { createFixturePageRunner } from './fixture-page-runner.mjs'
 import {
   fixtureCacheDir,

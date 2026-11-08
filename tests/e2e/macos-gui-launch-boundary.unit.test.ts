@@ -8,7 +8,7 @@ const fixture = vi.hoisted(() => ({
   write: vi.fn()
 }))
 
-vi.mock('../../config/scripts/macos-gui-launch-preflight.mjs', () => ({
+vi.mock('../../config/scripts/gui-launch/macos-gui-launch-preflight.mjs', () => ({
   assertMacGuiLaunchAllowed: fixture.preflight
 }))
 

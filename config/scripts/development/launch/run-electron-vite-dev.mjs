@@ -17,7 +17,7 @@ import { createRequire } from 'node:module'
 import os from 'node:os'
 import path from 'node:path'
 
-import { assertMacGuiLaunchAllowed } from '../../macos-gui-launch-preflight.mjs'
+import { assertMacGuiLaunchAllowed } from '../../gui-launch/macos-gui-launch-preflight.mjs'
 import { prepareDevCliTerminalWrappers } from './dev-cli-terminal-wrapper.mjs'
 import {
   DEV_BUNDLE_MARKER_FILENAME,
@@ -121,7 +121,9 @@ function formatDevInstanceLabel(branch, worktreeName) {
   return branch || worktreeName || null
 }
 
-const createDockTitle = (branch, label) => `Orca: ${branch || label || 'dev'}`
+function createDockTitle(branch, label) {
+  return `Orca: ${branch || label || 'dev'}`
+}
 
 function seedDevInstanceIdentityEnv() {
   const branch =

@@ -1,5 +1,5 @@
 // Use the pinned packaged build named by ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE; skip when it is unavailable.
-import { assertMacGuiLaunchAllowed } from '../../../config/scripts/macos-gui-launch-preflight.mjs'
+import { assertMacGuiLaunchAllowed } from '../../../config/scripts/gui-launch/macos-gui-launch-preflight.mjs'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type AddressInfo } from 'node:net'
 import os from 'node:os'
