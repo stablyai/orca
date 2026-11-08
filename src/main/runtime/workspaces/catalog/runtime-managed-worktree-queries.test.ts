@@ -36,8 +36,6 @@ vi.mock(
 
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'
 import type { RuntimeStore } from '../../runtime-store-contract'
-import '../../orca-runtime-tests/runtime-store-partial-fixture'
-import '../../../../shared/repo-host-identity'
 import {
   bumpLocalWorktreeScanGeneration,
   resetLocalWorktreeScanGenerationsForTests

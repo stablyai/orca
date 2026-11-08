@@ -11,9 +11,6 @@ import {
   GIT_KEY,
   SSH_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import '../../shared/workspace-layout/workspace-layout-load'
-import '../../shared/workspace-layout/workspace-layout-minted-ids'
-import '../../shared/workspace-layout/workspace-layout-published'
 import { WorkspaceLayoutStream } from './terminal/surface/workspace-layout-stream'
 import { collectLayoutEvents } from './orca-runtime-tests/workspace-layout-stream-events.test-fixture'
 
