@@ -3,10 +3,7 @@ import type {
   GitCommitAction,
   GitCommitActionResult
 } from '../../shared/git/commands/git-commit-action'
-import {
-  readGitCommandFailureStderr,
-  readGitCommandFailureText
-} from '../../shared/git/commands/git-command-failure-text'
+import { readGitCommandFailureStderr } from '../../shared/git/commands/git-command-failure-text'
 import { gitFailureLine, withCheckoutLock } from './branch-switch'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
 import { gitExecFileAsync } from './runner'
@@ -21,19 +18,22 @@ function throwSequencerFailure(error: unknown): never {
 
 async function finishEmptyCommitAction(
   operation: GitCommitAction,
-  error: unknown,
   execution: ReturnType<typeof gitOptionsForWorktree>
 ): Promise<GitCommitActionResult | undefined> {
-  const text = readGitCommandFailureText(error)
-  const empty =
-    operation === 'cherry-pick'
-      ? /The previous cherry-pick is now empty/.test(text)
-      : /nothing to commit/.test(text)
-  if (!empty) {
+  try {
+    if ((await detectConflictOperation(execution.cwd, execution)) !== operation) {
+      return undefined
+    }
+    const { stdout: unmerged } = await gitExecFileAsync(['ls-files', '-u'], execution)
+    if (unmerged.trim()) {
+      return undefined
+    }
+    await gitExecFileAsync(['diff', '--cached', '--quiet', 'HEAD'], execution)
+  } catch {
     return undefined
   }
   await runWithGitReadCacheInvalidation(() =>
-    gitExecFileAsync([operation, operation === 'revert' ? '--skip' : '--abort'], {
+    gitExecFileAsync([operation, '--skip'], {
       ...execution,
       env: { ...process.env, GIT_EDITOR: 'true' }
     })
@@ -102,9 +102,9 @@ export async function applyCommit(
       }
     }
     const stderr = readGitCommandFailureStderr(failure) ?? ''
-    const empty = await finishEmptyCommitAction(operation, failure, execution).catch(
-      throwSequencerFailure
-    )
+    const empty = failure
+      ? await finishEmptyCommitAction(operation, execution).catch(throwSequencerFailure)
+      : undefined
     if (empty) {
       return empty
     }
@@ -151,8 +151,7 @@ export async function recoverSequencer(
     )
       .then(() => undefined)
       .catch(async (error: unknown) => {
-        const empty =
-          action === 'continue' && (await finishEmptyCommitAction(operation, error, execution))
+        const empty = action === 'continue' && (await finishEmptyCommitAction(operation, execution))
         if (empty) {
           return empty
         }

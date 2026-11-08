@@ -83,13 +83,15 @@ describe('commit actions', () => {
     expect(await git('show', 'HEAD:file.txt')).toBe('base')
     expect(await git('log', '-1', '--format=%s')).toBe('Revert "topic change"')
   })
-  it('aborts an empty cherry-pick and leaves no operation in progress', async () => {
+  it('skips an empty cherry-pick and preserves the applied commit', async () => {
     await git('cherry-pick', topic)
     expect(await applyCommit(directory, 'cherry-pick', topic)).toEqual({
       outcome: 'empty',
       message: 'Already applied, nothing to cherry-pick'
     })
     await expect(git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow()
+    expect(await git('log', '--format=%s')).toBe('topic change\nbase')
+    expect(await git('show', 'HEAD:file.txt')).toBe('topic')
     expect(await git('status', '--porcelain')).toBe('')
   })
   it.each([
@@ -102,6 +104,9 @@ describe('commit actions', () => {
       expect(await applyCommit(directory, operation, topic)).toEqual({ outcome: 'conflicted' })
       await writeFile(join(directory, 'file.txt'), 'different\n')
       await git('add', 'file.txt')
+      if (operation === 'revert') {
+        await writeFile(join(directory, 'untracked.txt'), 'keep me\n')
+      }
       expect(await recoverSequencer(directory, operation, 'continue')).toEqual({
         outcome: 'empty',
         message
@@ -109,9 +114,51 @@ describe('commit actions', () => {
       expect(await detectConflictOperation(directory)).toBe('unknown')
       await expect(git('rev-parse', '--verify', operationHead)).rejects.toThrow()
       expect(await git('log', '-1', '--format=%s')).toBe('diverged')
-      expect(await git('status', '--porcelain')).toBe('')
+      expect(await git('status', '--porcelain')).toBe(
+        operation === 'revert' ? '?? untracked.txt' : ''
+      )
     }
   )
+  it('skips an empty final cherry-pick without losing earlier picks in a terminal sequence', async () => {
+    await git('checkout', '-q', 'topic')
+    await writeFile(join(directory, 'first.txt'), 'first\n')
+    await git('add', 'first.txt')
+    await git('commit', '-qm', 'first pick')
+    const first = await git('rev-parse', 'HEAD')
+    await writeFile(join(directory, 'second.txt'), 'second\n')
+    await git('add', 'second.txt')
+    await git('commit', '-qm', 'second pick')
+    const last = await commit('last\n', 'last pick')
+    await git('checkout', '-q', 'main')
+    await commit('different\n', 'diverged')
+    await expect(git('cherry-pick', `${first}^..${last}`)).rejects.toThrow()
+    await writeFile(join(directory, 'file.txt'), 'different\n')
+    await git('add', 'file.txt')
+
+    expect(await recoverSequencer(directory, 'cherry-pick', 'continue')).toEqual({
+      outcome: 'empty',
+      message: 'Already applied, nothing to cherry-pick'
+    })
+    expect(await git('log', '--format=%s')).toBe('second pick\nfirst pick\ndiverged\nbase')
+    expect(await git('show', 'HEAD:first.txt')).toBe('first')
+    expect(await git('show', 'HEAD:second.txt')).toBe('second')
+    expect(await git('show', 'HEAD:file.txt')).toBe('different')
+    await expect(git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow()
+    expect(await git('status', '--porcelain')).toBe('')
+  })
+  it('keeps a conflicting revert whose subject contains nothing to commit in progress', async () => {
+    await git('checkout', '-q', 'topic')
+    await git('commit', '--amend', '-qm', 'Fix nothing to commit warning')
+    topic = await git('rev-parse', 'HEAD')
+    await git('checkout', '-q', 'main')
+    await commit('different\n', 'diverged')
+
+    expect(await applyCommit(directory, 'revert', topic)).toEqual({ outcome: 'conflicted' })
+    await expect(recoverSequencer(directory, 'revert', 'continue')).rejects.toThrow(/^error: /)
+    expect(await git('rev-parse', '--verify', 'REVERT_HEAD')).toBe(topic)
+    expect(await git('diff', '--name-only', '--diff-filter=U')).toBe('file.txt')
+    expect(await git('log', '-1', '--format=%s')).toBe('diverged')
+  })
   for (const inProgress of ['merge', 'rebase', 'cherry-pick', 'revert', 'stash'] as const) {
     it(`refuses both commit actions during an existing ${inProgress} conflict`, async () => {
       if (inProgress === 'stash') {
