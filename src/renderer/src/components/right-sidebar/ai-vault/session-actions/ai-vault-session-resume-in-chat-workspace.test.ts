@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => mocks.state } }))
-vi.mock('@/runtime/structured-agent-session-owner', () => ({
+vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner', () => ({
   resolveStructuredAgentSessionOwner: mocks.owner
 }))
 vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({

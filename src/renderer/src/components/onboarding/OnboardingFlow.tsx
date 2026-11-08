@@ -15,7 +15,7 @@ import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDi
 import { OnboardingFooter } from './OnboardingFooter'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 import { useScrollEdgeFades } from '@/lib/use-scroll-edge-fades'
 import { AgentSurfaceStep } from './AgentSurfaceStep'
@@ -30,6 +30,7 @@ export default function OnboardingFlow({
   onboarding,
   onOnboardingChange
 }: OnboardingFlowProps): React.JSX.Element {
+  const t = useTranslate()
   const flow = useOnboardingFlow(onboarding, onOnboardingChange)
   const stepFades = useScrollEdgeFades<HTMLDivElement>()
   const continueShortcutModifierLabel = getScreenSubmitModifierLabel()
@@ -43,8 +44,8 @@ export default function OnboardingFlow({
   const footerPrimaryLabel =
     busyLabel ??
     (currentStep.id === 'notifications' && !flow.hasSelectedWorkspace
-      ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
-      : translate('components.onboarding.flow.actions.continue', 'Continue'))
+      ? t('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
+      : t('components.onboarding.flow.actions.continue', 'Continue'))
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
@@ -120,10 +121,7 @@ export default function OnboardingFlow({
         <section
           ref={flow.setLifecycleRootRef}
           role="dialog"
-          aria-label={translate(
-            'auto.components.onboarding.OnboardingFlow.277ba45540',
-            'Orca onboarding'
-          )}
+          aria-label={t('auto.components.onboarding.OnboardingFlow.277ba45540', 'Orca onboarding')}
           aria-modal="true"
           data-onboarding-modal
           className={cn(
@@ -140,9 +138,7 @@ export default function OnboardingFlow({
                   aria-hidden="true"
                   className="h-7 w-auto shrink-0 invert dark:invert-0"
                 />
-                <span>
-                  {translate('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}
-                </span>
+                <span>{t('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}</span>
               </div>
               <OnboardingLanguageSwitcher
                 open={languagePickerOpen}
@@ -169,7 +165,7 @@ export default function OnboardingFlow({
                               ? 'w-6 bg-muted-foreground/70 hover:bg-foreground/80'
                               : 'w-6 bg-muted-foreground/25 hover:bg-muted-foreground/45'
                         )}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.onboarding.OnboardingFlow.adaa0aa627',
                           'Go to onboarding step {{value0}}: {{value1}}',
                           { value0: progressIdx + 1, value1: stepTooltipLabel }
@@ -185,7 +181,7 @@ export default function OnboardingFlow({
                 )
               })}
               <span className="ml-3 text-xs font-medium text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.onboarding.OnboardingFlow.stepOfTotal',
                   '{{current}} of {{total}}',
                   { current: flow.progressStepIndex + 1, total: flow.progressSteps.length }
@@ -196,10 +192,7 @@ export default function OnboardingFlow({
             <div className="mt-8 shrink-0">
               {stepIndex === 0 && (
                 <div className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                  {translate(
-                    'auto.components.onboarding.OnboardingFlow.1b5e182e9f',
-                    'Welcome to Orca'
-                  )}
+                  {t('auto.components.onboarding.OnboardingFlow.1b5e182e9f', 'Welcome to Orca')}
                 </div>
               )}
               <h1 className="text-[34px] font-semibold leading-[1.15] tracking-tight text-foreground">

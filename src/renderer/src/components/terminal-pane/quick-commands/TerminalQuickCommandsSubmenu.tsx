@@ -12,7 +12,7 @@ import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { isTerminalAgentQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getHostedTerminalQuickCommandKey,
   shouldShowTerminalQuickCommandHostOwnership,
@@ -41,6 +41,7 @@ export function TerminalQuickCommandsSubmenu({
   onClose,
   onRun
 }: TerminalQuickCommandsSubmenuProps): React.JSX.Element {
+  const t = useTranslate()
   const nonEmptyHosts = hosts.filter(
     (host) => host.repoCommands.length > 0 || host.globalCommands.length > 0
   )
@@ -65,7 +66,7 @@ export function TerminalQuickCommandsSubmenu({
       <span className="min-w-0 flex-1 truncate">{command.label}</span>
       {showInsertHint && !isTerminalAgentQuickCommand(command) && !command.appendEnter ? (
         <DropdownMenuShortcut className="shrink-0">
-          {translate('auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d', 'Insert')}
+          {t('auto.components.terminal.pane.TerminalContextMenu.c2f0b72b8d', 'Insert')}
         </DropdownMenuShortcut>
       ) : null}
     </DropdownMenuItem>
@@ -75,10 +76,7 @@ export function TerminalQuickCommandsSubmenu({
     <DropdownMenuSub>
       <DropdownMenuSubTrigger>
         <Play fill="currentColor" strokeWidth={0} />
-        {translate(
-          'auto.components.terminal.pane.TerminalContextMenu.ec85df5914',
-          'Quick Commands'
-        )}
+        {t('auto.components.terminal.pane.TerminalContextMenu.ec85df5914', 'Quick Commands')}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-60">
         {nonEmptyHosts.length > 0 ? (
@@ -102,10 +100,7 @@ export function TerminalQuickCommandsSubmenu({
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel>
-                    {translate(
-                      'auto.components.terminal.pane.TerminalContextMenu.3ce594a4a0',
-                      'Global'
-                    )}
+                    {t('auto.components.terminal.pane.TerminalContextMenu.3ce594a4a0', 'Global')}
                   </DropdownMenuLabel>
                 </>
               ) : null}
@@ -116,21 +111,18 @@ export function TerminalQuickCommandsSubmenu({
           ) : null
         ) : (
           <DropdownMenuItem disabled className="text-muted-foreground">
-            {translate(
-              'auto.components.terminal.pane.TerminalContextMenu.9528a65ef8',
-              'No quick commands'
-            )}
+            {t('auto.components.terminal.pane.TerminalContextMenu.9528a65ef8', 'No quick commands')}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
         {hostOwnershipPending ? (
           <DropdownMenuItem disabled className="text-muted-foreground">
             {hostLoadFailed
-              ? translate(
+              ? t(
                   'auto.components.terminal.pane.TerminalQuickCommandsSubmenu.3ccc7981bb',
                   'Host unavailable'
                 )
-              : translate(
+              : t(
                   'auto.components.terminal.pane.TerminalQuickCommandsSubmenu.54f29b7c0d',
                   'Loading host…'
                 )}
@@ -147,11 +139,11 @@ export function TerminalQuickCommandsSubmenu({
             >
               <Plus />
               {hosts.length === 1
-                ? translate(
+                ? t(
                     'auto.components.terminal.pane.TerminalContextMenu.0a82b0608c',
                     'Add Quick Command…'
                   )
-                : translate(
+                : t(
                     'auto.components.terminal.pane.TerminalContextMenu.15dd899676',
                     'Add to {{value0}}…',
                     { value0: host.label }

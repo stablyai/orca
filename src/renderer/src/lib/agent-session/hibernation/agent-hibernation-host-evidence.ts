@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type {
   RuntimeTerminalAttention,
   RuntimeTerminalListResult,

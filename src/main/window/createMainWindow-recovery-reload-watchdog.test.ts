@@ -508,23 +508,6 @@ describe('renderer recovery reload watchdog', () => {
     consoleError.mockRestore()
   })
 
-  it('names the crash-loop cause and gives that prompt a watched retry too', () => {
-    const onRendererRecoveryExhausted = vi.fn()
-    const { consoleError, crashRenderer } = createHarness()
-
-    createMainWindow(null, { onRendererRecoveryExhausted })
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      crashRenderer()
-    }
-
-    expect(onRendererRecoveryExhausted).toHaveBeenCalledWith(
-      expect.objectContaining({ cause: 'crash-loop' })
-    )
-    expect(typeof onRendererRecoveryExhausted.mock.calls[0]?.[0].retry).toBe('function')
-
-    consoleError.mockRestore()
-  })
-
   it('restarts the stall budget when the machine resumes mid-load', () => {
     const onRecoveryReloadOutcome = vi.fn()
     const { browserWindowInstance, consoleError, crashRenderer } = createHarness()

@@ -10,7 +10,7 @@ import {
   requireRuntimeTargetForFileOwner
 } from '@/lib/file-owner-runtime-target'
 import { canAutoSaveOpenFile } from '../autosave/editor-autosave'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import { markFileChangedOnDisk } from './editor-changed-on-disk-mark'
 import { runtimePathsExist } from '@/runtime/files/metadata/runtime-path-existence-batch'
 import { getRecentSelfWrite } from './editor-self-write-registry'

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { isUnreadableError } from '../../../../shared/secure-file'
+import { isUnreadableError } from '../../../../shared/secure-storage/secure-file'
 import { AtomicSnapshotWriter } from '../../../persistence/atomic-snapshot-writer'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 import type { ExecutionHostId } from '../../../../shared/execution-host'

@@ -12,8 +12,8 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { registerTabGroupBody } from './tab-group-body-geometry'
-import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
-import { translate } from '@/i18n/i18n'
+import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TabGroup } from '../../../../shared/tab-types'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
@@ -23,8 +23,10 @@ import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-dro
 import { cn } from '@/lib/utils'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
 import { useWindowBackdropActive } from '@/lib/window-backdrop'
-import { useThemeBackgroundStore } from '@/store/theme-background'
+import { useThemeBackgroundStore } from '@/store/appearance/theme-background'
 import { EditorRevealFlash } from './EditorRevealFlash'
+import { SplitPaneLanding } from './SplitPaneLanding'
+import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
@@ -71,6 +73,7 @@ export default function TabGroupPanel({
   isTabDragActive?: boolean
   hoveredTabInsertion?: HoveredTabInsertion | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
@@ -83,6 +86,9 @@ export default function TabGroupPanel({
     tabBarOrder,
     terminalTabs
   } = model
+  const showsSplitLanding = useAppStore((state) =>
+    isSplitLandingGroup(state, worktreeId, model.group ?? undefined)
+  )
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
@@ -362,10 +368,7 @@ export default function TabGroupPanel({
               <Suspense
                 fallback={
                   <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
-                    {translate(
-                      'auto.components.tab.group.TabGroupPanel.814fb04c43',
-                      'Loading editor...'
-                    )}
+                    {t('auto.components.tab.group.TabGroupPanel.814fb04c43', 'Loading editor...')}
                   </div>
                 }
               >
@@ -380,6 +383,10 @@ export default function TabGroupPanel({
               <EditorRevealFlash viewStateId={activeTab.id} />
             </div>
           )}
+
+        {showsSplitLanding ? (
+          <SplitPaneLanding worktreeId={worktreeId} groupId={groupId} autoFocus={isFocused} />
+        ) : null}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>

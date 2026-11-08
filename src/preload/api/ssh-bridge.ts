@@ -17,7 +17,7 @@ import {
   admitSshConnectionStateForAuthorityReconciliation,
   admitSshDetectedPorts
 } from '../../shared/ssh-retained-payload-admission'
-import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../shared/file-access/filesystem-path-flavor'
 import type { PreloadApi } from '../api-types'
 
 export const sshApi = {

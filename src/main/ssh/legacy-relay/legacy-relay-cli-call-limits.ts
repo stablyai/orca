@@ -3,8 +3,8 @@
  * that may skip part of the scope check.
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
  */
-import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../shared/orchestration-ask-timeout'
-import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../shared/orchestration/mailbox/orchestration-ask-timeout'
+import { isDurableMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import {

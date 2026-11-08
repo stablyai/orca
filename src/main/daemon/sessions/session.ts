@@ -73,6 +73,7 @@ export class Session extends SessionProcessInspection {
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
+      readForegroundGroup: this.subprocess.readForegroundGroup,
       write: (data) => this.subprocess.write(data),
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
@@ -269,7 +270,7 @@ export class Session extends SessionProcessInspection {
 
   prepareForFinalSnapshot(): string {
     const held = this.shellReady.releaseHeldBytes()
-    this.startupIngress.snapshotBarrier()
+    this.startupIngress.snapshotBarrier(true)
     // Flush last: the ingress snapshot barrier can emit more held bytes into recovery.
     this.recoveryBarrier.flushPending()
     return held

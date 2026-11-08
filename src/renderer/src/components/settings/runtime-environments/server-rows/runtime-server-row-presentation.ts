@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   isConnectedRuntimeHostState,
@@ -37,11 +38,14 @@ export type RuntimeServerStatusInput = {
   managedNotRunning?: boolean
 }
 
-export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput): ServerRowStatus {
+export function getRuntimeServerStatusIndicator(
+  input: RuntimeServerStatusInput,
+  t: Translate = translate
+): ServerRowStatus {
   // Token refusal proves reachability; Disconnected would misdescribe the host.
   if (input.accessRevoked) {
     return {
-      label: translate(
+      label: t(
         'auto.components.settings.RuntimeEnvironmentsPane.serverAccessRevoked',
         'Access revoked'
       ),
@@ -50,39 +54,39 @@ export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput)
   }
   if (input.remoteUpdate && isRemoteServerUpdateInFlight(input.remoteUpdate)) {
     return {
-      label: getRemoteServerUpdatePhaseLabel(input.remoteUpdate.phase),
+      label: getRemoteServerUpdatePhaseLabel(input.remoteUpdate.phase, t),
       tone: 'muted',
       busy: true
     }
   }
   if (input.connecting) {
     return {
-      label: translate('auto.components.settings.serverList.connecting', 'Connecting…'),
+      label: t('auto.components.settings.serverList.connecting', 'Connecting…'),
       tone: 'muted',
       busy: true
     }
   }
   if (input.disconnecting) {
     return {
-      label: translate('auto.components.settings.serverList.disconnecting', 'Disconnecting…'),
+      label: t('auto.components.settings.serverList.disconnecting', 'Disconnecting…'),
       tone: 'muted',
       busy: true
     }
   }
   if (input.compatibilityBlocked) {
     return {
-      label: translate('auto.components.settings.serverList.needsUpdate', 'Needs update'),
+      label: t('auto.components.settings.serverList.needsUpdate', 'Needs update'),
       tone: 'destructive'
     }
   }
   // Revoked/updating/connecting/incompatible states take priority over Not running.
   if (input.managedNotRunning && !isConnectedRuntimeHostState(input.connectionState)) {
     return {
-      label: translate('auto.components.settings.managedServers.row.notRunning', 'Not running'),
+      label: t('auto.components.settings.managedServers.row.notRunning', 'Not running'),
       tone: 'muted'
     }
   }
-  const label = getRuntimeServerConnectionLabel(input.connectionState)
+  const label = getRuntimeServerConnectionLabel(input.connectionState, t)
   switch (input.connectionState) {
     case 'connected':
       return { label, tone: 'success' }
@@ -97,7 +101,7 @@ export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput)
       // Label silent probes Unreachable; they cannot establish that the host is down.
       return input.probeFailed
         ? {
-            label: translate('auto.components.settings.serverList.unreachable', 'Unreachable'),
+            label: t('auto.components.settings.serverList.unreachable', 'Unreachable'),
             tone: 'muted'
           }
         : { label, tone: 'muted' }
@@ -107,27 +111,29 @@ export function getRuntimeServerStatusIndicator(input: RuntimeServerStatusInput)
 /** The version part of the meta line; null when no version was ever verified. */
 export function getRuntimeServerVersionText(
   entry: RemoteServerUpdateEntry | undefined,
-  lastKnownVersion: string | null | undefined
+  lastKnownVersion: string | null | undefined,
+  t: Translate = translate
 ): string | null {
   const version = entry?.currentVersion?.trim() || lastKnownVersion?.trim()
   return version
-    ? translate('auto.components.settings.serverList.version', 'v{{version}}', {
+    ? t('auto.components.settings.serverList.version', 'v{{version}}', {
         version
       })
     : null
 }
 
 export function getRuntimeServerAvailableUpdateText(
-  entry: RemoteServerUpdateEntry | undefined
+  entry: RemoteServerUpdateEntry | undefined,
+  t: Translate = translate
 ): string | null {
   if (entry?.phase !== 'available') {
     return null
   }
   return entry.targetVersion
-    ? translate('auto.components.settings.serverList.updateAvailable', 'v{{version}} available', {
+    ? t('auto.components.settings.serverList.updateAvailable', 'v{{version}} available', {
         version: entry.targetVersion
       })
-    : translate('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
+    : t('auto.components.settings.RemoteServerUpdateStatus.available', 'Update available')
 }
 
 /** host:port of a ws:// endpoint; the raw string when it isn't a URL. */

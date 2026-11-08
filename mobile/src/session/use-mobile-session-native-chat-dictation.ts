@@ -8,7 +8,7 @@ import { useClipboardWriter } from '../platform/clipboard'
 import {
   useMobileDictationDestination,
   useMobileDictationPreviews
-} from './use-mobile-dictation-destination'
+} from '../dictation/use-mobile-dictation-destination'
 import {
   dictationFailureMessage,
   dictationMicHidden,
@@ -17,16 +17,16 @@ import {
   isDictationSetupRequiredError
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
-import { useMobileDictationLeaveHold } from './mobile-dictation-leave-hold'
-import { useMobileDictationHaptics } from './use-mobile-dictation-haptics'
-import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-stop'
+import { useMobileDictationLeaveHold } from '../dictation/mobile-dictation-leave-hold'
+import { useMobileDictationHaptics } from '../dictation/use-mobile-dictation-haptics'
+import { useMobileDictationSilenceStop } from '../dictation/use-mobile-dictation-silence-stop'
 import { useMobileNativeChatReadability } from './native-chat/transcript/use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './native-chat/use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './native-chat/use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { mobileNativeChatOverlayInputLockReason } from './native-chat/mobile-native-chat-overlay-lock-reason'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
-import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
+import { nativeChatDictationCopy } from '../dictation/mobile-session-native-chat-dictation-copy'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 
 export function useMobileSessionNativeChatDictation(

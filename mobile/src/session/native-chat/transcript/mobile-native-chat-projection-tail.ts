@@ -1,6 +1,7 @@
 import type { AgentType } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatToolFoldKind } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
+import { isOrphanRowId } from '../../../../../src/shared/native-chat/tools/native-chat-folded-tool-results'
 import { subagentItemBlock } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-items'
 import {
   hasImagePromptMarker,
@@ -28,7 +29,7 @@ function staysInTail(harness: NativeChatMessage): boolean {
 }
 
 function rowStaysInTail(row: NativeChatMessage): boolean {
-  return subagentItemBlock(row) === null && !row.id.startsWith('unpaired-tool-results:')
+  return subagentItemBlock(row) === null && !isOrphanRowId(row.id)
 }
 
 /** Streaming replaces the last message or appends one: re-project only the last unit or two, or null for a full pass. */

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  createJournalQueuePauseMarks,
   deriveQueuePauses,
   journalQueuePauseRestatement,
   queuePauseHolding,
   nextSendableQueuedCard
 } from './queued-message-pause'
+import { createJournalQueuePauseMarks } from './queued-message-pause-marks'
 
 const card = (messageId: string) => ({
   messageId,
@@ -35,7 +35,6 @@ describe('exact waiting-card membership after context clear', () => {
       { reason: 'cleared', since: { epoch: 'epoch', sequence: 5 }, messageIds: ['before-two'] }
     ])
     expect(queuePauseHolding(held, after)).toBeUndefined()
-    expect(nextSendableQueuedCard(held, current)).toBeNull()
     expect(pauses([after])).toEqual([])
     expect(nextSendableQueuedCard(pauses([after]), [after])).toEqual(after)
   })

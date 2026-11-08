@@ -1,0 +1,302 @@
+import { useCallback, useRef, useState } from 'react'
+import { useFocusEffect } from 'expo-router'
+import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
+import { parseRoutableExecutionHostId } from '../../../src/shared/execution-host'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { subscribeSharedClientEvents } from '../transport/connection/shared-client-events'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { sessionWorktreeRecordRead } from './session-worktree-record-operations'
+import { sessionProjectNameRead } from './session-project-name-operations'
+import { getLiveWorktreeDisplayName } from './worktree-display-name'
+import {
+  getFloatingWorkspaceTitle,
+  isFloatingWorkspaceWorktreeId
+} from '../session/floating-workspace'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import {
+  classifyWorktreeShowResponse,
+  type WorktreeShowResolution
+} from './worktree-show-resolution'
+
+const WORKTREE_NAME_FALLBACK_POLL_MS = 3000
+
+type Params = {
+  client: RpcClient | null
+  connState: ConnectionState
+  routeName?: string
+  worktreeId: string
+}
+
+export type LiveWorktreeName = {
+  name: string
+  projectName: string | null
+  /** Where the worktree lives on its host; null until the host's record arrives. */
+  path: string | null
+  hostId: string | null
+  resolution: WorktreeShowResolution
+}
+
+export function useLiveWorktreeName({
+  client,
+  connState,
+  routeName,
+  worktreeId
+}: Params): LiveWorktreeName {
+  useMobileTranslation()
+  // Floating workspaces have no worktree record; probing would keep fallback polling forever.
+  const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
+  const routeNameHint = routeName?.trim() ?? ''
+  const [worktreeName, setWorktreeName] = useState<{
+    client: RpcClient | null
+    worktreeId: string
+    name: string
+    projectName?: string | null
+    path?: string | null
+    hostId?: string | null
+  }>(() => ({ client, worktreeId, name: routeNameHint }))
+  // Key verdicts by route so a previous workspace’s deletion cannot escape into the new one.
+  const [resolved, setResolved] = useState<{
+    client: RpcClient | null
+    worktreeId: string
+    resolution: WorktreeShowResolution
+  }>(() => ({ client, worktreeId, resolution: 'unknown' }))
+  // Repo-scan failures can misreport live workspaces as missing; require a confirming fallback read.
+  const missingStreakRef = useRef({ client, worktreeId, count: 0 })
+
+  // Reset during render on route change; an effect would commit and re-render the session screen.
+  const [routeSource, setRouteSource] = useState({ client, worktreeId, routeNameHint })
+  if (
+    routeSource.client !== client ||
+    routeSource.worktreeId !== worktreeId ||
+    routeSource.routeNameHint !== routeNameHint
+  ) {
+    setRouteSource({ client, worktreeId, routeNameHint })
+    setWorktreeName((current) =>
+      current.client === client &&
+      current.worktreeId === worktreeId &&
+      current.name === routeNameHint
+        ? current
+        : { client, worktreeId, name: routeNameHint }
+    )
+    setResolved((current) =>
+      current.client === client && current.worktreeId === worktreeId
+        ? current
+        : { client, worktreeId, resolution: 'unknown' }
+    )
+  }
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isFloatingWorkspace || !client || connState !== 'connected') {
+        return
+      }
+      let stale = false
+      let eventStreamReady = false
+      let hasSuccessfulRefresh = false
+      let fallbackInterval: ReturnType<typeof setInterval> | null = null
+      let refreshGeneration = 0
+      let refreshProjectName = true
+      let projectGeneration = 0
+      let projectRetryTimer: ReturnType<typeof setTimeout> | null = null
+      const repoId = getRepoIdFromWorktreeId(worktreeId)
+
+      const stopFallbackPoll = (): void => {
+        if (fallbackInterval !== null) {
+          clearInterval(fallbackInterval)
+          fallbackInterval = null
+        }
+      }
+      const refreshWorktreeName = async (): Promise<void> => {
+        // Only the newest request may publish or stop polling; events can overtake slow fallback reads.
+        const generation = ++refreshGeneration
+        try {
+          const response = await sessionWorktreeRecordRead.request(client, {
+            worktree: `id:${worktreeId}`
+          })
+          if (stale || generation !== refreshGeneration) {
+            return
+          }
+          const classified = classifyWorktreeShowResponse(response)
+          const streak = missingStreakRef.current
+          missingStreakRef.current = {
+            client,
+            worktreeId,
+            count:
+              classified === 'missing'
+                ? (streak.client === client && streak.worktreeId === worktreeId
+                    ? streak.count
+                    : 0) + 1
+                : 0
+          }
+          const resolution =
+            classified === 'missing' && missingStreakRef.current.count < 2 ? 'unknown' : classified
+          setResolved((current) =>
+            current.client === client &&
+            current.worktreeId === worktreeId &&
+            current.resolution === resolution
+              ? current
+              : { client, worktreeId, resolution }
+          )
+          // Read selector_not_found before skip interpretation; only its confirmed code proves deletion.
+          const accepted = sessionWorktreeRecordRead.interpret(response)
+          if (!accepted.accepted) {
+            return
+          }
+          const worktree = accepted.value
+          const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
+          if (liveName) {
+            const path = worktree?.path || null
+            const hostId = worktree?.hostId ?? null
+            setWorktreeName((current) =>
+              current.client === client &&
+              current.worktreeId === worktreeId &&
+              current.name === liveName &&
+              current.path === path &&
+              current.hostId === hostId
+                ? current
+                : {
+                    ...(current.client === client && current.worktreeId === worktreeId
+                      ? current
+                      : {}),
+                    client,
+                    worktreeId,
+                    name: liveName,
+                    path,
+                    hostId
+                  }
+            )
+            const projectHost = parseRoutableExecutionHostId(hostId)
+            if (refreshProjectName && (!hostId || projectHost)) {
+              refreshProjectName = false
+              let projectRetries = 0
+              if (projectRetryTimer !== null) {
+                clearTimeout(projectRetryTimer)
+                projectRetryTimer = null
+              }
+              const readProjectName = (): void => {
+                const projectRequest = ++projectGeneration
+                void sessionProjectNameRead
+                  .request(client, {
+                    repo: `id:${repoId}`,
+                    ...(projectHost ? { repoHostId: projectHost.id } : {})
+                  })
+                  .then((reply) => {
+                    if (stale || projectRequest !== projectGeneration) {
+                      return
+                    }
+                    const project = sessionProjectNameRead.interpret(reply)
+                    if (project.accepted) {
+                      setWorktreeName((current) =>
+                        current.client === client && current.worktreeId === worktreeId
+                          ? { ...current, projectName: project.value || null }
+                          : current
+                      )
+                    }
+                  })
+                  .catch(() => {
+                    if (stale || projectRequest !== projectGeneration || projectRetries >= 3) {
+                      return
+                    }
+                    projectRetries += 1
+                    projectRetryTimer = setTimeout(() => {
+                      projectRetryTimer = null
+                      if (stale || projectRequest !== projectGeneration) {
+                        return
+                      }
+                      readProjectName()
+                    }, WORKTREE_NAME_FALLBACK_POLL_MS)
+                  })
+              }
+              readProjectName()
+            }
+          }
+          hasSuccessfulRefresh = true
+          if (eventStreamReady) {
+            stopFallbackPoll()
+          }
+        } catch {
+          // Non-fatal: the route param remains a usable label until the next refresh.
+        }
+      }
+
+      const startFallbackPoll = (): void => {
+        if (stale || fallbackInterval !== null) {
+          return
+        }
+        fallbackInterval = setInterval(
+          () => void refreshWorktreeName(),
+          WORKTREE_NAME_FALLBACK_POLL_MS
+        )
+      }
+      const invalidateAndRefresh = (): void => {
+        hasSuccessfulRefresh = false
+        startFallbackPoll()
+        void refreshWorktreeName()
+      }
+
+      startFallbackPoll()
+      const unsubscribe = subscribeSharedClientEvents(client, (event) => {
+        if (stale) {
+          return
+        }
+        if (event.type === 'ready') {
+          eventStreamReady = true
+          if (hasSuccessfulRefresh) {
+            stopFallbackPoll()
+          }
+          if ('replayed' in event) {
+            refreshProjectName = true
+            // A reopened stream or path switch missed title notices.
+            invalidateAndRefresh()
+          }
+          return
+        }
+        if (event.type === 'end' || event.type === 'error') {
+          eventStreamReady = false
+          startFallbackPoll()
+          return
+        }
+        if (
+          event.type === 'reposChanged' ||
+          (event.type === 'worktreesChanged' && event.repoId === repoId)
+        ) {
+          if (event.type === 'reposChanged') {
+            refreshProjectName = true
+          }
+          invalidateAndRefresh()
+        }
+      })
+      // Runtime displayName owns the title; retain fallback polling until invalidations prove available on this host.
+      void refreshWorktreeName()
+      return () => {
+        stale = true
+        stopFallbackPoll()
+        if (projectRetryTimer !== null) {
+          clearTimeout(projectRetryTimer)
+        }
+        unsubscribe()
+      }
+    }, [client, connState, worktreeId, isFloatingWorkspace])
+  )
+
+  if (isFloatingWorkspace) {
+    return {
+      name: getFloatingWorkspaceTitle(),
+      projectName: null,
+      path: null,
+      hostId: 'local',
+      resolution: 'unknown'
+    }
+  }
+  const current = worktreeName.client === client && worktreeName.worktreeId === worktreeId
+  return {
+    name: current ? worktreeName.name : routeNameHint,
+    projectName: current ? (worktreeName.projectName ?? null) : null,
+    path: current ? (worktreeName.path ?? null) : null,
+    hostId: current ? (worktreeName.hostId ?? null) : null,
+    resolution:
+      resolved.client === client && resolved.worktreeId === worktreeId
+        ? resolved.resolution
+        : 'unknown'
+  }
+}

@@ -8,7 +8,7 @@ import {
 } from './notification-routing'
 
 export function useOpenNotificationRoute(): (target: NotificationNavigationTarget) => void {
-  const openHostStackRoute = useOpenHostStackRoute()
+  const openHostStackRoute = useOpenHostStackRoute(true)
   const router = useRouter()
 
   return useCallback(

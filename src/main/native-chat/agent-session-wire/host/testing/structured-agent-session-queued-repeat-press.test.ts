@@ -107,9 +107,13 @@ describe('a queued Send receipt', () => {
     const db = openTestJournalHostDatabase(rig.root).db
     db.exec(`CREATE TRIGGER fail_draft_receipt BEFORE INSERT ON agent_session_command_receipts
       BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
-    await expect(rig.host.send(CALLER, params(id, 'must roll back'))).rejects.toThrow(
-      'receipt unavailable'
-    )
+    expect(await rig.host.send(CALLER, params(id, 'must roll back'))).toMatchObject({
+      ok: false,
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        details: { reason: 'journalWriteFailed' }
+      }
+    })
     expect(await rig.drafts()).toHaveLength(0)
     expect(rig.store.readCommandReceipt({ kind: 'global' }, id)).toEqual({ verdict: 'absent' })
     expect(rig.store.listOperationRows().find((row) => row.operationId === id)).toBeUndefined()

@@ -7,7 +7,7 @@ import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoUpstream } from '../../github/client/fetch/repo-slug-upstream'
 import { detectGitHubAvatarIcon } from '../../repository-icons/repo-icon-autodetect'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -24,7 +24,10 @@ import {
 } from '@/lib/bundled-skill-target'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ActiveProjectSkillRuntime = {
   projectRuntime?: ProjectExecutionRuntimeResolution

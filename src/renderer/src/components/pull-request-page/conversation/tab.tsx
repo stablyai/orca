@@ -28,7 +28,7 @@ import {
   resolveGitHubBodyDraft,
   shouldSyncGitHubBodyDraft
 } from '@/components/github-body-draft-state'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   GitHubAssignableUser,
   GitHubPRFile
@@ -41,6 +41,7 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { buildMentionOptions } from '../mentions/options'
 import { PRActionsPanel } from '../actions/panel'
@@ -97,8 +98,8 @@ export function ConversationTab({
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel =
-    item.author ?? translate('auto.components.PullRequestPage.77d9388fb0', 'unknown')
+  const t = useTranslate()
+  const authorLabel = item.author ?? t('auto.components.PullRequestPage.77d9388fb0', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)

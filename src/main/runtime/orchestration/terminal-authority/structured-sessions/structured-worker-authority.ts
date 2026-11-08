@@ -3,7 +3,7 @@
 
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import type { RuntimeTerminalState } from '../../../../../shared/runtime-terminal-contracts'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { canonicalOrcaSessionId } from '../../addressing/session-lineage/canonical-orca-session-id'
@@ -24,7 +24,7 @@ import {
 } from './structured-worker-custody'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { isStructuredWorkerHandle } from '../../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation,

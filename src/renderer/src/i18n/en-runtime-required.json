@@ -645,18 +645,8 @@
           "fullCoverage_other": "All {{value0}} detected agents have the skill."
         },
         "PluginAuthor": {
-          "publisher": "Publisher",
-          "catalogByline": "Listed as {{publisher}} by {{catalog}}",
-          "publisherByline": "Publisher: {{publisher}}",
-          "declaredByline": "Declared publisher: {{publisher}}",
-          "catalogClaim": "Publisher listed by {{catalog}}. Authorship is not verified.",
-          "unnamedCatalogClaim": "Publisher listed by the catalog. Authorship is not verified.",
-          "gitClaim": "Publisher derived by Orca from the repository URL. Authorship is not verified.",
-          "unknownClaim": "Publisher source is unknown. Authorship is not verified.",
-          "manifestClaim": "Publisher declared by the plugin. Authorship is not verified.",
           "shownPluginCount_one": "{{count}} matching plugin shown, including this one",
-          "shownPluginCount_other": "{{count}} matching plugins shown, including this one",
-          "samePublisher": "More listed as {{value0}}"
+          "shownPluginCount_other": "{{count}} matching plugins shown, including this one"
         },
         "PluginDevelopmentSection": {
           "title": "Development"
@@ -861,8 +851,8 @@
           "removeWithChildrenMixed_other": "Remove <target/> and <descendants>{{count}} child workspaces</descendants> from Orca. Git worktrees will also be removed from git and disk; folder workspaces will only remove the Orca workspace entry."
         },
         "DeleteWorktreeDirtyChangeHint": {
-          "changeCount_one": "{{count}} uncommitted or untracked change",
-          "changeCount_other": "{{count}} uncommitted or untracked changes",
+          "changesLost_one": "{{count}} uncommitted change will be lost",
+          "changesLost_other": "{{count}} uncommitted changes will be lost",
           "moreLoadedPaths_one": "and {{count}} more loaded path",
           "moreLoadedPaths_other": "and {{count}} more loaded paths"
         },
@@ -1299,6 +1289,7 @@
       "destinationChanged": "The automation destination changed before this run could launch.",
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
+      "managedHostServer": "Needs migration to {{host}}",
       "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
       "noDispatchHost": "No Orca window was available to launch the automation.",
       "noRunnableHost": "This automation has no host to run on.",
@@ -1316,8 +1307,7 @@
       "workspaceHostAmbiguous": "The automation workspace spans more than one host, so Orca cannot tell which one to run it on.",
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
-      "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
-      "managedHostServer": "Needs migration to {{host}}"
+      "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
     }
   },
   "browser": {
@@ -2320,6 +2310,10 @@
     }
   },
   "sourceControl": {
+    "branchPicker": {
+      "dirty_one": "Commit or discard {{count}} changed file before switching branches.",
+      "dirty_other": "Commit or discard {{count}} changed files before switching branches."
+    },
     "createReviewFailure": {
       "stacked": {
         "stackConflict": "The pull request already belongs to a different GitHub stack.",

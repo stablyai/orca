@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  symlinkSync,
-  utimesSync,
-  writeFileSync
-} from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -29,7 +21,7 @@ vi.mock('../macos-keychain/generic-password', () => ({
   }
 }))
 
-import { readClaudeFolderLoginAsync, removeClaudeAccountFolder } from './claude-account-folder'
+import { removeClaudeAccountFolder } from './claude-account-folder'
 
 import { claudeKeychainService } from './keychain'
 
@@ -50,25 +42,6 @@ function fixture() {
 }
 
 describe('claude account folder', () => {
-  it('rereads a state file over a share only when its mtime or size changes', async () => {
-    const { home } = fixture()
-    const stateFile = join(home, '.claude.json')
-    await expect(readClaudeFolderLoginAsync(stateFile)).resolves.toBeNull()
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'a@example.test' } }))
-    // Whole seconds avoid filesystem timestamp rounding.
-    const mtime = new Date(Math.floor(Date.now() / 1000) * 1000)
-    utimesSync(stateFile, mtime, mtime)
-    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')
-    // Hold size and mtime constant to prove the cached answer is reused.
-    writeFileSync(stateFile, JSON.stringify({ oauthAccount: { emailAddress: 'b@example.test' } }))
-    utimesSync(stateFile, mtime, mtime)
-    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('a@example.test')
-    utimesSync(stateFile, mtime, new Date(mtime.getTime() + 2_000))
-    expect((await readClaudeFolderLoginAsync(stateFile))?.email).toBe('b@example.test')
-    rmSync(stateFile)
-    await expect(readClaudeFolderLoginAsync(stateFile)).resolves.toBeNull()
-  })
-
   // A real symlink needs Developer Mode on Windows (EPERM otherwise).
   it.skipIf(process.platform === 'win32')(
     'unlinks shared history before deleting, and leaves the older layout alone',

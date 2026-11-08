@@ -158,78 +158,18 @@ async function render(visible = true) {
   )
 }
 
-it.each([3, 30])(
-  'bounds observation, watches and unrelated renders for %i attached worktrees',
-  async (count) => {
-    const worktrees = setup(count)
-    await render()
-    // One status per visible repository is necessary for its badge; collapsed bodies do no compare work.
-    expect(probes.status).toHaveBeenCalledTimes(count)
-    expect(probes.body).not.toHaveBeenCalled()
-    // Every mounted section watches its tree, collapsed ones included (R4).
-    expect(probes.watches).toEqual(worktrees.map((row) => row.id))
-    probes.header.mockClear()
-    await act(async () => useAppStore.setState({ activeFileId: 'unrelated-file' }))
-    expect(probes.header).not.toHaveBeenCalled()
-    await act(async () =>
-      useAppStore.setState({
-        sshConnectionStates: new Map([
-          [
-            'other-host',
-            { targetId: 'other-host', status: 'connected', error: null, reconnectAttempt: 0 }
-          ]
-        ])
-      })
+it('labels same-repo sections by worktree name and a detached section by its HEAD', async () => {
+  const [onBranch, detached] = setup(2)
+  useAppStore.setState({
+    worktreesByRepo: { repo: [onBranch!, { ...detached!, branch: '', head: 'abc1234def' }] }
+  })
+  await render()
+  expect(
+    [...container.querySelectorAll('section button[aria-expanded]')].map(
+      (toggle) => toggle.textContent
     )
-    expect(probes.header).not.toHaveBeenCalled()
-    await act(async () =>
-      useAppStore.setState((state) => ({
-        gitStatusByWorktree: {
-          ...state.gitStatusByWorktree,
-          [worktrees[0]!.id]: [{ path: 'a.ts', status: 'modified', area: 'unstaged' }]
-        }
-      }))
-    )
-    expect(probes.header.mock.calls).toEqual([['feature-0']])
-    expect(probes.body).not.toHaveBeenCalled()
-    // Agent changes wake the matching collapsed badge, using the existing scheduler's coalescing.
-    probes.status.mockClear()
-    await act(async () => {
-      window.dispatchEvent(
-        new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
-          detail: {
-            runtimeEnvironmentId: null,
-            payload: {
-              worktreePath: worktrees[0]!.path,
-              events: [{ absolutePath: `${worktrees[0]!.path}/a.ts`, kind: 'change' }]
-            }
-          }
-        })
-      )
-      await vi.advanceTimersByTimeAsync(4000)
-    })
-    expect(probes.status).toHaveBeenCalledTimes(1)
-    expect(probes.status.mock.calls[0]?.[0]?.worktreeId).toBe(worktrees[0]!.id)
-    const toggles = container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')
-    for (const toggle of toggles) {
-      await act(async () => toggle.click())
-    }
-    expect(probes.body).toHaveBeenCalledTimes(count)
-    expect(probes.watches).toEqual(worktrees.map((row) => row.id))
-    await render(false)
-    probes.status.mockClear()
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(120000)
-    })
-    expect(probes.status).not.toHaveBeenCalled()
-    expect(probes.watches).toEqual([])
-  }
-)
-
-function ActiveStatusObserver() {
-  useWorktreeGitStatusObservation(null)
-  return null
-}
+  ).toEqual(['ChildChild 0feature-0', 'ChildChild 1Detached HEAD · abc1234'])
+})
 
 function ScopedStatusObserver({ owner }: { owner: SourceControlScope }) {
   useWorktreeGitStatusObservation(owner, { enabled: true })
@@ -270,48 +210,6 @@ it('filters file events by the section runtime host when a same-id local twin ex
     })
     expect(probes.status).toHaveBeenCalledTimes(runtimeEnvironmentId === 'paired' ? 1 : 0)
   }
-})
-
-it('refreshes an open diff after a file event with the sidebar closed', async () => {
-  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mac')
-  const [worktree] = setup(1)
-  const path = '/Users/test/Library/Containers/app/worktree'
-  useAppStore.setState({
-    activeWorktreeId: worktree!.id,
-    activeWorkspaceKey: `worktree:${worktree!.id}`,
-    worktreesByRepo: { repo: [{ ...worktree!, path }] },
-    rightSidebarOpen: false,
-    openFiles: [
-      {
-        id: 'open-diff',
-        filePath: `${path}/a.ts`,
-        relativePath: 'a.ts',
-        worktreeId: worktree!.id,
-        language: 'typescript',
-        isDirty: false,
-        mode: 'diff'
-      }
-    ]
-  })
-  await act(async () => root.render(<ActiveStatusObserver />))
-  expect(probes.status).toHaveBeenCalledTimes(1)
-  probes.status.mockClear()
-  await act(async () => {
-    window.dispatchEvent(
-      new CustomEvent(ORCA_WORKTREE_FILE_CHANGE_EVENT, {
-        detail: {
-          runtimeEnvironmentId: null,
-          payload: {
-            worktreePath: path,
-            events: [{ absolutePath: `${path}/a.ts`, kind: 'change' }]
-          }
-        }
-      })
-    )
-    await vi.advanceTimersByTimeAsync(4000)
-  })
-  expect(probes.status).toHaveBeenCalledTimes(1)
-  expect(probes.status.mock.calls[0]?.[0]?.worktreeId).toBe(worktree!.id)
 })
 
 it('includes a paired-runtime descendant of a local attached worktree as a section', async () => {

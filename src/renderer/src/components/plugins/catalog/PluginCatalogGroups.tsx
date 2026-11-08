@@ -1,6 +1,7 @@
 import { AlertTriangle, CircleAlert } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
 import { Button } from '../../ui/button'
 import { PluginListGroup } from '../list/PluginListGroup'
@@ -16,10 +17,10 @@ import type { usePluginCatalog } from '../state/use-plugin-catalog'
 import type { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import type { usePluginInstallAction } from '../state/use-plugin-install-action'
 
-function sourceDetail(source: PluginMarketplaceHostSourceState): string {
+function sourceDetail(source: PluginMarketplaceHostSourceState, t: Translate = translate): string {
   const trust = source.official
-    ? translate('auto.components.settings.PluginManager.verified', 'verified')
-    : translate('auto.components.settings.PluginManager.unverified', 'unverified')
+    ? t('auto.components.settings.PluginManager.verified', 'verified')
+    : t('auto.components.settings.PluginManager.unverified', 'unverified')
   const origin = source.official ? source.marketplace?.owner : source.source.url
   return origin ? `${trust} · ${origin}` : trust
 }
@@ -74,6 +75,7 @@ export function CatalogCard({
   entry: PluginListEntry
   handlers: CatalogCardHandlers
 }): React.JSX.Element {
+  const t = useTranslate()
   const palettes = usePluginArtPalettes(entry.pluginKey, entry.listing?.release?.themePreview)
   const phase = handlers.install.phaseOf(entry.pluginKey)
   const listing = entry.listing
@@ -83,11 +85,16 @@ export function CatalogCard({
   const fullAccess =
     (installed?.execution ?? release?.execution) === 'trusted-worker' || installed?.hasWorker
   const controls = installed
-    ? installedPluginControls(installed, entry, {
-        busy: handlers.busyPluginKeys.has(entry.pluginKey),
-        canCheckUpdate: entry.updatable,
-        handlers: handlers.installedHandlers
-      })
+    ? installedPluginControls(
+        installed,
+        entry,
+        {
+          busy: handlers.busyPluginKeys.has(entry.pluginKey),
+          canCheckUpdate: entry.updatable,
+          handlers: handlers.installedHandlers
+        },
+        t
+      )
     : null
   const installError =
     controls?.tone === 'destructive' && typeof controls.description === 'string'
@@ -103,7 +110,7 @@ export function CatalogCard({
           ? { text: phase.message, tone: 'destructive' }
           : listing?.blockedByKillList && !entry.installed
             ? {
-                text: translate(
+                text: t(
                   'auto.components.settings.PluginMarketplaceListingRow.blocked',
                   "Blocked by Orca's safety list: {{value0}}",
                   { value0: listing.blockedByKillList.reason }
@@ -119,7 +126,7 @@ export function CatalogCard({
           <PluginCategoryBadge entry={entry} />
           {fullAccess ? (
             <Badge variant="hostContext">
-              {translate('auto.components.settings.pluginConsentCopy.fullAccess', 'Full access')}
+              {t('auto.components.settings.pluginConsentCopy.fullAccess', 'Full access')}
             </Badge>
           ) : null}
           <PluginChips entry={entry} />
@@ -194,6 +201,7 @@ export function PluginCatalogGroups({
   showAll: (groupId: string) => () => void
   openSources: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const order = new Map(
     catalog.listings.map((listing, index) => [
       `${listing.marketplaceSourceId}:${listing.pluginKey}`,
@@ -212,28 +220,28 @@ export function PluginCatalogGroups({
   return catalog.loading ? (
     <PluginListGroup
       layout="grid"
-      title={translate('auto.components.settings.PluginManager.catalogLoading', 'Catalog')}
+      title={t('auto.components.settings.PluginManager.catalogLoading', 'Catalog')}
     >
       <PluginCardSkeletons />
     </PluginListGroup>
   ) : catalog.error && catalog.sources.length === 0 ? (
     <PluginListGroup
       layout="grid"
-      title={translate('auto.components.settings.PluginManager.catalogLoading', 'Catalog')}
+      title={t('auto.components.settings.PluginManager.catalogLoading', 'Catalog')}
       notice={
         <CatalogNotice
           tone="error"
-          title={translate(
+          title={t(
             'auto.components.settings.PluginManager.catalogFailedTitle',
             'Couldn’t load the plugin catalog.'
           )}
-          body={translate(
+          body={t(
             'auto.components.settings.PluginManager.catalogFailedBody',
             'Your installed plugins keep working.'
           )}
           actions={
             <Button variant="ghost" size="xs" onClick={() => void catalog.loadMarketplaceData()}>
-              {translate('auto.components.settings.PluginManager.retry', 'Retry')}
+              {t('auto.components.settings.PluginManager.retry', 'Retry')}
             </Button>
           }
         />
@@ -254,21 +262,21 @@ export function PluginCatalogGroups({
           failed && listedTotal === 0 ? (
             <CatalogNotice
               tone="error"
-              title={translate(
+              title={t(
                 'auto.components.settings.PluginManager.sourceFailedTitle',
                 'Couldn’t load this catalog.'
               )}
-              body={translate(
+              body={t(
                 'auto.components.settings.PluginManager.sourceFailedBody',
                 'Your installed plugins keep working.'
               )}
               actions={
                 <>
                   <Button variant="ghost" size="xs" onClick={() => void catalog.refresh()}>
-                    {translate('auto.components.settings.PluginManager.retry', 'Retry')}
+                    {t('auto.components.settings.PluginManager.retry', 'Retry')}
                   </Button>
                   <Button variant="ghost" size="xs" onClick={() => openSources()}>
-                    {translate('auto.components.settings.PluginManager.sources', 'Sources…')}
+                    {t('auto.components.settings.PluginManager.sources', 'Sources…')}
                   </Button>
                 </>
               }
@@ -276,13 +284,13 @@ export function PluginCatalogGroups({
           ) : failed || source.stale ? (
             <CatalogNotice
               tone="warning"
-              title={translate(
+              title={t(
                 'auto.components.settings.PluginManager.sourceStaleTitle',
                 'Couldn’t refresh this catalog.'
               )}
               body={
                 source.marketplace
-                  ? translate(
+                  ? t(
                       'auto.components.settings.PluginManager.sourceStaleBody',
                       'Showing the copy from {{value0}}.',
                       { value0: formatShortTimeAgo(source.marketplace.fetchedAt) }
@@ -291,7 +299,7 @@ export function PluginCatalogGroups({
               }
               actions={
                 <Button variant="ghost" size="xs" onClick={() => void catalog.refresh()}>
-                  {translate('auto.components.settings.PluginManager.retry', 'Retry')}
+                  {t('auto.components.settings.PluginManager.retry', 'Retry')}
                 </Button>
               }
             />
@@ -301,17 +309,13 @@ export function PluginCatalogGroups({
             key={source.id}
             layout="grid"
             title={source.marketplace?.name ?? source.source.url}
-            detail={sourceDetail(source)}
+            detail={sourceDetail(source, t)}
             aside={
               listedTotal > shown.length && !narrowed
-                ? translate(
-                    'auto.components.settings.PluginManager.shownOf',
-                    '{{value0}} of {{value1}}',
-                    {
-                      value0: shown.length,
-                      value1: listedTotal
-                    }
-                  )
+                ? t('auto.components.settings.PluginManager.shownOf', '{{value0}} of {{value1}}', {
+                    value0: shown.length,
+                    value1: listedTotal
+                  })
                 : undefined
             }
             notice={notice}

@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { ProjectUpdateArgs } from '../../../../shared/project-types'
 import type { WslDriveProjectPreview } from '../../../../shared/wsl-drive-project-types'
 import { SettingsRow } from '../settings/form-controls/SettingsFormControls'
@@ -37,6 +37,7 @@ export function WslDriveProjectGitRow({
     updates: ProjectUpdateArgs['updates']
   ) => void | Promise<unknown>
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [step, setStep] = useState<Step>({ kind: 'idle' })
   const [alignLineEndings, setAlignLineEndings] = useState(true)
   if (!isWslDriveProject(resolution, repoPath)) {
@@ -45,8 +46,8 @@ export function WslDriveProjectGitRow({
   if (resolution.runtime.git === 'windows-host') {
     return (
       <SettingsRow
-        label={translate('wslDriveProject.label', 'Git')}
-        description={translate(
+        label={t('wslDriveProject.label', 'Git')}
+        description={t(
           'wslDriveProject.converted',
           'Orca runs Git on Windows for this project. Terminals and agents still run in {{distro}}.',
           { distro: resolution.runtime.distro }
@@ -65,7 +66,7 @@ export function WslDriveProjectGitRow({
       setStep({ kind: 'review', preview: await window.api.wslDriveProject.preview(projectId) })
     } catch {
       setStep({ kind: 'idle' })
-      toast.error(translate('wslDriveProject.checkFailed', 'Orca could not check this project.'))
+      toast.error(t('wslDriveProject.checkFailed', 'Orca could not check this project.'))
     }
   }
   const convert = async (preview: WslDriveProjectPreview): Promise<void> => {
@@ -80,7 +81,7 @@ export function WslDriveProjectGitRow({
       setStep({ kind: 'idle' })
     } catch {
       setStep({ kind: 'review', preview })
-      toast.error(translate('wslDriveProject.convertFailed', 'Orca could not switch Git.'))
+      toast.error(t('wslDriveProject.convertFailed', 'Orca could not switch Git.'))
     }
   }
   const preview = step.kind === 'review' || step.kind === 'converting' ? step.preview : null
@@ -90,9 +91,9 @@ export function WslDriveProjectGitRow({
   return (
     <div className="space-y-2">
       <SettingsRow
-        label={translate('wslDriveProject.label', 'Git')}
+        label={t('wslDriveProject.label', 'Git')}
         alignTop
-        description={translate(
+        description={t(
           'wslDriveProject.description',
           'This project is on a Windows drive, where Git in WSL is slow and misses changes made in Windows. Use Git for Windows instead; terminals and agents stay in {{distro}}.',
           { distro: resolution.runtime.distro }
@@ -106,7 +107,7 @@ export function WslDriveProjectGitRow({
               disabled={step.kind === 'checking'}
               onClick={() => void check()}
             >
-              {translate('wslDriveProject.useWindowsGit', 'Use Git for Windows')}
+              {t('wslDriveProject.useWindowsGit', 'Use Git for Windows')}
             </Button>
           )
         }
@@ -115,7 +116,7 @@ export function WslDriveProjectGitRow({
         <div role="alert" className="space-y-1 text-xs text-muted-foreground">
           {preview.blockers.map((blocker) => (
             <p key={`${blocker.kind}:${'repoId' in blocker ? blocker.repoId : ''}`}>
-              {wslDriveProjectBlockerMessage(blocker)}
+              {wslDriveProjectBlockerMessage(blocker, t)}
             </p>
           ))}
         </div>
@@ -123,7 +124,7 @@ export function WslDriveProjectGitRow({
       {preview && preview.blockers.length === 0 ? (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'wslDriveProject.review',
               'Nothing in Orca changes for this project: its tabs, terminals, chats and workspaces stay as they are. Running terminals keep going.'
             )}
@@ -136,7 +137,7 @@ export function WslDriveProjectGitRow({
                 onCheckedChange={(checked) => setAlignLineEndings(checked === true)}
               />
               <Label htmlFor={`wsl-drive-line-endings-${projectId}`}>
-                {translate(
+                {t(
                   'wslDriveProject.lineEndings',
                   'Also set core.autocrlf in this repo, so git in WSL terminals stops showing every file as changed.'
                 )}
@@ -148,7 +149,7 @@ export function WslDriveProjectGitRow({
       {preview ? (
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={() => setStep({ kind: 'idle' })}>
-            {translate('wslDriveProject.cancel', 'Cancel')}
+            {t('wslDriveProject.cancel', 'Cancel')}
           </Button>
           {preview.blockers.length === 0 ? (
             <Button
@@ -157,7 +158,7 @@ export function WslDriveProjectGitRow({
               disabled={step.kind === 'converting'}
               onClick={() => void convert(preview)}
             >
-              {translate('wslDriveProject.confirm', 'Use Git for Windows')}
+              {t('wslDriveProject.confirm', 'Use Git for Windows')}
             </Button>
           ) : null}
         </div>

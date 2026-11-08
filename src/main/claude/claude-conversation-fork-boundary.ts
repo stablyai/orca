@@ -17,6 +17,20 @@ export type ClaudeForkCheckpoint = NonNullable<
   Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]['checkpoint']
 >
 
+export function isClaudeConversationEntry(
+  row: Record<string, unknown>
+): row is Record<string, unknown> & { uuid: string } {
+  return (
+    typeof row.uuid === 'string' &&
+    row.isSidechain !== true &&
+    row.parent_tool_use_id == null &&
+    (row.type === 'user' ||
+      row.type === 'assistant' ||
+      row.type === 'attachment' ||
+      (row.type === 'system' && typeof row.parentUuid === 'string'))
+  )
+}
+
 /** Full native traversal belongs in the worker, independently of catch-up's suffix budget. */
 export function claudeConversationForkBoundary(
   entries: SessionStoreEntry[],

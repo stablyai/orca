@@ -29,12 +29,23 @@ export type NativeSpeechServer = {
   readonly dispose: () => void
 }
 
-type Session = { text: Omit<BridgeSpeechRead, 'failure'>; failure: BridgeSpeechFailure | null }
+// armed: native's start resolved. Text before then may be a cancelled session's last words, so it's dropped;
+// an error then is kept, because a recognizer that died while starting must not leave the page recording into nothing.
+type Session = {
+  text: Omit<BridgeSpeechRead, 'failure'>
+  failure: BridgeSpeechFailure | null
+  armed: boolean
+}
 
 // The recognizer is one per phone, so its live session is per engine; each server holds only its own.
 type EngineState = { live: Session | null }
 
 const engineStates = new WeakMap<NativeSpeechEngine, EngineState>()
+
+// A slow speech service is not an unsupported phone: callers ask again rather than remember it.
+export function isSpeechBusyError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'busy'
+}
 
 // A newer engine's code the shipped page does not know still means "use the computer".
 function failureOf(code: string): BridgeSpeechFailure {
@@ -50,7 +61,7 @@ function engineState(engine: NativeSpeechEngine): EngineState {
   engineStates.set(engine, state)
   // Subscribed once per engine for the app's life, so no page session can miss or double an event.
   engine.onText((text) => {
-    if (state.live !== null && text.revision > state.live.text.revision) {
+    if (state.live?.armed === true && text.revision > state.live.text.revision) {
       state.live.text = text
     }
   })
@@ -81,19 +92,27 @@ export function createNativeSpeechServer(engine: NativeSpeechEngine): NativeSpee
 
   async function status(locale: string): Promise<unknown> {
     // Answer the preference even when the recognizer can't say, so This phone never falls to the computer.
+    // A slow service is reported as busy, never unsupported, so the page asks again on its next dictation.
     const [preference, available] = await Promise.all([
       engine.readPreference(),
-      engine.availability(locale).catch(() => null)
+      engine
+        .availability(locale)
+        .catch((error: unknown) => (isSpeechBusyError(error) ? ('busy' as const) : null))
     ])
-    return available === null
-      ? { status: 'unsupported', locale: null, preference }
-      : { status: available.status, locale: available.locale, preference }
+    if (available === 'busy' || available === null) {
+      return { status: available ?? 'unsupported', locale: null, preference }
+    }
+    return { status: available.status, locale: available.locale, preference }
   }
 
   async function start(locale: string): Promise<unknown> {
     endSession()
-    // Claim before the await so events from the moment native arms land here; the engine's own start replaces any other page's session.
-    const claimed: Session = { text: { revision: 0, committed: '', tentative: '' }, failure: null }
+    // Claim before the await so a cancel or another page's start meanwhile is seen; events count only once native's start resolves.
+    const claimed: Session = {
+      text: { revision: 0, committed: '', tentative: '' },
+      failure: null,
+      armed: false
+    }
     session = claimed
     shared.live = claimed
     const started = await engine
@@ -117,6 +136,7 @@ export function createNativeSpeechServer(engine: NativeSpeechEngine): NativeSpee
         reason: started.started ? 'busy' : failureOf(started.reason)
       }
     }
+    claimed.armed = true
     return { started: true, locale: started.locale, reason: null }
   }
 

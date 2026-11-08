@@ -1,19 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEditorTabsStore } from '../editor-slice-test-harness'
-import { drawTabsFromMain } from '../../tabs-drawn-from-main.test-fixture'
+import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: vi.fn()
 }))
 

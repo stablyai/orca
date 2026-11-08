@@ -8,7 +8,7 @@
  * no grants (the desktop browser bridge's shape), after legacy-relay-cli-caller.ts bound them.
  */
 import { createHash, randomUUID } from 'node:crypto'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { DESKTOP_BROWSER_BRIDGE_SETTING_LABEL } from '../../../shared/desktop-browser-bridge-protocol'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RpcResponse } from '../../runtime/rpc/core'

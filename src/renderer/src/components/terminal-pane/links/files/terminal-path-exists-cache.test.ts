@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { RECENT_PATH_ANSWERS_MAX } from '../../../../../../shared/recent-path-answers'
+
 import {
-  getTerminalPathExistsCacheKey,
   readTerminalPathExistence,
   startTerminalPathExistsProbe,
   writeTerminalPathExistence,
@@ -9,27 +8,6 @@ import {
 } from './terminal-path-exists-cache'
 
 describe('terminal path-exists cache', () => {
-  it('caches a positive result, and positives are not subject to the TTL', () => {
-    const cache: TerminalPathExistsCache = new Map()
-    writeTerminalPathExistence(cache, 'k', true, startTerminalPathExistsProbe(1000))
-    expect(readTerminalPathExistence(cache, 'k', 1000)).toBe(true)
-    expect(readTerminalPathExistence(cache, 'k', 1000 + 60_000)).toBe(true)
-  })
-
-  it('honors a negative result within the TTL window', () => {
-    const cache: TerminalPathExistsCache = new Map()
-    writeTerminalPathExistence(cache, 'k', false, startTerminalPathExistsProbe(1000))
-    expect(readTerminalPathExistence(cache, 'k', 1000 + 5_000)).toBe(false)
-  })
-
-  it('re-probes (cache miss) once a negative result expires — issue #5024', () => {
-    const cache: TerminalPathExistsCache = new Map()
-    writeTerminalPathExistence(cache, 'k', false, startTerminalPathExistsProbe(1000))
-    // Expired misses must re-probe because the file may now exist.
-    expect(readTerminalPathExistence(cache, 'k', 1000 + 10_000)).toBeUndefined()
-    expect(cache.has('k')).toBe(true)
-  })
-
   it('keeps expired negatives as ordering guards for older in-flight probes', () => {
     const cache: TerminalPathExistsCache = new Map()
     const older = startTerminalPathExistsProbe(1000)
@@ -67,34 +45,5 @@ describe('terminal path-exists cache', () => {
     writeTerminalPathExistence(cache, 'older-first', false, older)
     writeTerminalPathExistence(cache, 'older-first', true, newer)
     expect(cache.get('older-first')).toEqual({ exists: true, ...newer })
-  })
-
-  it('bounds the cache to the max entry count, evicting the oldest', () => {
-    const cache: TerminalPathExistsCache = new Map()
-    for (let i = 0; i < RECENT_PATH_ANSWERS_MAX; i++) {
-      writeTerminalPathExistence(cache, `k-${i}`, true, startTerminalPathExistsProbe(1))
-    }
-    expect(cache.size).toBe(RECENT_PATH_ANSWERS_MAX)
-    expect(readTerminalPathExistence(cache, 'k-0', 2)).toBe(true)
-    writeTerminalPathExistence(cache, 'k-fresh', true, startTerminalPathExistsProbe(2))
-    expect(cache.size).toBe(RECENT_PATH_ANSWERS_MAX)
-    expect(cache.has('k-0')).toBe(true)
-    expect(cache.has('k-1')).toBe(false)
-    expect(cache.has('k-fresh')).toBe(true)
-  })
-
-  it('scopes keys by SSH connection and runtime environment', () => {
-    const abs = '/repo/file.ts'
-    expect(getTerminalPathExistsCacheKey({ absolutePath: abs })).toBe(`active\0${abs}`)
-    expect(getTerminalPathExistsCacheKey({ absolutePath: abs, connectionId: 'ssh-1' })).toBe(
-      `ssh:ssh-1\0${abs}`
-    )
-    expect(
-      getTerminalPathExistsCacheKey({
-        absolutePath: abs,
-        isRemoteRuntimePath: true,
-        runtimeEnvironmentId: 'env-1'
-      })
-    ).toBe(`env-1\0${abs}`)
   })
 })

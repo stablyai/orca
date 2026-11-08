@@ -32,7 +32,7 @@ import {
   type RightPanelCommentSubmitResult
 } from './right-panel-comment-composer'
 import { CommentRow } from './comment-row'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function PRCommentGroupView({
   imageUploadAddress,
@@ -83,6 +83,7 @@ export function PRCommentGroupView({
   onQueueForAgent?: () => void
   onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   // Replies target any comment ID, including nested replies, rather than only the thread root.
   const renderReplyComposer = (comment: PRComment, nested = false): React.ReactNode =>
     replyingCommentId === comment.id && onReply ? (
@@ -95,15 +96,12 @@ export function PRCommentGroupView({
       >
         <RightPanelCommentComposer
           imageUploadAddress={imageUploadAddress}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.right.sidebar.checks.panel.content.ba20d1a896',
             'Reply to {{value0}}',
             { value0: comment.author }
           )}
-          submitLabel={translate(
-            'auto.components.right.sidebar.checks.panel.content.c1f6fc006a',
-            'Reply'
-          )}
+          submitLabel={t('auto.components.right.sidebar.checks.panel.content.c1f6fc006a', 'Reply')}
           autoFocus
           disabled={replyDisabled}
           disabledReason={replyDisabledReason}
@@ -194,10 +192,7 @@ export function PRCommentGroupView({
       <ContextMenuContent>
         <ContextMenuItem onSelect={() => onQueueForAgent()}>
           <Sparkles />
-          {translate(
-            'auto.components.right.sidebar.checks.panel.content.f8a2c91d04',
-            'Queue for agent'
-          )}
+          {t('auto.components.right.sidebar.checks.panel.content.f8a2c91d04', 'Queue for agent')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
@@ -245,6 +240,7 @@ export function ResolvedCommentGroupsSection({
   ) => Promise<boolean>
   onOpenLocation?: (path: string, line: number) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (groups.length === 0) {
     return null
   }
@@ -254,7 +250,7 @@ export function ResolvedCommentGroupsSection({
         <AccordionItem value="resolved-all" className="border-b-0">
           <AccordionTrigger className={presentation.resolvedSectionTrigger}>
             <span className="min-w-0 truncate">
-              {translate(
+              {t(
                 'auto.components.right.sidebar.checks.panel.content.e8b4c1a903',
                 'Resolved · {{value0}}',
                 { value0: groups.length }

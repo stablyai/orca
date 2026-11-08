@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store'
-import { selectActiveTabForWorktree } from '../store/slices/tab-group-state'
+import { selectActiveTabForWorktree } from '../store/slices/tabs/active-tab-selection'
 import TabBar from './tab-bar/TabBar'
 import type { TerminalController } from './use-terminal-controller'
 

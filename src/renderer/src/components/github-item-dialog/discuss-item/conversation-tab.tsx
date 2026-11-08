@@ -35,9 +35,10 @@ import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
 } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   parseOwnerRepoFromItemUrl,
   resolvePullRequestRepo
@@ -103,8 +104,8 @@ export function ConversationTab({
   onCommentAdded: (comment: PRComment) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
 }): React.JSX.Element {
-  const authorLabel =
-    item.author ?? translate('auto.components.GitHubItemDialog.773ff70035', 'unknown')
+  const t = useTranslate()
+  const authorLabel = item.author ?? t('auto.components.GitHubItemDialog.773ff70035', 'unknown')
   const [replyingTo, setReplyingTo] = useState<number | null>(null)
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')
   const [bodyDraft, setBodyDraft] = useState(body)

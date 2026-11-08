@@ -1,27 +1,28 @@
 import React, { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SidebarHeaderActions } from './sidebar-header-actions'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverArrow, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Sparkles, Bell } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
-import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
 
 type SidebarHeaderProps = {
+  activityBadgeTarget?: React.Ref<HTMLSpanElement>
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
   activityOptionsTarget?: React.Ref<HTMLDivElement>
   projectsCollapseTarget?: React.Ref<HTMLDivElement>
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
+  activityBadgeTarget,
   onWorkspaceBoardMenuOpenChange,
   activityOptionsTarget,
   projectsCollapseTarget
 }: SidebarHeaderProps) {
+  const t = useTranslate()
   // Subscribe this memoized header to locale changes before using translate().
   useTranslation()
   const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
@@ -29,14 +30,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
   const setSidebarBody = useAppStore((s) => s.setSidebarBody)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const agentsViewActive = sidebarBody === 'agents'
-  const counts = useAgentBucketCounts()
   const activityBadgeId = useId()
-  const activityCount = counts.attention || counts.working
-  const activityStatusLabel = counts.attention
-    ? translate('dashboardPopout.bucket.attention', 'Needs You')
-    : counts.working
-      ? translate('dashboardPopout.bucket.working', 'Working')
-      : translate('dashboardPopout.bucket.idle', 'Idle')
   const agentsSidebarIntroShown = useAppStore((s) => s.settings?.agentsSidebarIntroShown === true)
   const migratedFromExperimental = useAppStore(
     (s) => s.settings?.agentsSidebarMigratedFromExperimental === true
@@ -50,9 +44,9 @@ const SidebarHeader = React.memo(function SidebarHeader({
   }, [updateSettings])
   const sidebarTitle =
     groupBy === 'repo'
-      ? translate('dashboard.sidebar.projects', 'Projects')
-      : translate('dashboard.sidebar.workspaces', 'Workspaces')
-  const activityLabel = translate(
+      ? t('dashboard.sidebar.projects', 'Projects')
+      : t('dashboard.sidebar.workspaces', 'Workspaces')
+  const activityLabel = t(
     agentsViewActive ? 'dashboard.sidebar.closeActivity' : 'dashboard.sidebar.openActivity',
     agentsViewActive ? 'Turn off activity view' : 'View activity'
   )
@@ -103,34 +97,10 @@ const SidebarHeader = React.memo(function SidebarHeader({
                     <span className="relative h-5 w-6 shrink-0">
                       <Bell className="absolute left-0 top-1 size-3" />
                       <span
-                        className="pointer-events-none absolute inset-0"
                         id={activityBadgeId}
-                        aria-label={`${activityStatusLabel}: ${activityCount}`}
-                      >
-                        <span className="absolute right-0 top-0 flex h-2 w-3 items-center justify-center">
-                          {counts.attention > 0 ? (
-                            <AgentQuestionIcon className="size-2" />
-                          ) : (
-                            <span
-                              className={cn(
-                                'size-1 rounded-full',
-                                counts.working > 0 ? 'bg-(--status-warning)' : 'bg-muted-foreground'
-                              )}
-                            />
-                          )}
-                        </span>
-                        <span className="absolute right-0 top-2.5 flex h-2.5 w-3 items-center justify-center">
-                          <span
-                            className={cn(
-                              'icon-superscript-count',
-                              activityCount > 99 && 'origin-center scale-x-65'
-                            )}
-                            data-multiple-digits={activityCount > 9}
-                          >
-                            {activityCount > 99 ? '99+' : activityCount}
-                          </span>
-                        </span>
-                      </span>
+                        ref={activityBadgeTarget}
+                        className="pointer-events-none absolute inset-0"
+                      />
                     </span>
                   </Button>
                 </PopoverAnchor>
@@ -154,18 +124,18 @@ const SidebarHeader = React.memo(function SidebarHeader({
               <div className="flex items-center gap-1.5">
                 <Sparkles className="size-4 shrink-0 text-primary" aria-hidden="true" />
                 <h3 id={introTitleId} className="text-sm font-semibold text-foreground">
-                  {translate('agentsSidebarIntro.migrated.title', 'Agents are easier to find')}
+                  {t('agentsSidebarIntro.migrated.title', 'Agents are easier to find')}
                 </h3>
               </div>
               <p id={introDescriptionId} className="text-xs leading-relaxed text-muted-foreground">
-                {translate(
+                {t(
                   'agentsSidebarIntro.migrated.description',
                   'Your Agents view is now a dedicated sidebar tab. Your activity and filters are preserved.'
                 )}
               </p>
               <div className="flex justify-end pt-0.5">
                 <Button size="sm" onClick={acknowledgeIntro}>
-                  {translate('agentsSidebarIntro.migrated.dismiss', 'Got it')}
+                  {t('agentsSidebarIntro.migrated.dismiss', 'Got it')}
                 </Button>
               </div>
             </div>

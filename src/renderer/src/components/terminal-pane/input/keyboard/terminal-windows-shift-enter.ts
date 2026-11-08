@@ -4,7 +4,7 @@ import {
   TUI_AGENT_CONFIG
 } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '../../../../lib/pane-agent-evidence'
-import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 
 export type WindowsShiftEnterEncoding = 'alt-enter' | 'csi-u'
 

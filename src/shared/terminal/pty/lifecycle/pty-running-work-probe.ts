@@ -1,4 +1,4 @@
-import { isRemoteExecutionHostPtyId } from '../../../remote-execution-host-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../execution-host/remote-execution-host-pty-id'
 import {
   isClientOnlyUnverifiableInspection,
   type TerminalProcessInspection

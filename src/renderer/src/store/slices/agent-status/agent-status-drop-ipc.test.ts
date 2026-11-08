@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import './agent-status'
 import { RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX } from './agent-status-pane-keyed-records'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 // Propagate renderer dismissal to main’s persisted hook cache or restart resurrects dismissed paneKeys.
 

@@ -1,4 +1,4 @@
-import { AUTOMATION_ORPHAN_ISSUES as EN } from '../../../src/shared/automation-list-scope'
+import { AUTOMATION_ORPHAN_ISSUES as EN } from '../../../src/shared/automations/ownership/automation-list-scope'
 import { translate } from '../i18n/mobile-i18n'
 
 const COPY: Record<string, () => string> = {

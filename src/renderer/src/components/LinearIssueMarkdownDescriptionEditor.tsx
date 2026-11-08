@@ -17,6 +17,7 @@ import { RichMarkdownTableControls } from '@/components/editor/rich-markdown/tab
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   getRichMarkdownSpellcheckAttribute,
@@ -56,6 +57,7 @@ export function LinearIssueMarkdownDescriptionEditor({
   disabled,
   submitShortcutLabel
 }: LinearIssueMarkdownDescriptionEditorProps): React.JSX.Element {
+  const t = useTranslate()
   const { i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const lastEditorMarkdownRef = useRef(value)
@@ -86,7 +88,7 @@ export function LinearIssueMarkdownDescriptionEditor({
         attributes: {
           class: 'rich-markdown-editor',
           spellcheck: getRichMarkdownSpellcheckAttribute(richMarkdownSpellcheckEnabled),
-          'aria-label': translate(
+          'aria-label': t(
             'auto.components.LinearIssueWorkspace.issueDescriptionLabel',
             'Issue description'
           )
@@ -176,12 +178,12 @@ export function LinearIssueMarkdownDescriptionEditor({
         <span className="flex items-center gap-1">
           <span>{submitShortcutLabel}</span>
           <span>
-            {translate('auto.components.LinearIssueMarkdownDescriptionEditor.a7301a11f3', 'save')}
+            {t('auto.components.LinearIssueMarkdownDescriptionEditor.a7301a11f3', 'save')}
           </span>
         </span>
         <span className="text-muted-foreground/35">·</span>
         <span>
-          {translate('auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef', 'Markdown')}
+          {t('auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef', 'Markdown')}
         </span>
       </div>
       {disabled ? (

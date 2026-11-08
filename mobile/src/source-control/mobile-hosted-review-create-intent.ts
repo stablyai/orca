@@ -12,7 +12,7 @@ import {
   stageMobileHostedReviewPaths
 } from './mobile-hosted-review-git-preparation'
 import { applyMobileHostedReviewRemotePrerequisite } from './mobile-hosted-review-remote-prerequisite'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 export { mobileHostedReviewCreateIntentProgressMessage } from './hosted-review-copy'
 

@@ -6,7 +6,7 @@ import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../shared/file-write/disk-baseline-signature'
 import {
   editorModelSiblingTabs,
   setEditorDiskBaseline

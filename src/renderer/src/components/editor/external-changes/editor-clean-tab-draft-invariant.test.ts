@@ -5,7 +5,7 @@ import { __clearSelfWriteRegistryForTests } from './editor-self-write-registry'
 import { createEditorStore } from '../autosave/editor-autosave-controller-test-fixture'
 
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import { GUARDED_PATH, stubGuardedDisk } from '../save/queue/editor-save-guarded-disk-fixture'
 
 const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> | null } => ({

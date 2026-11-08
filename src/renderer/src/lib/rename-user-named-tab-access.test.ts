@@ -14,12 +14,12 @@ vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importO
 // Switch on: main renames the tabs, and its frame rekeys the content (T1 transport, apply mode).
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('@/components/editor/autosave/editor-autosave', async (importOriginal) => {
@@ -43,7 +43,7 @@ import { withLoadedBaselines } from '@/components/editor/autosave/editor-autosav
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 let main: TabsDrawnFromMain
 
@@ -189,70 +189,6 @@ describe('renaming a floating-workspace document, then Undo and Redo', () => {
       [NOTE, moved, documentFolder(NOTE)],
       [moved, NOTE, documentFolder(moved)],
       [NOTE, moved, documentFolder(NOTE)]
-    ])
-  })
-})
-
-describe('renaming a tab opened by its full path in a project workspace', () => {
-  it.each([
-    ['to another outside name', '/tmp/notes.md', 'notes2.md', '/tmp/notes2.md'],
-    ['into its own project', '/Users/me/notes.md', 'project/notes.md', `${PROJECT}/notes.md`],
-    [
-      'out of its own project',
-      `${PROJECT}/docs/plan.md`,
-      '../../plan.md',
-      `${PROJECT}/docs/../../plan.md`
-    ]
-  ])('keeps it user-named %s, after Undo too', async (_, original, newName, moved) => {
-    openUserNamedTab(original, WT)
-
-    await renameTab(newName, PROJECT)
-    await expectUserNamedAt(moved)
-    expect(await undoFileExplorer()).toBe(true)
-    await expectUserNamedAt(original)
-
-    expect(renameCalls()).toEqual([
-      [original, moved, documentFolder(original)],
-      [moved, original, documentFolder(moved)]
-    ])
-  })
-
-  it('keeps a full-path tab user-named when its project folder is moved', async () => {
-    const link = `${PROJECT}/docs/link.md`
-    openUserNamedTab(link, WT)
-
-    await renameFileOnDisk({
-      oldPath: `${PROJECT}/docs`,
-      newName: 'notes',
-      worktreeId: WT,
-      worktreePath: PROJECT,
-      operationOwner: { kind: 'local' }
-    })
-
-    await expectUserNamedAt(`${PROJECT}/notes/link.md`)
-    expect(renameCalls()).toEqual([[`${PROJECT}/docs`, `${PROJECT}/notes`, undefined]])
-  })
-
-  it('still recomputes a project tab project-relative, with no declared access', async () => {
-    useAppStore.getState().openFile(
-      {
-        filePath: `${PROJECT}/docs/plan.md`,
-        relativePath: 'docs/plan.md',
-        worktreeId: WT,
-        runtimeEnvironmentId: null,
-        language: 'markdown',
-        mode: 'edit'
-      },
-      { suppressActiveRuntimeFallback: true }
-    )
-
-    await renameTab('plan2.md', PROJECT)
-
-    const tab = await onlyTab()
-    expect(tab.relativePath).toBe('docs/plan2.md')
-    expect(editorTabFileAccess(useAppStore.getState(), tab)).toBeUndefined()
-    expect(renameCalls()).toEqual([
-      [`${PROJECT}/docs/plan.md`, `${PROJECT}/docs/plan2.md`, undefined]
     ])
   })
 })

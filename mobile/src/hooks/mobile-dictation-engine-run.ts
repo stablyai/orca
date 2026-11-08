@@ -4,7 +4,7 @@ import type { DictationCapture } from '../platform/dictation-capture-contract'
 import type { OnDeviceSpeech } from '../platform/on-device-speech-contract'
 import { openMobileDictationCapture } from './mobile-dictation-capture-open'
 import { createMobileDictationId, type DictationStatus } from './mobile-dictation-session-state'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileDictationAudioPhase,
   MobileDictationTranscriptSoFar
@@ -16,6 +16,7 @@ import {
 } from './mobile-dictation-desktop-start'
 import {
   chooseMobileDictationRoute,
+  phoneDictationBusyMessage,
   phoneDictationFailedMessage,
   phoneDictationUnavailableMessage,
   readOnDeviceSpeech,
@@ -176,7 +177,7 @@ export async function armMobileDictationEngine(
     return null
   }
   if (route.kind === 'phone-unavailable') {
-    throw new Error(phoneDictationUnavailableMessage())
+    throw new Error(route.busy ? phoneDictationBusyMessage() : phoneDictationUnavailableMessage())
   }
   if (route.kind === 'host' || speech === null) {
     return { kind: 'host' }
@@ -192,7 +193,9 @@ export async function armMobileDictationEngine(
     return route
   }
   if (!route.fallback) {
-    throw new Error(phoneDictationFailedMessage())
+    throw new Error(
+      refused === 'busy' ? phoneDictationBusyMessage() : phoneDictationFailedMessage()
+    )
   }
   return { kind: 'host' }
 }

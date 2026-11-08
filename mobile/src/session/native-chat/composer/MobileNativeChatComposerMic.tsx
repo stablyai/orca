@@ -2,9 +2,12 @@ import { ActivityIndicator, Pressable, View } from 'react-native'
 import { Mic, Square } from 'lucide-react-native'
 import { useContext } from 'react'
 import { colors } from '../../../theme/mobile-theme'
-import { MobileDictationGrapes, MobileDictationTimer } from '../../MobileDictationMeter'
-import { MobileDictationMeterContext } from '../../mobile-dictation-meter-context'
-import { keepHeldPressThroughLongPress } from '../../held-press-long-press'
+import {
+  MobileDictationGrapes,
+  MobileDictationTimer
+} from '../../../dictation/MobileDictationMeter'
+import { MobileDictationMeterContext } from '../../../dictation/mobile-dictation-meter-context'
+import { keepHeldPressThroughLongPress } from '../../../platform/held-press-long-press'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as inputStyles

@@ -6,7 +6,7 @@ import { CLI_BOOLEAN_FLAGS } from '../../../shared/cli-argument-boundary'
 import {
   isOrchestrationRetryRequestId,
   RETRY_REQUEST_ID_GUIDANCE
-} from '../../../shared/orchestration-retry-request-id'
+} from '../../../shared/orchestration/orchestration-retry-request-id'
 
 type LegacyRelayCliArgs = { command: string; flags: Map<string, string | boolean> }
 

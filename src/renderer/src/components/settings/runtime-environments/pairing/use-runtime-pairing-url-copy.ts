@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type CopyTarget = 'web' | 'pairing'
 
@@ -10,6 +10,7 @@ export function useRuntimePairingUrlCopy(mountedRef: { current: boolean }): {
   copyGeneratedUrl: (target: CopyTarget, value: string) => Promise<void>
   setContainerNode: (node: HTMLDivElement | null) => void
 } {
+  const t = useTranslate()
   const [copiedTarget, setCopiedTarget] = useState<CopyTarget | null>(null)
   const copiedTargetResetTimerRef = useRef<number | null>(null)
 
@@ -45,11 +46,11 @@ export function useRuntimePairingUrlCopy(mountedRef: { current: boolean }): {
         }, 1400)
         toast.success(
           target === 'web'
-            ? translate(
+            ? t(
                 'auto.components.settings.RuntimePairingUrlGenerator.13704d635e',
                 'Copied web client URL.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.RuntimePairingUrlGenerator.df0aa45a86',
                 'Copied pairing URL.'
               )
@@ -60,7 +61,7 @@ export function useRuntimePairingUrlCopy(mountedRef: { current: boolean }): {
         toast.error(
           error instanceof Error
             ? error.message
-            : translate(
+            : t(
                 'auto.components.settings.RuntimePairingUrlGenerator.d6c081adf4',
                 'Failed to copy URL.'
               )

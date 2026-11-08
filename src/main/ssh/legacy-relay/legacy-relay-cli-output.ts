@@ -7,7 +7,7 @@ import {
   formatOrchestrationCheckText,
   prepareOrchestrationCheckOutput,
   type OrchestrationCheckOutput
-} from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { stringFlag } from './legacy-relay-cli-args'
 import type { LegacyRelayCliCall, LegacyRelayCliCaller } from './legacy-relay-cli-caller'
