@@ -53,7 +53,7 @@ describe('registerPtyHandlers', () => {
     const probePtyLiveness = vi.fn(async (id: string) =>
       id === 'dead-pty' ? false : id === 'unobserved-pty' ? null : true
     )
-    registerPtyHandlers(mainWindow as never)
+    registerPtyHandlers(mainWindow)
     installDaemonTestProvider({
       canProvideAuthoritativeBufferSnapshot: () => false,
       probePtyLiveness
@@ -79,7 +79,7 @@ describe('registerPtyHandlers', () => {
           releases.push(() => resolve(false))
         })
     )
-    registerPtyHandlers(mainWindow as never)
+    registerPtyHandlers(mainWindow)
     installDaemonTestProvider({
       canProvideAuthoritativeBufferSnapshot: () => false,
       probePtyLiveness

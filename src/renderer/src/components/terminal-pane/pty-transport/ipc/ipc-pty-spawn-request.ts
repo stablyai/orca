@@ -6,6 +6,7 @@ import {
 } from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeTerminalWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import { markTerminalProviderSessionAlive } from '../../../terminal/terminal-provider-snapshot-capability'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCreateOperation>()
@@ -101,7 +102,7 @@ export async function spawnIpcPty(
     resumesAgent && !admittedSessionId ? connectOptions.resumeSpawnIntent : undefined
   // Why: a reattach under an admitted session id must never stop the PTY it is reattaching.
   const replacesPtyId = admittedSessionId ? null : (connectOptions.claimReplacedPtyId?.() ?? null)
-  return window.api.pty.spawn({
+  const response = await window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
     cwd,
@@ -155,4 +156,7 @@ export async function spawnIpcPty(
     ...(telemetry ? { telemetry } : {}),
     ...(agentLaunch && !admittedSessionId ? { agentLaunch } : {})
   })
+  // Why: a respawn under a restored id revives it, so the earlier "gone" answer is stale.
+  markTerminalProviderSessionAlive(response.id)
+  return response
 }

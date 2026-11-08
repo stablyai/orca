@@ -279,6 +279,13 @@ export function terminalProviderSessionIsGone(ptyId: string): boolean {
   return goneSessionPtyIds.has(ptyId)
 }
 
+/** A pane spawned or attached under this id, so a stale "gone" answer must not keep allowing parking. */
+export function markTerminalProviderSessionAlive(ptyId: string): void {
+  if (goneSessionPtyIds.delete(ptyId)) {
+    publishCapabilityChange()
+  }
+}
+
 export function terminalProviderAllowsParking(ptyId: string): boolean {
   return authoritativeSnapshotByPtyId.get(ptyId) === true || goneSessionPtyIds.has(ptyId)
 }
