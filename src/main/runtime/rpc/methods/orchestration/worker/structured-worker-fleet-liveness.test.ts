@@ -25,6 +25,8 @@ vi.mock(
 )
 
 const { projectWorkerFleet } = await import('./worker-list-projection')
+const { ensureSessionWorkerRecords, inspectSessionWorker } =
+  await import('./session-worker-observation')
 const { createSessionWorkerLivenessReader } =
   await import('../../../../orchestration/workers/lifecycle/session-worker-liveness')
 const {
@@ -94,7 +96,7 @@ describe('worker-list liveness for chat-mode workers', () => {
   })
   afterEach(() => db.close())
 
-  function project(statuses: FleetAgentStatusEvidence[]) {
+  function seed() {
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'structured work' })
     const { dispatch } = db.createStartingWorkerDispatch({
       taskId: task.id,
@@ -114,10 +116,15 @@ describe('worker-list liveness for chat-mode workers', () => {
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(dispatch.id)
-    const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatch.id], limit: 1 })
+    return dispatch.id
+  }
+
+  function project(statuses: FleetAgentStatusEvidence[]) {
+    const dispatchId = seed()
+    const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
     return projectWorkerFleet({
       rows,
-      attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatch.id], NOW),
+      attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], NOW),
       statuses,
       limit: 1,
       now: NOW,
@@ -167,5 +174,31 @@ describe('worker-list liveness for chat-mode workers', () => {
       detail: 'The structured agent-session host is not installed in this runtime generation.'
     })
     expect(worker.attention.requiresAction).toBe(true)
+  })
+
+  it('installs the session host after a restart before judging a structured worker', async () => {
+    const dispatchId = seed()
+    const ended = record('codex', {
+      claimStatus: 'released',
+      deathEvidence: { kind: 'exit-observed', detail: 'provider exited', observedAt: 1 }
+    })
+    // After a restart the host is not installed until a caller asks for it.
+    const runtime = { ensureStructuredAgentSessionHost: async () => installHost(ended, false) }
+    const rows = db.listWorkerTerminalResources({ dispatchIds: [dispatchId], limit: 1 })
+
+    await ensureSessionWorkerRecords(runtime, rows)
+    const listed = projectWorkerFleet({
+      rows,
+      attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], NOW),
+      statuses: [],
+      limit: 1,
+      now: NOW,
+      observeSession: createSessionWorkerLivenessReader(db, [])
+    })
+    expect(listed.workers[0]!.liveness).toEqual({ verdict: 'exited', source: 'execution_host' })
+
+    hostRef.current = null
+    const shown = await inspectSessionWorker(runtime, db, dispatchId, rows[0]!.agentTerminalHandle!)
+    expect(shown?.status).toBe('exited')
   })
 })

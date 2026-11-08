@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { isStructuredWorkerHandle } from '../../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   chatAssigneeSessionId,
   observeChatAssignee
@@ -43,6 +44,7 @@ export async function inspectSessionWorker(
   if (!structured) {
     return null
   }
+  await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   // Structured registry proves pane/lineage identity without a PTY.
   // Omit agentWait: terminal scans cannot see journal questions, and null falsely claims no wait.
   const exact = db.isDispatchProcessCurrent({
@@ -67,12 +69,18 @@ export async function inspectSessionWorker(
   }
 }
 
-/** Chat verdicts read session records that a restart leaves uninstalled until something asks. */
-export async function ensureChatAssigneeRecords(
+/** Session verdicts read records that a restart leaves uninstalled until something asks. */
+export async function ensureSessionWorkerRecords(
   runtime: Pick<OrcaRuntimeService, 'ensureStructuredAgentSessionHost'>,
   rows: readonly { agentTerminalHandle: string | null }[]
 ): Promise<void> {
-  if (rows.some((row) => chatAssigneeSessionId(row.agentTerminalHandle))) {
+  if (
+    rows.some(
+      (row) =>
+        chatAssigneeSessionId(row.agentTerminalHandle) ||
+        isStructuredWorkerHandle(row.agentTerminalHandle)
+    )
+  ) {
     await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
   }
 }

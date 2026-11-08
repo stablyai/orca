@@ -15,7 +15,7 @@ import {
   applyFederatedFleetObservations,
   readFederatedFleetSnapshots
 } from '../federation/federated-fleet-snapshot'
-import { ensureChatAssigneeRecords } from './session-worker-observation'
+import { ensureSessionWorkerRecords } from './session-worker-observation'
 
 export type WorkerListPageParams = {
   run?: string
@@ -103,7 +103,7 @@ export async function projectWorkerListFleet(
   const db = runtime.getOrchestrationDb()
   const now = Date.now()
   const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
-  await ensureChatAssigneeRecords(runtime, rows)
+  await ensureSessionWorkerRecords(runtime, rows)
   const fleet = projectWorkerFleet({
     rows,
     attentionFacts: db.getWorkerAttentionFactsForDispatches(
