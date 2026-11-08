@@ -40,7 +40,7 @@ export function RightSidebarTopActivityBar({
     <ContextMenu>
       <div className="flex h-[36px] min-h-[36px] items-center border-b border-border right-sidebar-header-inset right-sidebar-header-drag overflow-hidden">
         {!hasDesktopWindowChrome && (
-          <TooltipProvider delayDuration={400}>
+          <TooltipProvider>
             <ContextMenuTrigger asChild>
               <div
                 ref={topActivityStripRef}
@@ -82,7 +82,7 @@ export function RightSidebarTopActivityBar({
           </TooltipProvider>
         )}
         {hasDesktopWindowChrome && (
-          <TooltipProvider delayDuration={400}>
+          <TooltipProvider>
             <div
               className={cn(
                 'ml-auto flex shrink-0 items-center pr-1',
@@ -95,7 +95,7 @@ export function RightSidebarTopActivityBar({
         )}
       </div>
       {hasDesktopWindowChrome && (
-        <TooltipProvider delayDuration={400}>
+        <TooltipProvider>
           <ContextMenuTrigger asChild>
             <div
               ref={topActivityStripRef}

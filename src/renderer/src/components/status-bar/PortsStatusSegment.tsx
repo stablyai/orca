@@ -95,7 +95,7 @@ export function PortsStatusSegment({ iconOnly }: PortsStatusSegmentProps): React
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
-      <Tooltip delayDuration={150}>
+      <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <button

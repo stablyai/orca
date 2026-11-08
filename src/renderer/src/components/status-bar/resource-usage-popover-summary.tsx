@@ -37,7 +37,7 @@ export function renderResourceUsagePopoverHeader(
             {t('resourceManager.refresh', 'Refresh')}
           </Button>
         )}
-        <Tooltip delayDuration={200}>
+        <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"
@@ -53,7 +53,7 @@ export function renderResourceUsagePopoverHeader(
             {t('resourceManager.restartLocal', 'Restart local daemon')}
           </TooltipContent>
         </Tooltip>
-        <Tooltip delayDuration={200}>
+        <Tooltip>
           <TooltipTrigger asChild>
             <button
               type="button"

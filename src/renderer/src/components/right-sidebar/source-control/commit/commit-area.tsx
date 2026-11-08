@@ -180,11 +180,18 @@ export function CommitArea({
         ) : (
           <div key={entry.kind}>
             <DropdownMenuItem
-              disabled={entry.disabled}
+              aria-disabled={entry.disabled || undefined}
+              className="aria-disabled:opacity-40"
               variant={entry.variant}
               textValue={entry.label}
               aria-describedby={entry.disabled ? `${actionDescriptionId}-${entry.kind}` : undefined}
-              onSelect={() => onDropdownAction(entry.kind)}
+              onSelect={(event) => {
+                if (entry.disabled) {
+                  event.preventDefault()
+                  return
+                }
+                onDropdownAction(entry.kind)
+              }}
             >
               <span className="flex min-w-0 flex-col break-words">
                 <span>{entry.label}</span>
