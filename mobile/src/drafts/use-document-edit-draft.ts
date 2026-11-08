@@ -42,6 +42,9 @@ export function useDocumentEditDraft({
   // The reader is reused across tabs, so a new document starts over.
   if (state.key !== draftKey) {
     setState({ key: draftKey, phase: 'pending', offer: null })
+  } else if (state.offer && state.offer.content === base) {
+    // Saved by hand without Restore: the host now has these edits.
+    setState({ ...state, offer: null })
   }
   const baseHash = useMemo(() => (base === null ? null : hashMarkdownContent(base)), [base])
   const latest = useRef({ base, live })
@@ -83,6 +86,7 @@ export function useDocumentEditDraft({
     if (state.phase !== 'ready' || state.offer || !editable || !draftKey || baseHash === null) {
       return
     }
+    holdDocumentEditDraftOffer(draftKey, false)
     saveDocumentEditDraft(
       draftKey,
       live === base ? null : { content: live, baseHash, savedAt: Date.now() }
