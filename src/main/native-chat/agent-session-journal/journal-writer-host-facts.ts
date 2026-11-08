@@ -8,12 +8,14 @@ import type { JournalGoalAttachmentSnapshot } from './writing/journal-goal-attac
 import type { UsageLimitContinueIdentity } from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalStopSettle } from './queued-messages/queued-message-pause-marks'
+import type { JournalAutomaticSubmissionFacts } from './journal-automatic-submission'
 
 export type JournalWriterStoreEffect = Extract<JournalWriterEffect, { kind: 'store' }>
 
 /** Host-memory facts a command needs; the writer never calls back into the host mid-transaction. */
 export type JournalWriterHostFacts = {
   identity: AgentSessionJournalIdentity
+  automatic?: JournalAutomaticSubmissionFacts
   /** Physical admission boundary captured after ready and before this opening's recovery. */
   openedThrough?: AgentJournalCursor
   /** This handle's unmarked reopen boundary. */

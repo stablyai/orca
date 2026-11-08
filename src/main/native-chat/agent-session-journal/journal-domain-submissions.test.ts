@@ -37,7 +37,6 @@ import {
 } from './queued-messages/queued-message-consume-error'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
-import { journalMailSenderKey } from './journal-writer-host-facts'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 
 const target = { sessionId: 'chat', epoch: 'epoch' }
@@ -155,7 +154,7 @@ afterEach(() => {
   }
 })
 
-it('admits against overlapping current edit holds, preserves provenance, and retires holds only when consumed', () => {
+it('manual Send preserves provenance and retires overlapping edit holds only when consumed', () => {
   const f = fixture()
   const message: AgentJournalMessageItem = {
     ...body('mail'),
@@ -179,17 +178,11 @@ it('admits against overlapping current edit holds, preserves provenance, and ret
   const operation = f.submit(
     'send',
     { body: message, options: { model: 'chosen-model' }, source: { kind: 'agent' } },
-    { messageId: 'card', expect: 'waiting', yieldsToPause: true, owed: true }
-  )
-  expect(() => f.admit(operation, { ...f.facts, owed: 'owed' })).toThrow(
-    QueuedMessageNotConsumableError
+    { messageId: 'card', expect: 'waiting', owed: true }
   )
   f.lease({ kind: 'release', callerKey: 'desktop', editId: 'desktop', messageId: 'card' })
   f.transaction(() => placeJournalDomainQueueRow(f.db, target, 'card', 9))
-  expect(() => f.admit(operation, { ...f.facts, owed: 'owed' })).toThrow(
-    QueuedMessageNotConsumableError
-  )
-  const explicit = { ...operation, consume: { ...operation.consume!, yieldsToPause: undefined } }
+  const explicit = operation
   const admitted = f.admit(explicit, { ...f.facts, owed: 'owed' })
   expect(admitted).toMatchObject({
     cursor: { sequence: 11 },
@@ -222,33 +215,7 @@ it('admits against overlapping current edit holds, preserves provenance, and ret
   expect(f.head()).toBe(11)
 })
 
-it('walks past unavailable mail using supplied finite authority and leaves that mail unconsumed', () => {
-  const f = fixture()
-  const from = {
-    kind: 'agent' as const,
-    senders: [],
-    orchestration: {
-      message: 'mail-notice' as const,
-      mailbox: 'owner',
-      dispatchId: null,
-      messages: []
-    }
-  }
-  f.seed('mail', { body: { ...body('notice'), from } })
-  f.seed('person', { position: 2 })
-  const operation = f.submit(
-    'send',
-    { body: body('person') },
-    { messageId: 'person', expect: 'waiting', yieldsToPause: true }
-  )
-  expect(() => f.admit(operation)).toThrow(/supplied sender authority/)
-  const committed = f.admit(operation, { ...f.facts, mail: [[journalMailSenderKey(from), true]] })
-  expect(committed.cards).toMatchObject([{ messageId: 'person', state: 'dispatched' }])
-  expect(f.card('mail')).toMatchObject({ state: 'waiting', consumedAs: null, body: { from } })
-  expect(f.attempt('send')).toMatchObject({ admittedPersonal: true })
-})
-
-it('uses current pause, expiry and owed authority before admission and appends ordered reopen/admission identities', () => {
+it('manual Send checks owed authority and appends ordered reopen/admission identities', () => {
   const f = fixture()
   f.seed('card')
   f.lease(
@@ -264,14 +231,11 @@ it('uses current pause, expiry and owed authority before admission and appends o
   const operation = f.submit(
     'send',
     { body: body('card') },
-    { messageId: 'card', expect: 'waiting', yieldsToPause: true, owed: true }
+    { messageId: 'card', expect: 'waiting', owed: true }
   )
   f.db
     .prepare(`UPDATE journal_chat_state SET queue_manual_stop_json=?`)
     .run(JSON.stringify({ sequence: 9, event: { reason: 'user-stop', at: now } }))
-  expect(() => f.admit(operation, { ...f.facts, owed: 'owed' })).toThrow(
-    QueuedMessageNotConsumableError
-  )
   f.db.prepare(`UPDATE journal_chat_state SET queue_resumed_sequence=10`).run()
   const reopened = {
     ...f.facts,

@@ -139,16 +139,12 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     const written = this.admit(async (writer) => {
       const savedAt = this.now()
       const context: JournalReceiptStage = { savedAt, row: receiptRow(operation) }
-      const mail =
-        operation.kind === 'submission' && operation.consume?.yieldsToPause
-          ? await this.queuedMessages.automaticMailFacts(operation.consume.steer)
-          : undefined
       const preparation = (await prepare?.(context)) ?? {}
       const facts: JournalWriterHostFacts = {
         identity: this.identity,
         openedThrough: this.openedThrough,
         goals: this.goalAttachments.snapshot(),
-        ...this.queuedMessages.facts(mail),
+        ...this.queuedMessages.facts(),
         ...settled(this.stopMarks.fact()),
         ...preparation.facts
       }
@@ -299,6 +295,7 @@ function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptStage['r
     case 'dispatch':
       return 'dispatch'
     case 'submission':
+    case 'automatic-submission':
       return 'submission'
     default:
       return undefined

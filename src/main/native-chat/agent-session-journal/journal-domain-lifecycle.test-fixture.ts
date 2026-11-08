@@ -26,14 +26,16 @@ export const lifecycleIdentity = (clientMessageId: string) => ({
   clientMessageId
 })
 
-export function domainLifecycleFixture(cleanups: (() => void)[]) {
+export function domainLifecycleFixture(cleanups: (() => void)[], sessionId = 'chat') {
+  const target = { ...lifecycleTarget, sessionId }
+  const defaultFacts = { ...lifecycleFacts, identity: { ...lifecycleFacts.identity, sessionId } }
   const directory = mkdtempSync(join(tmpdir(), 'orca-domain-lifecycle-'))
   const filename = join(directory, 'journal.sqlite')
   let db = new Database(filename)
   migrateJournalDomainSchema(db)
   db.prepare(
-    `INSERT INTO journal_chat_state(session_id,workspace_id,epoch,highest_fence) VALUES('chat','workspace','epoch',1)`
-  ).run()
+    `INSERT INTO journal_chat_state(session_id,workspace_id,epoch,highest_fence) VALUES(?,'workspace','epoch',1)`
+  ).run(sessionId)
   cleanups.push(() => {
     db.close()
     rmSync(directory, { recursive: true, force: true })
@@ -53,10 +55,10 @@ export function domainLifecycleFixture(cleanups: (() => void)[]) {
     },
     async run(
       operation: JournalWriterOperation,
-      facts: JournalWriterHostFacts = lifecycleFacts,
+      facts: JournalWriterHostFacts = defaultFacts,
       effects?: JournalWriterCommand['effects']
     ) {
-      const command = { target: lifecycleTarget, operation, facts, ...(effects ? { effects } : {}) }
+      const command = { target, operation, facts, ...(effects ? { effects } : {}) }
       const answer = (
         await new JournalSqlBatch(db).run([command], (command) =>
           new JournalSqlCommand(db, directory).apply(command, 100)

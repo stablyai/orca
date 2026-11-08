@@ -34,6 +34,10 @@ import type { StoppedHistoryDelivery } from '../../../shared/agent-session/lifec
 import type { JournalWriterSettled } from './journal-sql-failure'
 import type { JournalCommandOpenResult } from './journal-store-contracts'
 import { restoreJournalSqlFailure } from './journal-sql-failure'
+import { claimJournalAutomaticSubmission } from './journal-sql-automatic-submission'
+import type { JournalAutomaticSelection } from './journal-automatic-submission'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
+import type { QueuedMessageOwed } from './queued-messages/queued-message-consume-error'
 
 /**
  * The in-memory journal's append surface, each method one writer command with the same answer.
@@ -41,6 +45,7 @@ import { restoreJournalSqlFailure } from './journal-sql-failure'
  */
 export abstract class SqlJournalAppends {
   abstract readonly reads: JournalSqlReads
+  abstract reopenFloor(): AgentJournalCursor | null
 
   abstract write(
     operation: JournalSqlStoreOperation,
@@ -150,6 +155,15 @@ export abstract class SqlJournalAppends {
         })
       )
     )
+  }
+
+  claimAutomaticSubmission(
+    input: { clientMessageId: string; fence: number },
+    capture: () => JournalAutomaticSelection | Promise<JournalAutomaticSelection>,
+    owed: (source: AgentMessageSource) => QueuedMessageOwed,
+    receipt?: JournalOperationReceipt
+  ) {
+    return claimJournalAutomaticSubmission(this, input, capture, owed, receipt)
   }
 
   resolveDispatch(

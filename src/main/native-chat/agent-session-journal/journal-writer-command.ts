@@ -76,6 +76,7 @@ export type JournalWriterCommand = {
 }
 
 export type JournalWriterInputOperation =
+  | { kind: 'automatic-submission'; clientMessageId: string; fence: number }
   | { kind: 'edit-lease'; operation: JournalDomainEditLeaseOperation }
   | {
       kind: 'submission'

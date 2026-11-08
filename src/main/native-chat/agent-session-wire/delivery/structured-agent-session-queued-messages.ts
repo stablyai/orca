@@ -2,22 +2,14 @@
 
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionSendResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import { queuedSendAnswer } from './structured-agent-session-queued-send-answer'
 import { queuedMessagesPublishedBytesRefusal } from './structured-agent-session-queued-published-bytes'
-import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
-import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { readContextStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
-import {
-  QueuedMessageNotConsumableError,
-  QueuedMessageNotOwedError
-} from '../../agent-session-journal/queued-messages/queued-message-consume-error'
-import { queuedMessageOwed } from './structured-agent-session-queued-mail'
 import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
 import type {
   StructuredAgentSessionHostDeps,
@@ -30,10 +22,11 @@ import {
 } from '../operations/structured-agent-session-turns'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
-import {
-  nextStructuredQueuedMessage,
-  shouldQueueStructuredAgentSessionSend
-} from './structured-agent-session-queued-gate'
+import { shouldQueueStructuredAgentSessionSend } from './structured-agent-session-queued-gate'
+import type { JournalAutomaticSelection } from '../../agent-session-journal/journal-automatic-submission'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import { restoreJournalSqlFailure } from '../../agent-session-journal/journal-sql-failure'
+import { AgentSessionJournalError } from '../../agent-session-journal/writing/journal-write-guards'
 
 /** Queue eligible fresh sends; return null for immediate delivery or existing submission replay. */
 export async function maybeQueueStructuredAgentSessionSend(
@@ -129,12 +122,12 @@ export async function maybeQueueStructuredAgentSessionSend(
 
 export type QueuedMessageDrainDeps = {
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
-  getRecord: (sessionId: string) => AgentSessionRecord | null
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   conversationFence: (sessionId: string) => number
-  currentWork: (sessionId: string) => Promise<StructuredAgentSessionObservedWork | null>
-  readWork: (sessionId: string) => JournalWorkReader
-  canSteer?: (sessionId: string, card: QueuedMessageRow) => boolean | Promise<boolean>
+  captureSelection: (
+    sessionId: string,
+    journal: SqlAgentSessionJournal
+  ) => Promise<JournalAutomaticSelection>
   wakeDelivery: (sessionId: string) => void
   submissionReceipt?: (sessionId: string) => JournalOperationReceipt
   owed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
@@ -184,72 +177,24 @@ export class StructuredAgentSessionQueuedMessageDrain {
     }
     const journal = session.journal
     const fence = this.deps.conversationFence(sessionId)
-    const record = this.deps.getRecord(sessionId)
-    const work = await this.deps.currentWork(sessionId)
-    const next = work
-      ? await nextStructuredQueuedMessage({
-          journal,
-          record,
-          work,
-          readWork: this.deps.readWork(sessionId),
-          steer: true,
-          canSteer: this.deps.canSteer?.bind(null, sessionId)
-        })
-      : null
-    if (this.disposed || !next) {
-      return
-    }
-    const steer = work !== null && work.activeTurnId() !== null
-    // Fresh submission IDs link drafts through queuedMessageId, never equality.
-    const submissionId = createStructuredAgentSessionOperationId(randomUUID)
-    const owed = queuedMessageOwed({ queuedAgentMessageOwed: this.deps.owed }, sessionId, next.body)
-    try {
-      await journal.appendSubmission(
-        {
-          clientMessageId: submissionId,
-          // Automatic handoffs never become personal kept cards on close/restart.
-          origin: 'host',
-          payloadFingerprint: next.fingerprint,
-          body: next.body,
-          ...(next.options ? { options: next.options } : {}),
-          fence,
-          handoverRecorded: true
-        },
-        {
-          messageId: next.messageId,
-          expect: 'waiting',
-          yieldsToPause: true,
-          ...(steer && { steer: true }),
-          ...(owed && { owed })
-        },
-        this.deps.submissionReceipt?.(sessionId)
-      )
-    } catch (error) {
-      if (error instanceof QueuedMessageNotConsumableError) {
-        if (
-          next.messageId !== (await journal.queuedMessages.nextInputCard(true, steer))?.messageId
-        ) {
-          // The queue's choice moved (older mail became decidable): choose again.
-          this.schedule(sessionId)
+    const result = await journal.claimAutomaticSubmission(
+      { clientMessageId: createStructuredAgentSessionOperationId(randomUUID), fence },
+      async () => {
+        const selection = await this.deps.captureSelection(sessionId, journal)
+        if (this.disposed || this.deps.sessions.get(sessionId) !== session) {
+          throw new AgentSessionJournalError('journal_closed', 'queued delivery was cancelled')
         }
-        return
-      }
-      if (error instanceof QueuedMessageNotOwedError) {
-        // No longer owed here: drop it without a turn; its withdrawal commit wakes the next card.
-        // One that cannot be decided now keeps its place; the next wake passes over it.
-        if (error.owed === 'stale') {
-          await journal.queuedMessages.withdraw([next.messageId])
-        } else {
-          this.schedule(sessionId)
-        }
-        return
-      }
-      // Persist failed conversion as a held waiting card; only explicit Send retries, avoiding loops.
-      await journal.queuedMessages
-        .hold({ messageIds: [next.messageId], reason: QUEUED_MESSAGE_PAUSED_SEND_FAILED })
-        .catch(() => {})
-      throw error
+        return selection
+      },
+      (source) => this.deps.owed?.(sessionId, source) ?? 'owed',
+      this.deps.submissionReceipt?.(sessionId)
+    )
+    if (result.kind === 'claimed') {
+      this.deps.wakeDelivery(sessionId)
+    } else if (result.kind === 'changed' && result.retry) {
+      this.schedule(sessionId)
+    } else if (result.kind === 'failed') {
+      throw restoreJournalSqlFailure(result.failure)
     }
-    this.deps.wakeDelivery(sessionId)
   }
 }

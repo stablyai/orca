@@ -1,7 +1,6 @@
 import type Database from '../../sqlite/sync-database'
 import { orchestrationMailNotice } from '../../../shared/agent-session/agent-session-message-source'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { journalMailSenderKey } from './journal-writer-host-facts'
 import type { JournalWriterOperation } from './journal-writer-command'
 import type {
   JournalDomainSubmissionFacts,
@@ -103,7 +102,7 @@ export function selectJournalDomainSubmissionCard(
   target: JournalDomainSubmissionTarget,
   operation: Submission,
   facts: JournalDomainSubmissionFacts,
-  savedAt: number
+  _savedAt: number
 ): JournalDomainQueueRow | null {
   const { consume, input } = operation
   if (!consume) {
@@ -120,22 +119,7 @@ export function selectJournalDomainSubmissionCard(
       consumedAs: input.clientMessageId,
       fingerprint: input.payloadFingerprint
     },
-    current?.card ?? null,
-    () =>
-      nextJournalDomainQueueCard(db, target, {
-        reopenFloor: facts.reopenFloor ?? null,
-        now: savedAt,
-        steer: consume.steer === true,
-        automatic: true,
-        mailUnavailable: (card) => {
-          const key = journalMailSenderKey(card.body.from!)
-          const authority = facts.mail?.find(([sender]) => sender === key)
-          if (!authority) {
-            throw new Error('journal automatic mail selection requires supplied sender authority')
-          }
-          return authority[1]
-        }
-      })
+    current?.card ?? null
   )
   const owed = consume.owed ? (facts.owed ?? 'unavailable') : 'owed'
   if (owed !== 'owed') {

@@ -31,6 +31,11 @@ import type { JournalSqlScope } from './journal-sql-scope'
 import { journalMailSenderKey } from './journal-writer-host-facts'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { SqlQueuedMessageEditLeases } from './journal-sql-edit-leases'
+import { prepareJournalAutomaticSubmission } from './journal-domain-automatic-selection'
+import type {
+  JournalAutomaticPreparation,
+  JournalAutomaticSelection
+} from './journal-automatic-submission'
 
 /** Host-memory facts a queue read needs, sent as data like the writer's facts. */
 export type JournalSqlQueueFacts = {
@@ -39,6 +44,7 @@ export type JournalSqlQueueFacts = {
 }
 
 export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
+  | { kind: 'automatic-preparation'; selection: JournalAutomaticSelection; now: number }
   | { kind: 'list' }
   | { kind: 'get'; messageId: string }
   | { kind: 'revision' }
@@ -51,6 +57,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
 )
 
 export type JournalSqlQueueReadResult =
+  | { kind: 'automatic-preparation'; preparation: JournalAutomaticPreparation }
   | { kind: 'list'; cards: QueuedMessageRow[] }
   | { kind: 'get'; card: QueuedMessageRow | null }
   | { kind: 'revision'; revision: string }
@@ -79,6 +86,16 @@ export function readJournalSqlQueue(
   const target = { sessionId: read.sessionId, epoch: read.epoch }
   const { facts } = operation
   switch (operation.kind) {
+    case 'automatic-preparation':
+      return {
+        kind: 'automatic-preparation',
+        preparation: prepareJournalAutomaticSubmission(
+          read,
+          operation.selection,
+          operation.now,
+          facts
+        )
+      }
     case 'list':
       return { kind: 'list', cards: readJournalDomainQueueList(db, target) }
     case 'get':
@@ -142,17 +159,6 @@ export function readJournalSqlQueue(
         since: readJournalDomainQueueHead(db, target).lastSequence + 1
       }
   }
-}
-
-/** Pause marks are storage proxies; only plain values cross the reader port. */
-export function detachJournalSqlStop(stop: JournalLatestStop | null): JournalLatestStop | null {
-  return (
-    stop && {
-      sequence: stop.sequence,
-      event: { ...stop.event },
-      ...(stop.settle ? { settle: { ...stop.settle } } : {})
-    }
-  )
 }
 
 export type JournalSqlQueuePort = {
@@ -238,26 +244,15 @@ export class SqlJournalQueuedMessages {
     return (await this.read({ kind: 'cleared-through' }, 'cleared-through')).sequence
   }
 
-  /** The one mail fact an automatic consume selection can ask, captured before its writer command. */
-  async automaticMailFacts(steer = false): Promise<(readonly [string, boolean])[]> {
-    const result = await this.port.read({
-      kind: 'next-input-card',
-      automatic: true,
-      steer,
-      now: this.now(),
-      facts: this.facts()
-    })
-    return result.kind === 'mail-needed' ? this.answerMail([result.card]) : []
-  }
-
   async nextInputCard(automatic = true, steer = false): Promise<QueuedMessageRow | null> {
     const mail: (readonly [string, boolean])[] = []
+    const now = this.now()
     for (;;) {
       const result = await this.port.read({
         kind: 'next-input-card',
         automatic,
         steer,
-        now: this.now(),
+        now,
         facts: this.facts(mail)
       })
       if (result.kind === 'next-input-card') {

@@ -4,8 +4,7 @@ import type {
   StructuredAgentSessionHostSession
 } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
-import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
-import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
+import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { StructuredAgentSessionQueuedMessageDrain } from './structured-agent-session-queued-messages'
 import {
   deleteQueuedStructuredAgentMessage,
@@ -20,7 +19,6 @@ import {
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
 import { queuedMailUnavailable } from './structured-agent-session-queued-mail'
-import { canSteerStructuredQueuedMessage } from './structured-agent-session-queued-gate'
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
@@ -31,37 +29,41 @@ export function wireStructuredAgentSessionQueuedMessages(
 ) {
   const drain = new StructuredAgentSessionQueuedMessageDrain({
     sessions,
-    getRecord: (sessionId) => context().deps.store.getRecord(sessionId),
     serialize: (sessionId, task) => context().serialize(sessionId, task),
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
-    currentWork: (sessionId) =>
-      hostStructuredAgentSessionCurrentWork({ store: context().deps.store, sessions }, sessionId),
-    readWork: (sessionId) => (operation) =>
-      readHostStructuredAgentSessionWork(
-        { store: context().deps.store, sessions },
-        sessionId,
-        operation
-      ),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
-    canSteer: async (sessionId, card) => {
+    captureSelection: async (sessionId, journal) => {
       const ctx = context()
+      const stopping = await ctx.readStopping(sessionId)
       const child = sessions.get(sessionId)?.child
       const record = ctx.deps.store.getRecord(sessionId)
-      const work = await hostStructuredAgentSessionCurrentWork(
-        { store: ctx.deps.store, sessions },
-        sessionId
-      )
-      return canSteerStructuredQueuedMessage(
-        {
-          child,
-          record,
-          work,
-          stopping: await ctx.readStopping(sessionId),
-          adapter: ctx.deps.adapter
-        },
-        card
-      )
+      return {
+        authority: captureHostStructuredAgentSessionWork(
+          { store: ctx.deps.store, sessions },
+          sessionId,
+          journal
+        ),
+        child: child
+          ? {
+              fence: child.fence,
+              acquisitionGeneration: child.generation,
+              ready: child.phase === 'ready',
+              closing: !!child.close,
+              stopping
+            }
+          : null,
+        steering:
+          record?.provider !== 'codex'
+            ? { kind: 'other' }
+            : child
+              ? (ctx.deps.adapter.captureMessageSteeringInputs?.({
+                  sessionId,
+                  fence: child.fence,
+                  acquisitionGeneration: child.generation
+                }) ?? { kind: 'codex-unavailable' })
+              : { kind: 'codex-unavailable' }
+      }
     },
     submissionReceipt: (sessionId) => context().deps.store.submissionReceipt(sessionId),
     owed: (sessionId, from) => context().deps.queuedAgentMessageOwed?.(sessionId, from) ?? 'owed',

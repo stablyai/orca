@@ -18,6 +18,7 @@ import { applyJournalDomainPromptMutation } from './journal-domain-prompt-mutati
 import { applyJournalSqlStepCommand } from './journal-sql-step-command'
 import { applyJournalSqlEditLeaseCommand } from './journal-sql-edit-lease-command'
 import { trackJournalDomainQueueRevision } from './journal-domain-queue-revision'
+import { applyJournalSqlAutomaticSubmissionCommand } from './journal-sql-automatic-submission-command'
 
 /** Every command decides against current rows at its position on the sole writer. */
 export class JournalSqlCommand {
@@ -37,6 +38,13 @@ export class JournalSqlCommand {
     command = { ...command, savedAt }
     const { operation, target } = command
     switch (operation.kind) {
+      case 'automatic-submission':
+        return applyJournalSqlAutomaticSubmissionCommand(
+          this.db,
+          this.stateDirectory,
+          { ...command, operation },
+          savedAt
+        )
       case 'edit-lease':
         return applyJournalSqlEditLeaseCommand(
           this.db,

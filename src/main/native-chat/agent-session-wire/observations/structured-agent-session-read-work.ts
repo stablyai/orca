@@ -9,6 +9,7 @@ import type {
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
 import type { StructuredAgentSessionCurrentWorkHost } from './structured-agent-session-host-current-work'
 import { structuredAgentSessionHandoverAuthority } from '../delivery/structured-agent-session-handing-over'
+import type { JournalCurrentWorkAuthority } from '../../agent-session-journal/journal-observer-read'
 
 type WorkSession = Omit<
   NonNullable<ReturnType<StructuredAgentSessionCurrentWorkHost['sessions']['get']>>,
@@ -30,30 +31,39 @@ export async function readHostStructuredAgentSessionWork<K extends JournalWorkRe
     throw new AgentSessionJournalError('journal_closed', `the journal for ${sessionId} is closed`)
   }
   const { journal } = session
-  return journal.readWork(() => {
-    const current = host.sessions.get(sessionId)
-    if (current?.journal !== journal) {
-      throw new AgentSessionJournalError(
-        'journal_closed',
-        `the journal for ${sessionId} was replaced`
-      )
-    }
-    const child = current.child
-    const held = child?.heldSends?.()
-    return {
-      handle: journal.observationHandle(),
-      record: host.store.getConversation(sessionId),
-      ended: current.lastEndedChild,
-      replaced: host.store.replacedRuntime(sessionId),
-      child:
-        child === null || child === undefined
-          ? child
-          : { fence: child.fence, heldSends: held && [...held] },
-      ...structuredAgentSessionHandoverAuthority(journal),
-      openedThrough: journal.openingCursor(),
-      operationalRevision: current.operationalRevision ?? 0
-    }
-  }, operation)
+  return journal.readWork(
+    () => captureHostStructuredAgentSessionWork(host, sessionId, journal),
+    operation
+  )
+}
+
+export function captureHostStructuredAgentSessionWork(
+  host: WorkHost,
+  sessionId: string,
+  journal: AgentSessionJournal
+): JournalCurrentWorkAuthority {
+  const current = host.sessions.get(sessionId)
+  if (current?.journal !== journal) {
+    throw new AgentSessionJournalError(
+      'journal_closed',
+      `the journal for ${sessionId} was replaced`
+    )
+  }
+  const child = current.child
+  const held = child?.heldSends?.()
+  return {
+    handle: journal.observationHandle(),
+    record: host.store.getConversation(sessionId),
+    ended: current.lastEndedChild,
+    replaced: host.store.replacedRuntime(sessionId),
+    child:
+      child === null || child === undefined
+        ? child
+        : { fence: child.fence, heldSends: held && [...held] },
+    ...structuredAgentSessionHandoverAuthority(journal),
+    openedThrough: journal.openingCursor(),
+    operationalRevision: current.operationalRevision ?? 0
+  }
 }
 
 export async function readContextStructuredAgentSessionWork<K extends JournalWorkRead['kind']>(
