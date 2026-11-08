@@ -8,10 +8,12 @@ import { canProveUnchangedByStamp, readFileStampComponent } from './worktree-dif
 /** Opaque object-store identity under which a commit pair's graph answers stay valid. */
 export type CommitPairScope = string
 
-type CommitPairKind = 'merge-base' | 'divergence'
+/** One bounded LRU per answer kind keeps values typed without casts. */
+export type CommitPairStore<T> = Map<string, T>
 
-const MAX_ENTRIES = 256
-const entries = new Map<string, unknown>()
+const MAX_ENTRIES_PER_STORE = 128
+export const commitPairMergeBases: CommitPairStore<string> = new Map()
+export const commitPairDivergences: CommitPairStore<{ ahead: number; behind: number }> = new Map()
 
 // Shallow boundaries, grafts and replace refs rewrite parents of unchanged OIDs; packed/reftable refs can hold replace refs.
 const HISTORY_REWRITE_INPUTS = [
@@ -52,9 +54,9 @@ export async function readCommitPairScope(
 
 /** Reuse a successful answer for this exact commit pair; failures and aborts are never stored. */
 export async function rememberCommitPair<T>(
+  entries: CommitPairStore<T>,
   scope: CommitPairScope | null,
   rereadScope: () => Promise<CommitPairScope | null>,
-  kind: CommitPairKind,
   baseOid: string,
   headOid: string,
   compute: () => Promise<T>
@@ -62,9 +64,9 @@ export async function rememberCommitPair<T>(
   if (scope === null) {
     return compute()
   }
-  const key = JSON.stringify([scope, kind, baseOid, headOid])
-  if (entries.has(key)) {
-    const cached = entries.get(key) as T
+  const key = JSON.stringify([scope, baseOid, headOid])
+  const cached = entries.get(key)
+  if (cached !== undefined) {
     entries.delete(key)
     entries.set(key, cached)
     return cached
@@ -75,7 +77,7 @@ export async function rememberCommitPair<T>(
     return value
   }
   entries.set(key, value)
-  if (entries.size > MAX_ENTRIES) {
+  if (entries.size > MAX_ENTRIES_PER_STORE) {
     const oldest = entries.keys().next()
     if (!oldest.done) {
       entries.delete(oldest.value)

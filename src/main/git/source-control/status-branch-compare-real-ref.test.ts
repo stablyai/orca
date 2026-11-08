@@ -110,7 +110,7 @@ describe('getBranchCompare real refs', () => {
 
     git(repo, ['replace', '--graft', tipOid, rootOid])
     // Age the new replace ref past the racy-write margin so only the stamp can force a recount.
-    const aged = new Date(Date.now() - 60_000)
+    const aged = new Date('2020-01-01T00:00:00Z')
     const replaceDir = path.join(repo, '.git', 'refs', 'replace')
     await utimes(path.join(replaceDir, tipOid), aged, aged)
     await utimes(replaceDir, aged, aged)

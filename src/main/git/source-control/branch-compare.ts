@@ -7,7 +7,12 @@ import { resolveWorktreeAddBaseRef } from '../../../shared/worktree/base-ref'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { resolveWorktreeBaseCommitOid } from '../worktrees/creation/worktree-base-ref-probe'
 import { loadBranchChanges } from './branch-change-entries'
-import { readCommitPairScope, rememberCommitPair } from './commit-pair-cache'
+import {
+  commitPairDivergences,
+  commitPairMergeBases,
+  readCommitPairScope,
+  rememberCommitPair
+} from './commit-pair-cache'
 import {
   countCompareDivergence,
   resolveCompareRef,
@@ -92,9 +97,9 @@ export async function getBranchCompare(
   let mergeBase = ''
   try {
     mergeBase = await rememberCommitPair(
+      commitPairMergeBases,
       pairScope,
       rereadPairScope,
-      'merge-base',
       baseOid,
       headOid,
       () => resolveMergeBase(worktreePath, baseOid, headOid, options)
@@ -118,7 +123,7 @@ export async function getBranchCompare(
 
     const [entries, divergence] = await Promise.all([
       loadBranchChanges(worktreePath, mergeBase, headOid, options),
-      rememberCommitPair(pairScope, rereadPairScope, 'divergence', baseOid, headOid, () =>
+      rememberCommitPair(commitPairDivergences, pairScope, rereadPairScope, baseOid, headOid, () =>
         countCompareDivergence(worktreePath, baseOid, headOid, options)
       )
     ])
