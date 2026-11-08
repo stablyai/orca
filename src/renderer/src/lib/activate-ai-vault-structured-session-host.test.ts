@@ -96,7 +96,9 @@ it.each([false, true].map((olderLookup) => ({ olderLookup, rowHost: true })))(
   async ({ olderLookup, rowHost }) => {
     if (olderLookup) {
       const call = mocks.call.getMockImplementation()
-      if (!call) throw new Error('Missing fixture RPC implementation')
+      if (!call) {
+        throw new Error('Missing fixture RPC implementation')
+      }
       mocks.call.mockImplementation(async (...args) => {
         if (args[1] === 'orchestration.partyLocation') {
           throw Object.assign(new Error('old host'), { code: 'method_not_found' })
