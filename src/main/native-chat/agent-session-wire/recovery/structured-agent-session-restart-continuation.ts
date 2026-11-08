@@ -49,7 +49,7 @@ export type StructuredAgentSessionContinuationHost = {
   send: (input: {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   awaitSendSettlement: (
     sessionId: string,
@@ -62,21 +62,21 @@ export type StructuredAgentSessionContinuationHost = {
   logger: StructuredAgentSessionLogger
   now: () => number
   /** Recheck under acceptance serialization so the first post-restart message wins. */
-  stillResumable: (marker: AgentSessionResumeMarker) => boolean
+  stillResumable: (marker: AgentSessionResumeMarker) => Promise<boolean>
 }
 
 /** Bind serialized acceptance checks, settlement waits and attribution notes to the host. */
 export function continuationDeps(
   host: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>,
-  stillWanted: () => boolean
+  stillWanted: () => Promise<boolean>
 ): StructuredAgentSessionContinuationDeps {
   return {
     currentFence: host.conversationFence,
     send: (input) =>
       host.send({
         ...input,
-        beforeRun: () => {
-          if (!stillWanted()) {
+        beforeRun: async () => {
+          if (!(await stillWanted())) {
             throw new RestartContinuationSupersededError()
           }
         }

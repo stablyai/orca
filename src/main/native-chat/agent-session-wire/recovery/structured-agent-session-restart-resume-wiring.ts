@@ -16,7 +16,7 @@ export type StructuredAgentSessionRestartResumeSurfaces = {
   send: (input: {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   awaitSendSettlement: (
     sessionId: string,
@@ -42,7 +42,7 @@ type RestartResumeHostBindings = {
     params: {
       envelope: AgentSessionMutationEnvelope
       body: AgentJournalMessageItem
-      beforeRun?: () => void
+      beforeRun?: () => void | Promise<void>
     }
   ) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   waitForSendSettlement: (

@@ -70,7 +70,7 @@ export function sendStructuredAgentSessionTurn(
     userSend?: true
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   },
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
@@ -109,7 +109,7 @@ export function sendStructuredAgentSessionTurn(
               }
             }
           }
-          params.beforeRun?.()
+          await params.beforeRun?.()
           return runQueueableStructuredAgentSessionSend(context, ctx, params, () => plan.run(ctx))
         }
       },

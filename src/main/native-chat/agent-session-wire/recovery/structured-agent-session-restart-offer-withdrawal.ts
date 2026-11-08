@@ -24,17 +24,19 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
   now: () => number
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
 }) {
-  const movedOn = (marker: AgentSessionResumeMarker): boolean => {
+  const movedOn = async (marker: AgentSessionResumeMarker): Promise<boolean> => {
     const session = deps.sessions.get(marker.sessionId)
     if (!session) {
       return false
     }
     const taken = marker.journalCursor
+    const progress = taken ? await session.journal.reads.restartProgress(taken) : undefined
     // Legacy offers lack cursors, so only proven startup can withdraw them.
     const accepted =
       taken !== undefined &&
-      (session.journal.cursor().epoch !== taken.epoch ||
-        session.journal.inputOrder.acceptedInputsAfter(taken.sequence).some(
+      progress !== undefined &&
+      (progress.epoch !== taken.epoch ||
+        progress.acceptedInputs.some(
           (submission) =>
             (submission.acceptedSequence ?? 0) > taken.sequence &&
             // Own queued/rejected continuations allow retry; handover may have delivered despite no answer.

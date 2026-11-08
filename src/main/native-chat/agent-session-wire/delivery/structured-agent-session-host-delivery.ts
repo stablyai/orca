@@ -3,6 +3,7 @@ import { selectableStructuredSubmission } from './structured-agent-session-input
 
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { holdClosedStructuredAgentSessionSends } from '../termination/structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import {
@@ -92,7 +93,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   const { deps, sessions } = input
   const retainedWork = (sessionId: string, continuingId?: string) => ({
     currentWork: () =>
-      hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
+      readHostStructuredAgentSessionWork({ store: deps.store, sessions }, sessionId, {
+        kind: 'child-work'
+      }),
     childWork: () => input.clientDelivery.readChildWork(sessionId),
     childWorkOpen: () => input.clientDelivery.childWorkOpen(sessionId),
     hasOpenDispatch: () => {
@@ -153,12 +156,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       const record = deps.store.getRecord(sessionId)
       return record ? structuredAgentSessionImmediatePermission(deps, record) : null
     },
-    retainedWork: (sessionId, id) => {
+    retainedWork: async (sessionId, id) => {
       const session = sessions.get(sessionId)
-      return (
-        !!session &&
-        structuredAgentSessionChildOwesWork(session.journal, retainedWork(sessionId, id))
-      )
+      return !!session && (await structuredAgentSessionChildOwesWork(retainedWork(sessionId, id)))
     },
     readiness: input.readiness,
     startFlights: input.startFlights,

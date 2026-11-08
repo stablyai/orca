@@ -122,6 +122,13 @@ function readMemoryAnswer(
   switch (operation.kind) {
     case 'turn':
       return { kind: 'turn', activeTurn: work.activeTurn(), working: work.working() }
+    case 'child-work':
+      return {
+        kind: 'child-work',
+        activeTurn: work.activeTurnId() !== null,
+        actionablePrompt: work.hasActionablePrompt(),
+        newestTurnCompletedAt: journal.newestTurn()?.completedAt
+      }
     case 'item':
       return { kind: 'item', current: work.isCurrentItem(operation.itemId) }
     case 'send':

@@ -129,7 +129,7 @@ export function sendPlan(
     userSend?: true
     /** Host-sent personal text; userSend always implies this. */
     personsMessage?: true
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   }
 ): MutationPlan<AgentSessionSendResult> {
   // Match operation ID to optimistic client message ID for durable reconciliation.

@@ -40,7 +40,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   ) => Promise<void>
   immediatePermission?: (sessionId: string) => AgentChatPermissionChoice | null
   stopPermissionTransitionChild?: (sessionId: string) => Promise<void>
-  retainedWork?: (sessionId: string, continuingId: string) => boolean
+  retainedWork?: (sessionId: string, continuingId: string) => Promise<boolean>
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity

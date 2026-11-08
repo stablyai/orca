@@ -5,12 +5,19 @@ import type { JournalCurrentWorkAuthority, JournalObserverResult } from './journ
 export type JournalWorkRead =
   | { kind: 'state' }
   | { kind: 'turn' }
+  | { kind: 'child-work' }
   | { kind: 'item'; itemId: string }
   | { kind: 'send'; submission: AgentJournalSubmission }
   | { kind: 'attempt-ended'; clientMessageId: string }
 
 export type JournalWorkReadResult =
   | { kind: 'state'; state: JournalObserverResult['work'] }
+  | {
+      kind: 'child-work'
+      activeTurn: boolean
+      actionablePrompt: boolean
+      newestTurnCompletedAt: number | undefined
+    }
   | {
       kind: 'turn'
       activeTurn: JournalObserverResult['work']['activeTurn']

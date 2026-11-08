@@ -14,6 +14,7 @@ import type {
   JournalWorkReadResult
 } from './journal-work-read'
 import { journalInputAttemptEndedFromFacts } from './input-order/journal-input-attempt-ended'
+import { readJournalSqlInput } from './journal-sql-input-reads'
 
 export function readJournalSqlCurrentWork(
   context: JournalSqlStatusContext,
@@ -106,6 +107,20 @@ function readWork(
       return { kind: 'state', state: readJournalSqlWorkState(context, work) }
     case 'turn':
       return { kind: 'turn', activeTurn: work.activeTurn(), working: work.working() }
+    case 'child-work': {
+      const newest = readJournalSqlInput(context.scope, { kind: 'newest-turn' })
+      if (newest.kind !== 'newest-turn') {
+        throw new Error('journal newest turn read returned a different answer')
+      }
+      return {
+        kind: 'child-work',
+        activeTurn: work.activeTurn() !== null,
+        actionablePrompt: [...context.select({ kind: 'pending-prompts' })].some(
+          ({ item }) => work.isCurrentItem(item.itemId) && context.displayed(item.itemId) !== null
+        ),
+        newestTurnCompletedAt: newest.turn?.completedAt
+      }
+    }
     case 'item':
       return { kind: 'item', current: work.isCurrentItem(operation.itemId) }
     case 'send':

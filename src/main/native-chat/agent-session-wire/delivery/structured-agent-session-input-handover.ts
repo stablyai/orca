@@ -91,11 +91,9 @@ export async function beginStructuredAgentSessionInputHandover(
           ) {
             return { kind: 'acquire' as const, reason: 'permission' as const }
           }
-          admission = enqueue(
-            mode ?? 'own',
-            deps.retainedWork?.(sessionId, next.clientMessageId) === true,
-            body
-          )
+          const retained = await deps.retainedWork?.(sessionId, next.clientMessageId)
+          validate(signal)
+          admission = enqueue(mode ?? 'own', retained === true, body)
           return admission
         })
         try {
