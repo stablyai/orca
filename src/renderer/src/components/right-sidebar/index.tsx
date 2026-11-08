@@ -15,7 +15,7 @@ import {
   computeMaxRightSidebarPanelWidth,
   RIGHT_SIDEBAR_SIDE_ACTIVITY_BAR_WIDTH as ACTIVITY_BAR_SIDE_WIDTH
 } from './right-sidebar-width'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { RightSidebarPanelContent } from './right-sidebar-panel-content'
 import { useMeasuredWidth } from './right-sidebar-measured-width'
@@ -33,6 +33,7 @@ import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-c
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 
 function RightSidebarInner(): React.JSX.Element {
+  const t = useTranslate()
   useUiLanguageRevision()
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
     platform: getRendererAppPlatform(),
@@ -92,7 +93,7 @@ function RightSidebarInner(): React.JSX.Element {
     <div className="flex flex-col flex-1 min-h-0 overflow-hidden scrollbar-sleek-parent">
       {creatingWorktree ? (
         <div className="flex flex-1 items-center justify-center px-4 text-center text-[11px] text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.index.creatingWorkspace',
             'Available when the workspace is ready'
           )}
@@ -127,20 +128,15 @@ function RightSidebarInner(): React.JSX.Element {
           type="button"
           className="sidebar-toggle mr-1"
           onClick={toggleRightSidebar}
-          aria-label={translate(
-            'auto.components.right.sidebar.index.e8e2e4ce74',
-            'Toggle right sidebar'
-          )}
+          aria-label={t('auto.components.right.sidebar.index.e8e2e4ce74', 'Toggle right sidebar')}
         >
           <PanelRight size={16} />
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
-        {translate(
-          'auto.components.right.sidebar.index.9fffaf17c1',
-          'Toggle right sidebar ({{value0}})',
-          { value0: rightSidebarShortcut }
-        )}
+        {t('auto.components.right.sidebar.index.9fffaf17c1', 'Toggle right sidebar ({{value0}})', {
+          value0: rightSidebarShortcut
+        })}
       </TooltipContent>
     </Tooltip>
   ) : null
