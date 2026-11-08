@@ -1,4 +1,5 @@
 import type { BrowserWindow } from 'electron'
+import { basename } from 'node:path'
 import type { WorktreeBaseCollectedChanges } from './worktree-base-directory-change-collector'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import {
@@ -46,6 +47,22 @@ export function clearPendingWorktreeBaseNotifications(watch: WorktreeBaseNotific
 
 export function supportsWorktreeHeadIdentityRefresh(watch: WorktreeBaseNotificationWatch): boolean {
   return watch.kind === 'git-common'
+}
+
+// Structural and unattributed bursts may touch any checkout of this common dir, but no other repo's.
+function changedWorktreePaths(
+  watch: WorktreeBaseNotificationWatch,
+  structural: boolean,
+  attributed: string[] | null
+): string[] | null {
+  if (!structural && attributed) {
+    return attributed
+  }
+  if (!supportsWorktreeHeadIdentityRefresh(watch)) {
+    return null
+  }
+  // Like the head reader: only a `.git` common dir has a primary checkout.
+  return allCachedWorktreePaths(watch.headIdentityRefresh.cache, basename(watch.path) === '.git')
 }
 
 export function scheduleWorktreeBaseNotification(
@@ -97,17 +114,15 @@ export function scheduleWorktreeBaseNotification(
     const gitStatusWorktreePaths = supportsWorktreeHeadIdentityRefresh(watch)
       ? cachedWorktreePathsForScope(watch.headIdentityRefresh.cache, watch.pendingGitStatusScope)
       : null
-    // Structural and unattributed bursts may touch any checkout of this common dir, but no other repo's.
-    const changedWorktreePaths =
-      pendingStructure.length === 0 && gitStatusWorktreePaths
-        ? gitStatusWorktreePaths
-        : supportsWorktreeHeadIdentityRefresh(watch)
-          ? allCachedWorktreePaths(watch.headIdentityRefresh.cache)
-          : null
+    const changedPaths = changedWorktreePaths(
+      watch,
+      pendingStructure.length > 0,
+      gitStatusWorktreePaths
+    )
     clearPendingWorktreeBaseNotifications(watch)
     if (pendingStructure.length > 0 || sourceControlRepoIds.size > 0) {
       // Staging can keep a file's status letters, and a phone's re-read must not join a read begun before the change.
-      invalidateGitStatusReads(changedWorktreePaths)
+      invalidateGitStatusReads(changedPaths)
     }
     for (const repoId of pendingStructure) {
       notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)

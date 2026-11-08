@@ -35,9 +35,12 @@ export function cachedWorktreePathsForScope(
   return paths
 }
 
-/** Every checkout of the common dir, or null while the memo hasn't listed them all. */
-export function allCachedWorktreePaths(cache: WorktreeHeadIdentityCache): string[] | null {
-  if (cache.entryNames === null || cache.primaryUnverified) {
+/** Every checkout of the common dir, or null while the memo may lack one (an unread listing or primary). */
+export function allCachedWorktreePaths(
+  cache: WorktreeHeadIdentityCache,
+  hasPrimary: boolean
+): string[] | null {
+  if (cache.entryNames === null || (hasPrimary && cache.primary === null)) {
     return null
   }
   const linked = [...cache.entries.values()].map((identity) => identity.worktreePath)
