@@ -200,7 +200,6 @@ function setHostCanVerifyOwner(answer: boolean | Promise<boolean>): void {
 
 describe('connectPanePty confirmed process exit retires the live agent row', () => {
   beforeEach(async () => {
-    vi.resetModules()
     vi.clearAllMocks()
     vi.useFakeTimers()
     coordinatorOptionsByPaneKey.clear()
