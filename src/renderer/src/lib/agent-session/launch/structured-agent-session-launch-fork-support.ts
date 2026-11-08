@@ -58,7 +58,8 @@ export async function requireHostForkSupport(
 /** A no-send this attempt cannot settle a preceding lost create. */
 export function refuseUnsentInheritedFork(
   intent: StructuredAgentSessionLaunchIntent,
-  priorUnknown: boolean
+  priorUnknown: boolean,
+  error?: unknown
 ): never {
   if (priorUnknown) {
     throw new StructuredAgentSessionCreateUnknownOutcomeError(
@@ -66,11 +67,13 @@ export function refuseUnsentInheritedFork(
       'runtime_unavailable'
     )
   }
+  const code =
+    error instanceof StructuredAgentSessionCreateRefusalError &&
+    error.code === STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL
+      ? STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL
+      : 'runtime_unavailable'
   abandonStructuredAgentSessionLaunchIntent(intent)
-  throw new StructuredAgentSessionCreateRefusalError(
-    STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL,
-    STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL
-  )
+  throw new StructuredAgentSessionCreateRefusalError(code, code)
 }
 
 /** Restored intents have no row context; read only the requested child's saved journal. */
@@ -141,26 +144,33 @@ export async function inheritedForkCreateOptions(
   if (!required) {
     return undefined
   }
-  if (intent.target.kind === 'local') {
-    if (
-      (await structuredAgentSessionHostCapabilityState(
-        intent.target,
-        AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
-      )) !== 'supported'
-    ) {
-      throw new Error('Original fork support is unavailable')
-    }
-    return undefined
-  }
-  const proof = await runtimeEnvironmentCapabilityProof(
-    intent.target.environmentId,
-    AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
-  )
-  if (!proof.supported) {
+  const support =
+    intent.target.kind === 'local'
+      ? await structuredAgentSessionHostCapabilityState(
+          intent.target,
+          AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+        )
+      : undefined
+  if (support === 'unknown') {
     throw new Error('Original fork support is unavailable')
   }
-  return {
-    expectedEnvironmentRuntimeId: proof.runtimeId,
-    expectedEnvironmentPairingRevision: proof.pairingRevision
+  const proof =
+    intent.target.kind === 'environment'
+      ? await runtimeEnvironmentCapabilityProof(
+          intent.target.environmentId,
+          AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+        )
+      : undefined
+  if (support === 'unsupported' || proof?.supported === false) {
+    throw new StructuredAgentSessionCreateRefusalError(
+      STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL,
+      STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL
+    )
   }
+  return proof
+    ? {
+        expectedEnvironmentRuntimeId: proof.runtimeId,
+        expectedEnvironmentPairingRevision: proof.pairingRevision
+      }
+    : undefined
 }

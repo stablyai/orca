@@ -43,7 +43,10 @@ import {
   inheritedForkCreateOptions,
   refuseUnsentInheritedFork
 } from './structured-agent-session-launch-fork-support'
-import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  RuntimeRpcCallError
+} from '@/runtime/rpc/calls/runtime-rpc-result'
 export { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from './structured-agent-session-launch-fork-support'
 
 type LaunchSeed = Readonly<Record<string, string>> | undefined
@@ -147,8 +150,8 @@ export async function launchStructuredAgentSession(
   if (intent.params.forkFrom) {
     try {
       forkOptions = await inheritedForkCreateOptions(intent)
-    } catch {
-      refuseUnsentInheritedFork(intent, priorCreateOutcomeUnknown)
+    } catch (error) {
+      refuseUnsentInheritedFork(intent, priorCreateOutcomeUnknown, error)
     }
   }
   await requireHostForkSupport(intent)
@@ -204,8 +207,8 @@ export async function launchStructuredAgentSession(
   } catch (error) {
     if (
       forkOptions?.expectedEnvironmentRuntimeId &&
-      error instanceof RuntimeRpcCallError &&
-      error.code === 'runtime_environment_changed'
+      (error instanceof RuntimeConnectionChangedBeforeSendError ||
+        (error instanceof RuntimeRpcCallError && error.code === 'runtime_environment_changed'))
     ) {
       refuseUnsentInheritedFork(intent, priorCreateOutcomeUnknown)
     }

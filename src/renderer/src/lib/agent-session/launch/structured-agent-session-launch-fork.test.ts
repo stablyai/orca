@@ -11,6 +11,20 @@ import {
 } from './structured-agent-session-launch-create-message.test-fixture'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 
+const browserSession = vi.hoisted(() => ({
+  client: { connectionEpoch: 1, call: vi.fn() },
+  environment: { id: 'paired', createdAt: 7, pairingRevision: 7 }
+}))
+vi.mock('@/web/preload-api/web-runtime-session', () => ({
+  getClientForEnvironment: () => browserSession.client,
+  manuallyDisconnectedEnvironmentIds: new Set<string>(),
+  manuallyDisconnectedResponse: () => ({ ok: false }),
+  resolveEnvironment: () => browserSession.environment,
+  runtimeCallQueuePool: { enqueue: (_id: string, _method: string, run: () => unknown) => run() },
+  updateEnvironmentFromResponse: () => undefined
+}))
+import { callWebRuntimeEnvironment } from '@/web/preload-api/web-runtime-calls'
+
 let restore: (() => void) | undefined
 beforeEach(() => {
   restore = resetCreateMessageFixture()
@@ -231,7 +245,7 @@ it('settles a pinned pre-dispatch runtime replacement definitively, and keeps th
     forkRequiresInheritedOriginal: true
   })
   await expect(launch.launchResult).rejects.toMatchObject({
-    code: 'structured_agent_session_fork_unsupported'
+    code: 'runtime_unavailable'
   })
   expect(launch.isVisibilityUnknown()).toBe(false)
   expect(getStructuredAgentSessionLaunchLifecycle('workspace-fork', launch.sessionId)).toBe(
@@ -376,4 +390,47 @@ it('rederives a restored tip fork requirement from the child before resubmitting
       expectedEnvironmentPairingRevision: 7
     })
   )
+})
+
+it('settles a browser pin refusal before dispatch but keeps a lost browser reply uncertain', async () => {
+  const call = await remoteForkTransport()
+  call.mockImplementation(callWebRuntimeEnvironment)
+  browserSession.client.connectionEpoch = 1
+  browserSession.client.call.mockReset()
+  browserSession.client.call.mockImplementation(async (method) => {
+    if (method !== 'status.get') {
+      throw new Error('Unexpected create dispatch')
+    }
+    return { id: 'status', ok: true, result: {}, _meta: { runtimeId: 'runtime-b' } }
+  })
+  const state = recoveryState()
+  await expect(launchAndReconcile(state)).rejects.toMatchObject({
+    code: 'runtime_unavailable'
+  })
+  expect(state.visibilityUnknown).toBe(false)
+  expect(browserSession.client.call.mock.calls.map(([method]) => method)).not.toContain(
+    'agentSession.create'
+  )
+
+  // The same words in a failed reply are not pre-dispatch evidence.
+  browserSession.client.connectionEpoch = 2
+  browserSession.client.call.mockImplementation(async (method) => {
+    if (method === 'status.get') {
+      return { id: 'status', ok: true, result: {}, _meta: { runtimeId: 'runtime-a' } }
+    }
+    throw new Error('Runtime connection changed; try again.')
+  })
+  const lost = recoveryState()
+  await expect(launchAndReconcile(lost)).rejects.toThrow()
+  expect(lost.visibilityUnknown).toBe(true)
+})
+
+it('keeps a failed capability read definitive without classifying the host as unsupported', async () => {
+  const call = await remoteForkTransport()
+  clearRuntimeCompatibilityCache()
+  call.mockRejectedValue(new Error('status read failed'))
+  const state = recoveryState()
+  await expect(launchAndReconcile(state)).rejects.toMatchObject({ code: 'runtime_unavailable' })
+  expect(state.visibilityUnknown).toBe(false)
+  expect(call.mock.calls.map(([request]) => request.method)).not.toContain('agentSession.create')
 })
