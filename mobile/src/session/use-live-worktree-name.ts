@@ -181,10 +181,10 @@ export function useLiveWorktreeName({
                       return
                     }
                     const project = sessionProjectNameRead.interpret(reply)
-                    if (project.accepted && project.value) {
+                    if (project.accepted) {
                       setWorktreeName((current) =>
                         current.client === client && current.worktreeId === worktreeId
-                          ? { ...current, projectName: project.value }
+                          ? { ...current, projectName: project.value || null }
                           : current
                       )
                     }

@@ -154,6 +154,7 @@ export function MobileSessionHeader({
             </>
           ) : (
             <NavBar
+              reserveTwoButtonSides
               leading={leading}
               center={titleBlock}
               trailing={trailing}

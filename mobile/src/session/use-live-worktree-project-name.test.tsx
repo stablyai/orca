@@ -76,7 +76,7 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-it('resolves the project on its workspace owner and refreshes renamed projects', async () => {
+it('resolves the owner project and refreshes renamed or cleared project names', async () => {
   const client = createFakeRpcClient()
   await mount(client)
   await replyWorkspace(client)
@@ -87,6 +87,10 @@ it('resolves the project on its workspace owner and refreshes renamed projects',
   await renameEvent(client)
   await reply(client, 'repo.show', { repo: { displayName: 'Renamed project' } })
   expect(live?.projectName).toBe('Renamed project')
+
+  await renameEvent(client)
+  await reply(client, 'repo.show', { repo: { displayName: '   ' } })
+  expect(live).toMatchObject({ name: 'master', projectName: null })
 })
 
 it('hides another client project and ignores its late reply for the same workspace id', async () => {
