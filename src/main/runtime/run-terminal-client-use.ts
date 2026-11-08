@@ -1,9 +1,7 @@
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { TerminalRunFactsRegister } from './terminal-run-facts'
-import {
-  confirmRootShellAloneFromProcessTable,
-  inspectionShowsShellAlone
-} from './run-terminal-shell-alone'
+import { confirmRootShellAloneFromProcessTable } from './run-terminal-shell-alone'
+import { inspectionShowsShellAlone } from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 

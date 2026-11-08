@@ -1,5 +1,6 @@
 import type { TerminalForegroundObservation } from './terminal-foreground-observation'
 import type { RemoteForegroundEvidence } from '../../../foreground-process-evidence'
+import { isShellProcess } from '../../../agent-status/process/shell-process-detection'
 
 /** Keep unverifiable distinct from no-children; legacy booleans collapsed failed inspection and Windows relay defaults into false, bypassing close guards. */
 export type PtyChildProcessVerdict = 'children' | 'no-children' | 'unverifiable'
@@ -115,4 +116,35 @@ export function classifyTerminalProcessInspectionFailure(
     return 'transport_loss'
   }
   return null
+}
+
+/** Windows: the host's job-based child census found nothing under the shell. */
+export function inspectionShowsShellAlone(inspection: TerminalProcessInspection | null): boolean {
+  if (!inspection || inspection.verdict === 'unverifiable') {
+    return false
+  }
+  return (
+    inspection.childProcessEvidence === 'no-children' &&
+    (inspection.foregroundProcess === null || isShellProcess(inspection.foregroundProcess))
+  )
+}
+
+/** Whether the PTY's root shell is back at its prompt: Windows child census, or a POSIX foreground group owned by the shell itself (a nested shell or running command owns another group). */
+export function rootShellActivity(
+  inspection: TerminalProcessInspection
+): 'idle' | 'busy' | 'unknown' {
+  if (inspection.verdict === 'unverifiable') {
+    return 'unknown'
+  }
+  if (inspection.childProcessEvidence !== undefined) {
+    if (inspection.childProcessEvidence === 'unverifiable') {
+      return 'unknown'
+    }
+    return inspectionShowsShellAlone(inspection) ? 'idle' : 'busy'
+  }
+  const evidence = inspection.foregroundProcessEvidence
+  if (evidence?.verdict !== 'live' || evidence.fence.platform !== 'posix') {
+    return 'unknown'
+  }
+  return evidence.fence.foregroundPgid === evidence.fence.shellPid ? 'idle' : 'busy'
 }

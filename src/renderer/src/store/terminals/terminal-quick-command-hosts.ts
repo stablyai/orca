@@ -56,6 +56,16 @@ function readCommands(result: unknown): TerminalQuickCommand[] {
   return commands
 }
 
+function toastSaveFailure(description: string | undefined): void {
+  toast.error(
+    translate(
+      'auto.store.slices.terminal.quick.command.hosts.5b7d781d67',
+      'Failed to save quick command'
+    ),
+    { description }
+  )
+}
+
 function updateEntry(
   set: Parameters<StateCreator<AppState>>[0],
   environmentId: string,
@@ -80,13 +90,7 @@ async function mutateLocalCommands(
   } catch (error) {
     // Why: main refuses an unstorable list with its own sentence; drop Electron's IPC wrapper.
     const message = extractIpcErrorMessage(error, 'Failed to save quick command.')
-    toast.error(
-      translate(
-        'auto.store.slices.terminal.quick.command.hosts.5b7d781d67',
-        'Failed to save quick command'
-      ),
-      { description: message }
-    )
+    toastSaveFailure(message)
     return false
   }
 }
@@ -135,13 +139,7 @@ async function mutateRemoteCommands(
         ready: current?.ready ?? false,
         supported: current?.supported ?? null
       }))
-      toast.error(
-        translate(
-          'auto.store.slices.terminal.quick.command.hosts.5b7d781d67',
-          'Failed to save quick command'
-        ),
-        { description: message }
-      )
+      toastSaveFailure(message)
     }
   })
   mutationChains.set(environmentId, request)
@@ -263,13 +261,19 @@ export const createTerminalQuickCommandHostsSlice: StateCreator<
       return mutateLocalCommands(get, { type: 'upsert', command })
     }
     // Older hosts' strict schema rejects the field; save the command without auto-close instead.
-    const hostRejectsCloseTabOnSuccess =
-      'closeTabOnSuccess' in command &&
-      !(await runtimeEnvironmentSupportsCapability(
-        parsed.environmentId,
-        TERMINAL_QUICK_COMMAND_CLOSE_TAB_ON_SUCCESS_RUNTIME_CAPABILITY,
-        15_000
-      ))
+    let hostRejectsCloseTabOnSuccess = false
+    if ('closeTabOnSuccess' in command) {
+      try {
+        hostRejectsCloseTabOnSuccess = !(await runtimeEnvironmentSupportsCapability(
+          parsed.environmentId,
+          TERMINAL_QUICK_COMMAND_CLOSE_TAB_ON_SUCCESS_RUNTIME_CAPABILITY,
+          15_000
+        ))
+      } catch (error) {
+        toastSaveFailure(error instanceof Error ? error.message : undefined)
+        return false
+      }
+    }
     return mutateRemoteCommands(set, parsed.environmentId, {
       type: 'upsert',
       command: hostRejectsCloseTabOnSuccess ? withoutCloseTabOnSuccess(command) : command

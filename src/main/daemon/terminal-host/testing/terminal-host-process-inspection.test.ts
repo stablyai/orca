@@ -8,7 +8,7 @@ import type { IPty } from 'node-pty'
 import type { WindowsProcessRow } from '../../../windows/windows-process-table'
 import { createPtyForegroundProcessTracker } from '../../pty-subprocess/foreground-process-tracker'
 import { inspectSpawnFileWindowsChildProcesses } from '../../pty-subprocess/spawn-file-child-processes'
-import { inspectionShowsShellAlone } from '../../../runtime/run-terminal-shell-alone'
+import { inspectionShowsShellAlone } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 const { fullTable, identityTable, jobMembers, consoleMembers } = vi.hoisted(() => ({
   fullTable: vi.fn(),
