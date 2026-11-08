@@ -1,3 +1,4 @@
+import { acpSelectChoices } from './acp-select-choices'
 import { acpInitializeForkSupport } from './acp-fork-support'
 import type {
   AgentSessionModelOption,
@@ -13,14 +14,11 @@ import {
   type AgentModelCatalogConfiguredChoice,
   type AgentModelCatalogLiveListing
 } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
-import {
-  SessionConfigSelectGroupSchema,
-  SessionConfigSelectOptionSchema,
-  type AvailableCommand,
-  type InitializeResponse,
-  type SessionConfigOption,
-  type SessionConfigSelectOption,
-  type SessionModelState
+import type {
+  AvailableCommand,
+  InitializeResponse,
+  SessionConfigOption,
+  SessionModelState
 } from './generated/acp-protocol.generated'
 
 type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
@@ -28,22 +26,6 @@ type SelectOption = Extract<SessionConfigOption, { type: 'select' }>
 export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
-
-function selectChoices(option: SelectOption): SessionConfigSelectOption[] {
-  const choices: SessionConfigSelectOption[] = []
-  for (const entry of option.options) {
-    const group = SessionConfigSelectGroupSchema.safeParse(entry)
-    if (group.success) {
-      choices.push(...group.data.options)
-      continue
-    }
-    const choice = SessionConfigSelectOptionSchema.safeParse(entry)
-    if (choice.success) {
-      choices.push(choice.data)
-    }
-  }
-  return choices
-}
 
 function isSelect(option: SessionConfigOption): option is SelectOption {
   return option.type === 'select'
@@ -125,6 +107,16 @@ export class AcpStructuredOptions {
     }
   }
 
+  matchesNativeRestoredModel(value: string): boolean {
+    if (this.resolvesConfig || this.picked.has('model')) {
+      return false
+    }
+    return (
+      value.length > 0 &&
+      (this.select('model')?.currentValue ?? this.models?.currentModelId) === value
+    )
+  }
+
   notePick(key: string): void {
     this.picked.add(key)
   }
@@ -182,6 +174,15 @@ export class AcpStructuredOptions {
     return this.commands
   }
 
+  offersEffort(value: string): boolean {
+    const option = this.select('thought_level')
+    return !!(
+      option &&
+      (this.dialect.clampsUnlistedEffort ||
+        acpSelectChoices(option).some((choice) => choice.value === value))
+    )
+  }
+
   write(key: string, value: string): AcpOptionWrite | null {
     if (key === 'model') {
       const option = this.select('model')
@@ -202,7 +203,7 @@ export class AcpStructuredOptions {
     const modelOption = this.select('model')
     const effortOption = this.select('thought_level')
     const sessionEfforts: AgentSessionOptionChoice[] = effortOption
-      ? selectChoices(effortOption).map((choice) => ({
+      ? acpSelectChoices(effortOption).map((choice) => ({
           value: choice.value,
           label: choice.name,
           ...(choice.description ? { description: choice.description } : {})
@@ -210,7 +211,7 @@ export class AcpStructuredOptions {
       : []
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
     const listed: { id: string; label: string; description?: string }[] = modelOption
-      ? selectChoices(modelOption).map((choice) => ({
+      ? acpSelectChoices(modelOption).map((choice) => ({
           id: choice.value,
           label: choice.name,
           ...(choice.description ? { description: choice.description } : {})

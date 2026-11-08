@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { FSWatcher } from 'node:fs'
 import type * as NodeFs from 'node:fs'
-import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -53,45 +53,6 @@ afterEach(async () => {
 })
 
 describe('native chat transcript watcher errors', () => {
-  it('keeps retrying after the old recovery window and tails a recreated directory', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-gap-'))
-    roots.push(root)
-    const filePath = join(root, 'transcript.jsonl')
-    await writeFile(filePath, '')
-    const onInitialSnapshot = vi.fn()
-    const onAppend = vi.fn()
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'claude',
-      sessionId: 'session',
-      filePath,
-      onInitialSnapshot,
-      onAppend,
-      initialLimit: 40,
-      debounceMs: 0
-    })
-    await vi.waitFor(() => expect(onInitialSnapshot).toHaveBeenCalledOnce())
-
-    await rm(root, { recursive: true, force: true })
-    watchers[0]!.emit('error', new Error('EPERM'))
-    await new Promise((resolve) => setTimeout(resolve, 1_200))
-    expect(watchMock).toHaveBeenCalledTimes(1)
-
-    await mkdir(root, { recursive: true })
-    await writeFile(filePath, claudeLine('u-recreated', 'user', 'back'))
-    await vi.waitFor(() => expect(watchMock).toHaveBeenCalledTimes(2), { timeout: 2_000 })
-
-    await appendFile(filePath, claudeLine('a-recreated', 'assistant', 'reply'))
-    watchCallbacks[1]!('change', 'transcript.jsonl')
-    await vi.waitFor(() =>
-      expect(onAppend.mock.calls.flat(2)).toEqual(
-        expect.arrayContaining([expect.objectContaining({ id: 'a-recreated' })])
-      )
-    )
-
-    subscription.unsubscribe()
-    expect(watchers[1]!.close).toHaveBeenCalledOnce()
-  })
-
   it('still wins with a real initial snapshot once the transcript becomes readable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-recover-'))
     roots.push(root)

@@ -52,7 +52,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.callStructuredAgentSession
 }))
 
@@ -79,7 +79,7 @@ vi.mock('@/lib/agent-catalog', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 
 // The structured route hands the launch's own delivery result back unchanged.
-vi.mock('@/lib/launch-agent-in-new-tab', async () => {
+vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', async () => {
   const launch = await import('./structured-agent-session-launch')
   return {
     launchAgentInNewTab: (args: {
@@ -235,7 +235,6 @@ describe('a new start beside an unconfirmed or retried chat', () => {
       recipe: sourceControlActionRecipeEntry({ commandInputTemplate: '{basePrompt}' }),
       saveTargetValue: 'none',
       actionId: 'resolveComments',
-      settings: null,
       repo: null,
       worktreeId: WORKTREE_ID,
       promptDelivery: 'submit-after-ready',

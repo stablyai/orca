@@ -3,7 +3,7 @@ import type {
   WorktreeVisibilityDefaults
 } from '../../../../../../shared/global-settings-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/worktree-visibility-defaults-by-host'
+import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { getNewExternalWorktreeInboxWorktrees } from '../../../../../../shared/external-worktree-inbox'

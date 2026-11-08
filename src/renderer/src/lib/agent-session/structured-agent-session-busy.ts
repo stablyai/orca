@@ -7,13 +7,13 @@ import {
   getStructuredAgentSessionLaunchLifecycle,
   structuredAgentSessionLaunchHasRetainedInput
 } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
-import type { StructuredAgentSessionAdmission } from '@/components/native-chat/structured-agent-session-read-owner-contract'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import type { StructuredAgentSessionAdmission } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-contract'
 import type {
   AgentSessionStatusSummary,
   AgentSessionHistoryResult

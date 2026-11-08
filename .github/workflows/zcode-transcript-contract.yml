@@ -41,4 +41,4 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
       - name: Verify SQLite ordering, legacy readers, and host routing
-        run: pnpm test src/main/native-chat/transcript-zcode.test.ts src/main/native-chat/transcript-opencode-sqlite-query.test.ts src/main/native-chat/transcript-opencode-read-bounds.test.ts src/main/ai-vault/scanners/zcode/session-scanner-zcode.test.ts src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.test.ts src/shared/native-chat/transcript/native-chat-transcript-projection.test.ts src/renderer/src/components/native-chat/structured-agent-session-transcript-order.test.ts
+        run: pnpm test src/main/native-chat/transcript-zcode.test.ts src/main/native-chat/transcript-opencode-sqlite-query.test.ts src/main/ai-vault/scanners/zcode/session-scanner-zcode.test.ts src/main/ai-vault/scanners/opencode/reader-transport/opencode-wsl-runtime-preparation.test.ts src/shared/native-chat/transcript/native-chat-transcript-projection.test.ts src/renderer/src/components/native-chat/conversation/projection/structured-agent-session-transcript-order.test.ts

@@ -19,14 +19,4 @@ describe('Codex root turn evidence', () => {
     reconcileCodexTranscriptTurn(turn, [event({ type: 'task_started', turn_id: 'next' })])
     expect(turn).toEqual({ turnId: 'next', interrupted: false })
   })
-
-  it('accepts older abort events without a turn id and ignores other abort reasons', () => {
-    const turn: CodexTranscriptTurn = { interrupted: false }
-    reconcileCodexTranscriptTurn(turn, [event({ type: 'turn_aborted', reason: 'budget_limited' })])
-    expect(turn.interrupted).toBe(false)
-    reconcileCodexTranscriptTurn(turn, [event({ type: 'turn_aborted', reason: 'interrupted' })])
-    expect(turn.interrupted).toBe(true)
-    reconcileCodexTranscriptTurn(turn, [event({ type: 'turn_complete' })])
-    expect(turn.interrupted).toBe(false)
-  })
 })

@@ -8,7 +8,7 @@ import type { Automation, AutomationRun } from '../../../../shared/automations-t
 import type {
   RuntimeAutomationCreateInput,
   RuntimeAutomationUpdateInput
-} from '../../runtime-automation-run-context'
+} from '../../integrations/automations/runtime-automation-run-context'
 import {
   automationChangePublications,
   type AutomationChangeSelector,
@@ -54,6 +54,20 @@ export abstract class OrcaRuntimeWithAutomationApiOperations extends OrcaRuntime
     return this.readAutomationRuns(automationId, expectedOwner, () =>
       this.automation.listRunsPage(automationId, limit, cursor)
     )
+  }
+
+  showAutomationRun(
+    automationId: string,
+    runId: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): AutomationRun {
+    const run = this.readAutomationRuns(automationId, expectedOwner, () =>
+      this.automation.listRuns(automationId).find((entry) => entry.id === runId)
+    )
+    if (!run) {
+      throw new Error('Automation run not found.')
+    }
+    return run
   }
 
   showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { MockInstance } from 'vitest'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,12 +19,12 @@ import {
   testState
 } from '../../../persistence/persistence-test-harness'
 import { initOrcaProfilePaths } from '../../../orca-profiles/profile-storage-paths'
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createTestParams,
   CREATE_TEST_CALLER
-} from '../../../native-chat/agent-session-wire/structured-agent-session-create-test-fixture'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create-test-fixture'
 import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../agent-session-tab-layout'
@@ -52,6 +52,15 @@ afterEach(async () => {
 })
 
 export class AuthorityRuntime extends OrcaRuntimeService {
+  protected override structuredAgentCatalogDependencies() {
+    const missing = () => ({ command: join(root, 'agent-not-installed'), prefixArgs: [] })
+    return {
+      ...super.structuredAgentCatalogDependencies(),
+      resolveClaudeCommand: missing,
+      resolveCodexCommand: missing
+    }
+  }
+
   protected override async refreshMobileSessionPtyRecords() {
     return new Set<string>()
   }

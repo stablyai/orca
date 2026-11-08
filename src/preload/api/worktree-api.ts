@@ -28,6 +28,8 @@ import type {
   CreateWorktreeResult,
   ForceDeleteWorktreeBranchResult,
   RemoveWorktreeResult,
+  RunApprovedWorktreeSetupArgs,
+  RunApprovedWorktreeSetupResult,
   SparsePreset
 } from '../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'
@@ -63,6 +65,8 @@ export type WorktreeApi = {
   scanStartingWslDistro?: (args: { repoId: string }) => Promise<void>
   create: (args: CreateWorktreeArgs) => Promise<CreateWorktreeResult>
   adoptProvisionedRoot: (args: AdoptProvisionedRootArgs) => Promise<CreateWorktreeResult>
+  /** Absent on clients whose host cannot run an existing worktree's approved setup. */
+  runApprovedSetup?: (args: RunApprovedWorktreeSetupArgs) => Promise<RunApprovedWorktreeSetupResult>
   /** Local creates report progress by creationId; remote/runtime creates emit nothing. */
   onCreateProgress: (callback: (data: CreateWorktreeProgressEvent) => void) => () => void
   prefetchCreateBase: (args: { repoId: string; baseBranch?: string }) => Promise<void>
@@ -141,7 +145,7 @@ export type WorktreeApi = {
     worktreeId: string
     parentWorktreeId?: string
     noParent?: boolean
-  }) => Promise<WorktreeLineage | null>
+  }) => Promise<{ lineage: WorktreeLineage | null; workspaceLineage?: WorkspaceLineage | null }>
   persistSortOrder: (args: { orderedIds: string[]; hostIds?: string[] }) => Promise<void>
   /** Last failure output; memory-only, cleared on restart or when the failure clears. */
   getBranchRenameFailureOutput: (args: { worktreeId: string }) => Promise<string | null>

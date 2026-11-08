@@ -6,10 +6,10 @@ const MESSAGE_OPTIONS: Intl.NumberFormatOptions = {
   maximumFractionDigits: 1
 }
 
-export function formatSessionCount(sessions: number): string {
-  return uiNumberFormat(SESSION_OPTIONS).format(Math.max(0, Math.trunc(sessions)))
+export function formatSessionCount(sessions: number, intlLocale?: string): string {
+  return uiNumberFormat(SESSION_OPTIONS, intlLocale).format(Math.max(0, Math.trunc(sessions)))
 }
 
-export function formatMessageCount(messages: number): string {
-  return uiNumberFormat(MESSAGE_OPTIONS).format(Math.max(0, Math.trunc(messages)))
+export function formatMessageCount(messages: number, intlLocale?: string): string {
+  return uiNumberFormat(MESSAGE_OPTIONS, intlLocale).format(Math.max(0, Math.trunc(messages)))
 }

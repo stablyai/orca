@@ -3,13 +3,13 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/a
 import {
   CALLER,
   hostTestState
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_THREAD as THREAD,
   HOST_TEST_NOW as NOW,
   hostTestAttachParams,
   hostTestOperationId
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { AgentSessionRecoveryCapsule } from '../runtime/agent-session/records/agent-session-recovery-capsule'
 import { startOrcadWithLifecycle, stopOrcadStructuredAgentSessions } from './orcad-lifecycle'
 

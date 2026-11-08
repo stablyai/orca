@@ -1,11 +1,12 @@
 import { sharedPromiseSettlementWaiters } from '../../../src/shared/promise-settlement-waiters'
 import { hostStatusProbe } from '../transport/host-status-probe-operations'
+import { readHostStatusReply } from '../query/host-status-query'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
   attachmentTextChunkSchema,
   type AttachmentTextRead
-} from '../../../src/shared/attachment-text-source'
+} from '../../../src/shared/attachment-text/attachment-text-source'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 
@@ -30,7 +31,7 @@ export function createMobileChatAttachmentReader(
 ): AttachmentTextRead {
   const connectedAt = client?.getLastConnectedAt()
   const generation = client?.getGeneration?.()
-  let status: ReturnType<typeof hostStatusProbe.request> | undefined
+  let status: ReturnType<typeof readHostStatusReply> | undefined
   const assertCurrent = () => {
     if (
       !client ||
@@ -48,7 +49,7 @@ export function createMobileChatAttachmentReader(
       if (!request.expectedSnapshot) {
         status = undefined
       }
-      status ??= hostStatusProbe.request(client!, undefined, {
+      status ??= readHostStatusReply(client!, {
         signal,
         timeoutMs: 15_000,
         failWhenDisconnected: true,

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalInit, TerminalWebViewHandle } from '../terminal/terminal-webview-contract'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { useMobileNativeChatTerminalStream } from './native-chat/use-mobile-native-chat-terminal-stream'
+import { TerminalResumeState } from './terminal-stream-resume'
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import type { MobileSessionNativeChatDictationModel } from './use-mobile-session-native-chat-dictation'
 import { useMobileSessionTerminalSubscription } from './use-mobile-session-terminal-subscription'
@@ -103,6 +104,7 @@ function harness(phone: Terminal) {
     subscribingHandlesRef: { current: new Set<string>() },
     leaseOnlyHandlesRef: { current: new Set<string>() },
     initializedHandlesRef: { current: new Set<string>() },
+    terminalResume: new TerminalResumeState(),
     terminalDiagnosticsRef: { current: new MobileTerminalDiagnostics() },
     viewportResubscribeBudgetRef: { current: new TerminalViewportResubscribeBudget() },
     webReadyHandlesRef: { current: new Set<string>([HANDLE]) },
@@ -217,4 +219,26 @@ describe('resubscribe after the stream tears down', () => {
       expect(phone).toEqual(host)
     }
   )
+})
+
+describe('a path switch replays the stream on a new socket', () => {
+  it("redraws from the new stream's snapshot the output the old path never delivered", async () => {
+    const host = new Terminal({ cols: COLS, rows: ROWS, allowProposedApi: true })
+    const serializer = new SerializeAddon()
+    host.loadAddon(serializer)
+    const phone = new Terminal({ cols: COLS, rows: ROWS, allowProposedApi: true })
+    const page = harness(phone)
+
+    await writeSync(host, '$ seq 4\r\n1\r\n')
+    page.emit({ type: 'scrollback', streamId: 7, seq: 1, serialized: serializer.serialize() })
+    await writeSync(host, '2\r\n')
+    page.emit({ type: 'data', streamId: 7, chunk: '2\r\n' })
+    // Printed while the phone moved to the other path: only the new stream's snapshot has it.
+    await writeSync(host, '3\r\n')
+    page.emit({ type: 'scrollback', streamId: 8, seq: 1, serialized: serializer.serialize() })
+    page.emit({ type: 'data', streamId: 8, chunk: '4\r\n' })
+    await page.flush()
+
+    expect(screen(phone).slice(0, 6)).toEqual(['$ seq 4', '1', '2', '3', '4', ''])
+  })
 })

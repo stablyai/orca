@@ -11,7 +11,7 @@ import {
 } from '../../../../../../shared/cross-platform-path'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { getProjectGroupHostId } from '@/store/slices/project-group-owner-routing'
+import { getProjectGroupHostId } from '@/store/project-groups/project-group-owner-routing'
 import { createNestedRepoScanId } from '../../project-admission/dialog/add-repo-dialog-types'
 
 export type FolderProjectGroupRefreshDependencies = Pick<

@@ -25,9 +25,12 @@ vi.mock('../../store', () => ({
   }
 }))
 
-vi.mock('../../components/terminal-pane/legacy-relay-bridge-panes', () => ({
-  legacyRelayBridgedTabIds: (targetId: string) => (targetId === 'ssh-1' ? ['tab-1', 'tab-2'] : [])
-}))
+vi.mock(
+  '../../components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes',
+  () => ({
+    legacyRelayBridgedTabIds: (targetId: string) => (targetId === 'ssh-1' ? ['tab-1', 'tab-2'] : [])
+  })
+)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -39,7 +42,9 @@ afterEach(() => {
 describe('a host kept connected for the relay bridge', () => {
   it('never loads the bridge panes module, which subscribes on load, just by being imported', async () => {
     vi.resetModules()
-    vi.doUnmock('../../components/terminal-pane/legacy-relay-bridge-panes')
+    vi.doUnmock(
+      '../../components/terminal-pane/pty-transport/legacy-relay/legacy-relay-bridge-panes'
+    )
     const listPanes = vi.fn(() => undefined)
     Object.assign(window, { api: { ssh: {}, legacyRelayBridge: { listPanes, onPanes: vi.fn() } } })
     await import('./ssh-managed-server-state-effects')

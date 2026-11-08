@@ -2,7 +2,7 @@ import type {
   SearchFileResult,
   SearchMatch,
   SearchResult
-} from '../../../../../../shared/code-search-types'
+} from '../../../../../../shared/file-search/code-search-types'
 
 export type SearchRow =
   | {

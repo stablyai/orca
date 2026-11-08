@@ -2,8 +2,6 @@
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './server/runtime-rpc-mobile-method-allowlist'
 import type { RpcMethodPermission, RuntimeDeviceGrant } from './rpc-method-permission'
 
-export type { RuntimeDeviceGrant }
-
 export type RpcCallerScope =
   | { kind: 'owner' }
   /** Delegated phones inherit at most their paired desktop's scope, which never includes pairing-admin. */

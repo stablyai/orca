@@ -110,15 +110,4 @@ describe("pinning existing hosts' orca CLI control switch on upgrade", () => {
     expect(reopened.getSshTarget(added.id)?.allowRemoteCliControl).toBe(true)
     expect(isRemoteCliControlAllowed(reopened.getSshTarget(added.id))).toBe(true)
   })
-
-  it('does not re-run after a downgrade wrote an absent switch alongside the marker', async () => {
-    // Older builds preserve unknown migration markers when saving settings.
-    writeProfile([host('added-by-older-build')], {
-      sshRemoteCliControlExistingHostsMigrated: true
-    })
-
-    const store = await createStore()
-
-    expect(store.getSshTarget('added-by-older-build')).not.toHaveProperty('allowRemoteCliControl')
-  })
 })

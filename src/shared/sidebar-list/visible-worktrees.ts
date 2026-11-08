@@ -103,11 +103,14 @@ function addVisibleLineageAncestors(
     lineageParentIdentities
   )
 
+  // An older peer's loop reaches a row again before it is included.
+  const visiting = new Set<string>()
   const addWithAncestors = (worktree: Worktree): void => {
     const identity = getWorktreeHostIdentity(worktree)
-    if (included.has(identity)) {
+    if (included.has(identity) || visiting.has(identity)) {
       return
     }
+    visiting.add(identity)
     const parent = parentByIdentity.get(identity)
     // Repository filters are hard boundaries; ordinary filters may retain ancestors.
     if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {

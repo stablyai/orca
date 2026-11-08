@@ -43,8 +43,12 @@ export const FolderWorkspaceCreate = z
   })
   .superRefine(assertLinkedTaskSourceContextMatch)
 
+// Hosts advertising the unique-id mutation capability refuse a shared folder id when this is set.
+const RequireUniqueId = z.boolean().optional()
+
 export const FolderWorkspaceUpdate = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id'),
+  requireUniqueId: RequireUniqueId,
   updates: z
     .object({
       name: OptionalString,
@@ -72,6 +76,10 @@ export const FolderWorkspaceUpdate = z.object({
 
 export const FolderWorkspaceSelector = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id')
+})
+
+export const FolderWorkspaceDelete = FolderWorkspaceSelector.extend({
+  requireUniqueId: RequireUniqueId
 })
 
 export const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [

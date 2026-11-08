@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
+import type { RuntimeNotifier } from '../runtime/client/events/runtime-notifier-contract'
 
 const { ipcMain } = await vi.hoisted(async () => {
   const { EventEmitter } = await import('node:events')

@@ -34,7 +34,8 @@ export type PrActionsEngineConfig = {
   prNumber: number
   headSha?: string | null
   prRepo?: GitHubPrRepoSlug | null
-  refetch: () => void | Promise<void>
+  /** Re-reads what the settled action changed. */
+  refetch: (action: PrActionBusyKey) => void | Promise<void>
   onChange: () => void
 }
 
@@ -117,7 +118,7 @@ export class PrActionsEngine {
       this.setBusy(null)
     }
     try {
-      await this.cfg.refetch()
+      await this.cfg.refetch(key)
     } catch {
       // A failed reread keeps the shown PR and the write's own result.
     }

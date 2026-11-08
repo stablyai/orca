@@ -1,5 +1,6 @@
 import { createElement, useLayoutEffect, useState } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type SentRequest } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { ConnectionState, RpcResponse } from '../transport/types'
@@ -107,6 +108,7 @@ async function mount(provider: Provider, repoCount = 30, counted = false) {
     repoListEnsureLoaded: async () => repos,
     selectedLinearTeamIds: new Set<string>(),
     effectiveRepoIds: new Set(counted ? repos.map((repo) => repo.id) : []),
+    selectedRepoIds: new Set<string>(),
     serverRepoList: [],
     jiraConnection: { connected: false },
     resetGitHubItemsState: vi.fn()
@@ -163,7 +165,7 @@ async function mount(provider: Provider, repoCount = 30, counted = false) {
   }
   let renderer: ReactTestRenderer
   await act(async () => {
-    renderer = create(createElement(Harness))
+    renderer = createWithQueryClient(createElement(Harness))
     mounted.add(renderer)
   })
   const answered = new Set<SentRequest>()
@@ -214,16 +216,16 @@ describe('task repository request ownership', () => {
         const fixture = await mount(provider, repoCount)
         const old = await fixture.load()
         const oldRequests = fixture.pending()
-        expect(oldRequests).toHaveLength(3)
+        expect(oldRequests).toHaveLength(4)
         fixture.scope.query = 'new-query'
         await fixture.render()
         const live = await fixture.load()
         await fixture.answer(oldRequests)
-        expect(starts(fixture.client.requests, `${provider}.listWorkItems`)).toHaveLength(6)
+        expect(starts(fixture.client.requests, `${provider}.listWorkItems`)).toHaveLength(8)
         await fixture.drain()
         await Promise.all([old.request, live.request])
         expect(starts(fixture.client.requests, `${provider}.listWorkItems`)).toHaveLength(
-          repoCount + 3
+          repoCount + 4
         )
         expect(fixture.model().items).toHaveLength(repoCount)
         expect(fixture.model().items.every((item) => item.title.includes('new-query'))).toBe(true)
@@ -241,14 +243,14 @@ describe('task repository request ownership', () => {
     }
     await first.request
     const counts = fixture.pending()
-    expect(starts(counts, 'github.countWorkItems')).toHaveLength(3)
+    expect(starts(counts, 'github.countWorkItems')).toHaveLength(4)
     fixture.scope.provider = 'gitlab'
     await fixture.render()
     const live = await fixture.load()
     await fixture.answer(counts)
     await fixture.drain()
     await live.request
-    expect(starts(fixture.client.requests, 'github.countWorkItems')).toHaveLength(3)
+    expect(starts(fixture.client.requests, 'github.countWorkItems')).toHaveLength(4)
     expect(fixture.model().items).toHaveLength(30)
     expect(fixture.model().items.every((item) => item.provider === 'gitlab')).toBe(true)
   })
@@ -263,7 +265,7 @@ describe('task repository request ownership', () => {
       page = fixture.model().handleGitHubPageChange(1)
     })
     const pageRequests = fixture.pending()
-    expect(pageRequests).toHaveLength(3)
+    expect(pageRequests).toHaveLength(4)
     fixture.scope.query = 'new-query'
     await fixture.render()
     const live = await fixture.load()
@@ -274,7 +276,26 @@ describe('task repository request ownership', () => {
       const params = request.args[1]
       return params && typeof params === 'object' && 'page' in params && params.page === 2
     })
-    expect(nextPage).toHaveLength(3)
+    expect(nextPage).toHaveLength(4)
+    expect(fixture.model().githubPages).toHaveLength(1)
+    expect(fixture.model().items.every((item) => item.title.includes('new-query'))).toBe(true)
+  })
+
+  it("does not page from the previous query's rows while the next query reads", async () => {
+    const fixture = await mount('github')
+    const first = await fixture.load()
+    await fixture.drain()
+    await first.request
+    fixture.scope.query = 'new-query'
+    await fixture.render()
+    const live = await fixture.load()
+    const before = fixture.client.requests.length
+    await act(async () => {
+      await fixture.model().handleGitHubPageChange(1)
+    })
+    expect(fixture.client.requests).toHaveLength(before)
+    await fixture.drain()
+    await live.request
     expect(fixture.model().githubPages).toHaveLength(1)
     expect(fixture.model().items.every((item) => item.title.includes('new-query'))).toBe(true)
   })
@@ -295,7 +316,7 @@ describe('task repository request ownership', () => {
       }
       await fixture.drain()
       await old.request
-      expect(starts(fixture.client.requests, 'github.listWorkItems')).toHaveLength(3)
+      expect(starts(fixture.client.requests, 'github.listWorkItems')).toHaveLength(4)
       expect(fixture.model().items).toEqual([])
       expect(fixture.model().setLoading).toHaveBeenLastCalledWith(false)
     })

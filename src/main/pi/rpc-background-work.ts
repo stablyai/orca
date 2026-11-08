@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
-import type { AgentSessionIdleConfirmation } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AgentSessionIdleConfirmation } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   PI_BACKGROUND_WORK_REQUEST_SUFFIX,
   PI_BACKGROUND_WORK_STATUS_KEY

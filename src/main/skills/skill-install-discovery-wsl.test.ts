@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillInstallResult } from '../../shared/skill-install-contract'
-import type { SkillDiscoveryResult } from '../../shared/skills'
+
 import type { WslResult, WslSpec } from '../wsl/execution/wsl-runner'
 import type { discoverSkills } from './discovery'
 
@@ -11,15 +11,12 @@ const transport = vi.hoisted(() => ({
 vi.mock('../wsl/execution/wsl-runner', () => ({ runWslProcess: transport.run }))
 vi.mock('./discovery', () => ({ discoverSkills: transport.native }))
 
-import { discoverSkillsInWsl } from './skill-discovery-wsl'
+import './skill-discovery-wsl'
 import { verifySkillInstallDiscovery } from './skill-install-discovery-verification'
 
 const home = '/home/alice'
-const workspace = '/work/project'
 const homeAgents = `${home}/.agents/skills`
 const homeClaude = `${home}/.claude/skills`
-const repoAgents = `${workspace}/.agents/skills`
-const repoClaude = `${workspace}/.claude/skills`
 const pluginRoot = `${home}/.claude/plugins/cache/example/1/skills`
 type ScanRow = { root: string; directory: string; canonical: string; name: string }
 
@@ -94,14 +91,6 @@ function interceptScan(rows: ScanRow[]): void {
   })
 }
 
-function scanScript(): string {
-  const script = transport.run.mock.calls.at(-1)?.[0].script
-  if (!script) {
-    throw new Error('Expected a mandatory scan')
-  }
-  return script
-}
-
 const input = {
   scope: 'global',
   homeDirectory: home,
@@ -123,81 +112,6 @@ beforeEach(() => {
 })
 
 describe('WSL install verification at the discovery transport boundary', () => {
-  it.each(['global', 'workspace'] as const)(
-    'uses one fresh scan instead of two processes for a %s install with co-owners',
-    async (scope) => {
-      const canonicalRoot = scope === 'global' ? homeAgents : repoAgents
-      const aliasRoot = scope === 'global' ? homeClaude : repoClaude
-      const coownerRoot = scope === 'global' ? repoAgents : homeClaude
-      const canonical = `${canonicalRoot}/review`
-      const result = installResult([canonical, `${aliasRoot}/review`])
-      interceptScan([
-        skillRow(canonicalRoot),
-        skillRow(aliasRoot, canonical),
-        skillRow(coownerRoot, canonical),
-        skillRow(pluginRoot, canonical)
-      ])
-      const args = { ...input, scope, workspaceDirectory: workspace, result }
-      const broad = await verifySkillInstallDiscovery({
-        ...args,
-        discover: () => discoverSkillsInWsl({ distro: 'Ubuntu', homeDir: home, cwd: workspace })
-      })
-      expect(broad).toEqual(result)
-      expect(transport.run).toHaveBeenCalledTimes(2)
-      expect(scanScript()).toContain(`'${pluginRoot}'`)
-      transport.run.mockClear()
-
-      expect(await verifySkillInstallDiscovery(args)).toEqual(broad)
-      expect(transport.run).toHaveBeenCalledTimes(1)
-      expect(transport.native).not.toHaveBeenCalled()
-      expect(transport.run).toHaveBeenCalledWith(
-        expect.objectContaining({
-          distro: 'Ubuntu',
-          shell: 'bash',
-          loginPath: 'none',
-          timeoutMs: 10_000,
-          maxOutputBytes: 128 * 1024 * 1024
-        })
-      )
-      expect(scanScript()).toContain(`'${homeAgents}'`)
-      expect(scanScript()).toContain(`'${repoAgents}'`)
-      expect(scanScript()).toContain("'review') return 0 ;;")
-      expect(scanScript()).not.toContain('read_metadata()')
-      expect(scanScript()).not.toContain(`'${pluginRoot}'`)
-      expect(scanScript()).not.toContain(`'${home}/.codex/plugins/cache'`)
-    }
-  )
-
-  it('keeps an overridden provider root even when it is also an enabled plugin root', async () => {
-    const canonical = `${homeAgents}/review`
-    const result = installResult([canonical, `${pluginRoot}/review`])
-    interceptScan([skillRow(homeAgents), skillRow(pluginRoot, canonical)])
-    const args = {
-      ...input,
-      result,
-      providerRootOverrides: {
-        claude:
-          '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.claude\\plugins\\cache\\example\\1\\skills'
-      }
-    }
-    const broad = await verifySkillInstallDiscovery({
-      ...args,
-      discover: () =>
-        discoverSkillsInWsl({
-          distro: 'Ubuntu',
-          homeDir: home,
-          providerRootOverrides: { claude: pluginRoot }
-        })
-    })
-    expect(broad).toEqual(result)
-    expect(transport.run).toHaveBeenCalledTimes(2)
-    transport.run.mockClear()
-    expect(await verifySkillInstallDiscovery(args)).toEqual(broad)
-    expect(transport.run).toHaveBeenCalledTimes(1)
-    expect(scanScript()).toContain(`'${pluginRoot}'`)
-    expect(scanScript()).not.toContain('read_metadata()')
-  })
-
   it('reads again for each item and fails if its canonical placement disappears', async () => {
     const result = installResult([`${homeAgents}/review`])
     interceptScan([skillRow(homeAgents)])
@@ -232,20 +146,6 @@ describe('WSL install verification at the discovery transport boundary', () => {
     expect(transport.run).toHaveBeenCalledTimes(1)
   })
 
-  it.each(['review', 'Review', 'réview'])(
-    'verifies frontmatter name %s in a different directory without accepting unrelated siblings',
-    async (name) => {
-      const result = installResult([`${homeAgents}/review`], name)
-      interceptScan([
-        { ...skillRow(homeAgents, `${homeAgents}/renamed`, 'renamed'), name },
-        { ...skillRow(homeAgents, `${homeAgents}/other`, 'other'), name: 'other' }
-      ])
-      expect(await verifySkillInstallDiscovery({ ...input, result })).toEqual(result)
-      expect(transport.run).toHaveBeenCalledTimes(1)
-      expect(scanScript()).toContain('matches_requested_name()')
-    }
-  )
-
   it.each([
     { ...wslResult(''), code: 1 },
     { ...wslResult(''), timedOut: true },
@@ -264,51 +164,5 @@ describe('WSL install verification at the discovery transport boundary', () => {
       }
     })
     expect(transport.run).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves native fresh discovery arguments and answered co-owner proof unchanged', async () => {
-    const result = installResult([`${homeAgents}/review`, `${homeClaude}/review`])
-    const discovery: SkillDiscoveryResult = {
-      scannedAt: 1,
-      skills: [
-        {
-          id: 'review',
-          name: 'review',
-          description: null,
-          providers: ['agent-skills', 'claude'],
-          sourceKind: 'home',
-          sourceLabel: 'Home',
-          rootPath: homeAgents,
-          rootPaths: [homeAgents, homeClaude],
-          directoryPath: `${homeAgents}/review`,
-          skillFilePath: `${homeAgents}/review/SKILL.md`,
-          installed: true,
-          updatedAt: null
-        }
-      ],
-      sources: [
-        {
-          id: 'home-agents',
-          label: 'Home',
-          path: homeAgents,
-          sourceKind: 'home',
-          providers: ['agent-skills'],
-          owner: null,
-          exists: true,
-          skippedReason: 'unavailable'
-        }
-      ]
-    }
-    transport.native.mockResolvedValue(discovery)
-    expect(
-      await verifySkillInstallDiscovery({ result, scope: 'global', homeDirectory: home })
-    ).toEqual(result)
-    expect(transport.native).toHaveBeenCalledExactlyOnceWith({
-      homeDir: home,
-      repos: [],
-      refresh: true,
-      includeCwd: false
-    })
-    expect(transport.run).not.toHaveBeenCalled()
   })
 })

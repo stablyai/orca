@@ -129,7 +129,9 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
         serverFolderCatalogFor: orcadServerFolderCatalogFor,
         serverAutomationEnablerFor: orcadServerAutomationEnablerFor
       })
-      if (converted.outcome === 'converted' || converted.outcome === 'refused') {
+      // A quiet retry's refusal is not the user's attempt, so it keeps their consent.
+      const quiet = connectInFlight.get(target.id)?.quiet?.active === true
+      if (converted.outcome === 'converted' || (converted.outcome === 'refused' && !quiet)) {
         // Move-anyway consent covers one attempt; retain it on failure so held-fence verification can resume.
         registry.updateTarget(target.id, { managedServerLeaveBehind: undefined })
       }
@@ -174,7 +176,8 @@ export function hostServerOnConnectDeps(userDataPath: string): HostServerOnConne
       ),
     progress: (target, phase) => {
       // Cancelled decisions keep running; their progress must not revive connection status.
-      if (!connectInFlight.has(target.id)) {
+      const attempt = connectInFlight.get(target.id)
+      if (!attempt || attempt.quiet?.active) {
         return
       }
       setSshHostServerStatus(target.id, { kind: 'setting-up', phase })

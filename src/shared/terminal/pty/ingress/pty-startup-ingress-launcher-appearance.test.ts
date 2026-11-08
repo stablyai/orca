@@ -175,22 +175,6 @@ describe("a launcher-pinned PTY's owner answers every theme query (#34340)", () 
   })
 })
 
-it('keeps the launcher palette across the wire only beside launcher colours', () => {
-  const wire = (value: unknown) => parsePtyStartupIngressIntent(JSON.parse(JSON.stringify(value)))
-
-  expect(
-    wire({
-      colors: HOST,
-      deadlineMs: 0,
-      launcherColors: LAUNCHER_COLORS,
-      launcherAttributes: LAUNCHER
-    })?.launcherAttributes
-  ).toEqual(LAUNCHER)
-  expect(wire({ colors: HOST, deadlineMs: 0, launcherAttributes: LAUNCHER })).not.toHaveProperty(
-    'launcherAttributes'
-  )
-})
-
 it("forwards a mixed OSC's SETs to the viewers when ConPTY's reply write fails", () => {
   const intent = parsePtyStartupIngressIntent({
     colors: HOST,

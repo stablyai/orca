@@ -162,7 +162,13 @@ export function readyState(sessionId: string): MobileWebShellSessionState {
     sessionId,
     buildId: SCREEN_BUILD_ID,
     totalBytes: 4096,
-    elapsedMs: 811
+    elapsedMs: 811,
+    compat: {
+      schemaVersion: 1,
+      runtimeProtocolVersion: 1,
+      minCompatibleRuntimeProtocolVersion: 1,
+      pageVersion: 1
+    }
   }
 }
 

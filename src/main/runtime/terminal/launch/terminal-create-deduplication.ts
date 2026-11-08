@@ -5,11 +5,12 @@ import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folde
 import type { Repo } from '../../../../shared/repo-types'
 
 import { OrcaRuntimeWithCreateAgentSession } from '../../session-construction/agent-session/orca-runtime-create-agent-session'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { WORKTREE_CREATE_RESULT_TTL_MS } from '../../workspaces/creation/worktree-create-idempotency'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
 import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../lifecycle/pty-controller-inventory-budget'
+import { ownerSurfacing } from './terminal-presentation'
 import {
   type ResolvedWorktree,
   inferWorktreeIdFromPtyId
@@ -192,6 +193,7 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
       suppressStartupUpdatePrompt?: boolean
       /** Run now is the user's act; a scheduled run is background and a stopped WSL distro holds it. */
       wslUserAct?: true
+      surfaceOwner?: false
     },
     resolvedTarget?: { worktree: ResolvedWorktree; repo: Repo; folderWorkspace?: FolderWorkspace }
   ): Promise<RuntimeTerminalCreate> {
@@ -220,7 +222,8 @@ export abstract class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRun
         startupPromptDelivery: 'auto-submit',
         ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {}),
         title: opts.title,
-        ...(opts.wslUserAct ? { wslUserAct: true } : {})
+        ...(opts.wslUserAct ? { wslUserAct: true } : {}),
+        ...ownerSurfacing(opts.surfaceOwner !== false)
       },
       undefined,
       worktree,

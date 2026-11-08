@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { resolveNativeChatAppearanceSettings } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
   useNativeChatAppearanceStyle
-} from '../../../native-chat/native-chat-appearance-style'
+} from '../../../native-chat/appearance/native-chat-appearance-style'
 import { FontAutocomplete } from '../fonts/FontAutocomplete'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { SettingsDisabledControlTooltip } from '../../form-controls/SettingsDisabledControlTooltip'
@@ -31,10 +31,11 @@ export function ChatFontFamilySetting({
   onRequestFontSuggestions?: () => void
   forceVisible?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const appearance = resolveNativeChatAppearanceSettings(settings.nativeChatAppearance)
   const matching = appearance.matchTerminalInterface
   const [previewFamily, setPreviewFamily] = useState<string | null>(null)
-  const entry = getChatAppearanceEntriesByKey().fontFamily
+  const entry = getChatAppearanceEntriesByKey(undefined, t).fontFamily
   const style = useNativeChatAppearanceStyle({
     ...settings,
     nativeChatAppearance: {
@@ -42,16 +43,16 @@ export function ChatFontFamilySetting({
       fontFamily: previewFamily ?? appearance.fontFamily
     }
   })
-  const defaultLabel = translate('settings.appearance.chat.inheritFont', 'Same as IDE font')
+  const defaultLabel = t('settings.appearance.chat.inheritFont', 'Same as IDE font')
 
   return (
     <SearchableSetting id={entry.targetSectionId} {...entry} forceVisible={forceVisible}>
       <SettingsRow
         label={entry.title}
-        description={matching ? chatTerminalControlledHint() : entry.description}
+        description={matching ? chatTerminalControlledHint(t) : entry.description}
         control={
           <SettingsDisabledControlTooltip
-            reason={matching ? chatTerminalControlledTooltip() : undefined}
+            reason={matching ? chatTerminalControlledTooltip(t) : undefined}
           >
             <FontAutocomplete
               value={appearance.fontFamily}
@@ -69,14 +70,11 @@ export function ChatFontFamilySetting({
         }
       />
       <p
-        aria-label={translate('settings.appearance.chat.fontPreviewLabel', 'Chat font preview')}
+        aria-label={t('settings.appearance.chat.fontPreviewLabel', 'Chat font preview')}
         className={`${NATIVE_CHAT_APPEARANCE_ROOT_CLASS} mb-3 rounded-md border border-border px-3 py-2 text-sm text-chat-foreground`}
         style={style}
       >
-        {translate(
-          'settings.appearance.chat.fontPreview',
-          'The quick brown fox jumps over the lazy dog.'
-        )}{' '}
+        {t('settings.appearance.chat.fontPreview', 'The quick brown fox jumps over the lazy dog.')}{' '}
         <code className="font-mono text-chat-code">fontFamily</code>
       </p>
     </SearchableSetting>

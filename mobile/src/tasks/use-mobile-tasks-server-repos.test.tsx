@@ -1,5 +1,6 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { HostStatusGatesContext } from '../components/host-protocol-gates-context'
@@ -215,7 +216,7 @@ async function mount(
   }
   await act(async () => {
     mounted.push(
-      create(
+      createWithQueryClient(
         createElement(
           HostStatusGatesContext.Provider,
           { value: gates },
@@ -531,6 +532,33 @@ describe('Tasks screen repos on the desktop and its servers', () => {
     await settle()
     expect([...model().effectiveRepoIds]).toEqual([])
     expect(ranOn(client, 'linear.listIssues').slice(before)).toEqual(['desktop'])
+  })
+
+  it('reopens on the kept list before the desktop answers', async () => {
+    const client = desktop()
+    // A live connection, so its status read is the connection's.
+    client.getLastConnectedAt = () => 1
+    const model = await mount(client, [])
+    await settle()
+    expect(titles(model)).toEqual(['from the desktop'])
+
+    const gates: HostStatusGates = {
+      hostCapabilities: [],
+      floatingWorkspaceEnabled: false,
+      desktopAppVersion: null,
+      compatVerdict: { kind: 'ok' },
+      hostProtocolWindow: { protocolVersion: undefined, minCompatibleMobileVersion: undefined },
+      statusPending: false,
+      statusReadable: true
+    }
+    const screen = (children: ReturnType<typeof createElement> | null) =>
+      createElement(HostStatusGatesContext.Provider, { value: gates }, children)
+    // Leave Tasks and come back in the same page document, with the desktop now silent.
+    await act(async () => mounted[0]!.update(screen(null)))
+    client.sendRequest.mockImplementation(() => new Promise<RpcResponse>(() => {}))
+    await act(async () => mounted[0]!.update(screen(createElement(MobileTasksScreen))))
+    expect(titles(model)).toEqual(['from the desktop'])
+    expect(model().loading).toBe(false)
   })
 })
 

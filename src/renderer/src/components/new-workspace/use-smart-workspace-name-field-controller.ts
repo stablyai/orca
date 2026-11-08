@@ -10,8 +10,10 @@ import { useSmartWorkspaceFieldFocusControls } from './use-smart-workspace-field
 import { useSmartWorkspaceNameFieldActions } from './use-smart-workspace-name-field-actions'
 import { getSmartWorkspaceNameFieldCopy } from './smart-workspace-name-field-copy'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFieldProps) {
+  const t = useTranslate()
   const search = useWorkItemSourceSearch({
     ...props,
     defaultLinearWorkspaceId: 'all',
@@ -80,10 +82,13 @@ export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFi
     allowCrossRepoProjectAdd: props.allowCrossRepoProjectAdd ?? true
   }
   const actions = useSmartWorkspaceNameFieldActions(foundation, { ...search, activeEmojiShortcode })
-  const copy = getSmartWorkspaceNameFieldCopy({
-    ...search,
-    disabledPlaceholder: props.disabledPlaceholder
-  })
+  const copy = getSmartWorkspaceNameFieldCopy(
+    {
+      ...search,
+      disabledPlaceholder: props.disabledPlaceholder
+    },
+    t
+  )
   return {
     ...foundation,
     ...actions,
