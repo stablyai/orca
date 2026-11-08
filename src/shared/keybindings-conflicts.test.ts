@@ -11,6 +11,20 @@ import {
 } from './keybindings'
 
 describe('keybindings', () => {
+  it('yields fresh-profile search to a saved global Ctrl+K assignment', () => {
+    expect(resolveKeybindingOverrides('linux', { 'worktree.quickOpen': ['Ctrl+K'] }, {})).toEqual({
+      'worktree.palette': [],
+      'worktree.quickOpen': ['Ctrl+K']
+    })
+  })
+
+  it('yields fresh-profile search to a saved terminal Ctrl+K assignment', () => {
+    expect(resolveKeybindingOverrides('win32', { 'terminal.clear': ['Ctrl+K'] }, {})).toEqual({
+      'worktree.palette': [],
+      'terminal.clear': ['Ctrl+K']
+    })
+  })
+
   it('keeps the inherited search chord available for terminal-first chat toggling', () => {
     const overrides = resolveKeybindingOverrides('win32', {}, getLegacySearchBindings('win32'))
     const ctrlShiftJ = { key: 'j', control: true, shift: true }

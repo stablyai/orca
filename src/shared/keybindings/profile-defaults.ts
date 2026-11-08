@@ -30,7 +30,15 @@ export function resolveKeybindingOverrides(
     for (const conflict of conflicts) {
       const identity = getKeybindingConflictIdentity(conflict.binding, platform)
       for (const actionId of conflict.actionIds) {
-        const bindings = inherited[actionId]
+        const definition = getKeybindingDefinition(actionId)
+        // Fresh profiles must also yield the new search default to shared explicit choices.
+        const bindings =
+          inherited[actionId] ??
+          (actionId === 'worktree.palette' &&
+          definition &&
+          !Object.hasOwn(explicitOverrides, actionId)
+            ? getDefaultBindings(definition, platform)
+            : undefined)
         if (!bindings) {
           continue
         }
