@@ -6,6 +6,7 @@ import {
 } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 
+/** True when the connected Orca server does not advertise `capability`, so the CLI can refuse before sending a request it would misread. */
 export async function runtimeLacks(client: RuntimeClient, capability: string): Promise<boolean> {
   const status = await client.call<RuntimeStatus>('status.get')
   return !status.result.capabilities?.includes(capability)

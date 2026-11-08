@@ -56,7 +56,7 @@ const EXTERNAL_UNPLACEABLE_WORKTREES: ReadonlySet<string> = new Set([
   'new-top-level'
 ])
 
-// An external coordinator creates its Run with run-create --external; worker-start never makes one for it.
+/** An external coordinator creates its Run with run-create --external; worker-start never makes one for it. */
 function externalWorkerStartRun(
   authority: NonNullable<RpcContext['externalCoordinatorAuthority']>,
   explicit: RunRow | undefined

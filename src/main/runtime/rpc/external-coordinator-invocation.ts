@@ -36,7 +36,7 @@ type CandidateParams = Record<string, unknown>
 
 const NO_EFFECTS = { effectsApplied: false } as const
 
-// run-use stays terminal-only: binding someone else's Run is a takeover, not coordination.
+/** run-use stays terminal-only: binding someone else's Run is a takeover, not coordination. */
 function isExternalCoordinatorCandidate(method: string, params: CandidateParams): boolean {
   if (method === 'orchestration.runCreate') {
     return params.external === true
@@ -45,7 +45,7 @@ function isExternalCoordinatorCandidate(method: string, params: CandidateParams)
   return method !== 'orchestration.runUse' && callerParam !== undefined && !params[callerParam]
 }
 
-// Replay stays inside one client, Run and consumer generation, so a fenced coordinator cannot replay into its successor.
+/** Replay stays inside one client, Run and consumer generation, so a fenced coordinator cannot replay into its successor. */
 function mutationFingerprint(clientFingerprint: string, run?: RunRow): string {
   return createHash('sha256')
     .update(
@@ -61,6 +61,7 @@ type ExternalCoordinatorTransport = Pick<
   'clientKind' | 'clientCapabilities' | 'pairedDeviceId' | 'authenticatedCallerFingerprint'
 >
 
+/** The caller fingerprint of a paired runtime client that declared the capability and carries no Orca-launched agent evidence; undefined for everyone else. */
 function eligibleClientFingerprint(
   evidence: OrchestrationCompatibilityEvidence | undefined,
   transport: ExternalCoordinatorTransport
@@ -80,6 +81,7 @@ function eligibleClientFingerprint(
   return transport.authenticatedCallerFingerprint
 }
 
+/** The Run a request names, directly or through the message a reply answers. */
 function requestedRunId(
   runtime: OrcaRuntimeService,
   method: string,

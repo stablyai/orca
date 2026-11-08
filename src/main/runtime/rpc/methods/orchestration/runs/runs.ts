@@ -28,7 +28,7 @@ function cancelBoundDispatchWaiters(
   }
 }
 
-// The message zod gave while `from` was required; only an external coordinator may omit it.
+/** The message zod gave while `from` was required; only an external coordinator may omit it. */
 function requireCoordinatorTerminal(params: { from?: string }): string {
   if (!params.from) {
     throw new InvalidArgumentError('Missing coordinator terminal')

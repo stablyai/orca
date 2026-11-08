@@ -37,6 +37,7 @@ export function currentRunExternalCoordinator(
     : null
 }
 
+/** Creates a Run bound to a paired client's fingerprint instead of a terminal, at the generation an external coordinator starts from. */
 export function createExternalRun(
   this: OrchestrationDb,
   params: { objective: string; clientFingerprint: string }
@@ -70,6 +71,7 @@ export type RunExternalCoordinatorMethods = {
   runsBoundToExternalCoordinator: typeof runsBoundToExternalCoordinator
 }
 
+/** Mixes the external-coordinator Run methods into OrchestrationDb. */
 export function attachRunExternalCoordinator(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
     createExternalRun,
