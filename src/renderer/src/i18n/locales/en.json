@@ -22307,11 +22307,13 @@
     },
     "claudeThemeSyncOffer": {
       "title": "Match Claude Code to your Orca theme?",
-      "description": "Claude Code would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.",
+      "description": "Claude Code on this computer would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.",
       "accept": "Match Theme",
-      "accepted": "Theme sync is on",
-      "acceptedDescription": "Claude Code sessions use your Orca theme from their next start.",
-      "decline": "Not Now"
+      "accepted": "Claude Code theme sync is on",
+      "acceptedDescription": "New Claude Code sessions on this computer use your Orca theme.",
+      "decline": "No Thanks",
+      "failed": "Could not turn on Claude Code theme sync",
+      "failedDescription": "Turn it on in Settings."
     }
   },
   "fileExplorer": {

@@ -13,7 +13,7 @@ function isOfferDue(state: AppState): boolean {
 }
 
 function showClaudeThemeSyncOffer(): void {
-  const { updateSettings } = useAppStore.getState()
+  const { updateSettings, updateSettingsOrThrow } = useAppStore.getState()
   // Why settle before showing: shown means answered, so a dismiss, quit or reload never asks again.
   void updateSettings({ claudeCodeThemeSyncOffer: 'settled' })
   toast(translate('terminal.claudeThemeSyncOffer.title', 'Match Claude Code to your Orca theme?'), {
@@ -21,23 +21,42 @@ function showClaudeThemeSyncOffer(): void {
     id: OFFER_TOAST_ID,
     description: translate(
       'terminal.claudeThemeSyncOffer.description',
-      'Claude Code would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.'
+      'Claude Code on this computer would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.'
     ),
     duration: Infinity,
     action: {
       label: translate('terminal.claudeThemeSyncOffer.accept', 'Match Theme'),
       onClick: () => {
-        void updateSettings({ claudeCodeThemeSync: true })
-        toast.success(translate('terminal.claudeThemeSyncOffer.accepted', 'Theme sync is on'), {
-          description: translate(
-            'terminal.claudeThemeSyncOffer.acceptedDescription',
-            'Claude Code sessions use your Orca theme from their next start.'
-          )
-        })
+        // Why confirm only after the write: a failed save must not claim the sync is on.
+        updateSettingsOrThrow({ claudeCodeThemeSync: true }).then(
+          () =>
+            toast.success(
+              translate('terminal.claudeThemeSyncOffer.accepted', 'Claude Code theme sync is on'),
+              {
+                description: translate(
+                  'terminal.claudeThemeSyncOffer.acceptedDescription',
+                  'New Claude Code sessions on this computer use your Orca theme.'
+                )
+              }
+            ),
+          () =>
+            toast.error(
+              translate(
+                'terminal.claudeThemeSyncOffer.failed',
+                'Could not turn on Claude Code theme sync'
+              ),
+              {
+                description: translate(
+                  'terminal.claudeThemeSyncOffer.failedDescription',
+                  'Turn it on in Settings.'
+                )
+              }
+            )
+        )
       }
     },
     cancel: {
-      label: translate('terminal.claudeThemeSyncOffer.decline', 'Not Now'),
+      label: translate('terminal.claudeThemeSyncOffer.decline', 'No Thanks'),
       onClick: () => {}
     }
   })
