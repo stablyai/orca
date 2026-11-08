@@ -5,8 +5,10 @@ import {
   fsStageExternalPathsForRuntimeUpload,
   fsUploadExternalFileToRuntime,
   runtimeEnvironmentCall,
+  runtimeEnvironmentTransportCall,
   installRuntimeFileClientEnvironment
 } from '../runtime-file-client-test-harness'
+import { getRuntimeEnvironmentStatus } from '../../rpc/compatibility/runtime-compatibility-probe'
 import type { RuntimeImportProgressHandlers } from './runtime-upload-progress-tracker'
 import type { ImportItemResult } from '../../../../../shared/file-import/filesystem-import-result'
 
@@ -416,6 +418,84 @@ describe('runtime file import progress and cancel', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.commitUpload' })
     )
+    expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        method: 'files.delete',
+        params: expect.objectContaining({
+          relativePath: uploadRequests()[0]?.relativePath,
+          recursive: false
+        })
+      })
+    )
+    expect(progress.onRowSettled).toHaveBeenCalledWith(expect.any(String), 'cancelled')
+  })
+
+  it('does not commit a file whose cancel lands while the commit waits on a status probe', async () => {
+    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
+      sources: [
+        {
+          sourcePath: '/Users/me/clip.mp4',
+          status: 'staged',
+          name: 'clip.mp4',
+          kind: 'file',
+          entries: [stagedFile('', 10, 7)]
+        }
+      ]
+    })
+    runtimeEnvironmentCall.mockImplementation(async (call: { method: string }) =>
+      call.method === 'files.stat' ? notFoundResponse('stat-miss') : okResponse('ok')
+    )
+    let releaseProbe = (): void => {}
+    let streamed = false
+    fsUploadExternalFileToRuntime.mockImplementation(async () => {
+      // Another caller re-probes the runtime, so the commit has to wait on this pending status.get.
+      const answerStatus = runtimeEnvironmentTransportCall.getMockImplementation()
+      runtimeEnvironmentTransportCall.mockImplementationOnce(
+        (request) =>
+          new Promise((resolve) => {
+            releaseProbe = () => resolve(answerStatus?.(request))
+          })
+      )
+      void getRuntimeEnvironmentStatus('env-1')
+      streamed = true
+      return { byteLength: 10 }
+    })
+    let cancelled = false
+    // The import checks its caller before every runtime call, and after the stream that is the
+    // commit. Once the commit waits on the probe, the user cancels and then the probe answers.
+    const assertCurrent = (): void => {
+      if (streamed) {
+        streamed = false
+        queueMicrotask(() => {
+          cancelled = true
+          releaseProbe()
+        })
+      }
+    }
+    const progress = { ...quietHandlers(), isCancelled: () => cancelled }
+
+    const { results } = await importExternalPathsToRuntime(
+      {
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
+        worktreeId: 'wt-1',
+        worktreePath: '/remote/repo'
+      },
+      ['/Users/me/clip.mp4'],
+      '/remote/repo/uploads',
+      { progress, assertCurrent }
+    )
+
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'files.commitUpload' })
+    )
+    expect(results).toEqual([
+      {
+        sourcePath: '/Users/me/clip.mp4',
+        status: 'failed',
+        reason: 'Upload cancelled',
+        cancelled: true
+      }
+    ])
     expect(runtimeEnvironmentCall).toHaveBeenLastCalledWith(
       expect.objectContaining({
         method: 'files.delete',

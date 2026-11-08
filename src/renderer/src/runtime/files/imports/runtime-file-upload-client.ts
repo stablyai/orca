@@ -65,8 +65,6 @@ export async function uploadRuntimeFileWithoutClobber(
       // Import results expose this text directly; remove Electron’s remote-method wrapper.
       throw new Error(extractIpcErrorMessage(error, 'Upload failed'))
     }
-    // Why: a cancel after the last slice lands only here; the finally still deletes the temp path.
-    throwIfCancelled?.()
     await callRuntimeFileImportMutation(
       session,
       'files.commitUpload',
@@ -78,7 +76,10 @@ export async function uploadRuntimeFileWithoutClobber(
         expectedSshConnectionGeneration,
         expectedExecutionHostId
       },
-      30_000
+      30_000,
+      // Why: main stops cancels through the last slice; this one catches a cancel after the stream
+      // resolved, checked as the commit is sent so one during its status probe counts too.
+      throwIfCancelled
     )
   } finally {
     await callRuntimeFileImportMutation(
