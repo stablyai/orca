@@ -157,7 +157,7 @@ export default function AiVaultPanel({
     scanResult,
     sessions: history,
     loadedSessionLimit
-  } = useAiVaultSessionRefresh(scopePaths, executionHostScope, sessionLimit)
+  } = useAiVaultSessionRefresh(scopePaths, executionHostScope, sessionLimit, scope !== 'all')
   // Send scope identity: the host owns project worktree enumeration, and hundreds of paths cannot fit a request.
   const searchWithin = useMemo(
     () =>
@@ -176,6 +176,7 @@ export default function AiVaultPanel({
   )
   const requestedScanKey = aiVaultLocalScanKey({
     scopePaths,
+    scopeOnly: scope !== 'all',
     includeAntigravityIdeSessions: true,
     limit: sessionLimit === 'unlimited' ? undefined : sessionLimit,
     unlimited: sessionLimit === 'unlimited'

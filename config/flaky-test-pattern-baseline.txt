@@ -2,7 +2,6 @@
 # This is a RATCHET: counts may only go DOWN. Run `pnpm lint:ast-grep:flaky-tests` to list them.
 # Prune after a fix: pnpm check:flaky-test-pattern-ratchet --prune
 1 test-no-in-test-import-actual:src/cli/runtime/launch-serve-replaced-app-restart.test.ts
-1 test-no-in-test-import-actual:src/main/agent-hooks/server/testing/persistence/server-status-persist-nonblocking.test.ts
 1 test-no-in-test-import-actual:src/main/bitbucket/credential-connection.test.ts
 4 test-no-in-test-import-actual:src/main/bitbucket/credential-store.test.ts
 1 test-no-in-test-import-actual:src/main/bitbucket/status-no-decrypt.test.ts

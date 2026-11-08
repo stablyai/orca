@@ -1,5 +1,6 @@
+import { hasSavedStatus, readSavedStatus } from './last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
@@ -60,8 +61,8 @@ describe('agent status observation provenance', () => {
       server.flushStatusPersistSync()
 
       const path = join(userDataPath, 'agent-hooks', 'last-status.json')
-      expect(existsSync(path)).toBe(true)
-      const file = readFileSync(path, 'utf8')
+      expect(hasSavedStatus(path)).toBe(true)
+      const file = readSavedStatus(path)
       // Process-local sequencing cannot remain ordering authority after restart.
       expect(file).not.toContain('observation')
       expect(JSON.parse(file).entries[PANE].observation).toBeUndefined()
