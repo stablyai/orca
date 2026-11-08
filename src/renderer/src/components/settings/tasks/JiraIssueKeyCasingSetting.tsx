@@ -1,6 +1,7 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { JiraIssueKeyCasing } from '../../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
@@ -31,10 +32,11 @@ export function JiraIssueKeyCasingSetting({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const value: JiraIssueKeyCasing =
     settings.jiraIssueKeyCasing === 'preserve' ? 'preserve' : 'lowercase'
-  const title = getJiraIssueKeyCasingTitle()
-  const description = getJiraIssueKeyCasingDescription()
+  const title = getJiraIssueKeyCasingTitle(t)
+  const description = getJiraIssueKeyCasingDescription(t)
 
   return (
     <SearchableSetting
@@ -60,14 +62,14 @@ export function JiraIssueKeyCasingSetting({
             options={[
               {
                 value: 'lowercase',
-                label: translate(
+                label: t(
                   'auto.components.settings.GitPane.jiraIssueKeyCasingLowercase',
                   'Lowercase'
                 )
               },
               {
                 value: 'preserve',
-                label: translate(
+                label: t(
                   'auto.components.settings.GitPane.jiraIssueKeyCasingPreserve',
                   'Uppercase key'
                 )
