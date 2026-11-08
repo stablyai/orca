@@ -14,6 +14,11 @@ import {
   type JournalDomainHistoryRequest
 } from './journal-domain-history-page'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
+import {
+  migrateJournalDomainHistoryBounds,
+  writeJournalDomainHistoryBounds
+} from './journal-domain-history-bounds-schema'
 import { JOURNAL_DOMAIN_SCHEMA_VERSION } from './database/journal-domain-migrations'
 import { migrateJournalDomainPredecessor } from './database/journal-domain-migrations.test-fixture'
 
@@ -26,9 +31,15 @@ afterEach(() => {
 
 function history(db = new Database(':memory:')) {
   const value = messageFixture(db)
+  // The author installs this body as the next numbered migration and calls the bounds write at each item writer.
+  migrateJournalDomainHistoryBounds(db)
   cleanup.push(() => db.close())
   return {
     ...value,
+    seedItem: (item: AgentJournalRenderItem) => {
+      value.seedItem(item)
+      writeJournalDomainHistoryBounds(db, target, item.itemId, journalDomainHistoryMetadata(item))
+    },
     head: (sequence: number, retained = 0) =>
       db
         .prepare('UPDATE journal_chat_state SET last_sequence=?, retained_sequence=?')
@@ -147,6 +158,29 @@ it('never splits a same-sequence group, marking it oversized backward and paging
     ...group.map((item) => item.itemId),
     ...Array.from({ length: 10 }, (_, index) => `orca:${51 + index}:0`)
   ])
+})
+
+it('excludes a retained body and submission by stored size before reading either, in both directions', () => {
+  const { db, seedItem, head, event, read } = history()
+  for (let sequence = 1; sequence <= 4; sequence++) {
+    seedItem(text(sequence, 'row'))
+    event(sequence, [`orca:${sequence}:0`])
+  }
+  head(4)
+  // JSON5 satisfies the expression index but fails the read if this body were decoded.
+  db.prepare("UPDATE journal_items SET payload_json=? WHERE item_id='orca:2:0'").run(
+    `{"pad":"${'x'.repeat(10_000)}",}`
+  )
+  db.exec(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,
+    attempt_index,current,item_id,ordinal,submitted_at,fingerprint,dispatch_state,payload_json)
+    VALUES('chat','epoch','send',2,0,1,'orca:2:0',2,2,'f','accepted','not json')`)
+  const small = { form: measureHistoryItem, budgetBytes: 4096 }
+  const tail = read({ direction: 'tail' }, small)
+  expect(sequences(tail)).toEqual([3, 4])
+  expect(tail.page).toMatchObject({ hasOlder: true, window: { nextCursor: { sequence: 3 } } })
+  const forward = read({ direction: 'after', cursor: { epoch: 'epoch', sequence: 0 } }, small)
+  expect(sequences(forward)).toEqual([1])
+  expect(forward.page).toMatchObject({ hasNewer: true, window: { nextCursor: { sequence: 1 } } })
 })
 
 it('catches up with the current revision, placement and submission, not the replayed metadata', async () => {
