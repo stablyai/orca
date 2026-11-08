@@ -1,5 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { GitGraphOpenButton } from './git-graph-open-button'
+import { COMMITS_HEADER_ICON_BUTTON_CLASS } from './commits-header-icon-button'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -55,7 +56,8 @@ export function GitHistoryPanel({
   onOpenCommit,
   onLoadCommitFiles,
   onOpenCommitFile,
-  onCommitAction
+  onCommitAction,
+  onOpenGitGraph
 }: {
   worktreeId?: string
   state: GitHistoryPanelState
@@ -70,6 +72,7 @@ export function GitHistoryPanel({
     event?: SourceControlRowOpenEvent
   ) => void
   onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
+  onOpenGitGraph?: (event: SourceControlRowOpenEvent) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const result = state.result
@@ -267,14 +270,14 @@ export function GitHistoryPanel({
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
-          {worktreeId && <GitGraphOpenButton worktreeId={worktreeId} />}
+          {worktreeId && <GitGraphOpenButton worktreeId={worktreeId} onOpen={onOpenGitGraph} />}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
+                className={COMMITS_HEADER_ICON_BUTTON_CLASS}
                 aria-label={t(
                   'auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9',
                   'What are refs?'
@@ -299,7 +302,7 @@ export function GitHistoryPanel({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
+                className={COMMITS_HEADER_ICON_BUTTON_CLASS}
                 onClick={(event) => {
                   event.stopPropagation()
                   if (collapsed) {
