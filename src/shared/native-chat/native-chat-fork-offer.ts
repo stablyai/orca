@@ -4,8 +4,11 @@ import type { AgentSessionCapabilities } from '../agent-session/agent-session-ca
 import type { StructuredAgentSessionHostCapabilityState } from '../agent-session/structured-agent-session-host-capability'
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
+import { projectStructuredAgentSessionMessages } from '../agent-session/view/structured-agent-session-message-projection'
+import type { NativeChatTurnJournal } from './transcript/native-chat-turn-membership'
 import type { AgentSessionOptionsResult } from '../agent-session/options/agent-session-options-result'
 import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../agent-session/agent-session-fork'
+import { nativeChatTurnMembership } from './transcript/native-chat-turn-membership'
 import type { NativeChatMessage } from './native-chat-types'
 
 /** What a chat can fork: nothing, not yet known (drawn disabled), or through which turns. */
@@ -119,5 +122,29 @@ export function nativeChatRowOffersFork(
       chat.support.fork === 'checkpoint' ||
       row.inLatestTurn ||
       (chat.support.inheritedOriginal === true && sequence <= (chat.inheritedThroughSequence ?? 0)))
+  )
+}
+
+/** Only a nonlatest inherited tip needs the host's original-resolution extension. */
+export function nativeChatForkRequiresInheritedOriginal(
+  items: readonly AgentJournalRenderItem[],
+  fork: 'tip' | 'checkpoint',
+  throughItemId: string,
+  journal: Omit<NativeChatTurnJournal, 'items'> = { submissions: [] }
+): boolean {
+  if (fork !== 'tip') {
+    return false
+  }
+  const selected = items.find((item) => item.itemId === throughItemId)
+  if (!selected || selected.sequence > nativeChatForkInventory(items).inheritedThroughSequence) {
+    return false
+  }
+  const messages = projectStructuredAgentSessionMessages(items, [], journal.submissions).filter(
+    isRootAgentJournalItem
+  )
+  const { turnKeys } = nativeChatTurnMembership(messages, { ...journal, items })
+  const selectedTurn = turnKeys[messages.findIndex((message) => message.id === throughItemId)]
+  return (
+    selectedTurn === undefined || selectedTurn !== turnKeys.findLast((key) => key !== undefined)
   )
 }

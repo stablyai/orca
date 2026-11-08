@@ -10,13 +10,18 @@ import {
   latestAgentSessionContextClearSequence
 } from '../../../../../../shared/agent-session/agent-session-context-clear'
 import type { AgentJournalCursor } from '../../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
+import type {
+  AgentJournalSubmission,
+  AgentJournalRenderItem
+} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../../../../../../shared/agent-session/options/agent-session-options-result'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {
   nativeChatForkInventory,
+  nativeChatForkRequiresInheritedOriginal,
   nativeChatForkSupport,
   nativeChatLatestForkItemId,
   type NativeChatForkSupport
@@ -70,6 +75,8 @@ export function useNativeChatFork(input: {
   target: RuntimeClientTarget
   worktreeId: string | null
   items: readonly AgentJournalRenderItem[]
+  submissions?: readonly AgentJournalSubmission[]
+  latestTurn?: AgentSessionLatestTurn | null
   epoch: string | null
   contextFloor: AgentJournalCursor | undefined
   /** The chat's options read on its installed agent; the host's own discovery owns it. */
@@ -91,9 +98,9 @@ export function useNativeChatFork(input: {
     input.sessionForkSupport,
     inheritedOriginalHost
   )
-  const latest = useRef(input)
+  const latest = useRef({ ...input, support })
   useLayoutEffect(() => {
-    latest.current = input
+    latest.current = { ...input, support }
   })
   // Reserved at the click, before any await, so a second click never starts a second fork.
   const inFlight = useRef(false)
@@ -116,6 +123,18 @@ export function useNativeChatFork(input: {
         worktreeId,
         target,
         forkFrom: { sessionId, throughItemId },
+        forkRequiresInheritedOriginal:
+          latest.current.support.kind === 'known'
+            ? nativeChatForkRequiresInheritedOriginal(
+                latest.current.items,
+                latest.current.support.fork,
+                throughItemId,
+                {
+                  submissions: latest.current.submissions ?? [],
+                  latestTurn: latest.current.latestTurn
+                }
+              )
+            : undefined,
         surfaceAddress: nativeChatForkSurfaceAddress(worktreeId, tabId),
         ...(side ? { side } : {})
       })
@@ -213,6 +232,8 @@ export function useNativeChatPaneFork(
   pane: Pick<NativeChatStructuredViewProps, 'sessionId' | 'tabId' | 'agent' | 'target'>,
   chat: {
     journalItems: readonly AgentJournalRenderItem[]
+    submissions?: readonly AgentJournalSubmission[]
+    latestTurn?: AgentSessionLatestTurn | null
     epoch: string | null
     contextFloor: AgentJournalCursor | undefined
     forkSupport: AgentSessionOptionsResult['forkSupport']
@@ -226,6 +247,8 @@ export function useNativeChatPaneFork(
     target: pane.target,
     worktreeId,
     items: chat.journalItems,
+    submissions: chat.submissions,
+    latestTurn: chat.latestTurn,
     epoch: chat.epoch,
     contextFloor: chat.contextFloor,
     sessionForkSupport: chat.forkSupport

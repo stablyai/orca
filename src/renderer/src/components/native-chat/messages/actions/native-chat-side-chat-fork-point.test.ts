@@ -6,6 +6,10 @@ import {
   AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { useAppStore } from '@/store'
+import { runtimeEnvironmentStatusFromSnapshot } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import { launchNativeChatFork } from './native-chat-fork-launch'
 import { useNativeChatFork } from './use-native-chat-fork'
 import { useNativeChatSideChatForkOffer } from './use-native-chat-side-chat'
 import {
@@ -25,19 +29,15 @@ import { buildNativeChatTranscript } from '../../conversation/slots/native-chat-
 const host = vi.hoisted(
   (): {
     capabilities: Set<string>
-    pendingOriginal: Promise<boolean> | null
     contacts: Set<() => void>
   } => ({
     capabilities: new Set<string>(),
-    pendingOriginal: null,
     contacts: new Set<() => void>()
   })
 )
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: (_environmentId: string, capability: string) =>
-    capability === AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY && host.pendingOriginal
-      ? host.pendingOriginal
-      : Promise.resolve(host.capabilities.has(capability))
+    Promise.resolve(host.capabilities.has(capability))
 }))
 vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (_environmentId: string, listener: () => void) => {
@@ -207,6 +207,13 @@ it('carries current target-host proof into desktop response and side-chat offers
   )
   const items: AgentJournalRenderItem[] = [
     {
+      itemId: 'inherited-user',
+      sequence: 0,
+      revision: 1,
+      observedAt: 0,
+      body: { kind: 'message', role: 'user', blocks: [] }
+    },
+    {
       itemId: copied.id,
       sequence: 1,
       revision: 1,
@@ -221,6 +228,13 @@ it('carries current target-host proof into desktop response and side-chat offers
       body: { kind: 'status', presentation: 'forked-from', text: 'Forked from source' }
     },
     {
+      itemId: 'own-user',
+      sequence: 3,
+      revision: 1,
+      observedAt: 3,
+      body: { kind: 'message', role: 'user', blocks: [] }
+    },
+    {
       itemId: own.id,
       sequence: 4,
       revision: 1,
@@ -229,6 +243,7 @@ it('carries current target-host proof into desktop response and side-chat offers
     }
   ]
   host.capabilities = new Set([AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY])
+  publishStatus('verified')
   const pane = renderHook(() =>
     useNativeChatFork({
       sessionId: 'child',
@@ -271,47 +286,80 @@ it('carries current target-host proof into desktop response and side-chat offers
 
   host.capabilities.add(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
   await act(async () => {
+    publishStatus('verified')
     host.contacts.forEach((listener) => listener())
   })
   side.rerender()
   expect(responseOffered()).toBe(true)
   expect(sidePoint()).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:source:reply-1' })
 
-  let settleOriginal = (_supported: boolean) => {}
-  host.pendingOriginal = new Promise<boolean>((resolve) => {
-    settleOriginal = resolve
-  })
-  await act(async () => {
-    host.contacts.forEach((listener) => listener())
-  })
+  await act(async () => publishStatus('checking'))
   side.rerender()
   expect(responseOffered()).toBe(false)
   expect(sidePoint()).toEqual({ kind: 'reply-running' })
   expect(
     nativeChatRowOffersFork(
-      {
-        message: own,
-        inSubagentSection: false,
-        turnWorking: false,
-        inLatestTurn: true
-      },
+      { message: own, inSubagentSection: false, turnWorking: false, inLatestTurn: true },
       pane.result.current!
     )
   ).toBe(true)
-
-  await act(async () => {
-    settleOriginal(true)
-  })
-  host.pendingOriginal = null
+  await act(async () => publishStatus('unavailable'))
+  side.rerender()
+  expect(responseOffered()).toBe(false)
+  await act(async () => publishStatus('verified'))
   side.rerender()
   expect(responseOffered()).toBe(true)
   expect(sidePoint()).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:source:reply-1' })
 
+  vi.mocked(launchNativeChatFork).mockResolvedValue({})
+  await act(async () => {
+    await pane.result.current!.rowAction.request(copied.id, { question: 'Explain' })
+  })
+  expect(launchNativeChatFork).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      forkFrom: { sessionId: 'child', throughItemId: 'legacy:opencode:source:reply-1' },
+      forkRequiresInheritedOriginal: true,
+      side: { question: 'Explain' }
+    })
+  )
+  await act(async () => {
+    await pane.result.current!.rowAction.request(own.id)
+  })
+  expect(launchNativeChatFork).toHaveBeenLastCalledWith(
+    expect.objectContaining({ forkRequiresInheritedOriginal: false })
+  )
+
   host.capabilities.delete(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
   await act(async () => {
+    publishStatus('verified')
     host.contacts.forEach((listener) => listener())
   })
   side.rerender()
   expect(responseOffered()).toBe(false)
   expect(sidePoint()).toEqual({ kind: 'reply-running' })
 })
+
+function publishStatus(verification: 'verified' | 'checking' | 'unavailable') {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only runtime identity/capabilities are read by these hooks.
+  const status = { runtimeId: 'runtime-a', capabilities: [...host.capabilities] } as RuntimeStatus
+  useAppStore.setState({
+    runtimeStatusByEnvironmentId: new Map([
+      [
+        'paired-host',
+        {
+          ...runtimeEnvironmentStatusFromSnapshot({
+            environmentId: 'paired-host',
+            pairingRevision: 1,
+            sequence: 1,
+            checkedAt: 1,
+            status,
+            verification,
+            transport: verification === 'verified' ? 'ready' : 'disconnected'
+          }),
+          connectionGeneration: 1,
+          hostContactEpoch: 1
+        }
+      ]
+    ])
+  })
+}

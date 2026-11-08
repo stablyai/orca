@@ -78,22 +78,31 @@ export function useStructuredAgentSessionHostCapabilityState(
   const [contact, setContact] = useState(0)
   const [answer, setAnswer] = useState<{
     key: string | null
-    contact: number
     state: StructuredAgentSessionHostCapabilityState
   }>(() => ({
     key,
-    contact,
     state: target?.kind === 'local' ? localCapabilityState(capability) : 'unknown'
   }))
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
+  const current = useAppStateValue((state): StructuredAgentSessionHostCapabilityState => {
+    const status =
+      environmentId === null || !requireCurrentContact
+        ? null
+        : state.runtimeStatusByEnvironmentId.get(environmentId)?.status
+    return !status
+      ? 'unknown'
+      : status.capabilities?.includes(capability)
+        ? 'supported'
+        : 'unsupported'
+  })
   useEffect(() => {
-    if (environmentId === null) {
+    if (environmentId === null || requireCurrentContact) {
       return
     }
     return subscribeRuntimeHostContactRegained(environmentId, () => setContact((n) => n + 1))
-  }, [environmentId])
+  }, [environmentId, requireCurrentContact])
   useEffect(() => {
-    if (key === null) {
+    if (key === null || (requireCurrentContact && environmentId !== null)) {
       return
     }
     let cancelled = false
@@ -108,11 +117,7 @@ export function useStructuredAgentSessionHostCapabilityState(
       .then((state) => {
         if (!cancelled) {
           setAnswer((current) =>
-            current.key === key &&
-            current.state === state &&
-            (!requireCurrentContact || current.contact === contact)
-              ? current
-              : { key, contact, state }
+            current.key === key && current.state === state ? current : { key, state }
           )
         }
       })
@@ -120,9 +125,11 @@ export function useStructuredAgentSessionHostCapabilityState(
       cancelled = true
     }
   }, [capability, contact, environmentId, key, requireCurrentContact])
-  return answer.key === key && (!requireCurrentContact || answer.contact === contact)
-    ? answer.state
-    : 'unknown'
+  return requireCurrentContact && environmentId !== null
+    ? current
+    : answer.key === key
+      ? answer.state
+      : 'unknown'
 }
 
 function localCapabilityState(

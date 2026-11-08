@@ -4,6 +4,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  createSharedControlTestServer,
+  closeSharedControlTestServers
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
+import type { sendRemoteRuntimeRequestWithStatusPreflight as StatusPreflight } from '../../../shared/remote-runtime/remote-runtime-client'
 import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
@@ -41,6 +46,10 @@ vi.mock('./runtime-environment-request-connections', async () => {
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
 
+const actual = await vi.importActual<{
+  sendRemoteRuntimeRequestWithStatusPreflight: typeof StatusPreflight
+}>('../../../shared/remote-runtime/remote-runtime-client')
+
 describe('federated read RPC transport routing', () => {
   let userDataPath: string
   let environmentId: string
@@ -62,7 +71,8 @@ describe('federated read RPC transport routing', () => {
     sendRemoteRuntimeSharedControlRequestMock.mockReset()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeSharedControlTestServers()
     resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
@@ -196,25 +206,22 @@ describe('federated read RPC transport routing', () => {
   })
 
   it('refuses a runtime-pinned one-shot mutation when its socket reaches a restarted host', async () => {
-    markEnvironmentUsed(userDataPath, environmentId, { runtimeId: 'runtime-proven' })
-    const mutationSent = vi.fn()
+    const server = await createSharedControlTestServer({
+      resultForRequest: (method) =>
+        method === 'status.get' ? { runtimeId: 'runtime-restarted', capabilities: [] } : {}
+    })
+    const paired = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'Restarted host',
+      pairingCode: encodePairingOffer(server.offer)
+    })
+    markEnvironmentUsed(userDataPath, paired.id, { runtimeId: 'runtime-proven' })
     sendRemoteRuntimeRequestWithStatusPreflightMock.mockImplementation(
-      async (_connection, method, _params, _timeoutMs, validateStatus) => {
-        validateStatus({
-          id: 'status',
-          ok: true,
-          result: { capabilities: [] },
-          _meta: { runtimeId: 'runtime-restarted' }
-        })
-        mutationSent(method)
-        return { id: method, ok: true, result: {}, _meta: { runtimeId: 'runtime-restarted' } }
-      }
+      actual.sendRemoteRuntimeRequestWithStatusPreflight
     )
-
     await expect(
       callRuntimeEnvironment(
         userDataPath,
-        environmentId,
+        paired.id,
         'orchestration.federationRelease',
         { dispatchId: 'dispatch-1' },
         15_000,
@@ -223,8 +230,9 @@ describe('federated read RPC transport routing', () => {
         { expectedEnvironmentRuntimeId: 'runtime-proven' }
       )
     ).resolves.toMatchObject({ ok: false, error: { code: 'runtime_environment_changed' } })
-    expect(mutationSent).not.toHaveBeenCalled()
-    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+    expect(
+      server.requests.filter((request) => request.method === 'orchestration.federationRelease')
+    ).toEqual([])
   })
 
   it('falls back to one-shot with the envelope when shared control is unavailable', async () => {
