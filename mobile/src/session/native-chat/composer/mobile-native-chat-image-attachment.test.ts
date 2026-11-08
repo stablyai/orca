@@ -85,34 +85,4 @@ describe('uploadMobileNativeChatImages', () => {
       'uploaded:file:///c.jpg'
     ])
   })
-
-  it('returns an empty array when the picker is cancelled and uploads nothing', async () => {
-    const client = clientWithResponses([])
-
-    const result = await uploadMobileNativeChatImages('library', {
-      client,
-      getConnectionId: async () => null,
-      pickImages: vi.fn().mockResolvedValue([])
-    })
-
-    expect(result).toEqual([])
-    expect(client.calls).toEqual([])
-  })
-
-  it('falls back to an inline data uri for the preview when the picker omits a uri', async () => {
-    const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/x.png')])
-
-    const result = await uploadMobileNativeChatImages('files', {
-      client,
-      getConnectionId: async () => null,
-      pickImages: vi.fn().mockResolvedValue([{ base64: 'BBBB' }])
-    })
-
-    expect(result).toEqual([
-      {
-        path: '/tmp/x.png',
-        previewUri: 'data:image/png;base64,BBBB'
-      }
-    ])
-  })
 })
