@@ -160,7 +160,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     t
   )
   const allowSkipConfirm =
-    !isBatchDelete && modalData.allowSkipConfirm !== false && childWorkspaceCount === 0
+    !isBatchDelete &&
+    modalData.allowSkipConfirm !== false &&
+    childWorkspaceCount === 0 &&
+    !preserveChildren
   const [isSavingForcePreference, setIsSavingForcePreference] = useState(false)
   const deleteTargets = useMemo(
     () => (deleteAllLineage ? lineageDelete.deleteAllTargets : worktrees),
@@ -348,7 +351,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
           <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
 
-          {childWorkspaceCount > 0 && (
+          {(childWorkspaceCount > 0 || preserveChildren) && (
             <DeleteWorktreeLineageNotice
               descendants={lineageDelete.descendants}
               parent={worktree}
@@ -375,6 +378,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             isMainWorktree={isMainWorktree}
             isDeleting={isDeleting || isSavingForcePreference}
             isDetachingChildren={isDetachingChildren}
+            deleteDisabled={preserveChildren && !canPreserveChildren}
             canForceDelete={canForceDelete}
             isBatchDelete={isBatchDelete}
             worktreeCount={worktrees.length}

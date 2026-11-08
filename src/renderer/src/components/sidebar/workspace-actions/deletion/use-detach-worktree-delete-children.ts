@@ -50,7 +50,9 @@ export function useDetachWorktreeDeleteChildren({
   const [isDetachingChildren, setIsDetachingChildren] = useState(false)
   const [detachError, setDetachError] = useState<string | null>(null)
   const canPreserveChildren =
-    !!parent && canPreserveWorkspaceDeleteChildren(parent, lineage.descendants, isFolderWorkspace)
+    !!parent &&
+    lineage.descendants.length > 0 &&
+    canPreserveWorkspaceDeleteChildren(parent, lineage.descendants, isFolderWorkspace)
 
   if (!isOpen && (preserveChildren || detachError)) {
     setPreserve(false)
