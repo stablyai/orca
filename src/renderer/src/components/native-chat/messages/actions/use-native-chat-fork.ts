@@ -13,7 +13,7 @@ import type { AgentType } from '../../../../../../shared/agent-status/contracts/
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import {
-  nativeChatForkableItemIds,
+  nativeChatForkInventory,
   nativeChatForkSupport,
   nativeChatLatestForkItemId,
   type NativeChatForkSupport
@@ -49,6 +49,7 @@ export type NativeChatForkLatestOutcome = 'started' | 'pending' | 'none'
 export type NativeChatForkSurface = NativeChatForkRowAction & {
   contextFloorSequence: number
   forkableItemIds: ReadonlySet<string>
+  inheritedThroughSequence?: number
   /** Handed to offered rows, so a change in which rows offer it re-renders only those rows. */
   rowAction: NativeChatForkRowAction
 }
@@ -122,13 +123,15 @@ export function useNativeChatFork(input: {
   // Streaming replaces the items array on every commit; keep the set while its members hold, so the
   // context and every offered row's `fork` stay the same objects.
   const forkableRef = useRef<ReadonlySet<string>>(new Set())
+  const inventory = useMemo(() => nativeChatForkInventory(input.items), [input.items])
+  const { inheritedThroughSequence } = inventory
   const forkableItemIds = useMemo(() => {
-    const next = nativeChatForkableItemIds(input.items)
+    const next = inventory.forkableItemIds
     const previous = forkableRef.current
     return next.size === previous.size && [...next].every((id) => previous.has(id))
       ? previous
       : next
-  }, [input.items])
+  }, [inventory])
   useLayoutEffect(() => {
     forkableRef.current = forkableItemIds
   }, [forkableItemIds])
@@ -142,7 +145,7 @@ export function useNativeChatFork(input: {
         latestAgentSessionContextClearSequence(items),
         agentSessionContextFloorSequence(contextFloor, epoch)
       ),
-      forkableItemIds: nativeChatForkableItemIds(items)
+      forkableItemIds: nativeChatForkInventory(items).forkableItemIds
     })
     if (!throughItemId) {
       return 'none'
@@ -164,11 +167,19 @@ export function useNativeChatFork(input: {
     () =>
       supportKind === 'none' || !input.worktreeId || !isTuiAgent(input.agent)
         ? undefined
-        : { ...rowAction, contextFloorSequence, forkableItemIds, rowAction, forkLatest },
+        : {
+            ...rowAction,
+            contextFloorSequence,
+            forkableItemIds,
+            inheritedThroughSequence,
+            rowAction,
+            forkLatest
+          },
     [
       contextFloorSequence,
       forkableItemIds,
       forkLatest,
+      inheritedThroughSequence,
       input.agent,
       input.worktreeId,
       rowAction,

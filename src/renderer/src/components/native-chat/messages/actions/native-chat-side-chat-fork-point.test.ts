@@ -1,3 +1,4 @@
+import { nativeChatForkInventory } from '../../../../../../shared/native-chat/native-chat-fork-offer'
 import { describe, expect, it } from 'vitest'
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -90,4 +91,49 @@ describe('the side chat fork point the transcript finds while laying out', () =>
       }).forkPoint
     ).toEqual({ kind: 'no-reply' })
   })
+})
+
+it('offers the inherited source tip while a later child response is running', () => {
+  const { input, latestTurnKey } = conversation(
+    [
+      { ask: 'inherited-user', replies: [row('legacy:opencode:source:reply-1', 'assistant', 1)] },
+      { ask: 'own-user', replies: [row('legacy:opencode:child:reply-2', 'assistant', 4)] }
+    ],
+    true
+  )
+  const inventory = nativeChatForkInventory([
+    {
+      itemId: 'legacy:opencode:source:reply-1',
+      sequence: 1,
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'copied' }] }
+    },
+    {
+      itemId: 'orca:forked-from',
+      sequence: 1,
+      body: { kind: 'status', text: 'Forked from source', presentation: 'forked-from' }
+    },
+    {
+      itemId: 'legacy:opencode:child:reply-2',
+      sequence: 4,
+      body: {
+        kind: 'message',
+        role: 'assistant',
+        blocks: [{ type: 'text', text: 'local partial' }]
+      }
+    }
+  ])
+  const chat = {
+    support: { kind: 'known', fork: 'tip' },
+    contextFloorSequence: 0,
+    ...inventory
+  } as const
+  expect(
+    buildNativeChatTranscript({ ...input, forkOffer: { chat, latestTurnKey } }).forkPoint
+  ).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:source:reply-1' })
+  expect(
+    buildNativeChatTranscript({
+      ...input,
+      forkOffer: { chat: { ...chat, contextFloorSequence: 2 }, latestTurnKey }
+    }).forkPoint
+  ).toEqual({ kind: 'reply-running' })
 })

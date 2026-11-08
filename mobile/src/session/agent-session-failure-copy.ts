@@ -10,6 +10,18 @@ import { SEND_FAILURE_COPY } from './agent-session-send-failure-copy'
 
 const COPY: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> = {
   ...START_FAILURE_COPY,
+  forkOriginalMissing: (values) =>
+    translate(
+      'session.failure.forkOriginalMissing',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalMissing,
+      values
+    ),
+  forkOriginalUnavailable: (values) =>
+    translate(
+      'session.failure.forkOriginalUnavailable',
+      AGENT_SESSION_FAILURE_COPY.forkOriginalUnavailable,
+      values
+    ),
   pluginInputRequired: (values) =>
     translate(
       'session.failure.pluginInputRequired',

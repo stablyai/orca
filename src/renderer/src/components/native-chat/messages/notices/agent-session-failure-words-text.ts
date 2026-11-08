@@ -19,6 +19,18 @@ import { START_FAILURE_PIECES } from './agent-session-start-failure-words-text'
 const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopyValues) => string> =
   {
     theAgent: () => translate('components.native-chat.failureWords.theAgent', COPY.theAgent),
+    forkOriginalMissing: (values) =>
+      translate(
+        'components.native-chat.failureWords.forkOriginalMissing',
+        COPY.forkOriginalMissing,
+        values
+      ),
+    forkOriginalUnavailable: (values) =>
+      translate(
+        'components.native-chat.failureWords.forkOriginalUnavailable',
+        COPY.forkOriginalUnavailable,
+        values
+      ),
     pluginInputRequired: (values) =>
       translate(
         'components.native-chat.failureWords.pluginInputRequired',

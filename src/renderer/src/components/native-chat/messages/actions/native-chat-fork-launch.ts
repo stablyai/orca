@@ -1,3 +1,5 @@
+import { agentSessionForkSourceFailureWords } from '../../../../../../shared/agent-session/failures/agent-session-failure-copy'
+import { sayAgentSessionFailureTranslated } from '../notices/agent-session-failure-words-text'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -199,6 +201,17 @@ function forkFailureDetail(agentLabel: string, error: unknown): string {
   }
   if (code === 'structured_agent_session_host_permission') {
     return hostPermissionRefusedText(agentLabel, 'refused')
+  }
+  const sourceFailure =
+    error instanceof StructuredAgentSessionCreateRefusalError
+      ? agentSessionForkSourceFailureWords(
+          error.message,
+          agentLabel,
+          sayAgentSessionFailureTranslated
+        )
+      : null
+  if (sourceFailure) {
+    return sourceFailure
   }
   const causeText = structuredLaunchFailure(error)?.causeText
   if (causeText) {

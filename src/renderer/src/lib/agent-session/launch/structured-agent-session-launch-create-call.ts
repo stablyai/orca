@@ -11,6 +11,7 @@ import type {
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
 import {
   isAgentSessionCreateAdmissionRefusal,
+  isAgentSessionForkSourceAdmissionRefusal,
   isDefinitiveAgentSessionCreateRefusal
 } from '../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import { readAgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
@@ -233,7 +234,8 @@ export async function launchStructuredAgentSession(
       !priorCreateOutcomeUnknown &&
       result.refusal.createAttemptRefusedBeforeCommit === true &&
       refusal !== undefined &&
-      isAgentSessionCreateAdmissionRefusal(refusal)
+      (isAgentSessionCreateAdmissionRefusal(refusal) ||
+        (!!intent.params.forkFrom && isAgentSessionForkSourceAdmissionRefusal(refusal)))
     // Attempt proof cannot settle an earlier create whose reply was lost.
     if (
       !attemptRefusedBeforeCommit &&

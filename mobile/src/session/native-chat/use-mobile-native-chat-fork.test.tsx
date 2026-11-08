@@ -193,3 +193,55 @@ it('gives a resumed spell of fork support its own retries, and the reply becomes
   expect(sendRequest).toHaveBeenCalledTimes(5)
   expect(latest?.offerFor(message)).toBe('available')
 })
+
+it('offers an inherited OpenCode tip after the child advances and submits its displayed key', async () => {
+  const { client, sendRequest } = connection(0)
+  sendRequest.mockResolvedValue({
+    ok: true,
+    result: { agents: [{ agent: 'opencode', capabilities: { fork: 'tip' } }] }
+  })
+  const createFork = vi.fn(async () => {})
+  const copied = { ...message, id: 'legacy:opencode:source:reply-1' }
+  const own = {
+    ...message,
+    id: 'legacy:opencode:child:reply-2',
+    journalPosition: { sequence: 4, index: 0 }
+  }
+  function ForkProbe() {
+    latest = useMobileNativeChatFork({
+      client,
+      hostCapabilities: FORK_HOST,
+      agent: 'opencode',
+      sessionId: 'child',
+      messages: [copied, own],
+      turnJournal: {
+        items: [
+          { ...reply, itemId: copied.id },
+          {
+            ...reply,
+            itemId: 'orca:forked-from',
+            body: { kind: 'status', presentation: 'forked-from', text: 'Forked from source' }
+          },
+          { ...reply, itemId: own.id, sequence: 4 }
+        ],
+        submissions: []
+      },
+      agentWorking: false,
+      sessionForkSupport: 'supported',
+      createFork
+    })
+    return null
+  }
+  await act(async () => {
+    renderer = create(createElement(ForkProbe))
+  })
+  await settle()
+  expect(latest?.offerFor(copied)).toBe('available')
+  await act(async () => {
+    latest?.fork(copied)
+  })
+  expect(createFork).toHaveBeenCalledWith('opencode', {
+    sessionId: 'child',
+    throughItemId: 'legacy:opencode:source:reply-1'
+  })
+})

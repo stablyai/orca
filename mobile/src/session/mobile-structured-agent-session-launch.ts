@@ -1,9 +1,14 @@
+import { agentSessionForkSourceFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-copy'
+import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
 import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../src/shared/agent-session/agent-session-wire'
-import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
+import {
+  isDefinitiveAgentSessionCreateRefusal,
+  isAgentSessionForkSourceAdmissionRefusal
+} from '../../../src/shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
@@ -132,12 +137,14 @@ export async function createMobileStructuredAgentSession(
   const params = createParamsFor(agent, worktree, forkFrom, tabPlacement)
   rememberMobileCreatedStructuredSession(params.envelope.sessionId, worktree)
   let response
+  let priorCreateOutcomeUnknown = false
   try {
     response = await structuredAgentSessionCreate.request(client, params, {
       timeoutMs: 15_000,
       budgetSpansConnect: true
     })
   } catch {
+    priorCreateOutcomeUnknown = true
     // Replay the durable envelope once so a lost acknowledgement cannot create a sibling.
     try {
       response = await structuredAgentSessionCreate.request(client, params, {
@@ -178,6 +185,22 @@ export async function createMobileStructuredAgentSession(
       typeof result.refusal.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
+    }
+    if (
+      forkFrom &&
+      !priorCreateOutcomeUnknown &&
+      result.refusal.createAttemptRefusedBeforeCommit === true &&
+      isAgentSessionForkSourceAdmissionRefusal(result.refusal)
+    ) {
+      return {
+        kind: 'failed',
+        message:
+          agentSessionForkSourceFailureWords(
+            result.refusal.message,
+            TUI_AGENT_DISPLAY_NAMES[agent],
+            sayMobileAgentSessionFailure
+          ) ?? result.refusal.message
+      }
     }
     return classifyCreateRefusal(agent, result.refusal.code, result.refusal.message)
   }

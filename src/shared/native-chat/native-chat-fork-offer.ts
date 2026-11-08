@@ -5,6 +5,7 @@ import type { StructuredAgentSessionHostCapabilityState } from '../agent-session
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../agent-session/options/agent-session-options-result'
+import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../agent-session/agent-session-fork'
 import type { NativeChatMessage } from './native-chat-types'
 
 /** What a chat can fork: nothing, not yet known (drawn disabled), or through which turns. */
@@ -35,19 +36,27 @@ export function nativeChatForkSupport(
 
 /** The journal rows a fork can go through: the chat's own agent's messages. A displayed row that only
  *  reads as a response (a tool call, or a status projected as a plan) maps to none of them. */
-export function nativeChatForkableItemIds(
-  items: readonly Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'agentId'>[]
-): ReadonlySet<string> {
-  return new Set(
-    items
-      .filter(
-        (item) =>
-          item.body.kind === 'message' &&
-          item.body.role === 'assistant' &&
-          isRootAgentJournalItem(item)
-      )
-      .map((item) => item.itemId)
-  )
+export function nativeChatForkInventory(
+  items: readonly Pick<AgentJournalRenderItem, 'itemId' | 'body' | 'agentId' | 'sequence'>[]
+): { forkableItemIds: ReadonlySet<string>; inheritedThroughSequence: number } {
+  const forkableItemIds = new Set<string>()
+  let inheritedThroughSequence = 0
+  for (const item of items) {
+    if (
+      item.body.kind === 'status' &&
+      item.body.presentation === AGENT_SESSION_FORKED_FROM_PRESENTATION
+    ) {
+      inheritedThroughSequence = item.sequence
+    }
+    if (
+      item.body.kind === 'message' &&
+      item.body.role === 'assistant' &&
+      isRootAgentJournalItem(item)
+    ) {
+      forkableItemIds.add(item.itemId)
+    }
+  }
+  return { forkableItemIds, inheritedThroughSequence }
 }
 
 /** The response `/fork` copies through: the chat's newest forkable one still in its current context. */
@@ -84,6 +93,7 @@ export function nativeChatRowOffersFork(
     support: NativeChatForkSupport
     contextFloorSequence: number
     forkableItemIds: ReadonlySet<string>
+    inheritedThroughSequence?: number
   }
 ): boolean {
   const { message } = row
@@ -100,6 +110,9 @@ export function nativeChatRowOffersFork(
     // Rows above a /clear are no longer in the agent's context.
     sequence !== undefined &&
     sequence > chat.contextFloorSequence &&
-    (chat.support.kind === 'unknown' || chat.support.fork === 'checkpoint' || row.inLatestTurn)
+    (chat.support.kind === 'unknown' ||
+      chat.support.fork === 'checkpoint' ||
+      row.inLatestTurn ||
+      sequence <= (chat.inheritedThroughSequence ?? 0))
   )
 }

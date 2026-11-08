@@ -47,7 +47,8 @@ export function commitAgentSessionRewindCompletion(
   fence: number,
   rewind: AgentSessionRewindRecord,
   cursor: AgentJournalCursor,
-  cancel?: UsageLimitContinueIdentity
+  cancel?: UsageLimitContinueIdentity,
+  childBoundary?: NonNullable<AgentSessionRecord['forkedFrom']>['childBoundary']
 ): void {
   const record = draft.records.get(sessionId)
   if (
@@ -71,6 +72,9 @@ export function commitAgentSessionRewindCompletion(
   }
   draft.records.set(sessionId, {
     ...(cancel ? cancelAgentSessionUsageLimitContinue(record, cancel) : record),
+    ...(childBoundary && record.forkedFrom
+      ? { forkedFrom: { ...record.forkedFrom, childBoundary } }
+      : {}),
     providerHandleChain: rewindProviderChain(record, rewind, fence),
     rewind: {
       ...current,

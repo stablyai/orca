@@ -5,7 +5,7 @@ import type { StructuredAgentSessionState } from '../structured-agent-session-re
 import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import {
   agentSessionContextFloorSequence,
-  latestAgentSessionContextClearSequence
+  isAgentSessionContextClear
 } from '../agent-session-context-clear'
 
 /** User messages past `floor` the host can rewind to. */
@@ -43,13 +43,15 @@ export function agentSessionRewindContextFloor(
   state: Pick<StructuredAgentSessionState, 'items' | 'epoch'>,
   contextFloor: AgentJournalCursor | undefined
 ): number {
-  return Math.max(
-    latestAgentSessionContextClearSequence(state.items),
-    state.items.find(
-      (item) =>
-        item.body.kind === 'status' &&
-        item.body.presentation === AGENT_SESSION_FORKED_FROM_PRESENTATION
-    )?.sequence ?? 0,
-    agentSessionContextFloorSequence(contextFloor, state.epoch)
-  )
+  let floor = agentSessionContextFloorSequence(contextFloor, state.epoch)
+  for (const item of state.items) {
+    if (
+      isAgentSessionContextClear(item.body) ||
+      (item.body.kind === 'status' &&
+        item.body.presentation === AGENT_SESSION_FORKED_FROM_PRESENTATION)
+    ) {
+      floor = Math.max(floor, item.sequence)
+    }
+  }
+  return floor
 }

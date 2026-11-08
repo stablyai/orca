@@ -22,7 +22,7 @@ import {
 import type { StructuredAgentSessionForkSource } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../src/shared/agent-session/structured-agent-session-host-capability'
 import {
-  nativeChatForkableItemIds,
+  nativeChatForkInventory,
   nativeChatForkSupport,
   nativeChatRowOffersFork
 } from '../../../../src/shared/native-chat/native-chat-fork-offer'
@@ -191,8 +191,8 @@ export function useMobileNativeChatFork(input: {
   }, [messages, turnJournal])
   const contextFloorSequence = latestAgentSessionContextClearSequence(turnJournal?.items ?? [])
   // The sheet's row is a display projection; only one naming the agent's own message forks.
-  const forkableItemIds = useMemo(
-    () => nativeChatForkableItemIds(turnJournal?.items ?? []),
+  const { forkableItemIds, inheritedThroughSequence } = useMemo(
+    () => nativeChatForkInventory(turnJournal?.items ?? []),
     [turnJournal]
   )
   // Reserved at the press, before any await, so a second press never starts a second fork.
@@ -214,7 +214,7 @@ export function useMobileNativeChatFork(input: {
             turnWorking: agentWorking && (turnKey === undefined || turnKey === turns.liveTurnKey),
             inLatestTurn: turnKey !== undefined && turnKey === turns.latestTurnKey
           },
-          { support, contextFloorSequence, forkableItemIds }
+          { support, contextFloorSequence, forkableItemIds, inheritedThroughSequence }
         )
       return !offered
         ? 'reserved'
@@ -222,7 +222,17 @@ export function useMobileNativeChatFork(input: {
           ? 'disabled'
           : 'available'
     },
-    [agent, agentWorking, contextFloorSequence, forkableItemIds, pending, sessionId, support, turns]
+    [
+      agent,
+      agentWorking,
+      contextFloorSequence,
+      forkableItemIds,
+      inheritedThroughSequence,
+      pending,
+      sessionId,
+      support,
+      turns
+    ]
   )
   const fork = useCallback(
     (message: NativeChatMessage) => {

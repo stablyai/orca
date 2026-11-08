@@ -1600,6 +1600,8 @@
         "couldNotStopTheAgent": "Couldn't stop the agent.",
         "editSavedArguments": "Edit them in Settings > Agents > Arguments.",
         "emptyMessage": "This message is empty, so it was not sent.",
+        "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+        "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat right now. Open it and fork from there.",
         "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
         "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
         "historyTooLarge": "This conversation's history is too large to restore here.",

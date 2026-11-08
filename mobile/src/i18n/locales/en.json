@@ -2547,6 +2547,8 @@
       "fallback": "Worktree"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+      "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat right now. Open it and fork from there.",
       "backgroundTasksRunning": "Background tasks are still running.",
       "waitForBackgroundTasks": "Wait for the background tasks to finish.",
       "agentStarting": "The agent is still starting.",
