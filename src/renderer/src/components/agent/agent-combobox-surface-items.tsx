@@ -14,6 +14,7 @@ import {
 } from '@/components/tab-bar/tab-agent-row-presentation'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
 import { renderAgentComboboxItem } from './agent-combobox-items'
@@ -36,8 +37,8 @@ export function surfaceAnswerPending(rows: AgentComboboxSurfaceRows | undefined)
 }
 
 // Nothing launches until the form is submitted, so the picker says "start", not "launch".
-function terminalPickTitle(label: string): string {
-  return translate('components.agentCombobox.startInTerminal', 'Start {{value0}} in a terminal', {
+function terminalPickTitle(label: string, t: Translate = translate): string {
+  return t('components.agentCombobox.startInTerminal', 'Start {{value0}} in a terminal', {
     value0: label
   })
 }
@@ -66,7 +67,8 @@ export function surfaceCommandValues(
     value: TuiAgent | null
     blankValue: string
     blankMatchesQuery: boolean
-  }
+  },
+  t?: Translate
 ): { rows: NewTabAgentMenuRow[]; selected: string | null; highlighted: string } {
   // Disabled rows are listed with their reason, so every agent is searched, not only pickable ones.
   const rows = visibleSurfaceRows(model, getAgentCatalog(), picker.query)
@@ -74,7 +76,7 @@ export function surfaceCommandValues(
     surfaceRowValue(visibleSurfaceRows(model, getAgentCatalog(), ''), picker.value) ?? null
   const pending = model.state === 'settled' && model.terminalPending
   const first = rows.find(
-    (row) => row.kind !== 'chat-unavailable' && !terminalPendingReason(pending, row)
+    (row) => row.kind !== 'chat-unavailable' && !terminalPendingReason(pending, row, t)
   )
   const highlighted = !picker.query.trim()
     ? (selected ?? picker.blankValue)
@@ -161,6 +163,7 @@ export function SurfaceAgentItems({
   defaultAgent?: TuiAgent | 'blank' | null
   onSetDefault?: (agent: TuiAgent) => void
 }): React.ReactNode {
+  const t = useTranslate()
   const { model, onPick } = surfaceRows
   if (model.state === 'loading') {
     // Why: rows fill in once every answer is known, instead of reshuffling under the pointer.
@@ -169,10 +172,7 @@ export function SurfaceAgentItems({
         key={width}
         value={`loading:${width}`}
         disabled
-        aria-label={translate(
-          'auto.components.tab.bar.QuickLaunchButton.agentsLoading',
-          'Loading agents'
-        )}
+        aria-label={t('auto.components.tab.bar.QuickLaunchButton.agentsLoading', 'Loading agents')}
       >
         <span aria-hidden="true" className="flex h-[1lh] flex-1 items-center">
           <span className={cn('h-2 rounded-full bg-muted', width)} />
@@ -184,12 +184,12 @@ export function SurfaceAgentItems({
   const terminalPicked = surfaceRows.selection.cli
   return rows.map((row, index) => {
     const id = rowId(row)
-    const label = rowLabel(row)
+    const label = rowLabel(row, t)
     const startsCliGroup = row.kind === 'cli' && index > 0 && rows[index - 1]?.kind !== 'cli'
-    const pendingReason = terminalPendingReason(model.terminalPending, row)
+    const pendingReason = terminalPendingReason(model.terminalPending, row, t)
     const unavailable = row.kind === 'chat-unavailable' || !!pendingReason
     const pressed = row.kind === 'chat' && id === pickedValue && terminalPicked
-    const agentLabel = rowLabel({ ...row, kind: 'chat' })
+    const agentLabel = rowLabel({ ...row, kind: 'chat' }, t)
     return (
       <React.Fragment key={id}>
         {startsCliGroup ? <CommandSeparator /> : null}
@@ -206,17 +206,19 @@ export function SurfaceAgentItems({
           title: unavailable
             ? undefined
             : row.kind === 'chat'
-              ? rowTitle(row, agentLabel)
-              : terminalPickTitle(agentLabel),
+              ? rowTitle(row, agentLabel, t)
+              : terminalPickTitle(agentLabel, t),
           trailing: unavailable ? (
             <span className="shrink-0 text-muted-foreground">
-              {row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason) : pendingReason}
+              {row.kind === 'chat-unavailable'
+                ? chatUnavailableLabel(row.reason, t)
+                : pendingReason}
             </span>
           ) : rowOffersTerminal(model, row) ? (
             <AgentSurfaceLaunchButton
               surface="terminal"
-              reason={model.terminalPending ? terminalPendingLabel() : undefined}
-              title={terminalPickTitle(agentLabel)}
+              reason={model.terminalPending ? terminalPendingLabel(t) : undefined}
+              title={terminalPickTitle(agentLabel, t)}
               aria-pressed={pressed}
               className={cn(
                 'hover:bg-background [[data-selected=true]_&]:opacity-100',
