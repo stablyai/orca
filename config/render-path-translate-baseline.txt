@@ -98,7 +98,6 @@
 5 src/renderer/src/components/artifacts/ArtifactsPage.tsx
 1 src/renderer/src/components/artifacts/ArtifactsPageSkeleton.tsx
 17 src/renderer/src/components/artifacts/ArtifactsPageStates.tsx
-1 src/renderer/src/components/automations/AutomationRunHistory.tsx
 5 src/renderer/src/components/automations/use-external-automation-actions.ts
 10 src/renderer/src/components/browser-extension-install-dialog.tsx
 4 src/renderer/src/components/browser-webauthn-account-dialog.tsx
@@ -439,7 +438,6 @@
 3 src/renderer/src/components/tab-group/TabGroupPaneActionsMenu.tsx
 1 src/renderer/src/components/tab-group/TabGroupPanel.tsx
 1 src/renderer/src/components/tab-group/useTabGroupCreationCommands.ts
-9 src/renderer/src/components/task-page/linear/IssueDialog.tsx
 4 src/renderer/src/components/task-project-source-combobox.tsx
 3 src/renderer/src/components/terminal-pane/appearance/pane-top-banner/PaneTopWarningBanner.tsx
 2 src/renderer/src/components/terminal-pane/chat/TerminalPaneResumeInChatButton.tsx

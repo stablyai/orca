@@ -24,7 +24,6 @@ import {
   isAutomationRunHistoryArrowKey,
   shouldHandleAutomationRunHistoryKey
 } from './automation-run-history-keyboard-navigation'
-import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 // Base height covers date/workspace/padding; only folded occurrence text adds a line.
@@ -75,12 +74,12 @@ export function AutomationRunHistory({
   }))
   const runCountLabel = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length
-    return translate(
+    return t(
       'auto.components.automations.runHistory.runCountSummary',
       '{{count}} runs · {{completed}} completed',
       { count: runs.length, completed, defaultValue_one: '{{count}} run · {{completed}} completed' }
     )
-  }, [runs])
+  }, [runs, t])
 
   const selectedRunId =
     selectedRunState.automationId === automationId ? selectedRunState.runId : null
