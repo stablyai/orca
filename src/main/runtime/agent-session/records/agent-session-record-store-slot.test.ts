@@ -7,7 +7,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
-import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
+import {
+  ensureStructuredAgentSessionHost,
+  stopStructuredAgentSessionRuntime
+} from '../structured-agent-session-runtime'
 
 const HOST_ID = 'local'
 let stateDirectory: string
@@ -61,5 +64,56 @@ it.each(['standalone', 'construction'] as const)(
     // A new admission must first finish retiring the old connection.
     await openAgentSessionRecordStoreOnce(location())
     expect(retiring?.isClosed).toBe(true)
+  }
+)
+
+it.each(['draining', 'refused'] as const)(
+  'keeps the physical writer owned through a %s runtime teardown before launch admission reopens',
+  async (path) => {
+    const opened = await openAgentSessionRecordStoreOnce(location())
+    const host = await ensureStructuredAgentSessionHost({
+      ...location(),
+      claimKeyId: 'key-1',
+      resolveWorkspacePath: async () => stateDirectory,
+      resolveEnvironment: async () => ({}),
+      resolveLaunchArgs: () => [],
+      resolveClaudeAuthPolicy: () => ({ account: 'managed' })
+    })
+    const realOpen = JournalHostDatabase.open
+    vi.spyOn(JournalHostDatabase, 'open').mockImplementation((directory) => {
+      if (!opened.journalDatabase.isClosed) {
+        throw new Error('second physical journal writer')
+      }
+      return realOpen(directory)
+    })
+    const entered = Promise.withResolvers<void>()
+    const drain = Promise.withResolvers<void>()
+    const realFlush = host.flushAllStreamedEvents.bind(host)
+    vi.spyOn(host, 'flushAllStreamedEvents').mockImplementationOnce(async (options) => {
+      entered.resolve()
+      await drain.promise
+      if (path === 'refused') {
+        throw new Error('sink still owned')
+      }
+      await realFlush(options)
+    })
+    const stopped = stopStructuredAgentSessionRuntime()
+    const observedStop = stopped.catch((error: unknown) => error)
+    await entered.promise
+    expect(opened.journalDatabase.isClosed).toBe(false)
+    const replacement = openAgentSessionRecordStoreOnce(location())
+    const observedReplacement = replacement.catch((error: unknown) => error)
+    drain.resolve()
+    if (path === 'refused') {
+      expect(await observedStop).toEqual(new Error('sink still owned'))
+      expect(await observedReplacement).toEqual(new Error('sink still owned'))
+      expect(opened.journalDatabase.isClosed).toBe(false)
+      const retried = await openAgentSessionRecordStoreOnce(location())
+      expect(retried.journalDatabase.isClosed).toBe(false)
+    } else {
+      await stopped
+      expect((await replacement).journalDatabase.isClosed).toBe(false)
+    }
+    expect(opened.journalDatabase.isClosed).toBe(true)
   }
 )

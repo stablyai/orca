@@ -12,7 +12,7 @@ import { stopAgentSessionAttachments } from './structured-agent-session-attachme
 import {
   closeAgentSessionRecordStoreDatabase,
   openAgentSessionRecordStoreOnce,
-  releaseAgentSessionRecordStore
+  retireAgentSessionRecordStore
 } from './records/agent-session-record-store-slot'
 import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import {
@@ -29,6 +29,7 @@ import {
 } from './model-catalog/structured-agent-model-catalog-wiring'
 
 let installing: Promise<InstalledRuntime> | null = null
+let stopping: Promise<void> | null = null
 
 export const CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED =
   'structured agent-session host requires a Claude auth policy resolver'
@@ -39,12 +40,12 @@ export const STRUCTURED_AGENT_LAUNCH_ARGS_REQUIRED =
 export const STRUCTURED_AGENT_SESSION_LOGGER_REQUIRED =
   'structured agent-session host requires a logger'
 
-/** Keep failed teardowns after clearing the install slot so later stops retry their indexed conversations and journal connection. */
-const pendingTeardown = new Set<InstalledRuntime>()
-
 export function ensureStructuredAgentSessionHost(
   deps: StructuredAgentSessionRuntimeDeps
 ): Promise<StructuredAgentSessionHost> {
+  if (stopping) {
+    return stopping.then(() => ensureStructuredAgentSessionHost(deps))
+  }
   // A failed open must not poison the slot forever — the next call retries.
   if (!installing) {
     const pending = install(deps).catch((error) => {
@@ -65,40 +66,73 @@ export async function waitForStructuredAgentSessionRecovery(): Promise<void> {
 }
 
 /** Stop every provider child; retain failed teardowns for retry after the install slot clears. */
-export async function stopStructuredAgentSessionRuntime(options?: {
+export function stopStructuredAgentSessionRuntime(options?: {
   trigger?: AgentSessionResumeTrigger
 }): Promise<void> {
-  const trigger = options?.trigger ?? structuredAgentSessionTeardownTrigger()
-  const catalogStopped = stopStructuredAgentModelCatalogOwner()
+  if (!stopping) {
+    const pending = finishStop(options?.trigger ?? structuredAgentSessionTeardownTrigger())
+    stopping = pending
+    void pending
+      .finally(() => {
+        if (stopping === pending) {
+          stopping = null
+        }
+      })
+      .catch(() => {})
+  }
+  return stopping
+}
+
+async function finishStop(trigger: AgentSessionResumeTrigger): Promise<void> {
   const pending = installing
   installing = null
   setStructuredAgentSessionHost(null)
   stopAgentSessionAttachments()
-  const outstanding = [...pendingTeardown]
-  pendingTeardown.clear()
-  const installed = pending ? await pending.catch(() => null) : null
-  if (installed) {
-    outstanding.push(installed)
-  }
-  // A store admission opened with no host built on it has no teardown to close its database.
-  const recordStore = await releaseAgentSessionRecordStore()
+  const outstanding = new Set<InstalledRuntime>()
+  const installed = pending?.then(
+    (runtime) => outstanding.add(runtime),
+    () => {}
+  )
+  const catalogStopped = Promise.resolve(installed).then(() =>
+    stopStructuredAgentModelCatalogOwner()
+  )
   const failures: unknown[] = []
-  const standalone =
-    recordStore &&
-    !outstanding.some((runtime) => runtime.journalDatabase === recordStore.journalDatabase)
-
   try {
-    await closeAgentSessionRecordStoreDatabase(standalone ? recordStore.journalDatabase : undefined)
+    await retireAgentSessionRecordStore(async (recordStore) => {
+      await installed
+      setStructuredAgentSessionHost(null)
+      stopAgentSessionAttachments()
+      const teardownFailures: unknown[] = []
+      const standalone =
+        recordStore &&
+        ![...outstanding].some((runtime) => runtime.journalDatabase === recordStore.journalDatabase)
+      try {
+        await closeAgentSessionRecordStoreDatabase(
+          standalone ? recordStore.journalDatabase : undefined
+        )
+      } catch (error) {
+        teardownFailures.push(error)
+      }
+      for (const runtime of outstanding) {
+        try {
+          await tearDownRuntime(runtime, trigger)
+          outstanding.delete(runtime)
+        } catch (error) {
+          teardownFailures.push(error)
+        }
+      }
+      if (teardownFailures.length === 1) {
+        throw teardownFailures[0]
+      }
+      if (teardownFailures.length > 1) {
+        throw new AggregateError(
+          teardownFailures,
+          'structured agent-session runtime teardown failed'
+        )
+      }
+    })
   } catch (error) {
     failures.push(error)
-  }
-  for (const runtime of outstanding) {
-    try {
-      await tearDownRuntime(runtime, trigger)
-    } catch (error) {
-      pendingTeardown.add(runtime)
-      failures.push(error)
-    }
   }
   await catalogStopped
   await agentModelCatalogStore.flushPersistence()
@@ -123,7 +157,6 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     throw new Error(STRUCTURED_AGENT_SESSION_LOGGER_REQUIRED)
   }
   const logger = neverThrowingStructuredAgentSessionLogger(deps.logger)
-  const catalogOwner = await ensureStructuredAgentModelCatalogOwner(deps)
   // The store launch admission may already have opened; a failed install leaves it to that slot.
   const recordStore = await openAgentSessionRecordStoreOnce({
     stateDirectory: deps.stateDirectory,
@@ -131,6 +164,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
     hostId: deps.hostId,
     logger
   })
+  const catalogOwner = await ensureStructuredAgentModelCatalogOwner(deps)
   try {
     // Without the Arguments source there is nothing to fill from; missing modes run Ask.
     if (deps.resolveAgentFullAccess) {

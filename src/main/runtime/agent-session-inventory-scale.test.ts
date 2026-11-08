@@ -41,7 +41,7 @@ import {
 } from './orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import {
   openAgentSessionRecordStoreOnce,
-  releaseAgentSessionRecordStore
+  retireAgentSessionRecordStore
 } from './agent-session/records/agent-session-record-store-slot'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
@@ -307,8 +307,9 @@ describe('real conversation inventory work', () => {
       })
     } finally {
       db.close()
-      const released = await releaseAgentSessionRecordStore()
-      await released?.journalDatabase.close()
+      await retireAgentSessionRecordStore(async (released) => {
+        await released?.journalDatabase.close()
+      })
     }
   })
 
