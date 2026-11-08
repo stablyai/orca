@@ -1,5 +1,6 @@
+import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
@@ -124,9 +125,7 @@ describe('the host-stamped turn start', () => {
     expect(pushed.at(-1)).toBe(started)
     server.flushStatusPersistSync()
     server.stop()
-    const file = JSON.parse(
-      readFileSync(join(userDataPath, 'agent-hooks', 'last-status.json'), 'utf8')
-    )
+    const file = JSON.parse(readSavedStatus(join(userDataPath, 'agent-hooks', 'last-status.json')))
     expect(file.entries[PANE].turnStartedAt).toBe(started)
 
     const restarted = await startServer()
