@@ -44,7 +44,7 @@ export function sessionStartupMountAdapters(
         clearPendingLiveInputCommit: () => effect('clear-pending-live-input-commit', {}),
         clearDelayedActionTimers: () => effect('clear-delayed-action-timers', {}),
         clearTerminalCache: () => effect('clear-terminal-cache', {}),
-        terminalResume: { holdsAny: () => false }
+        terminalResume: { holdsAny: () => false, anyCatchingUp: () => false }
       }
 
       const hook = hookMount(() => {
