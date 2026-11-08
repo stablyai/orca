@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { NativeChatToolRun } from './NativeChatToolRun'
+import { NativeChatToolRun } from './tools/runs/NativeChatToolRun'
 
 const command =
   'node scripts/check-a-long-workspace-configuration-and-report-detailed-results.mjs --project workspace --configuration development --verify-all-sources'
