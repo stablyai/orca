@@ -11,14 +11,14 @@ import {
   emitDiscardedBrowserTabRemoved,
   noteBrowserPageGuestGone,
   takeDiscardedBrowserTabId
-} from '../tabs-and-windows/browser-extension-discarded-tabs'
+} from './browser-extension-discarded-tabs'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 import {
   canExtensionSeeTabUrl,
   describeBrowserExtensionTab,
   replaceActivatedBrowserTabId,
   resolveBrowserExtensionTab
-} from '../tabs-and-windows/browser-extension-tab-model'
+} from './browser-extension-tab-model'
 
 /** Tabs announced through onCreated or onReplaced, with their window, so onRemoved matches them. */
 const announcedTabWindowIds = new Map<number, { windowId: number; isPopout: boolean }>()

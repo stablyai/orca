@@ -1,4 +1,4 @@
-import { DnrDomainList } from './domain-matching'
+import { DnrDomainList } from '../matching/domain-matching'
 import { dnrRuleProblem, isDnrRuleProblem, type DnrRuleProblem } from './parse-errors'
 import {
   ELEMENT_TYPE,
@@ -9,7 +9,7 @@ import {
   ruleMethodBit
 } from './rule-flags'
 import type { DnrRule } from './rule-types'
-import { isAsciiText, toLowerAscii } from './url-text'
+import { isAsciiText, toLowerAscii } from '../matching/url-text'
 
 // Condition parsing steps of IndexedRule::CreateIndexedRule (indexed_rule.cc):
 // ComputeRequestMethods, ComputeElementTypes, CanonicalizeDomains and tab ids.

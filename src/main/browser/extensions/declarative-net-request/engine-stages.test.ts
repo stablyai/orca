@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { createDnrRequestState } from './request-state'
 import { DnrEngine } from './engine'
-import { applyDnrRequestHeaderActions } from './header-modification'
+import { applyDnrRequestHeaderActions } from './header-actions/header-modification'
 import type { DnrRequestInfo } from './request-context'
-import type { DnrRule } from './rule-types'
-import { buildDnrRuleset } from './ruleset-builder'
+import type { DnrRule } from './rule-compilation/rule-types'
+import { buildDnrRuleset } from './rule-compilation/ruleset-builder'
 
 const OLD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 const NEW = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'

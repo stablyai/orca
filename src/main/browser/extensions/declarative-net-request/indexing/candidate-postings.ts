@@ -1,4 +1,4 @@
-import type { DnrRequestContext } from './request-context'
+import type { DnrRequestContext } from '../request-context'
 import type { DnrRulePartition, DnrRulesetIndex } from './ruleset-index'
 
 // Engine-wide inverted index over every attached ruleset: n-gram id or domain -> the partitions

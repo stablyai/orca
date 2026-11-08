@@ -3,10 +3,10 @@ import {
   parseResponseHeaderConditions,
   type DnrHeaderCondition,
   type DnrHeaderModification
-} from './header-rules'
+} from '../header-actions/header-rules'
 import { dnrRuleProblem, isDnrRuleProblem, type DnrRuleProblem } from './parse-errors'
-import { parseDnrRedirect, type DnrRedirectSpec } from './redirect-url'
-import { isValidRegexSubstitution, translateDnrRegex } from './regex-filter'
+import { parseDnrRedirect, type DnrRedirectSpec } from '../redirect-actions/redirect-url'
+import { isValidRegexSubstitution, translateDnrRegex } from '../regex/regex-filter'
 import {
   emptyConditionListProblem,
   parseRuleConditionFields,
@@ -14,8 +14,8 @@ import {
 } from './rule-conditions'
 import { indexedRulePriority } from './rule-flags'
 import type { DnrActionType, DnrRule } from './rule-types'
-import { DnrUrlPatternMatcher, parseUrlFilter } from './url-pattern'
-import { isAsciiText, toLowerAscii } from './url-text'
+import { DnrUrlPatternMatcher, parseUrlFilter } from '../matching/url-pattern'
+import { isAsciiText, toLowerAscii } from '../matching/url-text'
 
 // IndexedRule::CreateIndexedRule (indexed_rule.cc). Checks run in Chromium's order so the
 // first problem reported is the one Chrome would report.
