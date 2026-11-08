@@ -227,3 +227,46 @@ it("lets every writer command plan with the host's unsaved Stop settlement", asy
   const restarted = await reopen(root, database, journal)
   expect((await restarted.journal.stopMarks.latest())?.settle).toBeUndefined()
 })
+
+it('orders a later turn end behind the Stop settlement read', async () => {
+  const { database, journal } = await fixture()
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'later' },
+    { kind: 'turn', turnId: 'later', state: 'running' },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  await journal.appendStopEvent({ reason: 'user-stop', turnId: 'earlier' }, 1)
+  const stop = await journal.reads.latestStop()
+  const reached = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<typeof stop>()
+  vi.spyOn(journal.reads, 'latestStop').mockImplementationOnce(() => {
+    reached.resolve()
+    return release.promise
+  })
+  const settling = journal.stopMarks.beginSettle(true)
+  await reached.promise
+  const ended = database.serialize('session', (writer) =>
+    writer.write({
+      target: {
+        sessionId: 'session',
+        epoch: journal.physicalCursor().epoch,
+        ownerToken: journal.observationHandle()
+      },
+      operation: {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: 'later' },
+        body: { kind: 'turn', turnId: 'later', state: 'interrupted', completedAt: 100 },
+        options: { fence: 1, turnScope: { kind: 'thread' } }
+      },
+      facts: { identity, stopSettle: journal.stopMarks.fact() },
+      savedAt: 100
+    })
+  )
+  release.resolve(stop)
+  await settling
+  await ended
+  expect((await journal.reads.item('orca:later'))?.body).toMatchObject({
+    state: 'interrupted',
+    outcome: 'cancellation'
+  })
+})

@@ -77,7 +77,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   ) {
     super()
     this.reads = journalSqlReads(database.readers, identity.sessionId)
-    this.stopMarks = new SqlJournalStopMarks(this.reads)
+    this.stopMarks = new SqlJournalStopMarks(this.reads, (run) => this.readInOrder(run))
     this.queuedMessages = new SqlJournalQueuedMessages(
       {
         read: (operation) => this.reads.queue(operation),

@@ -20,7 +20,10 @@ export class SqlJournalStopMarks {
   private onSettleEdge: (() => void) | null = null
   private overlay: { sequence: number; settle: JournalStopSettle } | null = null
 
-  constructor(private readonly reads: JournalSqlStopReads) {}
+  constructor(
+    private readonly reads: JournalSqlStopReads,
+    private readonly ordered: <T>(run: () => Promise<T>) => Promise<T>
+  ) {}
 
   /** One nonthrowing listener, replaced on each call; settle edges do not trigger commits. */
   observeSettleEdges(listener: () => void): () => void {
@@ -65,17 +68,19 @@ export class SqlJournalStopMarks {
   }
 
   /** Until settled, session-ending Stops own every turn ending during settlement. */
-  async beginSettle(endsSession = false): Promise<JournalStopSettle | null> {
-    const latestStop = await this.latest()
-    if (!latestStop) {
-      return null
-    }
-    const settle = beginJournalStopSettle(stopState(latestStop), endsSession)
-    if (settle) {
-      this.overlay = { sequence: latestStop.sequence, settle }
-      this.edge()
-    }
-    return settle
+  beginSettle(endsSession = false): Promise<JournalStopSettle | null> {
+    return this.ordered(async () => {
+      const latestStop = await this.latest()
+      if (!latestStop) {
+        return null
+      }
+      const settle = beginJournalStopSettle(stopState(latestStop), endsSession)
+      if (settle) {
+        this.overlay = { sequence: latestStop.sequence, settle }
+        this.edge()
+      }
+      return settle
+    })
   }
 
   /** Bind the stopped turn, or retain failedOn solely for display. */
