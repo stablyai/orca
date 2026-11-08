@@ -59,4 +59,43 @@ describe('browser device keys', () => {
     createIndexedDbWebDeviceKeyStore({ open: vi.fn() })
     expect(persist).toHaveBeenCalledTimes(1)
   })
+
+  it('does not touch IndexedDB or request persistence for session-only keys', async () => {
+    vi.resetModules()
+    const support = await import('./web-device-key-support')
+    support.setWebDeviceKeySupportForTests('session-no-ed25519')
+    const credentials = await import('./preload-api/web-runtime-credentials')
+    const persist = vi.fn(() => Promise.resolve(true))
+    const open = vi.fn()
+    vi.stubGlobal('navigator', { storage: { persist } })
+    vi.stubGlobal('indexedDB', { open })
+
+    credentials.webRuntimeCredentialFor(
+      {
+        id: 'env-1',
+        name: 'Server',
+        createdAt: 1,
+        updatedAt: 1,
+        pairingRevision: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        sessionOnly: true,
+        preferredEndpointId: 'ws-env-1',
+        endpoints: [
+          {
+            id: 'ws-env-1',
+            kind: 'websocket',
+            label: 'WebSocket',
+            endpoint: 'ws://127.0.0.1:6768',
+            deviceToken: 'code',
+            publicKeyB64: Buffer.alloc(32).toString('base64')
+          }
+        ]
+      },
+      { forgetStoredToken: vi.fn(), forgetPairing: vi.fn() }
+    )
+
+    expect(persist).not.toHaveBeenCalled()
+    expect(open).not.toHaveBeenCalled()
+  })
 })

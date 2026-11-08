@@ -28,6 +28,7 @@ export const webRuntimeState: {
   worktreeVisibilityDefaultsRuntimeValue: WorktreeVisibilityDefaults | null
   activeClient: WebRuntimeClient | null
   activeClientEnvironmentId: string | null
+  activeClientPairingRevision: number | null
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
 } = {
   activeEnvironment: null,
@@ -37,6 +38,7 @@ export const webRuntimeState: {
   worktreeVisibilityDefaultsRuntimeValue: null,
   activeClient: null,
   activeClientEnvironmentId: null,
+  activeClientPairingRevision: null,
   cachedDetectedWorktrees: null
 }
 
@@ -98,7 +100,8 @@ export function getClientForEnvironment(
   }
   if (
     !webRuntimeState.activeClient ||
-    webRuntimeState.activeClientEnvironmentId !== environment.id
+    webRuntimeState.activeClientEnvironmentId !== environment.id ||
+    webRuntimeState.activeClientPairingRevision !== pairingRevisionOf(environment)
   ) {
     webRuntimeState.activeClient?.close()
     webRuntimeState.activeClient = new WebRuntimeClient(
@@ -119,6 +122,7 @@ export function getClientForEnvironment(
       }
     )
     webRuntimeState.activeClientEnvironmentId = environment.id
+    webRuntimeState.activeClientPairingRevision = pairingRevisionOf(environment)
   }
   return webRuntimeState.activeClient
 }
@@ -155,6 +159,7 @@ export function closeActiveRuntimeClients(): void {
   webRuntimeState.activeClient?.close()
   webRuntimeState.activeClient = null
   webRuntimeState.activeClientEnvironmentId = null
+  webRuntimeState.activeClientPairingRevision = null
   invalidateRuntimeWorktreeCaches()
 }
 
