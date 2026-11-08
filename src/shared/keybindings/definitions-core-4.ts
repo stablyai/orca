@@ -21,6 +21,16 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'dashboard.openWorktree',
+    title: 'Open Agent Worktree',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'agent', 'dashboard', 'terminal', 'worktree', 'open', 'reveal'],
+    // Cmd+O is not a shell chord on macOS; Ctrl+O belongs to shells on Linux and Windows.
+    defaultBindings: { darwin: ['Mod+O'], linux: [], win32: [] },
+    allowInTerminal: true
+  },
+  {
     id: 'sidebar.projects.toggleCollapse',
     title: 'Collapse / Expand All Projects',
     group: 'Global',
