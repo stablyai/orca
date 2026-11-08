@@ -45,7 +45,7 @@ import {
 import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
-import { SkillCloudService } from '../skills/skill-cloud-service'
+import { SkillCloudService } from '../skills/cloud/skill-cloud-package-service'
 import { isArtifactSharingEnabled } from '../../shared/artifacts/artifact-sharing-gate'
 import {
   AgentStatusObservedPaneIdentities,

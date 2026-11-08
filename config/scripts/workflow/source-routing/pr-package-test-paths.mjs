@@ -215,9 +215,8 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/ipc/preflight-provider-command-selection.test.ts',
   'src/main/ipc/preflight-runnable-local-cli.test.ts',
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
-  'src/main/skills/skill-windows-rename-contention.integration.test.ts',
-  'src/main/skills/bundled-skill-install/local-host.test.ts',
-  'src/main/skills/bundled-skill-install/plan-selection.test.ts'
+  'src/main/skills/bundled-skill-install/bundled-skill-local-host.test.ts',
+  'src/main/skills/bundled-skill-install/bundled-skill-plan-selection.test.ts'
 ]
 
 const WINDOWS_PROCESS_PROBE_PREFIXES = [
