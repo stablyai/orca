@@ -8,6 +8,7 @@ import {
   agentLaunchSetupModelRows
 } from './agent-launch-setup-option-rows'
 import { useRef, useState } from 'react'
+import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import {
@@ -97,6 +98,7 @@ export function AgentLaunchSetupPanel({
     legacy,
     modelInArguments
   )
+  const highlight = useSetupModelHighlight(modelRows.start, modelQuery)
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
     options,
@@ -185,11 +187,11 @@ export function AgentLaunchSetupPanel({
       }}
     >
       <Command
-        // Why: remount once defaults settle so the list starts on the resolved model.
-        key={String(defaultsPending)}
         surface="inline"
         density="model"
-        defaultValue={modelRows.start}
+        value={highlight.value}
+        onValueChange={highlight.onValueChange}
+        onPointerMoveCapture={highlight.onPointerMoveCapture}
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
@@ -205,6 +207,7 @@ export function AgentLaunchSetupPanel({
           }
         }}
         onKeyDown={(event) => {
+          highlight.onKeyDown(event)
           if (event.key === 'Enter') {
             event.stopPropagation()
           }

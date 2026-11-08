@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
-import { expect, it } from 'vitest'
+import { fireEvent } from '@testing-library/react'
+import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   agentPickerDraft,
@@ -31,6 +32,8 @@ const listed: AgentPickerEntry = {
   }
 }
 const draft = agentPickerDraft(opencode)
+const onUse = vi.fn(() => true)
+const onDraftChange = vi.fn()
 const render = (own: AgentPickerEntry, mode?: 'select') =>
   act(() =>
     root.render(
@@ -40,8 +43,8 @@ const render = (own: AgentPickerEntry, mode?: 'select') =>
           mode={mode}
           draft={draft}
           getDraft={() => draft}
-          onDraftChange={() => {}}
-          onUse={() => true}
+          onDraftChange={onDraftChange}
+          onUse={onUse}
         />
       </TooltipProvider>
     )
@@ -86,4 +89,18 @@ it('keeps an Arguments-owned text action on its default instead of the inherited
     'select'
   )
   expect(highlighted()).toBe('__text_action_default__')
+})
+
+it('returns to the current model after a search is cleared, so Enter uses it', () => {
+  render(listed, 'select')
+  const search = document.querySelector<HTMLInputElement>('[cmdk-input]')!
+  fireEvent.change(search, { target: { value: 'opus' } })
+  expect(highlighted()).toBe('github-copilot/claude-opus-5')
+  fireEvent.change(search, { target: { value: '' } })
+  expect(highlighted()).toBe('opencode/gpt-5.3-codex')
+  onUse.mockClear()
+  onDraftChange.mockClear()
+  fireEvent.keyDown(search, { key: 'Enter' })
+  expect(onUse).toHaveBeenCalledTimes(1)
+  expect(onDraftChange).not.toHaveBeenCalled()
 })
