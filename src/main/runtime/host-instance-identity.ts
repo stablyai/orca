@@ -128,19 +128,24 @@ function backUpLiveFile(live: string, backupDir: string | null): void {
   }
   try {
     mkdirSync(backupDir, { recursive: true, mode: 0o700 })
-    renameSync(live, join(backupDir, basename(live)))
+    const saved = join(backupDir, basename(live))
+    // A resumed publish keeps the first backup; a live file recreated meanwhile is not the original.
+    if (!existsSync(saved)) {
+      renameSync(live, saved)
+    }
   } catch {
     // ENOENT: an earlier, interrupted publish already moved it (or it never existed).
   }
 }
 
-function pruneIdentityBackups(userDataPath: string): void {
+function pruneIdentityBackups(userDataPath: string, current: string | undefined): void {
   const root = join(userDataPath, IDENTITY_BACKUPS_DIRNAME)
   try {
+    // Never the one just made, even when copied-in backups carry later timestamps.
     const names = readdirSync(root)
-      .filter((name) => BACKUP_NAME_RE.test(name))
+      .filter((name) => BACKUP_NAME_RE.test(name) && name !== current)
       .sort()
-    for (const name of names.slice(0, Math.max(0, names.length - MAX_IDENTITY_BACKUPS))) {
+    for (const name of names.slice(0, Math.max(0, names.length - (MAX_IDENTITY_BACKUPS - 1)))) {
       rmSync(join(root, name), { recursive: true, force: true })
     }
   } catch {
@@ -175,7 +180,7 @@ function publishStagedIdentity(
   }
   bestEffortFsyncDirectorySync(userDataPath)
   write(join(userDataPath, HOST_INSTANCE_FILENAME), markerFor(marker.instanceId))
-  pruneIdentityBackups(userDataPath)
+  pruneIdentityBackups(userDataPath, marker.backup)
 }
 
 /**
@@ -197,9 +202,18 @@ export function rotateHostIdentity(
   } catch (error) {
     throw new HostIdentityRotationNotStartedError(error)
   }
+  const finishedEarlierRotation = !!stored?.rotating
   if (stored?.rotating) {
     // Staging below reuses the `.next` paths, so an earlier rotation must be finished first.
     publishStagedIdentity(userDataPath, stored, write)
+  }
+  // After finishing an earlier rotation the identity is already new and was never served, which
+  // is what a reset asks for; reporting "nothing changed" would be false.
+  const notStarted = (error: unknown): void => {
+    discardStagedIdentity(userDataPath)
+    if (!finishedEarlierRotation) {
+      throw new HostIdentityRotationNotStartedError(error)
+    }
   }
   const marker: HostInstanceMarker = {
     ...markerFor(instanceId ?? stored?.instanceId),
@@ -209,8 +223,8 @@ export function rotateHostIdentity(
   try {
     stageNewIdentity(userDataPath, write)
   } catch (error) {
-    discardStagedIdentity(userDataPath)
-    throw new HostIdentityRotationNotStartedError(error)
+    notStarted(error)
+    return
   }
   try {
     write(markerPath, marker)
@@ -224,8 +238,8 @@ export function rotateHostIdentity(
       throw error
     }
     if (!onDisk?.rotating) {
-      discardStagedIdentity(userDataPath)
-      throw new HostIdentityRotationNotStartedError(error)
+      notStarted(error)
+      return
     }
   }
   publishStagedIdentity(userDataPath, marker, write)

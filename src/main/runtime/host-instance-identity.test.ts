@@ -259,4 +259,41 @@ describe('ensureHostInstanceIdentity', () => {
     expect(kept).toHaveLength(5)
     expect(kept[0]).toMatch(/^2026-01-03/)
   })
+
+  it('reports a reset as done when it finished an interrupted rotation but cannot stage another', async () => {
+    ensureHostInstanceIdentity(dir, vmA)
+    const before = await pairedHost(dir)
+    const failFinalMarker: HostIdentityWrite = (path, value) => {
+      if (path.endsWith(HOST_INSTANCE_FILENAME) && !JSON.stringify(value).includes('rotating')) {
+        throw new Error('simulated crash clearing the marker')
+      }
+      return writeDurableSecureJsonFile(path, value)
+    }
+    expect(() => ensureHostInstanceIdentity(dir, vmB, failFinalMarker)).toThrow(/simulated crash/)
+
+    expect(() =>
+      rotateHostIdentity(dir, null, failingWriteOf('orca-e2ee-keypair.json.next'))
+    ).not.toThrow()
+    expect((await identity(dir)).registry.validateToken(before.token)).toBeNull()
+    expect(readdirSync(dir).filter((name) => name.endsWith('.next'))).toEqual([])
+    expect(ensureHostInstanceIdentity(dir, vmB)).toEqual({ kind: 'unchanged' })
+  })
+
+  it('never prunes the backup it just made', async () => {
+    ensureHostInstanceIdentity(dir, vmA)
+    await pairedHost(dir)
+    for (let day = 5; day <= 9; day++) {
+      rotateHostIdentity(
+        dir,
+        vmA,
+        writeDurableSecureJsonFile,
+        () => new Date(`2027-01-0${day}T00:00:00Z`)
+      )
+    }
+    // The clock went back (or the image carried later backups).
+    rotateHostIdentity(dir, vmA, writeDurableSecureJsonFile, () => new Date('2026-01-01T00:00:00Z'))
+    const kept = readdirSync(join(dir, IDENTITY_BACKUPS_DIRNAME)).sort()
+    expect(kept).toHaveLength(5)
+    expect(kept[0]).toMatch(/^2026-01-01/)
+  })
 })
