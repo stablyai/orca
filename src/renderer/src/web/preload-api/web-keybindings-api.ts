@@ -40,15 +40,21 @@ export type WebKeybindingsApi = NonNullable<PreloadApi['keybindings']>
 export const webKeybindingListeners = new Set<(snapshot: KeybindingFileSnapshot) => void>()
 
 const SEARCH_DEFAULTS_STORAGE_KEY = 'orca.web.searchKeybindingSeed.v1'
+const NON_MAC_SEARCH_DEFAULTS_STORAGE_KEY = 'orca.web.nonMacSearchKeybindingSeed.v1'
 let legacySearchDefaults = false
 
 function migrateWebSearchKeybindings(): void {
-  const cohort = window.localStorage.getItem(SEARCH_DEFAULTS_STORAGE_KEY)
+  const storageKey =
+    getWebKeybindingPlatform() === 'darwin'
+      ? SEARCH_DEFAULTS_STORAGE_KEY
+      : NON_MAC_SEARCH_DEFAULTS_STORAGE_KEY
+  const cohort = window.localStorage.getItem(storageKey)
   if (cohort === 'done' || cohort === 'legacy') {
     legacySearchDefaults = cohort === 'legacy'
     return
   }
   legacySearchDefaults = [
+    SEARCH_DEFAULTS_STORAGE_KEY,
     SETTINGS_STORAGE_KEY,
     KEYBINDINGS_STORAGE_KEY,
     UI_STORAGE_KEY,
@@ -56,7 +62,7 @@ function migrateWebSearchKeybindings(): void {
     ONBOARDING_STORAGE_KEY,
     GITHUB_CACHE_STORAGE_KEY
   ].some((key) => window.localStorage.getItem(key) !== null)
-  window.localStorage.setItem(SEARCH_DEFAULTS_STORAGE_KEY, legacySearchDefaults ? 'legacy' : 'done')
+  window.localStorage.setItem(storageKey, legacySearchDefaults ? 'legacy' : 'done')
 }
 
 function getWebDefaultOverrides(): KeybindingOverrides {

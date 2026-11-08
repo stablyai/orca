@@ -5,10 +5,45 @@ import {
   findKeybindingConflicts,
   getEffectiveKeybindingsForAction,
   keybindingMatchesAction,
-  KEYBINDING_DEFINITIONS
+  KEYBINDING_DEFINITIONS,
+  resolveKeybindingOverrides,
+  getLegacySearchBindings
 } from './keybindings'
 
 describe('keybindings', () => {
+  it('keeps the inherited search chord available for terminal-first chat toggling', () => {
+    const overrides = resolveKeybindingOverrides('win32', {}, getLegacySearchBindings('win32'))
+    const ctrlShiftJ = { key: 'j', control: true, shift: true }
+    const terminalFirst = { context: 'terminal', terminalShortcutPolicy: 'terminal-first' } as const
+    expect(
+      keybindingMatchesAction(
+        'terminal.toggleNativeChat',
+        ctrlShiftJ,
+        'win32',
+        overrides,
+        terminalFirst
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction('worktree.palette', ctrlShiftJ, 'win32', overrides, terminalFirst)
+    ).toBe(false)
+    expect(
+      findKeybindingConflicts('win32', overrides, { includeMainProcessInterception: true })
+    ).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'terminal.toggleNativeChat',
+        ctrlShiftJ,
+        'win32',
+        {
+          ...overrides,
+          'worktree.navigateDown': ['Ctrl+Shift+J']
+        },
+        terminalFirst
+      )
+    ).toBe(false)
+  })
+
   it('uses overrides as the complete effective binding list for an action', () => {
     const overrides = {
       'worktree.quickOpen': ['Ctrl+Alt+O', 'not-a-shortcut']
