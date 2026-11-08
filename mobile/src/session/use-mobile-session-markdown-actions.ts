@@ -239,6 +239,8 @@ export function useMobileSessionMarkdownActions(scope: MobileSessionMarkdownActi
           })
         })
         markdownSaveSeqRef.current.delete(tab.id)
+        // The reader may be gone by now (another tab is showing), so the saved edits leave the store here.
+        dropDocumentEditDraft(markdownTabDraftKey(worktreeId, tab.id))
         triggerSuccess()
         showToast(translate('session.useMarkdownActions.saved', 'Saved'))
       } catch (error) {

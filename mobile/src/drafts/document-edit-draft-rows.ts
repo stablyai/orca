@@ -20,6 +20,8 @@ type Slot = {
   draft: DocumentEditDraft | null
   // Set by the first save; what the row held before then no longer applies.
   saved: boolean
+  // The row's edits are on offer in an editor, waiting for Restore or Discard.
+  offered: boolean
   row: DurableDraftRow
 }
 const slots = new Map<string, Slot>()
@@ -34,6 +36,11 @@ export function fileEditDraftKey(worktreeId: string, path: string): string {
 
 // A value past the store's cap would be refused and leave older edits behind, so it is not kept at all.
 function fitsDeviceStore(draft: DocumentEditDraft): boolean {
+  const json = JSON.stringify(draft)
+  // At most 3 UTF-8 bytes per code unit, gzip barely grows any input, base64 adds a third: most documents skip the encode.
+  if (json.length * 4 + 1024 <= DEVICE_STORE_MAX_VALUE_LENGTH) {
+    return true
+  }
   return encodeDeviceStoreValue(draft).length <= DEVICE_STORE_MAX_VALUE_LENGTH
 }
 
@@ -43,6 +50,7 @@ function slotFor(key: string): Slot {
     const created: Slot = {
       draft: null,
       saved: false,
+      offered: false,
       row: durableDraftRow(key, {
         backend: () => pageDraftRowBackend(key),
         snapshot: () => (created.draft && fitsDeviceStore(created.draft) ? created.draft : null),
@@ -76,9 +84,15 @@ export function saveDocumentEditDraft(key: string, draft: DocumentEditDraft | nu
   slot.row.save(draft ? 'deferred' : 'immediate')
 }
 
-// The user threw these edits away, so they must not be offered again.
+export function holdDocumentEditDraftOffer(key: string, offered: boolean): void {
+  slotFor(key).offered = offered
+}
+
+// The user threw the editor's edits away; edits still on offer stay until that offer's own Discard.
 export function dropDocumentEditDraft(key: string): void {
-  saveDocumentEditDraft(key, null)
+  if (!slotFor(key).offered) {
+    saveDocumentEditDraft(key, null)
+  }
 }
 
 export function resetDocumentEditDraftsForTests(): void {

@@ -12,7 +12,6 @@ import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from './native-chat/composer/mobile-native-chat-draft-store'
-import { dropDocumentEditDraft, markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { defineHostMutation, useHostMutation, type HostMutationPhase } from '../query/host-mutation'
 import type { RpcClient } from '../transport/rpc-client'
 
@@ -43,7 +42,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setSessionTabs,
     setFileDocs,
     setMarkdownDocs,
-    markdownDocsRef,
     sessionTabsRef,
     forgetLastSessionTab,
     closedTabTombstonesRef,
@@ -141,11 +139,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           closeMobileNativeChatTabDraft(chatScope)
         }
         if (tab.type === 'markdown') {
-          const doc = markdownDocsRef.current.get(tab.id)
-          // A dirty document stays open on the phone; anything else left in its row can never be offered again.
-          if (doc?.status !== 'ready' || !doc.isDirty) {
-            dropDocumentEditDraft(markdownTabDraftKey(worktreeId, tab.id))
-          }
           setMarkdownDocs((prev) => {
             const doc = prev.get(tab.id)
             if (!doc || (doc.status === 'ready' && doc.isDirty)) {

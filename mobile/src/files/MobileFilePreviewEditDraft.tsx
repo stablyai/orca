@@ -4,6 +4,7 @@ import { useDocumentEditDraft } from '../drafts/use-document-edit-draft'
 import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { spacing } from '../theme/mobile-theme'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { MobileFilePreviewSource } from './mobile-file-preview-request'
 
 /** Only terminal artifacts are editable in the file preview. */
@@ -22,10 +23,11 @@ export function MobileFilePreviewEditDraft(props: {
 }) {
   const { offer, restore, discardOffer } = useDocumentEditDraft(props)
   const clipboard = useClipboardWriter()
+  const insets = useSafeAreaInsets()
   return offer ? (
     <DocumentEditDraftOfferBar
       offer={offer}
-      bottom={spacing.lg}
+      bottom={insets.bottom + spacing.lg}
       onDiscard={discardOffer}
       onRestore={restore}
       onCopy={() => void clipboard.writeText(offer.content).then(triggerSuccess, triggerError)}

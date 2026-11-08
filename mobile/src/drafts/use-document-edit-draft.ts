@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { hashMarkdownContent } from '../../../src/shared/mobile-markdown-document'
 import {
-  dropDocumentEditDraft,
+  holdDocumentEditDraftOffer,
   loadDocumentEditDraft,
   saveDocumentEditDraft,
   type DocumentEditDraft
@@ -62,9 +62,10 @@ export function useDocumentEditDraft({
       let offer = stored && stored.content !== shown ? stored : null
       if (offer && offer.content === hostContent) {
         // The edits reached the host before the page went away.
-        dropDocumentEditDraft(draftKey)
+        saveDocumentEditDraft(draftKey, null)
         offer = null
       }
+      holdDocumentEditDraftOffer(draftKey, offer !== null)
       setState((current) =>
         current.key === draftKey && current.phase === 'pending'
           ? { key: draftKey, phase: 'ready', offer }
@@ -98,14 +99,16 @@ export function useDocumentEditDraft({
   return {
     offer,
     restore: () => {
-      if (offer?.baseMatches) {
+      if (draftKey && offer?.baseMatches) {
+        holdDocumentEditDraftOffer(draftKey, false)
         onRestore(offer.content)
         setState((current) => ({ ...current, offer: null }))
       }
     },
     discardOffer: () => {
       if (draftKey) {
-        dropDocumentEditDraft(draftKey)
+        holdDocumentEditDraftOffer(draftKey, false)
+        saveDocumentEditDraft(draftKey, null)
       }
       setState((current) => ({ ...current, offer: null }))
     }

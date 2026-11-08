@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { publishPageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
-import { resetDocumentEditDraftsForTests } from './document-edit-draft-rows'
+import { dropDocumentEditDraft, resetDocumentEditDraftsForTests } from './document-edit-draft-rows'
 import { useDocumentEditDraft } from './use-document-edit-draft'
 
 type Draft = ReturnType<typeof useDocumentEditDraft>
@@ -12,8 +12,10 @@ const table = new Map<string, string>()
 let renderer: ReactTestRenderer | null = null
 let latest: Draft | null = null
 
+const KEY = 'draft:markdownTab:wt:tab-1'
+
 function Editor(props: { base: string; live: string; onRestore: (content: string) => void }) {
-  latest = useDocumentEditDraft({ draftKey: 'draft:markdownTab:wt:tab-1', ...props })
+  latest = useDocumentEditDraft({ draftKey: KEY, ...props })
   return null
 }
 
@@ -99,4 +101,21 @@ it('never applies edits made against a version the desktop has since changed', a
     await vi.advanceTimersByTimeAsync(1000)
   })
   expect(table.size).toBe(0)
+})
+
+it('keeps edits on offer when the edits typed over them are discarded', async () => {
+  await open('# notes\n', '# notes\n')
+  await type('# notes\n', '# notes\nship it\n')
+  kill()
+
+  await open('# notes\n', '# notes\n')
+  await type('# notes\n', '# notes\nsomething else\n')
+  act(() => dropDocumentEditDraft(KEY))
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  kill()
+
+  await open('# notes\n', '# notes\n')
+  expect(latest?.offer).toMatchObject({ content: '# notes\nship it\n', baseMatches: true })
 })
