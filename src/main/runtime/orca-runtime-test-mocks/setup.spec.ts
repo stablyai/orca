@@ -622,7 +622,8 @@ vi.mock('../../git/repo-default-base-ref', async (importOriginal) => {
 
 vi.mock('../../git/repo-branch-conflict', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  getBranchConflictKind: vi.fn().mockResolvedValue(null)
+  getBranchConflictKind: vi.fn().mockResolvedValue(null),
+  getBranchConflictKindStrict: vi.fn().mockResolvedValue(null)
 }))
 
 vi.mock('../../git/git-username', async () => {
