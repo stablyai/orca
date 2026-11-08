@@ -12,6 +12,7 @@ import {
 } from './workspace-unread-characterization-fixture'
 import { completeAgentTurn, toggleUnreadByUser } from './workspace-unread-characterization-driver'
 import { isWorkspaceFlagSet } from './workspace-unread-flag'
+import { selectAgentRowsUnread } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-ack-inputs'
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn(), dismiss: vi.fn() }
@@ -51,7 +52,7 @@ function finishedAgentOffScreen(store: AttentionStore): PaneTarget {
   return pane
 }
 
-describe('explicit reads keep the workspace flag and its agents in step', () => {
+describe('explicit workspace and agent reads', () => {
   it('Mark read also reads the agents, so their lines lose the dot with the flag', () => {
     const { store } = createAttentionStore()
     const pane = finishedAgentOffScreen(store)
@@ -61,16 +62,21 @@ describe('explicit reads keep the workspace flag and its agents in step', () => 
     toggleUnreadByUser(store, row)
 
     expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(false)
-    expect(store.getState().acknowledgedAgentsByPaneKey[pane.paneKey]).toBeGreaterThanOrEqual(900)
+    expect(selectAgentRowsUnread(store.getState(), [pane])).toEqual([false])
   })
 
-  it('reading the only unread agent elsewhere lowers the flag instead of leaving a phantom dot', () => {
+  it('reading an agent elsewhere preserves a workspace marked unread before restart', () => {
+    const { store: previousStore } = createAttentionStore()
+    previousStore.getState().setWorkspaceUnreadByUser(WS_A, true, 'local')
     const { store } = createAttentionStore()
+    store.setState({ worktreesByRepo: previousStore.getState().worktreesByRepo })
     const pane = finishedAgentOffScreen(store)
     expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
+    expect(selectAgentRowsUnread(store.getState(), [pane])).toEqual([true])
 
     store.getState().acknowledgeAgents([pane.paneKey], undefined, 'explicit')
 
-    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(false)
+    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
+    expect(selectAgentRowsUnread(store.getState(), [pane])).toEqual([false])
   })
 })

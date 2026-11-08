@@ -1,7 +1,5 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
-import type { AppState } from '@/store/types'
-import { paneKeyTabId } from '@/store/slices/workspace-attention/workspace-live-markers'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   collectAcknowledgedAgentNotificationId,
@@ -21,34 +19,11 @@ type ActivityActions = Pick<
   | 'clearManuallyUnreadTurns'
 >
 
-/** Workspaces holding these panes: terminal tabs, structured chat tabs, or the agent's own record. */
-function workspaceIdsOfPaneKeys(s: AppState, paneKeys: readonly string[]): Set<string> {
-  const ids = new Set<string>()
-  for (const paneKey of paneKeys) {
-    const tabId = paneKeyTabId(paneKey)
-    for (const worktreeId of [
-      resolvePaneKeyWorktreeIdFromTabs(s, paneKey),
-      s.agentStatusByPaneKey?.[paneKey]?.worktreeId,
-      s.retainedAgentsByPaneKey?.[paneKey]?.worktreeId,
-      ...Object.entries(s.unifiedTabsByWorktree ?? {})
-        .filter(([, tabs]) => tabs.some((tab) => tab.id === tabId))
-        .map(([worktreeId]) => worktreeId)
-    ]) {
-      if (worktreeId) {
-        ids.add(worktreeId)
-      }
-    }
-  }
-  return ids
-}
-
-export function createUiActivityActions(set: UISliceSet, get: UISliceGet): ActivityActions {
+export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): ActivityActions {
   return {
     acknowledgedAgentsByPaneKey: {},
     acknowledgeAgents: (paneKeys, reads, intent) => {
       emitAgentSubjectReads(paneKeys, reads, intent)
-      const readWorkspaceIds =
-        intent === 'explicit' ? workspaceIdsOfPaneKeys(get(), paneKeys) : null
       const notificationIdsToDismiss = new Set<string>()
       set((s) => {
         if (paneKeys.length === 0) {
@@ -116,10 +91,6 @@ export function createUiActivityActions(set: UISliceSet, get: UISliceGet): Activ
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
       })
-      // Explicit reads skip the on-screen scan that would otherwise lower the workspace flag.
-      if (readWorkspaceIds && readWorkspaceIds.size > 0) {
-        get().settleWorkspacesAfterExplicitRead(readWorkspaceIds)
-      }
       // Dismiss main’s announced subjects; rebuilt IDs cover restart-empty notification records.
       if (paneKeys.length > 0 && typeof window !== 'undefined') {
         void window.api?.notifications?.dismiss?.([...notificationIdsToDismiss], paneKeys)

@@ -145,7 +145,6 @@ export const createWorkspaceAttentionSlice: StateCreator<
       noteWorkspaceRead(worktreeId)
       const removed = removeAndDismiss(workspaceMarkerTabIds(get(), worktreeId))
       // Update only the clicked host’s row; markers stay workspace-wide because tab keys omit host.
-      // Before the acknowledgement below, so its settle finds the flag already down and skips a second persist.
       void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
       // Mark read reads the agents too, or their lines keep the dot the user just cleared.
       // Journal-positioned chat alerts retire only with this explicit read that bounds them.
@@ -155,15 +154,6 @@ export const createWorkspaceAttentionSlice: StateCreator<
       ])
       if (paneKeys.size > 0) {
         get().acknowledgeAgents([...paneKeys], undefined, 'explicit')
-      }
-    },
-    settleWorkspacesAfterExplicitRead: (worktreeIds) => {
-      const marked = get().workspacesMarkedUnreadByUser
-      for (const worktreeId of new Set(worktreeIds)) {
-        // The user's own mark is a source of its own; reading an agent there doesn't answer it.
-        if (!marked[worktreeId]) {
-          settleWorkspaceUnreadFlag(set, get, worktreeId, onScreenHostId(get(), worktreeId))
-        }
       }
     }
   }

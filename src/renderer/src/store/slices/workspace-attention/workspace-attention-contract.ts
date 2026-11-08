@@ -43,6 +43,4 @@ export type WorkspaceAttentionSlice = {
     isUnread: boolean,
     executionHostId: ExecutionHostId
   ) => void
-  /** An explicit read elsewhere (Activity, dashboard, a jump) lowers flags left with nothing unread behind them. */
-  settleWorkspacesAfterExplicitRead: (worktreeIds: Iterable<string>) => void
 }
