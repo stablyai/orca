@@ -1,6 +1,5 @@
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { usableJournalHistoryOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
-import { remapForkChildBoundary } from './agent-session-fork-boundary-remap'
 import {
   inheritForkName,
   persistRewindRecord,
@@ -61,8 +60,7 @@ export async function recoverStructuredRewind(
     rewind: AgentSessionRewindRecord,
     fence: number,
     cursor: AgentJournalCursor,
-    cancel?: UsageLimitContinueIdentity,
-    childBoundary?: NonNullable<AgentSessionRecord['forkedFrom']>['childBoundary']
+    cancel?: UsageLimitContinueIdentity
   ) => JournalOperationReceipt,
   signal?: AbortSignal
 ): Promise<void> {
@@ -130,8 +128,7 @@ export async function applyStructuredRewindRecovery(
     rewind: AgentSessionRewindRecord,
     fence: number,
     cursor: AgentJournalCursor,
-    cancel?: UsageLimitContinueIdentity,
-    childBoundary?: NonNullable<AgentSessionRecord['forkedFrom']>['childBoundary']
+    cancel?: UsageLimitContinueIdentity
   ) => JournalOperationReceipt
 ): Promise<void> {
   const { store } = deps
@@ -186,16 +183,6 @@ export async function applyStructuredRewindRecovery(
   if (rewind.phase !== 'provider-succeeded') {
     return
   }
-  const oldBoundary = store.getRecord(sessionId)?.forkedFrom?.childBoundary
-  const childBoundary =
-    oldBoundary && !alreadyReplaced && cut
-      ? remapForkChildBoundary(
-          oldBoundary,
-          journal.currentRead().items,
-          cut.kept,
-          journal.context.floor()?.sequence
-        )
-      : oldBoundary
   const completed = rewind
   const record = store.getRecord(sessionId)!
   const providerHandle = completed.providerFork
@@ -268,15 +255,8 @@ export async function applyStructuredRewindRecovery(
       write: (db, row) => {
         // The prepared fold is the result written before this completion receipt.
         staged =
-          receipt?.(completed, fence, cursor, cancel, childBoundary) ??
-          store.conversationReceipts.rewind(
-            sessionId,
-            fence,
-            completed,
-            cursor,
-            cancel,
-            childBoundary
-          )
+          receipt?.(completed, fence, cursor, cancel) ??
+          store.conversationReceipts.rewind(sessionId, fence, completed, cursor, cancel)
         staged.write(db, row)
       },
       committed: () => staged.committed()

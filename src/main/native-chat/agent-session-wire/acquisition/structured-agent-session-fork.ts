@@ -1,3 +1,8 @@
+import { isInheritedAgentSessionItem } from '../../../../shared/agent-session/agent-session-fork'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { prepareForkSnapshot } from './structured-agent-session-fork-snapshot'
 import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { importedAgentSessionForkTipSettled } from './imported-agent-session-fork-tip'
@@ -21,10 +26,7 @@ import {
   type AgentSessionExecutionLocation
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import {
-  resolveCommittedStructuredAgentSessionAdoptionIntent,
-  requireUnownedStructuredAgentSessionAdoption
-} from '../../../runtime/agent-session/structured-agent-session-create-adoption'
+import { requireUnownedStructuredAgentSessionAdoption } from '../../../runtime/agent-session/structured-agent-session-create-adoption'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
@@ -103,6 +105,31 @@ export async function prepareStructuredAgentSessionFork(input: {
     fail(
       `${name} could not find this response in the current chat. Open the chat again and try again.`
     )
+  if (
+    record.forkedFrom &&
+    isInheritedAgentSessionItem(
+      snapshot.items,
+      record.forkedFrom.childBoundary,
+      input.throughItemId
+    )
+  ) {
+    const original = host.deps.store.getRecord(record.forkedFrom.sessionId)
+    const originalHead = original && activeProviderContext(original).head
+    const key = parseAgentJournalItemKey(input.throughItemId)
+    return prepareStructuredAgentSessionFork({
+      ...input,
+      sessionId: record.forkedFrom.sessionId,
+      throughItemId:
+        key?.provider === 'codex' && key.threadId === sourceHead.handle.nativeId && originalHead
+          ? agentJournalItemKey({
+              provider: 'codex',
+              threadId: originalHead.handle.nativeId,
+              turnId: key.turnId,
+              ordinal: key.ordinal
+            })
+          : input.throughItemId
+    })
+  }
   const admissions = host.deps.store.admittedSendCount(record.sessionId)
   const dispatch = JSON.stringify(snapshot.submissions)
   const cwd =
@@ -268,32 +295,4 @@ export async function prepareStructuredAgentSessionFork(input: {
     ...(record.launchArgs ? { launchArgs: record.launchArgs } : {}),
     adopt: { providerHandle, conversationName: title }
   }
-}
-
-export async function resolveStructuredAgentSessionForkIntent(input: {
-  host: StructuredAgentSessionHost | null
-  forkFrom: { sessionId: string; throughItemId: string }
-  agent: StructuredAgentId
-  location: AgentSessionExecutionLocation
-  envelope: { sessionId: string; clientOperationId: string }
-  callerKey?: string
-}): Promise<AgentSessionAttachParams> {
-  const { host } = input
-  if (!host) {
-    throw agentConversationCopyRefusal(
-      'structured_agent_session_unsupported',
-      { reason: 'hostUnsupported' },
-      `${acpAgentName(input.agent)} could not reach the execution host. Reconnect to the host, then try again.`
-    )
-  }
-  return (
-    resolveCommittedStructuredAgentSessionAdoptionIntent({ ...input, host }) ??
-    prepareStructuredAgentSessionFork({
-      ...input,
-      host,
-      sessionId: input.forkFrom.sessionId,
-      throughItemId: input.forkFrom.throughItemId,
-      envelope: { ...input.envelope, expectedRuntimeFence: null, payloadFingerprint: '' }
-    })
-  )
 }

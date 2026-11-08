@@ -240,3 +240,57 @@ it('persists the live native predecessor before revert and retains it after a lo
     keptTurnId: 'kept'
   })
 })
+
+it('refuses inherited rewind and rewinds the first own prompt to the fork point', async () => {
+  const inherited = await seed()
+  const ancestry = {
+    sessionId: 'original-chat',
+    itemId: 'codex:original-thread:tip:0',
+    childBoundary: {
+      kind: 'item' as const,
+      itemId: agentJournalItemKey({
+        provider: 'codex',
+        threadId: HOST_TEST_THREAD,
+        turnId: 'tip',
+        ordinal: 0
+      })
+    }
+  }
+  await store.commitOperationReceipt(
+    store.conversationReceipts.forkBoundary(HOST_TEST_SESSION, ancestry)
+  )
+  expect(await host.rewind(caller, await params(inherited))).toMatchObject({
+    ok: false,
+    refusal: {
+      code: 'agent_session_operation_invalid',
+      details: { rewindReason: 'invalid-target' }
+    }
+  })
+  sink.appendItem(
+    { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'own', ordinal: 0 },
+    { ...hostTestMessage('first own prompt'), role: 'user' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(HOST_TEST_SESSION)
+  adapter.prepareRewind = async () => ({
+    ok: true,
+    revert: { threadId: HOST_TEST_THREAD, beforeTurnId: 'own', keptTurnId: 'tip' }
+  })
+  const own = agentJournalItemKey({
+    provider: 'codex',
+    threadId: HOST_TEST_THREAD,
+    turnId: 'own',
+    ordinal: 0
+  })
+  expect(await host.rewind(caller, await params(own))).toMatchObject({ ok: true })
+  expect(store.getRecord(HOST_TEST_SESSION)?.forkedFrom).toEqual(ancestry)
+  expect(
+    (await host.journalSnapshot(HOST_TEST_SESSION)).items
+      .filter((item) => item.body.kind === 'message')
+      .map((item) => item.body.kind === 'message' && item.body.blocks)
+  ).toEqual([
+    [{ type: 'text', text: '0' }],
+    [{ type: 'text', text: '1' }],
+    [{ type: 'text', text: '2' }]
+  ])
+})

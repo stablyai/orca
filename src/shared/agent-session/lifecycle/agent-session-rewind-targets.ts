@@ -1,3 +1,4 @@
+import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../agent-session-fork'
 import { isAgentSessionRewindTarget, savedRewindKeys } from './agent-session-rewind'
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { StructuredAgentSessionState } from '../structured-agent-session-reducer'
@@ -37,13 +38,18 @@ function turnOpeners(items: StructuredAgentSessionState['items']): Map<string, s
   return openers
 }
 
-/** The sequence a rewind target must be past: the latest /clear, or the host's context floor. */
+/** Rewind stays after inherited history, the latest /clear and the host's context floor. */
 export function agentSessionRewindContextFloor(
   state: Pick<StructuredAgentSessionState, 'items' | 'epoch'>,
   contextFloor: AgentJournalCursor | undefined
 ): number {
   return Math.max(
     latestAgentSessionContextClearSequence(state.items),
+    state.items.find(
+      (item) =>
+        item.body.kind === 'status' &&
+        item.body.presentation === AGENT_SESSION_FORKED_FROM_PRESENTATION
+    )?.sequence ?? 0,
     agentSessionContextFloorSequence(contextFloor, state.epoch)
   )
 }
