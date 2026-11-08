@@ -5,11 +5,7 @@ import { agentSessionFailureWords } from '../../../shared/agent-session/failures
 import { journalDatabasePath } from './database/journal-host-database'
 import { convertJournalSqlProjection } from './journal-sql-conversion'
 import { readJournalSqlProjection } from './journal-sql-read-transaction'
-import {
-  answerJournalInput,
-  type JournalInputRead,
-  type JournalInputReadResult
-} from './journal-input-reads'
+import type { JournalInputRead, JournalInputReadResult } from './journal-input-reads'
 import { readJournalSqlInput } from './journal-sql-input-reads'
 import { createFixture } from './queued-messages/journal-unsent-send-hold-contract-test-fixture'
 import { openTestJournalHostDatabase } from './store-lifecycle/journal-host-database-test-support'
@@ -43,6 +39,17 @@ const READS: JournalInputRead[] = [
   {
     kind: 'batch',
     reads: [{ kind: 'linked-to', messageId: 'card' }, { kind: 'latest-accepted-handover' }]
+  },
+  { kind: 'accepted-submissions' },
+  { kind: 'capture-keys', present: ['rendered-only', 'orca:accepted'] },
+  { kind: 'unsettled-submissions' },
+  {
+    kind: 'batch',
+    reads: [
+      { kind: 'accepted-submissions' },
+      { kind: 'capture-keys', present: [] },
+      { kind: 'unsettled-submissions' }
+    ]
   }
 ]
 
@@ -59,7 +66,7 @@ it('answers every input-evidence read from a readonly snapshot exactly as the in
     clientMessageId: 'accepted',
     fence: 0,
     state: 'accepted',
-    providerIdentity: null
+    providerIdentity: { provider: 'claude', sessionId: 'native-1', uuid: 'accepted-echo' }
   })
   await journal.resolveDispatch({
     clientMessageId: 'signed-out',
@@ -84,7 +91,15 @@ it('answers every input-evidence read from a readonly snapshot exactly as the in
     },
     { messageId: 'card', expect: 'waiting' }
   )
-  const memory = READS.map((read) => answerJournalInput(journal.inputOrder, read))
+  const before = await journal.reads.input({ kind: 'capture-keys', present: [] })
+  await journal.appendSubmission({
+    clientMessageId: 'legacy:raw/%',
+    payloadFingerprint: fixture.fingerprint(fixture.message('legacy')),
+    body: fixture.message('legacy'),
+    fence: 0
+  })
+  expect(before.keys).not.toContain('orca:legacy%3Araw%2F%25')
+  const memory = await Promise.all(READS.map((read) => journal.reads.input(read)))
   await journal.close()
 
   openTestJournalHostDatabase(fixture.root).transaction((db) =>
@@ -105,15 +120,41 @@ it('answers every input-evidence read from a readonly snapshot exactly as the in
   }
 
   const answer = (kind: JournalInputRead['kind']) => memory[READS.findIndex((r) => r.kind === kind)]
-  expect(ids(answer('recoverable-submissions'))).toEqual(['pending', 'linked'])
-  expect(ids(answer('pending-submissions'))).toEqual(['pending', 'linked'])
+  expect(ids(answer('recoverable-submissions'))).toEqual(['pending', 'linked', 'legacy:raw/%'])
+  expect(ids(answer('pending-submissions'))).toEqual(['pending', 'linked', 'legacy:raw/%'])
+  expect(ids(answer('accepted-submissions'))).toEqual([
+    'accepted',
+    'pending',
+    'signed-out',
+    'unknown',
+    'linked'
+  ])
+  expect(answer('accepted-submissions')).toMatchObject({ latestReceiptSequence: 6 })
+  expect(ids(answer('unsettled-submissions'))).toEqual([
+    'pending',
+    'unknown',
+    'linked',
+    'legacy:raw/%'
+  ])
+  expect(answer('capture-keys')).toEqual({
+    kind: 'capture-keys',
+    keys: [
+      'orca:accepted',
+      'orca:legacy%3Araw%2F%25',
+      'orca:linked',
+      'orca:pending',
+      'orca:signed-out',
+      'orca:unknown',
+      'rendered-only'
+    ]
+  })
   expect(answer('recovered-unknown-ids')).toEqual({
     kind: 'recovered-unknown-ids',
     ids: ['unknown']
   })
   expect(ids(answer('linked-to'))).toEqual(['linked'])
   expect(memory[12]).toEqual({ kind: 'input-ordinal', ordinal: Infinity })
-  expect(answer('input-count')).toEqual({ kind: 'input-count', count: 5 })
+  expect(answer('input-count')).toEqual({ kind: 'input-count', count: 6 })
   expect(memory[18]).toEqual({ kind: 'signed-out-at', answer: true })
   expect(memory[19]).toEqual({ kind: 'signed-out-at', answer: false })
 })
