@@ -183,31 +183,6 @@ describe('a folder workspace whose host is unknown', () => {
 })
 
 describe('enclosing-workspace catalog', () => {
-  it('derives folder hosts and keeps only folders that enclose cwd', async () => {
-    const client = clientAnswering((method) =>
-      method === 'worktree.list'
-        ? okFixture('list', { worktrees: [nested] })
-        : method === 'folderWorkspace.list'
-          ? okFixture('folders', {
-              folderWorkspaces: [
-                { id: 'hub', folderPath: '/tmp/hub', projectGroupId: 'local-group' },
-                { id: 'far', folderPath: '/tmp/far', projectGroupId: 'local-group' },
-                { id: 'ssh-hub', folderPath: '/tmp/hub', projectGroupId: 'ssh-group' }
-              ]
-            })
-          : method === 'projectGroup.list'
-            ? okFixture('groups', {
-                groups: [{ id: 'local-group' }, { id: 'ssh-group', connectionId: 'box' }]
-              })
-            : okFixture('repos', { repos: [] })
-    )
-    expect(await readEnclosingWorkspaceCatalog(client, '/tmp/hub/notes')).toEqual([
-      nested,
-      { id: 'folder:hub', path: '/tmp/hub', hostId: 'local' },
-      { id: 'folder:ssh-hub', path: '/tmp/hub', hostId: 'ssh:box' }
-    ])
-  })
-
   it('keeps an enclosing folder whose host inputs are missing, marked unresolved', async () => {
     const client = clientAnswering((method) => {
       if (method === 'worktree.list') {

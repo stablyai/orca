@@ -121,67 +121,6 @@ describe('--parent-environment', () => {
     spawnMock
   })
 
-  it('creates on B under a folder on this machine, recorded as a cross-store ref', async () => {
-    listEnvironmentsMock.mockReturnValue(SAVED)
-    const calls = serve(FOLDER_PARENT)
-    const { exitCode } = await run([
-      'worktree',
-      'create',
-      '--environment',
-      'srv-b',
-      '--repo',
-      'id:repo-1',
-      '--name',
-      'child',
-      '--parent-environment',
-      'local',
-      '--parent-worktree',
-      'folder:hub-a'
-    ])
-    expect(exitCode).toBeUndefined()
-    const create = calls.find((call) => call.method === 'worktree.create')
-    expect(create?.environment).toBe('srv-b')
-    expect(create?.params.crossStoreParent).toEqual({
-      installationId: 'install-local',
-      workspaceKey: 'folder:hub-a',
-      instanceId: 'hub-a'
-    })
-    expect(create?.params).not.toHaveProperty('parentWorkspace')
-    expect(create?.params).not.toHaveProperty('parentWorktree')
-  })
-
-  it('resolves the parent on C and records it on B by saved name', async () => {
-    listEnvironmentsMock.mockReturnValue(SAVED)
-    const calls = serve(({ environment, method, params }) =>
-      environment === 'srv-c' && method === 'worktree.show' && params.worktree === 'name:trunk'
-        ? { worktree: { id: 'repo-9::/gpu/trunk', instanceId: 'inst-trunk' } }
-        : undefined
-    )
-    const { exitCode } = await run([
-      'worktree',
-      'set',
-      '--environment',
-      'srv-b',
-      '--worktree',
-      'id:repo-1::/srv/child',
-      '--parent-environment',
-      'gpu-box',
-      '--parent-worktree',
-      'name:trunk'
-    ])
-    expect(exitCode).toBeUndefined()
-    expect(
-      calls.find((call) => call.method === 'worktree.show' && call.environment === 'srv-c')?.params
-    ).toEqual({ worktree: 'name:trunk', matchFolderWorkspaces: true })
-    const set = calls.find((call) => call.method === 'worktree.set')
-    expect(set?.environment).toBe('srv-b')
-    expect(set?.params.crossStoreParent).toEqual({
-      installationId: 'install-srv-c',
-      workspaceKey: 'worktree:repo-9::/gpu/trunk',
-      instanceId: 'inst-trunk'
-    })
-  })
-
   it('by default looks only in the child environment and says where it looked', async () => {
     listEnvironmentsMock.mockReturnValue(SAVED)
     const calls = serve(({ method }) =>

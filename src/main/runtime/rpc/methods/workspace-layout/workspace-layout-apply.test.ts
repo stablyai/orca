@@ -1,3 +1,8 @@
+import { RUNTIME_CAPABILITIES } from '../../../../../shared/protocol-version'
+import {
+  LAYOUT_INTENTS_RUNTIME_CAPABILITY,
+  LAYOUT_REOPEN_HELD_PANES_CAPABILITY
+} from '../../../../../shared/workspace-layout/layout-intents-capability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
@@ -71,6 +76,11 @@ afterEach(() => {
 })
 
 describe('layout.apply', () => {
+  it('does not advertise layout mutations in a window-owned build', () => {
+    expect(RUNTIME_CAPABILITIES).not.toContain(LAYOUT_INTENTS_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).not.toContain(LAYOUT_REOPEN_HELD_PANES_CAPABILITY)
+  })
+
   it('gives each title in its tab’s partition in one write, naming a paired server’s tab', async () => {
     const applyTabRenames = vi.fn<NonNullable<RuntimeStore['applyTabRenames']>>(async (batches) => [
       { rename: batches[0]!.renames[0]!, code: 'tab_not_found' }
