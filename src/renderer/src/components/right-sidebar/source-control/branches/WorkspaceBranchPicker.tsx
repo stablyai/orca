@@ -35,6 +35,22 @@ export type WorkspaceBranchPickerProps = {
   onLanded: () => void
 }
 
+/** Caches by list identity and selects only the name, so other hosts' edits re-render nothing. */
+function createEnvironmentNameSelector(environmentId: string | null) {
+  let source: AppState['runtimeEnvironments'] | undefined
+  let name: string | undefined
+  return (state: AppState): string | undefined => {
+    if (!environmentId) {
+      return undefined
+    }
+    if (state.runtimeEnvironments !== source) {
+      source = state.runtimeEnvironments
+      name = source.find((host) => host.id === environmentId)?.name
+    }
+    return name
+  }
+}
+
 /** One workspace's branch picker; every surface that switches branches in place renders this. */
 export function WorkspaceBranchPicker({
   worktreeId,
@@ -59,21 +75,10 @@ export function WorkspaceBranchPicker({
     refreshOnOpen
   })
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  // Cache by list identity and select only the name, so other hosts' edits re-render nothing here.
-  const selectEnvironmentName = useMemo(() => {
-    let source: AppState['runtimeEnvironments'] | undefined
-    let name: string | undefined
-    return (state: AppState): string | undefined => {
-      if (!environmentId) {
-        return undefined
-      }
-      if (state.runtimeEnvironments !== source) {
-        source = state.runtimeEnvironments
-        name = source.find((host) => host.id === environmentId)?.name
-      }
-      return name
-    }
-  }, [environmentId])
+  const selectEnvironmentName = useMemo(
+    () => createEnvironmentNameSelector(environmentId),
+    [environmentId]
+  )
   const environmentName = useAppStore(selectEnvironmentName)
   // Workspace rows need every worktree, not a folder section's owner-only map.
   const worktreeMap = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
