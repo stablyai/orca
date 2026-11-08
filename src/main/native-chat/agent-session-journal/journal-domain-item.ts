@@ -1,3 +1,4 @@
+import { journalContextEpoch } from './context-epochs/journal-context-cursor'
 import type Database from '../../sqlite/sync-database'
 import {
   agentJournalItemKey,
@@ -15,6 +16,7 @@ import type {
   AgentJournalAcceptanceReceipt
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalLinkageFields } from '../../../shared/agent-session/journal/agent-session-journal-producer'
+import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import type { JournalItemAppendOptions } from './journal-store-contracts'
 import { journalItemRevisionValue } from './projection/journal-item-fold'
 import { isProviderUserMessageEcho } from './projection/journal-item-echo'
@@ -57,6 +59,7 @@ export type JournalDomainItemWrite = JournalDomainItemFields &
 
 export type JournalDomainItemCommit = {
   cursor: AgentJournalCursor
+  publicCursor?: AgentJournalCursor
   outcome:
     | { kind: 'committed'; wrote: boolean }
     | { kind: 'dropped'; reason: 'turn-settled'; turnItemId: string }
@@ -73,7 +76,8 @@ export function applyJournalDomainItem(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
   input: JournalDomainItemWrite,
-  savedAt: number
+  savedAt: number,
+  stopSettle?: JournalStopSettleFact
 ): JournalDomainItemCommit {
   if (!db.isTransaction) {
     throw new Error('journal message requires its writer transaction')
@@ -91,6 +95,7 @@ export function applyJournalDomainItem(
   const cursor = { epoch, sequence: Number(head.last_sequence) }
   const empty: JournalDomainItemCommit = {
     cursor,
+    publicCursor: { ...cursor, epoch: journalContextEpoch(epoch, Number(head.context_boundary)) },
     outcome: { kind: 'committed', wrote: false },
     items: [],
     receipts: [],
@@ -201,6 +206,7 @@ export function applyJournalDomainItem(
     ordinal: stored ? Number(stored.ordinal) : nextJournalDomainItemOrdinal(db, target),
     hidden: Boolean(stored?.hidden),
     writtenSequence: sequence,
+    stopSettle,
     ownerFence: row.ownerFence!,
     executionOwner:
       row.executionOwner ??
@@ -208,6 +214,7 @@ export function applyJournalDomainItem(
   })
   const result: JournalDomainItemCommit = {
     cursor: { epoch, sequence },
+    publicCursor: { epoch: journalContextEpoch(epoch, Number(head.context_boundary)), sequence },
     outcome: { kind: 'committed', wrote: true },
     items,
     receipts: [],
