@@ -27,6 +27,40 @@ function rename(client: RuntimeClient, session?: string): Promise<void> {
   })
 }
 
+function close(client: RuntimeClient, session?: string): Promise<void> {
+  return CHAT_HANDLERS['chat close']({
+    flags: new Map(session === undefined ? [] : [['session', session] as const]),
+    client,
+    cwd: '/tmp/worktree',
+    json: true
+  })
+}
+
+describe('chat close CLI', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+  })
+
+  it('never closes the chat it runs in without --session', async () => {
+    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'chat-7')
+    const { client, call } = chatClient(false)
+
+    await expect(close(client)).rejects.toThrow('Missing required --session')
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it('fails when the host has no chat with that session id', async () => {
+    const { client, call } = chatClient(false)
+    call.mockResolvedValueOnce({ id: 'req-close', ok: true, result: { ok: true, found: false } })
+
+    await expect(close(client, 'chat-gone')).rejects.toThrow(
+      'No chat with session id chat-gone on this host.'
+    )
+    expect(call).toHaveBeenCalledWith('agentSession.close', { sessionId: 'chat-gone' })
+  })
+})
+
 describe('chat rename CLI', () => {
   afterEach(() => {
     vi.restoreAllMocks()

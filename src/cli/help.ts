@@ -193,6 +193,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'chat rename' && flag === 'session') {
     return '--session <id>        Chat session id (defaults to the chat this runs in)'
   }
+  if (command === 'chat close' && flag === 'session') {
+    return '--session <id>        Chat session id to close'
+  }
   if (command === 'chat rename' && flag === 'name') {
     return '--name <text>         New name for the chat'
   }

@@ -233,6 +233,12 @@ orca chat rename --name "Migrate auth"
 
 Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
 
+```bash
+orca chat close --session <sessionId> --json
+```
+
+Closes a chat tab and stops its agent, the same as closing the tab by hand. The conversation stays in Session History. `--session` is always required, so a chat never closes itself by accident.
+
 ## Files
 
 ```bash
