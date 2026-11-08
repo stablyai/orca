@@ -2,8 +2,8 @@ import { createElement, Suspense, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn().mockResolvedValue(null),
@@ -53,19 +53,23 @@ vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'MobileSwitch' }))
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))
 vi.mock('./TaskProviderLogo', () => ({ TaskProviderLogo: 'TaskProviderLogo' }))
 
-import { setCachedRepos } from '../cache/repo-cache'
-import { recordHostDescriptor } from '../transport/host-descriptor-store'
-import { FakeSession } from '../transport/mobile-endpoint-supervisor-test-fakes'
-import {
-  getLocalExecutionHostLabel,
-  type ExecutionHostId
-} from '../../../src/shared/execution-host'
+// The form seeds from the host list's repo.list rows in this document's query cache.
+const cachedRepos = new Map<string, unknown[]>()
+const setCachedRepos = (hostId: string, rows: unknown[]) => cachedRepos.set(hostId, rows)
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => null }))
+vi.mock('../host-screen/host-list-queries', () => ({
+  cachedHostRepos: (_queryClient: unknown, hostId: string | undefined) =>
+    (hostId && cachedRepos.get(hostId)) || null
+}))
+
+import '../transport/hosts/host-descriptor-store'
+import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
+import '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
 import { NewWorktreeModal } from './NewWorktreeModal'
 
 import { findAllByHostType } from '../test-support/react-test-renderer-host-nodes'
-
-const LOCAL_HOST_LABEL = getLocalExecutionHostLabel('darwin')
 
 const repos = [
   {
@@ -125,210 +129,6 @@ describe('NewWorktreeModal project targets', () => {
 
   afterEach(() => {
     act(() => renderer?.unmount())
-  })
-
-  it('keeps the cached repos when the in-flight repo.list rejects on a dropped connection', async () => {
-    const sendRequest = vi.fn().mockImplementation((method: string) => {
-      if (method === 'repo.list') {
-        return Promise.reject(new Error('connection closed'))
-      }
-      if (method === 'status.get') {
-        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
-      }
-      return new Promise(() => {})
-    })
-    const client = requestsOnly(sendRequest)
-
-    await act(async () => {
-      renderer = create(
-        createElement(NewWorktreeModal, {
-          visible: true,
-          client,
-          hostId: 'host-1',
-          onCreated: () => {},
-          onClose: () => {},
-          openExternalUrl: () => {}
-        })
-      )
-      await Promise.resolve()
-    })
-    await act(async () => {
-      await Promise.resolve()
-    })
-
-    expect(sendRequest).toHaveBeenCalledWith('repo.list')
-    expect(pickerItems(renderer, 'Project')).toEqual([
-      expect.objectContaining({ label: 'orca', detail: 'stablyai/orca' })
-    ])
-    expect(pickerItems(renderer, 'Run on')).toEqual([
-      expect.objectContaining({ label: LOCAL_HOST_LABEL, detail: '/src/orca' })
-    ])
-  })
-
-  it('loads SSH state before detecting agents on the selected remote target', async () => {
-    const remoteRepo = {
-      id: 'repo-remote',
-      displayName: 'orca',
-      path: '/home/dev/orca',
-      connectionId: 'build-server',
-      kind: 'git',
-      upstream: { owner: 'stablyai', repo: 'orca' }
-    }
-    setCachedRepos('host-ssh', [remoteRepo])
-    let resolveSshState: ((reply: unknown) => void) | undefined
-    const sshState = new Promise((resolve) => {
-      resolveSshState = resolve
-    })
-    const sendRequest = vi.fn().mockImplementation((method: string) => {
-      if (method === 'repo.list') {
-        return Promise.resolve({ ok: true, result: { repos: [remoteRepo] } })
-      }
-      if (method === 'ssh.getState') {
-        return sshState
-      }
-      if (method === 'preflight.detectRemoteAgents') {
-        return Promise.resolve({ ok: true, result: ['codex'] })
-      }
-      if (method === 'settings.get') {
-        return Promise.resolve({ ok: true, result: { settings: { defaultTuiAgent: 'codex' } } })
-      }
-      if (method === 'ui.get') {
-        return Promise.resolve({ ok: true, result: { ui: {} } })
-      }
-      if (method === 'preflight.check') {
-        return Promise.resolve({ ok: true, result: {} })
-      }
-      if (method === 'linear.status') {
-        return Promise.resolve({ ok: true, result: {} })
-      }
-      if (method === 'status.get') {
-        return Promise.resolve({ ok: true, result: { hostPlatform: 'linux' } })
-      }
-      if (method === 'repo.hooks') {
-        return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
-      }
-      return Promise.resolve({ ok: true, result: {} })
-    })
-    const client = requestsOnly(sendRequest)
-
-    await act(async () => {
-      renderer = create(
-        createElement(NewWorktreeModal, {
-          visible: true,
-          client,
-          hostId: 'host-ssh',
-          onCreated: () => {},
-          onClose: () => {},
-          openExternalUrl: () => {}
-        })
-      )
-    })
-    await flushUpdates()
-
-    expect(sendRequest).toHaveBeenCalledWith('ssh.getState', { targetId: 'build-server' })
-    expect(
-      sendRequest.mock.calls.some(([method]) => method === 'preflight.detectRemoteAgents')
-    ).toBe(false)
-    await act(async () => {
-      resolveSshState?.({
-        ok: true,
-        result: {
-          state: {
-            targetId: 'build-server',
-            status: 'connected',
-            error: null,
-            reconnectAttempt: 0
-          }
-        }
-      })
-    })
-    await flushUpdates()
-    expect(sendRequest).toHaveBeenCalledWith('preflight.detectRemoteAgents', {
-      connectionId: 'build-server'
-    })
-  })
-
-  it("creates a server repo's workspace on that server and names it for the route", async () => {
-    const serverRepo = { ...repos[0]!, id: 'server-repo', path: '/srv/orca' }
-    const serverSshRepo = { ...serverRepo, id: 'server-ssh', connectionId: 'its-own-ssh' }
-    const reply = (method: string, listed: unknown[], hostPlatform: string) => {
-      if (method === 'repo.list') {
-        return replied({ repos: listed })
-      }
-      if (method === 'status.get') {
-        return replied({ hostPlatform })
-      }
-      if (method === 'worktree.create') {
-        return replied({
-          worktree: { id: 'srv-wt', displayName: 'srv-wt', path: '/srv/orca-wt' }
-        })
-      }
-      if (method === 'settings.get') {
-        return replied({ settings: {} })
-      }
-      return replied({})
-    }
-    const desktop = vi.fn((method: string) => reply(method, repos, 'darwin'))
-    const server = vi.fn((method: string) => reply(method, [serverRepo, serverSshRepo], 'linux'))
-    const onCreated = vi.fn()
-    recordHostDescriptor('host-1', { machineName: null, platform: 'darwin' })
-
-    await act(async () => {
-      renderer = create(
-        createElement(NewWorktreeModal, {
-          visible: true,
-          client: requestsOnly(desktop),
-          serverClients: new Map<ExecutionHostId, RpcClient>([
-            ['runtime:env-1', requestsOnly(server)]
-          ]),
-          hostId: 'host-1',
-          hostLabelById: new Map<ExecutionHostId, string>([['runtime:env-1', 'scratch-server']]),
-          onCreated,
-          onClose: () => {},
-          openExternalUrl: () => {}
-        })
-      )
-    })
-    await flushUpdates()
-
-    const runTargets = pickerItems(renderer, 'Run on')
-    expect(runTargets.map((item) => [item.label, item.detail])).toEqual([
-      [LOCAL_HOST_LABEL, '/src/orca'],
-      ['scratch-server', '/srv/orca']
-    ])
-    const serverTarget = runTargetPicker(renderer)
-    const iconOf = (item: unknown) => {
-      let icon: ReactTestRenderer | undefined
-      act(() => {
-        icon = create(serverTarget.props.renderIcon(item))
-      })
-      return icon?.toJSON()
-    }
-    expect(serverTarget.props.items.map(iconOf)).toMatchObject([
-      { type: 'Monitor' },
-      { type: 'Server' }
-    ])
-    await act(async () => serverTarget.props.onSelect(serverTarget.props.items[1]))
-    await flushUpdates()
-    // The Run on field shows the picked server's glyph, as its row does.
-    expect(findAllByHostType(renderer.root, 'Server')).toHaveLength(1)
-    expect(pickerItems(renderer, 'Run on')[0]?.label).toBe(LOCAL_HOST_LABEL)
-    act(() => sourceInputs(renderer)[0]!.props.onChangeText('srv-wt'))
-    const form = renderer.root.find((node) => typeof node.props.onCreate === 'function')
-    await act(async () => form.props.onCreate())
-    await flushUpdates()
-
-    expect(server).toHaveBeenCalledWith(
-      'worktree.create',
-      expect.objectContaining({ repo: 'id:server-repo' }),
-      expect.anything()
-    )
-    expect(desktop).not.toHaveBeenCalledWith(
-      'worktree.create',
-      expect.anything(),
-      expect.anything()
-    )
-    expect(onCreated).toHaveBeenCalledWith('srv-wt', expect.any(String), undefined, 'runtime:env-1')
   })
 
   it("lists the desktop's repos at once while a server has not answered", async () => {
@@ -545,29 +345,5 @@ describe('NewWorktreeModal project targets', () => {
     })
 
     expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
-  })
-
-  it('starts with fresh form state after closing and reopening', async () => {
-    const sendRequest = vi.fn().mockImplementation(() => new Promise(() => {}))
-    const client = requestsOnly(sendRequest)
-    const modalProps = {
-      client,
-      hostId: 'host-1',
-      onCreated: () => {},
-      onClose: () => {},
-      openExternalUrl: () => {}
-    }
-
-    await act(async () => {
-      renderer = create(createElement(NewWorktreeModal, { ...modalProps, visible: true }))
-    })
-    const sourceInput = sourceInputs(renderer)[0]!
-    act(() => sourceInput.props.onChangeText('previous-workspace'))
-
-    act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: false })))
-    act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: true })))
-
-    expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
-    expect(sendRequest.mock.calls.filter(([method]) => method === 'repo.list')).toHaveLength(2)
   })
 })

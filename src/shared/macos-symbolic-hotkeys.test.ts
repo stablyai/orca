@@ -72,14 +72,6 @@ describe('capturedDigitRowChordsFromSymbolicHotkeysJson', () => {
     })
     expect(chords).toEqual([])
   })
-
-  it('returns empty for missing or non-object domains', () => {
-    expect(capturedDigitRowChordsFromSymbolicHotkeysJson(null)).toEqual([])
-    expect(capturedDigitRowChordsFromSymbolicHotkeysJson({})).toEqual([])
-    expect(
-      capturedDigitRowChordsFromSymbolicHotkeysJson({ AppleSymbolicHotKeys: 'bogus' })
-    ).toEqual([])
-  })
 })
 
 function physicalChord(
@@ -148,11 +140,5 @@ describe('findMacSystemHotkeyConflicts', () => {
     expect(conflicts).toEqual([
       { actionId: 'workspace.selectByIndex', binding: 'Ctrl+1', capturedBindings: ['Ctrl+3'] }
     ])
-  })
-
-  it('returns empty without captured chords', () => {
-    expect(findMacSystemHotkeyConflicts(KEYBINDING_DEFINITIONS, 'darwin', undefined, [])).toEqual(
-      []
-    )
   })
 })

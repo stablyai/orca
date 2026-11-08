@@ -17,6 +17,7 @@ import { getPRForBranchOutcome } from '../../../github/client/lookup/pr-for-bran
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
 import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
 import { admissionTierForRefreshReason } from '../../../github/pr-refresh-candidate-policy'
+import { runHostedPRRead } from '../../../github/pr-refresh-coordinator'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
 import { hostedReviewForBranchReply } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { readHostedReviewForBranch } from '../../../source-control/hosted-review'
@@ -91,13 +92,27 @@ export class RuntimeHostedReviewCommands {
     }
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
-    return getPRForBranchOutcome(
-      repo.path,
-      branch,
-      linkedPRNumber ?? null,
-      hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo)),
-      linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
-      ...lookupOptionArgs
+    const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
+    // Through the coordinator, so a client's read also serves this server's CI-line watches.
+    return runHostedPRRead(
+      {
+        cacheKey: `${repo.path}::${branch}`,
+        repoKind: repo.kind ?? 'git',
+        repoId: repo.id,
+        repoPath: repo.path,
+        branch,
+        connectionId,
+        linkedPRNumber: linkedPRNumber ?? null
+      },
+      () =>
+        getPRForBranchOutcome(
+          repo.path,
+          branch,
+          linkedPRNumber ?? null,
+          connectionId,
+          linkedPRNumber == null ? (fallbackPRNumber ?? null) : null,
+          ...lookupOptionArgs
+        )
     )
   }
 

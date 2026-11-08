@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { BRIDGE_MAX_METHOD_CHARS } from './bridge-caps'
 
 // Version gates incompatible shape; negotiate capabilities through grants. Drop unknown keys so independently updated desktop bundles and installed shells tolerate additive fields.

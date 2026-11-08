@@ -152,7 +152,11 @@ export function projectStructuredAgentSessionMessages(
           }
         : row
     // Until handover, queued sends have no conversation position.
-    if (submission && isQueuedAgentJournalSubmission(submission)) {
+    if (
+      submission &&
+      submission.queuedMessageId === undefined &&
+      isQueuedAgentJournalSubmission(submission)
+    ) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
       delivered.push(message)

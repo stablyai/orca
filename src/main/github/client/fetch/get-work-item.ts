@@ -7,7 +7,10 @@ import {
   resolveIssueGitHubApiRepositorySource,
   type GitHubApiRepository
 } from '../../github-api-repository'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import {
+  githubRepoIdentityKey,
+  isDefaultGitHubHost
+} from '../../../../shared/github/repository-identity-key'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
 import {
   getIssueDetailsViaGraphQL,
@@ -19,6 +22,10 @@ import {
   fetchPullRequestWorkItem,
   fetchPullRequestWorkItemFromCandidates
 } from './work-item-fetch'
+function githubHostKey(host?: string): string {
+  return isDefaultGitHubHost(host) ? 'github.com' : host!.trim().toLowerCase()
+}
+
 export async function getWorkItem(
   repoPath: string,
   number: number,
@@ -167,10 +174,15 @@ export async function getWorkItemByOwnerRepo(
       localGitOptions
     )
     const requestedKey = githubRepoIdentityKey(requestedRepository)
-    const matchedRepository = candidates.find(
-      (candidate) => githubRepoIdentityKey(candidate) === requestedKey
-    )
-    // Pasted hosts must match configured remotes before receiving credentials.
+    const requestedHostKey = githubHostKey(requestedRepository.host)
+    // Pasted hosts must match configured remotes before receiving credentials. A preview reads any
+    // repo on such a host, as a link card does: that host's sign-in already serves this workspace.
+    const matchedRepository =
+      candidates.find((candidate) => githubRepoIdentityKey(candidate) === requestedKey) ??
+      (options.preview &&
+      candidates.some((candidate) => githubHostKey(candidate.host) === requestedHostKey)
+        ? requestedRepository
+        : undefined)
     if (!matchedRepository) {
       return null
     }

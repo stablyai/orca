@@ -14,7 +14,7 @@ import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { verifyRuntimePairingIdentity } from '../../runtime/runtime-environment-identity-verification'
+import { verifyRuntimePairingIdentity } from '../../runtime/hosts/identity/runtime-environment-identity-verification'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { orcadBoundPort } from './orcad-managed-bound-port'
 import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'

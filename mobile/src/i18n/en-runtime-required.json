@@ -36,6 +36,7 @@
       "destinationChanged": "The automation destination changed before this run could launch.",
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
+      "managedHostServer": "Needs migration to {{host}}",
       "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
       "noDispatchHost": "No Orca window was available to launch the automation.",
       "noRunnableHost": "This automation has no host to run on.",
@@ -171,8 +172,10 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "Dictation is already in use on the computer or another phone.",
+      "alreadyActive": "Dictation is already in use on the computer or another phone. Update Orca on the computer to dictate from several devices at once.",
+      "modelBusy": "Another device is dictating with a different speech model. Try again when it finishes.",
       "repairRequired": "Re-pair this phone with the computer to use dictation.",
+      "sessionLimit": "Too many devices are dictating on this computer. Try again when one finishes.",
       "sessionLost": "Dictation lost its connection to the computer. Try again."
     }
   },

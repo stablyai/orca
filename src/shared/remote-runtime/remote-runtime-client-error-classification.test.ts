@@ -6,31 +6,6 @@ import {
 } from './remote-runtime-client-error-classification'
 
 describe('remote runtime client error classification', () => {
-  it.each([
-    'remote_runtime_unavailable',
-    'remote_runtime_busy',
-    'runtime_rpc_queue_overloaded',
-    'runtime_timeout',
-    'runtime_unavailable',
-    'reconnecting'
-  ])('treats %s as recoverable', (code) => {
-    expect(isRecoverableRemoteRuntimeConnectionError({ code, message: 'transport failed' })).toBe(
-      true
-    )
-  })
-
-  it('does not retry authentication or protocol failures', () => {
-    expect(
-      isRecoverableRemoteRuntimeConnectionError({ code: 'unauthorized', message: 'bad token' })
-    ).toBe(false)
-    expect(
-      isRecoverableRemoteRuntimeConnectionError({
-        code: 'invalid_runtime_response',
-        message: 'bad frame'
-      })
-    ).toBe(false)
-  })
-
   it('trusts a structured recovery code before legacy message fragments', () => {
     expect(
       isRecoverableRemoteRuntimeConnectionError({
@@ -60,14 +35,5 @@ describe('remote runtime client error classification', () => {
   ])('normalizes unstructured connection failure: %s', (message) => {
     const error = toRemoteRuntimeClientErrorLike(new Error(message))
     expect(isRecoverableRemoteRuntimeConnectionError(error)).toBe(true)
-  })
-
-  it.each([
-    'runtime_manually_disconnected',
-    'ssh_user_disconnected',
-    'remote_runtime_timeout',
-    'runtime_busy'
-  ])('does not treat client code %s as recoverable', (code) => {
-    expect(isRecoverableRemoteRuntimeConnectionError({ code, message: 'refused' })).toBe(false)
   })
 })

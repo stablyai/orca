@@ -3,7 +3,7 @@ import { ChevronRight, RefreshCw } from 'lucide-react'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   formatRateLimitWindowChipLabel,
   formatWindowLabel
@@ -25,8 +25,8 @@ type ProviderId = ProviderRateLimits['provider']
 export type UsageSection = { label: string; window: RateLimitWindow }
 
 // Drop null and missing windows from partial/rehydrated snapshots before reading percentages.
-function usedSections(p: ProviderRateLimits): UsageSection[] {
-  return getWindowSections(p).filter(
+function usedSections(p: ProviderRateLimits, t?: Translate): UsageSection[] {
+  return getWindowSections(p, t).filter(
     (s): s is UsageSection => s.window !== null && s.window !== undefined
   )
 }
@@ -58,8 +58,8 @@ function shortLabel(
     : formatWindowLabel(section.window.windowMinutes)
 }
 
-export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
-  const sections = usedSections(p)
+export function getTightestUsageSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
+  const sections = usedSections(p, t)
   if (sections.length === 0) {
     return null
   }
@@ -72,14 +72,16 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
-export function getUsageHeadlineSection(p: ProviderRateLimits): UsageSection | null {
+export function getUsageHeadlineSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
   if (p.provider === 'cursor') {
-    const primary = usedSections(p).find((section) => section.label === CURSOR_MODELS_BUCKET_NAME)
+    const primary = usedSections(p, t).find(
+      (section) => section.label === CURSOR_MODELS_BUCKET_NAME
+    )
     if (primary) {
       return { ...primary, label: shortLabel(p, primary, true) }
     }
   }
-  return getTightestUsageSection(p)
+  return getTightestUsageSection(p, t)
 }
 
 function soonestResetLabel(sections: UsageSection[], now: number): string | null {
@@ -137,12 +139,13 @@ export function UsageRow({
   now: number
   mode?: StatusBarUsageMode
 }): React.JSX.Element {
-  const sections = usedSections(p)
+  const t = useTranslate()
+  const sections = usedSections(p, t)
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getUsageHeadlineSection(p) : null
+  const tightest = mode === 'compact' ? getUsageHeadlineSection(p, t) : null
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -161,7 +164,7 @@ export function UsageRow({
             </span>
             {showSignInAction ? (
               <span className="ml-auto shrink-0 rounded-md border border-border bg-secondary px-2.5 py-0.5 text-xs text-foreground">
-                {translate('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
+                {t('auto.components.status.bar.StatusBar.c35af53b73', 'Sign in')}
               </span>
             ) : null}
           </>
@@ -226,35 +229,33 @@ export function UsageRosterPanel({
   // Return null to use the default row instead of a host-supplied detail/account wrapper.
   renderRow?: (p: ProviderRateLimits, row: React.ReactNode) => React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   // Why: one boundary-scheduled clock keeps every open row current without per-provider timers.
   const now = useResetCountdownClock(
     providers.flatMap((provider) =>
-      usedSections(provider).map((section) => section.window.resetsAt)
+      usedSections(provider, t).map((section) => section.window.resetsAt)
     )
   )
   const sorted = [...providers].sort(
-    (a, b) => providerMaxUsed(usedSections(b)) - providerMaxUsed(usedSections(a))
+    (a, b) => providerMaxUsed(usedSections(b, t)) - providerMaxUsed(usedSections(a, t))
   )
 
   return (
     <div className="w-[360px] text-xs">
       <div className="flex items-center justify-between px-3.5 pb-2 pt-3">
         <span className="text-[13px] font-semibold text-foreground">
-          {translate('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
+          {t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
         </span>
         <div className="flex items-center gap-2 text-muted-foreground">
           <span className="text-[11px]">
-            {translate('auto.components.status.bar.UsageRosterPanel.allAgents', 'all agents')}
+            {t('auto.components.status.bar.UsageRosterPanel.allAgents', 'all agents')}
           </span>
           <DropdownMenuItem
             onSelect={(event) => {
               event.preventDefault()
               onRefresh()
             }}
-            aria-label={translate(
-              'auto.components.status.bar.StatusBar.3325d996cb',
-              'Refresh rate limits'
-            )}
+            aria-label={t('auto.components.status.bar.StatusBar.3325d996cb', 'Refresh rate limits')}
             className="size-5 justify-center p-0"
           >
             <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
@@ -266,7 +267,7 @@ export function UsageRosterPanel({
         <SettingsSegmentedControl<StatusBarUsageMode>
           value={statusBarUsageMode}
           onChange={onStatusBarUsageModeChange}
-          ariaLabel={translate(
+          ariaLabel={t(
             'auto.components.status.bar.UsageRosterPanel.footerDetailAria',
             'Usage footer detail'
           )}
@@ -275,16 +276,16 @@ export function UsageRosterPanel({
           options={[
             {
               value: 'verbose',
-              label: translate('auto.components.status.bar.UsageRosterPanel.detailed', 'Detailed'),
-              tooltip: translate(
+              label: t('auto.components.status.bar.UsageRosterPanel.detailed', 'Detailed'),
+              tooltip: t(
                 'auto.components.status.bar.UsageRosterPanel.detailedTooltip',
                 'Full usage with bars, labels, and percentages'
               )
             },
             {
               value: 'compact',
-              label: translate('auto.components.status.bar.UsageRosterPanel.compact', 'Compact'),
-              tooltip: translate(
+              label: t('auto.components.status.bar.UsageRosterPanel.compact', 'Compact'),
+              tooltip: t(
                 'auto.components.status.bar.UsageRosterPanel.compactTooltip',
                 'Condensed usage: one summary per provider'
               )
@@ -294,7 +295,7 @@ export function UsageRosterPanel({
       </div>
       <div className="border-t border-border/70" />
       {sorted.map((p) => {
-        const state = getUsageRosterRowState(p, usedSections(p).length > 0)
+        const state = getUsageRosterRowState(p, usedSections(p, t).length > 0, t)
         const showSignInAction = state.kind === 'sign-in' && canSignIn(p.provider)
         const rowNode = (
           <UsageRow
@@ -336,17 +337,14 @@ export function UsageRosterPanel({
         onSelect={onUsageDetails}
         className="w-full cursor-pointer justify-between rounded-none px-3.5 py-2.5 text-[13px] text-foreground"
       >
-        {translate(
-          'auto.components.status.bar.UsageRosterPanel.usageDetails',
-          'Usage details & history'
-        )}
+        {t('auto.components.status.bar.UsageRosterPanel.usageDetails', 'Usage details & history')}
         <ChevronRight size={14} className="text-muted-foreground" />
       </DropdownMenuItem>
       <DropdownMenuItem
         onSelect={onManageAccounts}
         className="w-full cursor-pointer justify-between rounded-none px-3.5 py-2.5 text-[13px] text-foreground"
       >
-        {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
+        {t('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
         <ChevronRight size={14} className="text-muted-foreground" />
       </DropdownMenuItem>
     </div>

@@ -18,6 +18,7 @@ import {
   searchSshHostsLabel
 } from './ssh-status-segment-copy'
 import { connectSshTargetFromStatusMenu } from './SshTargetStatusRow'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Searchable picker for the SSH hosts the Remote Hosts menu has no room to list. */
 export function SshHostFindPopover({
@@ -31,6 +32,7 @@ export function SshHostFindPopover({
   targets: readonly SshStatusMenuTarget[]
   anchorRef: RefObject<HTMLButtonElement | null>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const dismissedByPointerRef = useRef(false)
   // Why own filtering: cmdk would mount and score an item per host, the DOM cost this avoids.
@@ -67,15 +69,15 @@ export function SshHostFindPopover({
           }
         }}
       >
-        <Command shouldFilter={false} label={searchSshHostsLabel()}>
+        <Command shouldFilter={false} label={searchSshHostsLabel(t)}>
           <CommandInput
             value={query}
             onValueChange={setQuery}
-            placeholder={searchSshHostsLabel()}
-            aria-label={searchSshHostsLabel()}
+            placeholder={searchSshHostsLabel(t)}
+            aria-label={searchSshHostsLabel(t)}
           />
           <CommandList>
-            <CommandEmpty>{noMatchingSshHostsLabel()}</CommandEmpty>
+            <CommandEmpty>{noMatchingSshHostsLabel(t)}</CommandEmpty>
             {shown.map((target) => (
               <CommandItem
                 key={target.id}

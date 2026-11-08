@@ -3,7 +3,7 @@ import { ExternalLink, GitPullRequest, Terminal, Ticket, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { WorkspaceAttachmentOrigins } from '../review/WorkspaceAttachmentOrigins'
 import {
@@ -11,7 +11,7 @@ import {
   workspaceAttachmentProviderLabel
 } from './worktree-attachment-editing'
 import { getWorkspaceAttachmentSourceLabel } from '../review/workspace-attachment-source-label'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   item: WorkspaceAttachment
@@ -26,11 +26,12 @@ export function WorktreeLinkedItemRow({
   disabled,
   onRemove
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const label = workspaceAttachmentLabel(item)
   const source = getWorkspaceAttachmentSourceLabel(item)
   const provider = workspaceAttachmentProviderLabel(item)
   const observedCount = item.origins?.filter((origin) => origin.kind === 'observed').length ?? 0
-  const sessionsLabel = translate('workspace.links.sessions', 'Sessions & terminals')
+  const sessionsLabel = t('workspace.links.sessions', 'Sessions & terminals')
   return (
     <Collapsible
       data-workspace-linked-item=""
@@ -76,7 +77,7 @@ export function WorktreeLinkedItemRow({
                   variant="ghost"
                   size="xs"
                   disabled={disabled}
-                  aria-label={translate(
+                  aria-label={t(
                     'workspace.links.sessionsForItem',
                     'Sessions & terminals for {{label}} · {{count}}',
                     { label, count: observedCount }
@@ -97,7 +98,7 @@ export function WorktreeLinkedItemRow({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                aria-label={translate('workspace.links.openItem', 'Open {{label}}', { label })}
+                aria-label={t('workspace.links.openItem', 'Open {{label}}', { label })}
                 onClick={(event) =>
                   openAppHttpLink(item.url ?? '', { worktreeId: workspace?.id, event })
                 }
@@ -105,7 +106,7 @@ export function WorktreeLinkedItemRow({
                 <ExternalLink className="size-3" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{translate('workspace.links.open', 'Open link')}</TooltipContent>
+            <TooltipContent>{t('workspace.links.open', 'Open link')}</TooltipContent>
           </Tooltip>
         ) : null}
         <Tooltip>
@@ -115,15 +116,13 @@ export function WorktreeLinkedItemRow({
               variant="ghost"
               size="icon-xs"
               disabled={disabled}
-              aria-label={translate('workspace.links.unlinkItem', 'Unlink {{label}}', { label })}
+              aria-label={t('workspace.links.unlinkItem', 'Unlink {{label}}', { label })}
               onClick={onRemove}
             >
               <X className="size-3" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>
-            {translate('workspace.links.unlink', 'Unlink from workspace')}
-          </TooltipContent>
+          <TooltipContent>{t('workspace.links.unlink', 'Unlink from workspace')}</TooltipContent>
         </Tooltip>
       </div>
       {workspace && observedCount > 0 ? (

@@ -1,6 +1,6 @@
 import { WifiOff, Shield, Monitor, Clock, Globe, Bell, type LucideIcon } from 'lucide-react-native'
 import type { Translate } from '../i18n/mobile-i18n'
-import { endpointPort } from '../transport/host-endpoint'
+import { endpointPort } from '../transport/hosts/host-endpoint'
 
 export type TroubleshootSection = {
   id: string

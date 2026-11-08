@@ -1,4 +1,4 @@
-import type { ActivePluginCommand } from '@/store/plugin-panels'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { dispatchAppCommand, type AppCommandSource } from './app-command-dispatch'
 
 /** Resolves with whatever a worker handler returned; built-in actions return nothing. */

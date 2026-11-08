@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupScanProgress } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 
 export function WorkspaceCleanupInitialScanBanner({
@@ -9,9 +9,10 @@ export function WorkspaceCleanupInitialScanBanner({
 }: {
   progress: WorkspaceCleanupScanProgress | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const title =
     progress && progress.totalWorktreeCount > 0
-      ? translate(
+      ? t(
           'components.workspace.cleanup.scan.progress',
           'Scanning workspaces ({{value0}}/{{value1}})',
           {
@@ -19,7 +20,7 @@ export function WorkspaceCleanupInitialScanBanner({
             value1: progress.totalWorktreeCount
           }
         )
-      : translate(
+      : t(
           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7eee951968',
           'Scanning workspaces'
         )
@@ -30,7 +31,7 @@ export function WorkspaceCleanupInitialScanBanner({
       <div className="min-w-0">
         <div className="text-xs font-medium text-foreground">{title}</div>
         <div className="mt-0.5 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.workspace.cleanup.WorkspaceCleanupDialog.47123d0108',
             'Collecting workspace information. You can close this and come back.'
           )}

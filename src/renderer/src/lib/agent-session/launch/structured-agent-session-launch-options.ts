@@ -1,10 +1,10 @@
 import {
   createLegacyPrerequisites,
   type LegacyPrerequisites
-} from '../../structured-agent-session-launch-prerequisites'
+} from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
 import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
-import { structuredSessionSelectionController } from '../../structured-agent-session-selection-controller'
+import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 import type {
   SelectionOperation,
   SelectionOutcome
@@ -21,8 +21,8 @@ import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
 } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 import {
@@ -51,6 +51,9 @@ export type StructuredLaunchSelection = {
 export function initialStructuredLaunchSelection(
   intent: StructuredAgentSessionLaunchIntent
 ): StructuredLaunchSelection {
+  if (intent.params.forkFrom) {
+    return {}
+  }
   return {
     seed: intent.seedOptions,
     ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),
