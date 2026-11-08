@@ -293,20 +293,24 @@ it('re-renders only the consumers of the preference and desktop that changed', a
           <CiLines id="ci-a" client={a.client} />
           <FollowUps id="follow-ups-a" client={a.client} />
           <CiLines id="ci-b" client={b.client} />
+          {Array.from({ length: 9 }, (_, index) => (
+            <CiLines key={index} id={`ci-b${index}`} client={b.client} />
+          ))}
         </>
       )
     )
   })
   await act(async () => {})
+  // Ten chats on B share one read and one stream.
+  expect(b.client.sendRequest).toHaveBeenCalledTimes(1)
+  expect(b.client.subscribe).toHaveBeenCalledTimes(1)
   // B executes the chat and reports CI lines on; A, the paired desktop, hasn't reported.
   await act(async () => b.emit({ type: 'nativeChatCiResultLinesChanged', ciResultLines: true }))
-  expect(values).toEqual(
-    new Map([
-      ['ci-a', false],
-      ['follow-ups-a', true],
-      ['ci-b', true]
-    ])
-  )
+  expect([values.get('ci-a'), values.get('follow-ups-a'), values.get('ci-b')]).toEqual([
+    false,
+    true,
+    true
+  ])
   const settled = new Map(renders)
   await act(async () => a.emit({ type: 'nativeChatCiResultLinesChanged', ciResultLines: true }))
   expect(values.get('ci-a')).toBe(true)
@@ -325,6 +329,9 @@ it('re-renders only the consumers of the preference and desktop that changed', a
   expect(values.get('ci-b')).toBe(false)
   expect(renders.get('ci-a')).toBe(beforeOther.get('ci-a'))
   expect(renders.get('follow-ups-a')).toBe(beforeOther.get('follow-ups-a'))
+  // A snapshot-less ready re-reads once for the connection, not once per chat.
+  await act(async () => b.emit({ type: 'ready', subscriptionId: 'legacy' }))
+  expect(b.client.sendRequest).toHaveBeenCalledTimes(2)
 })
 
 it('shows CI lines from the last value the paired desktop reported, hidden until it reports one', async () => {
@@ -416,33 +423,4 @@ it('keeps a pending follow-ups read when a CI change lands on a joined stream', 
       ['ci', true]
     ])
   )
-})
-
-it('reads the CI setting per desktop connection, not per open chat', async () => {
-  const one = connection(),
-    many = connection()
-  function Chat({ client }: { client: RpcClient }) {
-    useMobileNativeChatCiResultLines(client, true)
-    return null
-  }
-  await act(async () => {
-    renderers.add(
-      create(
-        <>
-          <Chat client={one.client} />
-          {Array.from({ length: 10 }, (_, index) => (
-            <Chat key={index} client={many.client} />
-          ))}
-        </>
-      )
-    )
-  })
-  await act(async () => {})
-  for (const desktop of [one, many]) {
-    await act(async () => desktop.emit({ type: 'ready', subscriptionId: 'legacy' }))
-  }
-  // One read on connect and one for the snapshot-less ready, however many chats are open.
-  expect(one.client.sendRequest).toHaveBeenCalledTimes(2)
-  expect(many.client.sendRequest).toHaveBeenCalledTimes(2)
-  expect(many.client.subscribe).toHaveBeenCalledTimes(1)
 })

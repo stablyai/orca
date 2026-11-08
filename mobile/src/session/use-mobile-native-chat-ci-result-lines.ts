@@ -7,7 +7,7 @@ import {
 
 const hidden = (): boolean => false
 
-/** The paired desktop's last reported CI result lines setting; it records the lines, so no execution server answers for it. */
+/** The paired desktop's last reported CI result lines setting: the desktop owns this display setting, so only it answers. */
 export function useMobileNativeChatCiResultLines(
   pairedHostClient: RpcClient | null,
   active: boolean

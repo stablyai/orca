@@ -106,6 +106,14 @@ export function withoutPullRequestEventRows(rows: {
 export function withoutPullRequestEventMessages<Messages extends readonly NativeChatMessage[]>(
   messages: Messages
 ): Messages | NativeChatMessage[] {
-  const kept = messages.filter((message) => !isPullRequestEventMessage(message))
-  return kept.length === messages.length ? messages : kept
+  let kept: NativeChatMessage[] | null = null
+  for (let index = 0; index < messages.length; index++) {
+    const message = messages[index]!
+    if (isPullRequestEventMessage(message)) {
+      kept ??= messages.slice(0, index)
+    } else {
+      kept?.push(message)
+    }
+  }
+  return kept ?? messages
 }

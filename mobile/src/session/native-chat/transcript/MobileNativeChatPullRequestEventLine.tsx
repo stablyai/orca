@@ -9,6 +9,7 @@ import {
   pullRequestEventShortSha
 } from '../../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
+import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
@@ -19,11 +20,13 @@ import { scaledType } from './mobile-native-chat-message-styles'
 export function MobileNativeChatPullRequestEventLine({
   block,
   messageId,
-  fontScale
+  fontScale,
+  onLongPress
 }: {
   block: NativeChatTextBlock
   messageId: string
   fontScale: number
+  onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -37,8 +40,14 @@ export function MobileNativeChatPullRequestEventLine({
         size={14 * fontScale}
         color={failing ? colors.statusRed : colors.statusGreen}
         strokeWidth={2}
+        // Sits on the first line's center when long names wrap the text.
+        style={{ marginTop: 2 * fontScale }}
       />
-      <Text style={[styles.text, scaledType(typography.metaSize, fontScale)]} numberOfLines={1}>
+      <Text
+        selectable={INLINE_TEXT_SELECTION}
+        onLongPress={onLongPress}
+        style={[styles.text, scaledType(typography.metaSize, fontScale)]}
+      >
         {event ? (
           <>
             {failing
@@ -71,12 +80,13 @@ export function MobileNativeChatPullRequestEventLine({
 const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
     gap: spacing.xs
   },
   text: {
     flexShrink: 1,
+    textAlign: 'center',
     color: colors.textMuted
   },
   link: {

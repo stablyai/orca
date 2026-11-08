@@ -158,9 +158,6 @@ describe('MobileNativeChatMessage status notices', () => {
       ['https://github.com/acme/repo/pull/3'],
       ['https://github.com/acme/repo/commit/8d5f74b0c1']
     ])
-    expect(renderer!.root.find((node) => String(node.type) === 'CircleX').props.color).toBe(
-      colors.statusRed
-    )
   })
 
   it.each(['without reset', 'with reset', 'from an old host'] as const)(

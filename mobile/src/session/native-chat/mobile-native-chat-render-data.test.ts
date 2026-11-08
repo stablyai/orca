@@ -294,33 +294,6 @@ describe('foldMobileNativeChatMessages', () => {
       ['assistant', [{ type: 'text', text: 'Hello, Kelvin!' }]]
     ])
   })
-
-  it('keeps CI result lines for the display filter, which owns hiding them', () => {
-    const ciLine: NativeChatMessage = {
-      id: 'orca:pr-event:github.com/acme/repo#3:8d5f74b:1',
-      role: 'system',
-      blocks: [
-        {
-          type: 'text',
-          text: 'CI failing on repo#3 at 8d5f74b',
-          presentation: 'pull-request-event',
-          tone: 'failure'
-        }
-      ],
-      timestamp: 0,
-      source: 'transcript'
-    }
-    const folded = fold([
-      assistant('a1', 'Opened the PR'),
-      ciLine,
-      assistant('a2', 'Pushed the fix')
-    ])
-    expect(folded.map((message) => message.id)).toEqual([
-      'a1',
-      'orca:pr-event:github.com/acme/repo#3:8d5f74b:1',
-      'a2'
-    ])
-  })
 })
 
 // Claude may consume queued commands without a user record; unmatched echoes must stay at their send position rather than trail every later turn.

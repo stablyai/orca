@@ -314,6 +314,7 @@ function MobileNativeChatMessageImpl({
                   block={pullRequestEvent}
                   messageId={message.id}
                   fontScale={fontScale}
+                  onLongPress={onLongPress}
                 />
               ) : isSystem ? (
                 <MobileNativeChatNoticeRow
