@@ -138,6 +138,12 @@ function read(
       values.has('inputs.presentations', identity.clientMessageId)
     )
   }
+  const items = {
+    scope,
+    item: (itemId: string) => values.get<AgentJournalRenderItem>('items', itemId),
+    visible,
+    epoch
+  }
   switch (operation.kind) {
     case 'work':
       return {
@@ -184,15 +190,10 @@ function read(
     case 'history-items':
     case 'claude-history-prompts':
     case 'canonical-item-ids':
-      return readJournalSqlItems(
-        {
-          scope,
-          item: (itemId) => values.get<AgentJournalRenderItem>('items', itemId),
-          visible,
-          epoch
-        },
-        operation
-      )
+    case 'latest-prompt':
+    case 'restart-progress':
+    case 'outgrown-child':
+      return readJournalSqlItems(items, operation)
     case 'metadata': {
       const sequence = scalars.get('lastSequence', 0)
       return {
