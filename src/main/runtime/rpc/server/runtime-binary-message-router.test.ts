@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   encodeTerminalStreamFrame,
   TerminalStreamOpcode
-} from '../../shared/terminal/stream/terminal-stream-protocol'
+} from '../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
   BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelFrame
-} from '../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser-network-tunnel-protocol'
 import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
 function tunnelPing(): Uint8Array {
