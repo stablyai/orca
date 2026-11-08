@@ -7,13 +7,16 @@ import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.j
 import { integer, text, type Identity } from './edge-relay-cohort.js'
 
 // Retries per pending fence before it is dropped (a fence the edge keeps refusing, e.g. `stale`,
-// cannot land until the host moves again, and that move fences anew).
-export const EDGE_FENCE_MAX_ATTEMPTS = 8
-// First retry one busy sweep after the failure, doubling up to the cap: about 1.5 h in all.
+// cannot land until the host moves again, and that move fences anew). Enough to outlast a day-long
+// edge outage: the last attempt comes about 25.5 h after the failure.
+export const EDGE_FENCE_MAX_ATTEMPTS = 56
+// First retry one busy sweep after the failure, doubling up to the cap (31 min to reach it, then
+// every 30 min).
 export const EDGE_FENCE_RETRY_BASE_MS = 60_000
-const EDGE_FENCE_RETRY_MAX_MS = 30 * 60_000
-// Pending fences retried per sweep (per director).
-const EDGE_FENCE_RETRY_BATCH = 20
+export const EDGE_FENCE_RETRY_MAX_MS = 30 * 60_000
+// Pending fences retried per sweep (per director), with at most EDGE_FENCE_RETRY_CONCURRENCY in flight.
+export const EDGE_FENCE_RETRY_BATCH = 50
+const EDGE_FENCE_RETRY_CONCURRENCY = 10
 
 export function edgeFenceRetryDelayMs(attempts: number): number {
   return Math.min(EDGE_FENCE_RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1), EDGE_FENCE_RETRY_MAX_MS)
@@ -91,7 +94,7 @@ export async function retryPendingFences(
      WHERE next_attempt_at <= ? ORDER BY next_attempt_at LIMIT ?`,
     [now(), EDGE_FENCE_RETRY_BATCH]
   )
-  for (const row of due) {
+  await forEachBounded(due, EDGE_FENCE_RETRY_CONCURRENCY, async (row) => {
     const identity = { userId: text(row, 'user_id'), relayHostId: text(row, 'relay_host_id') }
     const attempts = integer(row, 'attempts') + 1
     // Claim the attempt: a director that read the same row loses here and skips it.
@@ -102,7 +105,7 @@ export async function retryPendingFences(
       [attempts, now() + edgeFenceRetryDelayMs(attempts), identity.userId, identity.relayHostId,
         attempts - 1, integer(row, 'next_attempt_at')]
     )
-    if (claimed.length !== 1) { continue }
+    if (claimed.length !== 1) { return }
     const result = await retryOne(database, admin, edgeCellId, identity, attempts)
     if (result !== 'failed' || attempts >= EDGE_FENCE_MAX_ATTEMPTS) {
       // Only the claimed record: a newer failure recorded meanwhile restarted at attempts = 0.
@@ -111,10 +114,7 @@ export async function retryPendingFences(
         [identity.userId, identity.relayHostId, attempts]
       )
     }
-    if (result === 'failed' && attempts >= EDGE_FENCE_MAX_ATTEMPTS) {
-      console.error(JSON.stringify({ event: 'orca_relay_edge_fence_abandoned', attempts }))
-    }
-  }
+  })
   return (await database.query(`SELECT attempts FROM relay_edge_fence_pending LIMIT 1`)).length > 0
 }
 
@@ -150,5 +150,31 @@ async function retryOne(
   console.error(
     JSON.stringify({ event: 'orca_relay_edge_fence_failed', outcome, cellId, assignmentEpoch, attempts, retry: true })
   )
+  if (attempts >= EDGE_FENCE_MAX_ATTEMPTS) {
+    // The record is dropped: the edge keeps claiming the host until it moves again.
+    console.error(JSON.stringify({ event: 'orca_relay_edge_fence_abandoned', outcome, cellId, assignmentEpoch, attempts }))
+  }
   return 'failed'
+}
+
+// Runs `task` over `items` with at most `limit` in flight. A throw does not stop the other workers;
+// the first one is rethrown once all have settled.
+export async function forEachBounded<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T) => Promise<void>
+): Promise<void> {
+  let next = 0
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const item = items[next]
+      next += 1
+      if (item !== undefined) { await task(item) }
+    }
+  }
+  const results = await Promise.allSettled(
+    Array.from({ length: Math.min(limit, items.length) }, async () => await worker())
+  )
+  const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+  if (failed) { throw failed.reason instanceof Error ? failed.reason : new Error('relay_edge_task_failed') }
 }

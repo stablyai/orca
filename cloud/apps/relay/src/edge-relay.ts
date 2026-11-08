@@ -264,6 +264,8 @@ export class EdgeAssignments {
       )
     )[0]
     if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return false }
+    // The edge is known dead (director/edge.json): no export to wait for.
+    if (this.config.control?.().mode === 'down') { return await this.skipExport(identity, 'mode_down') }
     let exported
     try {
       exported = await this.admin.exportHost(identity.relayHostId)
@@ -278,10 +280,9 @@ export class EdgeAssignments {
       this.exportLastFailureAt = now
       const failingForMs = now - (this.exportFailingSince ?? now)
       if (failingForMs < (this.config.exportSkipAfterMs ?? EDGE_EXPORT_SKIP_AFTER_MS)) { throw new EdgeMoveBusyError() }
-      // The edge has been unreachable too long: place the host on its Postgres devices (changes
-      // made on the edge are lost) rather than refusing every ask until the edge is back.
-      console.warn(JSON.stringify({ event: 'orca_relay_edge_export_skipped', reason: error.message, failingForMs }))
-      return true
+      // The edge has been unreachable too long: place the host anyway rather than refusing every
+      // ask until the edge is back.
+      return await this.skipExport(identity, error.message, failingForMs)
     }
     this.exportFailingSince = undefined
     this.exportLastFailureAt = undefined
@@ -313,13 +314,34 @@ export class EdgeAssignments {
     return true
   }
 
+  // The host leaves without the edge's copy of its devices. The edge was their source of truth and
+  // revokes made there are unknown, so the Postgres rows are removed rather than resurrected: its
+  // phones pair again. Logs a count only.
+  private async skipExport(identity: Identity, reason: string, failingForMs?: number): Promise<true> {
+    const removed = await this.database.query(
+      `DELETE FROM relay_devices WHERE user_id = ? AND relay_host_id = ? RETURNING relay_device_id`,
+      [identity.userId, identity.relayHostId]
+    )
+    console.warn(
+      JSON.stringify({
+        event: 'orca_relay_edge_export_skipped',
+        reason,
+        ...(failingForMs === undefined ? {} : { failingForMs }),
+        devicesRemoved: removed.length
+      })
+    )
+    return true
+  }
+
   // After the host left: tell the edge where it went, so its phones get WRONG_CELL (re-resolve)
   // rather than HOST_OFFLINE. Until it lands the edge's freeze does the same; one that does not land
   // is recorded for the evacuation sweep to retry (edge-relay-fence.ts).
   async fenceAway(identity: Identity, cellId: string, assignmentEpoch: number): Promise<boolean> {
     if (!this.admin) { return true }
-    // An edge whose exports are failing gets one try, so a skipped export is not slowed further.
-    const attempts = this.exportFailingSince === undefined ? 3 : 1
+    // An edge whose exports are failing (or that is marked down) gets one try, so a skipped export
+    // is not slowed further.
+    const down = this.exportFailingSince !== undefined || this.config.control?.().mode === 'down'
+    const attempts = down ? 1 : 3
     return await fenceEdge(this.database, this.admin, { ...identity, cellId, assignmentEpoch }, attempts, this.now())
   }
 
