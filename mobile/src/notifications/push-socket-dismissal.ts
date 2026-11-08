@@ -1,4 +1,4 @@
-import { loadHostCatalog } from '../transport/host-store'
+import { loadHostCatalog } from '../transport/hosts/host-store'
 import { deriveHostFingerprint } from './push-host-fingerprint'
 import { dismissPresentedPushNotification } from './push-tray-dismissal'
 import type { DismissNotificationEvent } from './desktop-notification-events'

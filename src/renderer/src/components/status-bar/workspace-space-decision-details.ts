@@ -9,7 +9,7 @@ import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-supp
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import '../sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '../sidebar/workspace-card/identity/worktree-branch-display'
-import { findRepoForHost } from '../../store/slices/repo-host-identity'
+import { findRepoForHost } from '../../store/repos/repo-host-identity'
 import { getHostedReviewCacheKey } from '../../store/slices/hosted-review/hosted-review-cache-identity'
 import { issueCacheKey as getIssueCacheKey } from '../../store/github/cache/cache-identity'
 import { countWorkspaceSpaceActiveAgents } from './workspace-space-presentation'
@@ -17,6 +17,7 @@ import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-sele
 import { getWorkspaceSpaceBranchLabel } from './workspace-space-format'
 import { formatHostedReviewLabel } from './hosted-review-label'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type WorkspaceDecisionDetails = {
   isActive: boolean
@@ -83,19 +84,20 @@ function countLiveTerminals(
 }
 
 function getBranchStatus(
-  status: { hasUpstream: boolean; ahead: number; behind: number } | undefined
+  status: { hasUpstream: boolean; ahead: number; behind: number } | undefined,
+  t: Translate = translate
 ): string | null {
   if (!status?.hasUpstream) {
     return null
   }
   if (status.ahead === 0 && status.behind === 0) {
-    return translate(
+    return t(
       'auto.components.status.bar.workspaceSpaceDecision.syncedWithUpstream',
       'Synced with upstream'
     )
   }
   if (status.ahead > 0 && status.behind > 0) {
-    return translate(
+    return t(
       'auto.components.status.bar.workspaceSpaceDecision.aheadAndBehind',
       '{{ahead}} ahead, {{behind}} behind',
       {
@@ -105,17 +107,18 @@ function getBranchStatus(
     )
   }
   return status.ahead > 0
-    ? translate('auto.components.status.bar.workspaceSpaceDecision.ahead', '{{ahead}} ahead', {
+    ? t('auto.components.status.bar.workspaceSpaceDecision.ahead', '{{ahead}} ahead', {
         ahead: status.ahead
       })
-    : translate('auto.components.status.bar.workspaceSpaceDecision.behind', '{{behind}} behind', {
+    : t('auto.components.status.bar.workspaceSpaceDecision.behind', '{{behind}} behind', {
         behind: status.behind
       })
 }
 
 export function getWorkspaceDecisionDetails(
   worktree: WorkspaceSpaceWorktree,
-  inputs: WorkspaceDecisionInputs
+  inputs: WorkspaceDecisionInputs,
+  t?: Translate
 ): WorkspaceDecisionDetails {
   const candidateWorkspaceRecord =
     inputs.worktreeRecord ?? inputs.worktreeMap.get(worktree.worktreeId)
@@ -134,7 +137,7 @@ export function getWorkspaceDecisionDetails(
     : inputs.gitStatusByWorktree[worktree.worktreeId]
   const branch = workspaceRecord
     ? branchDisplayName(workspaceRecord.branch)
-    : getWorkspaceSpaceBranchLabel(worktree)
+    : getWorkspaceSpaceBranchLabel(worktree, t)
   const repo = inputs.repos
     ? findRepoForHost(inputs.repos, worktree.repoId, {
         hostId: worktree.executionHostId,
@@ -161,7 +164,7 @@ export function getWorkspaceDecisionDetails(
   const linkedPR = workspaceRecord?.linkedPR ?? null
   const reviewLabel =
     hostedReview !== undefined && hostedReview !== null
-      ? formatHostedReviewLabel(hostedReview)
+      ? formatHostedReviewLabel(hostedReview, t)
       : linkedPR
         ? `PR #${linkedPR}`
         : null
@@ -222,7 +225,7 @@ export function getWorkspaceDecisionDetails(
     dirtyEditorBufferCount,
     browserTabCount: inputs.browserTabsByWorktree[worktree.worktreeId]?.length ?? 0,
     changedFileCount: gitEntries ? gitEntries.length : null,
-    branchStatus: getBranchStatus(inputs.remoteStatusesByWorktree[worktree.worktreeId]),
+    branchStatus: getBranchStatus(inputs.remoteStatusesByWorktree[worktree.worktreeId], t),
     reviewLabel,
     issueLabel,
     linearIssueLabel

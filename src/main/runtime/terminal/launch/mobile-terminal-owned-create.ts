@@ -4,9 +4,9 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type {
   RuntimeMobileSessionCreateTerminalResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
 import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'

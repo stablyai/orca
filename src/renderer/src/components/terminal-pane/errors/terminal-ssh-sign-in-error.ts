@@ -4,6 +4,7 @@ import {
   SSH_SIGN_IN_AWAITED_SUFFIX,
   SSH_SIGN_IN_CANCELLED_SUFFIX
 } from '../../../../../shared/ssh-sign-in-required-copy'
+import type { Translate } from '@/i18n/use-translate'
 
 function isSignInLine(line: string): boolean {
   return line.endsWith(SSH_SIGN_IN_AWAITED_SUFFIX) || line.endsWith(SSH_SIGN_IN_CANCELLED_SUFFIX)
@@ -35,9 +36,9 @@ export function isSshSignInPendingTerminalError(error: string): boolean {
 }
 
 /** Drops Electron's IPC wrapper so the toast reads as the sentence main wrote. */
-export function describeSshSignInRequiredTerminalError(error: string): string {
+export function describeSshSignInRequiredTerminalError(error: string, t?: Translate): string {
   return error
     .split('\n')
-    .map((line) => (isSignInLine(line) ? (compactIpcErrorMessage(line) ?? line) : line))
+    .map((line) => (isSignInLine(line) ? (compactIpcErrorMessage(line, t) ?? line) : line))
     .join('\n')
 }

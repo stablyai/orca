@@ -14,13 +14,14 @@ export {
   formatCost as formatUsageCost,
   formatTokens as formatUsageTokens
 } from './usage-formatters'
+import type { Translate } from '@/i18n/use-translate'
 
-export function buildUsageOverview(input: UsageOverviewInput): UsageOverviewModel {
+export function buildUsageOverview(input: UsageOverviewInput, t?: Translate): UsageOverviewModel {
   const providers = [
-    createClaudeProvider(input.claude),
-    createCodexProvider(input.codex),
-    createOpenCodeProvider(input.opencode),
-    createMuseProvider(input.muse)
+    createClaudeProvider(input.claude, t),
+    createCodexProvider(input.codex, t),
+    createOpenCodeProvider(input.opencode, t),
+    createMuseProvider(input.muse, t)
   ]
   const daily = buildDailyOverview(input)
   const bestDay =

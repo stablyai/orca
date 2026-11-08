@@ -9,7 +9,7 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
   buildTaskSourceContextFromRepo,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import type {
   CrossRepoPrompt,
   RepoBackedSearchTarget,

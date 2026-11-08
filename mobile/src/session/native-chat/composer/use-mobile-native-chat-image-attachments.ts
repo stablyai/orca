@@ -8,8 +8,8 @@ import {
   type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import { useCallback, useMemo } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
-import type { ConnectionState } from '../../../transport/types'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { MobileImageSource } from '../../../platform/media-picker-contract'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './mobile-native-chat-composer-paste'
@@ -166,31 +166,33 @@ export function useMobileNativeChatImageAttachments({
       const sentAt = Date.now()
       try {
         const scope = scopeKey
-        if ((readMobileNativeChatDraftInputs(scope).pending ?? 0) > 0) {
+        // A queued message carries its own chips; the composer's are a later draft.
+        const queued = intent?.queued
+        if (!queued && (readMobileNativeChatDraftInputs(scope).pending ?? 0) > 0) {
           return false
         }
-        const pendingImages = attachments
+        const pendingImages = queued ? queued.images : attachments
         const sentImageIds = pendingImages.map((attachment) => attachment.id)
         // Hold Send until all selected files finish uploading.
         const sentFiles = structuredNativeChat
-          ? files.filter(
+          ? (queued?.files ?? files).filter(
               (file): file is PendingNativeChatFile & { path: string } => file.path !== null
             )
           : []
         const storedFiles = sentFiles.map(({ id, path }) => ({ kind: 'file' as const, id, path }))
+        const hasAttachments = scope !== null && pendingImages.length + storedFiles.length > 0
         const destination =
-          scope && pendingImages.length + storedFiles.length > 0
-            ? mobileNativeChatDraftDestination(scope)
-            : null
+          scope && hasAttachments && !queued ? mobileNativeChatDraftDestination(scope) : null
         // An unconfirmed send's text returns to the composer later; bring back the chips it carried too.
         const sendIntent = destination
           ? {
               ...intent,
+              carried: { images: pendingImages, files: sentFiles },
               onHandBack: () =>
                 returnMobileNativeChatDraftAttachments(destination, pendingImages, sentFiles)
             }
           : intent
-        if (structuredNativeChat && destination) {
+        if (structuredNativeChat && hasAttachments) {
           if (!client || !enabled || connState !== 'connected') {
             onError?.()
             onSendError('Message not sent (disconnected)')
@@ -206,7 +208,7 @@ export function useMobileNativeChatImageAttachments({
             undefined,
             sendIntent
           )
-          if (outcome !== 'rejected' && destination.active) {
+          if (outcome !== 'rejected' && destination?.active) {
             removeMobileNativeChatDraftImages(destination, sentImageIds)
             onFilesSent?.(
               storedFiles.map((file) => file.id),
@@ -215,7 +217,7 @@ export function useMobileNativeChatImageAttachments({
           }
           return outcome !== 'rejected'
         }
-        if (pendingImages.length === 0 || !destination) {
+        if (pendingImages.length === 0 || !hasAttachments) {
           // Heal stale paste before text-only sends; on failure retain the marker and submit no text.
           const staleTerminal = activeHandleRef.current
           if (staleTerminal && isMobileNativeChatInputStale(staleTerminal)) {
@@ -297,7 +299,7 @@ export function useMobileNativeChatImageAttachments({
             // Rejected or unknown text/Enter may orphan an already-pasted path; both outcomes require healing.
             markMobileNativeChatInputStale(handle)
           }
-          if (outcome !== 'rejected' && destination.active) {
+          if (outcome !== 'rejected' && destination?.active) {
             // Drop only chips in this send, including unknown delivery to avoid duplicate retries; preserve newly attached chips.
             removeMobileNativeChatDraftImages(destination, sentImageIds)
           }

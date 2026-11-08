@@ -10,7 +10,7 @@ import {
   MobileDictationChunkOrder,
   type MobileDictationChunk
 } from './mobile-dictation-chunk-order'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot

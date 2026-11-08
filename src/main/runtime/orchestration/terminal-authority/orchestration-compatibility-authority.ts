@@ -1,5 +1,5 @@
-import type { WorkerTerminalHostScope } from '../../../../shared/worker-terminal-host-scope'
-import type { OrchestrationCompatibilityHostStamp } from '../../../../shared/orchestration-compatibility-evidence'
+import type { WorkerTerminalHostScope } from '../../../../shared/orchestration/workers/worker-terminal-host-scope'
+import type { OrchestrationCompatibilityHostStamp } from '../../../../shared/orchestration/orchestration-compatibility-evidence'
 
 export type OrchestrationCompatibilityTerminalAuthority = {
   runtimeId: string

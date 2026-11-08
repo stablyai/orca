@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
 import type { UsageHistoryRow } from '../../../../shared/usage-history-types'
-import type { AppState } from '../../store'
+import type { AppState } from '../../store/types'
 import type { UsageHistorySource } from './use-usage-history'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { StatsPane } from './StatsPane'

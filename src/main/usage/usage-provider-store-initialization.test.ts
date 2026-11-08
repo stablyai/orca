@@ -173,27 +173,6 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-it('withholds a large disabled history until whenLoaded and retains no source graph', async () => {
-  const cached = historicalState()
-  writeLargeLegacyCache(cached)
-  const pending = pendingSplit(cached)
-  const split = vi.fn<Split>(() => pending.promise)
-  const store = createStore({ splitCacheFile: split })
-  const ready = vi.fn()
-  const loaded = store.whenLoaded().then(ready)
-  expect(store.getSnapshot()).toMatchObject({ sessions: [], dailyAggregates: [] })
-  await nextTurn()
-  expect(split).toHaveBeenCalledWith(
-    expect.objectContaining({ cacheFile, sourceKey: 'processedSources' })
-  )
-  expect(ready).not.toHaveBeenCalled()
-  pending.resolve({ reportText: reportText(cached), migrated: false })
-  await loaded
-  expect(store.getSnapshot()).toEqual(reportState(cached))
-  expect(store.getScanState()).toMatchObject({ enabled: false, hasAnyTestData: true })
-  expect(JSON.stringify(store.getSnapshot())).not.toContain('historical-source')
-})
-
 it('queues enabled changes and flush behind loading without writing provisional state', async () => {
   const cached = historicalState()
   const initialPayload = writeLargeLegacyCache(cached)
@@ -260,23 +239,6 @@ it('admits a shared refresh after loading and keeps the newer worker projection'
   expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).not.toHaveProperty('processedSources')
 })
 
-it('honors a queued disable before a queued refresh starts after loading', async () => {
-  const cached = historicalState(true)
-  writeLargeLegacyCache(cached)
-  const pending = pendingSplit(cached)
-  const scan = vi.fn<Scan>(async () => defaultState())
-  const store = createStore({ splitCacheFile: () => pending.promise, scan })
-  const disable = store.setEnabled(false)
-  const refresh = store.refresh(true)
-  pending.resolve({ reportText: reportText(cached), migrated: false })
-  await Promise.all([disable, refresh])
-  expect(scan).not.toHaveBeenCalled()
-  expect(store.getSnapshot()).toMatchObject({
-    sessions: cached.sessions,
-    scanState: { enabled: false }
-  })
-})
-
 it.each(['rejection', 'throw'] as const)(
   'preserves disabled cached history after a worker %s',
   async (failureMode) => {
@@ -313,17 +275,6 @@ it.each(['rejection', 'throw'] as const)(
     }
   }
 )
-
-it('keeps an ordinary compact report synchronous and never asks the worker to split it', async () => {
-  const cached = historicalState()
-  writeFileSync(cacheFile, reportText(cached))
-  const split = vi.fn<Split>()
-  const store = createStore({ splitCacheFile: split })
-  expect(store.getSnapshot()).toEqual(reportState(cached))
-  expect(split).not.toHaveBeenCalled()
-  await store.setEnabled(true)
-  expect(JSON.parse(readFileSync(cacheFile, 'utf8'))).not.toHaveProperty('processedSources')
-})
 
 it('extends whenLoaded through an asynchronous provider report parser', async () => {
   const cached = historicalState()

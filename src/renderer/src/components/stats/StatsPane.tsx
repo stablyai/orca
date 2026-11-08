@@ -24,6 +24,7 @@ import {
 } from '../ui/dropdown-menu'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 export { getStatsPaneSearchEntries } from './stats-search'
 
 function formatDuration(ms: number): string {
@@ -46,13 +47,17 @@ function formatDuration(ms: number): string {
   return `${totalMinutes}m`
 }
 
-function formatTrackingSince(timestamp: number | null): string {
+function formatTrackingSince(
+  timestamp: number | null,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
   if (!timestamp) {
     return ''
   }
   const date = new Date(timestamp)
-  return translate('auto.components.stats.StatsPane.trackingSince', 'Tracking since {{value0}}', {
-    value0: date.toLocaleDateString(getIntlLocale(), {
+  return t('auto.components.stats.StatsPane.trackingSince', 'Tracking since {{value0}}', {
+    value0: date.toLocaleDateString(intlLocale, {
       month: 'short',
       day: 'numeric',
       year: 'numeric'
@@ -119,6 +124,8 @@ export function StatsPane({
 }
 
 function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const summary = useAppStore((s) => s.statsSummary)
   const fetchStatsSummary = useAppStore((s) => s.fetchStatsSummary)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -137,7 +144,7 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
           ?.name ??
         remoteOwner?.label ??
         historyTarget.environmentId)
-      : translate('stats.usage.localHost', 'This device')
+      : t('stats.usage.localHost', 'This device')
   const [activeUsageTab, setActiveUsageTab] = useState<UsageTab>('overview')
   const activeUsageOption =
     USAGE_ANALYTICS_OPTIONS.find(
@@ -154,7 +161,7 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h3 className="text-sm font-semibold text-foreground">
-            {translate('stats.usage.history.detail', 'History detail')}
+            {t('stats.usage.history.detail', 'History detail')}
           </h3>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -163,7 +170,7 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
                 variant="outline"
                 size="sm"
                 data-testid="usage-provider-select"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.stats.StatsPane.42d3e0bdf7',
                   'Usage analytics provider: {{value0}}',
                   { value0: activeUsageOption.label }
@@ -215,10 +222,10 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
               {!remoteHistory && activeUsageOption.id !== 'overview' ? (
                 <details className="rounded-lg border border-border p-4">
                   <summary className="cursor-pointer text-sm font-medium text-foreground">
-                    {translate('stats.usage.history.providerDetails', 'Original provider view')}
+                    {t('stats.usage.history.providerDetails', 'Original provider view')}
                   </summary>
                   <p className="my-3 text-xs text-muted-foreground">
-                    {translate(
+                    {t(
                       'stats.usage.history.providerDetailsScope',
                       'This provider view has its own period and project filters. Account filters above apply to the historical ledger.'
                     )}
@@ -243,10 +250,10 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
       {summary ? (
         <details className="rounded-lg border border-border p-4">
           <summary className="cursor-pointer text-sm font-medium text-foreground">
-            {translate('stats.usage.activity.title', 'Local Orca activity · since first launch')}
+            {t('stats.usage.activity.title', 'Local Orca activity · since first launch')}
           </summary>
           <p className="mt-2 text-xs text-muted-foreground">
-            {translate(
+            {t(
               'stats.usage.activity.scope',
               'Local Orca events only. These counters use a different source and lifetime period from the historical log scan.'
             )}
@@ -254,7 +261,7 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
           <div className="mt-3 space-y-3">
             {summary.totalAgentsSpawned === 0 && summary.totalPRsCreated === 0 ? (
               <div className="flex min-h-[8rem] items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 text-sm text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.stats.StatsPane.73ed07859c',
                   'Start your first agent to begin tracking'
                 )}
@@ -263,30 +270,24 @@ function OwnedStatsPane({ hostScope }: { hostScope?: SettingsHostScope }): React
               <>
                 <div className="grid gap-3 @sm:grid-cols-3">
                   <StatCard
-                    label={translate(
-                      'auto.components.stats.StatsPane.9dbec9e675',
-                      'Agents spawned'
-                    )}
+                    label={t('auto.components.stats.StatsPane.9dbec9e675', 'Agents spawned')}
                     value={summary.totalAgentsSpawned.toLocaleString(getIntlLocale())}
                     icon={<Bot className="size-4" />}
                   />
                   <StatCard
-                    label={translate(
-                      'auto.components.stats.StatsPane.1c96f433e2',
-                      'Time agents worked'
-                    )}
+                    label={t('auto.components.stats.StatsPane.1c96f433e2', 'Time agents worked')}
                     value={formatDuration(summary.totalAgentTimeMs)}
                     icon={<Clock className="size-4" />}
                   />
                   <StatCard
-                    label={translate('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
+                    label={t('auto.components.stats.StatsPane.a58aba506f', 'PRs created')}
                     value={summary.totalPRsCreated.toLocaleString(getIntlLocale())}
                     icon={<GitPullRequest className="size-4" />}
                   />
                 </div>
-                {formatTrackingSince(summary.firstEventAt) && (
+                {formatTrackingSince(summary.firstEventAt, t, intlLocale) && (
                   <p className="px-1 text-xs text-muted-foreground">
-                    {formatTrackingSince(summary.firstEventAt)}
+                    {formatTrackingSince(summary.firstEventAt, t, intlLocale)}
                   </p>
                 )}
               </>

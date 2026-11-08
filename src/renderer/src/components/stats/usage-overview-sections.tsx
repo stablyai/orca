@@ -9,6 +9,7 @@ import type {
   UsageProviderOverview
 } from './usage-overview-types'
 import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 
 const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   0: 'border-border/60 bg-muted/40',
@@ -18,67 +19,72 @@ const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   4: 'border-border/60 bg-foreground/75'
 }
 
-function sessionCountLabel(sessions: number): string {
-  return translate(
-    'auto.components.stats.usage.overview.sections.sessionCount',
-    '{{formatted}} sessions',
-    {
-      count: sessions,
-      formatted: sessions.toLocaleString(getIntlLocale()),
-      defaultValue_one: '{{formatted}} session'
-    }
-  )
+function sessionCountLabel(
+  sessions: number,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
+  return t('auto.components.stats.usage.overview.sections.sessionCount', '{{formatted}} sessions', {
+    count: sessions,
+    formatted: sessions.toLocaleString(intlLocale),
+    defaultValue_one: '{{formatted}} session'
+  })
 }
 
-function activityCountLabel(provider: UsageProviderOverview): string {
+function activityCountLabel(
+  provider: UsageProviderOverview,
+  t: Translate = translate,
+  intlLocale: string = getIntlLocale()
+): string {
   const count = provider.activityCount
   if (provider.activityLabel === 'turns') {
-    return translate(
-      'auto.components.stats.usage.overview.sections.turnCount',
-      '{{formatted}} turns',
-      {
-        count,
-        formatted: count.toLocaleString(getIntlLocale()),
-        defaultValue_one: '{{formatted}} turn'
-      }
-    )
-  }
-  return translate(
-    'auto.components.stats.usage.overview.sections.eventCount',
-    '{{formatted}} events',
-    {
+    return t('auto.components.stats.usage.overview.sections.turnCount', '{{formatted}} turns', {
       count,
-      formatted: count.toLocaleString(getIntlLocale()),
-      defaultValue_one: '{{formatted}} event'
-    }
-  )
+      formatted: count.toLocaleString(intlLocale),
+      defaultValue_one: '{{formatted}} turn'
+    })
+  }
+  return t('auto.components.stats.usage.overview.sections.eventCount', '{{formatted}} events', {
+    count,
+    formatted: count.toLocaleString(intlLocale),
+    defaultValue_one: '{{formatted}} event'
+  })
 }
 
-function providerSessionsSummary(provider: UsageProviderOverview): string {
-  return translate(
+function providerSessionsSummary(
+  provider: UsageProviderOverview,
+  t: Translate = translate,
+  intlLocale?: string
+): string {
+  return t(
     'auto.components.stats.usage.overview.sections.sessionsAndActivity',
     '{{sessions}} - {{activity}}',
-    { sessions: sessionCountLabel(provider.sessions), activity: activityCountLabel(provider) }
+    {
+      sessions: sessionCountLabel(provider.sessions, t, intlLocale),
+      activity: activityCountLabel(provider, t, intlLocale)
+    }
   )
 }
 
 export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const segments = [
     {
       key: 'new-input',
-      label: translate('auto.components.stats.usage.overview.sections.9365b14a4e', 'New input'),
+      label: t('auto.components.stats.usage.overview.sections.9365b14a4e', 'New input'),
       value: overview.newInputTokens,
       className: 'bg-foreground'
     },
     {
       key: 'output',
-      label: translate('auto.components.stats.usage.overview.sections.7f270458af', 'Output'),
+      label: t('auto.components.stats.usage.overview.sections.7f270458af', 'Output'),
       value: overview.outputTokens,
       className: 'bg-muted-foreground'
     },
     {
       key: 'cache',
-      label: translate('auto.components.stats.usage.overview.sections.0015facc1f', 'Cache'),
+      label: t('auto.components.stats.usage.overview.sections.0015facc1f', 'Cache'),
       value: overview.cacheTokens,
       className: 'bg-border'
     }
@@ -91,10 +97,10 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold text-foreground">
-            {translate('auto.components.stats.usage.overview.sections.4ff104da47', 'Token mix')}
+            {t('auto.components.stats.usage.overview.sections.4ff104da47', 'Token mix')}
           </h4>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.stats.usage.overview.sections.3bc4a01b24',
               'Combined input, output, and cache tokens across enabled providers.'
             )}
@@ -102,8 +108,8 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
         </div>
         {overview.reasoningTokens > 0 ? (
           <Badge variant="outline" className="shrink-0">
-            {formatUsageTokens(overview.reasoningTokens)}{' '}
-            {translate('auto.components.stats.usage.overview.sections.e65084cb4b', 'reasoning')}
+            {formatUsageTokens(overview.reasoningTokens, intlLocale)}{' '}
+            {t('auto.components.stats.usage.overview.sections.e65084cb4b', 'reasoning')}
           </Badge>
         ) : null}
       </div>
@@ -111,7 +117,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
       {mixTotal > 0 ? (
         <div
           className="flex h-3 overflow-hidden rounded-full border border-border/60 bg-muted"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.stats.usage.overview.sections.3a795542fa',
             'Combined token mix'
           )}
@@ -122,12 +128,12 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
                 key={segment.key}
                 className={segment.className}
                 style={{ width: `${(segment.value / mixTotal) * 100}%` }}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.stats.usage.overview.sections.32330a6e66',
                   '{{value0}}: {{value1}} tokens',
                   {
                     value0: segment.label,
-                    value1: segment.value.toLocaleString(getIntlLocale())
+                    value1: segment.value.toLocaleString(intlLocale)
                   }
                 )}
               />
@@ -143,7 +149,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
           <div key={segment.key} className="flex min-w-0 items-center gap-2">
             <span className={`size-2 shrink-0 rounded-full ${segment.className}`} />
             <span className="min-w-0 truncate">
-              {segment.label}: {formatUsageTokens(segment.value)}
+              {segment.label}: {formatUsageTokens(segment.value, intlLocale)}
             </span>
           </div>
         ))}
@@ -159,18 +165,17 @@ export function DailyIntensityGrid({
   days: UsageOverviewDailyPoint[]
   bestDay: UsageOverviewDailyPoint | null
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold text-foreground">
-            {translate(
-              'auto.components.stats.usage.overview.sections.69e2b50427',
-              'Daily intensity'
-            )}
+            {t('auto.components.stats.usage.overview.sections.69e2b50427', 'Daily intensity')}
           </h4>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.stats.usage.overview.sections.recentCombinedActivity',
               'Recent combined Claude, Codex, OpenCode, and Muse token activity.'
             )}
@@ -178,15 +183,15 @@ export function DailyIntensityGrid({
         </div>
         {bestDay && bestDay.totalTokens > 0 ? (
           <Badge variant="outline" className="shrink-0">
-            {translate('auto.components.stats.usage.overview.sections.c424eb3f8e', 'Best:')}
-            {formatUsageDayLabel(bestDay.day)}
+            {t('auto.components.stats.usage.overview.sections.c424eb3f8e', 'Best:')}
+            {formatUsageDayLabel(bestDay.day, false, intlLocale)}
           </Badge>
         ) : null}
       </div>
 
       <div
         className="grid grid-cols-[repeat(14,minmax(0,1fr))] gap-1 sm:grid-cols-[repeat(21,minmax(0,1fr))]"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.stats.usage.overview.sections.52d9221dc0',
           'Recent token activity heatmap'
         )}
@@ -195,18 +200,18 @@ export function DailyIntensityGrid({
           <div
             key={day.day}
             className={`aspect-square min-h-3 rounded-[2px] border ${INTENSITY_CLASS[day.intensity]}`}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.stats.usage.overview.sections.32330a6e66',
               '{{value0}}: {{value1}} tokens',
-              { value0: day.day, value1: day.totalTokens.toLocaleString(getIntlLocale()) }
+              { value0: day.day, value1: day.totalTokens.toLocaleString(intlLocale) }
             )}
           />
         ))}
       </div>
 
       <div className="mt-3 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-        <span>{formatUsageDayLabel(days[0]?.day ?? '')}</span>
-        <span>{translate('auto.components.stats.usage.overview.sections.1dd166c920', 'Less')}</span>
+        <span>{formatUsageDayLabel(days[0]?.day ?? '', false, intlLocale)}</span>
+        <span>{t('auto.components.stats.usage.overview.sections.1dd166c920', 'Less')}</span>
         <div className="flex items-center gap-1" aria-hidden>
           {[0, 1, 2, 3, 4].map((intensity) => (
             <span
@@ -215,8 +220,8 @@ export function DailyIntensityGrid({
             />
           ))}
         </div>
-        <span>{translate('auto.components.stats.usage.overview.sections.f6df0d7d6d', 'More')}</span>
-        <span>{formatUsageDayLabel(days.at(-1)?.day ?? '')}</span>
+        <span>{t('auto.components.stats.usage.overview.sections.f6df0d7d6d', 'More')}</span>
+        <span>{formatUsageDayLabel(days.at(-1)?.day ?? '', false, intlLocale)}</span>
       </div>
     </section>
   )
@@ -231,12 +236,14 @@ export function ProviderUsageRow({
   totalTokens: number
   onEnable: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const share = totalTokens > 0 ? provider.totalTokens / totalTokens : 0
   const status = provider.enabled
     ? provider.isScanning
-      ? translate('auto.components.stats.usage.overview.sections.statusScanning', 'Scanning')
-      : translate('auto.components.stats.usage.overview.sections.statusEnabled', 'Enabled')
-    : translate('auto.components.stats.usage.overview.sections.statusOff', 'Off')
+      ? t('auto.components.stats.usage.overview.sections.statusScanning', 'Scanning')
+      : t('auto.components.stats.usage.overview.sections.statusEnabled', 'Enabled')
+    : t('auto.components.stats.usage.overview.sections.statusOff', 'Off')
   const statusVariant = provider.enabled ? 'secondary' : 'outline'
 
   return (
@@ -249,28 +256,24 @@ export function ProviderUsageRow({
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {provider.topModel ??
-              translate('auto.components.stats.usage.overview.sections.3de9bf87fc', 'No model yet')}
+              t('auto.components.stats.usage.overview.sections.3de9bf87fc', 'No model yet')}
             {provider.topProject ? ` - ${provider.topProject}` : ''}
           </p>
         </div>
         {!provider.enabled ? (
           <Button variant="outline" size="xs" onClick={onEnable}>
-            {translate('auto.components.stats.usage.overview.sections.57d1448ef8', 'Enable')}
+            {t('auto.components.stats.usage.overview.sections.57d1448ef8', 'Enable')}
           </Button>
         ) : null}
       </div>
 
       <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">
         <span>
-          {translate(
-            'auto.components.stats.usage.overview.sections.tokenTotal',
-            '{{tokens}} tokens',
-            {
-              tokens: formatUsageTokens(provider.totalTokens)
-            }
-          )}
+          {t('auto.components.stats.usage.overview.sections.tokenTotal', '{{tokens}} tokens', {
+            tokens: formatUsageTokens(provider.totalTokens, intlLocale)
+          })}
         </span>
-        <span>{providerSessionsSummary(provider)}</span>
+        <span>{providerSessionsSummary(provider, t, intlLocale)}</span>
         <span>{formatUsageCost(provider.estimatedCostUsd)}</span>
       </div>
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">

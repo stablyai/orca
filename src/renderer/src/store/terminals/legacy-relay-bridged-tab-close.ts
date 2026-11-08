@@ -6,7 +6,7 @@ import {
   collectPtyIdsForTab,
   type TerminalTabRetirementPlan,
   type TerminalTabRetirementState
-} from '../slices/terminal-tab-retirement'
+} from './terminal-tab-retirement'
 
 /** `state` is read before the close prunes the tab, so its own PTYs are still listed. */
 export async function stopLegacyRelayBridgedShellsForTab(

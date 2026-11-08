@@ -21,7 +21,7 @@ import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { useUsageHistory } from './use-usage-history'
 import { usageHistoryAccountLabels } from './usage-history-accounts'
 import { getAgentLabel } from '@/lib/agent-catalog'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 const PROVIDERS: readonly { value: UsageHistoryProvider; label: string }[] = [
   {
@@ -52,13 +52,15 @@ const PROVIDERS: readonly { value: UsageHistoryProvider; label: string }[] = [
 
 export function UsageOverviewPane({
   target,
-  ownerLabel = translate('stats.usage.localHost', 'This device'),
+  ownerLabel,
   initialProvider = 'all'
 }: {
   target?: RuntimeClientTarget
   ownerLabel?: string
   initialProvider?: UsageHistoryProvider | 'all'
 } = {}): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const { sources, accounts, isRefreshing, refresh, enable } = useUsageHistory(target)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
   const [selection, setSelection] = useState<UsageHistorySelection>({
@@ -99,11 +101,11 @@ export function UsageOverviewPane({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h3 className="text-sm font-semibold text-foreground">
-            {translate('stats.usage.history.title', 'Historical usage')}
+            {t('stats.usage.history.title', 'Historical usage')}
           </h3>
           <p className="text-xs text-muted-foreground">
-            {translate('stats.usage.history.owner', '{{host}} · Recorded agent logs', {
-              host: ownerLabel
+            {t('stats.usage.history.owner', '{{host}} · Recorded agent logs', {
+              host: ownerLabel ?? t('stats.usage.localHost', 'This device')
             })}
           </p>
         </div>
@@ -112,10 +114,10 @@ export function UsageOverviewPane({
           size="sm"
           onClick={() => void refresh()}
           disabled={isRefreshing}
-          aria-label={translate('stats.usage.history.refresh', 'Refresh historical usage')}
+          aria-label={t('stats.usage.history.refresh', 'Refresh historical usage')}
         >
           <RefreshCw className="size-3.5" />
-          {translate('stats.usage.refresh', 'Refresh')}
+          {t('stats.usage.refresh', 'Refresh')}
         </Button>
       </div>
       <UsageHistoryFilters
@@ -130,30 +132,30 @@ export function UsageOverviewPane({
         data-testid="usage-history-totals"
       >
         <StatCard
-          label={translate('stats.usage.tokens', 'Tokens')}
-          value={hasRows ? formatUsageTokens(totals.totalTokens) : '—'}
+          label={t('stats.usage.tokens', 'Tokens')}
+          value={hasRows ? formatUsageTokens(totals.totalTokens, intlLocale) : '—'}
           icon={<Sparkles className="size-4" />}
         />
         <StatCard
           label={
             totals.hasPartialCost
-              ? translate('stats.usage.estimate.partial', 'Partial API-equivalent estimate')
-              : translate('stats.usage.estimate.title', 'API-equivalent estimate')
+              ? t('stats.usage.estimate.partial', 'Partial API-equivalent estimate')
+              : t('stats.usage.estimate.title', 'API-equivalent estimate')
           }
           value={formatUsageCost(totals.apiEquivalentCostUsd)}
           icon={<Coins className="size-4" />}
         />
         <StatCard
-          label={translate('stats.usage.days', 'Recorded days')}
-          value={hasRows ? days.size.toLocaleString(getIntlLocale()) : '—'}
+          label={t('stats.usage.days', 'Recorded days')}
+          value={hasRows ? days.size.toLocaleString(intlLocale) : '—'}
           icon={<CalendarDays className="size-4" />}
         />
         <StatCard
-          label={translate('stats.usage.cache.title', 'Cache read share of input')}
+          label={t('stats.usage.cache.title', 'Cache read share of input')}
           value={formatCacheReadShare(
             totals,
-            getIntlLocale(),
-            translate('stats.usage.format.notAvailable', 'n/a')
+            intlLocale,
+            t('stats.usage.format.notAvailable', 'n/a')
           )}
           icon={<DatabaseZap className="size-4" />}
         />
@@ -161,26 +163,26 @@ export function UsageOverviewPane({
       <div className="space-y-1 text-xs text-muted-foreground">
         <details>
           <summary className="cursor-pointer text-foreground">
-            {translate('stats.usage.estimate.calculation', 'How these figures are calculated')}
+            {t('stats.usage.estimate.calculation', 'How these figures are calculated')}
           </summary>
           <div className="space-y-1 pt-2">
             <p>
-              {translate(
+              {t(
                 'stats.usage.estimate.explanation',
                 'Dollar amounts are API-equivalent estimates from token logs, not subscription charges or billed spend. Unavailable model prices are excluded; OpenCode cost telemetry and Muse pricing are not treated as billing sources.'
               )}
             </p>
             {totals.unpricedTokens > 0 ? (
               <p>
-                {translate(
+                {t(
                   'stats.usage.estimate.unpriced',
                   '{{tokens}} tokens have no API price estimate.',
-                  { tokens: totals.unpricedTokens.toLocaleString(getIntlLocale()) }
+                  { tokens: totals.unpricedTokens.toLocaleString(intlLocale) }
                 )}
               </p>
             ) : null}
             <p>
-              {translate(
+              {t(
                 'stats.usage.cache.explanation',
                 'Cache share = cache read / (new input + cache read + cache write). Cached input is included once; reasoning is already included in output.'
               )}
@@ -188,7 +190,7 @@ export function UsageOverviewPane({
           </div>
         </details>
         <p data-testid="usage-history-coverage">
-          {translate(
+          {t(
             'stats.usage.coverage.counts',
             'Recorded coverage: {{providers}} providers · {{models}} models · {{projects}} projects · {{days}} days.',
             {
@@ -201,19 +203,19 @@ export function UsageOverviewPane({
         </p>
         {unattributed.length > 0 ? (
           <p data-testid="usage-history-account-coverage">
-            {translate(
+            {t(
               'stats.usage.account.coverage',
               '{{tokens}} tokens across {{rows}} rows have unknown account ownership and are excluded from named-account totals. Shared history and older records cannot be assigned from the current login.',
               {
-                tokens: totalUsageHistory(unattributed).totalTokens.toLocaleString(getIntlLocale()),
-                rows: unattributed.length.toLocaleString(getIntlLocale())
+                tokens: totalUsageHistory(unattributed).totalTokens.toLocaleString(intlLocale),
+                rows: unattributed.length.toLocaleString(intlLocale)
               }
             )}
           </p>
         ) : null}
         {hasCoverageGap ? (
           <p>
-            {translate(
+            {t(
               'stats.usage.coverage.partial',
               'Coverage is incomplete. Disabled, unavailable or failed sources do not mean zero usage; totals include recorded rows only.'
             )}
@@ -234,29 +236,24 @@ export function UsageOverviewPane({
             </span>
             <p className="text-muted-foreground">
               {source.status === 'unsupported'
-                ? translate(
-                    'stats.usage.source.ownerUnsupported',
-                    'History unavailable on this host'
-                  )
+                ? t('stats.usage.source.ownerUnsupported', 'History unavailable on this host')
                 : source.status === 'loading'
-                  ? translate('stats.usage.source.loading', 'Loading scan state…')
+                  ? t('stats.usage.source.loading', 'Loading scan state…')
                   : source.status === 'error'
-                    ? translate('stats.usage.source.failed', 'Historical source unavailable')
+                    ? t('stats.usage.source.failed', 'Historical source unavailable')
                     : !source.enabled
-                      ? translate('stats.usage.source.disabled', 'Tracking disabled')
+                      ? t('stats.usage.source.disabled', 'Tracking disabled')
                       : source.isScanning || isRefreshing
-                        ? translate('stats.usage.source.scanning', 'Scanning logs…')
+                        ? t('stats.usage.source.scanning', 'Scanning logs…')
                         : source.lastScanCompletedAt === null
-                          ? translate('stats.usage.source.neverScanned', 'Not scanned yet')
-                          : translate('stats.usage.source.updated', 'Scanned {{time}}', {
-                              time: new Date(source.lastScanCompletedAt).toLocaleString(
-                                getIntlLocale()
-                              )
+                          ? t('stats.usage.source.neverScanned', 'Not scanned yet')
+                          : t('stats.usage.source.updated', 'Scanned {{time}}', {
+                              time: new Date(source.lastScanCompletedAt).toLocaleString(intlLocale)
                             })}
             </p>
             {source.needsRescan ? (
               <p className="text-muted-foreground">
-                {translate(
+                {t(
                   'stats.usage.source.needsRescan',
                   'Saved totals need a new scan before they can be included. Refresh to rebuild history from available logs.'
                 )}
@@ -277,7 +274,7 @@ export function UsageOverviewPane({
                   void enable(source.provider)
                 }}
               >
-                {translate('stats.usage.source.enable', 'Enable {{provider}}', {
+                {t('stats.usage.source.enable', 'Enable {{provider}}', {
                   provider:
                     PROVIDERS.find((provider) => provider.value === source.provider)?.label ??
                     source.provider
@@ -290,12 +287,12 @@ export function UsageOverviewPane({
       {!hasRows ? (
         <p className="rounded-lg border border-dashed border-border p-5 text-sm text-muted-foreground">
           {!hasSupportedSource && !isRefreshing
-            ? translate(
+            ? t(
                 'stats.usage.history.ownerUnavailable',
                 'Historical usage is unavailable from {{host}}. Check the host connection and update it if it does not support historical usage.',
-                { host: ownerLabel }
+                { host: ownerLabel ?? t('stats.usage.localHost', 'This device') }
               )
-            : translate(
+            : t(
                 'stats.usage.history.empty',
                 'No recorded usage matches this selection. Enable a provider, refresh its scan, or change the filters.'
               )}
@@ -318,7 +315,7 @@ export function UsageOverviewPane({
           />
           {totals.sessions === null ? (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'stats.usage.session.legacy',
                 'Some cached rows have no session attribution. Their tokens remain in the ledger; a new scan rebuilds session detail from available logs.'
               )}

@@ -22,6 +22,8 @@ export class TerminalStreamResumeLedger {
   private units = 0
   // The seq the client shows after everything sent so far; null once that can't be known.
   private shownSeq: number | null = null
+  // The ring coverage the client's screen was drawn from; a reset (clear, respawn) leaves older text on it.
+  private epoch: number | null = null
   private points: ResumePoint[] = []
 
   constructor(
@@ -32,6 +34,7 @@ export class TerminalStreamResumeLedger {
   /** The client's screen now shows output through `seq` (a snapshot or a resume point). */
   anchor(seq: number | undefined): void {
     this.shownSeq = seq ?? null
+    this.epoch = this.ring.epoch
     if (typeof seq === 'number') {
       // A snapshot or resume reply is drawn for the grid the PTY has now.
       this.addPoint({ seq, epoch: this.ring.epoch, size: this.ring.currentSize() })
@@ -59,13 +62,13 @@ export class TerminalStreamResumeLedger {
       this.units += frame.displayLength
       if (this.shownSeq !== null && typeof frame.seq === 'number') {
         this.shownSeq = frame.seq
-        this.addPoint(this.ring.pointAt(frame.seq))
+        this.addOutputPoint(frame.seq)
       }
     }
     // A span stripped to nothing sends no frame but still advances the seq the client shows.
     if (this.shownSeq !== null && typeof meta?.seq === 'number' && this.shownSeq !== meta.seq) {
       this.shownSeq = meta.seq
-      this.addPoint(this.ring.pointAt(meta.seq))
+      this.addOutputPoint(meta.seq)
     }
   }
 
@@ -77,6 +80,17 @@ export class TerminalStreamResumeLedger {
     }
     const output = this.ring.readAfter(point, currentSeq)
     return output ? { seq: point.seq, output } : null
+  }
+
+  private addOutputPoint(seq: number): void {
+    const point = this.ring.pointAt(seq)
+    // Output after a reset lands on a screen that still shows text from before it, which no snapshot now matches.
+    if (point.epoch !== this.epoch) {
+      this.shownSeq = null
+      this.points = []
+      return
+    }
+    this.addPoint(point)
   }
 
   private addPoint(point: PublishedOutputPoint): void {

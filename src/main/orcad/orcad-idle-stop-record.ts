@@ -1,8 +1,8 @@
 // Consume clean idle-stop evidence once; discard failed stops so later crashes cannot inherit it.
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../../shared/node-bounded-file-reader'
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { readNodeFileSyncWithinLimit } from '../../shared/file-content/node-bounded-file-reader'
+import { writeDurableSecureJsonFile } from '../../shared/secure-storage/secure-file'
 import {
   ORCAD_IDLE_STOP_RECORD_FILENAME,
   OrcadIdleStopRecordSchema,

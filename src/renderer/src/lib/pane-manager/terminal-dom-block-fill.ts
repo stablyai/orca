@@ -2,6 +2,7 @@ const BLOCK_FG_VAR = '--orca-block-fg'
 const FILL_ATTR = 'data-orca-block-fill'
 // The span's inline color before the fill ('' when it had none), restored on clear.
 const INLINE_FG_ATTR = 'data-orca-block-inline-fg'
+const INLINE_DECORATION_FG_ATTR = 'data-orca-block-inline-decoration-fg'
 
 function gradient(axis: 'bottom' | 'right', solidPercent: number, fromStart: boolean): string {
   const dir = axis === 'bottom' ? 'to bottom' : 'to right'
@@ -53,14 +54,25 @@ function clearBlockFill(span: HTMLElement): void {
     return
   }
   const originalColor = span.getAttribute(INLINE_FG_ATTR)
+  const originalDecorationColor = span.getAttribute(INLINE_DECORATION_FG_ATTR)
   // Any other inline color was set after the fill and is the span's current foreground.
   const ownsColor = span.style.color === 'transparent'
+  const ownsDecorationColor =
+    originalDecorationColor !== null && span.style.textDecorationColor === `var(${BLOCK_FG_VAR})`
   span.removeAttribute(FILL_ATTR)
   span.removeAttribute(INLINE_FG_ATTR)
+  span.removeAttribute(INLINE_DECORATION_FG_ATTR)
   span.style.removeProperty('background-image')
   span.style.removeProperty('background-size')
   span.style.removeProperty('background-repeat')
   span.style.removeProperty(BLOCK_FG_VAR)
+  if (ownsDecorationColor) {
+    if (originalDecorationColor) {
+      span.style.textDecorationColor = originalDecorationColor
+    } else {
+      span.style.removeProperty('text-decoration-color')
+    }
+  }
   if (!ownsColor) {
     return
   }
@@ -114,6 +126,17 @@ function fillBlockSpan(span: HTMLElement): void {
   }
   if (!ownsColor) {
     span.setAttribute(INLINE_FG_ATTR, inlineFg)
+  }
+  // Hiding the font glyph must not hide decorations that use currentColor.
+  const inlineDecorationColor = span.style.textDecorationColor
+  if (
+    !inlineDecorationColor ||
+    inlineDecorationColor === 'currentcolor' ||
+    inlineDecorationColor === 'initial' ||
+    inlineDecorationColor === 'unset'
+  ) {
+    span.setAttribute(INLINE_DECORATION_FG_ATTR, inlineDecorationColor)
+    span.style.textDecorationColor = `var(${BLOCK_FG_VAR})`
   }
   span.setAttribute(FILL_ATTR, text)
   span.style.setProperty(BLOCK_FG_VAR, fg)

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
-import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
+
 import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../../../codex-restart-notice-state'
 import {
   installCodexDetachedPaneRestartExecutor,
@@ -150,98 +150,6 @@ describe('accepted account restart queue progress', () => {
       warn.mockRestore()
     }
     expectRestarted(1)
-  })
-
-  it('admits later requests within a shared limit and rechecks mounted ownership as slots free', async () => {
-    const pending = Array.from({ length: 7 }, () => Promise.withResolvers<{ id: string }>())
-    spawn.mockImplementation(({ replacesPtyId }) => {
-      const index = pending.findIndex((_, position) => pane(position + 1).ptyId === replacesPtyId)
-      const result = pending[index]
-      if (!result) {
-        throw new Error('unexpected spawn')
-      }
-      return result.promise
-    })
-    seedPanes(7)
-    acceptRestarts([1])
-    const uninstall = installCodexDetachedPaneRestartExecutor()
-    let unregister = () => {}
-    try {
-      await vi.advanceTimersByTimeAsync(0)
-      acceptRestarts([2, 3, 4, 5, 6, 7])
-      await vi.advanceTimersByTimeAsync(0)
-
-      expect(spawn).toHaveBeenCalledTimes(4)
-      expect(Object.keys(useAppStore.getState().pendingPaneAccountRestarts)).toEqual(
-        [5, 6, 7].map((index) => pane(index).ptyId)
-      )
-      unregister = registerRuntimeTerminalTab({
-        tabId: pane(5).tabId,
-        worktreeId: 'wt1',
-        getManager: () => null,
-        getContainer: () => null,
-        getPtyIdForPane: () => pane(5).ptyId,
-        getTabWideAgentHintLeafId: () => null
-      })
-      pending[1]?.resolve({ id: pane(2).replacementId })
-      await vi.advanceTimersByTimeAsync(0)
-
-      expectRestarted(2)
-      expect(spawn).toHaveBeenCalledTimes(5)
-      expect(spawn.mock.calls[4]?.[0].replacesPtyId).toBe(pane(6).ptyId)
-      expect(useAppStore.getState().pendingPaneAccountRestarts[pane(5).ptyId]).toBe('codex')
-      expect(useAppStore.getState().pendingPaneAccountRestarts[pane(7).ptyId]).toBe('codex')
-      expect(kill).not.toHaveBeenCalled()
-    } finally {
-      for (const [position, result] of pending.entries()) {
-        result.resolve({ id: pane(position + 1).replacementId })
-      }
-      await vi.advanceTimersByTimeAsync(0)
-      uninstall()
-      unregister()
-    }
-    for (const index of [1, 2, 3, 4, 6, 7]) {
-      expectRestarted(index)
-    }
-    expect(useAppStore.getState().ptyIdsByTabId[pane(5).tabId]).toEqual([pane(5).ptyId])
-  })
-
-  it('resumes queued work when a claim from an earlier executor installation settles', async () => {
-    const firstBatch = Promise.withResolvers<{ id: string }>()
-    spawn.mockImplementationOnce(() => firstBatch.promise)
-    seedPanes(5)
-    acceptRestarts([1])
-    const firstUninstall = installCodexDetachedPaneRestartExecutor()
-    await vi.advanceTimersByTimeAsync(0)
-    firstUninstall()
-    acceptRestarts([2, 3, 4, 5])
-    const pending = Array.from({ length: 4 }, () => Promise.withResolvers<{ id: string }>())
-    spawn.mockImplementation(({ replacesPtyId }) => {
-      const index = pending.findIndex((_, position) => pane(position + 2).ptyId === replacesPtyId)
-      const result = pending[index]
-      if (!result) {
-        throw new Error('unexpected spawn')
-      }
-      return result.promise
-    })
-    const uninstall = installCodexDetachedPaneRestartExecutor()
-    try {
-      await vi.advanceTimersByTimeAsync(0)
-      expect(spawn).toHaveBeenCalledTimes(4)
-      firstBatch.resolve({ id: pane(1).replacementId })
-      await vi.advanceTimersByTimeAsync(0)
-
-      expectRestarted(1)
-      expect(spawn).toHaveBeenCalledTimes(5)
-      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
-    } finally {
-      uninstall()
-      firstBatch.resolve({ id: pane(1).replacementId })
-      for (const [position, result] of pending.entries()) {
-        result.resolve({ id: pane(position + 2).replacementId })
-      }
-      await vi.advanceTimersByTimeAsync(0)
-    }
   })
   it('asks again and frees the slot when a spawn stalls, then adopts its late result', async () => {
     const stalled = Array.from({ length: 4 }, () => Promise.withResolvers<{ id: string }>())

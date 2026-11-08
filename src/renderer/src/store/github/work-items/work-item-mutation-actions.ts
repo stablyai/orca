@@ -4,10 +4,10 @@ import type { GitHubSlice } from '../github-slice-contract'
 import { toast } from 'sonner'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
-import { repoMatchesHostIdentity } from '../../slices/repo-host-identity'
+import { repoMatchesHostIdentity } from '../../repos/repo-host-identity'
 import {
   evictRepoCacheEntries,
   repoCacheEviction,

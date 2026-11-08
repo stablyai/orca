@@ -84,7 +84,6 @@ describe('MobileNativeChatView: send and read failure banners', () => {
     const onClearSendError = vi.fn()
     await render({
       onSend: vi.fn().mockResolvedValue(false),
-      inputLockReason: 'disconnected',
       sendErrorMessage: 'Stop failed',
       onClearSendError
     })

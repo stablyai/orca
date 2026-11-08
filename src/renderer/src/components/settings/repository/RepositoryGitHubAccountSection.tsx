@@ -9,7 +9,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { useAppStore } from '@/store/index'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { searchKeywords } from '../search/settings-search-keywords'
 import {
   isGhAccountBindingEnforced,
@@ -35,6 +35,7 @@ export function RepositoryGitHubAccountSection({
   updateRepo,
   forceVisible
 }: RepositoryGitHubAccountSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [inventory, setInventory] = useState<GhAccountBindingInventory | null>(null)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -116,26 +117,26 @@ export function RepositoryGitHubAccountSection({
         if (!validation.ok) {
           setError(
             validation.error === 'gh_multi_account_unsupported'
-              ? translate(
+              ? t(
                   'auto.components.settings.RepositoryGitHubAccountSection.unsupported',
                   'This runtime’s GitHub CLI is too old for account binding (needs gh ≥ 2.40).'
                 )
               : validation.error === 'gh_multi_account_capability_unknown'
-                ? translate(
+                ? t(
                     'auto.components.settings.RepositoryGitHubAccountSection.capabilityUnknown',
                     'Could not determine whether this runtime’s GitHub CLI supports account binding. Retry.'
                   )
                 : validation.error === 'gh_bound_account_not_keyring'
-                  ? translate(
+                  ? t(
                       'auto.components.settings.RepositoryGitHubAccountSection.envToken',
                       'Environment-token accounts cannot be bound. Use a keyring login.'
                     )
                   : validation.error === 'invalid_binding'
-                    ? translate(
+                    ? t(
                         'auto.components.settings.RepositoryGitHubAccountSection.invalidBinding',
                         'That GitHub account binding is invalid.'
                       )
-                    : translate(
+                    : t(
                         'auto.components.settings.RepositoryGitHubAccountSection.unavailable',
                         'That GitHub account is unavailable on this runtime.'
                       )
@@ -147,7 +148,7 @@ export function RepositoryGitHubAccountSection({
       const result = await Promise.resolve(updateRepo(repo.id, { ghAccount: resolved }))
       if (result === false) {
         setError(
-          translate(
+          t(
             'auto.components.settings.RepositoryGitHubAccountSection.saveFailed',
             'Could not save the GitHub account binding.'
           )
@@ -167,39 +168,36 @@ export function RepositoryGitHubAccountSection({
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.RepositoryGitHubAccountSection.title',
-        'GitHub Account'
-      )}
-      description={translate(
+      title={t('auto.components.settings.RepositoryGitHubAccountSection.title', 'GitHub Account')}
+      description={t(
         'auto.components.settings.RepositoryGitHubAccountSection.description',
         'Use a specific gh login for this project’s GitHub issue and pull request calls.'
       )}
-      keywords={searchKeywords([
-        repo.displayName,
-        'github',
-        'gh account',
-        'github account',
-        'login',
-        'token',
-        {
-          key: 'auto.components.settings.repository.search.githubAccountKeyword',
-          fallback: 'github account'
-        }
-      ])}
-      className="space-y-3"
+      keywords={searchKeywords(
+        [
+          repo.displayName,
+          'github',
+          'gh account',
+          'github account',
+          'login',
+          'token',
+          {
+            key: 'auto.components.settings.repository.search.githubAccountKeyword',
+            fallback: 'github account'
+          }
+        ],
+        t
+      )}
+      className="space-y-3 py-3"
       forceVisible={forceVisible}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 space-y-1">
           <div className="text-sm font-semibold">
-            {translate(
-              'auto.components.settings.RepositoryGitHubAccountSection.title',
-              'GitHub Account'
-            )}
+            {t('auto.components.settings.RepositoryGitHubAccountSection.title', 'GitHub Account')}
           </div>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryGitHubAccountSection.longDescription',
               'Orca injects a short-lived token from the selected keyring login into each gh call for this project. Project View stays on the ambient login.'
             )}
@@ -210,10 +208,7 @@ export function RepositoryGitHubAccountSection({
       <div className="space-y-1.5">
         <div className="flex items-center gap-1">
           <span id={selectLabelId} className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.RepositoryGitHubAccountSection.selectLabel',
-              'Account'
-            )}
+            {t('auto.components.settings.RepositoryGitHubAccountSection.selectLabel', 'Account')}
           </span>
           <Button
             type="button"
@@ -221,11 +216,11 @@ export function RepositoryGitHubAccountSection({
             size="icon"
             onClick={() => void loadInventory(true)}
             disabled={loading || saving}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.RepositoryGitHubAccountSection.refreshAccounts',
               'Refresh GitHub accounts'
             )}
-            title={translate(
+            title={t(
               'auto.components.settings.RepositoryGitHubAccountSection.refreshAccounts',
               'Refresh GitHub accounts'
             )}
@@ -261,7 +256,7 @@ export function RepositoryGitHubAccountSection({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={AMBIENT_VALUE}>
-              {translate(
+              {t(
                 'auto.components.settings.RepositoryGitHubAccountSection.ambient',
                 'Default (ambient gh login)'
               )}
@@ -269,7 +264,7 @@ export function RepositoryGitHubAccountSection({
             {repo.ghAccount && !selectedInInventory ? (
               // Retain the missing bound key for display, but disable reselection.
               <SelectItem value={selectedKey} disabled>
-                {translate(
+                {t(
                   'auto.components.settings.RepositoryGitHubAccountSection.unavailableOption',
                   '{{user}} @ {{host}} (unavailable)',
                   { user: repo.ghAccount.user, host: repo.ghAccount.host }
@@ -295,7 +290,7 @@ export function RepositoryGitHubAccountSection({
 
       {capabilityUnsupported ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryGitHubAccountSection.capabilityBlocked',
             'Binding is unavailable until this runtime’s GitHub CLI supports `gh auth token --user` (gh ≥ 2.40).'
           )}
@@ -303,7 +298,7 @@ export function RepositoryGitHubAccountSection({
       ) : null}
       {capabilityUnknown ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryGitHubAccountSection.capabilityUnknownHint',
             'Could not determine GitHub CLI account-binding support on this runtime. Clear the binding or retry.'
           )}
@@ -311,7 +306,7 @@ export function RepositoryGitHubAccountSection({
       ) : null}
       {notEnforced ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.RepositoryGitHubAccountSection.notEnforced',
             'Saved, but not enforced by this runtime (mixed-version host).'
           )}

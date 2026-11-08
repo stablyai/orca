@@ -10,7 +10,7 @@ import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layou
 import { renameTabCommandsOf } from '../../../../shared/workspace-layout/workspace-layout-commands'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'
 import { isWslMoveWorkspaceSessionFrozen } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 /** Route tab commands to their holding partitions; group trees and browser records use the workspace partition. */
 export type WindowLayoutCommand =

@@ -9,9 +9,9 @@ import type {
 } from '../../../../src/shared/native-chat/native-chat-types'
 import { getVerifiedNativeChatCommands } from '../../../../src/shared/native-chat/native-chat-agent-profiles'
 import { surfaceSkillInvocationUserTurns } from '../../../../src/shared/native-chat/native-chat-command-envelope'
-import { prepareNativeChatLiveMessages } from '../../../../src/renderer/src/components/native-chat/native-chat-live-message-preparation'
+import { prepareNativeChatLiveMessages } from '../../../../src/renderer/src/components/native-chat/session/terminal/assembly/native-chat-live-message-preparation'
 import { mergeNativeChatLiveSession } from '../../../../src/shared/native-chat/native-chat-live-status'
-import { assembleNativeChatSession } from '../../../../src/renderer/src/components/native-chat/native-chat-session-assembler'
+import { assembleNativeChatSession } from '../../../../src/renderer/src/components/native-chat/session/terminal/assembly/native-chat-session-assembler'
 
 type Operation = (index: number) => number
 type ExpectedChecksum = (iterations: number) => number

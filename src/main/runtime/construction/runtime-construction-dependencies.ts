@@ -16,11 +16,11 @@ import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-types'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-session-contracts'
 import type { AgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import type { OrchestrationEnvironmentTransport } from '../orchestration/federation/environment-transport'
 import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
-import type { SessionSearchSettingsApply } from '../runtime-session-search-settings'
+import type { SessionSearchSettingsApply } from '../integrations/ai-vault/runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
   getSetupTerminalTitle?: () => string

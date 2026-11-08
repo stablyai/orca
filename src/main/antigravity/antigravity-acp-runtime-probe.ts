@@ -3,7 +3,10 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createAcpAgentConnection, type AcpAgentConnection } from '../acp/acp-agent-connection'
+import {
+  createAcpAgentConnection,
+  type AcpAgentConnection
+} from '../acp/process/acp-agent-connection'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
 import {
   AgentModelCatalogProbeError,

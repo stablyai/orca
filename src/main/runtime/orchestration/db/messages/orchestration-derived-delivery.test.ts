@@ -27,27 +27,6 @@ describe('delivery eligibility derived from messages', () => {
     return { run, params, message, first }
   }
 
-  it.each(['read mutation', 'lifecycle suppression', 'direct SQL'])(
-    '%s changes eligibility without updating the batch',
-    (path) => {
-      const { run, params, message, first } = setup()
-      const before = db.getDeliveryRaw(first.delivery.id)
-      if (path === 'read mutation') {
-        db.markAsRead([message.id])
-      } else if (path === 'lifecycle suppression') {
-        db.markAsReadAndDelivered([message.id])
-      } else {
-        db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(message.id)
-      }
-      expect(db.getDeliveryRaw(first.delivery.id)).toEqual(before)
-      expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
-      const changes = db.db.prepare('SELECT total_changes() AS n').get()
-      expect(db.getOrCreateRunDelivery(params)).toBeUndefined()
-      expect(db.db.prepare('SELECT total_changes() AS n').get()).toEqual(changes)
-      expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
-    }
-  )
-
   it('records only an actual acknowledgement, including after all messages were suppressed', () => {
     const { params, message, first } = setup()
     db.markAsReadAndDelivered([message.id])

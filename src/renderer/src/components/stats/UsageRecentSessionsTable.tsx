@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react'
 import { Button } from '../ui/button'
 import { translate } from '@/i18n/i18n'
 import { formatSessionTime, formatTokens } from './usage-formatters'
+import { useIntlLocale } from '../../i18n/use-translate'
 
 type UsageRecentSession = {
   sessionId: string
@@ -50,6 +51,7 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
   renderDetails
 }: UsageRecentSessionsTableProps<Row>): React.JSX.Element {
   const [expanded, setExpanded] = useState<string | null>(null)
+  const intlLocale = useIntlLocale()
   return (
     <section className="rounded-lg border border-border/60 bg-card/40 p-4">
       <div className="mb-3">
@@ -92,12 +94,12 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
                       >
                         {getSessionTimeLabel?.(row) ??
                           row.lastActiveDay ??
-                          formatSessionTime(row.lastActiveAt)}
+                          formatSessionTime(row.lastActiveAt, intlLocale)}
                       </Button>
                     ) : (
                       (getSessionTimeLabel?.(row) ??
                       row.lastActiveDay ??
-                      formatSessionTime(row.lastActiveAt))
+                      formatSessionTime(row.lastActiveAt, intlLocale))
                     )}
                   </td>
                   <td className="px-2 py-2 text-foreground">{row.projectLabel}</td>
@@ -107,13 +109,13 @@ export function UsageRecentSessionsTable<Row extends UsageRecentSession>({
                   </td>
                   <td className="px-2 py-2 text-muted-foreground">{getActivity(row)}</td>
                   <td className="px-2 py-2 text-muted-foreground">
-                    {formatTokens(row.inputTokens)}
+                    {formatTokens(row.inputTokens, intlLocale)}
                   </td>
                   <td className="px-2 py-2 text-muted-foreground">
-                    {formatTokens(row.outputTokens)}
+                    {formatTokens(row.outputTokens, intlLocale)}
                   </td>
                   <td className="px-2 py-2 text-muted-foreground">
-                    {formatTokens(getTrailingTokens(row))}
+                    {formatTokens(getTrailingTokens(row), intlLocale)}
                   </td>
                 </tr>
                 {expanded === row.sessionId && renderDetails ? (

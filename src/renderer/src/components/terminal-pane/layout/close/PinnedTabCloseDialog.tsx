@@ -11,10 +11,11 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Store-driven confirmation lets keyboard, native menu and CLI closes share the pinned-tab guard outside React context. */
 export default function PinnedTabCloseDialog(): React.JSX.Element {
+  const t = useTranslate()
   const checkboxId = useId()
   const request = useAppStore((state) => state.pinnedTabCloseConfirm)
   const confirmPinnedTabClose = useAppStore((state) => state.confirmPinnedTabClose)
@@ -52,13 +53,13 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
       <DialogContent className="max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate(
+            {t(
               'auto.components.terminal.pane.PinnedTabCloseDialog.6c190f295a',
               'Close pinned tab?'
             )}
           </DialogTitle>
           <DialogDescription className="text-xs">
-            {translate(
+            {t(
               'auto.components.terminal.pane.PinnedTabCloseDialog.0d1963f4a6',
               'This tab is pinned. Are you sure you want to close it?'
             )}
@@ -76,7 +77,7 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
             onCheckedChange={(checked) => setDontAskAgain(checked === true)}
           />
           <Label htmlFor={checkboxId} className="text-xs font-normal text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.terminal.pane.PinnedTabCloseDialog.dont_ask_again',
               "Don't ask again for pinned tabs"
             )}
@@ -84,10 +85,10 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
         </div>
         <DialogFooter className="gap-2">
           <Button type="button" variant="outline" size="sm" onClick={dismissPinnedTabClose}>
-            {translate('auto.components.terminal.pane.PinnedTabCloseDialog.0b38ee2f86', 'Cancel')}
+            {t('auto.components.terminal.pane.PinnedTabCloseDialog.0b38ee2f86', 'Cancel')}
           </Button>
           <Button type="button" variant="destructive" size="sm" autoFocus onClick={handleConfirm}>
-            {translate('auto.components.terminal.pane.PinnedTabCloseDialog.c337c9d75c', 'Close')}
+            {t('auto.components.terminal.pane.PinnedTabCloseDialog.c337c9d75c', 'Close')}
           </Button>
         </DialogFooter>
       </DialogContent>

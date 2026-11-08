@@ -13,11 +13,11 @@ import {
 import type { StructuredAgentCreateSupportReply } from '../../../src/shared/agent-session/structured-agent-create-support-reply'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { hasRuntimeRpcErrorCode } from '../../../src/shared/runtime-rpc-error-code'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   structuredAgentSessionCreate,
   structuredAgentSupportProbe
-} from './mobile-session-launch-operations'
+} from './native-chat/agent-session/mobile-structured-create-operations'
 import { randomV4Uuid } from '../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 

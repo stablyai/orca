@@ -1,14 +1,14 @@
-import { useAppStateViewActive, useAppStateValue } from '@/store/app-state-view'
+import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import {
   searchRuntimeRepoBaseRefs,
   watchRuntimeRepoBaseRefDefault
-} from '@/runtime/runtime-repo-client'
-import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/runtime-repo-search-bounds'
-import { translate } from '@/i18n/i18n'
+} from '@/runtime/source-control/references/runtime-repo-client'
+import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/source-control/references/runtime-repo-search-bounds'
+import { useTranslate } from '@/i18n/use-translate'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 type BaseRefPickerProps = {
@@ -26,6 +26,7 @@ export function BaseRefPicker({
   onSelect,
   onUsePrimary
 }: BaseRefPickerProps): React.JSX.Element {
+  const t = useTranslate()
   // Resolve refs on the explicit host or the repo row’s owner.
   const viewActive = useAppStateViewActive()
   const ownerHostId = useAppStateValue((state) => {
@@ -139,21 +140,18 @@ export function BaseRefPicker({
         <div>
           <div className="text-sm font-medium text-foreground">
             {effectiveBaseRef ??
-              translate('auto.components.settings.BaseRefPicker.ee110e1830', 'No default base ref')}
+              t('auto.components.settings.BaseRefPicker.ee110e1830', 'No default base ref')}
           </div>
           <p className="text-xs text-muted-foreground">
             {currentBaseRef
-              ? translate(
-                  'auto.components.settings.BaseRefPicker.2f3cda96f5',
-                  'Pinned for this repo'
-                )
+              ? t('auto.components.settings.BaseRefPicker.2f3cda96f5', 'Pinned for this repo')
               : defaultBaseRef
-                ? translate(
+                ? t(
                     'auto.components.settings.BaseRefPicker.086ce7f369',
                     'Following primary branch ({{value0}})',
                     { value0: defaultBaseRef }
                   )
-                : translate(
+                : t(
                     'auto.components.settings.BaseRefPicker.9a14ec7400',
                     'Pick a base branch below'
                   )}
@@ -162,30 +160,20 @@ export function BaseRefPicker({
           {remoteCount > 1 ? (
             // Static instructions need no aria-live; avoid repeat announcements on mount/repo changes.
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.BaseRefPicker.a5c16712c1',
                 'Multiple remotes detected. Type a remote name (e.g.'
               )}{' '}
-              <code>
-                {translate('auto.components.settings.BaseRefPicker.915ad97875', 'upstream')}
-              </code>
-              {translate(
-                'auto.components.settings.BaseRefPicker.80f7c82303',
-                ') or a full ref (e.g.'
-              )}{' '}
-              <code>
-                {translate('auto.components.settings.BaseRefPicker.b468f46726', 'upstream/main')}
-              </code>
-              {translate(
-                'auto.components.settings.BaseRefPicker.ade9a5bb03',
-                ') to scope results.'
-              )}
+              <code>{t('auto.components.settings.BaseRefPicker.915ad97875', 'upstream')}</code>
+              {t('auto.components.settings.BaseRefPicker.80f7c82303', ') or a full ref (e.g.')}{' '}
+              <code>{t('auto.components.settings.BaseRefPicker.b468f46726', 'upstream/main')}</code>
+              {t('auto.components.settings.BaseRefPicker.ade9a5bb03', ') to scope results.')}
             </p>
           ) : null}
         </div>
         {onUsePrimary && (
           <Button variant="outline" size="sm" onClick={onUsePrimary} disabled={!currentBaseRef}>
-            {translate('auto.components.settings.BaseRefPicker.773a5687a3', 'Use Primary')}
+            {t('auto.components.settings.BaseRefPicker.773a5687a3', 'Use Primary')}
           </Button>
         )}
       </div>
@@ -193,7 +181,7 @@ export function BaseRefPicker({
       <Input
         value={baseRefQuery}
         onChange={(e) => setBaseRefQuery(e.target.value)}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.settings.BaseRefPicker.7db7fb87e5',
           'Search branches by name...'
         )}
@@ -202,7 +190,7 @@ export function BaseRefPicker({
 
       {isSearchingBaseRefs ? (
         <p className="text-xs text-muted-foreground">
-          {translate('auto.components.settings.BaseRefPicker.a4a9372eb2', 'Searching branches...')}
+          {t('auto.components.settings.BaseRefPicker.a4a9372eb2', 'Searching branches...')}
         </p>
       ) : null}
 
@@ -231,7 +219,7 @@ export function BaseRefPicker({
                   <span className="truncate">{ref}</span>
                   {effectiveBaseRef === ref ? (
                     <span className="text-[10px] uppercase tracking-[0.18em]">
-                      {translate('auto.components.settings.BaseRefPicker.d166ff883d', 'Current')}
+                      {t('auto.components.settings.BaseRefPicker.d166ff883d', 'Current')}
                     </span>
                   ) : null}
                 </button>
@@ -240,10 +228,7 @@ export function BaseRefPicker({
           </div>
         ) : (
           <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.settings.BaseRefPicker.1b8e54151f',
-              'No matching branches found.'
-            )}
+            {t('auto.components.settings.BaseRefPicker.1b8e54151f', 'No matching branches found.')}
           </p>
         )
       ) : null}

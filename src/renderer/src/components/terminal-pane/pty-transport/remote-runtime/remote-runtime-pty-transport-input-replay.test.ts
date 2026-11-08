@@ -214,6 +214,21 @@ describe('remote pane input across a silent outage', () => {
     transport.destroy?.()
   })
 
+  it.each([
+    ['acknowledging', { inputAck: 1 }, ['a']],
+    ['legacy', { outputPause: 1 }, []]
+  ] as const)(
+    'sends an idle key at once only to a host that acknowledges input (%s)',
+    async (_host, capabilities, immediate) => {
+      const { transport } = await connectPane(capabilities)
+      subscriptionSendBinary.mockClear()
+      transport.sendInput('a', 'driving')
+      expect(sentInputs().map((input) => input.text)).toEqual(immediate)
+      transport.sendInput('b', 'driving')
+      await vi.waitFor(() => expect(sentText()).toBe('ab'))
+    }
+  )
+
   it('preserves the acknowledged input session across reconnects', async () => {
     const { transport, streamId } = await connectPane({ inputAck: 1 })
     const payload = latestSubscribePayload()

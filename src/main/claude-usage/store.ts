@@ -14,7 +14,7 @@ import type {
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
-import type { AutomationRunUsage } from '../../shared/automations-types'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
 import type { Store } from '../persistence/loading-store/store'
 import type { ClaudeUsagePersistedState } from './types'
 import {

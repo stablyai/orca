@@ -1,10 +1,11 @@
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useMobileEmulatorTabIntroActions } from './use-mobile-emulator-tab-intro-actions'
 
 export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
+  const t = useTranslate()
   const { keepIntro, hideIntro, dismissIntro } = useMobileEmulatorTabIntroActions()
 
   return (
@@ -14,7 +15,7 @@ export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
       onPointerDown={(event) => event.preventDefault()}
     >
       <p className="min-w-0 flex-1 text-[11px] leading-4 text-foreground/85">
-        {translate(
+        {t(
           'auto.components.emulator.pane.MobileEmulatorTabIntroCallout.5789936d9a',
           'Preview iOS simulators while agents drive the screen.'
         )}
@@ -27,10 +28,7 @@ export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
           className="h-6 px-2 text-[11px]"
           onClick={keepIntro}
         >
-          {translate(
-            'auto.components.emulator.pane.MobileEmulatorTabIntroCallout.8014b4b80b',
-            'Keep'
-          )}
+          {t('auto.components.emulator.pane.MobileEmulatorTabIntroCallout.8014b4b80b', 'Keep')}
         </Button>
         <Button
           type="button"
@@ -39,10 +37,7 @@ export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
           className="h-6 px-2 text-[11px] text-muted-foreground"
           onClick={hideIntro}
         >
-          {translate(
-            'auto.components.emulator.pane.MobileEmulatorTabIntroCallout.6e051a40b7',
-            'Hide'
-          )}
+          {t('auto.components.emulator.pane.MobileEmulatorTabIntroCallout.6e051a40b7', 'Hide')}
         </Button>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -50,7 +45,7 @@ export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.emulator.pane.MobileEmulatorTabIntroCallout.1924982130',
                 'Dismiss'
               )}
@@ -61,10 +56,7 @@ export function MobileEmulatorTabIntroCallout(): React.JSX.Element {
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate(
-              'auto.components.emulator.pane.MobileEmulatorTabIntroCallout.1924982130',
-              'Dismiss'
-            )}
+            {t('auto.components.emulator.pane.MobileEmulatorTabIntroCallout.1924982130', 'Dismiss')}
           </TooltipContent>
         </Tooltip>
       </div>

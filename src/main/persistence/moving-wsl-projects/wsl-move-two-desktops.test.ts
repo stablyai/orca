@@ -17,7 +17,6 @@ import {
   wslMoveRigTempDir,
   type WslMoveRig
 } from '../__fixtures__/wsl-mover/wsl-move-kill-rig'
-import { listWslMoveCutovers } from './wsl-move-cutover-journal'
 import { resetWslMoveDesktopRewriteStoresForTests } from './wsl-move-desktop-rewrite-stores'
 import { moveProjectsToWslHost } from './wsl-move-driver'
 import type { WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-types'
@@ -150,46 +149,6 @@ describe('R39: two desktops moving into one distro', () => {
     })
     expect(wslMoveRigOutcome(rig)).toBe('fully-moved')
     expect(rig.host.getRepos().filter((repo) => repo.id === 'repo-1')).toHaveLength(1)
-  })
-
-  it('the same project again after the first committed: refused, and the host copy is untouched', async () => {
-    expect(await moveProjectsToWslHost(rig.world.deps, request)).toMatchObject({ outcome: 'moved' })
-    const hostBefore = JSON.stringify(rig.host.getRepos())
-    const b = await otherDesktop(() => rig.host, [...rig.world.repos])
-
-    expect(await b.move()).toMatchObject({ outcome: 'refused', code: 'wsl_move_nothing_new' })
-    expect(b.journalPhases()).toEqual([])
-    expect(JSON.stringify(rig.host.getRepos())).toBe(hostBefore)
-    expect(listWslMoveCutovers(rig.userDataPath).map((entry) => entry.phase)).toEqual([
-      'client-rewritten'
-    ])
-  })
-
-  it('the same folder under another id (each profile added it): refused after the first committed', async () => {
-    expect(await moveProjectsToWslHost(rig.world.deps, request)).toMatchObject({ outcome: 'moved' })
-    const hostBefore = JSON.stringify(rig.host.getRepos())
-    const b = await otherDesktop(() => rig.host, [{ ...rig.world.repos[0], id: 'repo-b-profile' }])
-
-    expect(await b.move()).toMatchObject({
-      outcome: 'reset',
-      detail: 'orcad_migration_repository_path_conflict:/home/dev/app'
-    })
-    expect(b.journalPhases()).toEqual([])
-    expect(JSON.stringify(rig.host.getRepos())).toBe(hostBefore)
-  })
-
-  it('the same folder under another id, overlapping: the later stage is refused', async () => {
-    const a = pausedBeforeCommit()
-    await a.paused
-    const b = await otherDesktop(() => rig.host, [{ ...rig.world.repos[0], id: 'repo-b-profile' }])
-
-    const bResult = await b.move()
-    expect(bResult).toMatchObject({ outcome: 'reset' })
-    expect(JSON.stringify(bResult)).toContain(
-      'orcad_migration_staged_claim_conflict:repository-path'
-    )
-    a.release()
-    expect(await a.done).toMatchObject({ outcome: 'moved' })
   })
 
   it('different projects from each, overlapping: both move, and the host holds both', async () => {

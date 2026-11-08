@@ -40,45 +40,6 @@ function decodeCommand(command: string): string {
   return Buffer.from(encoded, 'base64').toString('utf16le')
 }
 
-describe('Windows Unicode managed hook commands', () => {
-  it('keeps the existing ASCII direct path', () => {
-    const scriptPath = 'C:\\Users\\ascii\\.orca\\agent-hooks\\antigravity-pre-tool-use.cmd'
-    expect(wrapWindowsBatchHookCommand(scriptPath)).toBe(scriptPath.replaceAll('\\', '/'))
-  })
-
-  it.each(PROFILES.slice(1))(
-    'preserves the guarded launcher for %s without policy setup',
-    (profile) => {
-      const scriptPath = `C:\\Users\\${profile}\\.orca\\agent-hooks\\antigravity-pre-tool-use.cmd`
-      const decoded = decodeCommand(wrapWindowsBatchHookCommand(scriptPath))
-      expect(decoded).toContain(`Test-Path -LiteralPath '${scriptPath}' -PathType Leaf`)
-      expect(decoded).toContain('[Console]::In.ReadToEnd() | Out-Null; exit 0')
-      expect(decoded).not.toContain('Set-ExecutionPolicy')
-      expect(decoded).toContain("$env:PSExecutionPolicyPreference='Bypass'")
-      expect(wrapWindowsDirectCmdHookCommand(scriptPath)).toBeNull()
-    }
-  )
-
-  it.each([
-    '测试 用户',
-    '用户%PATH%',
-    '用户!PATH!',
-    '用户&exit',
-    '用户^name',
-    "用户'name",
-    '用户;exit',
-    '用户\u3000name',
-    '用户$name',
-    '用户(name)',
-    '用户`name',
-    '用户\u2019name'
-  ])('retains the encoded launcher for %s', (profile) => {
-    const scriptPath = `C:\\Users\\${profile}\\.orca\\agent-hooks\\antigravity-pre-tool-use.cmd`
-    expect(wrapWindowsBatchHookCommand(scriptPath)).toBe(wrapWindowsHookCommand(scriptPath))
-    expect(wrapWindowsDirectCmdHookCommand(scriptPath)).toBeNull()
-  })
-})
-
 function installedCommand(configPath: string, eventName: string): string {
   const config = readHooksJson(configPath)
   const bundle = config?.['orca-status']

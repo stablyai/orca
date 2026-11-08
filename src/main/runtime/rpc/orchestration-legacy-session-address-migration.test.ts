@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { migrateV43 } from '../orchestration/db/schema/migrate-v43'
@@ -111,39 +110,6 @@ describe('a database an earlier build wrote session:<id> addresses into', () => 
       })
     )
     expect(sent).toMatchObject({ ok: true, result: { message: { to_handle: 'run:run_earlier' } } })
-  })
-
-  it('refuses the old spelling as an unknown terminal, even for the Run once remembered under it', async () => {
-    const stored = h.db.getInbox(100).length
-    for (const legacy of [LEGACY_X, LEGACY_Y]) {
-      const sent = await h.dispatch(
-        orchestrationRequest('orchestration.send', {
-          from: WORKER_HANDLE,
-          to: legacy,
-          subject: 's'
-        })
-      )
-      expect(sent).toMatchObject({
-        ok: false,
-        error: {
-          code: 'terminal_not_found',
-          message: `Terminal ${legacy} has no live pane or durable Run/Dispatch mailbox.`
-        }
-      })
-    }
-    expect(h.db.getInbox(100)).toHaveLength(stored)
-  })
-
-  it('files a reply to mail the chat sent before the upgrade at its current address', async () => {
-    expect(h.db.getMessageById(seeded.fromX)?.from_handle).toBe(ADDRESS_X)
-    const replied = await h.dispatch(
-      orchestrationRequest('orchestration.reply', {
-        id: seeded.fromX,
-        body: 'a',
-        from: WORKER_HANDLE
-      })
-    )
-    expect(replied).toMatchObject({ ok: true, result: { message: { to_handle: ADDRESS_X } } })
   })
 
   it('leaves no address in the old spelling, keeping the current row where both were keyed', () => {

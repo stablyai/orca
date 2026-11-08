@@ -8,7 +8,7 @@ import {
   TEST_WORKTREE_PATH
 } from '../../../src/main/runtime/orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
-import type { RuntimePtyController } from '../../../src/main/runtime/runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../../../src/main/runtime/terminal/lifecycle/runtime-pty-controller-contract'
 import { createRuntimeFixture } from './active-tab-publication.test-fixture'
 
 afterEach(() => vi.useRealTimers())

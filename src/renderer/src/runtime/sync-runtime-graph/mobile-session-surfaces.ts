@@ -7,7 +7,7 @@ import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
-} from '../../components/native-chat/native-chat-leaf-routing'
+} from '../../components/native-chat/pane/routing/native-chat-leaf-routing'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
 
 export function mobileTerminalSurfaceId(parentTabId: string, leafId: string): string {

@@ -3,15 +3,16 @@ import type { Project, ProjectUpdateArgs } from '../../../../../../shared/projec
 
 import {
   type LocalWindowsRuntimePreference,
-  normalizeProjectRuntimePreference,
-  resolveProjectExecutionRuntime
-} from '../../../../../../shared/project-execution-runtime'
+  normalizeProjectRuntimePreference
+} from '../../../../../../shared/execution-host/project-runtime-preference'
+import { resolveProjectExecutionRuntime } from '../../../../../../shared/execution-host/project-execution-runtime'
 import { useState } from 'react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { Button } from '../../../ui/button'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import type { ProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { projectRuntimeRepairSentence } from '../../../../../../shared/project-runtime-repair-message'
 
 type ProjectRuntimeSegment = LocalWindowsRuntimePreference['kind']
@@ -40,6 +41,7 @@ export function ProjectWindowsRuntimeSetting({
   runtimeSessionSummary,
   updateProject
 }: ProjectWindowsRuntimeSettingProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [pendingPreference, setPendingPreference] = useState<LocalWindowsRuntimePreference | null>(
     null
   )
@@ -61,10 +63,10 @@ export function ProjectWindowsRuntimeSetting({
   })
   const isWslSelected = selectedPreference.kind === 'wsl'
   const distroOptions = getVisibleDistroOptions(selectedPreference, wslDistros)
-  const runtimeSessionWarning = getRuntimeSessionWarning(runtimeSessionSummary)
+  const runtimeSessionWarning = getRuntimeSessionWarning(runtimeSessionSummary, t)
   const hasRuntimeSessions = hasActiveRuntimeSessions(runtimeSessionSummary)
   const hasPendingPreference = pendingPreference !== null
-  const defaultRuntimeLabel = getDefaultRuntimeLabel(settings)
+  const defaultRuntimeLabel = getDefaultRuntimeLabel(settings, t)
   const commitRuntimePreference = (nextPreference: LocalWindowsRuntimePreference): void => {
     setPendingPreference(null)
     if (nextPreference.kind === 'inherit-global') {
@@ -115,16 +117,16 @@ export function ProjectWindowsRuntimeSetting({
   return (
     <section className="space-y-3">
       <SettingsRow
-        label={translate(
+        label={t(
           'auto.components.settings.ProjectWindowsRuntimeSetting.projectRuntime',
           'Project runtime'
         )}
         alignTop
-        description={getProjectRuntimeDescription(resolution)}
+        description={getProjectRuntimeDescription(resolution, t)}
         control={
           <div className="flex flex-col items-end gap-2">
             <SettingsSegmentedControl<ProjectRuntimeSegment>
-              ariaLabel={translate(
+              ariaLabel={t(
                 'auto.components.settings.ProjectWindowsRuntimeSetting.projectRuntime',
                 'Project runtime'
               )}
@@ -137,17 +139,14 @@ export function ProjectWindowsRuntimeSetting({
                 },
                 {
                   value: 'windows-host',
-                  label: translate(
+                  label: t(
                     'auto.components.settings.ProjectWindowsRuntimeSetting.windows',
                     'Windows'
                   )
                 },
                 {
                   value: 'wsl',
-                  label: translate(
-                    'auto.components.settings.ProjectWindowsRuntimeSetting.wsl',
-                    'WSL'
-                  ),
+                  label: t('auto.components.settings.ProjectWindowsRuntimeSetting.wsl', 'WSL'),
                   disabled: wslCapabilitiesLoading || !wslAvailable || !nextWslDistro
                 }
               ]}
@@ -160,7 +159,7 @@ export function ProjectWindowsRuntimeSetting({
               >
                 <SelectTrigger size="sm" className="w-full min-w-52">
                   <SelectValue
-                    placeholder={translate(
+                    placeholder={t(
                       'auto.components.settings.ProjectWindowsRuntimeSetting.selectDistro',
                       'Select distro'
                     )}
@@ -179,7 +178,7 @@ export function ProjectWindowsRuntimeSetting({
         }
       />
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.ProjectWindowsRuntimeSetting.runtimeChangeHelp',
           'Runtime changes apply to new terminals, agent checks, and skill discovery for this project. Existing terminals keep their current runtime.'
         )}
@@ -190,7 +189,7 @@ export function ProjectWindowsRuntimeSetting({
       {hasPendingPreference ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
           <p className="mr-auto text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ProjectWindowsRuntimeSetting.pendingRuntimeChange',
               'Runtime change pending. New project work will use the selected runtime after you apply.'
             )}
@@ -201,7 +200,7 @@ export function ProjectWindowsRuntimeSetting({
             size="sm"
             onClick={() => setPendingPreference(null)}
           >
-            {translate('auto.components.settings.ProjectWindowsRuntimeSetting.cancel', 'Cancel')}
+            {t('auto.components.settings.ProjectWindowsRuntimeSetting.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
@@ -213,7 +212,7 @@ export function ProjectWindowsRuntimeSetting({
               }
             }}
           >
-            {translate(
+            {t(
               'auto.components.settings.ProjectWindowsRuntimeSetting.applyRuntimeChange',
               'Apply runtime change'
             )}
@@ -238,19 +237,19 @@ function sameRuntimePreference(
   return left.kind !== 'wsl' || left.distro === (right.kind === 'wsl' ? right.distro : null)
 }
 
-function joinRuntimeSessionParts(parts: string[]): string {
+function joinRuntimeSessionParts(parts: string[], t: Translate = translate): string {
   if (parts.length <= 1) {
     return parts[0] ?? ''
   }
-  return translate(
+  return t(
     'auto.components.settings.ProjectWindowsRuntimeSetting.runtimeSessionJoin',
     '{{value0}} and {{value1}}',
     { value0: parts.slice(0, -1).join(', '), value1: parts.at(-1) }
   )
 }
 
-function getLiveTerminalCountLabel(count: number): string {
-  return translate(
+function getLiveTerminalCountLabel(count: number, t: Translate = translate): string {
+  return t(
     count === 1
       ? 'auto.components.settings.ProjectWindowsRuntimeSetting.liveTerminalSingular'
       : 'auto.components.settings.ProjectWindowsRuntimeSetting.liveTerminalPlural',
@@ -259,8 +258,8 @@ function getLiveTerminalCountLabel(count: number): string {
   )
 }
 
-function getActiveTaskCountLabel(count: number): string {
-  return translate(
+function getActiveTaskCountLabel(count: number, t: Translate = translate): string {
+  return t(
     count === 1
       ? 'auto.components.settings.ProjectWindowsRuntimeSetting.activeTaskSingular'
       : 'auto.components.settings.ProjectWindowsRuntimeSetting.activeTaskPlural',
@@ -269,7 +268,10 @@ function getActiveTaskCountLabel(count: number): string {
   )
 }
 
-function getRuntimeSessionWarning(summary?: ProjectRuntimeSessionSummary): string | null {
+function getRuntimeSessionWarning(
+  summary?: ProjectRuntimeSessionSummary,
+  t: Translate = translate
+): string | null {
   const liveTerminalCount = summary?.liveTerminalCount ?? 0
   const activeTaskCount = summary?.activeTaskCount ?? 0
   if (liveTerminalCount === 0 && activeTaskCount === 0) {
@@ -277,14 +279,14 @@ function getRuntimeSessionWarning(summary?: ProjectRuntimeSessionSummary): strin
   }
 
   const parts = [
-    liveTerminalCount > 0 ? getLiveTerminalCountLabel(liveTerminalCount) : '',
-    activeTaskCount > 0 ? getActiveTaskCountLabel(activeTaskCount) : ''
+    liveTerminalCount > 0 ? getLiveTerminalCountLabel(liveTerminalCount, t) : '',
+    activeTaskCount > 0 ? getActiveTaskCountLabel(activeTaskCount, t) : ''
   ].filter((part) => part.length > 0)
 
-  return translate(
+  return t(
     'auto.components.settings.ProjectWindowsRuntimeSetting.runtimeSessionWarning',
     '{{value0}} will keep running in the current runtime. Let tasks finish or restart terminals before continuing.',
-    { value0: joinRuntimeSessionParts(parts) }
+    { value0: joinRuntimeSessionParts(parts, t) }
   )
 }
 
@@ -318,14 +320,15 @@ function getVisibleDistroOptions(
 }
 
 function getDefaultRuntimeLabel(
-  settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'>
+  settings: Pick<GlobalSettings, 'localWindowsRuntimeDefault'>,
+  t: Translate = translate
 ): string {
   const runtimeLabel =
     settings.localWindowsRuntimeDefault.kind === 'wsl'
-      ? translate('auto.components.settings.ProjectWindowsRuntimeSetting.wsl', 'WSL')
-      : translate('auto.components.settings.ProjectWindowsRuntimeSetting.windows', 'Windows')
+      ? t('auto.components.settings.ProjectWindowsRuntimeSetting.wsl', 'WSL')
+      : t('auto.components.settings.ProjectWindowsRuntimeSetting.windows', 'Windows')
 
-  return translate(
+  return t(
     'auto.components.settings.ProjectWindowsRuntimeSetting.defaultRuntime',
     'Default ({{value0}})',
     { value0: runtimeLabel }
@@ -333,7 +336,8 @@ function getDefaultRuntimeLabel(
 }
 
 function getProjectRuntimeDescription(
-  resolution: ReturnType<typeof resolveProjectExecutionRuntime>
+  resolution: ReturnType<typeof resolveProjectExecutionRuntime>,
+  t: Translate = translate
 ): string {
   if (resolution.status === 'repair-required') {
     return projectRuntimeRepairSentence(resolution.repair, translate)
@@ -341,12 +345,12 @@ function getProjectRuntimeDescription(
 
   if (resolution.runtime.kind === 'wsl') {
     return resolution.runtime.reason === 'global-default'
-      ? translate(
+      ? t(
           'auto.components.settings.ProjectWindowsRuntimeSetting.inheritedWsl',
           'No project override. General settings select {{value0}} via WSL.',
           { value0: resolution.runtime.distro }
         )
-      : translate(
+      : t(
           'auto.components.settings.ProjectWindowsRuntimeSetting.projectWsl',
           'This project runs in {{value0}} via WSL.',
           { value0: resolution.runtime.distro }
@@ -354,11 +358,11 @@ function getProjectRuntimeDescription(
   }
 
   return resolution.runtime.reason === 'global-default'
-    ? translate(
+    ? t(
         'auto.components.settings.ProjectWindowsRuntimeSetting.inheritedWindows',
         'No project override. General settings select Windows.'
       )
-    : translate(
+    : t(
         'auto.components.settings.ProjectWindowsRuntimeSetting.projectWindows',
         'This project runs on Windows.'
       )

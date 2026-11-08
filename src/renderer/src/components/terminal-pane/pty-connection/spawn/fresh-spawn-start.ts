@@ -1,9 +1,9 @@
 import { applyTerminalLaunchResult } from '../startup/terminal-launch-result-policy'
 import { armPaneOwnerRetry, isPaneOwnerRefusal } from '../host-ownership/pane-owner-recovery'
-import type { SpawnDeferralReason } from '../../../../../../shared/host-spawn-admission'
+import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
-import { hasWorktreeTeardownStarted } from '@/store/slices/worktree-delete-state-types'
+import { hasWorktreeTeardownStarted } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
 import { hasPtySerializer } from '../../snapshots/pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 

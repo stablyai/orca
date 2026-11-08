@@ -2,12 +2,15 @@
 
 import type { Tab } from '../../../../../../shared/tab-types'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import { sendLayoutApply, type WindowLayoutCommand } from '@/runtime/layout-apply-send'
+import {
+  sendLayoutApply,
+  type WindowLayoutCommand
+} from '@/runtime/workspace-layout/commands/layout-apply-send'
 import {
   expectContentRekey,
   framesShowTabRekeys,
   type TabRekey
-} from '@/runtime/layout-owner-content-rekeys'
+} from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
 import type { AppState } from '../../../types'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { OpenFile } from '../types/open-file'

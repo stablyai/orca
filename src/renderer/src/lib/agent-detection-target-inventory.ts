@@ -11,7 +11,7 @@ import {
   parseAgentDetectionTargetKey,
   type AgentDetectionOwnerState
 } from '@/hooks/useAgentDetectionTarget'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 

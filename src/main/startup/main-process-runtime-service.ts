@@ -25,13 +25,15 @@ import type { TerminalSideEffectBatch } from '../../shared/terminal/output/termi
 import { resolveTuiAgentLaunchEnv } from '../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
+import { trackRuntimeEnvironmentVerifiedTransitions } from '../ipc/runtime-environments/runtime-environment-verified-transitions'
+import { onRuntimeEnvironmentStatusPublished } from '../ipc/runtime-environments/runtime-environment-status-owner'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
 import {
   acceptEphemeralVmWorkspaceWake,
   resumeEphemeralVmWorkspace
 } from '../ephemeral-vm/workspace-resume'
-import { registerRecipeVmWaker } from '../runtime/recipe-vm-waker-registry'
+import { registerRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
@@ -43,12 +45,12 @@ import {
 import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
-import { SkillCloudService } from '../skills/skill-cloud-service'
-import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
+import { SkillCloudService } from '../skills/cloud/skill-cloud-package-service'
+import { isArtifactSharingEnabled } from '../../shared/artifacts/artifact-sharing-gate'
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
-} from '../runtime/agent-status-observed-pane-identity'
+} from '../runtime/terminal/identity/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
@@ -114,7 +116,11 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         homePath,
         resolveTuiAgentLaunchEnv('codex', store.getSettings())
       ),
-    orchestrationEnvironmentTransport: createOrchestrationEnvironmentTransport(),
+    orchestrationEnvironmentTransport: {
+      ...createOrchestrationEnvironmentTransport(),
+      onEnvironmentVerified: (listener) =>
+        onRuntimeEnvironmentStatusPublished(trackRuntimeEnvironmentVerifiedTransitions(listener))
+    },
     workspaceSleepPlatform: {
       callEnvironment: (environmentId, method, params, timeoutMs) =>
         callRuntimeEnvironment(

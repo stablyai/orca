@@ -7,9 +7,9 @@ import { hostQueryKey } from '../query/host-query-key'
 import {
   sourceControlSettingsRead,
   type MobileSourceControlSettings
-} from '../transport/settings-read-operations'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+} from './mobile-source-control-settings-operations'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 const DESKTOP_DEFAULTS: MobileSourceControlSettings = {
   groupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
