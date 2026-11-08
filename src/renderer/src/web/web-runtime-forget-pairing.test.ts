@@ -102,4 +102,27 @@ describe('a stale tab whose migrated pairing lost its device key', () => {
     expect(stored.readStoredWebRuntimeEnvironment()).toBeNull()
     session.closeActiveRuntimeClients()
   })
+
+  it('rebuilds the client when the same pairing returns at a newer revision', async () => {
+    const { stored, session } = await loadSession()
+    const stale = environment(1, 'migrated:keyed-1')
+    stored.saveStoredWebRuntimeEnvironment(stale)
+    session.webRuntimeState.activeEnvironment = stale
+
+    session.getClientForEnvironment(stale)
+    await vi.waitFor(() => expect(fakeSockets).toHaveLength(1))
+    await vi.waitFor(() => expect(stored.readStoredWebRuntimeEnvironment()).toBeNull())
+    const staleClient = session.webRuntimeState.activeClient
+
+    // Re-pairing the same server keeps its id, so only the revision tells the pairings apart.
+    const repaired = environment(2, 'fresh-code')
+    stored.saveStoredWebRuntimeEnvironment(repaired)
+    session.webRuntimeState.activeEnvironment = repaired
+
+    session.getClientForEnvironment(repaired)
+
+    expect(session.webRuntimeState.activeClient).not.toBe(staleClient)
+    await vi.waitFor(() => expect(fakeSockets).toHaveLength(2))
+    session.closeActiveRuntimeClients()
+  })
 })
