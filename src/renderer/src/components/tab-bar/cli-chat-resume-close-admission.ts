@@ -1,5 +1,7 @@
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import { agentLabel } from '../../../../shared/ai-vault/session-display/ai-vault-session-filters'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
 import { structuredChatUnavailableText } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
@@ -154,7 +156,19 @@ export async function admitCliChatResumeClose(
     return null
   }
   if (support.kind === 'refused') {
-    toast.error(cliConversationExitGuidance(source.agent))
+    // An unsaved transcript is the one refusal with its own step: reply first, then continue in chat.
+    const unsavedTranscript =
+      support.refusal.code === 'agent_session_identity_required' &&
+      support.refusal.details?.reason === 'transcriptNotFound'
+    toast.error(
+      unsavedTranscript
+        ? translate(
+            'components.native-chat.resumeInNewChat.notSavedYet',
+            "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
+            { agent: agentLabel(source.agent) }
+          )
+        : cliConversationExitGuidance(source.agent)
+    )
     return null
   }
   if (support.kind === 'declined') {

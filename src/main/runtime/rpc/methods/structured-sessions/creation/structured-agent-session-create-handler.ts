@@ -167,6 +167,13 @@ export async function handleStructuredAgentSessionCreateSupport(
       params.resumeFrom.providerSessionId,
       params.resumeFrom.closingPaneKeys
     )
+    // Create refuses a transcript the agent has not saved yet; asked here, the terminal the
+    // continuation closes stays open instead of stranding a chat that cannot start (#39942).
+    await ctx.runtime.assertStructuredAdoptionTranscriptReadable(
+      params.agent,
+      params.worktree,
+      params.resumeFrom.providerSessionId
+    )
   }
   // Optional: older clients ignore it, and a client seeds its picker with what create will use.
   const seedOptions = support.supported
