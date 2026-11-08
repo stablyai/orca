@@ -124,7 +124,8 @@ function folderLineageToggle(
 function renderLineageGroupVirtualRow(
   ctx: WorktreeVirtualRowContext,
   row: Extract<RenderRow, { type: 'lineage-group' }>,
-  vItem: VirtualItem
+  vItem: VirtualItem,
+  hostInset: number
 ): React.JSX.Element {
   const parent = row.folder ? undefined : row.rows[0]
   const children = row.folder ? row.rows : row.rows.slice(1)
@@ -150,7 +151,10 @@ function renderLineageGroupVirtualRow(
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset) }}
+      style={{
+        transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset),
+        paddingLeft: hostInset || undefined
+      }}
     >
       <div className="overflow-visible">
         {row.folder
@@ -182,6 +186,7 @@ function renderWorktreeVirtualRowFrame(
   ctx: WorktreeVirtualRowContext,
   row: RenderRow,
   vItem: VirtualItem,
+  hostInset: number,
   t?: Translate
 ): React.JSX.Element | null {
   if (row.type === 'host-header') {
@@ -201,14 +206,15 @@ function renderWorktreeVirtualRowFrame(
           index: vItem.index,
           firstHeaderIndex: ctx.firstHeaderIndex
         }),
-        measureVirtualRowElement: ctx.measureVirtualRowElement
+        measureVirtualRowElement: ctx.measureVirtualRowElement,
+        hostInset
       },
       t
     )
   }
 
   if (row.type === 'lineage-group') {
-    return renderLineageGroupVirtualRow(ctx, row, vItem)
+    return renderLineageGroupVirtualRow(ctx, row, vItem, hostInset)
   }
 
   if (row.type === 'imported-worktrees-card') {
@@ -216,6 +222,7 @@ function renderWorktreeVirtualRowFrame(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      hostInset,
       actionStateByProjectId: ctx.importedWorktreeCardActionState,
       onShow: ctx.onShowImportedWorktrees,
       onKeepHidden: ctx.onKeepImportedWorktreesHidden
@@ -227,6 +234,7 @@ function renderWorktreeVirtualRowFrame(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      hostInset,
       actionState: ctx.newExternalWorktreeInboxActionState.get(row.repo.id),
       onReview: ctx.onOpenWorktreeVisibility,
       onSuppress: ctx.onOpenSuppressExternalWorktreeInbox
@@ -237,7 +245,8 @@ function renderWorktreeVirtualRowFrame(
     return renderPendingCreationVirtualRow({
       row,
       vItem,
-      measureVirtualRowElement: ctx.measureVirtualRowElement
+      measureVirtualRowElement: ctx.measureVirtualRowElement,
+      hostInset
     })
   }
 
@@ -247,6 +256,7 @@ function renderWorktreeVirtualRowFrame(
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
+      hostInset,
       lineage: { onToggle: folderLineageToggle(ctx, row) }
     })
   }
@@ -275,7 +285,10 @@ function renderWorktreeVirtualRowFrame(
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
-      style={{ transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset) }}
+      style={{
+        transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset),
+        paddingLeft: hostInset || undefined
+      }}
       onDragOver={
         itemWorkspaceStatus
           ? (event) => ctx.onWorkspaceStatusDragOver(event, itemWorkspaceStatus)
@@ -300,16 +313,10 @@ export function renderWorktreeVirtualRow(
   vItem: VirtualItem,
   t?: Translate
 ): React.JSX.Element | null {
-  const frame = renderWorktreeVirtualRowFrame(ctx, row, vItem, t)
-  const inset = getHostSectionRowInset({
+  const hostInset = getHostSectionRowInset({
     rowType: row.type,
     index: vItem.index,
     firstHostHeaderIndex: ctx.firstHostHeaderIndex
   })
-  if (!frame || inset === 0) {
-    return frame
-  }
-  // Why: every row type owns its frame, so the shared inset is applied to whichever frame it built.
-  const framed: React.ReactElement<{ style?: React.CSSProperties }> = frame
-  return React.cloneElement(framed, { style: { ...framed.props.style, paddingLeft: inset } })
+  return renderWorktreeVirtualRowFrame(ctx, row, vItem, hostInset, t)
 }

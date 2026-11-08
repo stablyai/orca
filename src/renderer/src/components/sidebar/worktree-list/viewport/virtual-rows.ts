@@ -109,6 +109,17 @@ export function getVirtualRowTransform(start: number): string {
   return `translateY(${start}px)`
 }
 
+/** A virtual row frame's style: its offset, or none while pinned, and its host-section inset. */
+export function getVirtualRowFrameStyle(
+  start: number | null,
+  hostInset: number
+): { transform?: string; paddingLeft?: number } {
+  return {
+    ...(start === null ? {} : { transform: getVirtualRowTransform(start) }),
+    ...(hostInset > 0 ? { paddingLeft: hostInset } : {})
+  }
+}
+
 export function getVirtualRowIndex(element: Element): number | null {
   const index = Number.parseInt(element.getAttribute('data-index') ?? '', 10)
   return Number.isNaN(index) ? null : index

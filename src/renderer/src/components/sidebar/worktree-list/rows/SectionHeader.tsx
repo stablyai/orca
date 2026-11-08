@@ -23,7 +23,7 @@ import {
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
-import { getVirtualRowTransform } from '../viewport/virtual-rows'
+import { getVirtualRowFrameStyle } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
@@ -67,6 +67,7 @@ export function renderWorktreeSectionHeaderRow(
     hasStickyHost: boolean
     hasHeaderTopSpacing: boolean
     measureVirtualRowElement: (element: HTMLDivElement | null) => void
+    hostInset: number
   },
   t?: Translate
 ): React.JSX.Element {
@@ -200,7 +201,7 @@ export function renderWorktreeSectionHeaderRow(
             )
           : 'absolute top-0'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: getVirtualRowTransform(vItem.start) }}
+      style={getVirtualRowFrameStyle(isActiveStickyHeader ? null : vItem.start, args.hostInset)}
     >
       <ProjectHeaderHostTooltip label={label} context={hostContext}>
         <div
