@@ -13,8 +13,7 @@
   "rules": {
     "typescript/no-floating-promises": "warn",
     "typescript/no-misused-promises": "warn",
-    "typescript/require-await": "warn",
-    "typescript/return-await": "warn"
+    "typescript/require-await": "warn"
   },
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out", "**/*.test.*", "**/*.spec.*"]
 }
