@@ -1617,7 +1617,7 @@
         "providerRateLimited": "{{agent}} is rate-limited and retrying.",
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
-        "providerResponseFailed": "{{agent}} couldn't finish this response. Send a message to try again.",
+        "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
         "providerRetryLastError": "Last error: {{detail}}.",
         "providerRetryNumber": "Retry {{attempt}}.",
         "providerRetryNumberOf": "Retry {{attempt}} of {{maxRetries}}.",

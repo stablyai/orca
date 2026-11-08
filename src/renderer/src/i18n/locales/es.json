@@ -19005,7 +19005,7 @@
         "providerExitedAnswer": "{{agent}} se detuvo, así que su respuesta no se envió. Envíe un mensaje para continuar.",
         "providerUnavailable": "{{agent}} no pudo responder porque el servicio está ocupado. Elige otro modelo o espera un poco y vuelve a enviar el mensaje.",
         "providerSafetyStopped": "{{agent}} detuvo esta respuesta tras una comprobación de seguridad. Revisa tu solicitud y vuelve a enviarla.",
-        "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Envía un mensaje para volver a intentarlo.",
+        "providerResponseFailed": "{{agent}} no pudo terminar esta respuesta. Abre los detalles para obtener más información.",
         "selectedModel": "el modelo seleccionado",
         "providerRejected": "{{agent}} no aceptó este mensaje.",
         "providerRejectedQuoted": "{{agent}} no aceptó este mensaje: {{detail}}.",

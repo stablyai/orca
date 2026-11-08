@@ -18587,7 +18587,7 @@
         "providerExitedAnswer": "{{agent}} が停止したため、回答は送信されませんでした。続けるにはメッセージを送信してください。",
         "providerUnavailable": "サービスが混雑しているため、{{agent}} は応答できませんでした。別のモデルを選ぶか、しばらく待ってから再送してください。",
         "providerSafetyStopped": "{{agent}} は安全確認の後、この応答を停止しました。リクエストを見直して再送してください。",
-        "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。メッセージを送信して再試行してください。",
+        "providerResponseFailed": "{{agent}} はこの応答を完了できませんでした。詳細を開いて確認してください。",
         "selectedModel": "選択されたモデル",
         "providerRejected": "{{agent}} はこのメッセージを受け付けませんでした。",
         "providerRejectedQuoted": "{{agent}} はこのメッセージを受け付けませんでした: {{detail}}。",

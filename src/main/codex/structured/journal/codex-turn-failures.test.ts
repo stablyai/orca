@@ -135,6 +135,24 @@ describe('Codex terminal failure categories', () => {
     }
   })
 
+  it('keeps completion-only sign-in diagnostics behind Details', () => {
+    const tap = recorder()
+    const translator = translatorFor(tap)
+    translator.handle(notification('turn/started', { turn: { id: TURN_ID } }))
+    translator.handle(
+      notification('turn/completed', {
+        turn: {
+          id: TURN_ID,
+          status: 'failed',
+          error: error({ responseStreamDisconnected: { httpStatusCode: 401 } }).error
+        }
+      })
+    )
+    expect(statuses(tap)).toMatchObject([{ failure: { kind: 'notSignedIn' } }])
+    expect(statuses(tap)[0]?.text).not.toContain(DIAGNOSTIC)
+    expect(statuses(tap)[0]?.providerFrame?.payload.head).toContain(DIAGNOSTIC)
+  })
+
   it('keeps recovered sign-in advice through completion backpressure without another failure row', () => {
     const tap = recorder()
     let rejectCompletion = true
@@ -168,6 +186,8 @@ describe('Codex terminal failure categories', () => {
       (row) => row.body.kind === 'status' && row.body.failure?.kind !== 'providerRetrying'
     )
     expect(terminal.map((row) => row.body)).toMatchObject([{ failure: { kind: 'notSignedIn' } }])
+    expect(statuses(tap)[0]?.text).not.toContain(DIAGNOSTIC)
+    expect(statuses(tap)[0]?.providerFrame?.payload.head).toContain(DIAGNOSTIC)
     expect(reduced(tap.rows).find((row) => row.key === LIFECYCLE_KEY)?.body).toMatchObject({
       state: 'completed',
       outcome: 'failure'

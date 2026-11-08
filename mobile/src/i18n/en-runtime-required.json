@@ -304,7 +304,7 @@
     },
     "failure": {
       "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
-      "providerResponseFailed": "{{agent}} couldn't finish this response. Send a message to try again.",
+      "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
       "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
       "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
       "selectedModel": "the selected model"

@@ -19252,7 +19252,7 @@
         "providerExitedAnswer": "{{agent}} wurde gestoppt, daher wurde die Antwort nicht gesendet. Zum Fortfahren eine Nachricht senden.",
         "providerUnavailable": "{{agent}} konnte nicht antworten, weil der Dienst ausgelastet ist. Wähle ein anderes Modell oder warte kurz und sende erneut.",
         "providerSafetyStopped": "{{agent}} hat diese Antwort nach einer Sicherheitsprüfung gestoppt. Überprüfe deine Anfrage und sende sie erneut.",
-        "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Sende eine Nachricht, um es erneut zu versuchen.",
+        "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
         "selectedModel": "das ausgewählte Modell",
         "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
         "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",

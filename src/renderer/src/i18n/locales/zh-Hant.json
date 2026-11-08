@@ -18994,7 +18994,7 @@
         "modelNotSelected": "{{agent}} 沒有選擇模型。請檢查模型選擇和 {{agent}} 登入狀態，然後重新傳送。",
         "providerUnavailable": "{{agent}} 因服務忙碌而無法回覆。請選擇其他模型，或稍候片刻後重新傳送。",
         "providerSafetyStopped": "{{agent}} 在安全檢查後停止了此次回覆。請檢查您的請求後重新傳送。",
-        "providerResponseFailed": "{{agent}} 無法完成此次回覆。請傳送訊息重試。",
+        "providerResponseFailed": "{{agent}} 未能完成此回覆。開啟詳細資料以取得更多資訊。",
         "selectedModel": "所選模型",
         "providerRejected": "{{agent}} 未接受此訊息。",
         "providerRejectedQuoted": "{{agent}} 未接受此訊息：{{detail}}。",
