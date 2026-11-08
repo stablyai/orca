@@ -14,7 +14,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
   'display-name': '--display-name <name>  Override the Orca display name',
   environment:
-    '--environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them',
+    "--environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them",
   'pairing-code':
     '--pairing-code <code>  Run against a remote Orca server using an orca://pair?... code',
   'element-index': '--element-index <n>   Element index from get-app-state',
@@ -61,6 +61,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   pages: '--pages <n>           Number of scroll pages',
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+  'parent-environment':
+    "--parent-environment <environment> Environment holding --parent-worktree: local, or a saved environment id or name (default: the worktree's own)",
   path: '--path <path>          Path argument for the command',
   pr: '--pr <number|null>     Linked GitHub pull request number; null clears on set',
   prompt: '--prompt <text>        Prompt text for agent-backed commands',
