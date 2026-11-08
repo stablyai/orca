@@ -7,7 +7,7 @@ import {
   readManagedHookDetectionResult,
   type ManagedHookDetectionSettings
 } from './managed-hook-detection-commands'
-import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import type { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
 import { WSL_HOOK_FS_METHODS, type WslFsResult } from '../../shared/wsl-hook-relay-contract'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 

@@ -4,7 +4,7 @@ import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentat
 import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { HomeAgentEntry } from '../worktree/home-worktree-info'
-import type { AgentStatusGroup } from './agent-list-model'
+import type { AgentStatusGroup } from './agent-list-rows'
 
 /** The row's name: what the conversation is called, else its task, else what it was asked. */
 export function agentListTitle(agent: RuntimeWorktreeAgentRow): string {
@@ -32,7 +32,8 @@ function lastMessage(agent: RuntimeWorktreeAgentRow): string {
  */
 export function agentListPreview(
   agent: RuntimeWorktreeAgentRow,
-  group: AgentStatusGroup | null
+  group: AgentStatusGroup | null,
+  title: string
 ): string {
   const tool = group === null ? '' : oneLine(formatAgentToolPreviewLine(agent, false))
   const preview =
@@ -43,7 +44,7 @@ export function agentListPreview(
     return preview
   }
   const prompt = oneLine(getAgentRowPrimaryText({ prompt: agent.prompt }))
-  return prompt === agentListTitle(agent) ? '' : prompt
+  return prompt === title ? '' : prompt
 }
 
 /** Search covers what the row shows plus the prompt; `query` is already lower-cased. */
@@ -51,6 +52,7 @@ export function agentListEntryMatches(entry: HomeAgentEntry, query: string): boo
   const { agent } = entry
   return [
     agentListTitle(agent),
+    agent.activity?.listed === true ? agent.activity.title : null,
     entry.workspaceName,
     entry.branch,
     entry.repo,

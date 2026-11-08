@@ -16,12 +16,14 @@ export async function loadAgentListView(): Promise<AgentListView> {
     }
     const groupBy = 'groupBy' in parsed ? parsed.groupBy : undefined
     const showWorkers = 'showWorkers' in parsed ? parsed.showWorkers : undefined
+    const unreadOnly = 'unreadOnly' in parsed ? parsed.unreadOnly : undefined
     return {
       groupBy:
         AGENT_LIST_GROUP_BY_CHOICES.find((choice) => choice === groupBy) ??
         DEFAULT_AGENT_LIST_VIEW.groupBy,
       showWorkers:
-        typeof showWorkers === 'boolean' ? showWorkers : DEFAULT_AGENT_LIST_VIEW.showWorkers
+        typeof showWorkers === 'boolean' ? showWorkers : DEFAULT_AGENT_LIST_VIEW.showWorkers,
+      unreadOnly: typeof unreadOnly === 'boolean' ? unreadOnly : DEFAULT_AGENT_LIST_VIEW.unreadOnly
     }
   } catch {
     return DEFAULT_AGENT_LIST_VIEW

@@ -72,5 +72,5 @@
 3 src/main/runtime/terminal/surface/mobile-session-layout-projection.ts
 1 src/main/runtime/workspaces/session-hosts/get-runtime-id.ts
 1 src/main/runtime/workspaces/session-hosts/runtime-workspace-session-controller.ts
-1 src/main/ssh/orcad-migration-source-retention.ts
+1 src/main/persistence/migrating-orcad-catalog/orcad-migration-source-retention.ts
 1 src/main/ssh/targets/ssh-target-id-migration.ts

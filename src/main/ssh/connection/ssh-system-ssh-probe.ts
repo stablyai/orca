@@ -2,7 +2,7 @@ import type { ClientChannel } from 'ssh2'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { isOpenSshConfigBackedTarget } from '../system-transport/system-ssh-args'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
-import { createCancelledConnectAttemptError } from '../ssh-connect-attempt-cancellation'
+import { createCancelledConnectAttemptError } from './reconnect/ssh-connect-attempt-cancellation'
 import { CONNECT_TIMEOUT_MS } from './ssh-connection-timing'
 
 export function cloneResolvedConfig(config: SshResolvedConfig | null): SshResolvedConfig | null {

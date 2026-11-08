@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { requestGuestOpenCodeOverlayDir } from './wsl-guest-plugin-install'
-import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import type { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
 
 function fakeMux(
   request: () => Promise<unknown>,

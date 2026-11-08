@@ -1,6 +1,6 @@
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
-import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+import type { SshChannelMultiplexer } from '../ssh/protocol/ssh-channel-multiplexer'
 import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_PANE_ROOT_METHOD

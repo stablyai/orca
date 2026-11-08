@@ -15280,7 +15280,9 @@
             "needsIsolatedFrames": "This panel is not available: it needs isolated plugin frames, which are turned off."
           },
           "activityBar": {
-            "error": "Error"
+            "error": "Error",
+            "disablePlugin": "Disable Plugin",
+            "disableFailed": "Could not disable plugin."
           },
           "AiVaultSessionLimitMenu": {
             "historyDepth": "History depth: {{value0}}",

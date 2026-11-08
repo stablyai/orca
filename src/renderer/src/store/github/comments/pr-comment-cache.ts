@@ -17,6 +17,7 @@ export function mergePRCommentIntoList(
   byId.set(incoming.id, {
     ...previous,
     ...incoming,
+    bodyImageUrls: incoming.bodyImageUrls,
     threadId: incoming.threadId ?? previous?.threadId,
     path: incoming.path ?? previous?.path,
     line: incoming.line ?? previous?.line,
