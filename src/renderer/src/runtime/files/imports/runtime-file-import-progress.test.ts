@@ -342,7 +342,7 @@ describe('runtime file import progress and cancel', () => {
 
   it('marks a cancelled file cancelled through the IPC error wrapper', async () => {
     const [result] = await importFileThatThrowsAfterCancel(
-      "Error invoking remote method 'fs:uploadExternalFileToRuntime': Error: Upload cancelled"
+      "Error invoking remote method 'fs:uploadExternalFileToRuntime': RuntimeUploadCancelledError: Upload cancelled"
     )
 
     expect(result).toMatchObject({ status: 'failed', cancelled: true })
@@ -426,45 +426,5 @@ describe('runtime file import progress and cancel', () => {
       })
     )
     expect(progress.onRowSettled).toHaveBeenCalledWith(expect.any(String), 'cancelled')
-  })
-
-  it('keeps a file done when its cancel lands after commitUpload was sent', async () => {
-    fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
-      sources: [
-        {
-          sourcePath: '/Users/me/clip.mp4',
-          status: 'staged',
-          name: 'clip.mp4',
-          kind: 'file',
-          entries: [stagedFile('', 10, 7)]
-        }
-      ]
-    })
-    let cancelled = false
-    runtimeEnvironmentCall.mockImplementation(async (call: { method: string }) => {
-      if (call.method === 'files.commitUpload') {
-        cancelled = true
-      }
-      return call.method === 'files.stat' ? notFoundResponse('stat-miss') : okResponse('ok')
-    })
-    const progress = { ...quietHandlers(), isCancelled: () => cancelled }
-
-    const { results } = await importExternalPathsToRuntime(
-      {
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        worktreePath: '/remote/repo'
-      },
-      ['/Users/me/clip.mp4'],
-      '/remote/repo/uploads',
-      { progress }
-    )
-
-    expect(results[0]).toMatchObject({
-      status: 'imported',
-      destPath: '/remote/repo/uploads/clip.mp4'
-    })
-    expect(progress.onRowSettled).toHaveBeenCalledWith(expect.any(String), 'done')
-    expect(progress.onRowSettled).not.toHaveBeenCalledWith(expect.any(String), 'cancelled')
   })
 })

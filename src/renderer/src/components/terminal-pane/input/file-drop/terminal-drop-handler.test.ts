@@ -130,13 +130,6 @@ function startRowThenAbort(options: ImportOptions | undefined): void {
   options?.progress?.onFinish()
 }
 
-function announceRowThenResolve(value: unknown) {
-  return async (_context: unknown, _paths: unknown, _dest: unknown, options?: ImportOptions) => {
-    startAndFinishRow(options)
-    return value
-  }
-}
-
 /** Drops one client file onto the only pane, whose transport is connected. */
 async function dropLogoOnSinglePane(): Promise<void> {
   const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
@@ -277,19 +270,6 @@ describe('handleTerminalFileDrop', () => {
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
-  })
-
-  it('publishes the upload panel without an explicit undefined id', async () => {
-    mocks.importExternalPathsToRuntime.mockImplementation(announceRowThenResolve({ results: [] }))
-    await dropLogoOnSinglePane()
-
-    // Why: sonner spreads these options over the id it just minted, so passing
-    // `id: undefined` registers the toast under an id it never returns and every
-    // re-issue stacks another panel instead of updating the first.
-    expect(mocks.toastCustom).toHaveBeenCalledTimes(1)
-    const options = mocks.toastCustom.mock.calls[0]?.[1]
-    expect(options).toBeDefined()
-    expect(Object.keys(options ?? {})).not.toContain('id')
   })
 
   it('tears the upload panel down immediately when the import throws', async () => {

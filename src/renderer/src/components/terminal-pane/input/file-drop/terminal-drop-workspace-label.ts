@@ -17,7 +17,7 @@ export function describeDropWorkspaceIfInactive(
     return undefined
   }
   const worktree = selectKnownWorktreeById(state, worktreeId)
-  // Why: folder workspaces are not in worktreesByRepo; their folder name is the label.
+  // Why: a workspace the catalog cannot resolve is still named by its folder.
   const name = (worktree ? resolveWorktreeDisplayName(worktree) : '') || basename(worktreePath)
   if (!name) {
     return undefined
