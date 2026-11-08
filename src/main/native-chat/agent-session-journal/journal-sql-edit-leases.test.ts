@@ -2,7 +2,6 @@ import { afterEach, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA } from './journal-domain-current-queue-schema'
 import {
   applyJournalDomainEditLease,
   journalDomainEditLeaseDeadline,
@@ -22,8 +21,6 @@ function fixture() {
   const db = new Database(':memory:')
   databases.push(db)
   migrateJournalDomainSchema(db)
-  // Temporary until the central ordered migration list runs this body.
-  db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA)
   // Each seed is a content or state write on the one current row, as the queue writers make.
   const seed = (fields: Partial<QueuedMessageRow> = {}) => {
     const { messageId, state, position, ...card }: QueuedMessageRow = {

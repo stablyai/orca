@@ -16,6 +16,7 @@ import {
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
+import { migrateJournalDomainPredecessor } from './journal-domain-migrations.test-fixture'
 import { createJournalReducerState } from '../projection/journal-reducer'
 import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
 
@@ -308,24 +309,8 @@ it('retries a failed numbered migration in the published file without recopying 
   const filename = await initializeJournalDomainDatabase(stateDirectory)
   const db = new Database(filename)
   cleanup.push(() => db.close())
-  migrateJournalDomainSchema(db)
-  db.exec(`DROP INDEX journal_items_root_position;
-    DROP INDEX journal_items_turn_marker;
-    DROP INDEX journal_items_named_subagents;
-    ALTER TABLE journal_items DROP COLUMN hidden;
-    ALTER TABLE journal_items DROP COLUMN root;
-    ALTER TABLE journal_items DROP COLUMN subagent_row;
-    ALTER TABLE journal_items DROP COLUMN subagent_group_key;
-    ALTER TABLE journal_items DROP COLUMN named_subagent_ids;
-    ALTER TABLE journal_items DROP COLUMN turn_marker;
-    DROP TABLE journal_edit_leases;
-    DROP INDEX journal_events_saved_at;
-    DROP INDEX journal_card_order;
-    DROP INDEX journal_card_last_position;
-    DROP INDEX journal_submission_source_card;
-    ALTER TABLE journal_card_versions DROP COLUMN position;
-    INSERT INTO journal_items VALUES('chat','epoch','item',1,2,1,0,1,NULL,'invalid JSON');
-    PRAGMA user_version=5`)
+  migrateJournalDomainPredecessor(db, 5)
+  db.exec(`INSERT INTO journal_items VALUES('chat','epoch','item',1,2,1,0,1,NULL,'invalid JSON')`)
   expect(() => openJournalDomainDatabase(filename)).toThrow()
   expect(db.pragma('user_version', { simple: true })).toBe(5)
   expect(() => db.prepare('SELECT root FROM journal_items')).toThrow()

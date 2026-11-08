@@ -12,7 +12,7 @@ import {
 } from '../agent-session-attachments/agent-session-attachment-claims'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
-import { JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA } from './journal-domain-current-queue-schema'
+import { migrateJournalDomainPredecessor } from './database/journal-domain-migrations.test-fixture'
 import {
   applyJournalDomainEditLease,
   journalDomainMessageEditHeld
@@ -45,8 +45,6 @@ function fixture() {
     rmSync(stateDirectory, { recursive: true, force: true })
   })
   migrateJournalDomainSchema(db)
-  // Temporary until the central ordered migration list runs this body.
-  db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA)
   ensureAgentSessionAttachmentClaimTables(db)
   db.prepare(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
     VALUES('chat','epoch',10,1)`).run()
@@ -307,7 +305,7 @@ it('holds waiting cards and withdraws unsettled ones, ending only invalidated ed
 it('migrates current cards in place and snapshots admission provenance from the named card', () => {
   const db = new Database(':memory:')
   cleanups.push(() => db.close())
-  migrateJournalDomainSchema(db)
+  migrateJournalDomainPredecessor(db, 9)
   const version = (
     messageId: string,
     sequence: number,
@@ -354,9 +352,7 @@ it('migrates current cards in place and snapshots admission provenance from the 
     fingerprint,state,consumed_as,expires_at) VALUES('chat','epoch','handle','phone','edit','mine','f',
     'waiting',NULL,?)`).run(now + 60_000)
 
-  db.exec('BEGIN IMMEDIATE')
-  db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA)
-  db.exec('COMMIT')
+  migrateJournalDomainSchema(db)
 
   const accepted = readJournalSqlAcceptedInputs(db, ['chat', 'epoch'])
   expect(accepted).toEqual({ latestAcceptedTurnSequence: 10, latestPersonAcceptedSequence: 7 })

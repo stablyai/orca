@@ -4,6 +4,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session/jo
 import { journalDomainHistoryMetadata } from '../journal-domain-history-metadata'
 import { JOURNAL_DOMAIN_EDIT_LEASE_SCHEMA } from '../journal-domain-edit-lease-schema'
 import { migrateJournalDomainQueueSchema } from '../journal-domain-queue-schema'
+import { JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA } from '../journal-domain-current-queue-schema'
 import { ensureJournalOutcomeTables } from '../outcomes/journal-outcome-format'
 import { ensureCommandReceiptsTable } from '../writing/command-receipt-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../../agent-session-attachments/agent-session-attachment-claims'
@@ -13,7 +14,7 @@ import {
   createJournalTablesSql
 } from './journal-database-schema'
 
-const JOURNAL_DOMAIN_MIGRATIONS: readonly {
+export const JOURNAL_DOMAIN_MIGRATIONS: readonly {
   version: number
   migrate: (db: Database.Database) => void
 }[] = [
@@ -28,7 +29,8 @@ const JOURNAL_DOMAIN_MIGRATIONS: readonly {
       CREATE INDEX journal_events_saved_at ON journal_events(saved_at,session_id,epoch,sequence);`)
   },
   { version: 8, migrate: migrateJournalDomainQueueSchema },
-  { version: 9, migrate: dropJournalProjectionTables }
+  { version: 9, migrate: dropJournalProjectionTables },
+  { version: 10, migrate: (db) => db.exec(JOURNAL_DOMAIN_CURRENT_QUEUE_SCHEMA) }
 ]
 
 export const JOURNAL_DOMAIN_SCHEMA_VERSION = JOURNAL_DOMAIN_MIGRATIONS.at(-1)!.version

@@ -12,6 +12,8 @@ import {
   type JournalDomainHistoryRequest
 } from './journal-domain-history-page'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
+import { JOURNAL_DOMAIN_SCHEMA_VERSION } from './database/journal-domain-migrations'
+import { migrateJournalDomainPredecessor } from './database/journal-domain-migrations.test-fixture'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -148,8 +150,10 @@ it('never splits a same-sequence group, marking it oversized backward and paging
 it('catches up with the current revision, placement and submission, not the replayed metadata', async () => {
   const { db, commit, seedSend, read } = history()
   seedSend()
-  db.exec(`INSERT INTO journal_submission_attempts
-    SELECT session_id,epoch,message_id,0,0,0,item_id,0,0,NULL,fingerprint,'unknown',0,NULL,NULL,'{}'
+  db.exec(`INSERT INTO journal_submission_attempts(session_id,epoch,message_id,attempt_sequence,
+    attempt_index,current,item_id,ordinal,submitted_at,accepted_sequence,fingerprint,
+    dispatch_state,candidate,payload_json)
+    SELECT session_id,epoch,message_id,0,0,0,item_id,0,0,NULL,fingerprint,'unknown',0,'{}'
     FROM journal_submission_attempts WHERE current=1`)
   await commit(message('first'))
   await commit(message('second'))
@@ -261,23 +265,7 @@ it('answers every selected read from the snapshot its head came from', () => {
 it('backfills history metadata once from the preceding numbered schema and refuses a newer schema', () => {
   const db = new Database(':memory:')
   cleanup.push(() => db.close())
-  migrateJournalDomainSchema(db)
-  db.exec(`DROP INDEX journal_items_root_position;
-    DROP INDEX journal_items_turn_marker;
-    DROP INDEX journal_items_named_subagents;
-    ALTER TABLE journal_items DROP COLUMN hidden;
-    ALTER TABLE journal_items DROP COLUMN root;
-    ALTER TABLE journal_items DROP COLUMN subagent_row;
-    ALTER TABLE journal_items DROP COLUMN subagent_group_key;
-    ALTER TABLE journal_items DROP COLUMN named_subagent_ids;
-    ALTER TABLE journal_items DROP COLUMN turn_marker;
-    DROP TABLE journal_edit_leases;
-    DROP INDEX journal_events_saved_at;
-    DROP INDEX journal_card_order;
-    DROP INDEX journal_card_last_position;
-    DROP INDEX journal_submission_source_card;
-    ALTER TABLE journal_card_versions DROP COLUMN position;
-    PRAGMA user_version=5`)
+  migrateJournalDomainPredecessor(db, 5)
   const rows: AgentJournalRenderItem[] = [
     {
       ...text(1, ''),
@@ -348,7 +336,7 @@ it('backfills history metadata once from the preceding numbered schema and refus
       payload_json: JSON.stringify(rows[2])
     }
   ])
-  db.exec('PRAGMA user_version=10')
+  db.pragma(`user_version=${JOURNAL_DOMAIN_SCHEMA_VERSION + 1}`)
   expect(() => migrateJournalDomainSchema(db)).toThrow(
     'journal domain schema is newer than this writer'
   )
