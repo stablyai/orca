@@ -218,7 +218,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code, message))
+    return errorResponse(id, meta, code, message, computerUseErrorRecoveryData(code, message))
   }
   if (
     error instanceof Error &&
@@ -306,8 +306,6 @@ function agentSessionRefusalErrorResponse(
     { refusal: agentSessionRefusalReference(error.refusal) }
   )
 }
-
-export const computerErrorData = computerUseErrorRecoveryData
 
 // EmulatorError.code likewise uses its own namespace rather than generic runtime_error.
 export function mapEmulatorError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
