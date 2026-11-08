@@ -82,8 +82,9 @@ export function useAiVaultSessionRefresh(
   const publicationGateRef = useRef<AiVaultSessionPublicationGate>(undefined!)
   publicationGateRef.current ??= new AiVaultSessionPublicationGate()
   const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)}\n${sessionLimit}`
-  // Workspace or Project rows would pass for All's list while it loads or after it fails; the filter narrows the rest.
-  const shown = scan?.scopeOnly && !scopeOnly ? null : scan
+  const scopePending = scan?.scopeKey !== scanScopeKey && terminalScopeKey !== scanScopeKey
+  // Workspace or Project rows stand in, as loading, while All loads, but would pass for All's list once it fails.
+  const shown = scan?.scopeOnly && !scopeOnly && !scopePending ? null : scan
   // Kept through rescans so a repeat failure doesn't blink; shown only for the scope that failed.
   const error = failure?.scopeKey === scanScopeKey ? aiVaultScanErrorText(failure.cause) : null
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
@@ -315,7 +316,6 @@ export function useAiVaultSessionRefresh(
     requestForcedRescan()
   }, [agentSessionIdsKey, requestForcedRescan])
 
-  const scopePending = scan?.scopeKey !== scanScopeKey && terminalScopeKey !== scanScopeKey
   return {
     error,
     loading: loading || scopePending,

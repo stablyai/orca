@@ -206,7 +206,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.scanResult?.scannedAt).toBe('2026-07-01T00:00:02.000Z')
   })
 
-  it('does not show Workspace-only rows under All while All loads or after it fails', async () => {
+  it('keeps Workspace-only rows as loading while All loads, and drops them once All fails', async () => {
     let failAll: (error: Error) => void = () => {}
     listSessionsMock.mockImplementation((args) =>
       args.scopeOnly
@@ -221,7 +221,7 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
 
     await rerenderHook(['/repo'], 'local', 250, false)
     await flushMicrotasks()
-    expect(latest?.sessions).toEqual([])
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
     expect(latest?.loading).toBe(true)
 
     await act(async () => failAll(new Error('scan failed')))
