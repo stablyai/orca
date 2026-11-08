@@ -1,8 +1,9 @@
 import {
-  collectGitHubImageBody,
-  enrichGitHubBodyImages,
-  type GitHubBodyImageTarget
-} from './body-image-enrichment'
+  GITHUB_BODY_MEDIA_TYPE,
+  githubBodyImageUrls,
+  removeFailedGitHubBodyHtml
+} from './body-image-urls'
+import { extractExecError } from '../git/exec-error'
 import type { GitHubIssueTimelineItem, PRComment } from '../../shared/github/comment-types'
 import type { GitHubAssignableUser } from '../../shared/github/pull-request-types'
 import {
@@ -51,25 +52,33 @@ export async function getIssueDetailsViaGraphQL(
   }
   try {
     noteRepositoryRateLimitSpend(repository, 'graphql', 1, ghOptions)
-    const { stdout } = await ghExecFileAsync(
-      [
-        'api',
-        'graphql',
-        '-f',
-        `query=${ISSUE_DETAILS_QUERY}`,
-        '-f',
-        `owner=${repository.owner}`,
-        '-f',
-        `repo=${repository.repo}`,
-        '-F',
-        `number=${issueNumber}`,
-        '-F',
-        `includeItem=${includeItem}`
-      ],
-      ghOptions
-    )
-    const parsed = JSON.parse(stdout) as GraphQLIssueDetailsResponse
-    if (parsed.errors && parsed.errors.length > 0) {
+    let stdout: string
+    let rejected = false
+    try {
+      ;({ stdout } = await ghExecFileAsync(
+        [
+          'api',
+          'graphql',
+          '-f',
+          `query=${ISSUE_DETAILS_QUERY}`,
+          '-f',
+          `owner=${repository.owner}`,
+          '-f',
+          `repo=${repository.repo}`,
+          '-F',
+          `number=${issueNumber}`,
+          '-F',
+          `includeItem=${includeItem}`
+        ],
+        ghOptions
+      ))
+    } catch (error) {
+      stdout = extractExecError(error).stdout
+      rejected = true
+    }
+    const parsed: GraphQLIssueDetailsResponse = JSON.parse(stdout)
+    const errors = removeFailedGitHubBodyHtml(parsed.data, parsed.errors)
+    if (errors?.length || (rejected && !parsed.errors?.length)) {
       return null
     }
     const issue = parsed.data?.repository?.issue
@@ -88,20 +97,20 @@ export async function getIssueDetailsViaGraphQL(
     if (itemData?.success && itemData.data.number !== issueNumber) {
       return null
     }
-    const imageTargets: GitHubBodyImageTarget[] = []
     const comments: PRComment[] = (issue.comments?.nodes ?? [])
-      .filter((comment) => typeof comment.databaseId === 'number')
-      .map((comment) =>
-        collectGitHubImageBody(imageTargets, comment.id, {
-          id: comment.databaseId as number,
-          author: comment.author?.login ?? 'ghost',
-          authorAvatarUrl: comment.author?.avatarUrl ?? '',
-          body: comment.body ?? '',
-          createdAt: comment.createdAt ?? '',
-          url: comment.url ?? '',
-          isBot: comment.author?.__typename === 'Bot'
-        })
+      .filter(
+        (comment): comment is NonNullable<typeof comment> => typeof comment?.databaseId === 'number'
       )
+      .map((comment) => ({
+        id: comment.databaseId as number,
+        author: comment.author?.login ?? 'ghost',
+        authorAvatarUrl: comment.author?.avatarUrl ?? '',
+        body: comment.body ?? '',
+        bodyImageUrls: githubBodyImageUrls(comment.body, comment.bodyHTML),
+        createdAt: comment.createdAt ?? '',
+        url: comment.url ?? '',
+        isBot: comment.author?.__typename === 'Bot'
+      }))
     const assigneeUsers: GitHubAssignableUser[] = (issue.assignees?.nodes ?? [])
       .filter((assignee): assignee is { login: string; avatarUrl?: string; name?: string | null } =>
         Boolean(assignee?.login)
@@ -131,14 +140,13 @@ export async function getIssueDetailsViaGraphQL(
           }
         : {}),
       body: issue.body ?? '',
+      bodyImageUrls: githubBodyImageUrls(issue.body, issue.bodyHTML),
       comments,
       assignees: assigneeUsers.map((assignee) => assignee.login),
       assigneeUsers,
       participants,
       timelineItems: await getIssueTimelineItems(repository, issueNumber, ghOptions, fresh)
     }
-    collectGitHubImageBody(imageTargets, issue.id, details)
-    await enrichGitHubBodyImages(imageTargets, repository, ghOptions)
     return details
   } catch {
     return null
@@ -172,7 +180,8 @@ export async function getIssueBodyAndComments(
         ghExecFileAsync(
           [
             'api',
-            ...(fresh ? [] : ['--cache', '60s']),
+            '-H',
+            GITHUB_BODY_MEDIA_TYPE,
             `repos/${repository.owner}/${repository.repo}/issues/${issueNumber}`
           ],
           ghOptions
@@ -180,7 +189,8 @@ export async function getIssueBodyAndComments(
         ghExecFileAsync(
           [
             'api',
-            ...(fresh ? [] : ['--cache', '60s']),
+            '-H',
+            GITHUB_BODY_MEDIA_TYPE,
             ...(fresh ? ['--paginate', '--slurp'] : []),
             `repos/${repository.owner}/${repository.repo}/issues/${issueNumber}/comments?per_page=100`
           ],
@@ -189,15 +199,15 @@ export async function getIssueBodyAndComments(
         getIssueTimelineItems(repository, issueNumber, ghOptions, fresh)
       ])
       const issue: {
-        node_id?: string
         body?: string | null
+        body_html?: unknown
         assignees?: { login: string }[]
       } = JSON.parse(issueResult.stdout)
       type RESTComment = {
-        node_id?: string
         id: number
         user: { login: string; avatar_url: string; type?: string } | null
         body: string
+        body_html?: unknown
         created_at: string
         html_url: string
       }
@@ -206,26 +216,23 @@ export async function getIssueBodyAndComments(
       }
       // A slurped (paginated) read nests one array per page; an ordinary read is one page.
       const parsedComments: RESTComment[][] | RESTComment[] = JSON.parse(commentsResult.stdout)
-      const imageTargets: GitHubBodyImageTarget[] = []
-      const comments = parsedComments.flat().map((comment): PRComment =>
-        collectGitHubImageBody(imageTargets, comment.node_id, {
-          id: comment.id,
-          author: comment.user?.login ?? 'ghost',
-          authorAvatarUrl: comment.user?.avatar_url ?? '',
-          body: comment.body ?? '',
-          createdAt: comment.created_at,
-          url: comment.html_url,
-          isBot: comment.user?.type === 'Bot'
-        })
-      )
+      const comments = parsedComments.flat().map((comment): PRComment => ({
+        id: comment.id,
+        author: comment.user?.login ?? 'ghost',
+        authorAvatarUrl: comment.user?.avatar_url ?? '',
+        body: comment.body ?? '',
+        bodyImageUrls: githubBodyImageUrls(comment.body, comment.body_html),
+        createdAt: comment.created_at,
+        url: comment.html_url,
+        isBot: comment.user?.type === 'Bot'
+      }))
       const details = {
         body: issue.body ?? '',
+        bodyImageUrls: githubBodyImageUrls(issue.body, issue.body_html),
         comments,
         assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
         timelineItems
       }
-      collectGitHubImageBody(imageTargets, issue.node_id, details)
-      await enrichGitHubBodyImages(imageTargets, repository, ghOptions)
       return details
     }
     if (connectionId) {

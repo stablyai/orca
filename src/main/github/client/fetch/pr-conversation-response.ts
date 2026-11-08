@@ -1,4 +1,4 @@
-import type { GitHubBodyImageTarget } from '../../body-image-enrichment'
+import { githubBodyImageUrls, removeFailedGitHubBodyHtml } from '../../body-image-urls'
 import type { Nodes } from 'mdast'
 import { z } from 'zod'
 import remarkParse from 'remark-parse'
@@ -14,6 +14,7 @@ const commentSchema = z.object({
     .object({ __typename: z.string().optional(), login: z.string(), avatarUrl: z.string() })
     .nullable(),
   body: z.string().nullish(),
+  bodyHTML: z.unknown().optional(),
   createdAt: z.string(),
   submittedAt: z.string().nullish(),
   url: z.string(),
@@ -79,21 +80,20 @@ function hasDatabaseId<T extends { databaseId: number | null }>(
 }
 
 function mapGraphQLComment(
-  comment: z.infer<typeof commentSchema> & { databaseId: number },
-  targets?: GitHubBodyImageTarget[]
+  comment: z.infer<typeof commentSchema> & { databaseId: number }
 ): PRComment {
   const mapped: PRComment = {
     id: comment.databaseId,
     author: comment.author?.login ?? 'ghost',
     authorAvatarUrl: comment.author?.avatarUrl ?? '',
     body: comment.body ?? '',
+    bodyImageUrls: githubBodyImageUrls(comment.body, comment.bodyHTML),
     createdAt: comment.submittedAt ?? comment.createdAt,
     url: comment.url,
     isBot: comment.author?.__typename === 'Bot',
     reactionSubjectId: comment.id,
     reactions: mapGraphQLReactionGroups(comment.reactionGroups)
   }
-  targets?.push({ nodeId: comment.id, target: mapped })
   return mapped
 }
 
@@ -118,19 +118,17 @@ function hasVisibleReviewBody(body: string | null | undefined): boolean {
   return reviewMarkdown.parse(body).children.some(hasVisibleNode)
 }
 
-export function parsePRConversationResponse(
-  stdout: string,
-  targets?: GitHubBodyImageTarget[]
-): {
+export function parsePRConversationResponse(stdout: string): {
   issueComments?: PRComment[]
   reviewSummaries?: PRComment[]
   reviewComments: PRComment[]
 } {
   const envelope = envelopeSchema.parse(JSON.parse(stdout))
+  const errors = removeFailedGitHubBodyHtml(envelope.data, envelope.errors)
   const pr = envelope.data?.repository?.pullRequest
   const failed = (source: string): boolean =>
     Boolean(
-      envelope.errors?.some(
+      errors?.some(
         (error) =>
           !error.path?.length || !error.path.includes('pullRequest') || error.path[2] === source
       )
@@ -141,20 +139,20 @@ export function parsePRConversationResponse(
   return {
     issueComments:
       comments.success && !failed('comments')
-        ? comments.data.nodes.filter(hasDatabaseId).map((c) => mapGraphQLComment(c, targets))
+        ? comments.data.nodes.filter(hasDatabaseId).map(mapGraphQLComment)
         : undefined,
     reviewSummaries:
       reviews.success && !failed('reviews')
         ? reviews.data.nodes
             .filter(hasDatabaseId)
             .filter((c) => hasVisibleReviewBody(c.body))
-            .map((c) => mapGraphQLComment(c, targets))
+            .map(mapGraphQLComment)
         : undefined,
     reviewComments: threads.success
       ? threads.data.nodes.flatMap((thread) =>
           thread
             ? thread.comments.nodes.filter(hasDatabaseId).map((c) =>
-                Object.assign(mapGraphQLComment(c, targets), {
+                Object.assign(mapGraphQLComment(c), {
                   // Left-side threads count old-file lines, which the shared tail numbering cannot place.
                   ...(c === thread.comments.nodes[0] && thread.diffSide !== 'LEFT'
                     ? rootDiffHunk(thread.rootHunk)
@@ -182,21 +180,17 @@ function rootDiffHunk(
 
 const restCommentSchema = z.object({
   id: z.number(),
-  node_id: z.string().nullish(),
   user: z
     .object({ login: z.string(), avatar_url: z.string(), type: z.string().optional() })
     .nullable(),
   body: z.string().nullish(),
+  body_html: z.unknown().optional(),
   created_at: z.string().optional(),
   submitted_at: z.string().nullish(),
   html_url: z.string()
 })
 
-export function parseRestPRComments(
-  stdout: string,
-  reviews: boolean,
-  targets?: GitHubBodyImageTarget[]
-): PRComment[] {
+export function parseRestPRComments(stdout: string, reviews: boolean): PRComment[] {
   return z
     .array(restCommentSchema)
     .parse(JSON.parse(stdout))
@@ -207,11 +201,11 @@ export function parseRestPRComments(
         author: c.user?.login ?? 'ghost',
         authorAvatarUrl: c.user?.avatar_url ?? '',
         body: c.body ?? '',
+        bodyImageUrls: githubBodyImageUrls(c.body, c.body_html),
         createdAt: (reviews ? c.submitted_at : c.created_at) ?? '',
         url: c.html_url,
         isBot: c.user?.type === 'Bot'
       }
-      targets?.push({ nodeId: c.node_id, target: mapped })
       return mapped
     })
 }

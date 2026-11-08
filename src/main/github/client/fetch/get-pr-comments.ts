@@ -1,4 +1,4 @@
-import { enrichGitHubBodyImages, type GitHubBodyImageTarget } from '../../body-image-enrichment'
+import { GITHUB_BODY_MEDIA_TYPE } from '../../body-image-urls'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { extractExecError } from '../../../git/exec-error'
@@ -31,8 +31,6 @@ async function readPRComments(
   let restBudgetFailed = false
   try {
     if (ownerRepo) {
-      const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
-      const imageTargets: GitHubBodyImageTarget[] = []
       const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
 
       // Retain successful comment sources when another endpoint fails.
@@ -60,16 +58,16 @@ async function readPRComments(
           )
         } catch (error) {
           // gh exits nonzero for partial GraphQL errors; keep the successful sources.
-          const { stdout } = extractExecError(error)
+          const { stdout, stderr } = extractExecError(error)
           threadsResult = stdout ? { stdout } : null
-          console.warn('Failed to fetch review threads:', error)
+          console.warn('Failed to fetch review threads:', stderr)
         }
       }
 
       let conversation: ReturnType<typeof parsePRConversationResponse> = { reviewComments: [] }
       if (threadsResult) {
         try {
-          conversation = parsePRConversationResponse(threadsResult.stdout, imageTargets)
+          conversation = parsePRConversationResponse(threadsResult.stdout)
         } catch {
           console.warn('Invalid review threads response; falling back to REST')
         }
@@ -83,10 +81,13 @@ async function readPRComments(
         })
         try {
           noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
-          const { stdout } = await ghExecFileAsync(['api', ...cacheArgs, endpoint], ghOptions)
-          return parseRestPRComments(stdout, endpoint.includes('/reviews?'), imageTargets)
+          const { stdout } = await ghExecFileAsync(
+            ['api', '-H', GITHUB_BODY_MEDIA_TYPE, endpoint],
+            ghOptions
+          )
+          return parseRestPRComments(stdout, endpoint.includes('/reviews?'))
         } catch (error) {
-          console.warn('Failed to fetch PR conversation fallback:', error)
+          console.warn('Failed to fetch PR conversation fallback:', extractExecError(error).stderr)
           return []
         }
       }
@@ -103,7 +104,6 @@ async function readPRComments(
         ...reviewComments,
         ...(reviewSummaries ?? reviewsResult ?? [])
       ]
-      await enrichGitHubBodyImages(imageTargets, ownerRepo, ghOptions)
       all.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       return all
     }

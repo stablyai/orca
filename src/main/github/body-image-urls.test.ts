@@ -48,6 +48,17 @@ describe('GitHub body image sources', () => {
     expect(githubBodyImageUrls(body, html)).toBeUndefined()
   })
 
+  it('skips HTML parsing when the Markdown has no attachment candidates', () => {
+    traversal.enabled = true
+    traversal.parses = 0
+    try {
+      expect(githubBodyImageUrls('A plain comment', `<img src="${signed}">`)).toBeUndefined()
+      expect(traversal.parses).toBe(0)
+    } finally {
+      traversal.enabled = false
+    }
+  })
+
   it('leaves the optional map absent if HTML extraction fails', () => {
     traversal.fail = true
     try {

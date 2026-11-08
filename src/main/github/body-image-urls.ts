@@ -25,6 +25,66 @@ export function githubBodyImageCandidates(body: string): Map<string, URL> {
 const imageId = new RegExp(UUID, 'i')
 export const GITHUB_BODY_MEDIA_TYPE = 'Accept: application/vnd.github.full+json'
 
+export function removeFailedGitHubBodyHtml<T>(
+  data: unknown,
+  errors: T[] | undefined
+): T[] | undefined {
+  const isIndex = (value: unknown): boolean =>
+    typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+  return errors?.filter((error) => {
+    if (!error || typeof error !== 'object' || !('path' in error)) {
+      return true
+    }
+    const path = error.path
+    if (
+      !Array.isArray(path) ||
+      path[0] !== 'repository' ||
+      (path[1] !== 'issue' && path[1] !== 'pullRequest') ||
+      path.at(-1) !== 'bodyHTML'
+    ) {
+      return true
+    }
+    const owned =
+      path.length === 3 ||
+      (path.length === 6 &&
+        (path[2] === 'comments' || (path[1] === 'pullRequest' && path[2] === 'reviews')) &&
+        path[3] === 'nodes' &&
+        isIndex(path[4])) ||
+      (path.length === 9 &&
+        path[1] === 'pullRequest' &&
+        path[2] === 'reviewThreads' &&
+        path[3] === 'nodes' &&
+        isIndex(path[4]) &&
+        path[5] === 'comments' &&
+        path[6] === 'nodes' &&
+        isIndex(path[7]))
+    if (!owned) {
+      return true
+    }
+    let target = data
+    for (const part of path.slice(0, -1)) {
+      if (
+        !target ||
+        typeof target !== 'object' ||
+        (typeof part === 'number' && !Array.isArray(target))
+      ) {
+        return true
+      }
+      target = Reflect.get(target, part)
+    }
+    if (
+      !target ||
+      typeof target !== 'object' ||
+      !('body' in target) ||
+      typeof target.body !== 'string'
+    ) {
+      return true
+    }
+    Reflect.deleteProperty(target, 'bodyHTML')
+    return false
+  })
+}
+
 export function githubBodyMediaHeaders(body: string): string[] {
   return githubBodyImageCandidates(body).size ? ['-H', GITHUB_BODY_MEDIA_TYPE] : []
 }
