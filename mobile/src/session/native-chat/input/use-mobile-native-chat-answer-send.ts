@@ -7,7 +7,7 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskAnswerSelection } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
 import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
 import {
   openMobileNativeChatSendBudget,

@@ -1,8 +1,8 @@
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import { AutomationAgentLaunchPicker } from './AutomationAgentLaunchPicker'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { translate } from '@/i18n/i18n'
-import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
+import { useTranslate } from '@/i18n/use-translate'
+import { isValidAutomationSchedule } from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -67,16 +67,14 @@ export function AutomationEditorSettingsSidebar({
   onDraftChange,
   onSetupDecisionTouched
 }: AutomationEditorSettingsSidebarProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <aside className="flex w-[320px] shrink-0 flex-col overflow-auto border-l border-border/50 bg-muted/20 px-5 py-5 scrollbar-sleek">
       <div className="flex flex-col">
         <div className="mb-4 flex flex-col gap-5">
           <Field
             labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
-            label={translate(
-              'auto.components.automations.AutomationEditorDialog.57b722cbba',
-              'Agent'
-            )}
+            label={t('auto.components.automations.AutomationEditorDialog.57b722cbba', 'Agent')}
           >
             <AutomationAgentLaunchPicker
               draft={draft}
@@ -107,17 +105,14 @@ export function AutomationEditorSettingsSidebar({
         <Field
           className="mb-4"
           labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
-          label={translate(
-            'auto.components.automations.AutomationEditorDialog.02d351877e',
-            'Project'
-          )}
+          label={t('auto.components.automations.AutomationEditorDialog.02d351877e', 'Project')}
         >
           <AutomationProjectCombobox
             repos={repos}
             recordedProject={destination?.recordedProject}
             value={draft.projectId}
             onValueChange={onProjectChange}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.automations.AutomationEditorDialog.0d17f4ca8f',
               'Select project'
             )}
@@ -141,10 +136,7 @@ export function AutomationEditorSettingsSidebar({
         <Field
           className="mb-4"
           labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
-          label={translate(
-            'auto.components.automations.AutomationEditorDialog.c4b19094c2',
-            'Schedule'
-          )}
+          label={t('auto.components.automations.AutomationEditorDialog.c4b19094c2', 'Schedule')}
         >
           <AutomationSchedulePicker
             draft={draft}

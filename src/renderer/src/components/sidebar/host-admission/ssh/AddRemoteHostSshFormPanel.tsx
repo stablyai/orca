@@ -1,6 +1,6 @@
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { EditingTarget } from '../../../settings/ssh/targets/ssh-target-draft'
 import { SshHostFields } from './AddRemoteHostFields'
 
@@ -27,26 +27,27 @@ export function AddRemoteHostSshFormPanel({
   /** Set when the host is saved on a paired server rather than on this client. */
   serverLabel?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <DialogHeader>
         <DialogTitle>
           {serverLabel
-            ? translate(
+            ? t(
                 'auto.components.sidebar.AddRemoteHostDialog.serverSshTitle',
                 'Add SSH host to {{server}}',
                 { server: serverLabel }
               )
-            : translate('auto.components.sidebar.AddRemoteHostDialog.sshTitle', 'Add SSH host')}
+            : t('auto.components.sidebar.AddRemoteHostDialog.sshTitle', 'Add SSH host')}
         </DialogTitle>
         <DialogDescription>
           {serverLabel
-            ? translate(
+            ? t(
                 'auto.components.sidebar.AddRemoteHostDialog.serverSshDescription',
                 '{{server}} saves this host and connects to it. Passwords and passphrases are asked for when it connects.',
                 { server: serverLabel }
               )
-            : translate(
+            : t(
                 'auto.components.sidebar.AddRemoteHostDialog.sshDescription',
                 'Add a persistent machine you can log into over SSH.'
               )}
@@ -72,7 +73,7 @@ export function AddRemoteHostSshFormPanel({
             onClick={onFillFromConfig}
             disabled={disabled}
           >
-            {translate(
+            {t(
               'auto.components.sidebar.AddRemoteHostDialog.fillFromSshConfig',
               'Fill from ~/.ssh/config…'
             )}
@@ -82,12 +83,12 @@ export function AddRemoteHostSshFormPanel({
         )}
         <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <Button type="button" variant="outline" onClick={onCancel} disabled={disabled}>
-            {translate('auto.components.sidebar.AddRemoteHostDialog.cancel', 'Cancel')}
+            {t('auto.components.sidebar.AddRemoteHostDialog.cancel', 'Cancel')}
           </Button>
           <Button type="button" onClick={onSubmit} disabled={disabled}>
             {disabled
-              ? translate('auto.components.sidebar.AddRemoteHostDialog.saving', 'Saving...')
-              : translate('auto.components.sidebar.AddRemoteHostDialog.save', 'Save')}
+              ? t('auto.components.sidebar.AddRemoteHostDialog.saving', 'Saving...')
+              : t('auto.components.sidebar.AddRemoteHostDialog.save', 'Save')}
           </Button>
         </div>
       </DialogFooter>

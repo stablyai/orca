@@ -26,7 +26,10 @@ type OrcadManagedTunnelTransportDependencies = {
   forwards: SshPortForwardProvider[]
   stdio: SshPortForwardProvider
   probe: (conn: SshConnection, port: number) => Promise<TcpForwardingVerdict>
-  checkForward: (forward: StartedPortForward) => Promise<ForwardChannelVerdict>
+  checkForward: (
+    forward: StartedPortForward,
+    options: { signal: AbortSignal }
+  ) => Promise<ForwardChannelVerdict>
   /** Release stale forwards left by earlier clients before binding the persisted port. */
   reserveLocalPort: (conn: SshConnection, options: PortForwardStartOptions) => Promise<unknown>
 }
@@ -81,6 +84,8 @@ export class OrcadManagedTunnelTransportProvider implements SshPortForwardProvid
   ): Promise<StartedPortForward | { failure: string }> {
     // Capture exits before manager ownership; abandoned forwards must not close replacement bridges.
     const exits: string[] = []
+    // A forward that exits can never listen; stop waiting on its login.
+    const exited = new AbortController()
     let abandoned = false
     let started: StartedPortForward
     try {
@@ -91,6 +96,7 @@ export class OrcadManagedTunnelTransportProvider implements SshPortForwardProvid
             return
           }
           exits.push(reason.kind === 'unexpected-exit' ? (reason.detail ?? 'exited') : 'closed')
+          exited.abort()
           options.onUnexpectedClose?.(entry, reason)
         }
       })
@@ -99,7 +105,7 @@ export class OrcadManagedTunnelTransportProvider implements SshPortForwardProvid
       return { failure: error instanceof Error ? error.message : String(error) }
     }
     // System SSH listens locally before requesting a host channel; listener readiness proves no route.
-    const verdict = await this.dependencies.checkForward(started)
+    const verdict = await this.dependencies.checkForward(started, { signal: exited.signal })
     // Prefer ssh's exit reason over a generic listener failure before handing off a dead forward.
     const failure =
       verdict === 'refused'

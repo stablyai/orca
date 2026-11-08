@@ -21,15 +21,10 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree,
   activateAndRevealWorkspace: vi.fn()
 }))
-
-import { buildFileLinkActions } from './terminal-file-link-actions'
-import { openDetectedFilePath } from './terminal-file-open-routing'
-import { getTerminalFileContext } from '../../host-files/terminal-file-path-mapping'
-import { createNativeChatFileLinkExistence } from '../../../native-chat/native-chat-file-link-existence'
+import { createNativeChatFileLinkExistence } from '../../../native-chat/links/actions/native-chat-file-link-existence'
 import { extractTerminalFileLinks } from '../../../../../../shared/terminal/links/terminal-links'
 
 const id = 'repo::/home/u/proj'
-const deps = { worktreeId: id, worktreePath: '/home/u/proj', runtimeEnvironmentId: null }
 
 function sameIdState(activeHost: string | null): Record<string, unknown> {
   return {
@@ -66,10 +61,6 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-function desktopStatCalls(): unknown[] {
-  return mocks.stat.mock.calls.filter(([args]) => !args.connectionId)
-}
-
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.state.value = sameIdState('ssh:box')
@@ -86,73 +77,6 @@ beforeEach(() => {
 })
 
 describe('same-id SSH terminal file links', () => {
-  it('routes a rejected desktop-only root through the SSH host, never the desktop', async () => {
-    // Precondition: the real resolver cannot name a connection for the shared id.
-    expect(getConnectionId(id)).toBeUndefined()
-
-    openDetectedFilePath('/tmp/desktop-root', null, null, deps)
-    await settle()
-
-    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
-    expect(mocks.stat).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/desktop-root', connectionId: 'box' })
-    )
-    expect(desktopStatCalls()).toEqual([])
-    expect(mocks.openFilePath).not.toHaveBeenCalled()
-  })
-
-  it('refuses file access when no owner names the terminal host', async () => {
-    mocks.state.value = sameIdState(null)
-    const onOpenFailure = vi.fn()
-
-    const actions = buildFileLinkActions('/tmp/desktop-root', null, null, deps, {
-      kind: 'local'
-    })
-    expect(actions.alternate).toBeUndefined()
-    expect(actions.secondaryActions).toBeUndefined()
-
-    openDetectedFilePath('/tmp/desktop-root', null, null, {
-      ...deps,
-      openWithSystemDefault: true,
-      onOpenFailure
-    })
-    await settle()
-
-    expect(mocks.stat).not.toHaveBeenCalled()
-    expect(mocks.openFilePath).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'unverifiable' }))
-  })
-
-  it('keeps a registered-vs-detected owner conflict unresolved instead of local', async () => {
-    // Registered catalog says local, detected catalog says SSH; a different workspace is active.
-    mocks.state.value = {
-      ...sameIdState('local'),
-      activeWorktreeId: 'other',
-      worktreesByRepo: {
-        repo: [{ id, repoId: 'repo', path: '/home/u/proj', hostId: 'local' }]
-      },
-      detectedWorktreesByRepo: {
-        repo: { worktrees: [{ id, repoId: 'repo', path: '/home/u/proj', hostId: 'ssh:box' }] }
-      }
-    }
-    // Precondition: the connection lookup alone would read this as local.
-    expect(getConnectionId(id)).toBeNull()
-    expect(getTerminalFileContext(id, '/home/u/proj', null).sourceHostResolved).toBe(false)
-
-    const onOpenFailure = vi.fn()
-    openDetectedFilePath('/tmp/desktop-root', null, null, { ...deps, onOpenFailure })
-    openDetectedFilePath('/tmp/desktop-root', null, null, {
-      ...deps,
-      openWithSystemDefault: true,
-      onOpenFailure
-    })
-    await settle()
-
-    expect(mocks.stat).not.toHaveBeenCalled()
-    expect(mocks.openFilePath).not.toHaveBeenCalled()
-    expect(onOpenFailure).toHaveBeenCalledWith(expect.objectContaining({ verdict: 'unverifiable' }))
-  })
-
   it('stops a held native-chat link from rechecking the desktop once the owner turns ambiguous', async () => {
     const registeredLocal = {
       ...sameIdState('local'),

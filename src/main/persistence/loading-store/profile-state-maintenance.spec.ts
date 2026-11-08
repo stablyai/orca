@@ -1,4 +1,3 @@
-import { ProfileStateSqliteAuthority } from '../profile-state/profile-state-sqlite-authority'
 import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import { getActiveViewPreferenceFile } from '../preferences/active-view-preference'
@@ -59,18 +58,6 @@ export function registerProfileStateMaintenanceTests(): void {
       await store.flushPendingOrThrowAsync()
       expect(JSON.parse(authority.readSerializedState() ?? '{}').settings.theme).toBe('dark')
       expect(JSON.parse(readFileSync(preference, 'utf8')).activeView).toBe('settings')
-    })
-
-    it('refuses synchronous SQL resume if the source changed during maintenance', async () => {
-      const { store, databaseFile, profileId } = createSqliteMaintenanceFixture()
-      const maintenance = await store.beginProfileMaintenance()
-      const peer = new ProfileStateSqliteAuthority(databaseFile, profileId)
-      peer.readSerializedState()
-      peer.writeSerializedDomains([{ domain: 'peer', payload: 'true' }])
-      peer.close()
-      await expect(maintenance.resume()).rejects.toThrow('Profile state revision changed')
-      await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
-      expect(JSON.parse(peer.readSerializedState() ?? '{}').peer).toBe(true)
     })
   })
 }

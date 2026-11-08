@@ -27,6 +27,7 @@ import {
   consumeInactiveForegroundImmediateBudget
 } from './foreground-output-budgets'
 import { shouldWritePtyOutputForeground } from './foreground-output-visibility'
+import { syncRemoteOutputCadence } from './remote-output-cadence'
 
 import { terminalInputEchoAllowanceMs } from './terminal-input-echo-delay'
 
@@ -160,6 +161,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
   session.syncHiddenRendererPtyDelivery = (): void => {
     const ptyId = session.transport.getPtyId()
     syncModelRestoreNeededSubscription(ptyId)
+    syncRemoteOutputCadence(session)
     if (session.remoteOutputGatedPtyId !== null && session.remoteOutputGatedPtyId !== ptyId) {
       session.remoteOutputGatedPtyId = null
       if (!session.mainSideEffectAuthority) {

@@ -7,13 +7,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_SESSION_DEFAULT_MODEL_CAPABILITY } from '../../../../shared/agent-session-default-model'
 import { AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/agent-session-create-capabilities'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
-import { useStructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
-import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
-import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
-import { useStructuredAgentSessionSends } from './use-structured-agent-session-sends'
-import { resetStructuredAgentSessionSendsForTests } from './structured-agent-session-message-sender'
-import { FAST_OPTIONS } from './structured-session-option-defaults.test-fixture'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import { useStructuredAgentSessionMutate } from './session/structured/writes/use-structured-agent-session-mutate'
+import { useStructuredAgentSessionOptions } from './session/options/structured/use-structured-agent-session-options'
+import { useStructuredAgentSessionSendOptions } from './session/structured/delivery/use-structured-agent-session-send-options'
+import { useStructuredAgentSessionSends } from './session/structured/delivery/use-structured-agent-session-sends'
+import { resetStructuredAgentSessionSendsForTests } from './session/structured/delivery/structured-agent-session-message-sender'
+import { FAST_OPTIONS } from './session/options/structured/structured-session-option-defaults.test-fixture'
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
@@ -24,11 +24,13 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-session-options'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), enqueue: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() }))
+}))
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
 }))
-vi.mock('./native-chat-session-option-settings-write', () => ({
+vi.mock('./session/options/native-chat-session-option-settings-write', () => ({
   enqueueSessionOptionSettingsWrite: mocks.enqueue
 }))
 

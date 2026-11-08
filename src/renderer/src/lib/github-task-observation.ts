@@ -2,13 +2,13 @@ import { getTaskPageRepoSourceContext } from './task-repo-source-context'
 
 import type { Repo } from '../../../shared/repo-types'
 
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 
 import {
   buildTaskSourceContextFromRepo,
   getTaskSourceCacheScope,
   areTaskSourceContextsEqual
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
@@ -16,7 +16,7 @@ import { parseHostAuthorityKey } from '../../../shared/host-authority'
 
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 
-import { captureHostIdentityFence } from '@/store/host-catalog-fencing'
+import { captureHostIdentityFence } from '@/runtime/rpc/environment-revisions/host-identity-fence'
 
 export function githubTaskBinding(repo: Repo): string {
   return JSON.stringify([

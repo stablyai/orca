@@ -71,7 +71,7 @@ describe('main sync-spawn ratchet', () => {
       ['getWslHome', 'listWslDistros']
     ],
     [
-      "import * as acl from '..\\\\shared\\\\secure-path-windows-acl'\nacl.restrictWindowsPathSync(p, true)",
+      "import * as acl from '..\\\\shared\\\\secure-storage\\\\secure-path-windows-acl'\nacl.restrictWindowsPathSync(p, true)",
       1,
       ['restrictWindowsPathSync']
     ],
@@ -148,7 +148,7 @@ describe('main sync-spawn ratchet', () => {
 
   it('fails a lowered or stale count until it is pruned, and prune never raises', () => {
     const write =
-      "import { restrictWindowsPathSync } from '../shared/secure-path-windows-acl'\nrestrictWindowsPathSync(a, b)\n"
+      "import { restrictWindowsPathSync } from '../shared/secure-storage/secure-path-windows-acl'\nrestrictWindowsPathSync(a, b)\n"
     const root = tree({
       'src/main/store.ts': write,
       'src/main/clean.ts': 'export const done = true\n',

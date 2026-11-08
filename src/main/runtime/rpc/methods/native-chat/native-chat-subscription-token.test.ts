@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RuntimeSubscriptionRegistry } from '../../../runtime-subscription-registry'
+import { RuntimeSubscriptionRegistry } from '../../../client/runtime-subscription-registry'
 import type { RpcContext } from '../../core'
 
 vi.mock('../../../../native-chat/transcript-watch', () => ({

@@ -6,7 +6,7 @@ import {
   settleStructuredOptionPick,
   structuredOptionPickCommit
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-pick-book'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import {
@@ -17,7 +17,7 @@ import {
 import { structuredAgentSessionShownSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
 import type { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
-import { nativeChatSessionOptionsWrite } from './mobile-session-launch-operations'
+import { nativeChatSessionOptionsWrite } from './native-chat/input/mobile-native-chat-options-operations'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 
 export const MOBILE_MODEL_DEFAULT_PICK = ''

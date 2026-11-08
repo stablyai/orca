@@ -45,7 +45,14 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  queueNoFolderAtSelector,
+  worktreeListFixture
+} from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
@@ -159,6 +166,7 @@ describe('orca cli worktree awareness', () => {
       }
     ]
   ] as const)('%s', async (_name, { title, command, flags, expected }) => {
+    queueNoFolderAtSelector(callMock)
     queueFixtures(
       callMock,
       okFixture('req_terminal_create', {
@@ -186,9 +194,12 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock.mock.calls).toEqual([
-      ['terminal.create', { worktree: 'path:/tmp/repo/feature', command, title, ...expected }]
-    ])
+    expect(callMock).toHaveBeenLastCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command,
+      title,
+      ...expected
+    })
     expect(process.exitCode).toBeUndefined()
   })
 
@@ -196,13 +207,14 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', { terminals: [], totalCount: 0, truncated: false })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(['terminal', 'list', '--worktree', 'active', '--json'], '/tmp/repo/feature/src')
 
-    expect(callMock).toHaveBeenNthCalledWith(2, 'terminal.list', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'terminal.list', {
       worktree: 'id:repo::/tmp/repo/feature',
       limit: undefined,
       includeVisualLayouts: false
@@ -213,6 +225,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', { terminals: [], totalCount: 0, truncated: false })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -220,7 +233,7 @@ describe('orca cli worktree awareness', () => {
     await main(['terminal', 'list', '--worktree', 'active'], '/tmp/repo/feature/src')
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'terminal.list',
       expect.objectContaining({ includeVisualLayouts: true })
     )
@@ -237,6 +250,7 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_term', {
         terminals: [],
         visualLayouts,
@@ -252,7 +266,7 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'terminal.list',
       expect.objectContaining({ includeVisualLayouts: true })
     )
@@ -278,6 +292,7 @@ describe('orca cli worktree awareness', () => {
         },
         _meta: { runtimeId: 'host' }
       } satisfies RuntimeRpcFailure
+      queueNoFolderAtSelector(callMock)
       callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(failure))
       const log = vi.spyOn(console, 'log').mockImplementation(() => {})
       const stderr = vi.spyOn(console, 'error').mockImplementation(() => {})

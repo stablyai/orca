@@ -1,6 +1,6 @@
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type {
   MobileNativeChatSendIntent,
@@ -106,7 +106,7 @@ export type MobileStructuredAgentSessionArgs = {
   onActionResolved?: () => void
 }
 
-import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
+import type { MobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 
 export type MobileStructuredAgentOptionsArgs = {
   modelCatalogCache?: import('./use-mobile-host-model-catalog-upgrade').HostModelCatalogCache | null
@@ -115,7 +115,8 @@ export type MobileStructuredAgentOptionsArgs = {
   sessionId: string | null
   enabled: boolean
   fence: number | null
-  mutate: StructuredAgentSessionMutate
+  mutate: MobileStructuredAgentMutate
+  onOptionError?: (message: string) => void
   optionStamp?: string
   turnId: string | null
   hasTurn?: boolean

@@ -4,6 +4,74 @@
   "family": "tasks.item-detail-gitlab",
   "namedDeltas": [],
   "values": {
+    "0b2033ec0891": {
+      "name": "gitlab.workItemDetails#1",
+      "ordinal": 7,
+      "args": [
+        {
+          "name": "method",
+          "value": "gitlab.workItemDetails"
+        },
+        {
+          "name": "params",
+          "value": {
+            "iid": 4,
+            "markViewerComments": true,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "type": "issue"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "approvalState": {
+              "approvalsLeft": 0,
+              "approvalsRequired": 1
+            },
+            "assignees": [],
+            "body": "body",
+            "comments": [
+              {
+                "author": "octocat",
+                "authorAvatarUrl": "",
+                "body": "a discussion note",
+                "createdAt": "2020-01-01T00:00:00.000Z",
+                "id": 901,
+                "reactions": [
+                  {
+                    "count": 2,
+                    "name": "thumbsup"
+                  }
+                ],
+                "url": "https://gitlab.example.com/group/project/-/issues/4#note_901"
+              }
+            ],
+            "item": {
+              "labels": ["bug"],
+              "mergeable": "MERGEABLE"
+            },
+            "pipelineJobs": [],
+            "reviewers": []
+          }
+        }
+      }
+    },
     "12958fc227ba": {
       "error": "",
       "item": {
@@ -171,78 +239,6 @@
         "$rpc": "null"
       }
     },
-    "8ac545c58ec2": {
-      "name": "gitlab.workItemDetails#1",
-      "ordinal": 9,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":4,\"type\":\"issue\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"}}}"
-    },
-    "90e2c30bae69": {
-      "name": "gitlab.workItemDetails#1",
-      "ordinal": 7,
-      "args": [
-        {
-          "name": "method",
-          "value": "gitlab.workItemDetails"
-        },
-        {
-          "name": "params",
-          "value": {
-            "iid": 4,
-            "projectRef": {
-              "host": "gitlab.com",
-              "path": "group/project"
-            },
-            "repo": "id:repo-1",
-            "type": "issue"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "timeoutMs": 30000
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-1",
-          "ok": true,
-          "result": {
-            "approvalState": {
-              "approvalsLeft": 0,
-              "approvalsRequired": 1
-            },
-            "assignees": [],
-            "body": "body",
-            "comments": [
-              {
-                "author": "octocat",
-                "authorAvatarUrl": "",
-                "body": "a discussion note",
-                "createdAt": "2020-01-01T00:00:00.000Z",
-                "id": 901,
-                "reactions": [
-                  {
-                    "count": 2,
-                    "name": "thumbsup"
-                  }
-                ],
-                "url": "https://gitlab.example.com/group/project/-/issues/4#note_901"
-              }
-            ],
-            "item": {
-              "labels": ["bug"],
-              "mergeable": "MERGEABLE"
-            },
-            "pipelineJobs": [],
-            "reviewers": []
-          }
-        }
-      }
-    },
     "988fd3d6f1c4": {
       "name": "detailRefreshSeq",
       "ordinal": 5,
@@ -279,6 +275,11 @@
         "pipelineJobs": [],
         "provider": "gitlab"
       }
+    },
+    "ba6215ed3c22": {
+      "name": "gitlab.workItemDetails#1",
+      "ordinal": 9,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"gitlab.workItemDetails\",\"params\":{\"repo\":\"id:repo-1\",\"iid\":4,\"type\":\"issue\",\"projectRef\":{\"host\":\"gitlab.com\",\"path\":\"group/project\"},\"markViewerComments\":true}}"
     },
     "cc2ece9478f0": {
       "name": "actionItem",
@@ -338,8 +339,8 @@
       {
         "id": "mounted",
         "observation": {
-          "sender": ["90e2c30bae69"],
-          "payloads": ["8ac545c58ec2"],
+          "sender": ["0b2033ec0891"],
+          "payloads": ["ba6215ed3c22"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

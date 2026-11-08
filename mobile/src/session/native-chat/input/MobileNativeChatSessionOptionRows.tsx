@@ -30,6 +30,7 @@ export function ModelPill({
   secondary,
   warning,
   icon: Icon,
+  leading,
   accessibleName,
   disabled,
   onPress
@@ -38,12 +39,15 @@ export function ModelPill({
   secondary: string | null
   warning: boolean
   icon?: LucideIcon
+  /** Shown before the label, unlike `icon`, which replaces it. */
+  leading?: LucideIcon
   accessibleName: string
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  const PillIcon = Icon ?? (warning ? ShieldAlert : undefined)
+  // A held pick's clock never hides the full-access warning.
+  const PillIcon = Icon ?? (warning ? ShieldAlert : leading)
   return (
     <Pressable
       accessibilityLabel={accessibleName}

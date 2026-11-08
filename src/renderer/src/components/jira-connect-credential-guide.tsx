@@ -1,5 +1,6 @@
 import { Trans } from 'react-i18next'
-import { i18n, translate } from '@/i18n/i18n'
+import { i18n } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function JiraConnectCredentialGuide({
   isServer,
@@ -10,15 +11,16 @@ export function JiraConnectCredentialGuide({
   isServerBasic: boolean
   supportsScopedTokens: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (isServer) {
     return (
       <p className="text-xs text-muted-foreground">
         {isServerBasic
-          ? translate(
+          ? t(
               'auto.components.jira.connect.dialog.d8737db691',
               'Use your Jira Server or Data Center account username and password.'
             )
-          : translate(
+          : t(
               'auto.components.jira.connect.dialog.ccfb086d3e',
               'Create a personal access token in your Jira profile under Personal Access Tokens.'
             )}
@@ -30,7 +32,7 @@ export function JiraConnectCredentialGuide({
       <p>
         <Trans
           i18n={i18n}
-          defaults={translate(
+          defaults={t(
             'auto.components.jira.connect.dialog.createTokenInSettings',
             'Create a token in <link>Atlassian account settings</link>.'
           )}
@@ -51,11 +53,11 @@ export function JiraConnectCredentialGuide({
       </p>
       <p>
         {supportsScopedTokens
-          ? translate(
+          ? t(
               'jira.connect.scopedTokenGuide',
               'Scoped tokens need read:jira-work, write:jira-work, and read:jira-user. Leave email empty to use Bearer authentication.'
             )
-          : translate(
+          : t(
               'jira.connect.oldHostGuide',
               'This remote runtime requires an email and an unscoped API token. Update the remote runtime to use scoped tokens.'
             )}

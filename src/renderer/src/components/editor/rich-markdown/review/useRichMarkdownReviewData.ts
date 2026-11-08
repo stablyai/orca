@@ -9,7 +9,7 @@ import {
 } from '@/lib/markdown-review-notes'
 import type { NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type UseRichMarkdownReviewDataOptions = {
@@ -35,6 +35,7 @@ export function useRichMarkdownReviewData({
   sourceRelativePath: string | null
   unsentMarkdownReviewScope: NotesSendMenuScope<MarkdownReviewNote>[]
 } {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const sourceRelativePath = useMemo(
     () =>
@@ -63,16 +64,13 @@ export function useRichMarkdownReviewData({
     return [
       {
         id: 'all',
-        label: translate(
-          'auto.components.editor.useRichMarkdownReviewData.f9d2acd6b0',
-          'All unsent notes'
-        ),
+        label: t('auto.components.editor.useRichMarkdownReviewData.f9d2acd6b0', 'All unsent notes'),
         notes: unsentNotes,
         formatPrompt: (notes) => formatMarkdownReviewNotes(notes, markdownReviewContent)
       }
     ]
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [markdownReviewContent, markdownReviewNotes, languageRevision])
+  }, [markdownReviewContent, markdownReviewNotes, languageRevision, t])
 
   return {
     canAnnotateRichMarkdown,

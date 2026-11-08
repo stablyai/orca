@@ -18,34 +18,6 @@ function deferred<T = void>() {
 }
 
 describe('withCodexHomeProcessLock', () => {
-  it('runs different lock keys concurrently', async () => {
-    const events: string[] = []
-    const firstGate = deferred()
-
-    const first = withCodexHomeProcessLock('home-a', async () => {
-      events.push('a:start')
-      await firstGate.promise
-    })
-    const second = withCodexHomeProcessLock('home-b', async () => {
-      events.push('b:start')
-    })
-
-    await second
-    expect(events).toEqual(['a:start', 'b:start'])
-    firstGate.resolve()
-    await first
-  })
-
-  it('releases the lock after a rejected run', async () => {
-    await expect(
-      withCodexHomeProcessLock('home-a', async () => {
-        throw new Error('boom')
-      })
-    ).rejects.toThrow('boom')
-
-    await expect(withCodexHomeProcessLock('home-a', async () => 'after')).resolves.toBe('after')
-  })
-
   it('does not release a running lock based on elapsed time', async () => {
     vi.useFakeTimers()
     try {

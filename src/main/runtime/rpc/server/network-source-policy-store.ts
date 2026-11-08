@@ -1,7 +1,7 @@
 // Server-level memory of where authenticated direct clients connect from, kept in userData.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { writeDurableSecureJsonFile } from '../../../../shared/secure-file'
+import { writeDurableSecureJsonFile } from '../../../../shared/secure-storage/secure-file'
 import { isRecord } from '../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import type { NetworkSourceClass } from '../network-source-class'
 

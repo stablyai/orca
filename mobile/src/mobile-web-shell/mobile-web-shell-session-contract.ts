@@ -99,7 +99,8 @@ export type MobileWebShellSessionEffect =
       readonly totalBytes: number
     }
   | { readonly kind: 'delete-cache' }
-  | { readonly kind: 'remount' }
+  // A reclaimed renderer reloaded off screen would only be reclaimed again, so it waits for the foreground.
+  | { readonly kind: 'remount'; readonly inForeground?: true }
   // Stamp expiry with its flow; arming either deadline replaces the armed one, so the runner owns timing without deciding recovery.
   | { readonly kind: 'await-page-ready' }
   // A refused/uncommitted local load may report nothing; only the deadline can end it.
@@ -147,7 +148,12 @@ export type MobileWebShellSessionEvent =
       readonly flow: number
       readonly cause: MobileWebShellUpdateFailureCause
     }
-  | { readonly type: 'shell-failed'; readonly reason: MobileWebShellReportedFailure }
+  | {
+      readonly type: 'shell-failed'
+      readonly reason: MobileWebShellReportedFailure
+      // The OS took the renderer while Orca was off screen or for memory; the page is not at fault.
+      readonly reclaimed?: boolean
+    }
   | { readonly type: 'retry-pressed' }
   | { readonly type: 'document-started' }
   | { readonly type: 'document-loaded' }
@@ -178,6 +184,8 @@ export type MobileWebShellSession = {
   readonly retriedOnce: boolean
   // Renderer loss and page failure each get one remount; neither spends the other's.
   readonly remountedOnce: boolean
+  // A loss the OS reclaimed gets one free remount per painted document, so a hidden crash loop still reaches the budget.
+  readonly reclaimedOnce: boolean
   readonly pageRemountedOnce: boolean
   // Reset document facts on every new document; the previous page’s ready cannot prove this one ran.
   readonly pageReady: boolean

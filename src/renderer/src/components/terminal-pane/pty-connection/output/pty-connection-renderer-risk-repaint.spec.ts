@@ -21,6 +21,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -45,7 +46,6 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -137,6 +137,7 @@ export function registerPtyConnectionRendererRiskRepaintTests(): void {
 
     it('avoids atlas clears for captured redraw chunks split mid-sequence', async () => {
       const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks10 =
@@ -198,7 +199,6 @@ export function registerPtyConnectionRendererDrawingGlyphTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

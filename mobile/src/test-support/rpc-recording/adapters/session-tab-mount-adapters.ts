@@ -1,3 +1,5 @@
+import type * as MobileSessionTabActivationModule from '../../../session/tabs/mobile-session-tab-activation'
+import type * as MobileSessionTabsStreamHealthModule from '../../../session/tabs/mobile-session-tabs-stream-health'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -12,9 +14,9 @@ export function sessionTabMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.tab-activation': ({ client }) => {
-      const activation = modules.load<
-        typeof import('../../../session/mobile-session-tab-activation')
-      >('mobile/src/session/mobile-session-tab-activation.ts')
+      const activation = modules.load<typeof MobileSessionTabActivationModule>(
+        'mobile/src/session/tabs/mobile-session-tab-activation.ts'
+      )
       const replies: Record<string, unknown> = {}
       let failure: unknown = null
       return {
@@ -43,9 +45,9 @@ export function sessionTabMountAdapters(
       }
     },
     'session.tabs-stream-health': ({ client, effect }) => {
-      const Controller = modules.load<
-        typeof import('../../../session/mobile-session-tabs-stream-health')
-      >('mobile/src/session/mobile-session-tabs-stream-health.ts').MobileSessionTabsStreamHealth
+      const Controller = modules.load<typeof MobileSessionTabsStreamHealthModule>(
+        'mobile/src/session/tabs/mobile-session-tabs-stream-health.ts'
+      ).MobileSessionTabsStreamHealth
       let applicationRevision = 0
       let accepted: unknown = 'unapplied'
       let rejectApply = false

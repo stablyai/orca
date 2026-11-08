@@ -20,10 +20,10 @@ import {
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { agentChatPermissionModes } from '../../../src/shared/agent-launch/permissions/agent-chat-permission-support'
 import { legacyHostPermissionDescriptor } from '../../../src/shared/agent-session/options/structured-agent-session-permission-option'
+import { useMobileStructuredHeldOptionPicks } from './use-mobile-structured-held-option-picks'
 import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import {
-  acceptedStructuredSessionSelectionOutcome,
   structuredAgentSessionOptionAvailability,
   createStructuredAgentSessionOptionsWriteOwner
 } from '../../../src/shared/agent-session/options/structured-agent-session-options-write-owner'
@@ -121,7 +121,9 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
       }),
     [controller, projectRuntimeReports, hostSupport?.permissionOwn]
   )
-  const acceptsPicks = !!client && !!sessionId && enabled && fence !== null
+  // Before attach, picks are held and go out when the fence lands.
+  const acceptsPicks = !!client && !!sessionId && enabled
+  const appliesOnAttach = acceptsPicks && fence === null
   const readBaseOptionSnapshot = useCallback(
     (view = readOptionState()) => {
       const shown = mobileStructuredModelDefaultSnapshot(
@@ -130,9 +132,25 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
         hostSupport?.defaultModel === true
       )
       const snapshot = legacyHostPermissions ? [...shown, legacyHostPermissionDescriptor()] : shown
-      return acceptsPicks ? snapshot : lockedStructuredAgentSessionOptionSnapshot(snapshot)
+      if (!acceptsPicks) {
+        return lockedStructuredAgentSessionOptionSnapshot(snapshot)
+      }
+      // Before attach only the picker's options queue; the composer's mode toggle waits.
+      return appliesOnAttach
+        ? snapshot.map((row) =>
+            row.id === 'interactionMode'
+              ? lockedStructuredAgentSessionOptionSnapshot([row])[0]!
+              : row
+          )
+        : snapshot
     },
-    [acceptsPicks, legacyHostPermissions, readOptionState, hostSupport?.defaultModel]
+    [
+      acceptsPicks,
+      appliesOnAttach,
+      legacyHostPermissions,
+      readOptionState,
+      hostSupport?.defaultModel
+    ]
   )
   const readOptionSnapshot = useCallback(() => {
     const view = readOptionState()
@@ -169,12 +187,23 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
     fence,
     newLaunch: createdHere !== undefined,
     ...(createdHere ? { worktree: createdHere.worktree } : {}),
+    hasTurn: args.hasTurn,
     optionCatalog,
     activeOptionRecordRef,
     updateOptionState,
     receiveCatalog
   })
 
+  const held = useMobileStructuredHeldOptionPicks({
+    controller,
+    mutate,
+    fence,
+    acceptsPicks,
+    isCurrentContext,
+    flushQueued: () => writer.flushQueued(),
+    readOptionSnapshot,
+    onOptionError: args.onOptionError
+  })
   const readWriteContext = () => {
     const currentState = projectRuntimeReports({
       ...optionStateRef.current,
@@ -190,23 +219,11 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
       providerStarting,
       existingChat: createdHere === undefined || args.hasTurn === true,
       isCurrentContext,
-      flush: (isCurrent: () => boolean) => {
-        controller.flush(async (pick) => {
-          // A queued pick never retargets a replacement runtime.
-          if (!isCurrent()) {
-            return { kind: 'superseded' }
-          }
-          const result = await mutate<AgentSessionOptionResult>(
-            'agentSession.setOption',
-            'agentSession.setOption',
-            { key: pick.key, value: pick.value }
-          )
-          return result.status === 'accepted'
-            ? acceptedStructuredSessionSelectionOutcome(pick, result.value.options)
-            : result.status === 'unknown'
-              ? { kind: 'unknown' }
-              : { kind: 'refused' }
-        })
+      queues: appliesOnAttach,
+      flush: (isCurrent: () => boolean, queued?: boolean) => {
+        if (fence !== null) {
+          held.sendPicks(isCurrent, queued)
+        }
       },
       revalidate: reread,
       revalidateOn: 'refused-current' as const
@@ -288,6 +305,10 @@ export function useMobileStructuredAgentOptions(args: MobileStructuredAgentOptio
     pendingOptionId: structuredOptionPickIsPending(optionPicks.current, 'model')
       ? 'model'
       : writer.pendingOptionId(controller, optionState.record),
+    /** Picks are taken but wait for the chat to attach. */
+    appliesOnAttach,
+    /** A pick made before attach that has not gone out yet. */
+    heldPick: held.heldPick,
     setStructuredOption,
     invokeStructuredOption,
     sendSelection,

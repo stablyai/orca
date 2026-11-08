@@ -1,4 +1,5 @@
-import { getRepoIdFromWorktreeId, type WorktreeSlice } from '../../worktree-helpers'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
@@ -68,10 +69,9 @@ export function createRemoveWorktree(
       removalRoute,
       hostId,
       removalGenerationGuard,
-      sameIdSurvivingHostId: catalogSameIdSurvivingHostId
+      sameIdSurvivingHostId: catalogSurvivorHostId
     } = start
-    const sameIdSurvivingHostId =
-      catalogSameIdSurvivingHostId ?? options?.sameIdSurvivingHostId ?? null
+    const sameIdSurvivingHostId = catalogSurvivorHostId ?? options?.sameIdSurvivingHostId ?? null
     const deleteStateKey = getWorktreeDeleteStateKey(get(), worktreeId, requiredExecutionHostId)
     set((s) => ({
       deleteStateByWorktreeId: {
@@ -195,7 +195,7 @@ export function createRemoveWorktree(
             options?.ignoreWorkspaceCleanupScanSurvivors === true
           )
           if (sameIdStillSurvives) {
-            return completeSameIdHostScopedRemoval({
+            return await completeSameIdHostScopedRemoval({
               set,
               get,
               worktreeId,

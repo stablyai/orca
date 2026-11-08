@@ -15,9 +15,9 @@ import {
   isLatestStructuredOptionPick,
   settleStructuredOptionPick
 } from '../../../../shared/agent-session/options/structured-agent-session-option-pick-book'
-import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
-import type { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
-import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
+import type { StructuredAgentSessionMutate } from './session/structured/writes/use-structured-agent-session-mutate'
+import type { useStructuredAgentSessionOptionState } from './session/options/structured/use-structured-agent-session-option-state'
+import { enqueueSessionOptionSettingsWrite } from './session/options/native-chat-session-option-settings-write'
 
 export function useStructuredAgentSessionModelDefault(args: {
   agent: AgentType

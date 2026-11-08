@@ -1,4 +1,4 @@
-import { readAcpForkSupport } from '../../../acp/acp-fork-support'
+import { readAcpForkSupport } from '../../../acp/capabilities/acp-fork-support'
 import { supportsSessionAccountUsage } from '../../../../shared/agent-session/agent-session-account-usage'
 import { effectiveAgentSessionOptions } from '../../../../shared/agent-session-default-model'
 import { readStructuredAgentSessionDefaultModel } from '../structured-agent-session-model-default'

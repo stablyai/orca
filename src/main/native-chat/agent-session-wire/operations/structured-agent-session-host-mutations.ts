@@ -110,6 +110,7 @@ export function sendStructuredAgentSessionTurn(
               }
             }
           }
+          params.beforeRun?.()
           return runQueueableStructuredAgentSessionSend(context, ctx, params, () => plan.run(ctx))
         }
       },

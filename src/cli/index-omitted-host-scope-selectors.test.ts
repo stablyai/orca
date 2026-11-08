@@ -66,12 +66,12 @@ let catalog: RuntimeAgentLineageCatalogTestModule
 beforeAll(async () => {
   lineage = (
     await vi.importActual<{ default: RuntimeAgentLineageTestModule }>(
-      '../main/runtime/runtime-agent-lineage.test-fixture'
+      '../main/runtime/workspaces/process-listing/runtime-agent-lineage.test-fixture'
     )
   ).default
   catalog = (
     await vi.importActual<{ default: RuntimeAgentLineageCatalogTestModule }>(
-      '../main/runtime/runtime-agent-lineage-catalog.test-fixture'
+      '../main/runtime/workspaces/process-listing/runtime-agent-lineage-catalog.test-fixture'
     )
   ).default
 })

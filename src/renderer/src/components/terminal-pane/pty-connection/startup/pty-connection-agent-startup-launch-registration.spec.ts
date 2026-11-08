@@ -35,7 +35,6 @@ export function registerPtyConnectionNonAgentLaunchRegistrationTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -92,7 +91,6 @@ export function registerPtyConnectionUnboundAgentLaunchRegistrationTests(): void
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []

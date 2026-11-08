@@ -1,10 +1,10 @@
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-environment'
-import { isArtifactSharingEnabled } from '../../../../shared/artifact-sharing-gate'
+import { isArtifactSharingEnabled } from '../../../../shared/artifacts/artifact-sharing-gate'
 import { isAgentSkillSharingEnabled } from '../../../../shared/agent-skill-sharing-gate'
 import { applyPRBotAuthorOverride } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
-import { TASK_PROVIDERS } from '../../../../shared/task-providers'
+import { TASK_PROVIDERS } from '../../../../shared/work-items/task-providers'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
@@ -23,7 +23,7 @@ import { recordManagedHookInstallFailure } from '../../../agent-hooks/install-te
 import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/managed-agent-hook-controls'
 import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,

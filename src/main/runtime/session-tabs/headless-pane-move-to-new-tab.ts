@@ -4,7 +4,7 @@ import {
   recordPtySurface,
   spawnSurfaceClaimSequence
 } from '../terminal/surface/pty-recorded-surface-topology'
-import { withSelectedTabs } from '../headless-tab-group-selection'
+import { withSelectedTabs } from './headless-tab-group-selection'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'

@@ -1,92 +1,51 @@
+import { createHostSessionLaunchRuntimeFixture } from './remote-runtime-host-session-launch-test-fixture'
 import { ExplicitEnsure } from '../../../../../../shared/rpc-contract/agent-session-params'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-const appStore = vi.hoisted(() => ({
-  getState: vi.fn(() => {
-    throw new Error('These transport fixtures must not read app-store ownership')
-  })
+import type { deliverCreatedWebRuntimeAgentSessionPrompt } from '@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery'
+const promptFailure = vi.hoisted(() => ({ error: vi.fn(), copy: vi.fn() }))
+vi.mock('sonner', () => ({ toast: { error: promptFailure.error } }))
+const delivery = vi.hoisted(() =>
+  vi.fn<typeof deliverCreatedWebRuntimeAgentSessionPrompt>(async () => true)
+)
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
+  deliverCreatedWebRuntimeAgentSessionPrompt: delivery
+}))
+const appStore = vi.hoisted(() => {
+  const state = {
+    runtimeStatusByEnvironmentId: new Map()
+  }
+  return { getState: vi.fn(() => state) }
+})
+vi.mock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
+  refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => undefined)
 }))
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: appStore.getState } }))
 
-afterEach(() => {
-  expect(appStore.getState).not.toHaveBeenCalled()
-})
-
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
-  decodeTerminalStreamJson,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
 describe('createRemoteRuntimePtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
-  const runtimeCall = vi.fn()
-  const runtimeSubscribe = vi.fn()
-  let subscriptionCallbacks: {
-    onResponse: (response: unknown) => void
-    onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
-    onError?: (error: { code: string; message: string }) => void
-    onClose?: () => void
-  } | null = null
-  let unsubscribe: {
-    unsubscribe: () => void
-    sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
-  } | null = null
-  let unsubscribeFn: ReturnType<typeof vi.fn<() => void>> | null = null
+  const fixture = createHostSessionLaunchRuntimeFixture()
+  const {
+    runtimeCall,
+    runtimeSubscribe,
+    unsubscribe,
+    unsubscribeFn,
+    latestRemoteSubscribePayload
+  } = fixture
 
   beforeEach(() => {
     vi.resetModules()
-    runtimeCall.mockReset()
-    runtimeSubscribe.mockReset()
-    subscriptionCallbacks = null
-    unsubscribeFn = vi.fn<() => void>()
-    unsubscribe = {
-      unsubscribe: unsubscribeFn,
-      sendBinary: vi.fn()
-    }
-    runtimeCall.mockImplementation(async (args: { method?: string }) =>
-      args.method === 'status.get'
-        ? {
-            id: 'rpc-status',
-            ok: true,
-            result: {
-              runtimeProtocolVersion: 3,
-              minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
-            },
-            _meta: { runtimeId: 'runtime-remote' }
-          }
-        : {
-            id: 'rpc-create',
-            ok: true,
-            result: {
-              terminal: {
-                handle: 'term-remote',
-                worktreeId: 'repo1::/remote/wt',
-                title: null,
-                surface: 'background'
-              }
-            },
-            _meta: { runtimeId: 'runtime-remote' }
-          }
-    )
-    runtimeSubscribe.mockImplementation(
-      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
-        subscriptionCallbacks = callbacks
-        queueMicrotask(() => {
-          subscriptionCallbacks?.onResponse({
-            id: 'rpc-multiplex',
-            ok: true,
-            result: { type: 'ready' },
-            _meta: { runtimeId: 'runtime-remote' }
-          })
-        })
-        return unsubscribe
-      }
-    )
-
+    delivery.mockReset().mockResolvedValue(true)
+    promptFailure.error.mockClear()
+    promptFailure.copy.mockClear()
+    fixture.reset()
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -107,25 +66,6 @@ describe('createRemoteRuntimePtyTransport', () => {
       delete (globalThis as { window?: typeof window }).window
     }
   })
-
-  function latestRemoteSubscribePayload(): { streamId: number } {
-    const send = unsubscribe?.sendBinary as unknown as
-      | { mock: { calls: [Uint8Array<ArrayBufferLike>][] } }
-      | undefined
-    const frames =
-      send?.mock.calls
-        .map((call) => decodeTerminalStreamFrame(call[0]))
-        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe) ?? []
-    const frame = frames.at(-1)
-    if (!frame) {
-      throw new Error('missing remote terminal subscribe frame')
-    }
-    const payload = decodeTerminalStreamJson<{ streamId: number }>(frame.payload)
-    if (!payload) {
-      throw new Error('invalid remote terminal subscribe frame')
-    }
-    return payload
-  }
 
   it('round-trips a strict saved ensure and its actual refused shell result', async () => {
     const providerSession = { key: 'session_id' as const, id: 'C' }
@@ -228,7 +168,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     )
     const { streamId } = latestRemoteSubscribePayload()
 
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.SnapshotStart,
         streamId,
@@ -236,7 +176,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         payload: encodeTerminalStreamJson({ kind: 'scrollback' })
       })
     )
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.SnapshotChunk,
         streamId,
@@ -244,7 +184,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         payload: encodeTerminalStreamText('hello')
       })
     )
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.SnapshotEnd,
         streamId,
@@ -252,7 +192,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         payload: new Uint8Array()
       })
     )
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Output,
         streamId,
@@ -365,7 +305,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     }
 
     applyHostWorktreeTerminalSleepState('env-1', started)
-    subscriptionCallbacks?.onBinary?.(
+    fixture.subscriptionCallbacks?.onBinary?.(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.Output,
         streamId,
@@ -572,6 +512,254 @@ describe('createRemoteRuntimePtyTransport', () => {
       })
     )
   })
+
+  it('normalizes a non-native draft through the shared host startup contract and delivers to the returned pane once', async () => {
+    const original = runtimeCall.getMockImplementation()!
+    const { buildAgentDraftLaunchPlan, buildAgentStartupPlan } =
+      await import('../../../../../../shared/agent-launch/startup/tui-agent-startup')
+    const { resolveAgentStartupPlanInputs } =
+      await import('../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs')
+    let statusAnswered = false
+    runtimeCall.mockImplementation(
+      async (args: { method?: string; params?: Record<string, unknown> }) => {
+        if (args.method === 'status.get') {
+          if (statusAnswered) {
+            return await new Promise(() => {})
+          }
+          statusAnswered = true
+        }
+        const response = await original(args)
+        if (args.method === 'terminal.createAgentSession') {
+          const params = args.params!
+          const inputs = resolveAgentStartupPlanInputs({
+            agent: 'codex',
+            settings: {},
+            agentArgs: '',
+            sessionOptions: {
+              model: 'gpt-host-pick',
+              effort: 'high',
+              permissionMode: 'full-access'
+            },
+            platform: 'linux',
+            shell: 'posix',
+            isRemote: false
+          })
+          const prompt = String(params.prompt ?? '')
+          const plan =
+            params.promptDelivery === 'draft'
+              ? buildAgentDraftLaunchPlan({ ...inputs, draft: prompt })
+              : buildAgentStartupPlan({ ...inputs, prompt, allowEmptyPromptLaunch: true })
+          if (!plan) {
+            return {
+              ok: false,
+              error: { code: 'capability_unsupported', message: 'No native draft' }
+            }
+          }
+          return {
+            ...response,
+            result: {
+              ...response.result,
+              disposition: 'created',
+              terminal: { ...response.result.terminal, tabId: 'host-adopted' }
+            }
+          }
+        }
+        return args.method === 'status.get'
+          ? {
+              ...response,
+              result: {
+                ...response.result,
+                capabilities: ['agent-session.host-authority.v1', 'agent-session.create-options.v1']
+              }
+            }
+          : response
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: '/desktop/codex --model desktop',
+      env: { DESKTOP_ONLY: 'yes' },
+      launchAgent: 'codex',
+      launchToken: 'draft-recovery-token',
+      freshAgentLaunch: {
+        agentArgs: '',
+        sessionOptions: { model: 'gpt-host-pick', effort: 'high', permissionMode: 'full-access' },
+        prompt: 'ship it',
+        promptDelivery: 'draft'
+      },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          agent: 'codex',
+          agentArgs: '',
+          sessionOptions: { model: 'gpt-host-pick', effort: 'high', permissionMode: 'full-access' }
+        })
+      })
+    )
+    const create = runtimeCall.mock.calls.find(
+      ([args]) => args.method === 'terminal.createAgentSession'
+    )?.[0]
+    expect(create?.params).not.toHaveProperty('command')
+    expect(create?.params).not.toHaveProperty('env')
+    expect(delivery).toHaveBeenCalledExactlyOnceWith(
+      { outcome: { status: 'created' }, hostTabId: 'host-adopted' },
+      expect.objectContaining({
+        agent: 'codex',
+        rendererTabId: 'web-terminal-host-adopted',
+        promptAfterReady: 'ship it',
+        submitPrompt: false,
+        forcePromptPaste: true
+      })
+    )
+    const delivered = delivery.mock.calls[0]?.[1]
+    await expect(delivered?.launchPty).resolves.toBe('remote:env-1@@term-remote')
+    expect(delivered?.beforePaste?.()).toBe(true)
+    transport.disconnect()
+    expect(delivered?.beforePaste?.()).toBe(false)
+  })
+
+  it('reports a failed single Aider prompt attempt once with Copy prompt after a transient detach', async () => {
+    let finishDelivery!: (delivered: boolean) => void
+    delivery.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          finishDelivery = resolve
+        })
+    )
+    Object.assign(window.api, { ui: { writeClipboardText: promptFailure.copy } })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      launchAgent: 'aider',
+      launchToken: 'aider-launch',
+      freshAgentLaunch: { prompt: 'fix the parser', promptDelivery: 'draft' },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    transport.disconnect()
+    finishDelivery(false)
+    await vi.dynamicImportSettled()
+    expect(delivery).toHaveBeenCalledOnce()
+    expect(promptFailure.error).toHaveBeenCalledOnce()
+    promptFailure.error.mock.calls[0]?.[1].action.onClick()
+    expect(promptFailure.copy).toHaveBeenCalledExactlyOnceWith('fix the parser')
+    transport.disconnect()
+    await vi.dynamicImportSettled()
+    expect(delivery).toHaveBeenCalledOnce()
+    expect(promptFailure.error).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the existing pane request when an old host needs a prepared launch', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'repo1::/remote/wt',
+      command: 'goose',
+      launchAgent: 'goose',
+      agentLaunchPreferences: { mode: 'full-access' },
+      freshAgentLaunch: {
+        sessionOptions: { permissionMode: 'full-access' },
+        prompt: 'fix permissions',
+        promptDelivery: 'auto-submit'
+      },
+      tabId: 'tab-1',
+      leafId: '11111111-1111-4111-8111-111111111111'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          agent: 'goose',
+          launchPreferences: { mode: 'full-access' }
+        })
+      })
+    )
+    const create = runtimeCall.mock.calls.find(
+      ([args]) => args.method === 'terminal.createAgentSession'
+    )?.[0]
+    expect(create?.params).not.toHaveProperty('sessionOptions')
+    expect(create?.params).not.toHaveProperty('prompt')
+    expect(delivery).toHaveBeenCalledExactlyOnceWith(
+      { outcome: { status: 'created' }, hostTabId: undefined },
+      expect.objectContaining({
+        promptAfterReady: 'fix permissions',
+        submitPrompt: true,
+        forcePromptPaste: true
+      })
+    )
+    transport.disconnect()
+  })
+
+  it.each([
+    {
+      agent: 'codex' as const,
+      delivery: 'draft' as const,
+      submit: false,
+      command: "codex '-c' 'disable_paste_burst=true'"
+    },
+    {
+      agent: 'aider' as const,
+      delivery: 'auto-submit' as const,
+      submit: true,
+      command: 'aider'
+    }
+  ])(
+    'delivers ordinary legacy $agent text once without a recovery flag',
+    async ({ agent, delivery: promptDelivery, submit, command }) => {
+      const original = runtimeCall.getMockImplementation()!
+      runtimeCall.mockImplementation(async (args: { method?: string }) => {
+        const result = await original(args)
+        return args.method === 'status.get'
+          ? { ...result, result: { ...result.result, capabilities: [] } }
+          : result
+      })
+      const { planLaunchAgentStartupPrompt } =
+        await import('@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan')
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const prepare = () =>
+        planLaunchAgentStartupPrompt({
+          base: { agent, cmdOverrides: {}, agentArgs: null, platform: 'linux', isRemote: true },
+          prompt: 'ordinary work',
+          promptDelivery,
+          submitFollowup: true,
+          isFollowupPath: agent === 'aider'
+        })
+      const startup = prepare().startupPlan!
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'repo1::/remote/wt',
+        launchAgent: agent,
+        launchToken: `ordinary-${agent}`,
+        command: startup.launchCommand,
+        freshAgentLaunch: { prompt: 'ordinary work', promptDelivery, legacy: prepare },
+        tabId: 'ordinary-tab',
+        leafId: '11111111-1111-4111-8111-111111111111'
+      })
+      await transport.connect({ url: '', callbacks: {} })
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.create',
+          params: expect.objectContaining({ command })
+        })
+      )
+      expect(delivery).toHaveBeenCalledExactlyOnceWith(
+        { outcome: { status: 'created' }, hostTabId: undefined },
+        expect.objectContaining({
+          rendererTabId: 'ordinary-tab',
+          promptAfterReady: 'ordinary work',
+          submitPrompt: submit,
+          forcePromptPaste: true
+        })
+      )
+      transport.disconnect()
+    }
+  )
 
   it('forwards input over the stream and disconnects without closing shared remote sessions', async () => {
     vi.useFakeTimers()

@@ -247,7 +247,9 @@ export function createStructuredAgentSessionOptionsReadOwner(
         // Support stays tagged with its session; consumers filter by session, so it bridges a re-pair.
         snapshot = {
           ...snapshot,
-          optionState: sameOwner ? { ...kept, permissionMode: current.permissionMode } : kept
+          optionState: sameOwner
+            ? { ...kept, defaultModel: undefined, permissionMode: current.permissionMode }
+            : kept
         }
         writes.current = { count: 0, readback: false }
         resetStructuredOptionPickBook(optionPicks.current)

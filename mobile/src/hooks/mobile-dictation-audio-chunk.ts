@@ -6,19 +6,20 @@ import {
 import { bytesToBase64 } from './mobile-dictation-session-state'
 import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { rpcPayloadMember } from '../transport/rpc-reader-payload'
-import { waitForRpcClientReconnected } from '../transport/rpc-client-reconnect-wait'
-import { probeLivenessWhileWaiting } from '../transport/rpc-liveness-probe-while-waiting'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { isLogicalClientSuspendedError } from '../transport/logical-client-suspended-error'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
+import { waitForRpcClientReconnected } from '../transport/rpc/rpc-client-reconnect-wait'
+import { probeLivenessWhileWaiting } from '../transport/rpc/rpc-liveness-probe-while-waiting'
+import '../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
+import { isLogicalClientSuspendedError } from '../transport/connection/logical-client-suspended-error'
 import type {
   DictationCapture,
   DictationCaptureChunk
 } from '../platform/dictation-capture-contract'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 type MobileDictationAudioChunkQueue = {
   // One promise per busy send slot; each settles once nothing is left to send.

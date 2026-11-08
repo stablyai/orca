@@ -48,7 +48,13 @@ vi.mock('../runtime-client', async () => {
 
 import { main } from '../index'
 import { RuntimeClientError } from '../runtime/types'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
+import {
+  buildWorktree,
+  noFolderWorkspacesFixture,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from '../test-fixtures'
 
 describe('orca cli browser page targeting', () => {
   beforeEach(() => {
@@ -162,6 +168,7 @@ describe('orca cli browser page targeting', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_snapshot', {
         browserPageId: 'page-1',
         snapshot: 'tree',
@@ -178,7 +185,7 @@ describe('orca cli browser page targeting', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'browser.snapshot', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'browser.snapshot', {
       page: 'page-1',
       worktree: 'id:repo::/tmp/repo/feature'
     })
@@ -202,6 +209,7 @@ describe('orca cli browser page targeting', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_switch', { switched: 2, browserPageId: 'page-2' })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -212,7 +220,7 @@ describe('orca cli browser page targeting', () => {
     )
 
     expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
-    expect(callMock).toHaveBeenNthCalledWith(2, 'browser.tabSwitch', {
+    expect(callMock).toHaveBeenNthCalledWith(3, 'browser.tabSwitch', {
       index: undefined,
       page: 'page-2',
       worktree: 'id:repo::/tmp/repo/feature'
@@ -277,6 +285,7 @@ describe('orca cli browser page targeting', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      noFolderWorkspacesFixture(),
       okFixture('req_open_url', { browserPageId: 'page-local' })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -284,7 +293,7 @@ describe('orca cli browser page targeting', () => {
     await main(['open-url', '--url', 'https://example.com/login', '--json'], '/tmp/repo/feature')
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'browser.openUrl',
       {
         url: 'https://example.com/login',
@@ -300,6 +309,7 @@ describe('orca cli browser page targeting', () => {
     queueFixtures(
       callMock,
       worktreeListFixture([parent, workspace]),
+      noFolderWorkspacesFixture(),
       okFixture('req_tab_create', { browserPageId: 'page-1' })
     )
     vi.spyOn(console, 'log').mockImplementation(() => {})
@@ -308,7 +318,7 @@ describe('orca cli browser page targeting', () => {
     await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/folder')
 
     expect(callMock).toHaveBeenNthCalledWith(
-      2,
+      3,
       'browser.tabCreate',
       { url: 'https://example.com', worktree: `id:${workspace.id}` },
       { timeoutMs: 60_000 }

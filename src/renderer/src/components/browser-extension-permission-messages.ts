@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   browserExtensionHostWarning,
   browserExtensionPermissionWarning,
@@ -13,92 +14,79 @@ import {
 
 const MAX_NAMED_HOSTS = 3
 
-function permissionMessage(warning: BrowserExtensionPermissionWarning): string {
+function permissionMessage(
+  warning: BrowserExtensionPermissionWarning,
+  t: Translate = translate
+): string {
   switch (warning) {
     case 'history':
-      return translate('browserExtensions.permission.history', 'Read your browsing history')
+      return t('browserExtensions.permission.history', 'Read your browsing history')
     case 'historyWrite':
-      return translate(
-        'browserExtensions.permission.historyWrite',
-        'Read and change your browsing history'
-      )
+      return t('browserExtensions.permission.historyWrite', 'Read and change your browsing history')
     case 'bookmarks':
-      return translate('browserExtensions.permission.bookmarks', 'Read and change your bookmarks')
+      return t('browserExtensions.permission.bookmarks', 'Read and change your bookmarks')
     case 'clipboardRead':
-      return translate('browserExtensions.permission.clipboardRead', 'Read data you copy and paste')
+      return t('browserExtensions.permission.clipboardRead', 'Read data you copy and paste')
     case 'clipboardWrite':
-      return translate(
-        'browserExtensions.permission.clipboardWrite',
-        'Modify data you copy and paste'
-      )
+      return t('browserExtensions.permission.clipboardWrite', 'Modify data you copy and paste')
     case 'downloads':
-      return translate('browserExtensions.permission.downloads', 'Manage your downloads')
+      return t('browserExtensions.permission.downloads', 'Manage your downloads')
     case 'nativeMessaging':
-      return translate(
+      return t(
         'browserExtensions.permission.nativeMessaging',
         'Communicate with cooperating native applications'
       )
     case 'notifications':
-      return translate('browserExtensions.permission.notifications', 'Display notifications')
+      return t('browserExtensions.permission.notifications', 'Display notifications')
     case 'privacy':
-      return translate(
-        'browserExtensions.permission.privacy',
-        'Change your privacy-related settings'
-      )
+      return t('browserExtensions.permission.privacy', 'Change your privacy-related settings')
     case 'management':
-      return translate('browserExtensions.permission.management', 'Manage your other extensions')
+      return t('browserExtensions.permission.management', 'Manage your other extensions')
     case 'proxy':
-      return translate('browserExtensions.permission.proxy', 'Change your proxy settings')
+      return t('browserExtensions.permission.proxy', 'Change your proxy settings')
     case 'contentSettings':
-      return translate(
+      return t(
         'browserExtensions.permission.contentSettings',
         'Change which sites can use cookies, JavaScript, your camera, microphone and location'
       )
     case 'geolocation':
-      return translate('browserExtensions.permission.geolocation', 'Detect your physical location')
+      return t('browserExtensions.permission.geolocation', 'Detect your physical location')
     case 'topSites':
-      return translate(
+      return t(
         'browserExtensions.permission.topSites',
         'Read a list of your most frequently visited websites'
       )
     case 'blockContent':
-      return translate('browserExtensions.permission.blockContent', 'Block content on any page')
+      return t('browserExtensions.permission.blockContent', 'Block content on any page')
     case 'debugger':
-      return translate('browserExtensions.permission.debugger', 'Access the page debugger backend')
+      return t('browserExtensions.permission.debugger', 'Access the page debugger backend')
     case 'screenCapture':
-      return translate(
-        'browserExtensions.permission.screenCapture',
-        'Capture content of your screen'
-      )
+      return t('browserExtensions.permission.screenCapture', 'Capture content of your screen')
     case 'email':
-      return translate('browserExtensions.permission.email', 'Know your email address')
+      return t('browserExtensions.permission.email', 'Know your email address')
   }
 }
 
-function hostMessage(hostPermissions: string[]): string | null {
+function hostMessage(hostPermissions: string[], t: Translate = translate): string | null {
   const warning = browserExtensionHostWarning(hostPermissions)
   if (!warning) {
     return null
   }
   if (warning.kind === 'allSites') {
-    return translate(
+    return t(
       'browserExtensions.permission.allSites',
       'Read and change all your data on all websites'
     )
   }
   const { hosts } = warning
   if (hosts.length <= MAX_NAMED_HOSTS) {
-    return translate(
-      'browserExtensions.permission.someSites',
-      'Read and change your data on {{hosts}}',
-      {
-        hosts: hosts.join(', ')
-      }
-    )
+    return t('browserExtensions.permission.someSites', 'Read and change your data on {{hosts}}', {
+      hosts: hosts.join(', ')
+    })
   }
   const named = hosts.slice(0, MAX_NAMED_HOSTS).join(', ')
   const count = hosts.length - MAX_NAMED_HOSTS
-  return translate(
+  return t(
     'browserExtensions.permission.manyOtherSites',
     'Read and change your data on {{hosts}} and {{count}} other sites',
     {
@@ -112,14 +100,15 @@ function hostMessage(hostPermissions: string[]): string | null {
 /** Why skip unsupported ones: "It can" must not promise what Orca does not do; they get their own line. */
 export function describeBrowserExtensionAccess(
   permissions: string[],
-  hostPermissions: string[]
+  hostPermissions: string[],
+  t?: Translate
 ): string[] {
   const messages = [
-    hostMessage(hostPermissions),
+    hostMessage(hostPermissions, t),
     ...permissions
       .filter((permission) => unsupportedBrowserExtensionFeatures([permission]).length === 0)
       .map(browserExtensionPermissionWarning)
-      .map((warning) => (warning ? permissionMessage(warning) : null))
+      .map((warning) => (warning ? permissionMessage(warning, t) : null))
   ]
   return [...new Set(messages.filter((message): message is string => message !== null))]
 }
@@ -132,14 +121,15 @@ function featureLabel(feature: UnsupportedBrowserExtensionFeature): string {
 }
 
 /** One calm line naming what the extension asks for that Orca cannot do yet, or null. */
-export function describeUnsupportedBrowserExtensionFeatures(permissions: string[]): string | null {
+export function describeUnsupportedBrowserExtensionFeatures(
+  permissions: string[],
+  t: Translate = translate
+): string | null {
   const features = unsupportedBrowserExtensionFeatures(permissions)
   if (features.length === 0) {
     return null
   }
-  return translate(
-    'browserExtensions.unsupported.line',
-    'Not available in Orca yet: {{features}}.',
-    { features: features.map(featureLabel).join(', ') }
-  )
+  return t('browserExtensions.unsupported.line', 'Not available in Orca yet: {{features}}.', {
+    features: features.map(featureLabel).join(', ')
+  })
 }

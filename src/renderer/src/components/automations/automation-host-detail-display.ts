@@ -1,6 +1,6 @@
 // Use the catalog row’s storage host: a record’s local target means local to its server. Fall back to that target only for uncaptured legacy rows.
 
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import { getExecutionHostLabel, toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 

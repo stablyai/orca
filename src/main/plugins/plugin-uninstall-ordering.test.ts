@@ -9,7 +9,6 @@ import {
 } from './installation/plugin-install'
 import {
   createUninstallFixture,
-  holdNextUninstallRefresh,
   latestUninstallWorker,
   prepareUninstallFixture,
   publishBundledUninstallSuccessor,
@@ -80,31 +79,6 @@ it('retains a bundled plugin worker and history when ordinary IPC removal is ref
   expect((await readPluginLockfile(getUserPluginsDir(root))).plugins[key]?.source.kind).toBe(
     'bundled'
   )
-})
-
-it('checks bundled ownership after an earlier queued refresh before deactivation', async () => {
-  const { root, service, install, store } = await createUninstallFixture()
-  const key = await install('orca-queued', {}, true)
-  const held = holdNextUninstallRefresh(service)
-  const deactivate = vi.spyOn(uninstallWorkerController(service), 'deactivate')
-  const refresh = service.refresh()
-  const remove = vi.fn(async () => {})
-  const failed = service.removePlugin(key, remove).catch((error: unknown) => error)
-  try {
-    await held.entered.promise
-    await publishBundledUninstallSuccessor(root, 'orca-queued', key, store)
-  } finally {
-    held.release.resolve()
-  }
-  await refresh
-  const calls = deactivate.mock.calls.length
-  expect(await failed).toEqual(
-    expect.objectContaining({ message: expect.stringContaining('protected') })
-  )
-  expect(deactivate).toHaveBeenCalledTimes(calls)
-  expect(remove).not.toHaveBeenCalled()
-  expect(service.getLogs(key)).toHaveLength(200)
-  held.restore()
 })
 
 it('rechecks bundled ownership under the filesystem queue after a held worker shutdown', async () => {

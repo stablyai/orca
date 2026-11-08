@@ -3,7 +3,7 @@ import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
 import {
   STRUCTURED_WORKER_HANDLE_PREFIX,
   isStructuredWorkerHandle
-} from '../../../../../shared/structured-worker-handle'
+} from '../../../../../shared/orchestration/workers/structured-worker-handle'
 import {
   STRUCTURED_WORKER_INCARNATION_PREFIX,
   sessionIdFromStructuredWorkerIncarnation

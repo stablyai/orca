@@ -1,6 +1,6 @@
 import { refreshTerminalImeInputContext } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import { UNCOVERED_TERMINAL_LEAF_SELECTOR } from '@/components/terminal-pane/chat/native-chat-covered-pane'
-import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 
 /** Wait two frames for a fresh tab’s xterm textarea to mount so focus cannot land on the menu/body/previous tab. */
 function cssAttributeString(value: string): string {

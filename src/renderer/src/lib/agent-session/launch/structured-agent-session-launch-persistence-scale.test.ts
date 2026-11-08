@@ -26,12 +26,12 @@ import {
 import {
   resetStructuredAgentSessionSendsForTests,
   settleStructuredAgentSessionSendsFromJournal
-} from '@/components/native-chat/structured-agent-session-message-sender'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends,
   type StructuredAgentSessionPendingSend
-} from '@/components/native-chat/structured-agent-session-pending-sends'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 
 const KEY = 'orca:structuredAgentLaunches:v1'
 const refusal = {

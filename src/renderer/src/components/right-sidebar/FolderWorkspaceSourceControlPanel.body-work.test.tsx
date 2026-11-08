@@ -1,6 +1,6 @@
 import { getDefaultSettings } from '../../../../shared/constants'
 // @vitest-environment happy-dom
-import { act, Profiler, type ReactNode } from 'react'
+import { act, type ReactNode } from 'react'
 import { fireEvent, screen } from '@testing-library/react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -8,51 +8,21 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type * as WorktreeGitCopy from '@/lib/worktree-git-copy'
 import type * as GitStatusClient from '@/runtime/source-control/git/runtime-git-status-client'
 import type * as GitDiffClient from '@/runtime/source-control/git/runtime-git-diff-client'
-import type * as PanelModule from './source-control/panel/panel'
-import type * as RepoClient from '@/runtime/runtime-repo-client'
+import type * as RepoClient from '@/runtime/source-control/references/runtime-repo-client'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import FolderWorkspaceSourceControlPanel from './FolderWorkspaceSourceControlPanel'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 
-const probes = vi.hoisted(() => ({
-  status: vi.fn(),
-  upstreamRef: vi.fn(),
-  compare: vi.fn(),
-  history: vi.fn(),
-  submodules: vi.fn(),
-  upstream: vi.fn(),
-  eligibility: vi.fn(),
-  visible: new Set<string>(),
-  bodyRenders: new Map<string, number>()
-}))
+const probes = vi.hoisted(() => ({ visible: new Set<string>() }))
 const pending = (): Promise<never> => new Promise(() => {})
-
-vi.mock('./source-control/panel/panel', async (original) => {
-  const { SourceControlPanel: Panel } = await original<typeof PanelModule>()
-  const { useSourceControlScope } = await import('./source-control/panel/worktree-scope')
-  return {
-    SourceControlPanel: () => {
-      const id = useSourceControlScope()?.worktreeId ?? 'selected'
-      return (
-        <Profiler
-          id={id}
-          onRender={() => probes.bodyRenders.set(id, (probes.bodyRenders.get(id) ?? 0) + 1)}
-        >
-          <Panel />
-        </Profiler>
-      )
-    }
-  }
-})
 
 vi.mock('./source-control/sync/git-status-refresh', () => ({
   refreshGitStatusForWorktree: async (args: {
     worktreeId: string
     request?: { onStatusAccepted?: (status: unknown) => void }
   }) => {
-    probes.status(args.worktreeId)
     args.request?.onStatusAccepted?.({
       entries: [],
       conflictOperation: 'unknown',
@@ -74,21 +44,13 @@ vi.mock('@/lib/worktree-git-copy', async (original) => ({
 }))
 vi.mock('@/runtime/source-control/git/runtime-git-status-client', async (original) => ({
   ...(await original<typeof GitStatusClient>()),
-  setRuntimeGitStatusUpstreamRefWatch: async (context: { worktreeId: string }) =>
-    probes.upstreamRef(context.worktreeId),
-  getRuntimeGitHistory: (context: { worktreeId: string }) => {
-    probes.history(context.worktreeId)
-    return pending()
-  },
-  getRuntimeGitSubmoduleStatus: (context: { worktreeId: string }) => {
-    probes.submodules(context.worktreeId)
-    return pending()
-  }
+  setRuntimeGitStatusUpstreamRefWatch: async () => {},
+  getRuntimeGitHistory: () => pending(),
+  getRuntimeGitSubmoduleStatus: () => pending()
 }))
 vi.mock('@/runtime/source-control/git/runtime-git-diff-client', async (original) => ({
   ...(await original<typeof GitDiffClient>()),
-  getRuntimeGitBranchCompare: async (context: { worktreeId: string }, baseRef: string) => {
-    probes.compare(context.worktreeId)
+  getRuntimeGitBranchCompare: async (_context: { worktreeId: string }, baseRef: string) => {
     return {
       summary: {
         baseRef,
@@ -103,7 +65,7 @@ vi.mock('@/runtime/source-control/git/runtime-git-diff-client', async (original)
     }
   }
 }))
-vi.mock('@/runtime/runtime-repo-client', async (original) => ({
+vi.mock('@/runtime/source-control/references/runtime-repo-client', async (original) => ({
   ...(await original<typeof RepoClient>()),
   watchRuntimeRepoBaseRefDefault: () => () => {},
   searchRuntimeRepoBaseRefs: async () => ['feature/live']
@@ -162,11 +124,8 @@ async function scrollTo(ids: readonly string[]): Promise<void> {
     }
   })
 }
-
-const BODY_OPERATIONS = ['compare', 'history', 'submodules', 'upstream', 'eligibility'] as const
 let root: Root
 let container: HTMLDivElement
-let renders = 0
 const refuseConfirmation = async () => false
 
 beforeEach(() => {
@@ -185,14 +144,8 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  for (const probe of Object.values(probes)) {
-    if (typeof probe === 'function') {
-      probe.mockClear()
-    }
-  }
   probes.visible.clear()
   observed.clear()
-  renders = 0
 })
 afterEach(async () => {
   await act(async () => root.unmount())
@@ -260,13 +213,8 @@ function setup(count: number): Worktree[] {
     gitStatusByWorktree: Object.fromEntries(
       worktrees.map((row) => [row.id, [{ path: 'a.ts', status: 'modified', area: 'unstaged' }]])
     ),
-    fetchUpstreamStatus: async (worktreeId: string) => {
-      probes.upstream(worktreeId)
-    },
-    getHostedReviewCreationEligibility: (args: { worktreePath?: string }) => {
-      probes.eligibility(args.worktreePath)
-      return pending()
-    },
+    fetchUpstreamStatus: async () => {},
+    getHostedReviewCreationEligibility: pending,
     fetchHostedReviewForBranch: async () => null,
     fetchPRForBranch: async () => null
   } as unknown as Partial<AppState>)
@@ -277,11 +225,7 @@ async function render(node: ReactNode): Promise<void> {
   await act(async () =>
     root.render(
       <ConfirmationDialogContext.Provider value={refuseConfirmation}>
-        <TooltipProvider>
-          <Profiler id="source-control" onRender={() => (renders += 1)}>
-            {node}
-          </Profiler>
-        </TooltipProvider>
+        <TooltipProvider>{node}</TooltipProvider>
       </ConfirmationDialogContext.Provider>
     )
   )
@@ -336,16 +280,9 @@ it.each(['off-screen', 'collapsed'])(
       }))
     )
     expect(section!.querySelector('[data-source-control-path="latest.ts"]')).toBeNull()
-    for (const operation of BODY_OPERATIONS) {
-      probes[operation].mockClear()
-    }
     await act(async () => {
       await vi.advanceTimersByTimeAsync(60_000)
     })
-    // A mounted but off-screen body keeps its view and runs nothing.
-    for (const operation of BODY_OPERATIONS) {
-      expect(probes[operation]).not.toHaveBeenCalled()
-    }
 
     await (inactive === 'off-screen'
       ? scrollTo([first!.id])

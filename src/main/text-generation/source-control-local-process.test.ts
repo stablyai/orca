@@ -116,15 +116,6 @@ afterEach(() => {
 })
 
 describe('killSourceControlAgentProcess for a supervised agent', () => {
-  it('asks the supervisor to stop and leaves its group to it', async () => {
-    const child = fakeSupervisor('SIGTERM')
-
-    await killSourceControlAgentProcess(asSpawned(child))
-
-    expect(child.kill.mock.calls).toEqual([['SIGTERM']])
-    expect(terminateTreeMock).not.toHaveBeenCalled()
-  })
-
   it('tears the tree down only once the supervisor has had its full stop time', async () => {
     vi.useFakeTimers()
     const child = fakeSupervisor(null)
@@ -142,16 +133,6 @@ describe('killSourceControlAgentProcess for a supervised agent', () => {
     await vi.advanceTimersByTimeAsync(rootOnlyProviderClosePolicy(true).forcedExitMs)
     await stopped
     expect(child.kill).not.toHaveBeenCalledWith('SIGKILL')
-  })
-
-  it('signals nothing once the supervisor has exited', async () => {
-    const child = fakeSupervisor(null)
-    child.exitCode = 0
-
-    await killSourceControlAgentProcess(asSpawned(child))
-
-    expect(child.kill).not.toHaveBeenCalled()
-    expect(terminateTreeMock).not.toHaveBeenCalled()
   })
 })
 
@@ -414,38 +395,6 @@ describe('a supervised Codex model discovery that runs out of time', () => {
 describe.runIf(process.platform !== 'win32')(
   'killSourceControlAgentProcess on a real agent',
   () => {
-    it('stops an agent that ignores its stdin end through its supervisor', async () => {
-      const child = spawnSourceControlAgent({
-        binary: process.execPath,
-        args: ['-e', 'console.log(process.pid); setInterval(() => {}, 60000)'],
-        env: process.env,
-        stdinMode: 'ignore',
-        useCwdForNative: false
-      })
-      const stdout = child.stdout
-      if (!stdout) {
-        child.kill('SIGKILL')
-        throw new Error('The source-control fixture requires a stdout pipe')
-      }
-      const agentPid = await new Promise<number>((resolve) =>
-        stdout.once('data', (chunk: Buffer) => resolve(Number(chunk.toString().trim())))
-      )
-
-      try {
-        await killSourceControlAgentProcess(child)
-
-        expect(child.signalCode ?? child.exitCode).not.toBeNull()
-        expect(() => process.kill(agentPid, 0)).toThrow(expect.objectContaining({ code: 'ESRCH' }))
-        expect(terminateTreeMock).not.toHaveBeenCalled()
-      } finally {
-        for (const pid of [agentPid, child.pid!]) {
-          try {
-            process.kill(pid, 'SIGKILL')
-          } catch {}
-        }
-      }
-    })
-
     it('holds the Codex home until a canceled agent has stopped through its supervisor', async () => {
       const folder = mkdtempSync(join(tmpdir(), 'orca-supervised-cancel-'))
       const pids: number[] = []

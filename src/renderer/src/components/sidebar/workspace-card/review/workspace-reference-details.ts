@@ -4,7 +4,7 @@ import {
   type TaskSourceContext,
   getTaskSourceCacheScope,
   buildTaskSourceContextFromRepo
-} from '../../../../../../shared/task-source-context'
+} from '../../../../../../shared/work-items/task-source-context'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId

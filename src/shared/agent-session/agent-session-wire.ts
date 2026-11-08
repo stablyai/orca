@@ -324,7 +324,7 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** Only queue-if-active callers with queued-messages.v2 receive this draft arm; non-waiting states occur only on settled-draft replays. */
+/** Waiting input answers with its row; non-waiting states can occur on same-id replays. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number
@@ -335,7 +335,7 @@ export type AgentSessionSendResult =
   | { clientMessageId: string; submission: AgentJournalSubmission }
   | { clientMessageId: string; queued: AgentSessionQueuedSendReceipt }
 
-/** Undefined for queued replies; callers never sending delivery cannot receive that arm and read undefined as delivery-unknown. */
+/** Undefined while the input is a waiting row rather than a handed-off submission. */
 export function agentSessionSendSubmission(
   result: AgentSessionSendResult | undefined
 ): AgentJournalSubmission | undefined {

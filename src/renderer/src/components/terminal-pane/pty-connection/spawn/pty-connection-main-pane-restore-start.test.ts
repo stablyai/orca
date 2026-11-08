@@ -17,9 +17,12 @@ import {
 import { createInitialStoreState } from '../test-fixtures/pty-connection-test-store-fixtures'
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import type { TerminalPaneStart } from '@/store/terminals/terminal-state'
-import type { LayoutApplyHandlers, WindowLayoutCommand } from '@/runtime/layout-apply-send'
-import type * as LayoutApplySend from '@/runtime/layout-apply-send'
-import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/server-layout-apply-routes'
+import type {
+  LayoutApplyHandlers,
+  WindowLayoutCommand
+} from '@/runtime/workspace-layout/commands/layout-apply-send'
+import type * as LayoutApplySend from '@/runtime/workspace-layout/commands/layout-apply-send'
+import { LOCAL_LAYOUT_APPLY_ORIGIN } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
@@ -30,7 +33,7 @@ import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mo
 vi.mock('../../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
 const sent = vi.hoisted((): { command: WindowLayoutCommand; handlers: LayoutApplyHandlers }[] => [])
-vi.mock('@/runtime/layout-apply-send', async (importOriginal) => ({
+vi.mock('@/runtime/workspace-layout/commands/layout-apply-send', async (importOriginal) => ({
   ...(await importOriginal<LayoutApplySendModule>()),
   sendLayoutApply: (
     _state: unknown,

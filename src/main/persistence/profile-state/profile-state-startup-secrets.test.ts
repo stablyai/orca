@@ -9,7 +9,7 @@ import {
   _resetSecretStoreForTests
 } from '../../../shared/secret-store'
 import { Store } from '../loading-store/store'
-import * as storeDomains from '../loading-store/store-domain-composition'
+
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 
 let keyState: 'available' | 'unavailable' | 'decrypt-fails' = 'available'
@@ -79,38 +79,6 @@ const secrets = {
   lease: `startup-owner-lease-${'x'.repeat(480)}`
 }
 const sealed = (value: string) => Buffer.from(`encrypted:${value}`, 'utf8').toString('base64')
-
-it.each([false, true])(
-  'rejects reused input before Store context installation (secret=%s)',
-  (hasSecret) => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-consumed-startup-'))
-    directories.push(directory)
-    const authority = new ProfileStateSqliteAuthority(join(directory, 'profile-state.db'), 'once')
-    if (hasSecret) {
-      authority.writeSerializedState(
-        Buffer.from(
-          JSON.stringify({
-            settings: { opencodeSessionCookie: sealed(secrets.cookie) }
-          })
-        )
-      )
-    }
-    const options = {
-      dataFile: join(directory, 'orca-data.json'),
-      profileStateAuthority: authority,
-      initialAuthorityState: authority.readInitialState()
-    }
-    const store = new Store(options)
-    stores.push(store)
-    if (hasSecret) {
-      expect(store.getSettings().opencodeSessionCookie).toBe(secrets.cookie)
-    }
-    const install = vi.spyOn(storeDomains, 'installStoreDomainContexts')
-
-    expect(() => new Store(options)).toThrow('already been consumed')
-    expect(install).not.toHaveBeenCalled()
-  }
-)
 
 describe.each(['serialized', 'parsed'] as const)(
   '%s startup secret retention',

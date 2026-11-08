@@ -4,7 +4,7 @@ import type { DictationCapture } from '../platform/dictation-capture-contract'
 import type { OnDeviceSpeech } from '../platform/on-device-speech-contract'
 import { openMobileDictationCapture } from './mobile-dictation-capture-open'
 import { createMobileDictationId, type DictationStatus } from './mobile-dictation-session-state'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileDictationAudioPhase,
   MobileDictationTranscriptSoFar

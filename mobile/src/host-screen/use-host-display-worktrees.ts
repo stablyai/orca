@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { useHostDescriptor } from '../transport/host-descriptor-store'
-import type { ConnectionState } from '../transport/types'
+import { useHostDescriptor } from '../transport/hosts/host-descriptor-store'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   serverHostHealth,
   serverHostHealthLabels,

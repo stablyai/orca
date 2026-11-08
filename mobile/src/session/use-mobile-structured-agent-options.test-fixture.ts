@@ -8,7 +8,7 @@ import { createWithQueryClient } from '../test-support/query-client-test-rendere
 import { vi } from 'vitest'
 import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   StructuredAgentSessionMutate,
   StructuredAgentSessionMutationResult
@@ -149,6 +149,7 @@ type ProbeProps = {
   coherentCatalog?: boolean
   modelEffortDiscovery?: boolean
   permissionOwn?: boolean
+  onOptionError?: (message: string) => void
   onRender: (controller: Controller) => void
 }
 
@@ -161,6 +162,7 @@ function Probe(props: ProbeProps): null {
     fence: props.fence,
     unloadedTurnRevisions: undefined,
     mutate: props.mutate,
+    onOptionError: props.onOptionError,
     turnId: props.turnId ?? null,
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
     hostSupport: {

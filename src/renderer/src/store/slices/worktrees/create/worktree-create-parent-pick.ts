@@ -9,7 +9,10 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../../../shared/workspace-scope'
-import { getIndexedAllWorktrees, getIndexedWorktreesById } from '@/store/worktree-repo-index'
+import {
+  getIndexedAllWorktrees,
+  getIndexedWorktreesById
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   getWorktreeHostIdentity,
   isWorktreeHostIdentity
@@ -22,11 +25,11 @@ import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
+import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
 import {
-  findFolderWorkspaceRecord,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/cross-store-lineage-resolution'
 

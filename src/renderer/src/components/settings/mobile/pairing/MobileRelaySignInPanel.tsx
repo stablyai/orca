@@ -1,4 +1,4 @@
-import { translate } from '../../../../i18n/i18n'
+import { useTranslate } from '../../../../i18n/use-translate'
 import { useAppStore } from '../../../../store/index'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
 
@@ -7,6 +7,7 @@ export function MobileRelaySignInPanel({
 }: {
   reconnectRequired: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const browserWaiting = useAppStore((state) => Boolean(state.orcaProfileSignInProgress?.link))
 
   return (
@@ -25,7 +26,7 @@ export function MobileRelaySignInPanel({
         <OrcaSignInWaitNotice className="min-w-0 flex-1" />
       ) : (
         <p className="min-w-0 flex-1 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.MobilePairingConnectionOptions.relaySignInDetail',
             'Signs this desktop in to Orca and routes the phone through Orca’s servers. LAN does not need an account.'
           )}
@@ -33,11 +34,11 @@ export function MobileRelaySignInPanel({
       )}
       <OrcaSignInButton size="sm" className="shrink-0">
         {reconnectRequired
-          ? translate(
+          ? t(
               'auto.components.settings.MobilePairingConnectionOptions.signInAgain',
               'Sign in again for Relay'
             )
-          : translate(
+          : t(
               'auto.components.settings.MobilePairingConnectionOptions.signIn',
               'Sign in for Relay'
             )}

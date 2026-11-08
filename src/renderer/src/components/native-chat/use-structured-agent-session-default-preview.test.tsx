@@ -16,12 +16,12 @@ import {
   modelChoiceCount,
   HOST_CATALOG,
   LIVE_OPTIONS
-} from './use-structured-agent-session-options.test-fixture'
+} from './session/options/structured/use-structured-agent-session-options.test-fixture'
 import { act, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 describe('useStructuredAgentSessionOptions', () => {
   afterEach(() => {
     cleanup()
