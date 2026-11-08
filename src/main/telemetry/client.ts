@@ -207,16 +207,16 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): boole
   }
   const mainOwnedProps =
     name === 'app_opened'
-      ? {
-          agent_dashboard_enabled: settings.experimentalAgentDashboardPopout === true
-        }
+      ? { agent_dashboard_enabled: settings.experimentalAgentDashboardPopout === true }
       : sampleRate < 1
         ? { sample_rate: sampleRate }
         : {}
 
   const switchCohort = settings.telemetry?.chatUiSwitchNoteCohort
   enqueueCapture(name, {
-    ...(switchCohort && { chat_ui_switch_note_v1: switchCohort }),
+    ...(['control', 'treatment'].includes(switchCohort ?? '') && {
+      chat_ui_switch_note_v1: switchCohort
+    }),
     ...result.props,
     ...mainOwnedProps
   })
