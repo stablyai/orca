@@ -1,6 +1,6 @@
 import { createBranch } from './create-branch'
 import { detectConflictOperation } from './source-control/git-conflict-operation'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -157,6 +157,67 @@ describe('commit actions', () => {
     await expect(recoverSequencer(directory, 'revert', 'continue')).rejects.toThrow(/^error: /)
     expect(await git('rev-parse', '--verify', 'REVERT_HEAD')).toBe(topic)
     expect(await git('diff', '--name-only', '--diff-filter=U')).toBe('file.txt')
+    expect(await git('log', '-1', '--format=%s')).toBe('diverged')
+  })
+  it('preserves a staged gitlink when Continue fails with submodule diffs configured off', async () => {
+    await git('-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', directory, 'module')
+    await git('commit', '-qm', 'add module')
+    await git('checkout', '-qb', 'module-topic')
+    await git('-C', 'module', 'checkout', '-q', topic)
+    await git('add', 'module')
+    await git('commit', '-qm', 'topic module link')
+    const target = await git('rev-parse', 'HEAD')
+    await git('checkout', '-q', 'main')
+    await git('-C', 'module', 'checkout', '-qb', 'other-link', 'origin/main')
+    await writeFile(join(directory, 'module', 'file.txt'), 'other module\n')
+    await git(
+      '-C',
+      'module',
+      '-c',
+      'user.name=Audit',
+      '-c',
+      'user.email=audit@example.test',
+      '-c',
+      'commit.gpgsign=false',
+      '-c',
+      'core.hooksPath=',
+      'commit',
+      '-qam',
+      'other module'
+    )
+    await git('add', 'module')
+    await git('commit', '-qm', 'other module link')
+    expect(await applyCommit(directory, 'cherry-pick', target)).toEqual({ outcome: 'conflicted' })
+    await git('-C', 'module', 'checkout', '-q', topic)
+    await git('add', 'module')
+    await git('config', 'diff.ignoreSubmodules', 'all')
+    const hooks = join(directory, '.git', 'hooks')
+    await git('config', 'core.hooksPath', hooks)
+    await writeFile(
+      join(hooks, 'pre-commit'),
+      '#!/bin/sh\necho "error: reject gitlink" >&2\nexit 1\n'
+    )
+    await chmod(join(hooks, 'pre-commit'), 0o755)
+
+    await expect(recoverSequencer(directory, 'cherry-pick', 'continue')).rejects.toThrow(
+      'error: reject gitlink'
+    )
+    expect(await git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).toBe(target)
+    expect(await git('diff', '--cached', '--name-only', '--ignore-submodules=none')).toBe('module')
+    expect(await git('rev-parse', ':module')).toBe(topic)
+    expect(await git('log', '-1', '--format=%s')).toBe('other module link')
+  })
+  it('keeps an unstaged resolution in progress instead of reporting an empty cherry-pick', async () => {
+    await commit('different\n', 'diverged')
+    expect(await applyCommit(directory, 'cherry-pick', topic)).toEqual({ outcome: 'conflicted' })
+    await writeFile(join(directory, 'file.txt'), 'resolved\n')
+    await git('add', 'file.txt')
+    await git('restore', '--staged', 'file.txt')
+
+    await expect(recoverSequencer(directory, 'cherry-pick', 'continue')).rejects.toThrow()
+    expect(await git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).toBe(topic)
+    expect(await git('diff', '--', 'file.txt')).toContain('+resolved')
+    expect(await git('status', '--porcelain')).toBe('M file.txt')
     expect(await git('log', '-1', '--format=%s')).toBe('diverged')
   })
   for (const inProgress of ['merge', 'rebase', 'cherry-pick', 'revert', 'stash'] as const) {

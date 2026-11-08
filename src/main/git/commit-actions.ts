@@ -28,7 +28,11 @@ async function finishEmptyCommitAction(
     if (unmerged.trim()) {
       return undefined
     }
-    await gitExecFileAsync(['diff', '--cached', '--quiet', 'HEAD'], execution)
+    await gitExecFileAsync(
+      ['diff-index', '--cached', '--quiet', '--ignore-submodules=none', 'HEAD', '--'],
+      execution
+    )
+    await gitExecFileAsync(['diff-files', '--quiet', '--ignore-submodules=none'], execution)
   } catch {
     return undefined
   }
