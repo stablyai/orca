@@ -164,7 +164,9 @@ export function useHostQuery<TInput extends HostQueryParams, TData>(
   const keyHash = hashKey([target, input])
   const queryOptions = useMemo((): UseQueryOptions<TData, Error, TData, HostQueryKey> => {
     const observer = observerOptions(query, client, hostId, target, input)
-    return enabled ? observer : { ...observer, queryFn: skipToken }
+    // Disable through the observer, not skipToken: observers share the query's options, so a disabled
+    // screen's skipToken would leave an enabled one's key with no fetch for invalidation or intervals.
+    return enabled ? observer : { ...observer, enabled: false }
   }, [query, client, hostId, keyHash, enabled])
   return useQuery({
     ...queryOptions,

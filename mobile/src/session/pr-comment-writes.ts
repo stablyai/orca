@@ -114,6 +114,48 @@ function applyWrite(details: GitHubWorkItemDetails, write: PrCommentWrite): GitH
   }
 }
 
+// Puts back only what this write changed, so another write that settled meanwhile keeps its result.
+function revertWrite(
+  current: GitHubWorkItemDetails,
+  before: GitHubWorkItemDetails,
+  write: PrCommentWrite
+): GitHubWorkItemDetails {
+  const was = new Map(before.comments.map((comment) => [comment.id, comment]))
+  switch (write.kind) {
+    case 'resolve':
+      return {
+        ...current,
+        comments: current.comments.map((comment) =>
+          comment.threadId === write.params.threadId && was.has(comment.id)
+            ? { ...comment, isResolved: was.get(comment.id)!.isResolved }
+            : comment
+        )
+      }
+    case 'edit': {
+      const old = was.get(write.params.commentId)
+      return old
+        ? {
+            ...current,
+            comments: current.comments.map((comment) =>
+              comment.id === old.id ? { ...comment, body: old.body } : comment
+            )
+          }
+        : current
+    }
+    case 'delete': {
+      const index = before.comments.findIndex((comment) => comment.id === write.params.commentId)
+      if (index === -1 || current.comments.some((c) => c.id === write.params.commentId)) {
+        return current
+      }
+      const comments = [...current.comments]
+      comments.splice(Math.min(index, comments.length), 0, before.comments[index])
+      return { ...current, comments }
+    }
+    default:
+      return current
+  }
+}
+
 function readComments(client: RpcClient, vars: PrCommentWriteVars): Promise<PRComment[] | null> {
   return vars.target
     ? readPrComments(client, vars.worktreeId, vars.target.input)
@@ -137,6 +179,16 @@ export const prCommentWrite = defineHostMutation({
     apply: (queryClient, _hostId, vars) => {
       if (vars.target) {
         patchPrDetails(queryClient, vars.target.key, (details) => applyWrite(details, vars.write))
+      }
+    },
+    revert: (queryClient, vars, snapshot) => {
+      for (const [queryKey, before] of snapshot) {
+        if (before) {
+          patchPrDetails(queryClient, queryKey, (current) =>
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the snapshot holds this details entry, taken before `apply`.
+            revertWrite(current, before as GitHubWorkItemDetails, vars.write)
+          )
+        }
       }
     }
   },

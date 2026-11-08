@@ -9,7 +9,6 @@ import {
 import { gitBranchCompareRead } from './mobile-git-read-operations'
 import { isMobileGitUnavailableReply } from './mobile-git-status'
 import type { MobileGitBranchCompareReply } from './git-compare-reply-schema'
-import type { MobileBranchCompareState } from './mobile-source-control-screen-state'
 
 export type BranchCompareOutcome =
   | { readonly kind: 'ready'; readonly result: MobileGitBranchCompareReply }
@@ -93,20 +92,4 @@ function failedCompare(err: unknown): BranchCompareOutcome {
             'Unable to load committed changes'
           )
   }
-}
-
-export function nextBranchCompareState(
-  outcome: BranchCompareOutcome,
-  previous: MobileBranchCompareState
-): MobileBranchCompareState {
-  if (outcome.kind === 'ready') {
-    return { kind: 'ready', result: outcome.result }
-  }
-  // Clearing ready state to idle would claim No Changes despite retained branch commits.
-  if (previous.kind === 'ready') {
-    return previous
-  }
-  return outcome.kind === 'unavailable'
-    ? { kind: 'idle' }
-    : { kind: 'error', message: outcome.message }
 }

@@ -218,7 +218,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   // A live read of each part a write or Refresh changed; failures keep what is shown.
   const rereadPRSlices = useCallback(
     async (slices: readonly PrSlice[]): Promise<void> => {
-      if (!client) {
+      // A repo without a GitHub remote has no PR to read, however the caller asks.
+      if (!client || !isGithubRepo) {
         return
       }
       const live = { replace: true }
@@ -235,7 +236,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
           : null
       ])
     },
-    [branchInput, checksInput, client, detailsInput, hostId, queryClient, target]
+    [branchInput, checksInput, client, detailsInput, hostId, isGithubRepo, queryClient, target]
   )
 
   const refetchPRSidebar = useCallback(
@@ -246,23 +247,19 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (!demanded) {
         return
       }
-      await rereadPRSlices(
-        options?.refresh
-          ? ['summary', 'checks', ...(includeDetails ? ['details' as const] : [])]
-          : ['summary']
-      )
+      // Refresh reads every part; otherwise the summary, plus details a Retry asks for after they failed.
+      const details = includeDetails && (options?.refresh || detailsFailed)
+      await rereadPRSlices([
+        'summary',
+        ...(options?.refresh ? ['checks' as const] : []),
+        ...(details ? ['details' as const] : [])
+      ])
     },
-    [demanded, raiseDemand, rereadPRSlices]
+    [demanded, detailsFailed, raiseDemand, rereadPRSlices]
   )
 
-  const refetchDetails = detailsQuery.refetch
-  const ensurePrSidebarDetails = useCallback(() => {
-    raiseDemand(true)
-    // A failed read is asked again; a pending or loaded one is left alone.
-    if (detailsFailed) {
-      void refetchDetails()
-    }
-  }, [detailsFailed, raiseDemand, refetchDetails])
+  // Asking for details only enables their read; a failed one is read again by Retry or Refresh, never in a loop.
+  const ensurePrSidebarDetails = useCallback(() => raiseDemand(true), [raiseDemand])
 
   const openPRSidebar = useCallback(() => {
     // Opening is full demand even when loaded content needs no request now.

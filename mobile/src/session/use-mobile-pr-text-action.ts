@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { QueryKey } from '@tanstack/react-query'
+import type { QueryClient, QueryKey } from '@tanstack/react-query'
 import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -56,6 +56,23 @@ async function sendTextWrite(client: RpcClient, vars: PrTextWriteVars): Promise<
   }
 }
 
+function applyText(queryClient: QueryClient, vars: PrTextWriteVars): void {
+  const { text } = vars
+  if (vars.field === 'title') {
+    if (vars.summaryKey) {
+      patchPrSummary(queryClient, vars.summaryKey, (pr) => ({ ...pr, title: text }))
+    }
+    if (vars.detailsKey) {
+      patchPrDetails(queryClient, vars.detailsKey, (details) => ({
+        ...details,
+        item: { ...details.item, title: text }
+      }))
+    }
+  } else if (vars.detailsKey) {
+    patchPrDetails(queryClient, vars.detailsKey, (details) => ({ ...details, body: text }))
+  }
+}
+
 // The saved text is the whole change, so a confirmed write needs no re-read; a refusal puts the old text back.
 const prTextWrite = defineHostMutation({
   offline: 'draft',
@@ -65,23 +82,10 @@ const prTextWrite = defineHostMutation({
   optimistic: {
     keys: (_hostId, vars: PrTextWriteVars) =>
       [vars.summaryKey, vars.detailsKey].filter((key): key is QueryKey => key !== null),
-    apply: (queryClient, _hostId, vars) => {
-      const { text } = vars
-      if (vars.field === 'title') {
-        if (vars.summaryKey) {
-          patchPrSummary(queryClient, vars.summaryKey, (pr) => ({ ...pr, title: text }))
-        }
-        if (vars.detailsKey) {
-          patchPrDetails(queryClient, vars.detailsKey, (details) => ({
-            ...details,
-            item: { ...details.item, title: text }
-          }))
-        }
-      } else if (vars.detailsKey) {
-        patchPrDetails(queryClient, vars.detailsKey, (details) => ({ ...details, body: text }))
-      }
-    }
-  }
+    apply: (queryClient, _hostId, vars) => applyText(queryClient, vars)
+  },
+  // A poll that started before the host applied the text may have landed the old one meanwhile.
+  accept: (queryClient, _hostId, vars) => applyText(queryClient, vars)
 })
 
 // Title and description edits share one in-flight lock: both rewrite the same PR.

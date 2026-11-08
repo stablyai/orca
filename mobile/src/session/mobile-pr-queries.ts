@@ -31,6 +31,7 @@ import {
   fetchWorkItemDetails,
   type GitHubPrRepoSlug
 } from './github-pr-rpc'
+import { GITHUB_CONNECTION_CHANGED } from '../transport/github-target-invocation'
 import { githubPrCommentsRead } from './github-pr-read-operations'
 import { githubPrRequestParams } from './github-pr-repo-slug'
 import { loadPrBranchReview, type PrBranchReview } from './mobile-pr-sidebar-state'
@@ -208,7 +209,11 @@ export const prAssignableUsersQuery = defineHostQuery({
   staleTime: 10 * 60_000,
   fetch: async (client, target, input: PrRepoParams): Promise<GitHubAssignableUser[]> => {
     const repo = prRepoSlug(input)
-    const outcome = await fetchAssignableUsers(client, target.worktree ?? '', repo)
+    let outcome = await fetchAssignableUsers(client, target.worktree ?? '', repo)
+    // A LAN/relay switch during the account check sent nothing, so the read starts again on the new path.
+    if (!outcome.ok && outcome.error === GITHUB_CONNECTION_CHANGED) {
+      outcome = await fetchAssignableUsers(client, target.worktree ?? '', repo)
+    }
     if (!outcome.ok) {
       throw new Error(outcome.error)
     }
