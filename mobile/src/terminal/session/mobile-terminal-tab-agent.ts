@@ -70,6 +70,14 @@ export function resolveMobileTerminalTabAgentId(
   const hookAgent = agentTypeToIconAgent(
     correctCursorImportedHookAgent(status?.agentType, hostAgentIdentity)
   )
+  // Without process signals, a free-form title (a Claude summary naming "Agy") must not displace the launched agent's own completion.
+  if (
+    status?.state === 'done' &&
+    hookAgent &&
+    hookAgent === agentTypeToIconAgent(tab.launchAgent)
+  ) {
+    return hookAgent
+  }
   return resolveTabAgentFromSignalSnapshot({
     title: tab.title,
     hookAgent: status?.state === 'done' ? null : hookAgent,
