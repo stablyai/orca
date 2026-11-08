@@ -1,37 +1,39 @@
+import type Database from '../../sqlite/sync-database'
 import type { ClaudeJournalSnapshot } from '../../claude/claude-subagent-journaled-identities'
-import type { JournalSqlScope } from './journal-sql-scope'
 
-/** Read the derived columns only: the last alias per parent, the floored highest attempt, the roster. */
-export function readJournalSqlClaudeIdentities(
-  scope: JournalSqlScope
+/** Selected scalars and name memberships only: the last alias per parent, the floored highest attempt, the roster. */
+export function readJournalDomainClaudeIdentities(
+  db: Database.Database,
+  prefix: readonly [string, string]
 ): Omit<ClaudeJournalSnapshot, 'threadGoal'> {
-  const canonical = new Map<string, string>()
-  for (const row of scope.db
-    .prepare(`SELECT producer_parent_ref, producer_agent_id FROM journal_proj_items
-    WHERE session_id=? AND epoch=? AND producer_parent_ref IS NOT NULL AND hidden=0 ORDER BY ordinal`)
-    .all(...scope.prefix)) {
-    scope.examined(row)
-    canonical.set(String(row.producer_parent_ref), String(row.producer_agent_id))
-  }
-  const attempts: [string, number][] = []
-  for (const row of scope.db
-    .prepare(`SELECT producer_agent_id, MAX(producer_attempt) AS attempt FROM journal_proj_items
-    WHERE session_id=? AND epoch=? AND producer_agent_id IS NOT NULL AND hidden=0
+  // SQLite returns the bare agent column from the MAX(ordinal) row of each group.
+  const canonicalByToolUse = db
+    .prepare(`SELECT producer_parent_ref, producer_agent_id, MAX(ordinal) AS ordinal
+    FROM journal_items INDEXED BY journal_items_producer_parent
+    WHERE session_id=? AND epoch=? AND hidden=0 AND producer_parent_ref IS NOT NULL
+    GROUP BY producer_parent_ref ORDER BY ordinal`)
+    .all(...prefix)
+    .map((row): [string, string] => [
+      String(row.producer_parent_ref),
+      String(row.producer_agent_id)
+    ])
+  const attemptByAgent = db
+    .prepare(`SELECT producer_agent_id, MAX(producer_attempt) AS attempt
+    FROM journal_items INDEXED BY journal_items_producer_attempt
+    WHERE session_id=? AND epoch=? AND hidden=0 AND producer_agent_id IS NOT NULL
     GROUP BY producer_agent_id`)
-    .all(...scope.prefix)) {
-    scope.examined(row)
-    attempts.push([String(row.producer_agent_id), Math.max(1, Number(row.attempt))])
-  }
-  const subagents = new Set<string>()
-  for (const row of scope.db
-    .prepare(`SELECT subagent_names FROM journal_proj_items
-    WHERE session_id=? AND epoch=? AND subagent_names IS NOT NULL AND hidden=0 ORDER BY ordinal`)
-    .all(...scope.prefix)) {
-    scope.examined(row)
-    const names: { id: string }[] = JSON.parse(String(row.subagent_names))
-    for (const { id } of names) {
-      subagents.add(id)
-    }
-  }
-  return { canonicalByToolUse: [...canonical], attemptByAgent: attempts, subagents: [...subagents] }
+    .all(...prefix)
+    .map((row): [string, number] => [
+      String(row.producer_agent_id),
+      Math.max(1, Number(row.attempt))
+    ])
+  const subagents = db
+    .prepare(`SELECT name.subagent_id FROM journal_item_subagent_names name
+    JOIN journal_items item ON item.session_id=name.session_id AND item.epoch=name.epoch
+      AND item.item_id=name.item_id
+    WHERE name.session_id=? AND name.epoch=? AND item.hidden=0
+    GROUP BY name.subagent_id ORDER BY MIN(item.ordinal)`)
+    .all(...prefix)
+    .map((row) => String(row.subagent_id))
+  return { canonicalByToolUse, attemptByAgent, subagents }
 }

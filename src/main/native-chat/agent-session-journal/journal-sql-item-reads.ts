@@ -1,3 +1,4 @@
+import type Database from '../../sqlite/sync-database'
 import {
   readJournalHistoryItems,
   readClaudeHistoryPrompts,
@@ -5,7 +6,7 @@ import {
   type JournalHistoryReadOptions,
   type JournalHistoryPrompt
 } from './journal-history-items'
-import { journalSqlHistoryOpeners, journalSqlUserItemIds } from './journal-sql-history-items'
+import { journalDomainHistoryOpeners, journalDomainUserItemIds } from './journal-sql-history-items'
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem
@@ -14,27 +15,27 @@ import type { AgentJournalCursor } from '../../../shared/agent-session/journal/a
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
 import {
   journalThreadGoalSource,
   type JournalThreadGoalSource
 } from './projection/journal-thread-goal-source'
-import type { JournalSqlScope } from './journal-sql-scope'
 import type {
   JournalContinuationContext,
   JournalMessageOptions,
   JournalNamedTurn
 } from './journal-reads'
-import { readJournalSqlContinuationContext } from './journal-sql-continuation-context'
-import { JournalSqlReadValues } from './journal-sql-read-values'
-import { readJournalSqlInput } from './journal-sql-input-reads'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { currentAgentSessionThreadGoalSourceBySequence } from '../../../shared/agent-session/agent-session-thread-goal'
-import type { ClaudeJournalSnapshot } from '../../claude/claude-subagent-journaled-identities'
-import { readJournalSqlClaudeIdentities } from './journal-sql-claude-identities'
 import {
-  readJournalSqlLifecycle,
-  type JournalSqlLifecycleRead,
-  type JournalSqlLifecycleReadResult
+  journalDomainContextHead,
+  readJournalDomainContinuationContext
+} from './journal-sql-continuation-context'
+import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { ClaudeJournalSnapshot } from '../../claude/claude-subagent-journaled-identities'
+import { readJournalDomainClaudeIdentities } from './journal-sql-claude-identities'
+import type {
+  JournalSqlLifecycleRead,
+  JournalSqlLifecycleReadResult
 } from './journal-sql-lifecycle-reads'
 
 /** Item reads by type and position; each names the rows it decodes, as projection reads do. */
@@ -73,48 +74,51 @@ export type JournalSqlItemReadResult =
   | { kind: 'continuation-context'; context: JournalContinuationContext }
   | JournalSqlLifecycleReadResult
 
-export type JournalSqlItemReadContext = {
-  scope: JournalSqlScope
-  item: (itemId: string) => AgentJournalRenderItem | undefined
-  visible: (itemId: string) => boolean
-  epoch: () => string
-}
+export type JournalDomainItemRead = Exclude<JournalSqlItemRead, JournalSqlLifecycleRead>
+export type JournalDomainItemReadResult = Exclude<
+  JournalSqlItemReadResult,
+  JournalSqlLifecycleReadResult
+>
 
-const TURNS_NEWEST_FIRST = `SELECT entry_key, context_clear FROM journal_proj_items
-  WHERE session_id=? AND epoch=? AND (turn_id IS NOT NULL OR context_clear=1)
+export type JournalDomainItemTarget = { sessionId: string; epoch: string }
+
+/** Turns and clears, newest first; ties keep the later-admitted row, as an insertion-order fold does. */
+const TURNS_NEWEST_FIRST = `SELECT payload_json FROM journal_items INDEXED BY journal_items_turn_marker
+  WHERE session_id=? AND epoch=? AND hidden=0 AND turn_marker=1
   ORDER BY sequence DESC, ordinal DESC`
 
-export function readJournalSqlItems(
-  context: JournalSqlItemReadContext,
-  operation: JournalSqlItemRead
-): JournalSqlItemReadResult {
-  const { scope } = context
+/** Runs on the caller's open reader snapshot; it never writes, waits or caches. */
+export function readJournalDomainItems(
+  db: Database.Database,
+  target: JournalDomainItemTarget,
+  operation: JournalDomainItemRead
+): JournalDomainItemReadResult {
+  const prefix = [target.sessionId, target.epoch] as const
   switch (operation.kind) {
     case 'canonical-item-ids': {
-      const values = new JournalSqlReadValues(scope, () => {})
+      const canonical = canonicalItemId(db, prefix)
       return {
         kind: 'canonical-item-ids',
-        items: operation.itemIds.map((itemId) => ({
-          itemId,
-          canonicalItemId: values.get<string>('aliases', itemId) ?? itemId
-        }))
+        items: operation.itemIds.map((itemId) => ({ itemId, canonicalItemId: canonical(itemId) }))
       }
     }
     case 'history-items': {
-      const values = new JournalSqlReadValues(scope, () => {})
-      const canonical = (key: string) => values.get<string>('aliases', key) ?? key
+      const canonical = canonicalItemId(db, prefix)
+      const removed = db.prepare(`SELECT
+        EXISTS(SELECT 1 FROM journal_item_tombstones WHERE session_id=?1 AND epoch=?2 AND item_id=?3)
+        OR EXISTS(SELECT 1 FROM journal_items WHERE session_id=?1 AND epoch=?2 AND item_id=?3 AND hidden=1)
+        AS removed`)
       return {
         kind: 'history-items',
         items: readJournalHistoryItems(
           {
             canonicalItemId: canonical,
-            item: (key) => (context.visible(key) ? (context.item(key) ?? null) : null),
-            presentationRemoved: (key) => {
-              const itemId = canonical(key)
-              return values.has('tombstones', itemId) || !context.visible(itemId)
-            },
+            item: (itemId) => visibleItem(db, prefix, itemId),
+            presentationRemoved: (key) => Boolean(removed.get(...prefix, canonical(key))!.removed),
             ...(operation.options?.includeOpeners
-              ? { turnsOpenedBy: (key: string) => journalSqlHistoryOpeners(scope, key) }
+              ? {
+                  turnsOpenedBy: (itemId: string) => journalDomainHistoryOpeners(db, prefix, itemId)
+                }
               : {})
           },
           operation.itemIds
@@ -125,136 +129,177 @@ export function readJournalSqlItems(
       return {
         kind: 'claude-history-prompts',
         prompts: readClaudeHistoryPrompts(
-          journalSqlUserItemIds(scope, context.visible),
+          journalDomainUserItemIds(db, prefix),
           operation.sessionId,
           operation.uuids
         )
       }
     case 'continuation-context':
-      return { kind: 'continuation-context', context: readJournalSqlContinuationContext(scope) }
-    case 'message-options': {
-      const itemId = agentJournalSubmissionKey(operation.clientMessageId)
-      const body = context.visible(itemId) ? context.item(itemId)?.body : undefined
-      const newest = readJournalSqlInput(scope, { kind: 'newest-turn' })
-      if (newest.kind !== 'newest-turn') {
-        throw new Error('journal newest turn read returned a different answer')
+      return {
+        kind: 'continuation-context',
+        context: readJournalDomainContinuationContext(db, target)
       }
+    case 'message-options': {
+      const body = visibleItem(
+        db,
+        prefix,
+        agentJournalSubmissionKey(operation.clientMessageId)
+      )?.body
       return {
         kind: 'message-options',
         options: {
           ordinaryMessage: body?.kind === 'message' && !body.command,
-          runningTurn: newest.turn?.state === 'running'
+          runningTurn:
+            readAgentJournalTurn(newestTurnOrClear(db, prefix)?.body)?.state === 'running'
         }
       }
     }
     case 'named-turn': {
-      const row = scope.db
-        .prepare(`SELECT entry_key FROM journal_proj_items
+      const row = db
+        .prepare(`SELECT item_id FROM journal_items INDEXED BY journal_items_named_turn
         WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0
         ORDER BY sequence DESC, sequence_index DESC, ordinal DESC LIMIT 1`)
-        .get(...scope.prefix, operation.turnId)
-      if (row) {
-        scope.examined(row)
-      }
+        .get(...prefix, operation.turnId)
       return {
         kind: 'named-turn',
         turn: {
-          scope: row ? { kind: 'turn', turnItemId: entryItemId(row) } : null,
-          removed: new JournalSqlReadValues(scope, () => {}).has('removedTurnIds', operation.turnId)
+          scope: row ? { kind: 'turn', turnItemId: String(row.item_id) } : null,
+          removed: Boolean(
+            db
+              .prepare(`SELECT 1 FROM journal_item_tombstones
+              WHERE session_id=? AND epoch=? AND turn_id=? LIMIT 1`)
+              .get(...prefix, operation.turnId)
+          )
         }
       }
     }
     case 'items-by-kind': {
       const kinds = [...new Set(operation.kinds)]
       const rows = kinds.length
-        ? scope.db
-            .prepare(`SELECT entry_key, ordinal FROM journal_proj_items
-            WHERE session_id=? AND epoch=? AND kind IN (${kinds.map(() => '?').join(',')})
+        ? db
+            .prepare(`SELECT payload_json, ordinal FROM journal_items INDEXED BY journal_items_kind
+            WHERE session_id=? AND epoch=? AND hidden=0 AND kind IN (${kinds.map(() => '?').join(',')})
             AND ordinal>? ORDER BY ordinal LIMIT ?`)
-            .all(...scope.prefix, ...kinds, operation.afterOrdinal, operation.limit + 1)
+            .all(...prefix, ...kinds, operation.afterOrdinal, operation.limit + 1)
         : []
       const page = rows.slice(0, operation.limit)
-      const items: AgentJournalRenderItem[] = []
-      for (const row of page) {
-        scope.examined(row)
-        const itemId = entryItemId(row)
-        const item = context.visible(itemId) ? context.item(itemId) : undefined
-        if (item) {
-          items.push(item)
-        }
-      }
       return {
         kind: 'items-by-kind',
-        items,
+        items: page.map(parseItem),
         nextOrdinal: rows.length > operation.limit ? Number(page.at(-1)!.ordinal) : null
       }
     }
     case 'context-floor': {
-      const row = scope.db
-        .prepare(`SELECT sequence FROM journal_proj_items
-        WHERE session_id=? AND epoch=? AND context_clear=1 ORDER BY sequence DESC LIMIT 1`)
-        .get(...scope.prefix)
+      const row = db
+        .prepare(`SELECT sequence FROM journal_items INDEXED BY journal_items_context_clear
+        WHERE session_id=? AND epoch=? AND hidden=0 AND context_clear=1 ORDER BY sequence DESC LIMIT 1`)
+        .get(...prefix)
       return {
         kind: 'context-floor',
-        floor: row ? { epoch: context.epoch(), sequence: Number(row.sequence) } : null
+        floor: row
+          ? { epoch: journalDomainContextHead(db, target).epoch, sequence: Number(row.sequence) }
+          : null
       }
     }
     case 'running-turn': {
-      const row = scope.db.prepare(`${TURNS_NEWEST_FIRST} LIMIT 1`).get(...scope.prefix)
-      const item = row ? context.item(entryItemId(row)) : undefined
+      const row = db.prepare(`${TURNS_NEWEST_FIRST} LIMIT 1`).get(...prefix)
       return {
         kind: 'running-turn',
-        running: item ? runningStructuredAgentSessionTurnItemBySequence([item]) : null
+        running: row ? runningStructuredAgentSessionTurnItemBySequence([parseItem(row)]) : null
       }
     }
-    case 'context-usage': {
-      // Facts before the newest clear never count, so the walk stops there.
-      const turns: AgentJournalRenderItem[] = []
-      for (const row of scope.db.prepare(TURNS_NEWEST_FIRST).iterate(...scope.prefix)) {
-        scope.examined(row)
-        const item = context.item(entryItemId(row))
-        if (item) {
-          turns.push(item)
-        }
-        if (Number(row.context_clear) === 1) {
-          break
-        }
-      }
-      return { kind: 'context-usage', usage: latestStructuredAgentContextFacts(turns.toReversed()) }
-    }
+    case 'context-usage':
+      return { kind: 'context-usage', usage: readContextUsage(db, prefix) }
     case 'claude-snapshot':
       return {
         kind: 'claude-snapshot',
-        snapshot: { ...readJournalSqlClaudeIdentities(scope), threadGoal: readThreadGoal(context) }
+        snapshot: {
+          ...readJournalDomainClaudeIdentities(db, prefix),
+          threadGoal: readThreadGoal(db, prefix)
+        }
       }
     case 'thread-goal-source':
-      return { kind: 'thread-goal-source', source: readThreadGoal(context) }
-    case 'latest-prompt':
-    case 'restart-progress':
-    case 'outgrown-child':
-      return readJournalSqlLifecycle(context, operation)
+      return { kind: 'thread-goal-source', source: readThreadGoal(db, prefix) }
   }
 }
 
-/** The newest transition wins; on equal sequence the earlier-written row, as a fold scan keeps it. */
-function readThreadGoal(context: JournalSqlItemReadContext): JournalThreadGoalSource {
-  const { scope } = context
-  const rows = scope.db
-    .prepare(`SELECT entry_key FROM journal_proj_items
-    WHERE session_id=? AND epoch=? AND ((kind='status' AND root=1) OR context_clear=1)
-    ORDER BY sequence DESC, ordinal ASC`)
-    .iterate(...scope.prefix)
-  for (const row of rows) {
-    scope.examined(row)
-    const item = context.item(entryItemId(row))
-    if (item && currentAgentSessionThreadGoalSourceBySequence([item])) {
-      return journalThreadGoalSource([item])
+type Prefix = readonly [string, string]
+
+function canonicalItemId(db: Database.Database, prefix: Prefix): (key: string) => string {
+  const alias = db.prepare(`SELECT item_id FROM journal_item_aliases
+    WHERE session_id=? AND epoch=? AND provider_item_id=?`)
+  return (key) => {
+    const row = alias.get(...prefix, key)
+    return row ? String(row.item_id) : key
+  }
+}
+
+function visibleItem(
+  db: Database.Database,
+  prefix: Prefix,
+  itemId: string
+): AgentJournalRenderItem | null {
+  const row = db
+    .prepare(`SELECT payload_json FROM journal_items
+    WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
+    .get(...prefix, itemId)
+  return row ? parseItem(row) : null
+}
+
+/** The input order's newest turn: latest position, then the greatest item ID among ties. */
+function newestTurnOrClear(db: Database.Database, prefix: Prefix): AgentJournalRenderItem | null {
+  let newest: AgentJournalRenderItem | null = null
+  for (const row of db
+    .prepare(`SELECT payload_json FROM journal_items INDEXED BY journal_items_turn_marker
+    WHERE session_id=? AND epoch=? AND hidden=0 AND turn_marker=1
+    ORDER BY sequence DESC, sequence_index DESC`)
+    .iterate(...prefix)) {
+    const item = parseItem(row)
+    if (
+      newest &&
+      (item.sequence !== newest.sequence ||
+        (item.sequenceIndex ?? 0) !== (newest.sequenceIndex ?? 0))
+    ) {
+      break
+    }
+    if (!newest || item.itemId.localeCompare(newest.itemId) > 0) {
+      newest = item
     }
   }
-  return journalThreadGoalSource([])
+  return newest
 }
 
-/** Item rows key by the JSON-encoded item id. */
-function entryItemId(row: Record<string, unknown>): string {
-  return String(JSON.parse(String(row.entry_key)))
+/** Walks back to the newest clear, stopping early once older rows can no longer change either fact. */
+function readContextUsage(db: Database.Database, prefix: Prefix): AgentSessionContextUsage {
+  const turns: AgentJournalRenderItem[] = []
+  let used: number | null = null
+  let window: number | null = null
+  for (const row of db.prepare(TURNS_NEWEST_FIRST).iterate(...prefix)) {
+    const item = parseItem(row)
+    if (used !== null && window !== null && item.sequence < Math.min(used, window)) {
+      break
+    }
+    turns.push(item)
+    if (isAgentSessionContextClear(item.body)) {
+      break
+    }
+    const facts = readAgentJournalTurn(item.body)?.contextUsage
+    used ??= facts?.used ? item.sequence : null
+    window ??= facts?.window ? item.sequence : null
+  }
+  return latestStructuredAgentContextFacts(turns.toReversed())
+}
+
+/** The newest transition wins; on equal sequence the earlier-admitted row, as a fold scan keeps it. */
+function readThreadGoal(db: Database.Database, prefix: Prefix): JournalThreadGoalSource {
+  const row = db
+    .prepare(`SELECT payload_json FROM journal_items INDEXED BY journal_items_goal_transition
+    WHERE session_id=? AND epoch=? AND hidden=0 AND goal_transition=1
+    ORDER BY sequence DESC, ordinal ASC LIMIT 1`)
+    .get(...prefix)
+  return journalThreadGoalSource(row ? [parseItem(row)] : [])
+}
+
+function parseItem(row: Record<string, unknown>): AgentJournalRenderItem {
+  return JSON.parse(String(row.payload_json))
 }

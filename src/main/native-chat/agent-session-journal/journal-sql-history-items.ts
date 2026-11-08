@@ -1,48 +1,35 @@
-import type { JournalSqlScope } from './journal-sql-scope'
+import type Database from '../../sqlite/sync-database'
 import { JOURNAL_HISTORY_ITEMS_LIMIT } from './journal-history-items'
 
 /** Only item IDs cross the deterministic prompt lookup; historical bodies stay in SQLite. */
-export function* journalSqlUserItemIds(
-  scope: JournalSqlScope,
-  visible: (key: string) => boolean
+export function* journalDomainUserItemIds(
+  db: Database.Database,
+  prefix: readonly [string, string]
 ): Iterable<string> {
-  for (const row of scope.db
-    .prepare(`SELECT entry_key FROM journal_proj_items
-    WHERE session_id=? AND epoch=? AND kind='message' AND message_role='user' ORDER BY ordinal`)
-    .iterate(...scope.prefix)) {
-    scope.examined(row)
-    const key = String(JSON.parse(String(row.entry_key)))
-    if (visible(key)) {
-      yield key
-    }
+  for (const row of db
+    .prepare(`SELECT item_id FROM journal_items INDEXED BY journal_items_user_message
+    WHERE session_id=? AND epoch=? AND hidden=0 AND kind='message' AND message_role='user'
+    ORDER BY ordinal`)
+    .iterate(...prefix)) {
+    yield String(row.item_id)
   }
 }
 
-/** Opener aliases and turn membership both have typed indexes. */
-export function journalSqlHistoryOpeners(scope: JournalSqlScope, itemId: string): string[] {
-  const openers = [itemId]
-  for (const row of scope.db
-    .prepare(`SELECT alias FROM journal_proj_aliases
-    WHERE session_id=? AND epoch=? AND target=? LIMIT ?`)
-    .iterate(...scope.prefix, itemId, JOURNAL_HISTORY_ITEMS_LIMIT + 1)) {
-    scope.examined(row)
-    openers.push(String(row.alias))
-    if (openers.length > JOURNAL_HISTORY_ITEMS_LIMIT) {
-      throw new Error('history-workspace-too-large')
-    }
+/** Turns a user item opened, directly or through a provider alias, in admission order. */
+export function journalDomainHistoryOpeners(
+  db: Database.Database,
+  prefix: readonly [string, string],
+  itemId: string
+): string[] {
+  const rows = db
+    .prepare(`SELECT item_id FROM journal_items
+    WHERE session_id=?1 AND epoch=?2 AND hidden=0 AND opener_item_id IN (
+      SELECT ?3 UNION SELECT provider_item_id FROM journal_item_aliases
+      WHERE session_id=?1 AND epoch=?2 AND item_id=?3)
+    ORDER BY ordinal LIMIT ?4`)
+    .all(...prefix, itemId, JOURNAL_HISTORY_ITEMS_LIMIT + 1)
+  if (rows.length > JOURNAL_HISTORY_ITEMS_LIMIT) {
+    throw new Error('history-workspace-too-large')
   }
-  const turns = new Map<string, number>()
-  for (const opener of openers) {
-    for (const row of scope.db
-      .prepare(`SELECT entry_key, ordinal FROM journal_proj_items
-      WHERE session_id=? AND epoch=? AND opener_item_id=? ORDER BY ordinal LIMIT ?`)
-      .iterate(...scope.prefix, opener, JOURNAL_HISTORY_ITEMS_LIMIT + 1)) {
-      scope.examined(row)
-      turns.set(String(JSON.parse(String(row.entry_key))), Number(row.ordinal))
-      if (turns.size > JOURNAL_HISTORY_ITEMS_LIMIT) {
-        throw new Error('history-workspace-too-large')
-      }
-    }
-  }
-  return [...turns].sort((a, b) => a[1] - b[1]).map(([key]) => key)
+  return rows.map((row) => String(row.item_id))
 }
