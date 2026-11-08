@@ -1,3 +1,4 @@
+import { uiText, UI_LANGUAGE_CHOICES, UiLanguageChoice, setUiLanguage } from '../settings/NativeUi';
 import { applyThemeMode } from '../settings/Appearance';
 import { router } from '@kit.ArkUI';
 import {
@@ -15,15 +16,19 @@ import {
 @Entry
 @Component
 struct AppearanceSettings {
-  @StorageProp('themeBg') themeBg: string = '#111111';
-  @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
-  @StorageProp('themeBorder') themeBorder: string = '#353a42';
-  @StorageProp('themeText') themeText: string = '#e8e8e8';
-  @StorageProp('themeMuted') themeMuted: string = '#a3a9b2';
-  @StorageProp('themeSecondary') themeSecondary: string = '#b5bec9';
-  @StorageProp('themeAccent') themeAccent: string = '#7ddf7d';
-  @StorageProp('themeLink') themeLink: string = '#96b8e5';
-  @StorageProp('themeWarning') themeWarning: string = '#e0c070';
+  @StorageProp('uiLocale') uiLocale: string = 'en';
+  @StorageProp('uiLanguagePreference') language: string = 'system';
+  @State languageSaving: boolean = false;
+  @StorageProp('themeBg') themeBg: string = '#0a0a0a';
+  @StorageProp('themeSurface') themeSurface: string = '#171717';
+  @StorageProp('themeBorder') themeBorder: string = 'rgba(255, 255, 255, 0.07)';
+  @StorageProp('themeText') themeText: string = '#fafafa';
+  @StorageProp('themeMuted') themeMuted: string = '#898989';
+  @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
+  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
+  @StorageProp('themeLink') themeLink: string = '#3276f2';
+  @StorageProp('themeWarning') themeWarning: string = '#eab308';
+  @State error: string = '';
   @State themeMode: string = THEME_MODE_SYSTEM;
   @State homeScale: number = 1;
 
@@ -41,21 +46,24 @@ struct AppearanceSettings {
     });
   }
 
-  selectTheme(value: string): void {
-    this.themeMode = value;
-    applyThemeMode(value);
-    setString(getContext(this), KEY_THEME_MODE, value).catch((e: Error) => {
-      // 写入失败时，下次进入回落到默认值
-    });
+  async selectTheme(value: string): Promise<void> {
+    try {
+      await setString(getContext(this), KEY_THEME_MODE, value);
+      this.themeMode = value; applyThemeMode(value); this.error = '';
+    } catch (e) { this.error = '无法保存主题，请重试'; }
   }
 
-  persistHomeScale(value: number): void {
-    // 步进 0.05，吸附到 5% 网格消除浮点误差
-    let snapped = Math.round(value * 20) / 20;
-    this.homeScale = snapped;
-    setNumber(getContext(this), KEY_HOME_FONT_SCALE, snapped).catch((e: Error) => {
-      // 忽略写失败
-    });
+  async persistHomeScale(value: number): Promise<void> {
+    let snapped = Math.max(0.8, Math.min(1.5, Math.round(value * 20) / 20));
+    try { await setNumber(getContext(this), KEY_HOME_FONT_SCALE, snapped); this.homeScale = snapped; this.error = ''; }
+    catch (e) { this.error = '无法保存字号，请重试'; this.homeScale = await getNumber(getContext(this), KEY_HOME_FONT_SCALE); }
+  }
+
+  private async chooseLanguage(value: string): Promise<void> {
+    if (this.languageSaving) { return; } this.languageSaving = true;
+    try { await setUiLanguage(getContext(this), value); this.error = ''; }
+    catch (e) { this.error = '无法保存语言，请重试'; }
+    finally { this.languageSaving = false; }
   }
 
   scalePercent(): string {
@@ -66,7 +74,7 @@ struct AppearanceSettings {
     Column({ space: 10 }) {
       Row({ space: 10 }) {
         Text('‹')
-          .fontSize(22)
+          .fontFamily('Geist').fontSize(22)
           .fontColor(this.themeAccent)
           .width(32)
           .height(32)
@@ -74,8 +82,8 @@ struct AppearanceSettings {
           .onClick(() => {
             router.back();
           })
-        Text('外观')
-          .fontSize(20)
+        Text(uiText('外观', this.uiLocale))
+          .fontFamily('Geist').fontSize(20)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.themeText)
           .layoutWeight(1)
@@ -83,12 +91,13 @@ struct AppearanceSettings {
       .width('100%')
       .padding({ left: 10, right: 14, top: 10 })
 
+      if (this.error.length > 0) { Text(this.error).fontFamily('Geist').fontSize(13).fontColor(this.themeText).padding(12) }
       List({ space: 14 }) {
         // 主题模式
         ListItem() {
           Column({ space: 8 }) {
-            Text('主题模式')
-              .fontSize(12)
+            Text(uiText('主题模式', this.uiLocale))
+              .fontFamily('Geist').fontSize(12)
               .fontColor(this.themeMuted)
               .width('100%')
               .padding({ left: 4 })
@@ -97,18 +106,18 @@ struct AppearanceSettings {
                 Column() {
                   Row({ space: 10 }) {
                     Column({ space: 3 }) {
-                      Text(opt.label)
-                        .fontSize(15)
+                      Text(uiText(opt.label, this.uiLocale))
+                        .fontFamily('Geist').fontSize(15)
                         .fontColor(this.themeMode === opt.value ? this.themeAccent : this.themeText)
-                      Text(opt.desc)
-                        .fontSize(11)
+                      Text(uiText(opt.desc, this.uiLocale))
+                        .fontFamily('Geist').fontSize(11)
                         .fontColor(this.themeMuted)
                     }
                     .alignItems(HorizontalAlign.Start)
                     .layoutWeight(1)
 
                     Text(this.themeMode === opt.value ? '✓' : '')
-                      .fontSize(16)
+                      .fontFamily('Geist').fontSize(16)
                       .fontWeight(FontWeight.Bold)
                       .fontColor(this.themeAccent)
                       .width(24)
@@ -135,8 +144,8 @@ struct AppearanceSettings {
             .border({ width: 1, color: this.themeBorder })
             .clip(true)
 
-            Text('主题立即生效，并在下次启动时保留。')
-              .fontSize(11)
+            Text(uiText('主题立即生效，并在下次启动时保留。', this.uiLocale))
+              .fontFamily('Geist').fontSize(11)
               .fontColor(this.themeMuted)
               .width('100%')
               .padding({ left: 4 })
@@ -144,29 +153,41 @@ struct AppearanceSettings {
           .width('100%')
         }
 
+        ListItem() {
+          Column({ space: 8 }) {
+            Text(uiText('语言', this.uiLocale)).fontFamily('Geist').fontSize(12).fontColor(this.themeMuted).width('100%')
+            ForEach(UI_LANGUAGE_CHOICES, (choice: UiLanguageChoice) => {
+              Row() {
+                Text(choice.value === 'system' ? uiText('跟随系统', this.uiLocale) : choice.label)
+                  .fontFamily('Geist').fontSize(15).fontColor(this.themeText).layoutWeight(1)
+                Text(this.language === choice.value ? '✓' : '').fontFamily('Geist').fontSize(16).fontColor(this.themeAccent)
+              }.width('100%').padding(12).enabled(!this.languageSaving).onClick(() => { this.chooseLanguage(choice.value); })
+            }, (choice: UiLanguageChoice): string => choice.value)
+          }.padding(14).width('100%').backgroundColor(this.themeSurface).borderRadius(12)
+        }
         // 主页字号缩放
         ListItem() {
           Column({ space: 8 }) {
-            Text('主页字号缩放')
-              .fontSize(12)
+            Text(uiText('主页字号缩放', this.uiLocale))
+              .fontFamily('Geist').fontSize(12)
               .fontColor(this.themeMuted)
               .width('100%')
               .padding({ left: 4 })
             Column({ space: 12 }) {
               Row({ space: 10 }) {
-                Text('缩放比例')
-                  .fontSize(15)
+                Text(uiText('缩放比例', this.uiLocale))
+                  .fontFamily('Geist').fontSize(15)
                   .fontColor(this.themeText)
                   .layoutWeight(1)
                 Text(this.scalePercent())
-                  .fontSize(14)
+                  .fontFamily('Geist').fontSize(14)
                   .fontColor(this.themeLink)
               }
               .width('100%')
 
               Slider({ value: this.homeScale, min: 0.8, max: 1.5, step: 0.05 })
                 .width('100%')
-                .selectedColor('#2a6a5a')
+                .selectedColor(this.themeAccent)
                 .blockColor(this.themeAccent)
                 .onChange((value: number, mode: SliderChangeMode) => {
                   this.homeScale = value;
@@ -176,12 +197,12 @@ struct AppearanceSettings {
                 })
 
               Column({ space: 4 }) {
-                Text('预览 · 会话列表')
-                  .fontSize(Math.round(16 * this.homeScale))
+                Text(uiText('预览 · 会话列表', this.uiLocale))
+                  .fontFamily('Geist').fontSize(Math.round(16 * this.homeScale))
                   .fontWeight(FontWeight.Medium)
                   .fontColor(this.themeText)
-                Text('桌面连接正常 · 终端会话进行中')
-                  .fontSize(Math.round(12 * this.homeScale))
+                Text(uiText('桌面连接正常 · 终端会话进行中', this.uiLocale))
+                  .fontFamily('Geist').fontSize(Math.round(12 * this.homeScale))
                   .fontColor(this.themeSecondary)
               }
               .width('100%')
@@ -197,8 +218,8 @@ struct AppearanceSettings {
             .backgroundColor(this.themeSurface)
             .border({ width: 1, color: this.themeBorder })
 
-            Text('主页列表字号按此比例缩放；终端字号在「终端显示」中单独设置。')
-              .fontSize(11)
+            Text(uiText('主页列表字号按此比例缩放；终端字号在「终端显示」中单独设置。', this.uiLocale))
+              .fontFamily('Geist').fontSize(11)
               .fontColor(this.themeMuted)
               .width('100%')
               .padding({ left: 4 })

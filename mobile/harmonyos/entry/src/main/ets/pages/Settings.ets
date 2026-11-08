@@ -1,3 +1,6 @@
+import { lucideColorFilter } from '../settings/LucideColor';
+import { uiText } from '../settings/NativeUi';
+import { SETTINGS_MENU_ITEMS, SettingsMenuItem } from '../settings/SettingsMenu';
 import { router } from '@kit.ArkUI';
 import {
   getString,
@@ -15,6 +18,7 @@ import {
  */
 
 interface SettingsItem {
+  icon: Resource;
   title: string;
   subtitle: string;
   target: string;
@@ -29,57 +33,22 @@ interface SettingsGroup {
 @Entry
 @Component
 struct Settings {
-  @StorageProp('themeBg') themeBg: string = '#111111';
-  @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
-  @StorageProp('themeBorder') themeBorder: string = '#353a42';
-  @StorageProp('themeText') themeText: string = '#e8e8e8';
-  @StorageProp('themeMuted') themeMuted: string = '#a3a9b2';
-  @StorageProp('themeSecondary') themeSecondary: string = '#b5bec9';
-  @StorageProp('themeAccent') themeAccent: string = '#7ddf7d';
-  @StorageProp('themeLink') themeLink: string = '#96b8e5';
-  @StorageProp('themeWarning') themeWarning: string = '#e0c070';
+  @StorageProp('uiLocale') uiLocale: string = 'en';
+  @StorageProp('themeBg') themeBg: string = '#0a0a0a';
+  @StorageProp('themeSurface') themeSurface: string = '#171717';
+  @StorageProp('themeBorder') themeBorder: string = 'rgba(255, 255, 255, 0.07)';
+  @StorageProp('themeText') themeText: string = '#fafafa';
+  @StorageProp('themeMuted') themeMuted: string = '#898989';
+  @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
+  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
+  @StorageProp('themeLink') themeLink: string = '#3276f2';
+  @StorageProp('themeWarning') themeWarning: string = '#eab308';
   @State themeSummary: string = '';
   @State dictationSummary: string = '';
 
-  private groups: SettingsGroup[] = [
-    {
-      name: '外观',
-      items: [
-        { title: '主题与字号', subtitle: '主题模式、主页字号缩放', target: 'pages/AppearanceSettings', tag: 'theme' }
-      ]
-    },
-    {
-      name: '终端',
-      items: [
-        { title: '终端显示', subtitle: '字体大小、等宽字体、辅助键排', target: 'pages/TerminalSettings', tag: '' }
-      ]
-    },
-    {
-      name: '语音',
-      items: [
-        { title: '听写引擎', subtitle: '桌面转写 / 端上识别', target: 'pages/VoiceSettings', tag: 'dictation' }
-      ]
-    },
-    {
-      name: '通知',
-      items: [
-        { title: '通知设置', subtitle: '本地通知开关、免打扰', target: 'pages/NotificationSettings', tag: '' }
-      ]
-    },
-    {
-      name: '连接诊断',
-      items: [
-        { title: '连接诊断', subtitle: '已配对主机与排查提示', target: 'pages/Troubleshoot', tag: '' },
-        { title: '连接事件日志', subtitle: '最近 100 条连接事件', target: 'pages/ConnectionLog', tag: '' }
-      ]
-    },
-    {
-      name: '关于',
-      items: [
-        { title: '关于 Orca Mobile', subtitle: '版本信息、致谢与开源许可', target: 'pages/About', tag: '' }
-      ]
-    }
-  ];
+  private groups: SettingsGroup[] = [{ name: '设置', items: SETTINGS_MENU_ITEMS.map((item: SettingsMenuItem): SettingsItem => {
+    return { icon: item.icon, title: item.label, subtitle: item.subtitle, target: item.target, tag: item.tag };
+  }) }];
 
   aboutToAppear(): void {
     this.refreshSummaries();
@@ -107,7 +76,7 @@ struct Settings {
     Column({ space: 10 }) {
       Row({ space: 10 }) {
         Text('‹')
-          .fontSize(22)
+          .fontFamily('Geist').fontSize(22)
           .fontColor(this.themeAccent)
           .width(32)
           .height(32)
@@ -115,8 +84,8 @@ struct Settings {
           .onClick(() => {
             router.back();
           })
-        Text('设置')
-          .fontSize(20)
+        Text(uiText('设置', this.uiLocale))
+          .fontFamily('Geist').fontSize(20)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.themeText)
           .layoutWeight(1)
@@ -129,7 +98,7 @@ struct Settings {
           ListItem() {
             Column({ space: 8 }) {
               Text(group.name)
-                .fontSize(12)
+                .fontFamily('Geist').fontSize(12)
                 .fontColor(this.themeMuted)
                 .width('100%')
                 .padding({ left: 4 })
@@ -137,12 +106,13 @@ struct Settings {
                 ForEach(group.items, (item: SettingsItem, index: number) => {
                   Column() {
                     Row({ space: 10 }) {
+                      Image(item.icon).supportSvg2(true).width(18).height(18).colorFilter(lucideColorFilter(this.themeSecondary))
                       Column({ space: 3 }) {
                         Text(item.title)
-                          .fontSize(15)
+                          .fontFamily('Geist').fontSize(15)
                           .fontColor(this.themeText)
-                        Text(item.subtitle)
-                          .fontSize(11)
+                        Text(uiText(item.subtitle, this.uiLocale))
+                          .fontFamily('Geist').fontSize(11)
                           .fontColor(this.themeMuted)
                       }
                       .alignItems(HorizontalAlign.Start)
@@ -150,19 +120,19 @@ struct Settings {
 
                       if (item.tag === 'theme' && this.themeSummary.length > 0) {
                         Text(this.themeSummary)
-                          .fontSize(12)
+                          .fontFamily('Geist').fontSize(12)
                           .fontColor(this.themeLink)
                           .maxLines(1)
                       }
                       if (item.tag === 'dictation' && this.dictationSummary.length > 0) {
                         Text(this.dictationSummary)
-                          .fontSize(12)
+                          .fontFamily('Geist').fontSize(12)
                           .fontColor(this.themeLink)
                           .maxLines(1)
                       }
                       Text('›')
-                        .fontSize(18)
-                        .fontColor('#555555')
+                        .fontFamily('Geist').fontSize(18)
+                        .fontColor(this.themeMuted)
                     }
                     .width('100%')
                     .padding({ top: 13, bottom: 13, left: 14, right: 14 })

@@ -39,6 +39,9 @@ export class DictationController {
   private activeId: string = '';
   private seq: number = 0;
   private running: boolean = false;
+  private starting: boolean = false;
+  private generation: number = 0;
+  private queuedBytes: number = 0;
   private pending: Uint8Array = new Uint8Array(0);
   private sendChain: Promise<void> = Promise.resolve();
 
@@ -70,12 +73,15 @@ export class DictationController {
    * capturer and streams chunks. Returns false (with a log line) on any failure.
    */
   async start(dictationId: string, rpc: SpikeRpcClient): Promise<boolean> {
+    if (this.running || this.capturer !== null || this.starting) { return false; }
+    this.starting = true; let generation = ++this.generation;
     try {
       if (this.running || this.capturer !== null) {
         this.log('听写已在进行中，先停止再开始');
         return false;
       }
       let granted = await this.ensureMicPermission();
+      if (generation !== this.generation) { return false; }
       if (!granted) {
         this.log('麦克风权限未授予');
         return false;
@@ -83,6 +89,7 @@ export class DictationController {
       let setupParams: Record<string, number> = { 'sampleRate': DICTATION_SAMPLE_RATE };
       let setupResponse: RpcResponse = await rpc.request('speech.dictation.setup',
         JSON.stringify(setupParams));
+      if (generation !== this.generation) { return false; }
       if (!(setupResponse instanceof RpcSuccess)) {
         this.log(`dictation.setup 失败: ${(setupResponse as RpcFailure).errorMessage}`);
         return false;
@@ -90,30 +97,33 @@ export class DictationController {
       let startParams: Record<string, string> = { 'dictationId': dictationId };
       let startResponse: RpcResponse = await rpc.request('speech.dictation.start',
         JSON.stringify(startParams));
+      if (generation !== this.generation) {
+        await rpc.request('speech.dictation.cancel', JSON.stringify(startParams)); return false;
+      }
       if (!(startResponse instanceof RpcSuccess)) {
         this.log(`dictation.start 失败: ${(startResponse as RpcFailure).errorMessage}`);
         return false;
       }
       this.rpc = rpc;
       this.activeId = dictationId;
-      this.seq = 0;
+      this.seq = 0; this.queuedBytes = 0;
       this.pending = new Uint8Array(0);
       this.sendChain = Promise.resolve();
-      await this.startCapturer(dictationId, rpc);
+      await this.startCapturer(dictationId, rpc, generation);
+      if (generation !== this.generation) { await this.closeCapturer(); return false; }
       this.running = true;
       this.log(`听写已开始 (${dictationId})`);
       return true;
     } catch (e) {
       this.log(`听写启动失败: ${(e as Error).message}`);
-      this.running = false;
-      this.activeId = '';
-      await this.closeCapturer();
+      await this.cancel();
       return false;
-    }
+    } finally { this.starting = false; }
   }
 
   /** Stops the capturer and sends speech.dictation.finish; the final transcript, if any, reaches onTranscript. */
   async stop(): Promise<void> {
+    this.generation++;
     let dictationId = this.activeId;
     let rpc = this.rpc;
     this.running = false;
@@ -145,6 +155,7 @@ export class DictationController {
 
   /** Stops the capturer and sends speech.dictation.cancel; failures are logged and ignored (upstream skip policy). */
   async cancel(): Promise<void> {
+    this.generation++;
     let dictationId = this.activeId;
     this.activeId = '';
     this.pending = new Uint8Array(0);
@@ -184,7 +195,7 @@ export class DictationController {
     }
   }
 
-  private async startCapturer(dictationId: string, rpc: SpikeRpcClient): Promise<void> {
+  private async startCapturer(dictationId: string, rpc: SpikeRpcClient, generation: number): Promise<void> {
     let streamInfo: audio.AudioStreamInfo = {
       samplingRate: audio.AudioSamplingRate.SAMPLE_RATE_16000,
       channels: audio.AudioChannel.CHANNEL_1,
@@ -200,6 +211,7 @@ export class DictationController {
       capturerInfo: capturerInfo
     };
     let capturer = await audio.createAudioCapturer(options);
+    if (generation !== this.generation) { await capturer.release(); throw new Error('Capture cancelled'); }
     this.capturer = capturer;
     capturer.on('readData', (data: ArrayBuffer): void => {
       try {
@@ -208,7 +220,9 @@ export class DictationController {
         this.log(`readData 处理异常: ${(e as Error).message}`);
       }
     });
+    this.running = true;
     await capturer.start();
+    if (generation !== this.generation || !this.running) { await this.closeCapturer(); throw new Error('Capture cancelled'); }
   }
 
   private async closeCapturer(): Promise<void> {
@@ -258,12 +272,19 @@ export class DictationController {
   }
 
   private enqueueChunk(dictationId: string, rpc: SpikeRpcClient, chunk: Uint8Array): void {
+    if (dictationId !== this.activeId) { return; }
+    if (this.queuedBytes + chunk.length > 320000) {
+      this.log('听写发送积压，已停止采集，请检查网络后重试'); this.cancel().catch((): void => {}); return;
+    }
+    this.queuedBytes += chunk.length;
     let seq = this.seq;
     this.seq = seq + 1;
     this.sendChain = this.sendChain
       .then((): Promise<void> => this.sendChunkRpc(dictationId, rpc, chunk, seq))
       .catch((err: BusinessError): void => {
         this.log(`chunk #${seq} 发送链异常: ${err.message}`);
+      }).finally((): void => {
+        if (this.activeId === dictationId) { this.queuedBytes = Math.max(0, this.queuedBytes - chunk.length); }
       });
   }
 

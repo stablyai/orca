@@ -24,7 +24,20 @@ for (const name of sourceFiles(root)) {
 for (const command of [
   ['tools/prepare-vendor.mjs', '--check'],
   ['--disable-warning=ExperimentalWarning', 'tools/verify/review-regressions.cjs'],
-  ['--disable-warning=ExperimentalWarning', 'tools/verify/crypto-mirror.mjs']
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/crypto-mirror.mjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/launch-routes.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/home-parity.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/bridge-storage-parity.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/device-parity.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/relay-contracts.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/home-actions.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/bundle-cache-contracts.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/e2ee-interoperability.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/bridge-errors.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/onboarding.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/host-removal-recovery.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/dictation-lifecycle.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/appearance-lifecycle.cjs']
 ]) {
   const result = spawnSync(process.execPath, command, { cwd: root, stdio: 'inherit' })
   if (result.status !== 0) {

@@ -1,3 +1,4 @@
+import { uiText } from '../settings/NativeUi';
 import { router } from '@kit.ArkUI';
 import {
   listLogs,
@@ -13,15 +14,16 @@ import {
 @Entry
 @Component
 struct ConnectionLog {
-  @StorageProp('themeBg') themeBg: string = '#111111';
-  @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
-  @StorageProp('themeBorder') themeBorder: string = '#353a42';
-  @StorageProp('themeText') themeText: string = '#e8e8e8';
-  @StorageProp('themeMuted') themeMuted: string = '#a3a9b2';
-  @StorageProp('themeSecondary') themeSecondary: string = '#b5bec9';
-  @StorageProp('themeAccent') themeAccent: string = '#7ddf7d';
-  @StorageProp('themeLink') themeLink: string = '#96b8e5';
-  @StorageProp('themeWarning') themeWarning: string = '#e0c070';
+  @StorageProp('uiLocale') uiLocale: string = 'en';
+  @StorageProp('themeBg') themeBg: string = '#0a0a0a';
+  @StorageProp('themeSurface') themeSurface: string = '#171717';
+  @StorageProp('themeBorder') themeBorder: string = 'rgba(255, 255, 255, 0.07)';
+  @StorageProp('themeText') themeText: string = '#fafafa';
+  @StorageProp('themeMuted') themeMuted: string = '#898989';
+  @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
+  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
+  @StorageProp('themeLink') themeLink: string = '#3276f2';
+  @StorageProp('themeWarning') themeWarning: string = '#eab308';
   @State entries: ConnectionLogEntry[] = [];
   @State loaded: boolean = false;
 
@@ -90,7 +92,7 @@ struct ConnectionLog {
     Column({ space: 10 }) {
       Row({ space: 10 }) {
         Text('‹')
-          .fontSize(22)
+          .fontFamily('Geist').fontSize(22)
           .fontColor(this.themeAccent)
           .width(32)
           .height(32)
@@ -98,13 +100,13 @@ struct ConnectionLog {
           .onClick(() => {
             router.back();
           })
-        Text('连接事件日志')
-          .fontSize(20)
+        Text(uiText('连接事件日志', this.uiLocale))
+          .fontFamily('Geist').fontSize(20)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.themeText)
           .layoutWeight(1)
-        Button('清空')
-          .fontSize(12)
+        Button(uiText('清空', this.uiLocale))
+          .fontFamily('Geist').fontSize(12)
           .height(32)
           .backgroundColor('#5a2a2a')
           .onClick(() => {
@@ -116,11 +118,11 @@ struct ConnectionLog {
 
       if (this.loaded && this.entries.length === 0) {
         Column({ space: 8 }) {
-          Text('暂无连接事件')
-            .fontSize(15)
+          Text(uiText('暂无连接事件', this.uiLocale))
+            .fontFamily('Geist').fontSize(15)
             .fontColor(this.themeSecondary)
-          Text('连接与配对事件会自动记录在这里')
-            .fontSize(12)
+          Text(uiText('连接与配对事件会自动记录在这里', this.uiLocale))
+            .fontFamily('Geist').fontSize(12)
             .fontColor(this.themeMuted)
             .textAlign(TextAlign.Center)
             .width('80%')
@@ -134,22 +136,22 @@ struct ConnectionLog {
               Column({ space: 4 }) {
                 Row({ space: 8 }) {
                   Text(this.formatTs(entry.ts))
-                    .fontSize(10)
+                    .fontFamily('Geist').fontSize(10)
                     .fontColor(this.themeMuted)
                     .layoutWeight(1)
                   Text(this.levelTag(entry.level))
-                    .fontSize(10)
+                    .fontFamily('Geist').fontSize(10)
                     .fontColor(this.levelColor(entry.level))
                 }
                 .width('100%')
 
                 Text(entry.message)
-                  .fontSize(13)
+                  .fontFamily('Geist').fontSize(13)
                   .fontColor(this.themeText)
 
                 if (entry.detail.length > 0) {
                   Text(entry.detail)
-                    .fontSize(11)
+                    .fontFamily('Geist').fontSize(11)
                     .fontColor(this.levelColor(entry.level))
                     .maxLines(4)
                 }
@@ -163,8 +165,8 @@ struct ConnectionLog {
           }, (entry: ConnectionLogEntry, index: number) => `${index}-${entry.ts}`)
 
           ListItem() {
-            Text('最多保留最近 100 条；清空后不可恢复。')
-              .fontSize(11)
+            Text(uiText('最多保留最近 100 条；清空后不可恢复。', this.uiLocale))
+              .fontFamily('Geist').fontSize(11)
               .fontColor(this.themeMuted)
               .width('100%')
               .textAlign(TextAlign.Center)

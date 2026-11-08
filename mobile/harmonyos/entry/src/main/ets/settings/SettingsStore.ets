@@ -13,9 +13,13 @@ const PREFS_NAME = 'orca_settings';
 export const KEY_THEME_MODE = 'appearance.themeMode';
 export const KEY_HOME_FONT_SCALE = 'appearance.homeFontScale';
 export const KEY_TERMINAL_FONT_SCALE = 'terminal.fontScale';
+export const KEY_TERMINAL_TEXT_SCALE = 'orca:terminalTextScale';
+export const KEY_DEFAULT_SESSION_VIEW = 'orca:defaultSessionView';
+export const KEY_TERMINAL_LINK_MODE = 'orca:terminalLinkOpenMode';
+export const TERMINAL_TEXT_SCALES: number[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
 export const KEY_TERMINAL_FONT_FAMILY = 'terminal.fontFamily';
 export const KEY_TERMINAL_SHOW_KEY_RAIL = 'terminal.showKeyRail';
-export const KEY_DICTATION_ENGINE = 'dictation.engine';
+export const KEY_DICTATION_ENGINE = 'orca:dictationEngine';
 export const KEY_NOTIFICATIONS_LOCAL_ENABLED = 'notifications.localEnabled';
 export const KEY_NOTIFICATIONS_DND_ENABLED = 'notifications.dndEnabled';
 
@@ -27,8 +31,9 @@ export const THEME_MODE_DARK = 'dark';
 export const FONT_FAMILY_MONO = 'mono';
 export const FONT_FAMILY_SANS = 'sans';
 
-export const DICTATION_ENGINE_DESKTOP = 'desktop';
-export const DICTATION_ENGINE_ONDEVICE = 'ondevice';
+export const DICTATION_ENGINE_AUTOMATIC = 'automatic';
+export const DICTATION_ENGINE_DESKTOP = 'computer';
+export const DICTATION_ENGINE_ONDEVICE = 'phone';
 
 // ---------- 可选项表（页面渲染与摘要共用） ----------
 export interface OptionEntry {
@@ -49,8 +54,9 @@ export const FONT_FAMILY_OPTIONS: OptionEntry[] = [
 ];
 
 export const DICTATION_ENGINE_OPTIONS: OptionEntry[] = [
+  { value: DICTATION_ENGINE_AUTOMATIC, label: '自动', desc: '可用时在本机识别，否则使用已配对电脑' },
   { value: DICTATION_ENGINE_DESKTOP, label: '桌面转写（推荐）', desc: '音频送到已配对桌面完成识别，质量稳定' },
-  { value: DICTATION_ENGINE_ONDEVICE, label: '端上识别（暂不可用）', desc: '当前版本使用桌面转写，端上识别尚未接入' }
+  { value: DICTATION_ENGINE_ONDEVICE, label: '本机识别', desc: '仅在本机识别；当前系统支持离线普通话，不发送音频到电脑' }
 ];
 
 /** 按 value 找展示名（找不到时原样返回）。 */
@@ -87,12 +93,15 @@ const BOOL_DEFAULTS: BoolDefault[] = [
 
 const STRING_DEFAULTS: StringDefault[] = [
   { key: KEY_THEME_MODE, value: THEME_MODE_SYSTEM },
+  { key: KEY_DEFAULT_SESSION_VIEW, value: 'terminal' },
+  { key: KEY_TERMINAL_LINK_MODE, value: 'orca-browser' },
   { key: KEY_TERMINAL_FONT_FAMILY, value: FONT_FAMILY_MONO },
-  { key: KEY_DICTATION_ENGINE, value: DICTATION_ENGINE_DESKTOP }
+  { key: KEY_DICTATION_ENGINE, value: DICTATION_ENGINE_AUTOMATIC }
 ];
 
 const NUMBER_DEFAULTS: NumberDefault[] = [
   { key: KEY_HOME_FONT_SCALE, value: 1 },
+  { key: KEY_TERMINAL_TEXT_SCALE, value: 1 },
   { key: KEY_TERMINAL_FONT_SCALE, value: 14 }
 ];
 
@@ -142,8 +151,18 @@ export async function getString(context: common.Context, key: string): Promise<s
   let fallback = stringDefaultFor(key);
   try {
     let prefs = await loadPrefs(context);
-    let value: preferences.ValueType = await prefs.get(key, fallback);
-    if (key === KEY_DICTATION_ENGINE) { return DICTATION_ENGINE_DESKTOP; }
+    let value: preferences.ValueType = await prefs.get(key, key === KEY_DICTATION_ENGINE ? '' : fallback);
+    if (key === KEY_DICTATION_ENGINE) {
+      if (value === '') { value = await prefs.get('dictation.engine', DICTATION_ENGINE_AUTOMATIC); }
+      if (value === 'desktop') { return DICTATION_ENGINE_DESKTOP; }
+      if (value === 'ondevice') { return DICTATION_ENGINE_ONDEVICE; }
+      return [DICTATION_ENGINE_AUTOMATIC, DICTATION_ENGINE_DESKTOP, DICTATION_ENGINE_ONDEVICE].includes(value as string)
+        ? value as string : DICTATION_ENGINE_AUTOMATIC;
+    }
+    if (key === KEY_THEME_MODE && ![THEME_MODE_SYSTEM, THEME_MODE_LIGHT, THEME_MODE_DARK].includes(value as string)) { return THEME_MODE_SYSTEM; }
+    if (PAGE_PREFERENCE_KEYS.includes(key) && typeof value === 'string') {
+      try { validatePagePreference(key, value); } catch (e) { return fallback; }
+    }
     if (key === KEY_TERMINAL_FONT_FAMILY) { return FONT_FAMILY_MONO; }
     return typeof value === 'string' ? value : fallback;
   } catch (e) {
@@ -156,26 +175,114 @@ export async function getNumber(context: common.Context, key: string): Promise<n
   try {
     let prefs = await loadPrefs(context);
     let value: preferences.ValueType = await prefs.get(key, fallback);
-    return typeof value === 'number' ? value : fallback;
+    if (key === KEY_TERMINAL_TEXT_SCALE) { return typeof value === 'string' && TERMINAL_TEXT_SCALES.includes(Number(value)) ? Number(value) : fallback; }
+    if (key === KEY_HOME_FONT_SCALE && typeof value === 'number') { return Number.isFinite(value) && value >= 0.8 && value <= 1.5 ? value : fallback; }
+    return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   } catch (e) {
     return fallback;
   }
 }
 
+function persistSync(context: common.Context, key: string, value: preferences.ValueType | null): void {
+  let prefs = preferences.getPreferencesSync(context, { name: PREFS_NAME });
+  let existed = prefs.hasSync(key);
+  let previous = prefs.getSync(key, '');
+  try {
+    if (value === null) { prefs.deleteSync(key); } else { prefs.putSync(key, value); }
+    prefs.flushSync();
+  } catch (e) {
+    if (existed) { prefs.putSync(key, previous); } else { prefs.deleteSync(key); }
+    throw new Error((e as Error).message);
+  }
+}
+
+async function persist(context: common.Context, key: string, value: preferences.ValueType | null): Promise<void> {
+  persistSync(context, key, value);
+}
+
 export async function setBool(context: common.Context, key: string, value: boolean): Promise<void> {
-  let prefs = await loadPrefs(context);
-  await prefs.put(key, value);
-  await prefs.flush();
+  await persist(context, key, value);
 }
 
 export async function setString(context: common.Context, key: string, value: string): Promise<void> {
-  let prefs = await loadPrefs(context);
-  await prefs.put(key, value);
-  await prefs.flush();
+  if (key === KEY_THEME_MODE && ![THEME_MODE_SYSTEM, THEME_MODE_LIGHT, THEME_MODE_DARK].includes(value)) { throw new Error('Invalid theme'); }
+  if (key === KEY_DICTATION_ENGINE && ![DICTATION_ENGINE_AUTOMATIC, DICTATION_ENGINE_ONDEVICE, DICTATION_ENGINE_DESKTOP].includes(value)) { throw new Error('Invalid dictation engine'); }
+  if (PAGE_PREFERENCE_KEYS.includes(key)) { validatePagePreference(key, value); }
+  await persist(context, key, value);
 }
 
 export async function setNumber(context: common.Context, key: string, value: number): Promise<void> {
-  let prefs = await loadPrefs(context);
-  await prefs.put(key, value);
-  await prefs.flush();
+  if (key === KEY_HOME_FONT_SCALE && (value < 0.8 || value > 1.5)) { throw new Error('Invalid home scale'); }
+  if (!Number.isFinite(value)) { throw new Error('Invalid preference number'); }
+  if (key === KEY_TERMINAL_TEXT_SCALE) {
+    await writePagePreference(context, key, String(value));
+  } else { await persist(context, key, value); }
+}
+
+export const PAGE_PREFERENCE_KEYS: string[] = [
+  'orca:terminal-accessory-layout', 'orca:custom-accessory-keys', KEY_TERMINAL_TEXT_SCALE,
+  'orca:terminalAutocompleteEnabled', KEY_TERMINAL_LINK_MODE, 'orca:terminalSplitLayout', KEY_DEFAULT_SESSION_VIEW
+];
+
+function validatePagePreference(key: string, value: string): void {
+  if (value.length > 16384) { throw new Error('Preference too large'); }
+  if (key === KEY_TERMINAL_TEXT_SCALE && !TERMINAL_TEXT_SCALES.includes(Number(value))) { throw new Error('Invalid terminal scale'); }
+  if (key === KEY_TERMINAL_LINK_MODE && !['orca-browser', 'phone-browser'].includes(value)) { throw new Error('Invalid link mode'); }
+  if (key === KEY_DEFAULT_SESSION_VIEW && !['terminal', 'chat'].includes(value)) { throw new Error('Invalid session view'); }
+  if (key === 'orca:terminalSplitLayout' && !['auto', 'side-by-side', 'stacked'].includes(value)) { throw new Error('Invalid split layout'); }
+  if (key === 'orca:terminalAutocompleteEnabled' && !['true', 'false'].includes(value)) { throw new Error('Invalid autocomplete'); }
+  if (key === 'orca:terminal-accessory-layout' || key === 'orca:custom-accessory-keys') {
+    let parsed: ESObject = JSON.parse(value);
+    if (parsed === null || typeof parsed !== 'object') { throw new Error('Invalid shortcut layout'); }
+  }
+}
+
+export function readPagePreferencesSync(context: common.Context): Map<string, string> {
+  let prefs = preferences.getPreferencesSync(context, { name: PREFS_NAME });
+  let result = new Map<string, string>();
+  for (let i = 0; i < PAGE_PREFERENCE_KEYS.length; i++) {
+    let key = PAGE_PREFERENCE_KEYS[i];
+    let value = prefs.getSync(key, '');
+    if (typeof value === 'string' && value.length > 0) {
+      try { validatePagePreference(key, value); result.set(key, value); } catch (e) { }
+    }
+  }
+  return result;
+}
+
+export async function readPagePreferences(context: common.Context): Promise<Map<string, string>> {
+  return readPagePreferencesSync(context);
+}
+
+export function writePagePreferenceSync(context: common.Context, key: string, value: string | null): void {
+  if (!PAGE_PREFERENCE_KEYS.includes(key)) { throw new Error('Not a page preference'); }
+  if (value !== null) { validatePagePreference(key, value); }
+  persistSync(context, key, value);
+}
+
+export async function writePagePreference(context: common.Context, key: string, value: string | null): Promise<void> {
+  writePagePreferenceSync(context, key, value);
+}
+
+export interface NotificationDeliveryPreferences {
+  onlyWhenDesktopAway: boolean;
+  onlyWhenAgentNeedsInput: boolean;
+  sound: boolean;
+  suppressWhileViewing: boolean;
+}
+const NOTIFICATION_DELIVERY_KEY = 'orca:notificationDeliveryPreferences';
+export function notificationDeliveryPreferences(context: common.Context): NotificationDeliveryPreferences {
+  let prefs = preferences.getPreferencesSync(context, { name: PREFS_NAME });
+  let raw = prefs.getSync(NOTIFICATION_DELIVERY_KEY, '');
+  let stored: ESObject = null;
+  if (typeof raw === 'string' && raw.length > 0) { try { stored = JSON.parse(raw); } catch (e) { } }
+  return {
+    onlyWhenDesktopAway: typeof stored?.onlyWhenDesktopAway === 'boolean' ? stored.onlyWhenDesktopAway : true,
+    onlyWhenAgentNeedsInput: typeof stored?.onlyWhenAgentNeedsInput === 'boolean' ? stored.onlyWhenAgentNeedsInput : false,
+    sound: typeof stored?.sound === 'boolean' ? stored.sound : true,
+    suppressWhileViewing: typeof stored?.suppressWhileViewing === 'boolean' ? stored.suppressWhileViewing : true
+  };
+}
+export async function saveNotificationDeliveryPreferences(context: common.Context, value: NotificationDeliveryPreferences): Promise<void> {
+  await persist(context, NOTIFICATION_DELIVERY_KEY, JSON.stringify(value));
 }

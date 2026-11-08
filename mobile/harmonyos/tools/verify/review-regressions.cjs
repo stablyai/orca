@@ -4,7 +4,11 @@ const zlib = require('node:zlib')
 const { loadArkts, util } = require('./arkts-source.cjs')
 const { createRpcPeer } = require('./fixtures/rpc-peer.cjs')
 
-const bytes = loadArkts('transport/crypto/Bytes.ets', ['base64Encode', 'base64Decode'], { util })
+const bytes = loadArkts(
+  'transport/crypto/Bytes.ets',
+  ['base64Encode', 'base64Decode', 'utf8Encode', 'utf8Decode'],
+  { util }
+)
 const hostId = 'a'.repeat(32)
 const meta = { id: hostId, name: 'Test host', endpoint: 'ws://test', publicKeyB64: 'key' }
 const manifest = {
@@ -88,7 +92,7 @@ test('bridge request and subscription preserve execution-host routing and protec
   const peer = createRpcPeer()
   const client = new peer.SpikeRpcClient()
   await connect(client)
-  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], peer)
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes })
   const bridge = new BridgeHost(client, createController(), manifest, meta, `/h/${hostId}`)
   post(bridge, {
     type: 'request',
@@ -112,19 +116,33 @@ test('bridge request and subscription preserve execution-host routing and protec
 })
 
 test('a draft written through the bridge survives reopening', () => {
-  const values = new Map()
+  const stores = new Map()
   const preferences = {
-    getPreferencesSync: () => ({
-      getSync: (key, fallback) => values.get(key) ?? fallback,
-      putSync: (key, value) => values.set(key, value),
-      flushSync() {}
-    })
+    getPreferencesSync: (_context, { name }) => {
+      if (!stores.has(name)) {
+        stores.set(name, new Map())
+      }
+      const values = stores.get(name)
+      return {
+        getSync: (key, fallback) => values.get(key) ?? fallback,
+        putSync: (key, value) => values.set(key, value),
+        hasSync: (key) => values.has(key),
+        deleteSync: (key) => values.delete(key),
+        flushSync() {}
+      }
+    }
   }
+  const settings = loadArkts(
+    'settings/SettingsStore.ets',
+    ['PAGE_PREFERENCE_KEYS', 'readPagePreferencesSync', 'writePagePreferenceSync'],
+    { preferences }
+  )
   const { PageStorageStore } = loadArkts('storage/PageStorageStore.ets', ['PageStorageStore'], {
-    preferences
+    preferences,
+    ...settings
   })
   const peer = createRpcPeer()
-  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], peer)
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes })
   const client = { onBinaryFrames() {}, cancelById() {} }
   const key = `orca:terminalDrafts:${hostId}:tree:tab`
   const first = new BridgeHost(client, createController(), manifest, meta, `/h/${hostId}`)
@@ -227,8 +245,20 @@ test('the public microphone stop result contains the ring tail and overflow loss
     SourceType: {},
     createAudioCapturer: async () => capturer
   }
+  const nativeModules = {
+    ...loadArkts('webshell/NativeSpeech.ets', ['NativeSpeech'], { util }),
+    ...loadArkts('webshell/NativeImageActions.ets', ['NativeImageActions'], { util }),
+    ...loadArkts('webshell/NativePdfViewer.ets', ['NativePdfViewer'], { util })
+  }
   const { NativeDevice } = loadArkts('webshell/NativeDevice.ets', ['NativeDevice'], {
     ...bytes,
+    ...nativeModules,
+    window: {
+      getLastWindow: async () => ({
+        setWindowKeepScreenOn: async () => {},
+        getWindowProperties: () => ({ isKeepScreenOn: false })
+      })
+    },
     audio,
     abilityAccessCtrl: {
       createAtManager: () => ({ requestPermissionsFromUser: async () => ({ authResults: [0] }) })

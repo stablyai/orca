@@ -58,12 +58,12 @@ struct SpikeBundle {
     Column({ space: 8 }) {
       Row({ space: 10 }) {
         Text('Spike C · ArkWeb bridge 双向')
-          .fontSize(18)
+          .fontFamily('Geist').fontSize(18)
           .fontWeight(FontWeight.Bold)
           .fontColor('#e8e8e8')
           .layoutWeight(1)
         Button('推送 native.hello')
-          .fontSize(12)
+          .fontFamily('Geist').fontSize(12)
           .height(32)
           .onClick(() => this.pushNativeHello())
       }
@@ -71,7 +71,7 @@ struct SpikeBundle {
       .padding({ left: 12, right: 12, top: 8 })
 
       Text(this.log)
-        .fontSize(11)
+        .fontFamily('Geist').fontSize(11)
         .fontColor('#9ad0ff')
         .maxLines(3)
         .width('100%')

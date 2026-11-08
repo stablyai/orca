@@ -1,10 +1,25 @@
+import { lucideColorFilter } from '../settings/LucideColor';
+import { uiText } from '../settings/NativeUi';
 import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
+import { AgentWatch } from '../notifications/AgentWatch';
+import { LocalNotifier, DesktopNotification } from '../notifications/LocalNotifier';
+import { getBool, KEY_NOTIFICATIONS_LOCAL_ENABLED } from '../settings/SettingsStore';
 import { parseLaunchRoute } from '../navigation/LaunchRoute';
 import { getNumber, KEY_HOME_FONT_SCALE } from '../settings/SettingsStore';
 import { deletePageStorage } from '../storage/PageStorageStore';
-import { listHosts, deleteHost, getDeviceToken, HostMeta } from '../storage/HostStore';
+import { listHosts, deleteHost, getDeviceToken, getRelayCredential, HostMeta } from '../storage/HostStore';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
+import { HostSession, SessionPhase } from '../transport/HostSession';
+import { HomeWorktree, readHomeCatalog, isHomeAttention, homeAttentionRank } from '../home/HomeCatalog';
+import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, readHomeUsage, readHomeAutomations,
+  readHomeAutomationRuns, homeAutomationToggleParams } from '../home/HomeAccountUsage';
+import { SETTINGS_MENU_ITEMS, SettingsMenuItem } from '../settings/SettingsMenu';
+import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
+import { recoverRelayPairings } from '../transport/RelayPairing';
+import { HomeResume, readHomeResume, saveHomeResume, clearHomeResume } from '../home/HomeResume';
+import { HomeStats, readHomeStats, totalHomeStats } from '../home/HomeStats';
+import { HomeQuotaOffer, HomeQuotaScope, readHomeQuotaOffer, consumeHomeQuotaReset } from '../home/HomeQuotaReset';
 
 /**
  * Home：对齐上游 MobileHomeScreen（src/home/MobileHomeScreen.tsx）的外壳结构——
@@ -76,44 +91,32 @@ interface JumpRow {
   worktreeId: string;
   title: string;
   repo: string;
-  state: string; // 原始 agent state（宽松解析）
-}
-
-interface WorktreeAcc {
-  worktreeId: string;
-  title: string;
-  repo: string;
   state: string;
+  unread: boolean;
+  lastOutputAt: number;
+  paneKey: string;
+  executionHost: string;
+  lastOpened: boolean;
+  actionable: boolean;
 }
 
 interface HostRuntime {
+  session: HostSession;
   client: SpikeRpcClient | null;
   online: boolean;
   connecting: boolean;
-}
-
-interface SettingsRow {
-  label: string;
-  icon: Resource;
-  target: string;
+  refreshTimer: number;
+  catalogPending: boolean;
+  automationPending: boolean;
+  automationFetchedAt: number;
+  watch: AgentWatch | null;
 }
 
 const TAB_SPECS: TabSpec[] = [
-  { id: 'feed', label: '动态', icon: $r('sys.symbol.list_bullet') },
-  { id: 'usage', label: '使用情况', icon: $r('sys.symbol.gauge_with_dots_needle_33percent') },
-  { id: 'automations', label: '自动化', icon: $r('sys.symbol.calendar_badge_clock') },
-  { id: 'settings', label: '设置', icon: $r('sys.symbol.gearshape') }
-];
-
-// 上游 settings.menuItems.*（zh）+ 图标顺序（mobile-settings-menu-items.ts 的子集）
-const SETTINGS_ROWS: SettingsRow[] = [
-  { label: '外观', icon: $r('sys.symbol.sun_max'), target: 'pages/AppearanceSettings' },
-  { label: '终端', icon: $r('sys.symbol.arrow_left_arrow_right'), target: 'pages/TerminalSettings' },
-  { label: '语音', icon: $r('sys.symbol.mic'), target: 'pages/VoiceSettings' },
-  { label: '通知', icon: $r('sys.symbol.bell'), target: 'pages/NotificationSettings' },
-  { label: '故障排查', icon: $r('sys.symbol.wrench_and_screwdriver'), target: 'pages/Troubleshoot' },
-  { label: '连接事件日志', icon: $r('sys.symbol.doc_text'), target: 'pages/ConnectionLog' },
-  { label: '关于', icon: $r('sys.symbol.info_circle'), target: 'pages/About' }
+  { id: 'feed', label: '动态', icon: $r('app.media.lucide_list') },
+  { id: 'usage', label: '使用情况', icon: $r('app.media.lucide_gauge') },
+  { id: 'automations', label: '自动化', icon: $r('app.media.lucide_calendar_clock') },
+  { id: 'settings', label: '设置', icon: $r('app.media.lucide_settings') }
 ];
 
 const FAB_SIZE = 56;
@@ -122,6 +125,7 @@ const TAB_BAR_HEIGHT = 64; // paddingTop 6 + 图标 26 + 文本 + paddingBottom 
 @Entry
 @Component
 struct Home {
+  @StorageProp('uiLocale') uiLocale: string = 'en';
   @StorageProp('themeScheme') scheme: string = 'dark';
   @State activeTab: string = 'feed';
   @State hosts: HostMeta[] = [];
@@ -130,9 +134,32 @@ struct Home {
   @State online: Record<string, boolean> = {};
   @State connecting: boolean = false;
   @State agentRows: JumpRow[] = [];
+  @State summaries: Record<string, string> = {};
+  @State loadError: string = '';
+  @State agentsExpanded: boolean = false;
+  @State choosingHost: boolean = false;
+  @State resume: HomeResume | null = null;
+  @State usageByHost: Record<string, HomeUsageCard[]> = {};
+  @State automationsByHost: Record<string, HomeAutomation[]> = {};
+  @State usageErrors: Record<string, string> = {};
+  @State automationErrors: Record<string, string> = {};
+  @State automationRunsByHost: Record<string, HomeAutomationRun[]> = {};
+  @State quotaOffers: Record<string, HomeQuotaOffer> = {};
+  @State quotaAllowed: Record<string, boolean> = {};
+  @State quotaBusy: string[] = [];
+  @State statsTotal: HomeStats | null = null;
+  private statsByHost: Record<string, HomeStats> = {};
+  private notifier: LocalNotifier = new LocalNotifier();
+  @State automationBusy: string[] = [];
+  @State automationRequested: Record<string, boolean> = {};
   private runtimes: Map<string, HostRuntime> = new Map();
-  private accByHost: Map<string, Map<string, WorktreeAcc>> = new Map();
+  private accByHost: Map<string, HomeWorktree[]> = new Map();
   private epoch: number = 0;
+  private visible: boolean = false;
+  private loadEpoch: number = 0;
+  private onboardingChecked: boolean = false;
+  private onboardingPending: boolean = false;
+  private onboardingNavigating: boolean = false;
 
   // ---------------------------------------------------------------- helpers
 
@@ -140,15 +167,16 @@ struct Home {
     return this.scheme === 'light' ? PALETTE_LIGHT : PALETTE_DARK;
   }
 
-  aboutToAppear(): void {
-    this.reload();
-  }
+
 
   onPageShow(): void {
+    this.visible = true;
     let uri = AppStorage.get<string>('pendingLaunchUri') ?? '';
     AppStorage.setOrCreate('pendingLaunchUri', '');
     let destination = parseLaunchRoute(uri);
     if (destination) {
+      AppStorage.setOrCreate('explicitLaunchNavigation', true);
+      this.onboardingChecked = true;
       let page = destination.page;
       let params = destination.params;
       setTimeout((): void => { router.pushUrl({ url: page, params: params }).catch(() => {}); }, 0);
@@ -160,23 +188,61 @@ struct Home {
   }
 
   onPageHide(): void {
+    this.visible = false;
+    this.loadEpoch++;
     this.stopProbes();
   }
 
   aboutToDisappear(): void {
+    this.visible = false;
+    this.loadEpoch++;
     this.stopProbes();
   }
 
+  onBackPress(): boolean {
+    if (this.choosingHost) { this.choosingHost = false; return true; }
+    if (this.activeTab !== 'feed') { this.activeTab = 'feed'; return true; }
+    return false;
+  }
+
   reload(): void {
-    listHosts(getContext(this) as common.Context).then((hosts: HostMeta[]): void => {
+    let loadEpoch = ++this.loadEpoch;
+    let context = getContext(this) as common.Context;
+    this.resume = readHomeResume(context);
+    recoverRelayPairings(context).then(() => listHosts(context)).then((hosts: HostMeta[]): void => {
+      if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.hosts = hosts;
+      this.statsTotal = totalHomeStats(this.statsByHost, hosts.map((host: HostMeta): string => host.id));
       this.loaded = true;
-      this.startProbes();
+      this.loadError = '';
+      if (!this.openPendingOnboarding(context)) { this.startProbes(); }
     }).catch((_e: Error) => {
-      this.hosts = [];
+      if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.loaded = true;
+      this.loadError = '无法读取已配对桌面，请重试。';
       this.stopProbes();
     });
+  }
+
+  private openPendingOnboarding(context: common.Context): boolean {
+    if (this.hosts.length === 0) { return false; }
+    if (AppStorage.get<boolean>('explicitLaunchNavigation') === true) {
+      this.onboardingChecked = true; this.onboardingPending = false; return false;
+    }
+    if (!this.onboardingChecked) {
+      this.onboardingChecked = true;
+      try { this.onboardingPending = loadMobileOnboardingSteps(context).length > 0; }
+      catch (e) { return false; }
+    }
+    if (!this.onboardingPending) { return false; }
+    if (!this.onboardingNavigating) {
+      this.onboardingNavigating = true;
+      router.replaceUrl({ url: 'pages/MobileOnboarding' }).catch(() => {
+        this.onboardingNavigating = false;
+        if (this.visible) { this.loadError = '无法打开首次设置，请重试'; }
+      });
+    }
+    return true;
   }
 
   onlineCount(): number {
@@ -227,196 +293,318 @@ struct Home {
 
   private stopProbes(): void {
     this.epoch++;
-    this.runtimes.forEach((rt: HostRuntime): void => {
-      if (rt.client) {
-        rt.client.close();
-      }
-    });
+    let runtimes = Array.from(this.runtimes.values());
     this.runtimes.clear();
+    for (let i = 0; i < runtimes.length; i++) {
+      let rt = runtimes[i];
+      if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); }
+      if (rt.watch) { rt.watch.stop(); rt.watch = null; }
+      rt.session.stop();
+    }
     this.accByHost.clear();
+    this.online = {};
+    this.usageByHost = {}; this.automationsByHost = {};
+    this.usageErrors = {}; this.automationErrors = {};
+    this.automationRunsByHost = {}; this.automationBusy = []; this.automationRequested = {};
+    this.quotaOffers = {}; this.quotaAllowed = {}; this.quotaBusy = [];
     this.agentRows = [];
+    this.summaries = {};
     this.connecting = false;
   }
 
   private startProbes(): void {
     this.stopProbes();
-    let myEpoch = this.epoch;
-    for (let i = 0; i < this.hosts.length; i++) {
-      this.probeHost(this.hosts[i], myEpoch);
-    }
+    let epoch = this.epoch;
+    for (let i = 0; i < this.hosts.length; i++) { this.probeHost(this.hosts[i], epoch); }
   }
 
   private probeHost(host: HostMeta, epoch: number): void {
-    getDeviceToken(getContext(this) as common.Context, host.id).then((token: string | null): void => {
-      if (epoch !== this.epoch) {
-        return;
-      }
-      if (token === null || token.length === 0) {
-        let offline: HostRuntime = { client: null, online: false, connecting: false };
-        this.runtimes.set(host.id, offline);
-        this.syncConnState();
-        return;
-      }
-      let client = new SpikeRpcClient(8000, 6000);
-      let rt: HostRuntime = { client: client, online: false, connecting: true };
+    getDeviceToken(getContext(this) as common.Context, host.id).then(async (token: string | null): Promise<void> => {
+      if (!this.visible || epoch !== this.epoch || !token) { return; }
+      let context = getContext(this) as common.Context;
+      let relay = await getRelayCredential(context, host.id);
+      if (!this.visible || epoch !== this.epoch) { return; }
+      let session = new HostSession(host, token, relay ?? undefined, context);
+      let rt: HostRuntime = { session: session, client: null, online: false,
+        connecting: true, refreshTimer: -1, catalogPending: false, automationPending: false, automationFetchedAt: 0, watch: null };
       this.runtimes.set(host.id, rt);
-      this.syncConnState();
-      client.onSocketClosed((): void => {
-        rt.online = false;
-        rt.connecting = false;
-        this.accByHost.delete(host.id);
-        this.syncConnState();
-      });
-      client.connect(host.endpoint, token, host.publicKeyB64, 'v2').then((): void => {
-        if (epoch !== this.epoch) {
-          client.close();
-          return;
+      session.addListener((phase: SessionPhase, _detail: string): void => {
+        if (epoch !== this.epoch || this.runtimes.get(host.id) !== rt) { return; }
+        rt.online = phase === 'connected';
+        rt.connecting = phase === 'connecting' || phase === 'reconnecting';
+        if (rt.watch) { rt.watch.stop(); rt.watch = null; }
+        if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); rt.refreshTimer = -1; }
+        rt.catalogPending = false; rt.automationPending = false;
+        rt.client = session.getClient();
+        if (rt.online && rt.client) {
+          this.fetchCatalog(rt.client, host.id, epoch);
+          this.subscribeUsage(rt.client, host.id, epoch);
+          this.fetchAutomations(rt.client, host.id, epoch);
+          this.fetchStats(rt.client, host.id, epoch);
+          this.fetchQuotaCapability(rt.client, host.id, epoch);
+          this.startHostNotifications(rt.client, host.id, epoch);
+        } else {
+          this.accByHost.delete(host.id);
+          this.usageByHost[host.id] = []; this.automationsByHost[host.id] = [];
         }
-        rt.online = true;
-        rt.connecting = false;
-        this.syncConnState();
-        this.subscribeTabs(client, host.id);
-        client.request('status.get', null, 6000).then((_r: RpcResponse): void => {
-          // 活性确认：失败时靠 socket 关闭回调兜底，这里无需额外处理
-        }).catch(() => {});
-      }).catch((_e: Error): void => {
-        rt.online = false;
-        rt.connecting = false;
         this.syncConnState();
       });
-    }).catch((_e: Error): void => {
+      session.start();
+      this.syncConnState();
+    }).catch((_e: Error): void => {});
+  }
+
+  private startHostNotifications(client: SpikeRpcClient, hostId: string, epoch: number): void {
+    let context = getContext(this) as common.UIAbilityContext;
+    getBool(context, KEY_NOTIFICATIONS_LOCAL_ENABLED).then((enabled: boolean): void => {
+      let found = this.runtimes.get(hostId);
+      if (!enabled || epoch !== this.epoch || !found || found.client !== client || found.watch) { return; }
+      let runtime: HostRuntime = found;
+      let notifier = this.notifier;
+      notifier.setContext(context); notifier.setViewing('', '');
+      notifier.ensureSlot().then((): void => {
+        if (epoch !== this.epoch || this.runtimes.get(hostId) !== runtime || runtime.client !== client) { return; }
+        let watch = new AgentWatch({ deviceToken: client.deviceToken, hostId: hostId,
+          subscribe: (id: string, wire: string, onEvent: (frame: string) => void): boolean => client.subscribeWithId(id, wire, onEvent),
+          cancel: (id: string): void => client.cancelById(id),
+          notify: (title: string, body: string, host: string, worktree: string, paneKey?: string, executionHost?: string): boolean =>
+            notifier.publishAgentEvent(title, body, host, worktree, paneKey, executionHost),
+          notifyEvent: (event: DesktopNotification): boolean => notifier.publishDesktopEvent(event),
+          dismiss: (id: string): void => { notifier.dismiss(id).catch(() => {}); },
+          logSink: (_line: string): void => {} });
+        runtime.watch = watch; watch.start();
+      }).catch(() => {});
+    }).catch(() => {});
+  }
+
+  private setHostError(target: string, hostId: string, message: string): void {
+    let previous = target === 'usageErrors' ? this.usageErrors : this.automationErrors;
+    let next: Record<string, string> = {};
+    let keys = Object.keys(previous);
+    for (let i = 0; i < keys.length; i++) { next[keys[i]] = previous[keys[i]]; }
+    next[hostId] = message;
+    if (target === 'usageErrors') { this.usageErrors = next; }
+    else { this.automationErrors = next; }
+  }
+
+  private fetchStats(client: SpikeRpcClient, hostId: string, epoch: number): void {
+    client.request('stats.summary', null, 8000).then((response: RpcResponse): void => {
+      if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
+      let value = response instanceof RpcSuccess ? readHomeStats(response.result) : null;
+      if (value) {
+        this.statsByHost[hostId] = value;
+        this.statsTotal = totalHomeStats(this.statsByHost, this.hosts.map((host: HostMeta): string => host.id));
+      }
+    }).catch(() => {});
+  }
+
+  private fetchQuotaCapability(client: SpikeRpcClient, hostId: string, epoch: number): void {
+    client.request('status.get', null, 8000).then((response: RpcResponse): void => {
+      if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
+      let allowed = false;
+      if (response instanceof RpcSuccess) {
+        try {
+          let value = JSON.parse(response.result) as Record<string, Object>;
+          let caps = value['capabilities'];
+          allowed = Array.isArray(caps) && (caps as Array<Object>).includes('accounts.codex-reset-credit.v1');
+        } catch (e) {}
+      }
+      let next: Record<string, boolean> = {};
+      let keys = Object.keys(this.quotaAllowed);
+      for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.quotaAllowed[keys[i]]; }
+      next[hostId] = allowed; this.quotaAllowed = next;
+    }).catch(() => {});
+  }
+
+  private applyQuotaOffer(hostId: string, json: string): void {
+    let value = readHomeQuotaOffer(json);
+    let next: Record<string, HomeQuotaOffer> = {};
+    let keys = Object.keys(this.quotaOffers);
+    for (let i = 0; i < keys.length; i++) { if (keys[i] !== hostId) { next[keys[i]] = this.quotaOffers[keys[i]]; } }
+    if (value) { next[hostId] = value; }
+    this.quotaOffers = next;
+  }
+
+  quotaCount(hostId: string, card: HomeUsageCard): number {
+    let offer = this.quotaOffers[hostId];
+    return this.quotaAllowed[hostId] === true && offer && card.provider === 'codex'
+      && card.key === `codex:${offer.scope.accountId}` ? offer.availableCount : 0;
+  }
+
+  async resetQuota(host: HostMeta, card: HomeUsageCard): Promise<void> {
+    let offered = this.quotaOffers[host.id];
+    let rt = this.runtimes.get(host.id);
+    if (!offered || this.quotaCount(host.id, card) === 0 || !rt || !rt.client || !rt.online || this.quotaBusy.includes(host.id)) { return; }
+    let offer: HomeQuotaOffer = offered;
+    let client: SpikeRpcClient = rt.client;
+    let epoch = this.epoch;
+    let frozen: HomeQuotaScope = { target: { runtime: offer.scope.target.runtime, wslDistro: offer.scope.target.wslDistro },
+      accountId: offer.scope.accountId, accountRevision: offer.scope.accountRevision, offerRevision: offer.scope.offerRevision };
+    this.quotaBusy = this.quotaBusy.concat(host.id);
+    let attempted = false;
+    try {
+      let runtime = frozen.target.runtime === 'wsl' ? `WSL · ${frozen.target.wslDistro}` : '桌面主机';
+      let answer = await promptAction.showDialog({ title: uiText('使用额度重置次数？', this.uiLocale),
+        message: `${host.name} · ${runtime}\n${offer.accountLabel}\n将为此账户使用一次额度重置机会。`,
+        buttons: [{ text: uiText('取消', this.uiLocale), color: this.pal().textSecondary }, { text: uiText('使用一次', this.uiLocale), color: this.pal().accentBlue }] });
+      if (answer.index !== 1 || epoch !== this.epoch || this.runtimes.get(host.id)?.client !== client) { return; }
+      attempted = true;
+      let result = await consumeHomeQuotaReset(client, frozen);
+      if (epoch !== this.epoch || this.runtimes.get(host.id)?.client !== client) { return; }
+      let json = `{"result":{"type":"snapshot","snapshot":${result.snapshot}}}`;
+      let cards = readHomeUsage(json);
+      if (cards) {
+        let next: Record<string, HomeUsageCard[]> = {};
+        let keys = Object.keys(this.usageByHost);
+        for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.usageByHost[keys[i]]; }
+        next[host.id] = cards; this.usageByHost = next;
+      }
+      this.applyQuotaOffer(host.id, json);
+      let message = result.outcome === 'reset' ? '额度已重置'
+        : result.outcome === 'nothingToReset' ? '当前额度无需重置'
+        : result.outcome === 'noCredit' ? '已无可用重置次数'
+        : result.outcome === 'alreadyRedeemed' ? '这次重置机会已使用' : '账户或重置机会已变化，请核对后重试';
+      this.setHostError('usageErrors', host.id, message);
+    } catch (e) {
+      if (attempted && epoch === this.epoch) { this.setHostError('usageErrors', host.id, '重置结果未获确认，请刷新账户用量后核对；不会自动重试。'); }
+    } finally {
+      this.quotaBusy = this.quotaBusy.filter((id: string): boolean => id !== host.id);
+    }
+  }
+
+  private subscribeUsage(client: SpikeRpcClient, hostId: string, epoch: number): void {
+    let id = `home-accounts-${hostId}`;
+    let wire = JSON.stringify({ id: id, deviceToken: client.deviceToken, method: 'accounts.subscribe' });
+    let started = client.subscribeWithId(id, wire, (json: string): void => {
+      if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
+      this.applyQuotaOffer(hostId, json);
+      let rows = readHomeUsage(json);
+      if (rows !== null) {
+        let next: Record<string, HomeUsageCard[]> = {};
+        let keys = Object.keys(this.usageByHost);
+        for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.usageByHost[keys[i]]; }
+        next[hostId] = rows; this.usageByHost = next;
+        this.setHostError('usageErrors', hostId, '');
+      } else {
+        this.setHostError('usageErrors', hostId, '账户用量暂不可用，可打开账户页重试。');
+      }
+    });
+    if (!started) { this.setHostError('usageErrors', hostId, '账户用量订阅失败。'); }
+  }
+
+  private fetchAutomations(client: SpikeRpcClient, hostId: string, epoch: number): Promise<void> {
+    let found = this.runtimes.get(hostId);
+    if (!found || found.client !== client || found.automationPending) { return Promise.resolve(); }
+    let rt: HostRuntime = found;
+    rt.automationPending = true; rt.automationFetchedAt = Date.now();
+    return client.request('automation.list', '{}', 8000).then((response: RpcResponse): void => {
+      if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
+      rt.automationPending = false;
+      let rows = response instanceof RpcSuccess ? readHomeAutomations(response.result) : null;
+      if (rows !== null) {
+        let next: Record<string, HomeAutomation[]> = {};
+        let keys = Object.keys(this.automationsByHost);
+        for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.automationsByHost[keys[i]]; }
+        next[hostId] = rows; this.automationsByHost = next;
+        this.fetchAutomationRuns(client, hostId, epoch);
+        this.setHostError('automationErrors', hostId, '');
+      } else {
+        this.setHostError('automationErrors', hostId, '自动化列表不可用，请打开自动化页重试。');
+      }
+    }).catch(() => {
+      if (epoch === this.epoch && rt.client === client) { rt.automationPending = false; }
     });
   }
 
-  /** 上游 session.tabs.subscribeAll：聚合该主机的活跃 worktree/agent 状态。 */
-  private subscribeTabs(client: SpikeRpcClient, hostId: string): void {
+  private fetchAutomationRuns(client: SpikeRpcClient, hostId: string, epoch: number): void {
+    client.request('automation.runs', JSON.stringify({ limit: 5, preview: true }), 8000).then((response: RpcResponse): void => {
+      if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
+      let rows = response instanceof RpcSuccess ? readHomeAutomationRuns(response.result) : null;
+      if (rows) {
+        let next: Record<string, HomeAutomationRun[]> = {};
+        let keys = Object.keys(this.automationRunsByHost);
+        for (let i = 0; i < keys.length; i++) { next[keys[i]] = this.automationRunsByHost[keys[i]]; }
+        next[hostId] = rows; this.automationRunsByHost = next;
+      }
+    }).catch(() => {});
+  }
+
+  async toggleAutomation(hostId: string, row: HomeAutomation, value: boolean): Promise<void> {
+    let key = `${hostId}:${row.id}`;
+    let rt = this.runtimes.get(hostId);
+    if (!rt || !rt.online || !rt.client || this.automationBusy.includes(key)) { return; }
+    let client = rt.client; let epoch = this.epoch;
+    this.automationBusy = this.automationBusy.concat(key);
+    let requested: Record<string, boolean> = {};
+    let keys = Object.keys(this.automationRequested);
+    for (let i = 0; i < keys.length; i++) { requested[keys[i]] = this.automationRequested[keys[i]]; }
+    requested[key] = value; this.automationRequested = requested;
+    this.setHostError('automationErrors', hostId, '');
     try {
-      let subId = `home-tabs-${hostId}`;
-      let obj: Record<string, Object> = {
-        'id': subId,
-        'deviceToken': client.deviceToken,
-        'method': 'session.tabs.subscribeAll'
-      };
-      client.subscribeWithId(subId, JSON.stringify(obj), (frame: string): void => {
-        this.onTabsFrame(hostId, frame);
-      });
+      let response = await client.request('automation.update', homeAutomationToggleParams(row, value));
+      if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
+      if (!(response instanceof RpcSuccess)) {
+        this.setHostError('automationErrors', hostId, '更新未获确认；桌面可能已执行，请刷新后核对。');
+      }
+      await this.fetchAutomations(client, hostId, epoch);
     } catch (e) {
-      // 宽松处理：订阅失败只影响 JumpBackIn，不影响其余 UI
+      if (epoch === this.epoch) { this.setHostError('automationErrors', hostId, '更新结果未知，请刷新后核对。'); }
+    } finally {
+      this.automationBusy = this.automationBusy.filter((item: string): boolean => item !== key);
+      let next: Record<string, boolean> = {};
+      let names = Object.keys(this.automationRequested);
+      for (let i = 0; i < names.length; i++) { if (names[i] !== key) { next[names[i]] = this.automationRequested[names[i]]; } }
+      this.automationRequested = next;
     }
   }
 
-  /** 事件帧 {id, streaming, result:{type, worktree|snapshots, tabs}} 的宽松解析（参照 AgentWatch）。 */
-  private onTabsFrame(hostId: string, frameJson: string): void {
-    try {
-      let parsed: Object | null = JSON.parse(frameJson) as Object | null;
-      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-        return;
-      }
-      let rec = parsed as Record<string, Object>;
-      let eventSource: Object = rec;
-      let streamingValue: Object = rec['streaming'];
-      if (streamingValue === true) {
-        let resultValue: Object = rec['result'];
-        if (resultValue === null || resultValue === undefined || typeof resultValue !== 'object'
-          || Array.isArray(resultValue)) {
-          return;
-        }
-        eventSource = resultValue;
-      }
-      let event = eventSource as Record<string, Object>;
-      let typeValue: Object = event['type'];
-      if (typeof typeValue !== 'string') {
-        return;
-      }
-      let hostAcc = this.accByHost.get(hostId);
-      if (hostAcc === undefined) {
-        hostAcc = new Map<string, WorktreeAcc>();
-        this.accByHost.set(hostId, hostAcc);
-      }
-      if (typeValue === 'snapshots') {
-        let snapshotsValue: Object = event['snapshots'];
-        if (snapshotsValue !== null && snapshotsValue !== undefined && Array.isArray(snapshotsValue)) {
-          let snapshots = snapshotsValue as Array<Object>;
-          for (let i = 0; i < snapshots.length; i++) {
-            this.absorbSnapshot(hostAcc, snapshots[i]);
-          }
-          this.rebuildRows();
-        }
-        return;
-      }
-      if (typeValue === 'snapshot' || typeValue === 'updated') {
-        this.absorbSnapshot(hostAcc, eventSource);
-        this.rebuildRows();
-        return;
-      }
-    } catch (e) {
-      // 宽松解析：未知帧直接忽略
-    }
+  refreshAutomations(hostId: string): void {
+    let rt = this.runtimes.get(hostId);
+    if (rt && rt.online && rt.client) { this.fetchAutomations(rt.client, hostId, this.epoch); }
   }
 
-  /** 单个 per-worktree 帧：{worktree, tabs:[...]}（宽松）。 */
-  private absorbSnapshot(hostAcc: Map<string, WorktreeAcc>, snapshotValue: Object): void {
-    if (snapshotValue === null || snapshotValue === undefined || typeof snapshotValue !== 'object'
-      || Array.isArray(snapshotValue)) {
-      return;
-    }
-    let snapshot = snapshotValue as Record<string, Object>;
-    let worktreeId = '';
-    let worktreeValue: Object = snapshot['worktree'];
-    if (typeof worktreeValue === 'string') {
-      worktreeId = worktreeValue;
-    }
-    let tabsValue: Object = snapshot['tabs'];
-    if (tabsValue === null || tabsValue === undefined || !Array.isArray(tabsValue)) {
-      return;
-    }
-    let tabs = tabsValue as Array<Object>;
-    let best: WorktreeAcc | null = null;
-    for (let i = 0; i < tabs.length; i++) {
-      let tabValue: Object = tabs[i];
-      if (tabValue === null || tabValue === undefined || typeof tabValue !== 'object'
-        || Array.isArray(tabValue)) {
-        continue;
-      }
-      let tab = tabValue as Record<string, Object>;
-      let tabWorktree: Object = tab['worktreeId'];
-      if (worktreeId.length === 0 && typeof tabWorktree === 'string') {
-        worktreeId = tabWorktree;
-      }
-      let state = readTabState(tab);
-      let title = readStringMember(tab, 'displayName');
-      if (title.length === 0) {
-        title = readStringMember(tab, 'title');
-      }
-      let repo = readStringMember(tab, 'repo');
-      if (best === null) {
-        best = { worktreeId: worktreeId, title: title, repo: repo, state: state };
-      } else {
-        // 优先保留"更像 agent"的 tab：有状态者优先，其次有标题者优先
-        if (state.length > 0 && best.state.length === 0) {
-          best.state = state;
-        }
-        if (best.title.length === 0 && title.length > 0) {
-          best.title = title;
-        }
-        if (best.repo.length === 0 && repo.length > 0) {
-          best.repo = repo;
-        }
-      }
-    }
-    if (worktreeId.length === 0) {
-      return;
-    }
-    if (best !== null) {
-      best.worktreeId = worktreeId;
-      hostAcc.set(worktreeId, best);
-    }
+  private fetchCatalog(client: SpikeRpcClient, hostId: string, epoch: number): void {
+    let found = this.runtimes.get(hostId);
+    if (!found || found.client !== client || found.catalogPending) { return; }
+    let rt: HostRuntime = found;
+    rt.catalogPending = true;
+    // No afterSnapshotId: every reply is a full replacement, never a delta against a missing base.
+    client.request('worktree.ps', JSON.stringify({ limit: 10000 }), 8000).then((response: RpcResponse): void => {
+      if (epoch !== this.epoch || this.runtimes.get(hostId) !== rt || rt.client !== client) { return; }
+      rt.catalogPending = false;
+      if (response instanceof RpcSuccess) {
+        let rows = readHomeCatalog(response.result);
+        if (rows !== null) { this.accByHost.set(hostId, rows); }
+        else { this.accByHost.delete(hostId); }
+      } else { this.accByHost.delete(hostId); }
+      this.rebuildRows();
+      if (Date.now() - rt.automationFetchedAt > 15000) { this.fetchAutomations(client, hostId, epoch); }
+      rt.refreshTimer = setTimeout((): void => {
+        rt.refreshTimer = -1;
+        if (epoch === this.epoch && rt.online) { this.fetchCatalog(client, hostId, epoch); }
+      }, 3000);
+    }).catch((): void => {
+      if (epoch !== this.epoch || rt.client !== client) { return; }
+      rt.catalogPending = false;
+      this.accByHost.delete(hostId);
+      this.rebuildRows();
+      rt.refreshTimer = setTimeout((): void => this.fetchCatalog(client, hostId, epoch), 3000);
+    });
+  }
+
+  private refreshSummaries(): void {
+    let next: Record<string, string> = {};
+    this.accByHost.forEach((rows: HomeWorktree[], hostId: string): void => {
+      let active = rows.filter((row: HomeWorktree): boolean => row.state !== 'inactive').length;
+      next[hostId] = `${rows.length} 个工作区${active > 0 ? ` · ${active} 个活跃` : ''}`;
+    });
+    this.summaries = next;
   }
 
   private rebuildRows(): void {
     let rows: JumpRow[] = [];
     let multipleHosts = this.hosts.length > 1;
-    this.accByHost.forEach((hostAcc: Map<string, WorktreeAcc>, hostId: string): void => {
+    this.accByHost.forEach((hostAcc: HomeWorktree[], hostId: string): void => {
       let hostName = hostId;
       for (let i = 0; i < this.hosts.length; i++) {
         if (this.hosts[i].id === hostId) {
@@ -424,7 +612,11 @@ struct Home {
           break;
         }
       }
-      hostAcc.forEach((acc: WorktreeAcc): void => {
+      hostAcc.forEach((acc: HomeWorktree): void => {
+        // 只展示有内容的行：空闲/无 agent 状态的 worktree 不进「智能体」区（上游同样按需隐藏）
+        if (!isHomeAttention(acc)) {
+          return;
+        }
         let where = acc.repo;
         if (multipleHosts && hostName.length > 0) {
           where = where.length > 0 ? `${where} · ${hostName}` : hostName;
@@ -435,37 +627,54 @@ struct Home {
           worktreeId: acc.worktreeId,
           title: acc.title.length > 0 ? acc.title : acc.worktreeId,
           repo: where,
-          state: acc.state
+          state: acc.state, unread: acc.unread, lastOutputAt: acc.lastOutputAt,
+          paneKey: acc.paneKey, executionHost: acc.executionHost, lastOpened: false, actionable: true
         });
       });
     });
-    rows.sort((a: JumpRow, b: JumpRow): number => stateRank(a.state) - stateRank(b.state));
+    rows.sort((a: JumpRow, b: JumpRow): number => homeAttentionRank(a.state) - homeAttentionRank(b.state)
+      || b.lastOutputAt - a.lastOutputAt);
+    rows = rows.slice(0, 25);
+    let heldResume = this.resume;
+    if (heldResume) {
+    let resume: HomeResume = heldResume;
+    if ( this.hosts.some((host: HostMeta): boolean => host.id === resume.hostId)
+      && !rows.some((row: JumpRow): boolean => row.hostId === resume.hostId
+        && row.worktreeId === resume.worktreeId && row.executionHost === resume.executionHost)) {
+      let host = this.hosts.find((candidate: HostMeta): boolean => candidate.id === resume.hostId);
+      rows.push({ hostId: resume.hostId, hostName: host ? host.name : '', worktreeId: resume.worktreeId,
+        title: resume.title, repo: resume.repo, state: 'inactive', unread: false, lastOutputAt: 0,
+        paneKey: resume.paneKey, executionHost: resume.executionHost, lastOpened: true,
+        actionable: this.online[resume.hostId] === true });
+    }
+    }
     this.agentRows = rows;
+    this.refreshSummaries();
   }
 
   stateLabel(state: string): string {
     if (state === 'working') {
-      return '工作中';
+      return uiText('工作中', this.uiLocale);
     }
     if (state === 'monitoring') {
-      return '监控后台任务';
+      return uiText('监控后台任务', this.uiLocale);
     }
     if (state === 'waiting' || state === 'interactivePrompt') {
-      return '等待输入';
+      return uiText('等待输入', this.uiLocale);
     }
     if (state === 'blocked' || state === 'permission') {
-      return '已阻塞';
+      return uiText('已阻塞', this.uiLocale);
     }
     if (state === 'done') {
-      return '已完成';
+      return uiText('已完成', this.uiLocale);
     }
     if (state === 'failed') {
-      return '失败';
+      return uiText('失败', this.uiLocale);
     }
     if (state === 'interrupted') {
-      return '已中断';
+      return uiText('已中断', this.uiLocale);
     }
-    return '空闲';
+    return uiText('空闲', this.uiLocale);
   }
 
   stateDotColor(state: string): string {
@@ -495,12 +704,28 @@ struct Home {
   // ---------------------------------------------------------------- actions
 
   openHostDetail(hostId: string): void {
-    router.pushUrl({ url: 'pages/HostDetail', params: { 'hostId': hostId } }).catch(() => {});
+    this.openHostRoute(hostId, '');
   }
 
-  openSession(hostId: string, worktreeId: string): void {
-    let route = `/h/${hostId}/session/${worktreeId}`;
-    router.pushUrl({ url: 'pages/ShellScreen', params: { 'hostId': hostId, 'route': route } }).catch(() => {});
+  openHostRoute(hostId: string, suffix: string, params: Record<string, string> = {}): void {
+    let routeParams: Record<string, string> = { 'hostId': hostId, 'route': `/h/${encodeURIComponent(hostId)}${suffix}` };
+    let keys = Object.keys(params);
+    for (let i = 0; i < keys.length; i++) { routeParams[keys[i]] = params[keys[i]]; }
+    router.pushUrl({ url: 'pages/ShellScreen', params: routeParams }).catch(() => {});
+  }
+
+  openSession(row: JumpRow): void {
+    if (!row.actionable) { return; }
+    let catalog = this.accByHost.get(row.hostId);
+    if (row.lastOpened && catalog && !catalog.some((item: HomeWorktree): boolean =>
+      item.worktreeId === row.worktreeId && item.executionHost === row.executionHost)) {
+      this.openHostRoute(row.hostId, ''); return;
+    }
+    let resume: HomeResume = { hostId: row.hostId, worktreeId: row.worktreeId, title: row.title,
+      repo: row.repo, paneKey: row.paneKey, executionHost: row.executionHost };
+    try { saveHomeResume(getContext(this), resume); } catch (e) {}
+    let params: Record<string, string> = { 'paneKey': row.paneKey, 'executionHost': row.executionHost };
+    this.openHostRoute(row.hostId, `/session/${encodeURIComponent(row.worktreeId)}`, params);
   }
 
   openPairScan(): void {
@@ -508,18 +733,39 @@ struct Home {
   }
 
   openNewWorkspace(): void {
-    let hostId = this.firstOnlineHostId();
-    if (hostId.length === 0) {
-      return;
-    }
-    router.pushUrl({ url: 'pages/ShellScreen', params: { 'hostId': hostId } }).catch(() => {});
+    let hosts = this.hosts.filter((host: HostMeta): boolean => this.online[host.id] === true);
+    if (hosts.length === 1) { this.openHostRoute(hosts[0].id, '/new-workspace'); }
+    else if (hosts.length > 1) { this.choosingHost = true; }
+  }
+
+  openNewAutomation(hostId: string): void {
+    let params: Record<string, string> = { 'new': '1' };
+    this.openHostRoute(hostId, '/automations', params);
+  }
+
+  async hostActions(host: HostMeta): Promise<void> {
+    try {
+      let choice = await promptAction.showActionMenu({ title: host.name,
+        buttons: [{ text: uiText('编辑桌面', this.uiLocale), color: this.pal().textPrimary },
+          { text: uiText('重新连接', this.uiLocale), color: this.pal().textPrimary },
+          { text: uiText('连接诊断', this.uiLocale), color: this.pal().textPrimary },
+          { text: uiText('重新配对', this.uiLocale), color: this.pal().textPrimary },
+          { text: uiText('移除桌面', this.uiLocale), color: this.pal().statusRed }] });
+      if (choice.index === 0) {
+        router.pushUrl({ url: 'pages/HostDetail', params: { 'hostId': host.id } }).catch(() => {});
+      } else if (choice.index === 1) { this.reload(); }
+      else if (choice.index === 2) {
+        router.pushUrl({ url: 'pages/HostDetail', params: { 'hostId': host.id, 'diagnostics': '1' } }).catch(() => {});
+      } else if (choice.index === 3) { this.openPairScan(); }
+      else if (choice.index === 4) { this.removeHost(host).catch(() => {}); }
+    } catch (e) {}
   }
 
   async removeHost(host: HostMeta): Promise<void> {
     let answer = await promptAction.showDialog({
-      title: '移除主机',
+      title: uiText('移除主机', this.uiLocale),
       message: `要移除“${host.name}”吗？之后可重新配对。`,
-      buttons: [{ text: '取消', color: '#898989' }, { text: '移除', color: '#ff6568' }]
+      buttons: [{ text: uiText('取消', this.uiLocale), color: this.pal().textMuted }, { text: uiText('移除', this.uiLocale), color: this.pal().statusRed }]
     });
     if (answer.index !== 1) {
       return;
@@ -527,9 +773,10 @@ struct Home {
     try {
       await deleteHost(getContext(this) as common.Context, host.id);
       await deletePageStorage(getContext(this) as common.Context, host.id);
+      clearHomeResume(getContext(this), host.id);
       this.reload();
     } catch (e) {
-      // 忽略：目录刷新会在下次 onPageShow 重试
+      this.loadError = '移除失败，凭证或页面数据未能清理，请重试。';
     }
   }
 
@@ -539,7 +786,7 @@ struct Home {
   tabHeader(title: string) {
     Row() {
       Text(title)
-        .fontSize(22)
+        .fontFamily('Geist').fontSize(22)
         .fontWeight(FontWeight.Bold)
         .fontColor(this.pal().textPrimary)
         .maxLines(1)
@@ -555,13 +802,13 @@ struct Home {
   sectionHeading(title: string, aside: string, first: boolean) {
     Row() {
       Text(title)
-        .fontSize(15 * this.fontScale)
+        .fontFamily('Geist').fontSize(15 * this.fontScale)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.pal().textPrimary)
         .maxLines(1)
       if (aside.length > 0) {
         Text(aside)
-          .fontSize(13)
+          .fontFamily('Geist').fontSize(13)
           .fontColor(this.pal().textMuted)
           .margin({ left: 8 })
           .alignSelf(ItemAlign.End)
@@ -578,6 +825,11 @@ struct Home {
     Circle({ width: 9, height: 9 }).fill(this.stateDotColor(state));
   }
 
+  jumpStatus(row: JumpRow): string {
+    if (!row.lastOpened) { return this.stateLabel(row.state); }
+    return row.actionable ? '上次打开' : `连接 ${row.hostName} 后打开`;
+  }
+
   @Builder
   jumpRow(row: JumpRow) {
     Row() {
@@ -591,19 +843,19 @@ struct Home {
 
       Column() {
         Text(row.title)
-          .fontSize(16 * this.fontScale)
+          .fontFamily('Geist').fontSize(16 * this.fontScale)
           .fontColor(this.pal().textPrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
         Row() {
-          Text(this.stateLabel(row.state))
-            .fontSize(14)
+          Text(uiText(this.jumpStatus(row), this.uiLocale))
+            .fontFamily('Geist').fontSize(14)
             .fontColor(this.statusTextColor(row.state))
             .maxLines(1)
           if (row.repo.length > 0) {
-            Text(`${this.stateLabel(row.state).length > 0 ? ' · ' : ''}${row.repo}`)
-              .fontSize(14)
+            Text(`${this.jumpStatus(row).length > 0 ? ' · ' : ''}${row.repo}`)
+              .fontFamily('Geist').fontSize(14)
               .fontColor(this.pal().textSecondary)
               .maxLines(1)
               .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -618,9 +870,9 @@ struct Home {
       .layoutWeight(1)
 
       Row() {
-        SymbolGlyph($r('sys.symbol.chevron_right'))
-          .fontSize(16)
-          .fontColor([this.pal().textMuted])
+        Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
+          .width(16).height(16)
+          .colorFilter(lucideColorFilter(this.pal().textMuted))
       }
       .padding({ left: 10, right: 14 })
       .margin({ top: 9 })
@@ -628,8 +880,9 @@ struct Home {
     .width('100%')
     .padding({ left: 16 })
     .alignItems(VerticalAlign.Top)
+    .opacity(row.actionable ? 1 : 0.45)
     .onClick(() => {
-      this.openSession(row.hostId, row.worktreeId);
+      this.openSession(row);
     })
   }
 
@@ -637,20 +890,20 @@ struct Home {
   desktopRow(host: HostMeta) {
     Row() {
       // 机器磁贴（上游 tile 30x30 圆角 10 + 角落连接点）
-      Stack({ alignContent: Alignment.BottomEnd }) {
+      Stack({ alignContent: Alignment.Center }) {
         Column()
           .width(30)
           .height(30)
           .borderRadius(10)
           .backgroundColor(this.pal().bgRaised)
-        SymbolGlyph($r('sys.symbol.computer'))
-          .fontSize(17)
-          .fontColor([this.pal().textPrimary])
+        Image($r('app.media.lucide_monitor')).supportSvg2(true)
+          .width(17).height(17)
+          .colorFilter(lucideColorFilter(this.pal().textPrimary))
         Circle({ width: 14, height: 14 })
           .fill(this.online[host.id] === true ? this.pal().statusGreen : this.pal().textMuted)
           .stroke(this.pal().bgPanel)
           .strokeWidth(2)
-          .translate({ x: 5, y: 5 })
+          .position({ x: 21, y: 21 })
       }
       .width(30)
       .height(30)
@@ -658,20 +911,20 @@ struct Home {
 
       Column() {
         Text(host.name)
-          .fontSize(16 * this.fontScale)
+          .fontFamily('Geist').fontSize(16 * this.fontScale)
           .fontColor(this.pal().textPrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
         Row() {
-          Text(this.online[host.id] === true ? '已连接' : (this.connecting ? '正在连接' : '离线'))
-            .fontSize(14)
+          Text(this.hostStatusLine(host))
+            .fontFamily('Geist').fontSize(14)
             .fontColor(this.online[host.id] === true
               ? this.pal().textSecondary
               : (this.connecting ? this.pal().statusAmber : this.pal().textSecondary))
             .maxLines(1)
           Text(` · ${host.endpoint}`)
-            .fontSize(14)
+            .fontFamily('Geist').fontSize(14)
             .fontColor(this.pal().textSecondary)
             .maxLines(1)
             .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -685,9 +938,9 @@ struct Home {
       .layoutWeight(1)
 
       Row() {
-        SymbolGlyph($r('sys.symbol.chevron_right'))
-          .fontSize(16)
-          .fontColor([this.pal().textMuted])
+        Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
+          .width(16).height(16)
+          .colorFilter(lucideColorFilter(this.pal().textMuted))
       }
       .padding({ left: 10, right: 14 })
       .margin({ top: 9 })
@@ -699,7 +952,7 @@ struct Home {
       this.openHostDetail(host.id);
     })
     .gesture(LongPressGesture().onAction(() => {
-      this.removeHost(host);
+      this.hostActions(host);
     }))
   }
 
@@ -712,19 +965,34 @@ struct Home {
       .width('100%')
   }
 
+  /** 连接行的状态文案：已连接 → worktree 概要（上游 homeHostWorktreeSummary）。 */
+  hostStatusLine(host: HostMeta): string {
+    if (this.online[host.id] !== true) {
+      let runtime = this.runtimes.get(host.id);
+      return runtime && runtime.connecting ? '正在连接' : '离线';
+    }
+    let summary = this.summaries[host.id];
+    return summary !== undefined && summary.length > 0 ? summary : '已连接';
+  }
+
   @Builder
   feedTab() {
     Column() {
-      this.tabHeader('动态')
-      if (this.hosts.length === 0) {
+      this.tabHeader(uiText('动态', this.uiLocale))
+      if (this.loadError.length > 0) {
+        Text(this.loadError).fontColor(this.pal().statusRed).fontFamily('Geist').fontSize(15).padding(16)
+        Button(uiText('重试', this.uiLocale)).onClick(() => this.reload())
+      } else if (!this.loaded) {
+        LoadingProgress().width(32).height(32)
+      } else if (this.hosts.length === 0) {
         this.homeEmptyState()
       } else {
         Scroll() {
           Column() {
             if (this.agentRows.length > 0) {
-              this.sectionHeading('智能体', `${this.activeCountText()}`, true)
+              this.sectionHeading(uiText('智能体', this.uiLocale), `${this.activeCountText()}`, true)
               Column() {
-                ForEach(this.agentRows, (row: JumpRow, index: number) => {
+                ForEach(this.agentsExpanded ? this.agentRows : this.agentRows.slice(0, 5), (row: JumpRow, index: number) => {
                   Column() {
                     if (index > 0) {
                       this.hairline(40)
@@ -732,7 +1000,12 @@ struct Home {
                     this.jumpRow(row)
                   }
                   .width('100%')
-                }, (row: JumpRow, index: number) => `${index}-${row.hostId}-${row.worktreeId}`)
+                }, (row: JumpRow, index: number) => `${row.hostId}-${row.executionHost}-${row.worktreeId}`)
+                if (this.agentRows.length > 5) {
+                  Button(this.agentsExpanded ? uiText('收起', this.uiLocale) : `${uiText('显示全部', this.uiLocale)} ${this.agentRows.length}`)
+                    .fontColor(this.pal().textSecondary).backgroundColor(Color.Transparent)
+                    .onClick(() => { this.agentsExpanded = !this.agentsExpanded; })
+                }
               }
               .width('100%')
               .borderRadius(16)
@@ -740,7 +1013,7 @@ struct Home {
               .clip(true)
             }
 
-            this.sectionHeading('台式机', '', this.agentRows.length === 0)
+            this.sectionHeading(uiText('台式机', this.uiLocale), '', this.agentRows.length === 0)
             Column() {
               ForEach(this.hosts, (host: HostMeta, index: number) => {
                 Column() {
@@ -756,7 +1029,11 @@ struct Home {
             .borderRadius(16)
             .backgroundColor(this.pal().bgPanel)
             .clip(true)
-            .margin({ bottom: TAB_BAR_HEIGHT + 24 })
+            .margin({ bottom: 8 })
+            Button(uiText('配对另一台桌面', this.uiLocale)).fontFamily('Geist').fontSize(16).fontColor(this.pal().accentBlue)
+              .backgroundColor(Color.Transparent).constraintSize({ minHeight: 44 })
+              .onClick(() => this.openPairScan())
+              .margin({ bottom: TAB_BAR_HEIGHT + 24 })
           }
           .width('100%')
           .padding({ left: 16, right: 16 })
@@ -772,23 +1049,15 @@ struct Home {
   }
 
   activeCountText(): string {
-    let count = 0;
-    for (let i = 0; i < this.agentRows.length; i++) {
-      if (this.agentRows[i].state !== 'done' && !isNeedsYou(this.agentRows[i].state)) {
-        count++;
-      }
-    }
-    if (count > 0) {
-      return `${count} 个活跃`;
-    }
-    return '';
+    let count = this.agentRows.filter((row: JumpRow): boolean => !row.lastOpened).length;
+    return count > 0 ? `${count} 个活跃` : '';
   }
 
   @Builder
   stepRow(index: number, title: string, desc: string) {
     Row({ space: 14 }) {
       Text(`${index}`)
-        .fontSize(14)
+        .fontFamily('Geist').fontSize(14)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.pal().textPrimary)
         .width(26)
@@ -797,13 +1066,13 @@ struct Home {
         .backgroundColor(this.pal().bgRaised)
         .textAlign(TextAlign.Center)
       Column({ space: 2 }) {
-        Text(title)
-          .fontSize(17 * this.fontScale)
+        Text(uiText(title, this.uiLocale))
+          .fontFamily('Geist').fontSize(17 * this.fontScale)
           .fontColor(this.pal().textPrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(desc)
-          .fontSize(15)
+        Text(uiText(desc, this.uiLocale))
+          .fontFamily('Geist').fontSize(15)
           .lineHeight(20)
           .fontColor(this.pal().textSecondary)
       }
@@ -824,14 +1093,14 @@ struct Home {
             .width(44)
             .height(44)
             .borderRadius(10)
-          Text('连接桌面')
-            .fontSize(28 * this.fontScale)
+          Text(uiText('连接桌面', this.uiLocale))
+            .fontFamily('Geist').fontSize(28 * this.fontScale)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.pal().textPrimary)
             .textAlign(TextAlign.Center)
             .margin({ top: 26, bottom: 10 })
-          Text('与电脑上的 Orca 配对，即可在手机上查看智能体、进入任意终端并推进工作。')
-            .fontSize(17)
+          Text(uiText('与电脑上的 Orca 配对，即可在手机上查看智能体、进入任意终端并推进工作。', this.uiLocale))
+            .fontFamily('Geist').fontSize(17)
             .lineHeight(24)
             .fontColor(this.pal().textSecondary)
             .textAlign(TextAlign.Center)
@@ -843,7 +1112,7 @@ struct Home {
         Column() {
           this.stepRow(1, '打开 Orca 桌面应用', '前往“设置” → “移动端”，生成配对二维码。')
           this.hairline(46)
-          this.stepRow(2, '扫描二维码', 'Tap Pair desktop below, then point your camera at the QR code on your screen.')
+          this.stepRow(2, '扫描二维码', '轻点下方“配对桌面”，扫描电脑屏幕上的二维码。')
           this.hairline(46)
           this.stepRow(3, '已连接', '桌面将显示在这里。所有数据均采用端到端加密。')
         }
@@ -853,11 +1122,11 @@ struct Home {
         .clip(true)
 
         Row({ space: 8 }) {
-          SymbolGlyph($r('sys.symbol.qrcode'))
-            .fontSize(18)
-            .fontColor([this.pal().onAccent])
-          Text('Pair desktop')
-            .fontSize(16)
+          Image($r('app.media.lucide_qr_code')).supportSvg2(true)
+            .width(18).height(18)
+            .colorFilter(lucideColorFilter(this.pal().onAccent))
+          Text(uiText('配对桌面', this.uiLocale))
+            .fontFamily('Geist').fontSize(16)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.pal().onAccent)
         }
@@ -885,16 +1154,16 @@ struct Home {
   @Builder
   tabEmptyState(icon: Resource, title: string, message: string) {
     Column({ space: 6 }) {
-      SymbolGlyph(icon)
-        .fontSize(28)
-        .fontColor([this.pal().textMuted])
-      Text(title)
-        .fontSize(17)
+      Image(icon).supportSvg2(true)
+        .width(28).height(28)
+        .colorFilter(lucideColorFilter(this.pal().textMuted))
+      Text(uiText(title, this.uiLocale))
+        .fontFamily('Geist').fontSize(17)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.pal().textPrimary)
         .margin({ top: 6 })
-      Text(message)
-        .fontSize(15)
+      Text(uiText(message, this.uiLocale))
+        .fontFamily('Geist').fontSize(15)
         .lineHeight(20)
         .fontColor(this.pal().textSecondary)
         .textAlign(TextAlign.Center)
@@ -906,87 +1175,190 @@ struct Home {
   }
 
   @Builder
+  usageCard(host: HostMeta, card: HomeUsageCard) {
+    Column({ space: 8 }) {
+      Text(`${card.provider === 'claude' ? 'Claude' : 'Codex'} · ${card.account}`)
+        .fontFamily('Geist').fontSize(15).fontColor(this.pal().textPrimary).maxLines(1)
+        .textOverflow({ overflow: TextOverflow.Ellipsis })
+      ForEach(card.windows, (window: HomeUsageWindow) => {
+        Row() {
+          Text(uiText(window.label, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary).layoutWeight(1)
+          Text(`${Math.round(window.usedPercent)}% 已使用`).fontFamily('Geist').fontSize(14).fontColor(this.pal().textPrimary)
+        }.width('100%')
+        Progress({ value: window.usedPercent, total: 100, type: ProgressType.Linear })
+          .color(this.pal().accentBlue).backgroundColor(this.pal().bgRaised).width('100%')
+      })
+      if (this.quotaCount(host.id, card) > 0) {
+        Button(`使用额度重置（剩余 ${this.quotaCount(host.id, card)} 次）`).fontFamily('Geist').fontSize(14)
+          .fontColor(this.pal().accentBlue).backgroundColor(Color.Transparent)
+          .enabled(!this.quotaBusy.includes(host.id))
+          .onClick(() => { this.resetQuota(host, card).catch(() => {}); })
+      }
+      if (card.windows.length === 0) {
+        Text(uiText(card.status === 'fetching' || card.status === 'idle' ? '正在获取用量…' : '用量暂不可用', this.uiLocale))
+          .fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
+      }
+    }
+    .alignItems(HorizontalAlign.Start).width('100%').padding(16)
+    .borderRadius(16).backgroundColor(this.pal().bgPanel).margin({ bottom: 8 })
+
+  }
+
+  @Builder
+  hostTabAction(host: HostMeta, label: string, suffix: string) {
+    Button(label).fontFamily('Geist').fontSize(15).fontColor(this.pal().accentBlue)
+      .backgroundColor(Color.Transparent).constraintSize({ minHeight: 44 })
+      .onClick(() => this.openHostRoute(host.id, suffix))
+  }
+
+  formatAgentTime(milliseconds: number): string {
+    let minutes = Math.max(0, Math.floor(milliseconds / 60000));
+    let hours = Math.floor(minutes / 60); let days = Math.floor(hours / 24);
+    return days > 0 ? `${days}d` : hours > 0 ? `${hours}h` : `${minutes}m`;
+  }
+
+  @Builder
+  statsCell(value: string, label: string) {
+    Column({ space: 2 }) {
+      Text(value).fontFamily('Geist').fontSize(20).fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary).maxLines(1)
+      Text(uiText(label, this.uiLocale)).fontFamily('Geist').fontSize(13).fontColor(this.pal().textSecondary).maxLines(2).textAlign(TextAlign.Center)
+    }.layoutWeight(1).padding({ top: 13, bottom: 12, left: 8, right: 8 })
+  }
+
+  @Builder
+  statsSummary() {
+    if (this.statsTotal !== null) {
+      this.sectionHeading(uiText('你的统计', this.uiLocale), '', true)
+      Row() {
+        this.statsCell(this.statsTotal!.totalAgentsSpawned.toLocaleString(), '已启动智能体')
+        this.statsCell(this.formatAgentTime(this.statsTotal!.totalAgentTimeMs), '智能体工作时间')
+        this.statsCell(this.statsTotal!.totalPRsCreated.toLocaleString(), '已创建 PR')
+      }.width('100%').borderRadius(16).backgroundColor(this.pal().bgPanel).margin({ bottom: 12 })
+    }
+  }
+
+  @Builder
   usageTab() {
     Column() {
-      this.tabHeader('使用情况')
+      this.tabHeader(uiText('使用情况', this.uiLocale))
       Scroll() {
         Column() {
+          this.statsSummary()
           if (this.hosts.length === 0) {
-            this.tabEmptyState($r('sys.symbol.gauge_with_dots_needle_33percent'), '暂无使用情况',
-              '请先配对桌面，才能查看智能体账户使用情况。')
-          } else if (this.onlineCount() === 0) {
-            this.tabEmptyState($r('sys.symbol.gauge_with_dots_needle_33percent'), '暂无使用情况',
-              `请连接 ${this.hosts[0].name}，才能查看智能体账户使用情况。`)
-          } else {
-            this.tabEmptyState($r('sys.symbol.gauge_with_dots_needle_33percent'), '暂无使用情况',
-              '请在桌面的“设置 → 账户”中添加账户。')
+            this.tabEmptyState($r('app.media.lucide_gauge'), '暂无使用情况', '请先配对桌面，才能查看智能体账户使用情况。')
           }
-        }
-        .width('100%')
-        .padding({ left: 16, right: 16, bottom: TAB_BAR_HEIGHT + 24 })
-      }
-      .scrollBar(BarState.Off)
-      .width('100%')
-      .layoutWeight(1)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .height('100%')
+          ForEach(this.hosts, (host: HostMeta) => {
+            this.sectionHeading(host.name, this.hostStatusLine(host), true)
+            if (this.online[host.id] === true) {
+              if (this.usageByHost[host.id] !== undefined) {
+                ForEach(this.usageByHost[host.id], (card: HomeUsageCard) => { this.usageCard(host, card) },
+                  (card: HomeUsageCard) => card.key)
+                if (this.usageByHost[host.id].length === 0) {
+                  Text(uiText('此桌面暂无账户用量', this.uiLocale)).fontFamily('Geist').fontSize(15).fontColor(this.pal().textSecondary).padding(16)
+                }
+              } else if (!((this.usageErrors[host.id] ?? '').length > 0)) {
+                Text(uiText('正在获取账户用量…', this.uiLocale)).fontFamily('Geist').fontSize(15).fontColor(this.pal().textSecondary).padding(16)
+              }
+              if ((this.usageErrors[host.id] ?? '').length > 0) {
+                Text(uiText(this.usageErrors[host.id], this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary).padding(16)
+              }
+              this.hostTabAction(host, '管理账户与刷新用量', '/accounts')
+            } else {
+              Text(uiText('连接此桌面后查看用量', this.uiLocale)).fontFamily('Geist').fontSize(15).fontColor(this.pal().textSecondary).padding(16)
+            }
+          }, (host: HostMeta) => host.id)
+        }.width('100%').padding({ left: 16, right: 16, bottom: 24 })
+      }.scrollBar(BarState.Off).width('100%').layoutWeight(1)
+    }.width('100%').height('100%')
   }
 
   @Builder
   automationsTab() {
     Column() {
-      this.tabHeader('自动化')
+      this.tabHeader(uiText('自动化', this.uiLocale))
       Scroll() {
         Column() {
           if (this.hosts.length === 0) {
-            this.tabEmptyState($r('sys.symbol.calendar_badge_clock'), '安排智能体工作',
-              '请先配对桌面，才能查看和运行自动化。')
-          } else if (this.onlineCount() === 0) {
-            this.tabEmptyState($r('sys.symbol.calendar_badge_clock'), '安排智能体工作',
-              `请连接 ${this.hosts[0].name}，才能查看和运行自动化。`)
-          } else {
-            this.tabEmptyState($r('sys.symbol.calendar_badge_clock'), '暂无自动化',
-              '轻点 + 以安排智能体。')
+            this.tabEmptyState($r('app.media.lucide_calendar_clock'), '安排智能体工作', '请先配对桌面，才能查看和运行自动化。')
           }
-        }
-        .width('100%')
-        .padding({ left: 16, right: 16, bottom: TAB_BAR_HEIGHT + 24 })
-      }
-      .scrollBar(BarState.Off)
-      .width('100%')
-      .layoutWeight(1)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .height('100%')
+          ForEach(this.hosts, (host: HostMeta) => {
+            this.sectionHeading(host.name, this.hostStatusLine(host), true)
+            if (this.online[host.id] === true) {
+              if (this.automationsByHost[host.id] !== undefined) {
+                ForEach(this.automationsByHost[host.id], (row: HomeAutomation) => {
+                  Row({ space: 12 }) {
+                    Column({ space: 4 }) {
+                      Text(row.name).fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary).maxLines(1)
+                      Text(row.enabled ? `下次运行 ${new Date(row.nextRunAt).toLocaleString()}` : '已暂停')
+                        .fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
+                    }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+                      .onClick(() => this.openHostRoute(host.id, '/automations'))
+                    Toggle({ type: ToggleType.Switch, isOn: this.automationRequested[`${host.id}:${row.id}`] ?? row.enabled })
+                      .enabled(!this.automationBusy.includes(`${host.id}:${row.id}`))
+                      .accessibilityText(`${row.name} 启用状态`)
+                      .onChange((value: boolean) => { this.toggleAutomation(host.id, row, value).catch(() => {}); })
+                  }.padding(16).width('100%').borderRadius(16).backgroundColor(this.pal().bgPanel).margin({ bottom: 8 })
+                }, (row: HomeAutomation) => row.id)
+                if (this.automationsByHost[host.id].length === 0) {
+                  Text(uiText('暂无自动化', this.uiLocale)).fontFamily('Geist').fontSize(15).fontColor(this.pal().textSecondary).padding(16)
+                }
+              } else if (!((this.automationErrors[host.id] ?? '').length > 0)) {
+                Text(uiText('正在加载自动化…', this.uiLocale)).fontFamily('Geist').fontSize(15).fontColor(this.pal().textSecondary).padding(16)
+              }
+              if ((this.automationErrors[host.id] ?? '').length > 0) {
+                Text(uiText(this.automationErrors[host.id], this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary).padding(16)
+              }
+              if (this.automationRunsByHost[host.id] !== undefined && this.automationRunsByHost[host.id].length > 0) {
+                this.sectionHeading(uiText('最近运行', this.uiLocale), '', false)
+                ForEach(this.automationRunsByHost[host.id], (run: HomeAutomationRun) => {
+                  Column({ space: 4 }) {
+                    Text(run.title).fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary).maxLines(1)
+                    Text(`${run.status} · ${new Date(run.createdAt).toLocaleString()}`).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
+                  }.alignItems(HorizontalAlign.Start).width('100%').padding(16)
+                    .borderRadius(16).backgroundColor(this.pal().bgPanel).margin({ bottom: 8 })
+                    .onClick(() => this.openHostRoute(host.id, '/automations'))
+                }, (run: HomeAutomationRun) => run.id)
+              }
+              Row({ space: 8 }) {
+                this.hostTabAction(host, '管理与运行', '/automations')
+                Button(uiText('新建', this.uiLocale)).fontFamily('Geist').fontSize(15).backgroundColor(this.pal().accentBlue).fontColor(this.pal().onAccent)
+                  .onClick(() => this.openNewAutomation(host.id))
+              }
+              Button(uiText('刷新', this.uiLocale)).fontFamily('Geist').fontSize(15).fontColor(this.pal().accentBlue).backgroundColor(Color.Transparent)
+                .onClick(() => this.refreshAutomations(host.id))
+            } else {
+              Text(uiText('连接此桌面后查看自动化', this.uiLocale)).fontFamily('Geist').fontSize(15).fontColor(this.pal().textSecondary).padding(16)
+            }
+          }, (host: HostMeta) => host.id)
+        }.width('100%').padding({ left: 16, right: 16, bottom: 24 })
+      }.scrollBar(BarState.Off).width('100%').layoutWeight(1)
+    }.width('100%').height('100%')
   }
 
   @Builder
   settingsTab() {
     Column() {
-      this.tabHeader('设置')
+      this.tabHeader(uiText('设置', this.uiLocale))
       Scroll() {
         Column() {
           Column() {
-            ForEach(SETTINGS_ROWS, (row: SettingsRow, index: number) => {
+            ForEach(SETTINGS_MENU_ITEMS, (row: SettingsMenuItem, index: number) => {
               Column() {
                 if (index > 0) {
                   this.hairline(46)
                 }
                 Row({ space: 11 }) {
-                  SymbolGlyph(row.icon)
-                    .fontSize(18)
-                    .fontColor([this.pal().textSecondary])
-                  Text(row.label)
-                    .fontSize(16 * this.fontScale)
+                  Image(row.icon).supportSvg2(true)
+                    .width(18).height(18)
+                    .colorFilter(lucideColorFilter(this.pal().textSecondary))
+                  Text(uiText(row.label, this.uiLocale))
+                    .fontFamily('Geist').fontSize(16 * this.fontScale)
                     .fontColor(this.pal().textPrimary)
                     .maxLines(1)
                     .layoutWeight(1)
-                  SymbolGlyph($r('sys.symbol.chevron_right'))
-                    .fontSize(14)
-                    .fontColor([this.pal().textMuted])
+                  Image($r('app.media.lucide_chevron_right')).supportSvg2(true)
+                    .width(14).height(14)
+                    .colorFilter(lucideColorFilter(this.pal().textMuted))
                 }
                 .width('100%')
                 .padding({ top: 12, bottom: 12, left: 16, right: 14 })
@@ -995,7 +1367,7 @@ struct Home {
                 })
               }
               .width('100%')
-            }, (row: SettingsRow, index: number) => `${index}-${row.target}`)
+            }, (row: SettingsMenuItem, index: number) => `${index}-${row.target}`)
           }
           .width('100%')
           .borderRadius(16)
@@ -1021,12 +1393,12 @@ struct Home {
       ForEach(TAB_SPECS, (tab: TabSpec, index: number) => {
         Column({ space: 3 }) {
           Stack({ alignContent: Alignment.TopStart }) {
-            SymbolGlyph(tab.icon)
-              .fontSize(25)
-              .fontColor([this.activeTab === tab.id ? this.pal().textPrimary : this.pal().textMuted])
+            Image(tab.icon).supportSvg2(true)
+              .width(25).height(25)
+              .colorFilter(lucideColorFilter(this.activeTab === tab.id ? this.pal().textPrimary : this.pal().textMuted))
             if (tab.id === 'feed' && this.needsYouCount() > 0) {
               Text(`${this.needsYouCount()}`)
-                .fontSize(11)
+                .fontFamily('Geist').fontSize(11)
                 .fontWeight(FontWeight.Bold)
                 .fontColor('#000000')
                 .constraintSize({ minWidth: 17 })
@@ -1041,8 +1413,8 @@ struct Home {
           }
           .width(30)
           .height(26)
-          Text(tab.label)
-            .fontSize(10.5)
+          Text(uiText(tab.label, this.uiLocale))
+            .fontFamily('Geist').fontSize(10.5)
             .fontWeight(FontWeight.Medium)
             .fontColor(this.activeTab === tab.id ? this.pal().textPrimary : this.pal().textMuted)
             .maxLines(1)
@@ -1050,6 +1422,7 @@ struct Home {
         .layoutWeight(1)
         .justifyContent(FlexAlign.Center)
         .padding({ top: 2 })
+        .accessibilityText(uiText(tab.label, this.uiLocale))
         .onClick(() => {
           this.activeTab = tab.id;
         })
@@ -1067,8 +1440,8 @@ struct Home {
   fab() {
     Column({ space: 8 }) {
       if (this.fabDisabled() && !this.connecting) {
-        Text('Connect a desktop to start new work.')
-          .fontSize(13)
+        Text(uiText('连接桌面以创建工作区', this.uiLocale))
+          .fontFamily('Geist').fontSize(13)
           .fontColor(this.pal().textSecondary)
           .backgroundColor(this.pal().bgRaised)
           .padding({ left: 10, right: 10, top: 5, bottom: 5 })
@@ -1083,13 +1456,14 @@ struct Home {
           .backgroundColor(this.pal().accentBlue)
           .shadow({ radius: 10, color: 'rgba(0,0,0,0.3)', offsetY: 5 })
           .opacity(this.fabDisabled() ? 0.4 : 1)
-        SymbolGlyph($r('sys.symbol.plus'))
-          .fontSize(26)
-          .fontColor([this.pal().onAccent])
+        Image($r('app.media.lucide_plus')).supportSvg2(true)
+          .width(26).height(26)
+          .colorFilter(lucideColorFilter(this.pal().onAccent))
           .opacity(this.fabDisabled() ? 0.4 : 1)
       }
       .width(FAB_SIZE)
       .height(FAB_SIZE)
+      .accessibilityText('新建工作区')
       .onClick(() => {
         if (!this.fabDisabled()) {
           this.openNewWorkspace();
@@ -1108,20 +1482,38 @@ struct Home {
     Column() {
       Stack({ alignContent: Alignment.BottomEnd }) {
         Column() {
-          if (this.activeTab === 'feed') {
-            this.feedTab()
-          } else if (this.activeTab === 'usage') {
-            this.usageTab()
-          } else if (this.activeTab === 'automations') {
-            this.automationsTab()
-          } else {
-            this.settingsTab()
-          }
+          Stack() {
+            Column() { this.feedTab() }.width('100%').height('100%')
+              .visibility(this.activeTab === 'feed' ? Visibility.Visible : Visibility.Hidden)
+            Column() { this.usageTab() }.width('100%').height('100%')
+              .visibility(this.activeTab === 'usage' ? Visibility.Visible : Visibility.Hidden)
+            Column() { this.automationsTab() }.width('100%').height('100%')
+              .visibility(this.activeTab === 'automations' ? Visibility.Visible : Visibility.Hidden)
+            Column() { this.settingsTab() }.width('100%').height('100%')
+              .visibility(this.activeTab === 'settings' ? Visibility.Visible : Visibility.Hidden)
+          }.width('100%').height('100%')
         }
         .width('100%')
         .height('100%')
 
-        if (this.activeTab === 'feed' && this.loaded && this.hosts.length > 0) {
+        if (this.choosingHost) {
+          Column({ space: 12 }) {
+            Text(uiText('选择桌面', this.uiLocale)).fontFamily('Geist').fontSize(18).fontColor(this.pal().textPrimary)
+            ForEach(this.hosts, (host: HostMeta) => {
+              if (this.online[host.id] === true) {
+                Button(host.name).width('100%').fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary)
+                  .backgroundColor(this.pal().bgPanel).onClick(() => {
+                    this.choosingHost = false; this.openHostRoute(host.id, '/new-workspace');
+                  })
+              }
+            }, (host: HostMeta) => host.id)
+            Button(uiText('取消', this.uiLocale)).fontColor(this.pal().textSecondary).backgroundColor(Color.Transparent)
+              .onClick(() => { this.choosingHost = false; })
+          }.width('100%').height('100%').padding(24).justifyContent(FlexAlign.Center)
+            .backgroundColor(this.pal().bgBase)
+        }
+
+        if (!this.choosingHost && this.activeTab === 'feed' && this.loaded && this.hosts.length > 0) {
           this.fab()
         }
       }
@@ -1136,51 +1528,6 @@ struct Home {
   }
 }
 
-// ------------------------------------------------------------- loose parsing
-
-function readStringMember(obj: Record<string, Object>, name: string): string {
-  let value: Object = obj[name];
-  return typeof value === 'string' ? value : '';
-}
-
-function readStateOfObject(value: Object): string {
-  if (value === null || value === undefined || typeof value !== 'object' || Array.isArray(value)) {
-    return '';
-  }
-  let obj = value as Record<string, Object>;
-  let stateValue: Object = obj['state'];
-  return typeof stateValue === 'string' ? stateValue : '';
-}
-
-/** 宽松 agent 状态读取：agentStatus.state → chatStatus.state → tab.state。 */
-function readTabState(tab: Record<string, Object>): string {
-  let fromAgentStatus = readStateOfObject(tab['agentStatus']);
-  if (fromAgentStatus.length > 0) {
-    return fromAgentStatus;
-  }
-  let fromChatStatus = readStateOfObject(tab['chatStatus']);
-  if (fromChatStatus.length > 0) {
-    return fromChatStatus;
-  }
-  return readStateOfObject(tab['state']);
-}
-
-/** 上游 homeAgentNeedsYou：等待输入/被阻塞/失败的智能体需要用户处理。 */
 function isNeedsYou(state: string): boolean {
-  return state === 'waiting' || state === 'interactivePrompt' || state === 'blocked'
-    || state === 'permission' || state === 'failed';
-}
-
-/** 上游 attentionRank：需要处理的排最前，其后是已完成，再后是运行中。 */
-function stateRank(state: string): number {
-  if (isNeedsYou(state)) {
-    return 0;
-  }
-  if (state === 'done') {
-    return 1;
-  }
-  if (state === 'working' || state === 'monitoring') {
-    return 2;
-  }
-  return 3;
+  return state === 'permission' || state === 'failed';
 }

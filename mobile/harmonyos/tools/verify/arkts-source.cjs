@@ -9,7 +9,7 @@ function loadArkts(file, names, bindings = {}) {
     .readFileSync(path.join(sourceRoot, file), 'utf8')
     .replace(/^import\s[\s\S]*?from\s+['"][^'"]+['"];\s*/gm, '')
   const executable = stripTypeScriptTypes(source, { mode: 'transform' }).replace(
-    /\bexport\s+(?=(class|const|function|async|let|var)\b)/g,
+    /\bexport\s+(?:default\s+)?(?=(class|const|function|async|let|var)\b)/g,
     ''
   )
   let timerSequence = 0
@@ -42,6 +42,7 @@ function loadArkts(file, names, bindings = {}) {
   })
 }
 const util = {
+  generateRandomUUID: require('node:crypto').randomUUID,
   TextEncoder: class {
     encodeInto(value) {
       return new TextEncoder().encode(value)

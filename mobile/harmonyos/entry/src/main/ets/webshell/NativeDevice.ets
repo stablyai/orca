@@ -1,10 +1,16 @@
+import { vibrator } from '@kit.SensorServiceKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { audio } from '@kit.AudioKit';
 import { abilityAccessCtrl, common } from '@kit.AbilityKit';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { fileIo as fs, picker } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
+import { window } from '@kit.ArkUI';
 import { base64Encode } from '../transport/crypto/Bytes';
+import { SpikeRpcClient } from '../transport/SpikeRpcClient';
+import { NativeSpeech } from './NativeSpeech';
+import { NativeImageActions } from './NativeImageActions';
+import { NativePdfViewer } from './NativePdfViewer';
 
 const AUDIO_LIMIT = 160000;
 const MEDIA_LIMIT = 18 * 1024 * 1024;
@@ -16,8 +22,12 @@ interface MediaRecord { bytes: Uint8Array; mime: string; name: string; }
 export class NativeDevice {
   readonly methods: string[] = ['native.clipboard.read', 'native.clipboard.write',
     'native.media.pick', 'native.media.read', 'native.media.release', 'native.media.name',
-    'native.audio.start', 'native.audio.read', 'native.audio.stop'];
+    'native.audio.start', 'native.audio.read', 'native.audio.stop',
+    'native.speech.act', 'native.image.act', 'native.pdf.view'];
   private context: common.UIAbilityContext;
+  private speech: NativeSpeech;
+  private images: NativeImageActions;
+  private pdf: NativePdfViewer;
   private capturer: audio.AudioCapturer | null = null;
   private recording = false;
   private pcm: Uint8Array = new Uint8Array(0);
@@ -28,20 +38,32 @@ export class NativeDevice {
   private generation = 0;
   private disposed = false;
   private starting = false;
+  private recordingWindow: window.Window | null = null;
+  private previousKeepScreenOn = false;
   private picking = false;
+  private selectionGeneration = 0;
 
-  constructor(context: common.UIAbilityContext) { this.context = context; }
+  constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null = null) {
+    this.context = context; this.speech = new NativeSpeech(context);
+    this.images = new NativeImageActions(context); this.pdf = new NativePdfViewer(context, client);
+  }
   async dispose(): Promise<void> {
-    this.disposed = true; this.generation++; this.media.clear();
-    await this.stopCapture(); this.pcm = new Uint8Array(0);
+    this.disposed = true; this.generation++; this.selectionGeneration++; this.media.clear();
+    this.speech.dispose(); this.images.dispose();
+    await this.stopCapture(); await this.pdf.dispose(); this.pcm = new Uint8Array(0);
+  }
+  async pause(): Promise<void> {
+    this.selectionGeneration++; this.speech.cancel(); this.images.pause(); await this.stopCapture(); await this.pdf.cancel();
   }
   async stopCapture(): Promise<void> {
     this.generation++; this.recording = false;
     let capturer = this.capturer; this.capturer = null;
+    let recordingWindow = this.recordingWindow; this.recordingWindow = null;
     if (capturer) {
       try { capturer.off('readData'); await capturer.stop(); } catch (e) { }
       try { await capturer.release(); } catch (e) { }
     }
+    if (recordingWindow) { try { await recordingWindow.setWindowKeepScreenOn(this.previousKeepScreenOn); } catch (e) { } }
   }
   private params(value: ESObject, keys: string[]): ESObject {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) { throw new Error('Invalid device parameters'); }
@@ -53,6 +75,9 @@ export class NativeDevice {
   }
   async serve(method: string, value: ESObject): Promise<Object> {
     if (this.disposed) { throw new Error('Device session closed'); }
+    if (method === 'native.speech.act') { return this.speech.serve(value); }
+    if (method === 'native.image.act') { return this.images.serve(value); }
+    if (method === 'native.pdf.view') { return this.pdf.serve(value); }
     if (method === 'native.clipboard.read') {
       let params: ESObject = this.params(value, ['mime']);
       if (params['mime'] !== 'text') { throw new Error('Text only'); }
@@ -89,7 +114,7 @@ export class NativeDevice {
     }
     let params: ESObject = this.params(value, method === 'native.media.read' ? ['handle', 'offset', 'length'] : ['handle']);
     let handle: string = params['handle'];
-    if (typeof handle !== 'string' || handle.length > 64) { throw new Error('Invalid media handle'); }
+    if (typeof handle !== 'string' || handle.length < 1 || handle.length > 64) { throw new Error('Invalid media handle'); }
     let record = this.media.get(handle);
     if (method === 'native.media.release') {
       let result: Record<string, Object> = { 'released': this.media.delete(handle) }; return result;
@@ -103,6 +128,26 @@ export class NativeDevice {
     let result: Record<string, Object> = { 'base64': base64Encode(record.bytes.subarray(offset, end)), 'eof': end === record.bytes.length };
     return result;
   }
+  async notifyExternalLink(target: string): Promise<void> {
+    if (this.disposed || typeof target !== 'string' || target.length > 8192 || /[\x00-\x20\x7f]/.test(target)
+      || !/^(?:https?:\/\/[^/@?#]+(?:[/?#]|$)|mailto:[^@\s]+@[^\s]+)/i.test(target)) { throw new Error('Invalid external link'); }
+    await this.context.startAbility({ action: 'ohos.want.action.viewData', uri: target });
+  }
+
+  async notifyHaptic(kind: string): Promise<void> {
+    if (this.disposed || !['mediumImpact', 'selection', 'success', 'error', 'edgeBump'].includes(kind)) { throw new Error('Invalid haptic feedback'); }
+    let effectId = kind === 'success' ? vibrator.HapticFeedback.EFFECT_NOTICE_SUCCESS
+      : kind === 'error' ? vibrator.HapticFeedback.EFFECT_NOTICE_FAILURE
+      : kind === 'mediumImpact' ? vibrator.HapticFeedback.EFFECT_HARD : vibrator.HapticFeedback.EFFECT_SOFT;
+    let supported = vibrator.isSupportEffectSync(effectId);
+    if (supported) { await vibrator.startVibration({ type: 'preset', effectId: effectId }, { usage: 'touch' }); }
+    else { await vibrator.startVibration({ type: 'time', duration: kind === 'mediumImpact' ? 30 : kind === 'error' ? 60 : 10 }, { usage: 'touch' }); }
+  }
+
+  private checkSelection(generation: number): void {
+    if (this.disposed || generation !== this.selectionGeneration) { throw new Error('Selection cancelled'); }
+  }
+
   private async ensureClipboardPermission(): Promise<void> {
     let result = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(this.context, ['ohos.permission.READ_PASTEBOARD']);
     if (result.authResults[0] !== 0 || this.disposed) { throw new Error('Clipboard access denied'); }
@@ -117,6 +162,7 @@ export class NativeDevice {
     try {
       let permission = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(this.context, ['ohos.permission.MICROPHONE']);
       if (permission.authResults[0] !== 0) {
+        this.speech.cancel();
         let denied: Record<string, Object> = { 'started': false, 'sampleRate': 16000, 'permission': 'denied' }; return denied;
       }
       if (this.disposed || generation !== this.generation) { throw new Error('Capture cancelled'); }
@@ -127,11 +173,21 @@ export class NativeDevice {
       };
       let capturer = await audio.createAudioCapturer(options);
       if (this.disposed || generation !== this.generation) { await capturer.release(); throw new Error('Capture cancelled'); }
-      this.capturer = capturer; this.pcm = new Uint8Array(0); this.dropped = 0; this.interruption = null;
+      this.capturer = capturer;
+      this.recordingWindow = await window.getLastWindow(this.context);
+      if (this.disposed || generation !== this.generation) { await this.stopCapture(); throw new Error('Capture cancelled'); }
+      this.previousKeepScreenOn = this.recordingWindow.getWindowProperties().isKeepScreenOn;
+      let recordingWindow = this.recordingWindow; let previousKeepScreenOn = this.previousKeepScreenOn;
+      await recordingWindow.setWindowKeepScreenOn(true);
+      if (this.disposed || generation !== this.generation) {
+        try { await recordingWindow.setWindowKeepScreenOn(previousKeepScreenOn); } catch (e) { }
+        await this.stopCapture(); throw new Error('Capture cancelled');
+      }
+      this.pcm = new Uint8Array(0); this.dropped = 0; this.interruption = null;
       this.recording = true;
       capturer.on('readData', (data: ArrayBuffer): void => {
         if (!this.recording || generation !== this.generation) { return; }
-        let incoming = new Uint8Array(data); let size = this.pcm.length + incoming.length;
+        let incoming = new Uint8Array(data); this.speech.feed(incoming); let size = this.pcm.length + incoming.length;
         let skip = Math.max(0, size - AUDIO_LIMIT); this.dropped += skip;
         let next = new Uint8Array(Math.min(size, AUDIO_LIMIT));
         if (skip < this.pcm.length) {
@@ -139,39 +195,49 @@ export class NativeDevice {
         } else { next.set(incoming.subarray(skip - this.pcm.length)); }
         this.pcm = next;
       });
+      capturer.on('stateChange', (state: audio.AudioState): void => {
+        if (generation === this.generation && this.recording
+          && (state === audio.AudioState.STATE_STOPPED || state === audio.AudioState.STATE_RELEASED)) {
+          this.interruption = 'blocked'; this.speech.cancel(); this.stopCapture().catch(() => {});
+        }
+      });
       capturer.on('audioInterrupt', (event: audio.InterruptEvent): void => {
         if (event.eventType === audio.InterruptType.INTERRUPT_TYPE_BEGIN) {
-          this.interruption = 'began'; this.stopCapture().catch(() => {});
+          this.interruption = 'began'; this.speech.cancel(); this.stopCapture().catch(() => {});
         } else { this.interruption = 'ended'; }
       });
       await capturer.start();
       if (this.disposed || generation !== this.generation) { await this.stopCapture(); throw new Error('Capture cancelled'); }
       let result: Record<string, Object> = { 'started': true, 'sampleRate': 16000, 'permission': 'granted' }; return result;
-    } catch (e) { await this.stopCapture(); throw new Error((e as Error).message); }
+    } catch (e) { this.speech.cancel(); await this.stopCapture(); throw new Error((e as Error).message); }
     finally { this.starting = false; }
   }
   private async pickMedia(source: string, multiple: boolean): Promise<Object> {
     if (!['library', 'files', 'clipboard'].includes(source) || typeof multiple !== 'boolean' || this.picking) {
       throw new Error('Invalid media selection');
     }
-    this.picking = true;
+    this.picking = true; let generation = this.selectionGeneration;
     let pending: MediaRecord[] = [];
     try {
+      if (this.media.size >= 8) { throw new Error('Too many selected files'); }
       if (source === 'clipboard') {
         await this.ensureClipboardPermission();
-        let data = await pasteboard.getSystemPasteboard().getData();
+        let data = await pasteboard.getSystemPasteboard().getData(); this.checkSelection(generation);
         let pixel = data.getPrimaryPixelMap();
         if (pixel) {
           let packer = image.createImagePacker();
           try {
+            let info = await pixel.getImageInfo(); this.checkSelection(generation);
+            if (info.size.width * info.size.height > 40000000) { throw new Error('Image dimensions too large'); }
             let packed = await packer.packing(pixel, { format: 'image/png', quality: 100 });
+            this.checkSelection(generation);
             if (packed.byteLength > MEDIA_LIMIT) { throw new Error('Image too large'); }
             pending.push({ bytes: new Uint8Array(packed), mime: 'image/png', name: 'clipboard.png' });
-          } finally { await packer.release(); }
+          } finally { await packer.release(); await pixel.release(); }
         }
       } else {
         let uris: string[] = [];
-        let max = multiple ? 8 - this.media.size : 1;
+        let max = Math.min(multiple ? 8 : 1, 8 - this.media.size);
         if (max <= 0) { throw new Error('Too many selected files'); }
         if (source === 'library') {
           let options = new photoAccessHelper.PhotoSelectOptions();
@@ -181,26 +247,35 @@ export class NativeDevice {
           let options = new picker.DocumentSelectOptions(); options.maxSelectNumber = max;
           uris = await new picker.DocumentViewPicker(this.context).select(options);
         }
+        this.checkSelection(generation);
         for (let i = 0; i < uris.length; i++) {
+          this.checkSelection(generation);
           let file = await fs.open(uris[i], fs.OpenMode.READ_ONLY);
           try {
-            let stat = await fs.stat(file.fd);
+            let stat = await fs.stat(file.fd); this.checkSelection(generation);
             if (stat.size > MEDIA_LIMIT || stat.size < 0) { throw new Error('File too large'); }
             let bytes = new Uint8Array(stat.size); let offset = 0;
             while (offset < bytes.length) {
               let part = new ArrayBuffer(Math.min(READ_LIMIT, bytes.length - offset));
-              let read = await fs.read(file.fd, part, { offset: offset, length: part.byteLength });
+              let read = await fs.read(file.fd, part, { offset: offset, length: part.byteLength }); this.checkSelection(generation);
               if (read <= 0) { throw new Error('File read interrupted'); }
               bytes.set(new Uint8Array(part, 0, read), offset); offset += read;
             }
-            let name = decodeURIComponent(uris[i].split('/').pop() ?? 'attachment').slice(0, 255);
+            let name = 'attachment';
+            try { name = decodeURIComponent(uris[i].split('/').pop() ?? 'attachment'); } catch (e) { }
+            name = name.replace(/[\x00-\x1f\\/]/g, '_').slice(0, 255) || 'attachment';
             let ext = name.toLowerCase().split('.').pop();
             let mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg'
               : ext === 'webp' ? 'image/webp' : ext === 'pdf' ? 'application/pdf' : 'application/octet-stream';
+            if (bytes.length >= 8 && bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71) { mime = 'image/png'; }
+            else if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) { mime = 'image/jpeg'; }
+            else if (bytes.length >= 12 && bytes[0] === 82 && bytes[1] === 73 && bytes[8] === 87 && bytes[9] === 69) { mime = 'image/webp'; }
+            else if (bytes.length >= 6 && bytes[0] === 71 && bytes[1] === 73 && bytes[2] === 70) { mime = 'image/gif'; }
             pending.push({ bytes: bytes, mime: mime, name: name });
           } finally { await fs.close(file); }
         }
       }
+      this.checkSelection(generation);
       if (this.disposed || this.media.size + pending.length > 8) { throw new Error('Selection cancelled'); }
       let items: Object[] = [];
       for (let i = 0; i < pending.length; i++) {

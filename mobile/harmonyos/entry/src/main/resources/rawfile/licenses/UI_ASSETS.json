@@ -1,0 +1,165 @@
+{
+  "packages": [
+    {
+      "name": "geist",
+      "version": "1.9.2",
+      "tarball": "https://registry.npmjs.org/geist/-/geist-1.9.2.tgz",
+      "integrity": "sha512-UU1x2q5Khob0+i4csFvXk1Ki4DePdu7xISuXyEcj1tzQMg64oN7Kbuy4e5z5QhcUWbbvOMJNs3ZxYQqpsEMV3w=="
+    },
+    {
+      "name": "lucide-static",
+      "version": "0.577.0",
+      "tarball": "https://registry.npmjs.org/lucide-static/-/lucide-static-0.577.0.tgz",
+      "integrity": "sha512-hx39J5Tq4JWF2ALY+5YRg+SxQLpeAmLJDXNcqiBJH/UuVwp43it9fyki/onZO7AVFgG5ZbB+fWwZR9mwGHE2XQ=="
+    }
+  ],
+  "files": [
+    {
+      "path": "entry/src/main/resources/rawfile/fonts/Geist-Variable.ttf",
+      "sha256": "b34955a09f71d9ac4b67e54cedb1825d3d5264c7992dbbafa0802080d617e241",
+      "package": "geist",
+      "version": "1.9.2",
+      "source": "package/dist/fonts/geist-sans/Geist-Variable.ttf"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/licenses/Geist-OFL.txt",
+      "sha256": "930853ee1daa68554d9e35c8a9175affb74f699fad9a5da6ee5ebe76379d9137",
+      "package": "geist",
+      "version": "1.9.2",
+      "source": "package/LICENSE.txt"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_list.svg",
+      "sha256": "8026044412ed4adb96e3f4d2b7798a71b7cdf10fd23449ec14eab77ed1bc59c6",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/list.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_gauge.svg",
+      "sha256": "05f8955b122ab894d74421558f4fd792bac261b2357208ccd1a7de660b2292d8",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/gauge.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_calendar_clock.svg",
+      "sha256": "554389c32ae75d8c0f9b8900f3cd6f304011277cb0b503a1c6b7a184678ae2f4",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/calendar-clock.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_settings.svg",
+      "sha256": "cbb2908c645ba9d4c100340bc5b64ac3d55346ce985fc0901a7db170b1423164",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/settings.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_monitor.svg",
+      "sha256": "4b6038427c02440eb57379be45697b80c26e0ad4e2b5c72aee36ba5aa78e822c",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/monitor.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_chevron_right.svg",
+      "sha256": "eb6fb602da4bb5d4effb2bc73274a2bc32cc834ba3d00884900a09d6fbe3b32c",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/chevron-right.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_sun.svg",
+      "sha256": "f167bc5a2017e1bd0d222c08de5137c0a952c801a9df305522d1032de1d1e871",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/sun.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_terminal.svg",
+      "sha256": "8841bc0b36d13364d1359dfaac2bf3b29f31ada33cc2fb4c144bbb0a38f2e912",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/terminal.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_message_square.svg",
+      "sha256": "fb9363f57c9a9b4ddef957893f0b10bd6f04bc356ad858b5d9300cc43380d70e",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/message-square.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_globe.svg",
+      "sha256": "32418176340c5897d077172c8d4992e89f8e4fd7fd67abd619ff1cc42d02c9c0",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/globe.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_mic.svg",
+      "sha256": "90073878abeeb8b0f34811a60bc9c23eda280cefa7f963ad08b0c8a2ce7a8e3b",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/mic.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_bell.svg",
+      "sha256": "e1559438ee38695fb8bfcbf8fab56c2588dcaf33c273758242e239990c4fd72a",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/bell.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_wrench.svg",
+      "sha256": "2b9355927b820847bdca102a8a4844665c409191e8d6f0f04f7e8968fb906a2a",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/wrench.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_info.svg",
+      "sha256": "165a9e9c2413e2e313551539425c428e39fe54f368f6c7d47ad7fd25da929142",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/info.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_plus.svg",
+      "sha256": "f1123de1ad1ac07e230d993a0649534437534d196e3bea9a7e927e5890a09211",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/plus.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_qr_code.svg",
+      "sha256": "6391905913571304605b405a72ab89b04c21238dbb887293969f352bd10f9962",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/qr-code.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_arrow_left.svg",
+      "sha256": "2fe5740bcb24bcb4c06217310e2854a9db72aec9d76c8551a8344d562ccb0cf1",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/arrow-left.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_refresh_cw.svg",
+      "sha256": "d9d7545cdc1d2187140de956b34a3aeb60ec89aa5ce2f98a296d708d1014cdba",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/refresh-cw.svg"
+    },
+    {
+      "path": "entry/src/main/resources/rawfile/licenses/Lucide-ISC.txt",
+      "sha256": "668dcc52803480e0a026b31140a4cae668772663cd764e5991d252eef03f98db",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/LICENSE"
+    }
+  ]
+}

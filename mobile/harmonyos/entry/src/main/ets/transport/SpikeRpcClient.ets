@@ -1,3 +1,4 @@
+import { RelayConnectionOptions, RelayMove, isRelayOrigin } from './RelayProtocol';
 import { webSocket } from '@kit.NetworkKit';
 import { util as textDecoderUtil } from '@kit.ArkTS';
 import { BusinessError } from '@kit.BasicServicesKit';
@@ -10,10 +11,12 @@ import { E2eeV2ClientSession, LegacyE2eeChannel, buildV2TokenAuthJson } from './
  */
 
 export class RpcSuccess {
+  readonly wire: string;
   readonly id: string;
   readonly result: string; // raw JSON text of the result value
 
-  constructor(id: string, result: string) {
+  constructor(id: string, result: string, wire: string = '') {
+    this.wire = wire;
     this.id = id;
     this.result = result;
   }
@@ -24,11 +27,13 @@ export class RpcSuccess {
 }
 
 export class RpcFailure {
+  readonly wire: string;
   readonly id: string;
   readonly errorCode: string;
   readonly errorMessage: string;
 
-  constructor(id: string, errorCode: string, errorMessage: string) {
+  constructor(id: string, errorCode: string, errorMessage: string, wire: string = '') {
+    this.wire = wire;
     this.id = id;
     this.errorCode = errorCode;
     this.errorMessage = errorMessage;
@@ -46,7 +51,7 @@ interface PendingRequest {
   timer: number;
 }
 
-type ChannelState = 'idle' | 'connecting' | 'awaiting-ready' | 'awaiting-authenticated' | 'ready' | 'closed';
+type ChannelState = 'awaiting-relay' | 'idle' | 'connecting' | 'awaiting-ready' | 'awaiting-authenticated' | 'ready' | 'closed';
 
 export class SpikeRpcClient {
   private ws: webSocket.WebSocket = webSocket.createWebSocket();
@@ -58,6 +63,21 @@ export class SpikeRpcClient {
   private connectTimer: number = -1;
   private rejectConnect: ((error: Error) => void) | null = null;
   private closedNotified: boolean = false;
+  private relayOptions: RelayConnectionOptions | null = null;
+  private relayMove: RelayMove | null = null;
+  private resumeConfirmation: Record<string, Object> | null = null;
+  private relayCloseCode: number = 0;
+  private authRejected: boolean = false;
+  authenticationRejected(): boolean { return this.authRejected; }
+  configureRelay(options: RelayConnectionOptions): void {
+    if (!/^[A-Za-z0-9_-]{16}$/.test(options.relayHostId) || !/^[A-Za-z0-9_-]{43}$/.test(options.credential)
+      || !['invite', 'resume'].includes(options.credentialKind)) { throw new Error('Invalid relay credentials'); }
+    this.relayOptions = options;
+  }
+  getRelayMove(): RelayMove | null { return this.relayMove; }
+  getRelayCloseCode(): number { return this.relayCloseCode; }
+  getResumeConfirmation(): Record<string, Object> | null { return this.resumeConfirmation; }
+  isRelay(): boolean { return this.relayOptions !== null; }
   private handshakeMs: number;
   private requestMs: number;
 
@@ -125,34 +145,31 @@ export class SpikeRpcClient {
       this.connectTimer = setTimeout((): void => this.terminate('连接超时，请检查桌面和网络'), this.handshakeMs);
       let connected = (): void => { this.finishConnect(); resolve(); };
       let failed = (error: Error): void => this.terminate(error.message);
-      this.log(`connecting ${endpoint} (framing ${framing})`);
+      this.log(this.relayOptions ? '正在建立 Relay 加密连接' : '正在建立直连加密连接');
       this.ws.on('open', (_err: BusinessError, _value: Object) => {
         try {
           if (this.state === 'closed') { return; }
-          this.state = 'awaiting-ready';
-          if (framing === 'legacy') {
-            this.legacy = new LegacyE2eeChannel(serverPublicKeyB64);
-            this.log('ws open — sending e2ee_hello (legacy v1)');
-            this.sendRaw(this.legacy.helloJson);
-          } else {
-            this.session = new E2eeV2ClientSession('direct', '');
-            this.session.setPinnedKey(serverPublicKeyB64);
-            this.log('ws open — sending e2ee_hello (v2)');
-            this.sendRaw(this.session.helloJson);
+          if (this.relayOptions) {
+            this.state = 'awaiting-relay';
+            let auth: Record<string, Object> = { 'type': 'relay-auth', 'v': 1, 'mode': 'connect', 'credential': this.relayOptions.credential };
+            this.sendRaw(JSON.stringify(auth)); return;
           }
+          this.beginHandshake(serverPublicKeyB64);
         } catch (e) {
           failed(e as Error);
         }
       });
       this.ws.on('message', (_err: BusinessError, value: string | ArrayBuffer) => {
         try {
+          if (this.state === 'awaiting-relay') { this.acceptRelayHello(value, serverPublicKeyB64); return; }
           if (this.state !== 'closed') { this.handleMessage(value, deviceToken, connected, failed); }
         } catch (e) {
-          this.log(`protocol error: ${(e as Error).message}`);
-          failed(e as Error);
+          this.log('连接协议验证失败');
+          failed(new Error('Connection protocol validation failed'));
         }
       });
-      this.ws.on('close', (_err: BusinessError, _value: webSocket.CloseResult) => {
+      this.ws.on('close', (_err: BusinessError, value: webSocket.CloseResult) => {
+        this.relayCloseCode = value.code;
         this.log('连接已关闭');
         this.terminate('socket closed');
       });
@@ -167,6 +184,53 @@ export class SpikeRpcClient {
         }
       }); } catch (e) { failed(e as Error); }
     });
+  }
+
+  private beginHandshake(serverPublicKeyB64: string): void {
+    this.state = 'awaiting-ready';
+    if (this.framing === 'legacy') {
+      this.legacy = new LegacyE2eeChannel(serverPublicKeyB64); this.sendRaw(this.legacy.helloJson);
+    } else {
+      this.session = new E2eeV2ClientSession(this.relayOptions ? 'relay' : 'direct', this.relayOptions ? this.relayOptions.relayHostId : '');
+      this.session.setPinnedKey(serverPublicKeyB64); this.sendRaw(this.session.helloJson);
+    }
+  }
+  private acceptRelayHello(value: string | ArrayBuffer, publicKeyB64: string): void {
+    if (typeof value !== 'string' || value.length > 16384 || !this.relayOptions) { throw new Error('Invalid relay hello'); }
+    let hello: ESObject = JSON.parse(value);
+    if (hello && hello['type'] === 'relay-moved' && hello['v'] === 1 && isRelayOrigin(hello['cellUrl'])
+      && Number.isSafeInteger(hello['assignmentEpoch']) && hello['assignmentEpoch'] >= 0) {
+      this.relayMove = { cellUrl: hello['cellUrl'], assignmentEpoch: hello['assignmentEpoch'] };
+      this.terminate('Relay assignment moved'); return;
+    }
+    if (!hello || hello['type'] !== 'relay-hello' || typeof hello['ok'] !== 'boolean') { throw new Error('Invalid relay hello'); }
+    if (hello['ok'] === false) {
+      this.relayCloseCode = typeof hello['code'] === 'number' ? hello['code'] : 4400;
+      this.terminate(`Relay refused credential (${this.relayCloseCode})`); return;
+    }
+    if (hello['credentialKind'] !== this.relayOptions.credentialKind || !Number.isSafeInteger(hello['leaseExpiresAt'])
+      || hello['leaseExpiresAt'] <= Date.now()) { throw new Error('Relay credential kind or lease mismatch'); }
+    if (hello['credentialKind'] === 'resume' && hello['acceptedCredentialVersion'] !== this.relayOptions.credentialVersion) {
+      throw new Error('Relay credential version mismatch');
+    }
+    this.beginHandshake(publicKeyB64);
+  }
+  private confirmResume(connected: () => void, failed: (error: Error) => void): void {
+    let params: Record<string, string> = { 'resumeConfirmReqId': `confirm-${Date.now()}-${this.requestCounter++}` };
+    this.request('pairing.getEndpoints', JSON.stringify(params)).then((reply: RpcResponse): void => {
+      if (!(reply instanceof RpcSuccess) || !this.relayOptions) { failed(new Error('Relay resume confirmation failed')); return; }
+      try {
+        let result: ESObject = JSON.parse(reply.result);
+        let confirmation: ESObject = result['resumeConfirmation'];
+        if (!confirmation || result['relay']['relayHostId'] !== this.relayOptions.relayHostId
+          || confirmation['v'] !== 1 || confirmation['reqId'] !== params.resumeConfirmReqId
+          || !['current', 'grace'].includes(confirmation['acceptedAs'])
+          || (confirmation['acceptedAs'] === 'current' && confirmation['currentVersion'] !== this.relayOptions.credentialVersion)
+          || (confirmation['acceptedAs'] === 'grace' && (!Number.isSafeInteger(confirmation['graceExpiresAt']) || confirmation['graceExpiresAt'] <= Date.now()))
+          || !Number.isSafeInteger(confirmation['resumeExpiresAt'])) { throw new Error('Invalid relay resume confirmation'); }
+        this.resumeConfirmation = confirmation; connected();
+      } catch (e) { failed(new Error('Invalid relay resume confirmation')); }
+    }).catch((): void => failed(new Error('Relay resume confirmation failed')));
   }
 
   close(): void {
@@ -284,6 +348,7 @@ export class SpikeRpcClient {
     }
     let reply = parsed as Record<string, Object>;
     if (reply['type'] === 'e2ee_error') {
+      this.authRejected = true;
       rejectConnect(new Error('E2EE authentication rejected'));
       return;
     }
@@ -309,7 +374,9 @@ export class SpikeRpcClient {
     }
     this.state = 'ready';
     this.log('authenticated — channel ready');
-    resolveConnect();
+    if (this.relayOptions && this.relayOptions.credentialKind === 'resume') {
+      this.confirmResume(resolveConnect, rejectConnect);
+    } else { resolveConnect(); }
   }
 
   private deliverRpcText(plaintext: string): void {
@@ -341,7 +408,7 @@ export class SpikeRpcClient {
     clearTimeout(pending.timer);
     let okValue: Object = rec['ok'];
     if (okValue === true) {
-      pending.resolve(new RpcSuccess(id, JSON.stringify(rec['result'])));
+      pending.resolve(new RpcSuccess(id, JSON.stringify(rec['result']), plaintext));
     } else {
       let errorValue: Object = rec['error'];
       let errorCode = '';
@@ -357,7 +424,7 @@ export class SpikeRpcClient {
           errorMessage = messageValue;
         }
       }
-      pending.resolve(new RpcFailure(id, errorCode, errorMessage));
+      pending.resolve(new RpcFailure(id, errorCode, errorMessage, plaintext));
     }
   }
 
@@ -367,7 +434,7 @@ export class SpikeRpcClient {
       this.ws.send(frame).catch(() => this.terminate('ws send failed'));
       return true;
     } catch (e) {
-      return false;
+      this.terminate('ws send failed'); return false;
     }
   }
 
@@ -424,7 +491,7 @@ export class SpikeRpcClient {
       if (this.state !== 'ready' || (!this.session && !this.legacy)) {
         resolve(new RpcFailure(id, 'not-ready', 'channel not ready')); return;
       }
-      if (this.pending.has(id) || this.pending.size >= 64) {
+      if (this.pending.has(id) || this.streams.has(id) || this.pending.size >= 64) {
         resolve(new RpcFailure(id, 'request-limit', 'request id or capacity unavailable')); return;
       }
       let timer = setTimeout((): void => {
@@ -454,7 +521,7 @@ export class SpikeRpcClient {
     if (this.state !== 'ready' || !this.session) {
       return false;
     }
-    if (this.streams.has(id) || this.streams.size >= 64) { return false; }
+    if (this.streams.has(id) || this.pending.has(id) || this.streams.size >= 32) { return false; }
     this.streams.set(id, onEvent);
     if (!this.sendRaw(this.session.sealText(wire))) {
       this.streams.delete(id);
@@ -465,5 +532,7 @@ export class SpikeRpcClient {
 
   cancelById(id: string): void {
     this.streams.delete(id);
+    let pending = this.pending.get(id);
+    if (pending) { clearTimeout(pending.timer); this.pending.delete(id); pending.resolve(new RpcFailure(id, 'cancelled', 'request cancelled')); }
   }
 }

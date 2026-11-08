@@ -1,3 +1,4 @@
+import { uiText } from '../settings/NativeUi';
 import { router } from '@kit.ArkUI';
 import { bundleManager } from '@kit.AbilityKit';
 
@@ -16,15 +17,16 @@ interface LicenseEntry {
 @Entry
 @Component
 struct About {
-  @StorageProp('themeBg') themeBg: string = '#111111';
-  @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
-  @StorageProp('themeBorder') themeBorder: string = '#353a42';
-  @StorageProp('themeText') themeText: string = '#e8e8e8';
-  @StorageProp('themeMuted') themeMuted: string = '#a3a9b2';
-  @StorageProp('themeSecondary') themeSecondary: string = '#b5bec9';
-  @StorageProp('themeAccent') themeAccent: string = '#7ddf7d';
-  @StorageProp('themeLink') themeLink: string = '#96b8e5';
-  @StorageProp('themeWarning') themeWarning: string = '#e0c070';
+  @StorageProp('uiLocale') uiLocale: string = 'en';
+  @StorageProp('themeBg') themeBg: string = '#0a0a0a';
+  @StorageProp('themeSurface') themeSurface: string = '#171717';
+  @StorageProp('themeBorder') themeBorder: string = 'rgba(255, 255, 255, 0.07)';
+  @StorageProp('themeText') themeText: string = '#fafafa';
+  @StorageProp('themeMuted') themeMuted: string = '#898989';
+  @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
+  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
+  @StorageProp('themeLink') themeLink: string = '#3276f2';
+  @StorageProp('themeWarning') themeWarning: string = '#eab308';
   @State versionName: string = '';
 
   private licenses: LicenseEntry[] = [
@@ -51,7 +53,7 @@ struct About {
     Column({ space: 10 }) {
       Row({ space: 10 }) {
         Text('‹')
-          .fontSize(22)
+          .fontFamily('Geist').fontSize(22)
           .fontColor(this.themeAccent)
           .width(32)
           .height(32)
@@ -59,8 +61,8 @@ struct About {
           .onClick(() => {
             router.back();
           })
-        Text('关于')
-          .fontSize(20)
+        Text(uiText('关于', this.uiLocale))
+          .fontFamily('Geist').fontSize(20)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.themeText)
           .layoutWeight(1)
@@ -73,14 +75,14 @@ struct About {
           // 应用卡片
           Column({ space: 6 }) {
             Text('Orca')
-              .fontSize(28)
+              .fontFamily('Geist').fontSize(28)
               .fontWeight(FontWeight.Bold)
               .fontColor(this.themeAccent)
-            Text('Orca Mobile · 鸿蒙版')
-              .fontSize(13)
+            Text(uiText('Orca Mobile · 鸿蒙版', this.uiLocale))
+              .fontFamily('Geist').fontSize(13)
               .fontColor(this.themeSecondary)
             Text(this.versionText())
-              .fontSize(12)
+              .fontFamily('Geist').fontSize(12)
               .fontColor(this.themeLink)
           }
           .width('100%')
@@ -92,17 +94,17 @@ struct About {
 
           // 上游致谢
           Column({ space: 8 }) {
-            Text('上游致谢')
-              .fontSize(12)
+            Text(uiText('上游致谢', this.uiLocale))
+              .fontFamily('Geist').fontSize(12)
               .fontColor(this.themeMuted)
               .width('100%')
-            Text('Orca Mobile 是 stablyai/orca 的鸿蒙客户端移植。上游项目以 MIT 协议开源，感谢上游所有贡献者。')
-              .fontSize(12)
+            Text(uiText('Orca Mobile 是 stablyai/orca 的鸿蒙客户端移植。上游项目以 MIT 协议开源，感谢上游所有贡献者。', this.uiLocale))
+              .fontFamily('Geist').fontSize(12)
               .fontColor(this.themeSecondary)
               .lineHeight(18)
               .width('100%')
-            Text('上游仓库：github.com/stablyai/orca（MIT）')
-              .fontSize(11)
+            Text(uiText('上游仓库：github.com/stablyai/orca（MIT）', this.uiLocale))
+              .fontFamily('Geist').fontSize(11)
               .fontColor(this.themeLink)
               .width('100%')
           }
@@ -115,8 +117,8 @@ struct About {
 
           // 开源许可
           Column({ space: 4 }) {
-            Text('开源许可')
-              .fontSize(12)
+            Text(uiText('开源许可', this.uiLocale))
+              .fontFamily('Geist').fontSize(12)
               .fontColor(this.themeMuted)
               .width('100%')
               .padding({ bottom: 4 })
@@ -125,17 +127,17 @@ struct About {
                 Row({ space: 10 }) {
                   Column({ space: 3 }) {
                     Text(item.name)
-                      .fontSize(14)
+                      .fontFamily('Geist').fontSize(14)
                       .fontColor(this.themeText)
                     Text(item.usage)
-                      .fontSize(11)
+                      .fontFamily('Geist').fontSize(11)
                       .fontColor(this.themeMuted)
                   }
                   .alignItems(HorizontalAlign.Start)
                   .layoutWeight(1)
 
                   Text(item.license)
-                    .fontSize(11)
+                    .fontFamily('Geist').fontSize(11)
                     .fontColor(this.themeAccent)
                 }
                 .width('100%')
@@ -156,8 +158,8 @@ struct About {
           .border({ width: 1, color: this.themeBorder })
 
           // 诊断入口
-          Button('打开连接事件日志')
-            .fontSize(13)
+          Button(uiText('打开连接事件日志', this.uiLocale))
+            .fontFamily('Geist').fontSize(13)
             .width('100%')
             .height(40)
             .backgroundColor('#2a6a5a')
@@ -165,8 +167,8 @@ struct About {
               router.pushUrl({ url: 'pages/ConnectionLog' });
             })
 
-          Text('本应用按 MIT 协议开源')
-            .fontSize(11)
+          Text(uiText('本应用按 MIT 协议开源', this.uiLocale))
+            .fontFamily('Geist').fontSize(11)
             .fontColor(this.themeMuted)
             .width('100%')
             .textAlign(TextAlign.Center)

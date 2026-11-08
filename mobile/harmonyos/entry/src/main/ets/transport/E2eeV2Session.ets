@@ -1,4 +1,5 @@
-import { uint32Bytes, uint64LeBytes, utf8Encode, utf8Decode, concatBytes, equalBytes, base64Encode, base64DecodeCanonical, base64UrlDecode } from './crypto/Bytes';
+import { PairingRelay, readPairingRelay, isDirectEndpoint } from './RelayProtocol';
+import { uint32Bytes, uint64BeBytes, utf8Encode, utf8Decode, concatBytes, equalBytes, base64Encode, base64DecodeCanonical, base64UrlDecode } from './crypto/Bytes';
 import { sha256, hkdfSha256 } from './crypto/Sha256';
 import {
   naclBoxBefore, naclBoxAfter, naclBoxOpenAfter, naclGenerateKeyPair, naclRandomBytes, naclSecretbox, naclSecretboxOpen,
@@ -246,7 +247,7 @@ function encodeHeader(sessionId: Uint8Array, direction: string, kind: string, co
   header.set(sessionId, 0);
   header[SESSION_ID_LENGTH] = directionByte(direction);
   header[SESSION_ID_LENGTH + 1] = payloadKindByte(kind);
-  header.set(uint64LeBytes(counter), SESSION_ID_LENGTH + 2);
+  header.set(uint64BeBytes(counter), SESSION_ID_LENGTH + 2);
   return header;
 }
 
@@ -257,7 +258,7 @@ function encodeNonce(sessionId: Uint8Array, direction: string, kind: string, cou
   nonce[13] = directionByte(direction);
   nonce[14] = payloadKindByte(kind);
   nonce[15] = 0;
-  nonce.set(uint64LeBytes(counter), 16);
+  nonce.set(uint64BeBytes(counter), 16);
   return nonce;
 }
 
@@ -363,13 +364,11 @@ export class E2eeV2ClientSession {
    * derive the key schedule and latch the transcript. False on any mismatch.
    */
   acceptReady(readyRaw: Object | null): boolean {
-    console.info('[e2ee-v2] acceptReady: stage 0 enter');
     if (!isRecord(readyRaw)) {
       return false;
     }
     let ready = readyRaw as JsonRecord;
     if (!exactRecord(ready, ['type', 'v', 'desktopPublicKeyB64', 'clientNonceB64', 'desktopNonceB64', 'selection', 'context'])) {
-      console.info('[e2ee-v2] acceptReady: reject exact-record');
       return false;
     }
     if (stringOf(ready['type']) !== 'e2ee_ready') {
@@ -384,7 +383,6 @@ export class E2eeV2ClientSession {
     }
     let selectionRec = selection as JsonRecord;
     if (!exactRecord(selectionRec, ['framing', 'payloadKinds']) || selectionRec['framing'] !== 2) {
-      console.info('[e2ee-v2] acceptReady: reject selection');
       return false;
     }
     let kindsValue: Object = selectionRec['payloadKinds'];
@@ -395,29 +393,22 @@ export class E2eeV2ClientSession {
     if (kinds.length !== 2 || kinds[0] !== 'text' || kinds[1] !== 'binary') {
       return false;
     }
-    console.info('[e2ee-v2] acceptReady: stage 1 shape ok');
     let readyContext = parseContext(ready['context']);
     if (!readyContext || readyContext.transport !== this.helloContext.transport
       || readyContext.relayHostId !== this.helloContext.relayHostId) {
-      console.info('[e2ee-v2] acceptReady: reject context');
       return false;
     }
     if (stringOf(ready['clientNonceB64']) !== base64Encode(this.clientNonce)) {
-      console.info('[e2ee-v2] acceptReady: reject nonce echo');
       return false;
     }
-    console.info('[e2ee-v2] acceptReady: stage 2 context ok');
     let desktopPublicKey = decodeCanonicalBase64Bytes(stringOf(ready['desktopPublicKeyB64']) ?? '', 32);
     let desktopNonce = decodeCanonicalBase64Bytes(stringOf(ready['desktopNonceB64']) ?? '', 32);
     if (!desktopPublicKey || !desktopNonce) {
-      console.info('[e2ee-v2] acceptReady: reject key/nonce decode');
       return false;
     }
     if (!equalBytes(desktopPublicKey, this.pinnedDesktopPublicKey)) {
-      console.info('[e2ee-v2] acceptReady: reject pinned key mismatch');
       return false;
     }
-    console.info('[e2ee-v2] acceptReady: stage 3 keys ok');
     let transcript: Uint8Array;
     try {
       transcript = encodeTranscript(
@@ -430,7 +421,6 @@ export class E2eeV2ClientSession {
       console.error('[e2ee-v2] stack: %{public}s', err.stack ?? 'no stack');
       throw new Error(`${err.message}\n${err.stack ?? ''}`);
     }
-    console.info('[e2ee-v2] acceptReady: stage 4 transcript ok');
     try {
       this.schedule = deriveKeySchedule(
         this.clientSecretKey, this.pinnedDesktopPublicKey, this.clientNonce, desktopNonce, transcript
@@ -441,7 +431,6 @@ export class E2eeV2ClientSession {
       console.error('[e2ee-v2] stack: %{public}s', err.stack ?? 'no stack');
       throw new Error(`${err.message}\n${err.stack ?? ''}`);
     }
-    console.info('[e2ee-v2] acceptReady: stage 5 schedule ok');
     this.transcriptHashB64Value = base64Encode(this.schedule.transcriptHash);
     return true;
   }
@@ -499,6 +488,7 @@ export class E2eeV2ClientSession {
     if (!this.schedule) {
       throw new Error('E2EE v2 ready has not been accepted');
     }
+    if (!Number.isSafeInteger(this.outboundCounter)) { throw new Error('E2EE session counter exhausted'); }
     let frame = sealFrame(plaintext, this.schedule.mobileToDesktopKey, this.schedule.sessionId,
       'mobile-to-desktop', kind, this.outboundCounter);
     this.outboundCounter++;
@@ -534,6 +524,7 @@ export interface PairingOffer {
   publicKeyB64: string;
   scope: string; // 'mobile' | 'runtime' | ''
   hasRelay: boolean;
+  relay?: PairingRelay;
 }
 
 export function parsePairingOffer(raw: string): PairingOffer {
@@ -562,16 +553,22 @@ export function parsePairingOffer(raw: string): PairingOffer {
   let endpoint = stringOf(offer['endpoint']);
   let deviceToken = stringOf(offer['deviceToken']);
   let publicKeyB64 = stringOf(offer['publicKeyB64']);
-  if (endpoint === null || deviceToken === null || publicKeyB64 === null) {
+  if (endpoint === null || !isDirectEndpoint(endpoint) || deviceToken === null || deviceToken.length < 1 || deviceToken.length > 4096 || publicKeyB64 === null) {
     throw new Error('Pairing offer missing endpoint/deviceToken/publicKeyB64');
   }
   let scope = stringOf(offer['scope']);
+  let relay: PairingRelay | undefined = undefined;
+  if (offer['relay'] !== undefined) {
+    if (scope === 'runtime') { throw new Error('Relay does not support runtime pairing'); }
+    relay = readPairingRelay(offer['relay'], publicKeyB64);
+  }
   return {
     endpoint: endpoint,
     deviceToken: deviceToken,
     publicKeyB64: publicKeyB64,
     scope: scope ?? '',
-    hasRelay: isRecord(offer['relay'])
+    hasRelay: relay !== undefined,
+    relay: relay
   };
 }
 

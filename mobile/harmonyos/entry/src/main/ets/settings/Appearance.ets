@@ -1,19 +1,23 @@
 import { common } from '@kit.AbilityKit';
 import { getString, KEY_THEME_MODE } from './SettingsStore';
 
+let appearanceListener: (() => void) | null = null;
+export function setAppearanceListener(listener: (() => void) | null): void { appearanceListener = listener; }
+
 export function applyThemeMode(mode: string): void {
   AppStorage.setOrCreate('themeMode', mode);
   let light = mode === 'light' || (mode === 'system' && AppStorage.get<boolean>('systemLight') === true);
   AppStorage.setOrCreate('themeScheme', light ? 'light' : 'dark');
-  AppStorage.setOrCreate('themeBg', light ? '#f5f6f8' : '#111111');
-  AppStorage.setOrCreate('themeSurface', light ? '#ffffff' : '#1c1c1c');
-  AppStorage.setOrCreate('themeBorder', light ? '#d7dce2' : '#353a42');
-  AppStorage.setOrCreate('themeText', light ? '#17212d' : '#e8e8e8');
-  AppStorage.setOrCreate('themeMuted', light ? '#59616b' : '#a3a9b2');
-  AppStorage.setOrCreate('themeSecondary', light ? '#455463' : '#b5bec9');
-  AppStorage.setOrCreate('themeAccent', light ? '#17603f' : '#7ddf7d');
-  AppStorage.setOrCreate('themeLink', light ? '#285b94' : '#96b8e5');
-  AppStorage.setOrCreate('themeWarning', light ? '#795817' : '#e0c070');
+  AppStorage.setOrCreate('themeBg', light ? '#ffffff' : '#0a0a0a');
+  AppStorage.setOrCreate('themeSurface', light ? '#fafafa' : '#171717');
+  AppStorage.setOrCreate('themeBorder', light ? '#e5e5e5' : 'rgba(255, 255, 255, 0.07)');
+  AppStorage.setOrCreate('themeText', light ? '#0a0a0a' : '#fafafa');
+  AppStorage.setOrCreate('themeMuted', light ? '#696969' : '#898989');
+  AppStorage.setOrCreate('themeSecondary', light ? '#696969' : '#acacac');
+  AppStorage.setOrCreate('themeAccent', light ? '#225be3' : '#3276f2');
+  AppStorage.setOrCreate('themeLink', light ? '#225be3' : '#3276f2');
+  AppStorage.setOrCreate('themeWarning', light ? '#ca8a04' : '#eab308');
+  if (appearanceListener) { appearanceListener(); }
 }
 export async function loadAppearance(context: common.Context): Promise<void> {
   applyThemeMode(await getString(context, KEY_THEME_MODE));

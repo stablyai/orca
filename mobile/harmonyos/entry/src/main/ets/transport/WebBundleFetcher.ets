@@ -2,7 +2,7 @@ import { fileIo as fs } from '@kit.CoreFileKit';
 import { common } from '@kit.AbilityKit';
 import fflateModule from '../vendor/fflate-umd.js';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from './SpikeRpcClient';
-import { base64Decode } from './crypto/Bytes';
+import { base64Decode, utf8Encode } from './crypto/Bytes';
 import { sha256 } from './crypto/Sha256';
 
 /**
@@ -258,11 +258,18 @@ export class WebBundleFetcher {
   /** Downloads every manifest asset into <filesDir>/webshell/<buildId>/; skips when the build is cached. */
   async ensureBundle(manifest: BundleManifest): Promise<string> {
     validateManifest(manifest);
-    let baseDir = `${this.context.filesDir}/webshell/${manifest.buildId}`;
+    let fingerprint = bytesToHex(sha256(utf8Encode(JSON.stringify(manifest))));
+    let baseDir = `${this.context.cacheDir}/webshell/${manifest.buildId}-${fingerprint}`;
     let marker = `${baseDir}/.complete`;
     try {
-      fs.statSync(marker);
-      return baseDir; // cached build
+      if (fs.readTextSync(marker) === fingerprint) {
+        let complete = true;
+        for (let i = 0; i < manifest.assets.length; i++) {
+          let asset = manifest.assets[i];
+          if (fs.statSync(`${baseDir}/${asset.path}`).size !== asset.byteLength) { complete = false; break; }
+        }
+        if (complete) { return baseDir; }
+      }
     } catch (e) {
       // not cached — fall through to download
     }
@@ -275,7 +282,7 @@ export class WebBundleFetcher {
       // ignore — see downloadAsset
     }
     let file = fs.openSync(marker, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    fs.writeSync(file.fd, manifest.buildId);
+    fs.writeSync(file.fd, fingerprint);
     fs.closeSync(file);
     return baseDir;
   }

@@ -31,9 +31,14 @@ if [ ! -x "$HVIGOR_BIN" ]; then
 fi
 node tools/configure-build.mjs
 node tools/prepare-vendor.mjs --check
+source_fingerprint="$(node tools/package.mjs --fingerprint)"
 if "$clean"; then "$HVIGOR_BIN" clean --no-daemon; fi
 "$HVIGOR_BIN" assembleHap --mode module -p product=default -p "buildMode=$build_mode" --no-daemon
 
+if [ "$source_fingerprint" != "$(node tools/package.mjs --fingerprint)" ]; then
+  echo 'Source changed during the build. Rebuild from a stable snapshot before distributing this HAP.' >&2
+  exit 1
+fi
 output_dir=entry/build/default/outputs/default
 if [ -f "$output_dir/entry-default-signed.hap" ]; then
   artifact="$output_dir/entry-default-signed.hap"
@@ -49,4 +54,4 @@ if "$require_signed" && ! "$signed"; then
   echo 'A signed HAP is required. Configure local signing in DevEco Studio and rebuild.' >&2
   exit 1
 fi
-node tools/package.mjs --hap "$artifact" --build-mode "$build_mode"
+node tools/package.mjs --hap "$artifact" --build-mode "$build_mode" --source-fingerprint "$source_fingerprint"

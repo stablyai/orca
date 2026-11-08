@@ -17,7 +17,7 @@ const rootFiles = [
   'hvigor/hvigor-config.json5'
 ]
 const sourceDirectories = ['AppScope', 'entry/src', 'tools']
-const documentation = ['architecture.md', 'development.md', 'device-testing.md']
+const documentation = ['architecture.md', 'development.md', 'device-testing.md', 'parity.md']
 export function sourceFiles(root) {
   const files = [...rootFiles, ...documentation.map((name) => `docs/${name}`)]
   function visit(directory) {

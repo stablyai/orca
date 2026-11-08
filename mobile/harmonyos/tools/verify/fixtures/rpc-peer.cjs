@@ -26,6 +26,11 @@ function createRpcPeer({ authenticate = true } = {}) {
             receive('{"type":"e2ee_authenticated","v":2,"transcriptHashB64":"transcript"}')
           } else {
             sent.push(frame)
+            const request =
+              typeof frame === 'string' && frame.startsWith('{') ? JSON.parse(frame) : null
+            if (request?.method === 'runtime.clientCapabilities.update') {
+              receive(JSON.stringify({ id: request.id, ok: true, result: {} }))
+            }
           }
           return Promise.resolve()
         },
@@ -63,8 +68,11 @@ function createRpcPeer({ authenticate = true } = {}) {
       buildV2TokenAuthJson: () => 'auth'
     }
   )
+  const capabilities = loadArkts('transport/RuntimeCapabilities.ets', ['settleRuntimeCapabilities'])
   return {
     ...rpc,
+    ...capabilities,
+    fflateModule: require('../../../entry/src/main/ets/vendor/fflate-umd.js'),
     sent,
     close: () => handlers.get('close')(null, { code: 1006, reason: 'reset' }),
     failSend: () => {

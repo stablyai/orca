@@ -86,19 +86,19 @@ struct SpikePair {
   build() {
     Column({ space: 10 }) {
       Text('Spike B · 配对 + E2EE 连接桌面')
-        .fontSize(18)
+        .fontFamily('Geist').fontSize(18)
         .fontWeight(FontWeight.Bold)
         .fontColor('#e8e8e8')
 
       TextInput({ placeholder: 'ws://192.168.x.x:6768（留空则用 offer 内 endpoint）', text: this.endpoint })
-        .fontSize(12)
+        .fontFamily('Geist').fontSize(12)
         .height(40)
         .onChange((value: string) => {
           this.endpoint = value;
         })
 
       TextArea({ placeholder: '粘贴 orca://pair?code=… / base64url / JSON offer', text: this.pairingCode })
-        .fontSize(11)
+        .fontFamily('Geist').fontSize(11)
         .height(90)
         .onChange((value: string) => {
           this.pairingCode = value;
@@ -110,7 +110,7 @@ struct SpikePair {
             this.legacyMode = isOn;
           })
         Text('legacy v1（mock server）')
-          .fontSize(12)
+          .fontFamily('Geist').fontSize(12)
           .fontColor('#9a9a9a')
         Blank()
       }
@@ -118,21 +118,21 @@ struct SpikePair {
 
       Row({ space: 8 }) {
         Button(this.connected ? '已连接 ✓' : '连接')
-          .fontSize(14)
+          .fontFamily('Geist').fontSize(14)
           .layoutWeight(1)
           .enabled(!this.connected && this.pairingCode.length > 0)
           .onClick(() => {
             this.doConnect();
           })
         Button('status.get')
-          .fontSize(12)
+          .fontFamily('Geist').fontSize(12)
           .layoutWeight(1)
           .enabled(this.connected)
           .onClick(() => {
             this.doStatusGet();
           })
         Button('exchangeTicket')
-          .fontSize(12)
+          .fontFamily('Geist').fontSize(12)
           .layoutWeight(1)
           .enabled(this.connected)
           .onClick(() => {
@@ -145,7 +145,7 @@ struct SpikePair {
         ForEach(this.logs, (line: string) => {
           ListItem() {
             Text(line)
-              .fontSize(10)
+              .fontFamily('Geist').fontSize(10)
               .fontColor('#a0c8a0')
               .maxLines(3)
           }

@@ -60,12 +60,12 @@ struct SpikeXterm {
     Column() {
       Row({ space: 10 }) {
         Text('Spike A · ArkWeb xterm')
-          .fontSize(18)
+          .fontFamily('Geist').fontSize(18)
           .fontWeight(FontWeight.Bold)
           .fontColor('#e8e8e8')
           .layoutWeight(1)
         Button('状态')
-          .fontSize(12)
+          .fontFamily('Geist').fontSize(12)
           .height(30)
           .onClick(() => this.pollStatus())
       }
@@ -73,7 +73,7 @@ struct SpikeXterm {
       .padding({ left: 12, right: 12, top: 8, bottom: 4 })
 
       Text(this.status)
-        .fontSize(10)
+        .fontFamily('Geist').fontSize(10)
         .fontColor('#8a8a8a')
         .maxLines(5)
         .width('100%')

@@ -13,7 +13,7 @@ bash -n tools/build.sh
 bash tools/build.sh --clean
 ```
 
-`tools/check.mjs` checks the source export for credential patterns, verifies generated vendor output and executes public-entry regressions and SHA/HMAC/HKDF vectors against actual ArkTS source. The Node loader removes types and substitutes platform APIs; it is not an ArkTS typechecker or a UI/device test. The SDK compile is a separate required gate.
+`tools/check.mjs` checks the source export for credential patterns, verifies generated vendor output and executes public-entry regressions, SHA/HMAC/HKDF vectors and pinned upstream direct/relay E2EE interoperability vectors against actual ArkTS source. The Node loader removes types and substitutes platform APIs; it is not an ArkTS typechecker or a UI/device test. The SDK compile is a separate required gate.
 
 ## Physical-device signing
 
@@ -36,3 +36,5 @@ The source export uses an explicit file set. IDE state, staging copies, local si
 ## Pinned vendor updates
 
 Regenerate ArkTS vendor modules with `node tools/prepare-vendor.mjs`. `tools/patch-nacl-arkts.mjs` remains an alias. Regenerate the diagnostic xterm page with `node tools/build-spike-xterm.mjs`. A vendor update must retain licenses, update the provenance manifest and pass `tools/check.mjs`; clean SDK builds are required after vendored JS changes.
+
+The build/export commands fingerprint the explicit source set. A source change during SDK compilation or copying fails delivery instead of stamping a newer source fingerprint onto an older HAP. Keep the source stable for a final build. UI assets have separate pinned hashes and packaged licenses; the source checks validate them too.

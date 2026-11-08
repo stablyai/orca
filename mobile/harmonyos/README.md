@@ -24,15 +24,16 @@ See [development and signing](docs/development.md), the [device test guide](docs
 
 ## Current scope
 
-- Native host catalog, QR/manual pairing, credential storage, supervised E2EE v2 connections and connection diagnostics.
-- Desktop bundle download with hash/path/size validation, fenced ArkWeb, RPC routing and host-scoped durable page storage.
-- Terminal binary streams, reconnect/reopen behavior, native clipboard text, file/photo selection and PCM audio bridge.
-- Theme, home/terminal text sizing, terminal shortcuts and local agent notification preferences.
-- Device routes for pairing and notification targets.
+- Native home, multi-host catalogs, usage and automation data, QR/manual pairing and connection diagnostics.
+- Pinned E2EE v2 direct and relay transport, durable resume credentials, relocation/rotation and reconnect with direct-path upgrade.
+- Desktop-provided workspace/session, task, automation, account, file, review and source-control pages in fenced ArkWeb.
+- Bounded multipart RPC replies, terminal and browser image streams, remote execution-host envelopes, encrypted device cache/draft rows and mirrored native preferences.
+- Native text clipboard, photo/file and clipboard-image selection, image copy/save/share, PDF preview, 16 kHz microphone capture and system offline Mandarin recognition.
+- Shared terminal scale/shortcut preferences, default Chat UI, browser link destination, theme, UI language and online notification filters.
 
-The desktop supplies the core workspace/session UI. On-device transcription and proportional terminal fonts are disabled. Screencast, Huawei remote push and AppGallery release signing are not implemented. Microphone quality, real camera pairing, notification clicks, device interruptions and background network changes require the physical-device acceptance checks.
+See the [parity and verification matrix](docs/parity.md) for the implementation boundaries. The official Orca push gateway accepts iOS/Android registrations only, so HarmonyOS remote push while the application is terminated is blocked by the gateway. This project does not deploy or modify that service. System offline recognition supports Mandarin; other languages can use the paired computer where configured. Native labels use the mobile locale catalogs; HarmonyOS-specific descriptions fall back to English outside Simplified Chinese.
 
-Source regressions use public entry points and fake platform interfaces; crypto vectors execute the actual `Sha256.ets` implementation. They supplement ArkTS compilation and device testing.
+Source checks execute actual ArkTS logic with platform adapters and fixed upstream E2EE/RFC vectors. They supplement SDK compilation. Real camera, microphone quality, OS interruption, system media dialogs, relay service and background/lifecycle behavior require the physical-device acceptance checks. A compiled implementation is not a claim of complete Android/iOS product parity.
 
 ## Layout
 

@@ -1,19 +1,21 @@
+import { uiText } from '../settings/NativeUi';
 import { HostSession, SessionPhase } from '../transport/HostSession';
+import { readHomeResume, saveHomeResume, resumeFromLocation } from '../home/HomeResume';
 import { NativeDevice } from '../webshell/NativeDevice';
 import { PageStorageStore } from '../storage/PageStorageStore';
 import { appendLog as recordConnection, LOG_LEVEL_INFO, LOG_LEVEL_ERROR } from '../diagnostics/ConnectionLogStore';
-import { getNumber, getString, KEY_TERMINAL_FONT_SCALE, KEY_TERMINAL_SHOW_KEY_RAIL } from '../settings/SettingsStore';
 import { webview } from '@kit.ArkWeb';
 import { common } from '@kit.AbilityKit';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { router } from '@kit.ArkUI';
 import { SpikeRpcClient } from '../transport/SpikeRpcClient';
 import { WebBundleFetcher, BundleManifest, isSafeBundlePath } from '../transport/WebBundleFetcher';
+import { ShellStartup } from '../webshell/ShellStartup';
 import { BridgeHost } from '../webshell/BridgeHost';
 import fflateModule from '../vendor/fflate-umd.js';
-import { listHosts, getDeviceToken, HostMeta } from '../storage/HostStore';
+import { listHosts, getDeviceToken, getRelayCredential, HostMeta } from '../storage/HostStore';
 import { AgentWatch } from '../notifications/AgentWatch';
-import { LocalNotifier } from '../notifications/LocalNotifier';
+import { LocalNotifier, DesktopNotification } from '../notifications/LocalNotifier';
 import { getBool, KEY_NOTIFICATIONS_LOCAL_ENABLED } from '../settings/SettingsStore';
 
 /**
@@ -111,6 +113,8 @@ class OrcaNativeProxy {
 @Entry
 @Component
 struct ShellScreen {
+  @StorageProp('uiLocale') @Watch('onLocaleChanged') uiLocale: string = 'en';
+  @StorageProp('themeScheme') @Watch('onThemeChanged') scheme: string = 'dark';
   @StorageProp('themeBg') themeBg: string = '#111111';
   @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
   @StorageProp('themeBorder') themeBorder: string = '#353a42';
@@ -125,21 +129,32 @@ struct ShellScreen {
   private bridge: BridgeHost | null = null;
   private client: SpikeRpcClient | null = null;
   private hostId: string = '';
+  private hostMeta: HostMeta | null = null;
   @State phase: string = '启动中…';
   @State logs: string[] = [];
   @State webSrc: string = '';
   @State showLog: boolean = false;
+  private startup: ShellStartup = new ShellStartup((message: string): void => this.failStartup(message));
+  private startupGeneration: number = 0;
+  private painted: boolean = false;
   private manifest: BundleManifest | null = null;
   private agentWatch: AgentWatch | null = null;
   private notifier: LocalNotifier = new LocalNotifier();
   private baseDir: string = '';
   private routePathname: string = '';
+  private routeParams: Record<string, string> = {};
   private supervisor: HostSession | null = null;
   private nativeDevice: NativeDevice | null = null;
   private disposed: boolean = false;
+  private pageVisible: boolean = true;
+  private foreground: boolean = true;
+  private foregroundListener: () => void = (): void => {
+    this.foreground = true; this.updateViewing();
+  };
   private generation: number = 0;
   private backgroundListener: () => void = (): void => {
-    if (this.nativeDevice) { this.nativeDevice.stopCapture().catch(() => {}); }
+    this.foreground = false; this.notifier.setViewing('', '');
+    if (this.nativeDevice) { this.nativeDevice.pause().catch(() => {}); }
   };
 
   appendLog(line: string): void {
@@ -153,20 +168,35 @@ struct ShellScreen {
   }
 
   aboutToAppear(): void {
-    let params = router.getParams() as Record<string, string>;
+    let params = (router.getParams() ?? {}) as Record<string, string>;
     this.hostId = params['hostId'];
+    let routeKeys = ['paneKey', 'executionHost', 'new'];
+    for (let i = 0; i < routeKeys.length; i++) {
+      let key = routeKeys[i];
+      if (typeof params[key] === 'string' && params[key].length > 0) { this.routeParams[key] = params[key]; }
+    }
     let routeOverride = params['route'];
     this.routePathname = (routeOverride !== undefined && routeOverride.length > 0)
       ? routeOverride
       : `/h/${this.hostId}`;
     this.nativeProxy.setLogSink((line: string): void => this.appendLog(line));
     (getContext(this) as common.UIAbilityContext).eventHub.on('orcaBackground', this.backgroundListener);
+    (getContext(this) as common.UIAbilityContext).eventHub.on('orcaForeground', this.foregroundListener);
     this.boot();
   }
 
+  onLocaleChanged(): void {
+    if (this.bridge) { this.bridge.setUiLocale(this.uiLocale); }
+  }
+
+  onThemeChanged(): void {
+    if (this.bridge) { this.bridge.setColorScheme(this.scheme); }
+  }
+
   aboutToDisappear(): void {
-    this.disposed = true; this.generation++;
+    this.disposed = true; this.generation++; this.startup.cancel();
     (getContext(this) as common.UIAbilityContext).eventHub.off('orcaBackground', this.backgroundListener);
+    (getContext(this) as common.UIAbilityContext).eventHub.off('orcaForeground', this.foregroundListener);
     if (this.supervisor) { this.supervisor.stop(); this.supervisor = null; }
     this.releaseBridge();
   }
@@ -174,10 +204,42 @@ struct ShellScreen {
     if (this.showLog) { this.showLog = false; return true; }
     return this.bridge ? this.bridge.handleBack() : false;
   }
-  onPageHide(): void { this.backgroundListener(); }
+  onPageShow(): void {
+    this.pageVisible = true; this.updateViewing();
+    if (this.client && this.hostMeta && !this.agentWatch) { this.startAgentWatch(this.client, this.hostMeta); }
+  }
+  onPageHide(): void {
+    this.pageVisible = false; this.notifier.setViewing('', '');
+    if (this.agentWatch) { this.agentWatch.stop(); this.agentWatch = null; }
+    if (this.nativeDevice) { this.nativeDevice.pause().catch(() => {}); }
+  }
+  private updateViewing(): void {
+    if (!this.pageVisible || !this.foreground || !this.bridge) { this.notifier.setViewing('', ''); return; }
+    let route = resumeFromLocation(this.hostId, this.bridge.getRoute(), this.bridge.getRouteParams());
+    if (route) { this.notifier.setViewing(route.hostId, route.worktreeId, route.executionHost); }
+    else { this.notifier.setViewing('', ''); }
+  }
+  private recordResume(pathname: string, params: Record<string, string>): void {
+    try {
+      let next = resumeFromLocation(this.hostId, pathname, params);
+      if (next && this.pageVisible && this.foreground) { this.notifier.setViewing(next.hostId, next.worktreeId, next.executionHost); }
+      else { this.notifier.setViewing('', ''); }
+      if (!next) { return; }
+      let held = readHomeResume(getContext(this));
+      if (held && held.hostId === next.hostId && held.worktreeId === next.worktreeId
+        && held.executionHost === next.executionHost) {
+        if (!params['name']) { next.title = held.title; }
+        next.repo = held.repo;
+      }
+      saveHomeResume(getContext(this), next);
+    } catch (e) {}
+  }
+
   private releaseBridge(): void {
     if (this.bridge) {
       this.routePathname = this.bridge.getRoute();
+      this.routeParams = this.bridge.getRouteParams();
+      this.recordResume(this.routePathname, this.routeParams);
       this.bridge.publishState('disconnected', 0); this.bridge.dispose(); this.bridge = null;
     }
     this.nativeProxy.setBridge(null);
@@ -185,6 +247,21 @@ struct ShellScreen {
     if (this.nativeDevice) { this.nativeDevice.dispose().catch(() => {}); this.nativeDevice = null; }
     this.client = null;
   }
+  private failStartup(message: string): void {
+    if (this.disposed) { return; }
+    this.startup.cancel(); this.generation++; this.releaseBridge();
+    this.webSrc = ''; this.painted = false;
+    if (this.supervisor) { this.supervisor.stop(); }
+    this.publishPhase(`失败：${message}`);
+  }
+
+  private pagePainted(client: SpikeRpcClient, generation: number): void {
+    if (this.disposed || generation !== this.generation || this.client !== client) { return; }
+    if (this.startup.complete(this.startupGeneration)) {
+      this.painted = true; this.publishPhase('已连接');
+    }
+  }
+
   private publishPhase(state: string): void {
     if (this.disposed || this.phase === state) { return; }
     this.phase = state;
@@ -194,28 +271,26 @@ struct ShellScreen {
   /** Phase 4a: watch agent states on the open channel and raise local notifications. */
   private startAgentWatch(client: SpikeRpcClient, meta: HostMeta): void {
     getBool(getContext(this), KEY_NOTIFICATIONS_LOCAL_ENABLED).then((enabled: boolean): void => {
-      if (!enabled || this.disposed || this.client !== client) {
+      if (!enabled || this.disposed || !this.pageVisible || this.client !== client || this.agentWatch) {
         this.appendLog('本地通知已关闭（设置 → 通知）');
         return;
       }
       let notifier = this.notifier;
       notifier.setLogSink((line: string): void => this.appendLog(`[notify] ${line}`));
       let context = getContext(this) as common.UIAbilityContext;
-      notifier.requestEnable(context).then((granted: boolean): void => {
-        if (!granted || this.disposed || this.client !== client) {
-          this.appendLog('通知权限未授予');
-          return;
-        }
+      notifier.setContext(context);
         notifier.ensureSlot().then((_ok: boolean): void => {
-          if (this.disposed || this.client !== client) { return; }
+          if (this.disposed || !this.pageVisible || this.client !== client || this.agentWatch) { return; }
           let watch = new AgentWatch({
             deviceToken: client.deviceToken,
             hostId: meta.id,
             subscribe: (id: string, wire: string, onEvent: (responseJson: string) => void): boolean =>
               client.subscribeWithId(id, wire, onEvent),
             cancel: (id: string): void => client.cancelById(id),
-            notify: (title: string, body: string, hostId: string, worktreeId: string): boolean =>
-              notifier.publishAgentEvent(title, body, hostId, worktreeId),
+            notify: (title: string, body: string, hostId: string, worktreeId: string, paneKey?: string, executionHost?: string): boolean =>
+              notifier.publishAgentEvent(title, body, hostId, worktreeId, paneKey, executionHost),
+            notifyEvent: (event: DesktopNotification): boolean => notifier.publishDesktopEvent(event),
+            dismiss: (id: string): void => { notifier.dismiss(id).catch(() => {}); },
             logSink: (line: string): void => this.appendLog(`[watch] ${line}`)
           });
           this.agentWatch = watch;
@@ -224,8 +299,6 @@ struct ShellScreen {
           }
         }).catch((_e: Error) => {
         });
-      }).catch((_e: Error) => {
-      });
     }).catch((_e: Error) => {
     });
   }
@@ -251,7 +324,10 @@ struct ShellScreen {
       }
 
       if (this.disposed) { return; }
-      let supervisor = new HostSession(meta, token); this.supervisor = supervisor;
+      let context = getContext(this) as common.UIAbilityContext;
+      let relayCredential = await getRelayCredential(context, meta.id);
+      if (this.disposed) { return; }
+      let supervisor = new HostSession(meta, token, relayCredential ?? undefined, context); this.supervisor = supervisor;
       supervisor.setClientSetup((client: SpikeRpcClient): void => client.setFflate(fflateModule));
       supervisor.setLogSink((line: string): void => this.appendLog(line));
       let host = meta;
@@ -261,8 +337,11 @@ struct ShellScreen {
           let client = supervisor.getClient();
           if (client) { this.loadConnected(client, host).catch(() => {}); }
         } else if (phase === 'reconnecting') {
-          this.generation++; this.releaseBridge(); this.publishPhase(`连接中断 · ${detail}`);
+          this.startup.cancel(); this.generation++; this.releaseBridge(); this.publishPhase(`连接中断 · ${detail}`);
         } else if (phase === 'connecting') { this.publishPhase('连接桌面…'); }
+        else if (phase === 'auth-failed') {
+          this.startup.cancel(); this.generation++; this.releaseBridge(); this.publishPhase('凭证已失效，请重新配对');
+        }
       });
       supervisor.start();
     } catch (e) { this.publishPhase('失败：无法读取桌面凭证，请重新配对'); }
@@ -270,37 +349,27 @@ struct ShellScreen {
 
   private async loadConnected(client: SpikeRpcClient, meta: HostMeta): Promise<void> {
     let generation = ++this.generation; this.releaseBridge(); this.client = client;
+    this.hostMeta = meta;
+    this.painted = false; this.startupGeneration = this.startup.begin();
     try {
       this.publishPhase('已连接 · 加载会话…');
       let fetcher = new WebBundleFetcher(client, getContext(this));
       let manifest = await fetcher.fetchManifest();
       let baseDir = await fetcher.ensureBundle(manifest);
-      let size = await getNumber(getContext(this), KEY_TERMINAL_FONT_SCALE);
-      let showRail = await getBool(getContext(this), KEY_TERMINAL_SHOW_KEY_RAIL);
       if (this.disposed || generation !== this.generation || this.client !== client) { return; }
       this.manifest = manifest; this.baseDir = baseDir;
       let storage = new PageStorageStore(getContext(this), meta.id);
-      storage.write('orca:terminalTextScale', JSON.stringify(Math.max(12, Math.min(24, size)) / 13));
-      // The page owns shortcut ordering; only override visibility while the native toggle is off.
-      let ids: string[] = ['escape','tab','enter','shiftTab','space','backspace','delete','arrowUp','arrowDown','arrowLeft','arrowRight',
-        'ctrlC','ctrlD','ctrlL','ctrlZ','ctrlR','ctrlA','ctrlE','ctrlW','ctrlU'];
-      if (!showRail) {
-        storage.write('orca:terminal-accessory-layout', JSON.stringify({ version: 2, orderedBuiltInIds: ids,
-          visibleBuiltInIds: [], directionPadEnabled: false }));
-      } else {
-        let held = storage.entries().get('orca:terminal-accessory-layout');
-        if (held) {
-          let parsed: ESObject = JSON.parse(held);
-          if (Array.isArray(parsed['visibleBuiltInIds']) && parsed['visibleBuiltInIds'].length === 0) {
-            storage.write('orca:terminal-accessory-layout', null);
-          }
-        }
-      }
-      let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext); this.nativeDevice = nativeDevice;
+      let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client); this.nativeDevice = nativeDevice;
       let bridge = new BridgeHost(client, this.controller, manifest, meta, this.routePathname);
-      bridge.setStorage(storage); bridge.setColorScheme(AppStorage.get<string>('themeScheme') ?? 'dark');
+      bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(this.routeParams);
+      if (this.supervisor) { bridge.setConnectionPath(this.supervisor.getActivePath()); }
+      bridge.setLocationSink((pathname: string, params: Record<string, string>): void => this.recordResume(pathname, params));
+      this.recordResume(this.routePathname, this.routeParams);
+      bridge.setDeviceNotifies((target: string): Promise<void> => nativeDevice.notifyExternalLink(target),
+        (kind: string): Promise<void> => nativeDevice.notifyHaptic(kind));
       bridge.setNativeHandler(nativeDevice.methods, (method: string, params: ESObject): Promise<Object> => nativeDevice.serve(method, params));
-      bridge.setNavigation((home: boolean): void => { if (home) { router.back({ url: 'pages/Home' }); } else { router.back(); } }, (): void => this.publishPhase('已连接'));
+      bridge.setNavigation((home: boolean): void => { if (home) { router.back({ url: 'pages/Home' }); } else { router.back(); } }, (): void => this.pagePainted(client, generation));
+      bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
       bridge.setLogSink((line: string): void => this.appendLog(line));
       this.bridge = bridge; this.nativeProxy.setBridge(bridge);
       let wasMounted = this.webSrc.length > 0;
@@ -309,42 +378,52 @@ struct ShellScreen {
       if (wasMounted) { this.controller.loadUrl(this.webSrc); }
       this.startAgentWatch(client, meta);
     } catch (e) {
-      if (!this.disposed && generation === this.generation) { this.publishPhase('失败：会话加载未完成，请重试'); }
+      if (!this.disposed && generation === this.generation) { this.failStartup('会话加载未完成，请重试'); }
     }
   }
 
   build() {
-    Column({ space: 8 }) {
+    Column() {
+      if (this.webSrc.length === 0 || this.phase !== '已连接' || this.showLog) {
       Row({ space: 10 }) {
-        Text('会话')
-          .fontSize(18)
+        Button(uiText('返回', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).backgroundColor(Color.Transparent)
+          .onClick(() => router.back())
+        Text(uiText('会话', this.uiLocale))
+          .fontFamily('Geist').fontSize(18)
           .fontWeight(FontWeight.Bold)
           .fontColor(this.themeText)
           .layoutWeight(1)
-        Text(this.phase)
-          .fontSize(11)
+        Text(uiText(this.phase, this.uiLocale))
+          .fontFamily('Geist').fontSize(11)
           .fontColor(this.themeWarning)
           .maxLines(1)
+        if (this.phase.includes('重新配对')) {
+          Button(uiText('重新配对', this.uiLocale)).height(28).fontFamily('Geist').fontSize(12).onClick(() => {
+            router.replaceUrl({ url: 'pages/PairScan' }).catch(() => {});
+          })
+        }
         if (this.phase.startsWith('失败')) {
-          Button('重试').height(28).fontSize(11).onClick(() => {
+          Button(uiText('重试', this.uiLocale)).height(28).fontFamily('Geist').fontSize(11).onClick(() => {
             if (this.supervisor) { this.supervisor.stop(); this.supervisor.start(); }
           })
         }
         Button(this.showLog ? '页面' : '日志')
-          .fontSize(11)
+          .fontFamily('Geist').fontSize(11)
           .height(28)
           .onClick(() => {
             this.showLog = !this.showLog;
           })
       }
       .width('100%')
-      .padding({ left: 12, right: 12, top: 8 })
+      .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+      }
 
       // Web must stay mounted regardless of the log overlay — conditional unmount
       // reloads the shell document and bounces the page back to the host root.
       Stack() {
         if (this.webSrc !== '' && this.manifest !== null) {
           Web({ src: this.webSrc, controller: this.controller })
+            .keyboardAvoidMode(WebKeyboardAvoidMode.RESIZE_CONTENT)
             .javaScriptProxy({
               object: this.nativeProxy,
               name: 'orcaNative',
@@ -359,7 +438,15 @@ struct ShellScreen {
             .onLoadIntercept((event) => {
               return !event.data.getRequestUrl().startsWith(`${SHELL_ORIGIN}/`);
             })
-            .onPageEnd(() => { if (this.bridge) { this.publishPhase('已连接'); } })
+            .onPageEnd((event) => {
+              if (event.url === this.webSrc && !this.painted && this.bridge) { this.publishPhase('页面已加载，正在初始化…'); }
+            })
+            .onErrorReceive((event) => {
+              if (event.request.isMainFrame() && event.request.getRequestUrl() === this.webSrc) {
+                this.failStartup('会话页面加载失败，请重试');
+              }
+            })
+            .onRenderExited(() => this.failStartup('会话页面进程已退出，请重试'))
             .onInterceptRequest((event) => {
               let url = event.request.getRequestUrl();
               let marker = `${SHELL_ORIGIN}/`;
@@ -415,15 +502,15 @@ struct ShellScreen {
             .backgroundColor(this.themeBg)
         } else {
           Column({ space: 6 }) {
-            Text(this.phase)
-              .fontSize(14)
+            Text(uiText(this.phase, this.uiLocale))
+              .fontFamily('Geist').fontSize(14)
               .fontColor(this.themeWarning)
             List({ space: 2 }) {
               ForEach(this.logs, (line: string) => {
                 ListItem() {
                   Text(line)
-                    .fontSize(9)
-                    .fontColor('#a0c8a0')
+                    .fontFamily('Geist').fontSize(9)
+                    .fontColor(this.themeSecondary)
                     .maxLines(3)
                     .width('100%')
                 }
@@ -443,8 +530,8 @@ struct ShellScreen {
             ForEach(this.logs, (line: string) => {
               ListItem() {
                 Text(line)
-                  .fontSize(9)
-                  .fontColor('#a0c8a0')
+                  .fontFamily('Geist').fontSize(9)
+                  .fontColor(this.themeSecondary)
                   .maxLines(3)
                   .width('100%')
               }

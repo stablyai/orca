@@ -14,6 +14,17 @@ for (const [name, expected] of Object.entries(provenance.sha256)) {
     throw new Error(`Pinned vendor source changed: ${name}`)
   }
 }
+const uiAssets = JSON.parse(
+  readFileSync(join(root, 'entry/src/main/resources/rawfile/licenses/UI_ASSETS.json'), 'utf8')
+)
+for (const file of uiAssets.files) {
+  const actual = createHash('sha256')
+    .update(readFileSync(join(root, file.path)))
+    .digest('hex')
+  if (actual !== file.sha256) {
+    throw new Error(`Pinned UI asset changed: ${file.path}`)
+  }
+}
 const nacl = readFileSync(join(root, 'tools/vendor/tweetnacl/nacl-fast.min.js'), 'utf8')
 const cryptoNeedle = 'o=require("crypto")'
 const invocation =
@@ -35,7 +46,9 @@ const notices = `${[
   'tools/vendor/fflate/LICENSE',
   'tools/vendor/fflate/UMD-LICENSE',
   'tools/vendor/xterm/LICENSE',
-  'tools/vendor/xterm-webgl/LICENSE'
+  'tools/vendor/xterm-webgl/LICENSE',
+  'entry/src/main/resources/rawfile/licenses/Geist-OFL.txt',
+  'entry/src/main/resources/rawfile/licenses/Lucide-ISC.txt'
 ]
   .map((name) => `${name}\n\n${readFileSync(join(root, name), 'utf8')}`)
   .join('\n\n')

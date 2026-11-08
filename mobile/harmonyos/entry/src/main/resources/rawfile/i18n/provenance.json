@@ -1,0 +1,18 @@
+{
+  "upstream": "https://github.com/stablyai/orca",
+  "revision": "10c01509de6769f5a8baef080c993d77ac493127",
+  "sources": {
+    "mobile/src/i18n/locales/zh.json": "03c4047302aec06df9546de7517ab116df874a543f3ab8ba6358f7733a96e78a",
+    "mobile/src/i18n/locales/tr.json": "377f9fe5efe51b801f895bc0c41a56ddadbe6fc6cca550c70d93fcef1db7879a",
+    "mobile/src/i18n/locales/ja.json": "aa686e1e24794bd546c80d93744e5fa788034559f58358f5ed759b607456f581",
+    "mobile/src/i18n/locales/de.json": "6f21e40f661c450859911a576787358f9650cc1d86ea2dead82aa4ef0c69db14",
+    "mobile/src/i18n/locales/ru.json": "abf69751d6c2f113983f7f7f2d8bc2086e0d135fa15475c69587920b09a76af0",
+    "mobile/src/i18n/locales/pt.json": "bb41ac79e76f0ec2aa45dfe57f8ef70583850af7554bbd6bbd1f03e2eea8bb1c",
+    "mobile/src/i18n/locales/en.json": "ff9c0c41d0fc3b3f28bc73254d853f2a1ff63c5dc7b01c73c2a39ec828723be5",
+    "mobile/src/i18n/locales/fr.json": "6c0979b7d61644838ef8c856cb52af35e66e8db787f188a8230ceca3dfa9418e",
+    "mobile/src/i18n/locales/ko.json": "4fd5cbb879b1b54fd209a3638fd4406e0b67fe82543fa42c0acea014ea3174ad",
+    "mobile/src/i18n/locales/es.json": "2d99d7788167f3ce95604da83a051a89e4dffc12be702bb80dedc61316df71e1",
+    "mobile/src/i18n/locales/zh-Hant.json": "2302a6956f5d90231cb576bcc996e36432d5c6ce17a9c76f2521f3aacfce65f6"
+  },
+  "notes": "Native labels use existing mobile catalogs where keys match. HarmonyOS-specific descriptions fall back to English outside Simplified Chinese."
+}

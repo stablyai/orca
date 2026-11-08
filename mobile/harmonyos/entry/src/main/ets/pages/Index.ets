@@ -6,10 +6,10 @@ struct Index {
   build() {
     Column({ space: 16 }) {
       Text('Orca · 鸿蒙版')
-        .fontSize(28)
+        .fontFamily('Geist').fontSize(28)
         .fontWeight(FontWeight.Bold)
       Text('Phase 0 spikes')
-        .fontSize(14)
+        .fontFamily('Geist').fontSize(14)
         .opacity(0.6)
 
       Button('Spike A · ArkWeb xterm 终端验证')

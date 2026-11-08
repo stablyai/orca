@@ -11,9 +11,17 @@ mkdirSync(output, { recursive: true })
 const args = process.argv.slice(2)
 const hash = (file) => createHash('sha256').update(readFileSync(file)).digest('hex')
 const sources = sourceFiles(root)
-const sourceHash = createHash('sha256')
-for (const name of sources) {
-  sourceHash.update(`${name}\0${hash(join(root, name))}\n`)
+function fingerprintAt(directory, files) {
+  const digest = createHash('sha256')
+  for (const name of files) {
+    digest.update(`${name}\0${hash(join(directory, name))}\n`)
+  }
+  return digest.digest('hex')
+}
+const fingerprint = fingerprintAt(root, sources)
+if (args.includes('--fingerprint')) {
+  console.log(fingerprint)
+  process.exit(0)
 }
 if (args.includes('--source')) {
   const staging = join(output, 'source', 'orca-harmonyos')
@@ -22,11 +30,19 @@ if (args.includes('--source')) {
     mkdirSync(dirname(join(staging, name)), { recursive: true })
     copyFileSync(join(root, name), join(staging, name))
   }
+  if (
+    fingerprintAt(staging, sources) !== fingerprint ||
+    fingerprintAt(root, sourceFiles(root)) !== fingerprint
+  ) {
+    throw new Error('Source changed during export. Retry from a stable snapshot.')
+  }
   const archive = join(output, 'orca-harmonyos-source.tar.gz')
-  execFileSync('tar', ['-czf', archive, '-C', join(output, 'source'), 'orca-harmonyos'])
+  execFileSync('tar', ['-czf', archive, '-C', join(output, 'source'), 'orca-harmonyos'], {
+    env: { ...process.env, COPYFILE_DISABLE: '1' }
+  })
   writeFileSync(
     join(output, 'source-manifest.json'),
-    `${JSON.stringify({ sha256: sourceHash.digest('hex'), files: sources }, null, 2)}\n`
+    `${JSON.stringify({ sha256: fingerprint, files: sources }, null, 2)}\n`
   )
   writeFileSync(`${archive}.sha256`, `${hash(archive)}  orca-harmonyos-source.tar.gz\n`)
   console.log('Source package: dist/orca-harmonyos-source.tar.gz (local signing excluded).')
@@ -34,6 +50,10 @@ if (args.includes('--source')) {
   const input = resolve(root, args[args.indexOf('--hap') + 1])
   if (!input.endsWith('.hap')) {
     throw new Error('Expected a HAP artifact')
+  }
+  const expectedIndex = args.indexOf('--source-fingerprint')
+  if (expectedIndex !== -1 && args[expectedIndex + 1] !== fingerprint) {
+    throw new Error('Source changed after compilation; HAP export refused.')
   }
   const signed = input.endsWith('-signed.hap')
   const modeIndex = args.indexOf('--build-mode')
@@ -46,7 +66,7 @@ if (args.includes('--source')) {
     buildMode,
     sha256: hash(input),
     bytes: statSync(input).size,
-    sourceSha256: sourceHash.digest('hex'),
+    sourceSha256: fingerprint,
     sdkApi: 26,
     node: process.version,
     host: process.platform
@@ -58,6 +78,6 @@ if (args.includes('--source')) {
   )
 } else {
   throw new Error(
-    'Usage: node tools/package.mjs --source | --hap <file> [--build-mode debug|release]'
+    'Usage: node tools/package.mjs --fingerprint | --source | --hap <file> [--build-mode debug|release] [--source-fingerprint <sha256>]'
   )
 }

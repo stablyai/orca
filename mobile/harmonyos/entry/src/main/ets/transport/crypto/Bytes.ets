@@ -66,8 +66,8 @@ export function uint32Bytes(value: number): Uint8Array {
   return bytes;
 }
 
-/** Upstream: uint64 little-endian written one byte at a time from a bigint. Spike uses a number (safe below 2^53). */
-export function uint64LeBytes(value: number): Uint8Array {
+/** E2EE v2 counter is big-endian, matching upstream writeUint64. */
+export function uint64BeBytes(value: number): Uint8Array {
   let bytes = new Uint8Array(8);
   let remaining = Math.floor(value);
   for (let index = 7; index >= 0; index--) {

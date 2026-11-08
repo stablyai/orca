@@ -1,26 +1,5 @@
-/**
- * Agent state watcher (Phase 4a): subscribes to the host's session-tabs stream on an
- * already-connected RPC channel and turns agent state transitions into local
- * notifications.
- *
- * Upstream contract (src/main/runtime/rpc/methods/session-tabs/session-tabs.ts):
- * - 'session.tabs.subscribe' requires params {"worktree": "<selector>"} (min length 1);
- *   'session.tabs.subscribeAll' takes no params and streams every worktree. The default
- *   here is subscribeAll (watch the whole host); pass worktreeSelector to switch to the
- *   single-worktree subscribe method.
- * - Stream events ride in frames {"id","streaming":true,"result":<event>}; the event is
- *   {"type":"snapshot"|"updated","worktree","tabs":[...]} (single) or
- *   {"type":"snapshots","snapshots":[...]}, and {"type":"end"} on teardown.
- * - Without the tab-delta client capability (SpikeRpcClient sends none) every frame
- *   carries the full tabs array.
- * - Tab agent state (loose, per upstream AGENT_STATUS_STATES): terminal tabs carry
- *   agentStatus.state in 'working' | 'blocked' | 'waiting' | 'done'; agent-session tabs
- *   may carry chatStatus instead; waiting/interactivePrompt signals "needs input".
- *   There is no 'finished' literal on the wire — 'done' is the finished state, so the
- *   notification rule is non-done -> done, plus waiting transitions.
- *
- * Everything here parses defensively: unknown shapes are logged and skipped, never thrown.
- */
+import { DesktopNotification } from './LocalNotifier';
+/** Live desktop notifications, with session-state fallback for older hosts. */
 
 export interface AgentWatchDeps {
   /** Device token used in the wire frame's deviceToken field (same value SpikeRpcClient authed with). */
@@ -34,7 +13,9 @@ export interface AgentWatchDeps {
   /** Drop the stream handler (SpikeRpcClient.cancelById). */
   cancel: (id: string) => void;
   /** Publish a local notification (LocalNotifier.publishAgentEvent). */
-  notify: (title: string, body: string, hostId: string, worktreeId: string) => boolean;
+  notify: (title: string, body: string, hostId: string, worktreeId: string, paneKey?: string, executionHost?: string) => boolean;
+  notifyEvent?: (event: DesktopNotification) => boolean;
+  dismiss?: (notificationId: string) => void;
   logSink: (line: string) => void;
 }
 
@@ -46,6 +27,8 @@ export class AgentWatch {
   private deps: AgentWatchDeps;
   private subscriptionId: string = '';
   private active: boolean = false;
+  private seenNotifications: Set<string> = new Set();
+  private legacy = false;
   /** Last known agent state per "<worktreeId>/<tabId>"; '' baseline means "never notify on first sight". */
   private lastStates: Map<string, string> = new Map();
 
@@ -62,8 +45,11 @@ export class AgentWatch {
       return true;
     }
     try {
+      this.legacy = false;
       let subId = `watch-${Date.now()}`;
-      let wire = this.buildSubscribeWire(subId);
+      let params: Record<string, Object> = { 'includeDesktopSuppressed': true };
+      let frame: Record<string, Object> = { 'id': subId, 'deviceToken': this.deps.deviceToken, 'method': 'notifications.subscribe', 'params': params };
+      let wire = JSON.stringify(frame);
       let ok = this.deps.subscribe(subId, wire, (frame: string): void => {
         this.onFrame(frame);
       });
@@ -92,7 +78,7 @@ export class AgentWatch {
     }
     this.subscriptionId = '';
     this.active = false;
-    this.lastStates.clear();
+    this.lastStates.clear(); this.seenNotifications.clear();
     this.deps.logSink('agent watch: 已停止');
   }
 
@@ -122,6 +108,7 @@ export class AgentWatch {
   }
 
   private onFrame(frameJson: string): void {
+    if (!this.active) { return; }
     try {
       let parsed: Object | null = JSON.parse(frameJson) as Object | null;
       if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
@@ -130,6 +117,14 @@ export class AgentWatch {
       let rec = parsed as Record<string, Object>;
       // Stream events arrive as {"id","streaming":true,"result":<event>}; fall back to
       // the top-level frame when a host spells it differently.
+      let error: ESObject = rec['error'];
+      if (!this.legacy && error && ['method-not-found', 'method_not_found', 'unknown_method', '-32601'].includes(String(error.code))) {
+        this.legacy = true;
+        this.deps.cancel(this.subscriptionId);
+        let wire = this.buildSubscribeWire(this.subscriptionId);
+        this.deps.subscribe(this.subscriptionId, wire, (frame: string): void => this.onFrame(frame));
+        return;
+      }
       let eventSource: Object = rec;
       let streamingValue: Object = rec['streaming'];
       if (streamingValue === true) {
@@ -145,6 +140,10 @@ export class AgentWatch {
       if (typeof typeValue !== 'string') {
         return;
       }
+      if (typeValue === 'dismiss') {
+        let notificationId = this.readStringMember(event, 'notificationId'); if (notificationId && this.deps.dismiss) { this.deps.dismiss(notificationId); } return;
+      }
+      if (typeValue === 'notification') { this.onNotification(event); return; }
       if (typeValue === 'end') {
         this.deps.logSink('agent watch: 流已结束（type=end）');
         return;
@@ -163,7 +162,7 @@ export class AgentWatch {
         this.onSnapshot(event);
         return;
       }
-      // Unknown frame types are ignored on purpose (loose handling).
+
     } catch (e) {
       this.deps.logSink(`agent watch 事件解析失败: ${(e as Error).message}`);
     }
@@ -205,6 +204,26 @@ export class AgentWatch {
     }
   }
 
+  private onNotification(event: Record<string, Object>): void {
+    if (event['desktopAllowed'] === false || !['agent-task-complete', 'terminal-bell', 'test', 'plugin'].includes(this.readStringMember(event, 'source'))) { return; }
+    let title = this.readStringMember(event, 'title'); let body = this.readStringMember(event, 'body');
+    let epoch = this.readStringMember(event, 'notificationEpoch'); let sequence = event['notificationSeq'];
+    if (title.length === 0 || epoch.length === 0 || typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0) { return; }
+    let identity = `${epoch}/${sequence}`; if (this.seenNotifications.has(identity)) { return; }
+    this.seenNotifications.add(identity);
+    if (this.seenNotifications.size > 128) { let first = Array.from(this.seenNotifications)[0]; this.seenNotifications.delete(first); }
+    if (this.deps.notifyEvent) {
+      this.deps.notifyEvent({ title: title.replace(/\s+/g, ' ').slice(0, 80), body: body.replace(/\s+/g, ' ').slice(0, 180),
+        hostId: this.deps.hostId, worktreeId: this.readStringMember(event, 'worktreeId'), paneKey: this.readStringMember(event, 'paneKey'),
+        executionHost: this.readStringMember(event, 'executionHost'), source: this.readStringMember(event, 'source'),
+        agentState: this.readStringMember(event, 'agentState'), desktopAway: typeof event['desktopAway'] === 'boolean' ? event['desktopAway'] as boolean : null,
+        notificationId: this.readStringMember(event, 'notificationId') });
+      return;
+    }
+    this.deps.notify(title.replace(/\s+/g, ' ').slice(0, 80), body.replace(/\s+/g, ' ').slice(0, 180), this.deps.hostId,
+      this.readStringMember(event, 'worktreeId'), this.readStringMember(event, 'paneKey'), this.readStringMember(event, 'executionHost'));
+  }
+
   /** Reads one tab loosely; returns the state key it recorded ('' when nothing usable). */
   private onTab(tabValue: Object, worktreeId: string): string {
     if (tabValue === null || tabValue === undefined || typeof tabValue !== 'object'
@@ -236,18 +255,21 @@ export class AgentWatch {
    * shapes yield '' (treated as "not an agent tab").
    */
   private readTabState(tab: Record<string, Object>): string {
+    let agent: ESObject = tab['agentStatus'];
+    if (agent && typeof agent === 'object' && typeof agent.interactivePrompt === 'string' && agent.interactivePrompt.length > 0) { return STATE_WAITING; }
     let fromAgentStatus = this.readStateOfObject(tab['agentStatus']);
     if (fromAgentStatus.length > 0) {
-      return fromAgentStatus;
+      return fromAgentStatus === 'blocked' ? STATE_WAITING : fromAgentStatus;
     }
     let fromChatStatus = this.readStateOfObject(tab['chatStatus']);
     if (fromChatStatus.length > 0) {
-      return fromChatStatus;
+      return fromChatStatus === 'blocked' ? STATE_WAITING : fromChatStatus;
     }
     return this.readStateOfObject(tab['state']);
   }
 
   private readStateOfObject(value: Object): string {
+    if (typeof value === 'string') { return value; }
     if (value === null || value === undefined || typeof value !== 'object' || Array.isArray(value)) {
       return '';
     }
@@ -291,15 +313,23 @@ export class AgentWatch {
       }
       if (previous !== STATE_DONE && state === STATE_DONE) {
         let body = promptPreview.length > 0 ? `最近输入: ${promptPreview}` : '本轮任务已完成';
-        this.deps.notify(`${title} 已完成`, body, this.deps.hostId, worktreeId);
+        this.notifyTransition(`${title} 已完成`, body, worktreeId, tab, 'done');
         return;
       }
       if (previous !== STATE_WAITING && (state === STATE_WAITING || interactive)) {
-        this.deps.notify(`${title} 需要输入`, promptPreview.length > 0 ? promptPreview : 'Agent 正在等待你的回复',
-          this.deps.hostId, worktreeId);
+        this.notifyTransition(`${title} 需要输入`, promptPreview.length > 0 ? promptPreview : 'Agent 正在等待你的回复',
+          worktreeId, tab, 'waiting');
       }
     } catch (e) {
       this.deps.logSink(`agent watch notify 异常: ${(e as Error).message}`);
     }
   }
+  private notifyTransition(title: string, body: string, worktreeId: string, tab: Record<string, Object>, state: string): void {
+    if (this.deps.notifyEvent) {
+      this.deps.notifyEvent({ title: title, body: body, hostId: this.deps.hostId, worktreeId: worktreeId,
+        paneKey: this.readStringMember(tab, 'paneKey'), executionHost: this.readStringMember(tab, 'executionHost'),
+        source: 'agent-task-complete', agentState: state, desktopAway: null, notificationId: '' });
+    } else { this.deps.notify(title, body, this.deps.hostId, worktreeId); }
+  }
+
 }
