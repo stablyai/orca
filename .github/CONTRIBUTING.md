@@ -121,11 +121,7 @@ Affected tests use Vitest's static import graph. Run suites explicitly for compu
 dynamic imports, fixture files, subprocess inputs, or other dependencies outside that
 graph. Local affected tests do not replace CI.
 
-Run tests through `pnpm test`, not `vitest` or `npx vitest` directly. The launcher keeps a
-transform cache in `node_modules/.cache/orca-vitest-modules`, so repeat runs skip most
-startup work. For example, a filtered `src/main/runtime/orca-runtime.test.ts` run drops
-from about 25s to about 5s after the first run. `-t` filters which tests run but not what
-loads: a test that imports `OrcaRuntimeService` still loads most of the main process.
+Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
 
 To reduce main-process rebuild CPU and memory when you do not need its source maps,
 set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev`. In Bash/zsh:
