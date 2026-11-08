@@ -35,7 +35,27 @@ describe('describeDropWorkspaceIfInactive', () => {
     expect(describeDropWorkspaceIfInactive('wt-b', '/srv/repo/x')).toBe('Dropped into ux-polish')
   })
 
-  it('falls back to the folder name for a workspace outside worktreesByRepo', () => {
-    expect(describeDropWorkspaceIfInactive('folder:notes', '/srv/notes')).toBe('Dropped into notes')
+  it('names a folder workspace the way the sidebar does', () => {
+    mocks.state = {
+      ...mocks.state,
+      repos: [],
+      projectGroups: [{ id: 'group-1', name: 'Research', parentGroupId: null }],
+      folderWorkspaces: [
+        {
+          id: 'notes',
+          projectGroupId: 'group-1',
+          name: 'Research notes',
+          folderPath: '/srv/notes'
+        }
+      ]
+    }
+
+    expect(describeDropWorkspaceIfInactive('folder:notes', '/srv/notes')).toBe(
+      'Dropped into Research notes'
+    )
+  })
+
+  it('falls back to the folder name for a workspace the catalog no longer has', () => {
+    expect(describeDropWorkspaceIfInactive('wt-gone', '/srv/repo/gone')).toBe('Dropped into gone')
   })
 })
