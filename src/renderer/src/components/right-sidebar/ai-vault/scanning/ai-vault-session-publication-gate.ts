@@ -22,11 +22,15 @@ export class AiVaultSessionPublicationGate {
   }
 
   publish(result: AiVaultListResult, apply: (result: AiVaultListResult) => void): void {
-    this.published += 1
     this.cancel()
     const generation = this.generation
-    if (hasInputBeenQuietFor(AI_VAULT_PUBLICATION_QUIET_MS)) {
+    // Counted when it lands: a cancelled publication must not drop a saved list still on its way.
+    const land = () => {
+      this.published += 1
       startTransition(() => apply(result))
+    }
+    if (hasInputBeenQuietFor(AI_VAULT_PUBLICATION_QUIET_MS)) {
+      land()
       return
     }
     this.cancelPending = scheduleAfterInputQuiet(
@@ -35,7 +39,7 @@ export class AiVaultSessionPublicationGate {
           return
         }
         this.cancelPending = null
-        startTransition(() => apply(result))
+        land()
       },
       {
         delayMs: 0,

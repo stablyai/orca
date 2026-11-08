@@ -4,9 +4,25 @@ import type {
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 
-vi.mock('@/store/index', () => ({
-  useAppStore: { getState: () => ({ activeOrcaProfileId: 'profile-1' }) }
-}))
+const store = vi.hoisted(() => {
+  const listeners = new Set<(state: { activeOrcaProfileId: string | null }) => void>()
+  const state: { activeOrcaProfileId: string | null } = { activeOrcaProfileId: 'profile-1' }
+  return {
+    state,
+    setProfile: (id: string | null) => {
+      state.activeOrcaProfileId = id
+      listeners.forEach((listener) => listener(state))
+    },
+    useAppStore: {
+      getState: () => state,
+      subscribe: (listener: (next: typeof state) => void) => {
+        listeners.add(listener)
+        return () => listeners.delete(listener)
+      }
+    }
+  }
+})
+vi.mock('@/store/index', () => ({ useAppStore: store.useAppStore }))
 
 type Handler = (() => void) | null
 type Request = { result: unknown; onsuccess: Handler; onerror: Handler }
@@ -120,6 +136,7 @@ async function loadModule() {
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
+  store.state.activeOrcaProfileId = 'profile-1'
 })
 
 afterEach(() => {
@@ -135,6 +152,8 @@ describe('saved Session History lists', () => {
 
     await lists.saveAiVaultSessionList('workspace', 250, result)
     await lists.saveAiVaultSessionList('workspace', 250, { ...result })
+    // A remount or a return to the scope rescans into fresh copies of the same rows.
+    await lists.saveAiVaultSessionList('workspace', 250, listOf([session('a')]))
 
     expect(puts).toHaveLength(1)
     const saved = await lists.readSavedAiVaultSessionList('workspace')
@@ -179,5 +198,17 @@ describe('saved Session History lists', () => {
     await lists.saveAiVaultSessionList('workspace', 250, result)
     expect(puts).toHaveLength(10)
     expect(await lists.readSavedAiVaultSessionList('workspace')).not.toBeNull()
+  })
+
+  it('reads the saved list once startup has loaded the profile', async () => {
+    fakeIndexedDb()
+    const lists = await loadModule()
+    await lists.saveAiVaultSessionList('workspace', 250, listOf([session('a')]))
+    store.state.activeOrcaProfileId = null
+
+    const read = lists.readSavedAiVaultSessionList('workspace')
+    store.setProfile('profile-1')
+
+    expect((await read)?.result.sessions.map((row) => row.id)).toEqual(['a'])
   })
 })

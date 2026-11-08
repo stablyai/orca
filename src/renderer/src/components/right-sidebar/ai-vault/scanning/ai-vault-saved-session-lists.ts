@@ -12,6 +12,7 @@ import {
   indexedDbConnection,
   settledRequest
 } from '@/lib/indexeddb-connection'
+import { catalogRowsEqual } from '@/lib/catalog-reconciliation/catalog-row-reconciliation'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
 
 const DATABASE_NAME = 'orca-ai-vault-session-lists'
@@ -23,6 +24,8 @@ const MAX_SAVED_LISTS = 8
 const MAX_SAVED_ROWS = 250
 // Bump when AiVaultSession changes shape, so rows saved by an older build are never painted.
 const ROW_FORMAT = 1
+// Past this the scan has usually answered, and a saved list arriving later is dropped anyway.
+const PROFILE_WAIT_MS = 5_000
 
 export type SavedAiVaultSessionList = { limit: AiVaultSessionLimit; result: AiVaultListResult }
 
@@ -39,15 +42,59 @@ function savedListsAvailable(): boolean {
 }
 
 // Profiles share one IndexedDB, so each key names its profile.
-function storageKey(key: string): string | null {
-  const profileId = useAppStore.getState().activeOrcaProfileId
+function storageKey(
+  key: string,
+  profileId = useAppStore.getState().activeOrcaProfileId
+): string | null {
   return savedListsAvailable() && profileId ? JSON.stringify([profileId, key]) : null
 }
 
+// After a restart the panel can mount before startup has loaded the profile list.
+function loadedProfileId(): Promise<string | null> {
+  const current = useAppStore.getState().activeOrcaProfileId
+  if (current || !savedListsAvailable()) {
+    return Promise.resolve(current)
+  }
+  return new Promise((resolve) => {
+    const finish = (profileId: string | null) => {
+      clearTimeout(timer)
+      unsubscribe()
+      resolve(profileId)
+    }
+    const timer = setTimeout(() => finish(null), PROFILE_WAIT_MS)
+    const unsubscribe = useAppStore.subscribe((state) => {
+      if (state.activeOrcaProfileId) {
+        finish(state.activeOrcaProfileId)
+      }
+    })
+  })
+}
+
 let connection: (() => Promise<IDBDatabase>) | null = null
-// The rows each stored key last wrote. Callers pass the panel's reconciled rows, which keep their
-// identity across unchanged rescans, so a focus refresh costs no copy and no write.
-const lastSavedRows = new Map<string, readonly AiVaultSession[]>()
+// What each stored key last wrote, so a rescan that changed nothing (every focus refresh) skips the
+// copy and the write. Only the saved rows are kept, never the whole list.
+const lastSaved = new Map<string, { limit: AiVaultSessionLimit; rows: readonly AiVaultSession[] }>()
+
+function unchangedSinceSave(
+  stored: string,
+  limit: AiVaultSessionLimit,
+  rows: readonly AiVaultSession[]
+): boolean {
+  const last = lastSaved.get(stored)
+  if (!last || last.limit !== limit) {
+    return false
+  }
+  // The panel's rows keep their identity across unchanged rescans, so this is usually a pointer walk.
+  if (last.rows.length === rows.length && last.rows.every((row, index) => row === rows[index])) {
+    return true
+  }
+  // A remount or a return to this scope brings fresh copies; comparing them costs far less than a write.
+  if (!catalogRowsEqual(last.rows, rows)) {
+    return false
+  }
+  lastSaved.set(stored, { limit, rows })
+  return true
+}
 
 function database(): Promise<IDBDatabase> {
   connection ??= indexedDbConnection(indexedDB, DATABASE_NAME, DATABASE_VERSION, (db) => {
@@ -93,7 +140,7 @@ function isStoredList(value: unknown): value is StoredList {
 export async function readSavedAiVaultSessionList(
   key: string
 ): Promise<SavedAiVaultSessionList | null> {
-  const stored = storageKey(key)
+  const stored = storageKey(key, await loadedProfileId())
   if (!stored) {
     return null
   }
@@ -117,19 +164,24 @@ export async function saveAiVaultSessionList(
   result: AiVaultListResult
 ): Promise<void> {
   const stored = storageKey(key)
-  if (!stored || lastSavedRows.get(stored) === result.sessions) {
+  if (!stored) {
     return
   }
   // Host lists are newest first, so the cut keeps the rows the panel opens on.
+  const rows = result.sessions.slice(0, MAX_SAVED_ROWS)
+  // A cut list covers no deeper than its rows.
+  const savedLimit =
+    result.sessions.length > MAX_SAVED_ROWS && (limit === 'unlimited' || limit > MAX_SAVED_ROWS)
+      ? MAX_SAVED_ROWS
+      : limit
+  if (unchangedSinceSave(stored, savedLimit, rows)) {
+    return
+  }
   const list: StoredList = {
     format: ROW_FORMAT,
     savedAt: Date.now(),
-    // A cut list covers no deeper than its rows.
-    limit:
-      result.sessions.length > MAX_SAVED_ROWS && (limit === 'unlimited' || limit > MAX_SAVED_ROWS)
-        ? MAX_SAVED_ROWS
-        : limit,
-    sessions: result.sessions.slice(0, MAX_SAVED_ROWS).map(savedRow)
+    limit: savedLimit,
+    sessions: rows.map(savedRow)
   }
   try {
     const transaction = (await database()).transaction(LISTS, 'readwrite')
@@ -143,12 +195,12 @@ export async function saveAiVaultSessionList(
       for (const oldest of keys.result.slice(0, excess)) {
         lists.delete(oldest)
         // Evicted keys must write again, even when their rows haven't changed.
-        lastSavedRows.delete(String(oldest))
+        lastSaved.delete(String(oldest))
       }
       transaction.commit?.()
     }
     await done
-    lastSavedRows.set(stored, result.sessions)
+    lastSaved.set(stored, { limit: savedLimit, rows })
   } catch {
     // A refused write only costs the next restart its instant list; the next scan tries again.
   }
@@ -160,7 +212,7 @@ export async function forgetSavedAiVaultSession(sessionId: string): Promise<void
     return
   }
   // Whatever lists held the row are rewritten, so the next scan of each scope saves again.
-  lastSavedRows.clear()
+  lastSaved.clear()
   try {
     const transaction = (await database()).transaction(LISTS, 'readwrite')
     const done = committedTransaction(transaction)
