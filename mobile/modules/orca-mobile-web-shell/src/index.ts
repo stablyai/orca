@@ -1,4 +1,8 @@
-import { requireNativeModule, requireNativeViewManager } from 'expo-modules-core'
+import {
+  requireNativeModule,
+  requireOptionalNativeModule,
+  requireNativeViewManager
+} from 'expo-modules-core'
 import type { ComponentType, RefAttributes } from 'react'
 import { Platform, type NativeSyntheticEvent, type ViewProps } from 'react-native'
 import type { MobileWebShellLoadStatePayload } from './load-state'
@@ -68,8 +72,13 @@ export function saveImageToPhotos(uri: string, mime: string): Promise<void> {
 
 // iOS only: starts WebKit's helper processes ahead of the first page. Later calls are no-ops.
 export function warmUpWebShell(): void {
-  if (Platform.OS === 'ios') {
-    requireNativeModule<{ warmUp: () => void }>('OrcaMobileWebShell').warmUp()
+  if (Platform.OS !== 'ios') {
+    return
+  }
+  // A binary built before warmUp existed has the module without the function.
+  const shell = requireOptionalNativeModule<{ warmUp?: () => void }>('OrcaMobileWebShell')
+  if (typeof shell?.warmUp === 'function') {
+    shell.warmUp()
   }
 }
 

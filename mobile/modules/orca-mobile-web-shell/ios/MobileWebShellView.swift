@@ -612,15 +612,18 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     didFailProvisionalNavigation navigation: WKNavigation!,
     withError error: Error
   ) {
+    MobileWebShellWarmUp.release()
     reportNavigationFailure(error)
   }
 
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    MobileWebShellWarmUp.release()
     reportNavigationFailure(error)
   }
 
   /// Report renderer death; memory pressure/provider updates look alike, so the caller owns retry policy.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    MobileWebShellWarmUp.release()
     clearBridgeTarget()
     // Jetsam takes WebContent while Orca is backgrounded; the report can arrive as the app resumes, before it is active.
     let background = window == nil || UIApplication.shared.applicationState != .active
