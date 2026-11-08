@@ -89,6 +89,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
   const lineageParentIdentities = useAppStore(selectSidebarLineageParentIdentities)
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
+  const showHostSections = useAppStore((s) => s.showWorkspaceHostSections)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
 
   // Why: manual header order is bound to state.repos; Recent/Smart derive order from the sorted worktree stream.
@@ -139,7 +140,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
   )
 
   const hostScopedGroups =
-    args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
+    showHostSections || args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
   // Same-id registrations on two hosts: each row and project header needs its own host's.
   const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
   const rowPlan = useMemo(
@@ -253,8 +254,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       localHostLabel: getLocalExecutionHostLabel(),
       collapsedHostKeys: effectiveCollapsedGroups,
       forceCollapseHosts: hostDragActive,
-      // Why: projects/workspaces are the primary sidebar object; host sections are only an explicit host-filter view.
-      preferProjectGrouping: true
+      showHostSections
     })
     return hostScopedGroups
       ? scopeHostSectionCollapse({
@@ -270,7 +270,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     hostDragActive,
     hostScopedGroups,
     orderedHostOptions,
-    rows
+    rows,
+    showHostSections
   ])
   const renderedSidebarRowKeys = useMemo(
     () => collectRenderedSidebarRowKeys(sectionRows),

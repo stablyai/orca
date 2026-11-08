@@ -32,6 +32,8 @@ export function buildHostFeedView(args: {
     filters: view.filters,
     workspaceHostScope: ALL_EXECUTION_HOSTS_SCOPE,
     visibleWorkspaceHostIds: view.filters.visibleHostIds,
+    // Why: the phone has no host-sections toggle yet, so it keeps drawing sections for a partial Hosts filter.
+    showHostSections: view.filters.visibleHostIds !== null,
     workspaceStatuses: view.workspaceStatuses,
     pinnedDisplayPolicy: desktop?.showPinnedInGroups ? 'duplicate-in-groups' : 'single-location',
     defaultHostId: normalizeExecutionHostId(desktop?.focusedHostId) ?? LOCAL_EXECUTION_HOST_ID,

@@ -6588,6 +6588,8 @@
           "hosts": "Hosts",
           "showSection": "Show",
           "allHostsDetail": "Show every host",
+          "hostSections": "Host sections",
+          "hostSectionsAria": "Group workspaces into a section per host",
           "configuredSshHost": "Configured SSH",
           "projectSshHost": "Project SSH",
           "activeRuntimeHost": "Default for new projects",

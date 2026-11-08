@@ -80,6 +80,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations, 'hidden'))
   )
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
+  const showHostSections = useAppStore((s) => s.showWorkspaceHostSections)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
   const domains = useMemo(
     () =>
@@ -115,6 +116,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       filters: sidebarWorkspaceRowFilters(filterState),
       workspaceHostScope: filterState.workspaceHostScope,
       visibleWorkspaceHostIds: filterState.visibleWorkspaceHostIds,
+      showHostSections,
       workspaceStatuses: args.workspaceStatuses,
       pinnedDisplayPolicy: args.pinnedDisplayPolicy,
       defaultHostId,
@@ -131,6 +133,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       args.pinnedDisplayPolicy,
       defaultHostId,
       settings,
+      showHostSections,
       workspaceHostOrder
     ]
   )
