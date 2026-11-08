@@ -16,12 +16,13 @@ export function projectRepoVisibilityForClient(repo: Repo, context: RepoProjecti
   ) {
     return repo
   }
+  const settings = context.runtime.requireStore?.().getSettings()
   return {
     ...repo,
     externalWorktreeVisibility: effectiveExternalWorktreeVisibility(
       repo,
       isLegacyRepoForExternalWorktreeVisibility(repo),
-      context.runtime.getClientSettings?.().worktreeVisibilityDefaults
+      settings ? (settings.worktreeVisibilityDefaults ?? { external: 'hide' }) : undefined
     )
   }
 }

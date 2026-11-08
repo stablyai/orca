@@ -6,6 +6,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
@@ -15,6 +16,7 @@ import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function GHCommentComposer({
   className,
@@ -37,9 +39,13 @@ export function GHCommentComposer({
 }): React.JSX.Element {
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const mountedRef = useMountedRef()
 
   const handleSubmit = useCallback(async () => {
+    if (uploading) {
+      return
+    }
     const bodyState = getCommentBodySubmitState(body)
     if (bodyState.status === 'empty') {
       return
@@ -64,16 +70,18 @@ export function GHCommentComposer({
         type: itemType,
         prRepo
       })
+      if (result.ok) {
+        onCommentAdded(result.comment)
+      }
       if (!mountedRef.current) {
         return
       }
       if (result.ok) {
         setBody('')
         // Why: use GitHub's returned comment so the optimistic row shows the real login/avatar immediately.
-        onCommentAdded(result.comment)
       } else {
         toast.error(
-          result.error ??
+          codeHostErrorText(result) ??
             translate('auto.components.GitHubItemDialog.082515176a', 'Failed to add comment')
         )
       }
@@ -92,6 +100,7 @@ export function GHCommentComposer({
     }
   }, [
     body,
+    uploading,
     mountedRef,
     repoPath,
     repoId,
@@ -106,6 +115,14 @@ export function GHCommentComposer({
   return (
     <div className={cn('relative', className)}>
       <GitHubMarkdownComposer
+        imageUploadAddress={githubCommentImageUploadAddress({
+          repoPath,
+          repoId,
+          sourceContext,
+          type: itemType,
+          prRepo
+        })}
+        onImageUploadPendingChange={setUploading}
         value={body}
         onChange={setBody}
         placeholder={translate('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
@@ -120,7 +137,7 @@ export function GHCommentComposer({
             type="button"
             size="icon-sm"
             onClick={handleSubmit}
-            disabled={!canSubmitComment || submitting}
+            disabled={!canSubmitComment || submitting || uploading}
             className="absolute bottom-3 right-3 shadow-sm"
             aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
           >

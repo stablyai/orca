@@ -2,7 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileS
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import {
   getEphemeralVmRuntimeStorePath,
   listEphemeralVmRuntimes,
@@ -51,7 +52,7 @@ describe('ephemeral VM runtime service', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
   beforeEach(() => {
-    // Why: secure-file has dedicated ACL coverage; these tests focus on lifecycle semantics.
+    // Isolate lifecycle tests from platform ACL behavior, which secure-file tests cover.
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   })
 
@@ -94,8 +95,7 @@ describe('ephemeral VM runtime service', () => {
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
-      // Repo-owned recipes predate plugin bounds; snapshotting must not fail
-      // after create has already provisioned external resources.
+      // Legacy repository recipes may exceed plugin limits after resources have already been provisioned.
       description: 'x'.repeat(2_048),
       create: nodeCommand(startPath),
       destroy: nodeCommand(cleanupPath)

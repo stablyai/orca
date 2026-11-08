@@ -1,23 +1,20 @@
 import { z } from 'zod'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import type { AcpDialect, AcpRequestPresentation } from './acp-dialects/acp-dialect'
+import {
+  pendingAcpResolution,
+  type AcpDialect,
+  type AcpRequestPresentation
+} from './acp-dialects/acp-dialect'
 import type { AcpToolTimeline } from './acp-tool-timeline'
 import { AcpRpcError } from './acp-errors'
+import { ACP_FORM_ELICITATION_METHOD, acpFormElicitationPresentation } from './acp-form-elicitation'
 import { readAcpPermissionRequest } from './acp-permission-requests'
 
-export const pendingAcpResolution = {
-  state: 'pending',
-  selectedOptionId: null,
-  resolvedBy: null,
-  resolvedAt: null
-} as const
-
-/** `description`: the agent's own words about what answering means, shown above the choices. */
 export function acpPermissionPresentation(
   params: unknown,
   description?: string
 ): AcpRequestPresentation {
-  // The runtime already read this request and reported any field it dropped.
+  // Runtime parsing already reported dropped fields.
   const request = readAcpPermissionRequest(params, () => {})
   if (!request) {
     throw new AcpRpcError(-32602, 'Invalid ACP permission request')
@@ -69,7 +66,6 @@ export function translateAcpRequest(
 ): {
   events: ProviderTimelineEvent[]
   presentation?: AcpRequestPresentation
-  /** Answered at once: nobody is asked. */
   settled?: { reply: unknown }
 } {
   const session = requestSessionSchema.safeParse(params)
@@ -78,8 +74,7 @@ export function translateAcpRequest(
   }
   const tool = requestToolSchema.safeParse(params)
   const callId = tool.success ? (tool.data.toolCall?.toolCallId ?? tool.data.toolCallId) : undefined
-  const turn = callId ? options.tools.turn(callId) : undefined
-  const join = { thread: options.sessionId, ...(turn === undefined ? {} : { turn }) }
+  const join = { thread: options.sessionId, ...(callId ? options.tools.join(callId) : {}) }
   const settlement =
     method === 'session/request_permission'
       ? undefined
@@ -107,10 +102,10 @@ export function translateAcpRequest(
   }
   const presentation =
     options.dialect.request?.(method, params) ??
-    (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined)
+    (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined) ??
+    (method === ACP_FORM_ELICITATION_METHOD ? acpFormElicitationPresentation(params) : undefined)
   if (!presentation) {
-    // A file system or terminal call Orca never advertised is the agent's own misstep (OpenCode 1.x
-    // repeats each approved edit as a file write it already made): refused, with no row.
+    // OpenCode 1.x repeats completed writes through unadvertised client methods; omit their rows.
     if (UNADVERTISED_CLIENT_METHOD.test(method)) {
       return { events: [] }
     }
@@ -125,7 +120,9 @@ export function translateAcpRequest(
         type: 'request.open',
         request: `${method}:${JSON.stringify(id)}`,
         body: presentation.body,
-        join
+        join,
+        // The live exchange ends only by answer or withdrawal, not with the turn that shows it.
+        outlivesTurn: true
       }
     ]
   }

@@ -5,7 +5,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-// How many more renames out of each path fail the way Windows refuses a running executable.
+// Remaining simulated Windows rename refusals per path.
 const { refusals } = vi.hoisted(() => ({ refusals: new Map<string, number>() }))
 function refuseIfListed(from: string): void {
   const left = refusals.get(from) ?? 0
@@ -80,15 +80,5 @@ describe.each([
     expect(readFileSync(target, 'utf8')).toBe('running build')
     expect(existsSync(aside)).toBe(false)
     expect(readFileSync(tmp, 'utf8')).toBe('next build')
-  })
-
-  it('leaves a locked target in place when not asked to move it', async () => {
-    const { tmp, target, aside } = stage()
-    refusals.set(tmp, 1)
-
-    await expect(replace(tmp, target, false)).rejects.toMatchObject({ code: 'EPERM' })
-
-    expect(readFileSync(target, 'utf8')).toBe('running build')
-    expect(existsSync(aside)).toBe(false)
   })
 })

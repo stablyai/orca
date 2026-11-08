@@ -1,0 +1,378 @@
+import type * as NodeChildProcess from 'node:child_process'
+import type * as NodeFs from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+import type { Repo } from '../../shared/repo-types'
+
+import { describe, expect, it, vi } from 'vitest'
+
+const { execFileSyncMock, statSyncMock } = vi.hoisted(() => ({
+  execFileSyncMock: vi.fn(),
+  statSyncMock: vi.fn()
+}))
+
+vi.mock('fs', () => ({
+  readFileSync: vi.fn(),
+  statSync: statSyncMock,
+  existsSync: vi.fn(),
+  mkdirSync: vi.fn(),
+  writeFileSync: vi.fn(),
+  chmodSync: vi.fn()
+}))
+
+vi.mock('child_process', () => ({
+  exec: vi.fn(),
+  execFileSync: execFileSyncMock,
+  execFile: vi.fn(),
+  spawn: vi.fn()
+}))
+
+// Answers a WSL worktree's `.git` link the way the distro's Git wrote it.
+function linkWslWorktree(fs: typeof NodeFs, gitdir: string): void {
+  statSyncMock.mockImplementation((path: string) => ({
+    isDirectory: () => !path.endsWith('.git')
+  }))
+  vi.mocked(fs.readFileSync).mockImplementation((path) =>
+    String(path).endsWith('.git') ? `gitdir: ${gitdir}\n` : ''
+  )
+}
+
+describe('createSetupRunnerScript', () => {
+  const makeRepo = () =>
+    ({
+      id: 'test-id',
+      path: '/test/repo',
+      displayName: 'Test Repo',
+      badgeColor: '#000',
+      addedAt: Date.now()
+    }) as unknown as Repo
+
+  it('writes a fail-fast Windows runner that returns after batch commands', async () => {
+    const fs = await import('node:fs')
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const result = await createSetupRunnerScript(
+        makeRepo(),
+        'C:\\repo\\feature\\',
+        'pnpm install\npnpm build'
+      )
+
+      expect(result).toEqual({
+        runnerScriptPath: 'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd',
+        envVars: expect.objectContaining({
+          ORCA_ROOT_PATH: '/test/repo',
+          ORCA_WORKTREE_PATH: 'C:\\repo\\feature\\',
+          ORCA_WORKSPACE_NAME: 'feature'
+        }),
+        shell: { family: 'cmd' }
+      })
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd',
+        [
+          '@echo off',
+          'setlocal EnableExtensions DisableDelayedExpansion',
+          'call pnpm install',
+          'if errorlevel 1 exit /b %errorlevel%',
+          'call pnpm build',
+          'if errorlevel 1 exit /b %errorlevel%',
+          ''
+        ].join('\r\n'),
+        'utf-8'
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('converts path env vars to MSYS form for a native Windows Git Bash runner', async () => {
+    const fs = await import('node:fs')
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const result = await createSetupRunnerScript(
+        { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
+        'C:\\repo\\feature',
+        '#!/usr/bin/env bash\npnpm install',
+        undefined,
+        { family: 'posix' }
+      )
+
+      expect(result).toEqual({
+        runnerScriptPath: 'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        envVars: expect.objectContaining({
+          ORCA_ROOT_PATH: '/c/Users/jinwo/git/orca',
+          ORCA_WORKTREE_PATH: '/c/repo/feature',
+          CONDUCTOR_ROOT_PATH: '/c/Users/jinwo/git/orca',
+          GHOSTX_ROOT_PATH: '/c/Users/jinwo/git/orca',
+          // Workspace names are labels and must not undergo path conversion.
+          ORCA_WORKSPACE_NAME: 'feature'
+        }),
+        shell: { family: 'posix' }
+      })
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        '#!/usr/bin/env bash\nset -e\npnpm install\n',
+        'utf-8'
+      )
+      // Only guest Linux paths need chmod; native Windows paths do not.
+      expect(vi.mocked(fs.chmodSync)).not.toHaveBeenCalledWith(
+        'C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        0o755
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('leaves non-path setup env values alone under a Git Bash runner', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } =
+        await import('../../shared/shell/launch/terminal-git-credential-guard')
+      const result = await createSetupRunnerScript(
+        makeRepo(),
+        'C:\\repo\\feature',
+        'pnpm install',
+        undefined,
+        { family: 'posix' }
+      )
+
+      expect(result.envVars[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]).toBe('guard')
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('keeps native Windows env vars in Windows form for the default cmd runner', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const result = await createSetupRunnerScript(
+        { ...makeRepo(), path: 'C:\\Users\\jinwo\\git\\orca' },
+        'C:\\repo\\feature',
+        'pnpm install'
+      )
+
+      expect(result.envVars).toEqual(
+        expect.objectContaining({
+          ORCA_ROOT_PATH: 'C:\\Users\\jinwo\\git\\orca',
+          ORCA_WORKTREE_PATH: 'C:\\repo\\feature'
+        })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('preserves exclamation marks in Windows runner script lines', async () => {
+    const { buildWindowsRunnerScript } = await import('./setup-runner-script-text')
+
+    const runner = buildWindowsRunnerScript('echo hello!world!')
+
+    // Disable inherited cmd delayed expansion so !world! remains literal.
+    expect(runner).toContain('setlocal EnableExtensions DisableDelayedExpansion')
+    expect(runner).toContain('call echo hello!world!')
+  })
+
+  it('refuses to run a shebang script as a batch command', async () => {
+    const { buildWindowsRunnerScript } = await import('./setup-runner-script-text')
+
+    // Reject POSIX scripts before cmd runs even their portable prefix and leaves setup incomplete.
+    const runner = buildWindowsRunnerScript('#!/usr/bin/env bash\npnpm install\nsource .env')
+
+    expect(runner).not.toContain('call pnpm install')
+    expect(runner).not.toContain('call source .env')
+    expect(runner).toContain('needs a POSIX shell')
+    expect(runner).toContain('exit /b 1')
+  })
+
+  it('keeps a `#` comment that is not an interpreter line', async () => {
+    const { buildWindowsRunnerScript } = await import('./setup-runner-script-text')
+
+    const runner = buildWindowsRunnerScript('# not a shebang\nrem still batch')
+
+    expect(runner).toContain('call # not a shebang')
+    expect(runner).toContain('call rem still batch')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'runs a script whose shebang carries invocation-only bash flags',
+    async () => {
+      // Reapplying login/interactive flags through set would abort before the first user line.
+      const { buildPosixRunnerScript } = await import('./setup-runner-script-text')
+      const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
+      const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
+
+      const dir = mkdtempSync(join(tmpdir(), 'orca-posix-runner-'))
+      try {
+        const runnerPath = join(dir, 'setup-runner.sh')
+        writeFileSync(
+          runnerPath,
+          buildPosixRunnerScript('#!/bin/bash -l\necho SETUP_RAN\n'),
+          'utf-8'
+        )
+
+        expect(execFileSync('bash', [runnerPath], { encoding: 'utf-8' })).toContain('SETUP_RAN')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it('derives ORCA_WORKSPACE_NAME from a POSIX worktree path', async () => {
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockReturnValue('/test/repo/.git/worktrees/feature/orca/setup-runner.sh')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'linux'
+    })
+
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const result = await createSetupRunnerScript(makeRepo(), '/test/repo-feature', 'pnpm install')
+
+      expect(result.envVars).toEqual(
+        expect.objectContaining({
+          ORCA_WORKTREE_PATH: '/test/repo-feature',
+          ORCA_WORKSPACE_NAME: 'repo-feature'
+        })
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('translates WSL runner paths and env vars to Linux form on Windows', async () => {
+    const fs = await import('node:fs')
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockClear()
+    linkWslWorktree(fs, '/home/jin/.git/worktrees/feature')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const result = await createSetupRunnerScript(
+        {
+          ...makeRepo(),
+          path: 'C:\\Users\\jinwo\\git\\orca'
+        },
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\feature',
+        'pnpm install'
+      )
+
+      expect(result).toEqual({
+        runnerScriptPath:
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        envVars: expect.objectContaining({
+          ORCA_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+          ORCA_WORKTREE_PATH: '/home/jin/feature',
+          ORCA_WORKSPACE_NAME: 'feature',
+          CONDUCTOR_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca',
+          GHOSTX_ROOT_PATH: '/mnt/c/Users/jinwo/git/orca'
+        })
+      })
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        '#!/usr/bin/env bash\nset -e\npnpm install\n',
+        'utf-8'
+      )
+      expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        0o755
+      )
+      // The link answers it: Git in a distro would be a synchronous wsl.exe on the main thread.
+      expect(execFileSyncMock).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(fs.readFileSync).mockReset()
+      statSyncMock.mockReset()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
+  it('translates WSL env vars to Linux paths when the worktree lives on a WSL UNC path', async () => {
+    const fs = await import('node:fs')
+    const originalPlatform = process.platform
+
+    execFileSyncMock.mockClear()
+    linkWslWorktree(fs, '/home/jin/repo/.git/worktrees/feature')
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const result = await createSetupRunnerScript(
+        makeRepo(),
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\feature',
+        'pnpm install'
+      )
+
+      expect(result).toEqual({
+        runnerScriptPath:
+          '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        envVars: expect.objectContaining({
+          ORCA_ROOT_PATH: '/test/repo',
+          ORCA_WORKTREE_PATH: '/home/jin/repo/feature',
+          ORCA_WORKSPACE_NAME: 'feature',
+          CONDUCTOR_ROOT_PATH: '/test/repo',
+          GHOSTX_ROOT_PATH: '/test/repo'
+        })
+      })
+      expect(vi.mocked(fs.writeFileSync)).toHaveBeenCalledWith(
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        '#!/usr/bin/env bash\nset -e\npnpm install\n',
+        'utf-8'
+      )
+      expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh',
+        0o755
+      )
+      // The link answers it: Git in a distro would be a synchronous wsl.exe on the main thread.
+      expect(execFileSyncMock).not.toHaveBeenCalled()
+    } finally {
+      vi.mocked(fs.readFileSync).mockReset()
+      statSyncMock.mockReset()
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+})

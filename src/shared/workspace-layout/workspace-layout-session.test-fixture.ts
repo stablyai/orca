@@ -1,5 +1,4 @@
-// Stored session partitions shaped the way today's writers leave them, for the Loader/Serializer
-// round trip, built the way the window saves them. Each terminal tab has its row, tab-bar entry and pane layout; order fields agree.
+// Window-shaped session partitions for Loader/Serializer round trips: terminal row, tab-bar entry, pane layout and order fields agree.
 
 import { getDefaultWorkspaceSession } from '../constants'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../execution-host'
@@ -8,8 +7,8 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../terminal-tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+} from './terminal-tab-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../workspace-scope'
 
 export const GIT_KEY = 'repo-1::/Users/dev/orca'
@@ -56,7 +55,6 @@ function paneTree(leafIds: string[], direction: 'vertical' | 'horizontal'): Term
 
 const isTerminal = (spec: TerminalSpec | ContentSpec): spec is TerminalSpec => !('kind' in spec)
 
-/** Adds one workspace's tabs the way the window saves them: rows, tab bar, groups, layouts. */
 export function addWorkspace(
   session: WorkspaceSessionState,
   key: string,

@@ -1,17 +1,16 @@
 import { translate } from '@/i18n/i18n'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
-import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
-import type { RuntimePairingRepairRoute } from '../../../../shared/runtime-environments'
-import {
-  describeRuntimeCompatBlock,
-  type RuntimeCompatVerdict
-} from '../../../../shared/protocol-compat'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
+import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import type { RuntimePairingRepairRoute } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   runtimeStatusForOverall,
   type HostStatus,
   type RuntimeHostConnectionState
-} from '@/runtime/runtime-host-connection-state'
+} from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 
 /** 'blocked' is a host that refused us (revoked pairing or incompatible versions). */
@@ -37,6 +36,21 @@ export type RuntimeHostBlockedCopy = {
   explanation: string
   /** Untranslated protocol detail, shown in the diagnostics box. */
   detail?: string
+}
+
+/** `repair`: a new access link re-pairs; `open-settings`: the server must be forgotten there first. */
+export type RuntimeHostBlockedRecovery = 'repair' | 'open-settings'
+
+/** The row action that can actually get a refused host back; null when only another surface can. */
+export function runtimeHostBlockedRecovery(
+  reason: RuntimeHostBlockedReason,
+  repairRoute: RuntimePairingRepairRoute
+): RuntimeHostBlockedRecovery | null {
+  if (reason === 'server-replaced') {
+    // Why not Connect: SSH access alone can't pair with the host's new server key.
+    return 'open-settings'
+  }
+  return reason === 'access-revoked' && repairRoute === 'access-link' ? 'repair' : null
 }
 
 export function runtimeHostBlockedCopy(
@@ -70,6 +84,23 @@ export function runtimeHostBlockedCopy(
                 'auto.components.status.bar.RuntimeHostStatusRow.connect_access_revoked_explanation',
                 'Connect to try again.'
               )
+    }
+  }
+  if (reason === 'server-replaced') {
+    return {
+      label: translate(
+        'auto.components.status.bar.RuntimeHostStatusRow.server_replaced',
+        'Different server'
+      ),
+      summary: translate(
+        'auto.components.status.bar.RuntimeHostStatusRow.server_replaced_summary',
+        'This host now runs a different Orca server than the one this computer paired with'
+      ),
+      // Why: SSH access alone can't re-pin another server key, so reconnecting can't fix this.
+      explanation: translate(
+        'auto.components.status.bar.RuntimeHostStatusRow.server_replaced_explanation',
+        'Orca connects to the host as a different SSH user, or its server was reinstalled. In Settings › Remote Orca Servers, open the ⋯ menu on this server and choose Forget…, then connect the SSH host to pair with its current server.'
+      )
     }
   }
   return {
@@ -120,9 +151,6 @@ export function runtimeHostConnectionDetail(
       { value0: remoteControl.lastClose.reason }
     )
   }
-  // Why: pending-request / subscription counts are internal RPC plumbing (e.g. a
-  // live browser screencast shows as "N streams"). They're noise in a user-facing
-  // status row and make the line truncate — only surface actionable detail
-  // (errors, close reasons, reconnect attempts) above.
+  // Hide internal RPC counts; only errors, close reasons and reconnect attempts help users act.
   return undefined
 }

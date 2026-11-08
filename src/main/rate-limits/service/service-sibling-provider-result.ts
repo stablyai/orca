@@ -4,10 +4,15 @@ export type SettledProviderResult =
   | { status: 'fulfilled'; value: ProviderRateLimits }
   | { status: 'rejected'; reason: unknown }
 
-/**
- * Collapses a provider that resolves on its own promise (outside the main
- * `Promise.allSettled` tuple) into a publishable snapshot.
- */
+export function settleSiblingProviderFetch(
+  pending: Promise<ProviderRateLimits>
+): Promise<SettledProviderResult> {
+  return pending.then(
+    (value) => ({ status: 'fulfilled', value }),
+    (reason) => ({ status: 'rejected', reason })
+  )
+}
+
 export function settleSiblingProviderResult(
   provider: ProviderRateLimits['provider'],
   settled: SettledProviderResult

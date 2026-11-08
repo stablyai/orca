@@ -3,8 +3,7 @@ import { ownRetainedString } from './own-retained-string'
 export const NDJSON_MAX_LINE_BYTES = 16 * 1024 * 1024
 
 const REJECTED_LINE_PREFIX_MAX_BYTES = 64 * 1024
-// Paused consumers may receive many individually valid records. Keep that queue
-// bounded independently from the unterminated-record suffix cap.
+// Bound paused complete records separately from the unterminated suffix: individually valid records can still accumulate.
 const PAUSED_COMPLETE_RECORD_QUEUE_MAX_BYTES = 64 * 1024 * 1024
 
 export class NdjsonLineTooLongError extends Error {
@@ -38,6 +37,8 @@ export type IncrementalNdjsonFramer = {
 export type IncrementalNdjsonFramerOptions = {
   maxLineBytes?: number
   shouldPause?: () => boolean
+  /** Skips parsing lines the consumer can rule out from their text. */
+  acceptLine?: (line: string) => boolean
 }
 
 function boundedUtf8Prefix(value: string, maxBytes: number): string {
@@ -193,7 +194,7 @@ export function createIncrementalNdjsonFramer(
           lineSegments.push(segment)
           const line = lineSegments.length === 1 ? lineSegments[0] : lineSegments.join('')
           clearLine()
-          if (!/^\s*$/.test(line)) {
+          if (!/^\s*$/.test(line) && (options.acceptLine?.(line) ?? true)) {
             let parsed: unknown
             try {
               parsed = JSON.parse(line)
@@ -263,8 +264,7 @@ export function createIncrementalNdjsonFramer(
       }
       if (input !== null) {
         if (options.shouldPause?.()) {
-          // A queued record may pause the consumer again. Keep the suffix
-          // behind any newly queued records so it cannot overtake them.
+          // Keep the suffix behind records newly queued by a consumer that pauses again.
           const queuedSuffix = pendingInput
           pendingInput = null
           const suffix = `${queuedSuffix ?? ''}${input}`

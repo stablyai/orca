@@ -1,11 +1,12 @@
+import { pickApprovedSetupHashes } from '../../../../shared/worktree/approved-setup-hashes'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
-import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
-import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../shared/workspace-attachment-legacy'
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
+import { getLegacyWorkspaceReviewSelectionUpdates } from '../../../../shared/workspace-attachments/workspace-attachment-legacy'
 import {
   WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
-} from '../../../../shared/workspace-attachment-capabilities'
+} from '../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ForceDeleteWorktreeBranchResult,
@@ -27,12 +28,9 @@ import {
   requireActiveEnvironment,
   assertActiveEnvironment
 } from './web-runtime-session'
-import {
-  WEB_RUNTIME_WORKTREE_LIST_LIMIT,
-  callRuntimeDetectedWorktrees,
-  listAllRuntimeWorktrees
-} from './web-runtime-worktree-catalog'
+import { callRuntimeDetectedWorktrees } from './web-runtime-worktree-catalog'
 import { noopUnsubscribe } from './web-storage'
+import { runApprovedSetupOnWebHost } from './web-approved-setup'
 import { emitWebWorkspaceSleep } from './web-workspace-sleep-notices'
 import { translate } from '@/i18n/i18n'
 import type { WorkspaceSleepOutcome } from '../../../../shared/workspace-sleep'
@@ -42,17 +40,7 @@ const WEB_WORKSPACE_SLEEP_TIMEOUT_MS = 150_000
 
 export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
   return {
-    list: async ({ repoId }) => {
-      const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
-        repo: repoId,
-        limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
-      })
-      return owned.result.worktrees.map((worktree) =>
-        withRuntimeWorktreeOwner(worktree, owned.hostId)
-      )
-    },
-    // Why the catch: a host predating this method answers `method_not_found`, and an empty list
-    // degrades the suggestion to the pre-existing behavior rather than blocking workspace create.
+    // Older hosts return method_not_found; empty retired names preserve suggestions without blocking create.
     listRetiredNames: async ({ repoId }) => {
       try {
         return readRetiredNameRegistryForRepo(
@@ -64,7 +52,6 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       }
     },
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
-    listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       if (args.linkedItems !== undefined) {
         await assertAttachmentWriteSupported(args)
@@ -79,6 +66,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         baseBranch: args.baseBranch,
         compareBaseRef: args.compareBaseRef,
         branchNameOverride: args.branchNameOverride,
+        ...(args.branchIntent ? { branchIntent: args.branchIntent } : {}),
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
         ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
@@ -94,6 +82,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         sparseCheckout: args.sparseCheckout,
         pushTarget: args.pushTarget,
         setupDecision: args.setupDecision,
+        ...pickApprovedSetupHashes(args),
         createdWithAgent: args.createdWithAgent,
         pendingFirstAgentMessageRename: args.pendingFirstAgentMessageRename,
         ...(args.startup
@@ -111,10 +100,13 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           : {}),
         parentWorkspace: args.parentWorkspace,
         // Why: every create through this API is an in-app action, never the CLI's parent flag.
-        ...(args.parentWorkspace ? { parentWorkspaceOrigin: 'manual' } : {}),
+        ...(args.parentWorkspace || args.crossStoreParent
+          ? { parentWorkspaceOrigin: 'manual' }
+          : {}),
+        ...(args.crossStoreParent ? { crossStoreParent: args.crossStoreParent } : {}),
+        ...(args.comment ? { comment: args.comment } : {}),
         workspaceStatus: args.workspaceStatus,
         manualOrder: args.manualOrder,
-        automationProvenanceRequest: args.automationProvenanceRequest,
         // Switch point: the host lists this creation under the window's id only on the dark path.
         ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? { creationId: args.creationId } : {})
       })
@@ -123,6 +115,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
       }
     },
+    runApprovedSetup: runApprovedSetupOnWebHost,
     // Why: adoption verifies a desktop-owned hidden SSH target and is intentionally not a remote-server operation.
     adoptProvisionedRoot: () =>
       Promise.reject(
@@ -136,21 +129,37 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         baseBranch
       })
     },
-    resolvePrBase: async ({ repoId, prNumber, headRefName, baseRefName, isCrossRepository }) =>
+    resolvePrBase: async ({
+      repoId,
+      prNumber,
+      headRefName,
+      baseRefName,
+      isCrossRepository,
+      wakeWslDistro
+    }) =>
       callRuntimeResult('worktree.resolvePrBase', {
         repo: repoId,
         prNumber,
         headRefName,
         baseRefName,
-        isCrossRepository
+        isCrossRepository,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
       }),
-    resolveMrBase: async ({ repoId, mrIid, sourceBranch, targetBranch, isCrossRepository }) =>
+    resolveMrBase: async ({
+      repoId,
+      mrIid,
+      sourceBranch,
+      targetBranch,
+      isCrossRepository,
+      wakeWslDistro
+    }) =>
       callRuntimeResult('worktree.resolveMrBase', {
         repo: repoId,
         mrIid,
         sourceBranch,
         targetBranch,
-        isCrossRepository
+        isCrossRepository,
+        ...(wakeWslDistro ? { wakeWslDistro } : {})
       }),
     // Each workspace sleeps on the paired host, which runs its terminals, chats and VM.
     sleep: async ({ targets, markChatsAsleep }) =>
@@ -191,6 +200,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     // A web client runs no VM, so a reopen during a sleep changes nothing.
     sleepReopened: async () => {},
     resumeSleptPane: async () => false,
+    retireStrandedSleepRecord: async () => {},
     remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>(
@@ -199,8 +209,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
           worktree: toRuntimeWorktreeSelector(worktreeId),
           ...(hostId ? { hostId } : {}),
           force,
-          // Why (#11960): the web client renders the same Force Delete affordances, so
-          // dropping this field here would leave paired clients permanently wedged.
+          // Forward Force Delete waiver or paired clients stay wedged (#11960).
           allowUnverifiedPtyStop,
           runHooks: skipArchive !== true
         },
@@ -246,17 +255,27 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       await callRuntimeResult<{
         lineage: Record<string, WorktreeLineage>
         workspaceLineage?: Record<string, WorkspaceLineage>
+        crossStoreLineage?: Record<string, unknown>
+        installationId?: string
       }>('worktree.lineageList'),
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()
       const result = await callRuntimeResult<{
-        worktree: Worktree & { lineage?: WorktreeLineage | null }
+        worktree: Worktree & {
+          lineage?: WorktreeLineage | null
+          workspaceLineage?: WorkspaceLineage | null
+        }
       }>('worktree.set', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         parentWorktree: parentWorktreeId,
         noParent
       })
-      return result.worktree.lineage ?? null
+      return {
+        lineage: result.worktree.lineage ?? null,
+        ...(result.worktree.workspaceLineage !== undefined
+          ? { workspaceLineage: result.worktree.workspaceLineage }
+          : {})
+      }
     },
     persistSortOrder: async ({ orderedIds, hostIds }) => {
       await callRuntimeResult('worktree.persistSortOrder', { orderedIds, hostIds })

@@ -1,4 +1,4 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { getCommentBodySubmitState } from '@/lib/comment-body-submit-state'
@@ -8,13 +8,16 @@ import type { GitLabAssignableUser, GitLabWorkItem } from '../../../../shared/gi
 import { dedupeGitLabUsers, showGitLabMutationError } from '../gitlab-item-dialog-parts'
 import type { GitLabDialogRepoSelector } from './gitlab-item-dialog-types'
 import type { GitLabItemDialogState } from './use-gitlab-item-dialog-state'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
 export function useGitLabReviewActions(
   item: GitLabWorkItem | null,
   repoSelector: GitLabDialogRepoSelector | null,
-  state: GitLabItemDialogState
+  state: GitLabItemDialogState,
+  handleRefresh: () => void
 ) {
   const {
+    claimDetailsOwner,
     details,
     inlineCommentBody,
     inlineCommentFilePath,
@@ -36,13 +39,14 @@ export function useGitLabReviewActions(
       return
     }
     setReviewerOptionsLoading(true)
+    const ownsResult = claimDetailsOwner()
     try {
       const users = await gitLabApiFor(repoSelector).listAssignableUsers(repoSelector)
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setReviewerOptions(dedupeGitLabUsers(users))
       }
     } catch {
-      if (mountedRef.current) {
+      if (ownsResult()) {
         setReviewerOptions([])
       }
     } finally {
@@ -51,6 +55,7 @@ export function useGitLabReviewActions(
       }
     }
   }, [
+    claimDetailsOwner,
     mountedRef,
     repoSelector,
     reviewerOptions,
@@ -77,6 +82,7 @@ export function useGitLabReviewActions(
         return
       }
       setReviewerUpdating(true)
+      const ownsResult = claimDetailsOwner()
       try {
         const result = await gitLabApiFor(repoSelector).updateMRReviewers({
           ...repoSelector,
@@ -84,7 +90,7 @@ export function useGitLabReviewActions(
           reviewerIds,
           projectRef: details.item.projectRef ?? item.projectRef ?? null
         })
-        if (!mountedRef.current) {
+        if (!ownsResult()) {
           return
         }
         if (result.ok) {
@@ -97,20 +103,25 @@ export function useGitLabReviewActions(
           )
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         } else {
-          toast.error(result.error)
+          toast.error(codeHostErrorText(result))
         }
       } catch (error) {
         if (mountedRef.current) {
           showGitLabMutationError(error)
         }
       } finally {
-        if (mountedRef.current) {
+        // Only while this item is still shown: a switched-to item keeps its own read and busy state.
+        if (ownsResult()) {
           setReviewerUpdating(false)
+          // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+          handleRefresh()
         }
       }
     },
     [
+      claimDetailsOwner,
       details,
+      handleRefresh,
       item,
       mountedRef,
       repoSelector,
@@ -184,7 +195,7 @@ export function useGitLabReviewActions(
           translate('auto.components.GitLabItemDialog.60c13320c4', 'Inline comment added')
         )
       } else {
-        toast.error(result.error)
+        toast.error(codeHostErrorText(result))
       }
     } catch (error) {
       if (mountedRef.current) {
@@ -236,7 +247,7 @@ export function useGitLabReviewActions(
             useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
           }
         } else if (mountedRef.current) {
-          toast.error(res.error)
+          toast.error(codeHostErrorText(res))
         }
       } catch (error) {
         if (mountedRef.current) {

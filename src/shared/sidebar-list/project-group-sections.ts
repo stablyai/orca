@@ -16,7 +16,8 @@ import {
   createRecentRankLookup,
   withRepoSectionDisplayLabels
 } from '../project-section-order'
-import { buildFolderWorkspaceRow } from './row-builders'
+import { appendWorktreeRows } from './row-builders'
+import { getFolderLaneSectionKey } from './folder-workspace-occurrences'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -50,9 +51,7 @@ export function appendProjectGroupSections(
         compareRecentRank(getRecentRank(left), getRecentRank(right))
       )
     }
-    // Manual: within a Project Group, projects order by their per-group rank
-    // (projectGroupOrder), falling back to global repoOrder when unset so drag
-    // midpoint commits and the rendered order stay aligned.
+    // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
     return [...entries].sort((left, right) => {
       const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
       const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
@@ -61,8 +60,7 @@ export function appendProjectGroupSections(
   }
 
   const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
-  // Membership already decided by getRenderableFolderWorkspaces in planSidebarRows, so
-  // repo grouping no longer owns the filter — it only groups and orders (#15362).
+  // Folder membership is already resolved above grouping; only group/order here (#15362).
   const folderWorkspacesByProjectGroupId = new Map<string, RenderableFolderWorkspace[]>()
   for (const pair of folderWorkspaces) {
     const groupId = pair.folderWorkspace.projectGroupId
@@ -118,9 +116,14 @@ export function appendProjectGroupSections(
       projectGroupDepth: depth
     })
     if (!collapsedGroups.has(key)) {
-      for (const pair of folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []) {
-        result.push(buildFolderWorkspaceRow(pair, depth + 1))
-      }
+      // The group's folders, with whatever is nested under them, precede its projects.
+      appendWorktreeRows(result, ctx.repoOf, ctx.occurrencePlan, {
+        collapsedGroups,
+        groupDepth: depth + 1,
+        sectionKey: getFolderLaneSectionKey(projectGroup.id),
+        hostContextLabelByWorktreeIdentity: ctx.mixedWorktreeHostContextLabels,
+        folderPairByIdentity: ctx.folderPairByIdentity
+      })
       appendOrderedGroups(ctx, withRepoSectionDisplayLabels(repoEntries), depth + 1)
       for (const childGroup of childGroups) {
         appendProjectGroup(childGroup, depth + 1)
@@ -138,8 +141,7 @@ export function appendProjectGroupSections(
     if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
       continue
     }
-    // Why: startup can have repos from hosts whose project-group metadata was
-    // not fetched yet; missing metadata must not make those repos disappear.
+    // Keep repos visible while host project-group metadata is still loading.
     remainingRepoEntries.push(...entries)
   }
   appendOrderedGroups(

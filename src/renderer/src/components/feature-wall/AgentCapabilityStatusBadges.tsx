@@ -5,7 +5,6 @@ import {
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
 
-// Why: mt-auto pins every card's status to the bottom edge so they line up across the row.
 export function AgentCapabilityStatusNote(props: {
   status: AgentCapabilityInstallStatus
 }): React.JSX.Element | null {
@@ -15,12 +14,12 @@ export function AgentCapabilityStatusNote(props: {
   return (
     <span
       className={cn(
-        'mt-auto flex items-center gap-1 pt-2 text-xs font-medium',
+        'mt-auto flex min-w-0 items-center gap-1 pt-2 text-xs font-medium',
         getAgentCapabilityStatusClassName(props.status.tone)
       )}
     >
       {props.status.tone === 'ready' ? <Check className="size-3 shrink-0" /> : null}
-      {props.status.label}
+      <span className="min-w-0 truncate">{props.status.label}</span>
     </span>
   )
 }

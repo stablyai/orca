@@ -1,20 +1,31 @@
-import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider-metadata'
+import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useEffect } from 'react'
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { translate } from '@/i18n/i18n'
+import { readIpcErrorDetail } from '@/lib/ipc-error'
+import {
+  gitLabApiFor,
+  type GitLabCapabilityChecks
+} from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { mapSettledWithConcurrency } from '../../../../../shared/map-with-concurrency'
 import type { Repo } from '../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import type { GitLabDialogRepoSelector } from '../../gitlab-item-dialog/gitlab-item-dialog-types'
 import type { GitLabWorkItem, GitLabTodo } from '../../../../../shared/gitlab-types'
-import {
-  getTaskPageRepoSourceContext,
-  isGitLabIssueFilter,
-  isGitLabMRFilter
-} from '../../task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../../lib/task-repo-source-context'
+import { isGitLabIssueFilter, isGitLabMRFilter } from '../task-page-source-context'
 
-// Why: "All projects" fans out one list call per repo; staying below the runtime RPC queue's
-// foreground concurrency (8) leaves headroom for other callers on the same selector, such as the sidebar.
+// Leave headroom below the runtime RPC foreground concurrency of eight for sidebar and other callers.
 export const GITLAB_TASK_FETCH_CONCURRENCY = 6
+
+// Rows and errors belong to the query that loaded them, so a changed filter never shows the previous filter's rows.
+export function gitLabListQueryKey(
+  view: string,
+  filter: string,
+  involvement: string | null,
+  reposKey: string
+): string {
+  return JSON.stringify([view, filter, view === 'mrs' ? involvement : null, reposKey])
+}
 
 function gitLabTaskRepoSelector(repo: Repo): GitLabDialogRepoSelector {
   return {
@@ -39,6 +50,13 @@ type GitLabLoadingInput = Pick<
   | 'setGitlabTodos'
   | 'setGitlabTodosLoading'
   | 'activeGitlabFilter'
+  | 'gitlabMRInvolvement'
+  | 'gitlabItems'
+  | 'gitlabError'
+  | 'gitlabLoading'
+  | 'displayedGitLabItems'
+  | 'gitlabListQueryKey'
+  | 'setGitlabListQueryKey'
 >
 
 export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model: Model): Model {
@@ -54,9 +72,18 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     gitlabView,
     setGitlabTodos,
     setGitlabTodosLoading,
-    activeGitlabFilter
+    activeGitlabFilter,
+    gitlabMRInvolvement,
+    gitlabListQueryKey,
+    setGitlabListQueryKey
   } = model
-  // Why: fetch GitLab Issues and MRs separately so errors stay isolated per tab (mirrors GitHub's split endpoints).
+  const currentListQueryKey = gitLabListQueryKey(
+    gitlabView,
+    activeGitlabFilter,
+    gitlabMRInvolvement,
+    selectedReposKey
+  )
+  // Fetch issues and MRs separately so a failure stays scoped to its tab.
   useEffect(() => {
     if (taskSource !== 'gitlab') {
       return
@@ -74,15 +101,18 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     ) {
       return
     }
-    // Why: folder-mode repos lack remotes to derive a GitLab project from; each repo is read on the machine holding its GitLab sign-in.
+    // Exclude folder workspaces without project remotes; read each repo on the host holding its GitLab sign-in.
     const eligibleRepos = selectedRepos
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
+      setGitlabListQueryKey(currentListQueryKey)
       setGitlabLoading(false)
       setGitlabError(null)
       return
     }
     let stale = false
+    // One answer per runtime and capability for this refresh, so N projects on one server probe it once.
+    const capabilityChecks: GitLabCapabilityChecks = new Map()
     setGitlabLoading(true)
     setGitlabError(null)
     const fetchItems =
@@ -105,7 +135,7 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
                     message: string
                   }
                 }
-                // Why: not_found just means the repo isn't a GitLab project (mixed selection); drop it so the list shows no false errors.
+                // Non-GitLab repos in mixed selections return not_found; omit them without a false failure banner.
                 const error = typed.error?.type === 'not_found' ? undefined : typed.error
                 return {
                   repo,
@@ -116,10 +146,11 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
           }
         : (repo: (typeof eligibleRepos)[0]) => {
             const selector = gitLabTaskRepoSelector(repo)
-            return gitLabApiFor(selector)
+            return gitLabApiFor(selector, { capabilityChecks })
               .listMRs({
                 ...selector,
                 state: activeMRFilter ?? 'opened',
+                ...(gitlabMRInvolvement ? { involvement: gitlabMRInvolvement } : {}),
                 page: 1,
                 perPage: 50
               })
@@ -151,7 +182,13 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         const errs: string[] = []
         for (const r of results) {
           if (r.status !== 'fulfilled') {
-            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
+            errs.push(
+              readIpcErrorDetail(r.reason) ??
+                translate(
+                  'auto.components.TaskPage.gitlabLoadFailed',
+                  'Could not load GitLab work items. Refresh to try again.'
+                )
+            )
             continue
           }
           // Why the host: a twin's two rows share the id, so only the stamp names the row that answered.
@@ -169,7 +206,8 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
         }
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
         setGitlabItems(merged)
-        // Why: only banner when every eligible repo failed; a partial one would hide working rows in a mixed (non-GitLab) selection.
+        setGitlabListQueryKey(currentListQueryKey)
+        // Show failures only when no usable rows remain; mixed selections may include non-GitLab repos.
         if (errs.length > 0 && merged.length === 0) {
           setGitlabError(errs[0])
         }
@@ -183,9 +221,20 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers every selectedRepos field read above (see its GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
+  }, [
+    taskSource,
+    gitlabView,
+    activeGitlabFilter,
+    gitlabMRInvolvement,
+    gitlabRefreshNonce,
+    selectedReposKey,
+    setGitlabError,
+    setGitlabItems,
+    setGitlabLoading,
+    setGitlabListQueryKey
+  ])
 
-  // Why: Todos fetch has its own effect — different trigger (no chip filter) and data path (gl.todos is user-scoped, not repo-scoped).
+  // Todos are user-scoped and ignore repo/chip filters, so fetch them independently.
   useEffect(() => {
     if (taskSource !== 'gitlab' || gitlabView !== 'todos') {
       return
@@ -226,5 +275,11 @@ export function useTaskPageGitLabLoading<Model extends GitLabLoadingInput>(model
     setGitlabTodosLoading,
     setGitlabTodos
   ])
+  if (gitlabView !== 'todos' && gitlabListQueryKey !== currentListQueryKey) {
+    model.gitlabItems = []
+    model.displayedGitLabItems = []
+    model.gitlabError = null
+    model.gitlabLoading = true
+  }
   return model
 }

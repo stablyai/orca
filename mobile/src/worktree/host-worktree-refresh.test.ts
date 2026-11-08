@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../transport/rpc-client'
 import { startHostWorktreeRefresh } from './host-worktree-refresh'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 
 const appState = vi.hoisted(() => ({
   currentState: 'active',
@@ -18,12 +18,14 @@ const AppState = {
   }
 }
 
+type RefreshArgs = Parameters<typeof startHostWorktreeRefresh>[0]
+
 describe('startHostWorktreeRefresh', () => {
   let eventListener: ((payload: unknown) => void) | null
-  let fetchWorktrees: ReturnType<typeof vi.fn>
-  let fetchRepoMetadata: ReturnType<typeof vi.fn>
-  let syncViewSettings: ReturnType<typeof vi.fn>
-  let unsubscribe: ReturnType<typeof vi.fn>
+  let fetchWorktrees: ReturnType<typeof vi.fn<RefreshArgs['fetchWorktrees']>>
+  let fetchRepoMetadata: ReturnType<typeof vi.fn<RefreshArgs['fetchRepoMetadata']>>
+  let syncViewSettings: ReturnType<typeof vi.fn<RefreshArgs['syncViewSettings']>>
+  let unsubscribe: ReturnType<typeof vi.fn<() => void>>
   let stop: (() => void) | null
 
   beforeEach(() => {
@@ -32,24 +34,22 @@ describe('startHostWorktreeRefresh', () => {
     appState.listener = null
     appState.remove.mockClear()
     eventListener = null
-    fetchWorktrees = vi.fn().mockResolvedValue(undefined)
-    fetchRepoMetadata = vi.fn().mockResolvedValue(undefined)
-    syncViewSettings = vi.fn().mockResolvedValue(undefined)
-    unsubscribe = vi.fn()
+    fetchWorktrees = vi.fn<RefreshArgs['fetchWorktrees']>().mockResolvedValue(undefined)
+    fetchRepoMetadata = vi.fn<RefreshArgs['fetchRepoMetadata']>().mockResolvedValue(undefined)
+    syncViewSettings = vi.fn<RefreshArgs['syncViewSettings']>().mockResolvedValue(undefined)
+    unsubscribe = vi.fn<() => void>()
     stop = null
   })
 
   function start(
     sidebarFeed: Parameters<typeof startHostWorktreeRefresh>[0]['sidebarFeed'] = null
   ): void {
-    const client = {
-      subscribe: vi.fn(
-        (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
-          eventListener = listener
-          return unsubscribe
-        }
-      )
-    } as unknown as RpcClient
+    const client = stubRpcClient({
+      subscribe: (_method, _params, listener) => {
+        eventListener = listener
+        return unsubscribe
+      }
+    })
     stop = startHostWorktreeRefresh({
       client,
       fetchWorktrees,
@@ -76,83 +76,15 @@ describe('startHostWorktreeRefresh', () => {
     appState.currentState = 'active'
     await vi.advanceTimersByTimeAsync(3_000)
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
-  })
 
-  it('refreshes both snapshots immediately on foreground return', () => {
-    start()
+    stop?.()
+    stop = null
     fetchWorktrees.mockClear()
-    fetchRepoMetadata.mockClear()
-
-    appState.currentState = 'active'
-    appState.listener?.('active')
-
-    expect(fetchWorktrees).toHaveBeenCalledWith({ allowDuringModal: true })
-    expect(fetchRepoMetadata).toHaveBeenCalledWith({ queueIfInFlight: true })
-  })
-
-  it('polls repo metadata on the interval while foregrounded and skips it while backgrounded', async () => {
-    start()
-    // Mount force-fetch.
-    expect(fetchRepoMetadata).toHaveBeenCalledTimes(1)
-
-    // Foregrounded: repo.list rides the interval as a convergence safety-net for hosts on an
-    // older build, whose Settings edits emit no runtime reposChanged (the callee self-throttles).
-    await vi.advanceTimersByTimeAsync(9_000)
-    expect(fetchWorktrees).toHaveBeenCalledTimes(4)
-    expect(fetchRepoMetadata).toHaveBeenCalledTimes(4)
-
-    // Backgrounded: neither snapshot is polled.
-    fetchWorktrees.mockClear()
-    fetchRepoMetadata.mockClear()
-    appState.currentState = 'background'
-    await vi.advanceTimersByTimeAsync(9_000)
+    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
+    await vi.advanceTimersByTimeAsync(3_000)
     expect(fetchWorktrees).not.toHaveBeenCalled()
-    expect(fetchRepoMetadata).not.toHaveBeenCalled()
-  })
-
-  it('reads the Workspace options at start, resending what the last connection left unanswered', () => {
-    start()
-    expect(syncViewSettings).toHaveBeenCalledExactlyOnceWith({ resend: true })
-  })
-
-  it('re-reads only the shared Workspace options on workspaceViewChanged', () => {
-    start()
-    fetchWorktrees.mockClear()
-    fetchRepoMetadata.mockClear()
-    syncViewSettings.mockClear()
-
-    eventListener?.({ type: 'workspaceViewChanged' })
-
-    expect(syncViewSettings).toHaveBeenCalledExactlyOnceWith()
-    expect(fetchWorktrees).not.toHaveBeenCalled()
-    expect(fetchRepoMetadata).not.toHaveBeenCalled()
-  })
-
-  it('refreshes worktrees and repo metadata on reposChanged', () => {
-    start()
-    fetchWorktrees.mockClear()
-    fetchRepoMetadata.mockClear()
-
-    eventListener?.({ type: 'reposChanged' })
-
-    expect(fetchWorktrees).toHaveBeenCalledOnce()
-    expect(fetchRepoMetadata).toHaveBeenCalledOnce()
-    expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
-  })
-
-  it('re-reads repo metadata, which carries SSH host health, on sshStateChanged', () => {
-    start()
-    fetchWorktrees.mockClear()
-    fetchRepoMetadata.mockClear()
-
-    eventListener?.({
-      type: 'sshStateChanged',
-      targetId: 'ssh-1',
-      state: { targetId: 'ssh-1', status: 'reconnecting' }
-    })
-
-    expect(fetchWorktrees).not.toHaveBeenCalled()
-    expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
+    expect(unsubscribe).toHaveBeenCalledOnce()
+    expect(appState.remove).toHaveBeenCalledOnce()
   })
 
   it('refreshes worktrees on worktreesChanged and both snapshots after stream replay', () => {
@@ -167,6 +99,39 @@ describe('startHostWorktreeRefresh', () => {
     eventListener?.({ type: 'ready', subscriptionId: 'events-2' })
     expect(fetchWorktrees).toHaveBeenCalledTimes(2)
     expect(fetchRepoMetadata).toHaveBeenCalledWith({ force: true, queueIfInFlight: true })
+  })
+
+  it('reads nothing on change notices while hidden and catches up once on return', async () => {
+    start()
+    fetchWorktrees.mockClear()
+    fetchRepoMetadata.mockClear()
+    syncViewSettings.mockClear()
+
+    appState.currentState = 'background'
+    eventListener?.({ type: 'worktreesChanged', repoId: 'repo-1' })
+    eventListener?.({ type: 'reposChanged' })
+    eventListener?.({ type: 'workspaceViewChanged' })
+    eventListener?.({
+      type: 'sshStateChanged',
+      targetId: 'ssh-1',
+      state: { targetId: 'ssh-1', status: 'connected' }
+    })
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(fetchWorktrees).not.toHaveBeenCalled()
+    expect(fetchRepoMetadata).not.toHaveBeenCalled()
+    expect(syncViewSettings).not.toHaveBeenCalled()
+
+    appState.currentState = 'active'
+    appState.listener?.('active')
+    expect(fetchWorktrees).toHaveBeenCalledExactlyOnceWith({
+      allowDuringModal: true,
+      queueIfInFlight: true
+    })
+    expect(fetchRepoMetadata).toHaveBeenCalledExactlyOnceWith({
+      force: true,
+      queueIfInFlight: true
+    })
+    expect(syncViewSettings).toHaveBeenCalledExactlyOnceWith({ resend: true })
   })
 
   describe('with the host’s sidebar feed', () => {
@@ -185,35 +150,6 @@ describe('startHostWorktreeRefresh', () => {
       fetchWorktrees.mockClear()
       await vi.advanceTimersByTimeAsync(30_000)
       expect(fetchWorktrees).not.toHaveBeenCalled()
-    })
-
-    it('re-reads each row’s live content on every install, queued behind a read in flight', () => {
-      let installed = (): void => {}
-      const stopFollowing = vi.fn()
-      const sidebarFeed = {
-        refresh: vi.fn(),
-        changed: vi.fn(),
-        onInstalled: vi.fn((listener: () => void) => {
-          installed = listener
-          return stopFollowing
-        })
-      }
-      start(sidebarFeed)
-      fetchWorktrees.mockClear()
-      installed()
-      expect(fetchWorktrees).toHaveBeenCalledWith({ queueIfInFlight: true })
-      stop?.()
-      stop = null
-      expect(stopFollowing).toHaveBeenCalledOnce()
-    })
-
-    it('hands each change notice to the feed', () => {
-      const sidebarFeed = { refresh: vi.fn(), changed: vi.fn(), onInstalled: vi.fn(() => () => {}) }
-      start(sidebarFeed)
-      eventListener?.({ type: 'sidebarInputsChanged', generation: 'g', revision: 4 })
-      expect(sidebarFeed.changed).toHaveBeenCalledWith(
-        expect.objectContaining({ generation: 'g', revision: 4 })
-      )
     })
   })
 })

@@ -28,7 +28,11 @@ import {
   listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
-import { PtyExitProof, type PtyRetirementEvidence } from '../../pty-exit-proof'
+import { legacyRelayChannels } from './legacy-relay-bridge-connections'
+import {
+  PtyExitProof,
+  type PtyRetirementEvidence
+} from '../../pty/process-retirement/pty-exit-proof'
 
 /** How long a connect waits for the first look at its relays before publishing the host. */
 const START_BUDGET_MS = 20_000
@@ -52,7 +56,7 @@ export type LegacyRelayBridgeHost = {
   /** Absent: relay-era `orca` commands are refused, as before this host served them. */
   remoteCli?: {
     runtime: () => OrcaRuntimeService | null
-    /** The per-host "Allow this host's orca CLI to control Orca" switch. */
+    /** The per-host browser-control switch (DESKTOP_BROWSER_BRIDGE_SETTING_LABEL). */
     allowed: (targetId: string) => boolean
   }
 }
@@ -60,10 +64,7 @@ export type LegacyRelayBridgeHost = {
 let host: LegacyRelayBridgeHost | null = null
 let hiddenOutput: LegacyRelayHiddenOutput | null = null
 const bridges = new Map<string, LegacyRelayTargetBridge>()
-/**
- * Panes a hung-up bridge served, held `unverifiable` until the target's next bridge lists its own
- * or the leases go: a hang-up is loss of contact, not exit (docs/reference/ssh-execution-boundary.md).
- */
+/** Hold disconnected panes unverifiable until their host answers or leases end; loss of contact never proves exit. */
 const heldPanes = new Map<string, LegacyRelayBridgedPane[]>()
 const paneStops = new Map<string, LegacyRelayPaneStops>()
 /** Each target's relay-id owners, which outlive a bridge: a reconnect must not forget them. */
@@ -74,6 +75,7 @@ export function installLegacyRelayBridge(next: LegacyRelayBridgeHost | null): vo
     bridge.dispose()
   }
   bridges.clear()
+  legacyRelayChannels.dispose()
   heldPanes.clear()
   paneOwners.clear()
   paneStops.forEach((stops) => stops.dispose())
@@ -110,6 +112,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
     }
     return conn
   }
+  const channels = legacyRelayChannels.for(targetId, () => installed.connection(targetId))
   const remoteCli = installed.remoteCli
   const cliServer = remoteCli
     ? createLegacyRelayCliServer({
@@ -135,7 +138,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
         cliServer,
         openTransport: async () =>
           waitForSentinel(
-            await connection().exec(endpoint.connectCommand ?? '', {
+            await channels.open(endpoint.connectCommand ?? '', {
               wrapCommand: endpoint.wrapCommand
             })
           )
@@ -179,10 +182,7 @@ function stopsFor(targetId: string): LegacyRelayPaneStops {
   return created
 }
 
-/**
- * Called once a connect reaches the host's managed server: looks at the relays this target left,
- * so the panes they still run are known before the renderer remounts them on the new server.
- */
+/** List surviving legacy terminals before managed-server connect lets the renderer remount them. */
 export async function startLegacyRelayBridge(targetId: string): Promise<void> {
   if (!hasListedLeases(targetId)) {
     // Leases retired while hung up publish nothing themselves; this connect is the next answer.
@@ -220,6 +220,7 @@ export function stopLegacyRelayBridge(targetId: string): void {
     // Disposing publishes the list, now with the held panes instead of the bridge's.
     bridge.dispose()
   }
+  legacyRelayChannels.dispose(targetId)
 }
 
 /** The target and its leases are gone, so nothing it served is held any longer. */
@@ -270,7 +271,7 @@ export async function attachLegacyRelayPane(
   }
   const result = await bridge.attach(ptyId, (replay) => {
     hiddenOutput?.screenSent(ptyId)
-    // In output order, so a reattach's clear never erases what the relay printed after this screen.
+    // Replay in stream order so screen clear cannot erase newer relay output.
     if (replayInStream) {
       host?.onReplay(ptyId, replay)
     }
@@ -286,7 +287,7 @@ async function rereadLegacyRelayScreen(
   const bridge = bridgeForPty(ptyId)
   const result = await bridge?.attach(ptyId, atSnapshot)
   if (result?.status === 'attached') {
-    // The attach counted a viewer; this re-read is not one.
+    // This screen read is not a viewer; release the attach acquisition.
     bridge?.detach(ptyId, result.acquisitionId)
   }
 }
@@ -319,8 +320,7 @@ export function setLegacyRelayPaneOutputPaused(ptyId: string, paused: boolean): 
   hiddenOutput?.setPaused(ptyId, paused)
 }
 
-/** Whether this PTY is an older relay's terminal the bridge serves or owes a stop, so only the
- *  bridge stops it. */
+/** Only the bridge stops PTYs it serves or owes a stop. */
 export function isLegacyRelayBridgedPty(ptyId: string): boolean {
   const targetId = parseAppSshPtyId(ptyId)?.connectionId
   return Boolean(targetId && host && listedAppPtyIds(targetId, host.leases(targetId)).has(ptyId))
@@ -332,7 +332,7 @@ export async function closeLegacyRelayPane(ptyId: string): Promise<LegacyRelayBr
   if (!targetId || !host || !hasListedLeases(targetId)) {
     return { status: 'not-bridged' }
   }
-  // Disconnected: recorded now, and the target's next connect lists the relay and sends the stop.
+  // Persist now; next host connect sends the owed stop.
   return stopsFor(targetId).stop(ptyId, host.connection(targetId) ? bridgeFor(targetId) : null)
 }
 

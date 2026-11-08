@@ -357,7 +357,6 @@ it('writes a mapped file through a verified split namespace over a real ssh2 SFT
     expect(fixture.operations).toContain(`LSTAT:${SFTP_RELAY_DIR}/${MARKER_PATH}`)
     expect(fixture.operations).toContain(`OPEN:${SFTP_RELAY_DIR}/package.json`)
     expect(fixture.operations).toEqual(expect.arrayContaining(['WRITE', 'CLOSE']))
-    // Shell-namespace path must never be opened for a confirmed split write.
     expect(fixture.operations).not.toContain(`OPEN:${shellFilePath}`)
   })
 }, 15_000)

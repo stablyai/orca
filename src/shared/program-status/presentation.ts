@@ -1,6 +1,6 @@
 // The one place deciding what a row shows from its OSC 7501 facet: the row owns `state`, the facet
 // adds what the row's producer cannot say. Shared by desktop, dashboard and mobile.
-import type { AgentStatusEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import type { ProgramStatusFacet } from './facet'
 import {
   isTurnScopedProgramStatusKind,
@@ -19,9 +19,7 @@ export type ProgramStatusPresentation = {
   progress?: number
   /** The program's own line for a live row whose producer has no structured tool preview. */
   message?: string
-  /** A block the program reports that the row's own state does not show (e.g. sign-in after a
-   *  hook-owned turn ended). Present only while the row reads as not needing the user, and for an
-   *  approval or question only while the turn runs. */
+  /** Expose program blocks hidden by row state (e.g. sign-in after hook completion); approval/question blocks last only during live turns. */
   attention?: ProgramStatusAttention
 }
 

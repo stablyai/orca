@@ -36,7 +36,7 @@ export function registerSshConnectionHandlers(): void {
     return getPublicSshState(args.targetId)
   })
 
-  // Why: auto-connect callers need to know whether connecting will prompt; true when the last connect required a credential and no live conn has it cached.
+  // Auto-connect callers need to avoid prompts when credentials were declined or are no longer cached.
   ipcMain.handle('ssh:needsPassphrasePrompt', (_event, args: { targetId: string }) => {
     if (isSshCredentialDeclined(args.targetId)) {
       return true
@@ -55,7 +55,7 @@ export function registerSshConnectionHandlers(): void {
     }
     clearSshCredentialDeclined(args.targetId)
 
-    // Why: testConnection's disconnect() would tear down an in-flight connect's transport; await it instead.
+    // Probe disconnect would tear down an active connect; join its attempt instead.
     const inFlight = connectInFlight.get(args.targetId)
     if (inFlight) {
       try {
@@ -66,12 +66,11 @@ export function registerSshConnectionHandlers(): void {
       }
     }
 
-    // Why a tracked promise and not just the id: a probe holds a real transport that no session owns,
-    // so shutdown has to be able to join it before the final drain disconnects what is left.
+    // Track probe completion so shutdown can join its otherwise sessionless transport.
     const probe = runSshTestConnectionProbe(args.targetId, async () => {
-      // Why: a probe transport opened after the shutdown drain would outlive orderly teardown.
+      // Do not open probe transports after the shutdown drain.
       assertSshConnectsNotFenced()
-      // Why: a test of a disconnected host may dial it, but must leave it disconnected.
+      // Probing a user-disconnected host must leave it disconnected.
       const conn = await connectionManager!.connect(target, { probe: true })
       const state = conn.getState()
       await connectionManager!.disconnect(args.targetId)

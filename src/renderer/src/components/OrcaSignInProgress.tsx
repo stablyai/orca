@@ -17,7 +17,6 @@ async function copySignInLink(link: string): Promise<void> {
   }
 }
 
-/** Starts an Orca sign-in, and shows that one is in flight until it ends. */
 export function OrcaSignInButton({
   children,
   disabled,

@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type {
   DetectedWorktreeListResult,
   GitPushTarget,
@@ -11,7 +11,10 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { DirectSshAuthority } from '../../../../../../shared/ssh-types'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type {
+  WorkspaceLineage,
+  WorktreeLineage
+} from '../../../../../../shared/worktree/lineage-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 
 export type WorktreeSliceGet = Parameters<StateCreator<AppState>>[1]
@@ -25,8 +28,7 @@ export type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {
   executionHostId: ExecutionHostId
   requireAuthoritative?: boolean
   directSshAuthority?: DirectSshAuthority
-  // Why (#10562): the caller's own view of what it is about to purge. Teardown is
-  // requested per caller, so this must never be shared with a coalesced scan.
+  // Each caller’s purge snapshot needs its own teardown; never share it with coalesced scan state (#10562).
   connectionId?: string | null
   knownWorktreeIds?: readonly string[]
   // Why a callback: staleness is judged against the client's live applied version, which a
@@ -60,6 +62,8 @@ export type WorktreeWithLineage = Worktree & {
   parentWorktreeId?: string | null
   childWorktreeIds?: string[]
   lineage?: WorktreeLineage | null
+  /** worktree.show/set: the host's workspace record; older hosts omit it. */
+  workspaceLineage?: WorkspaceLineage | null
 }
 
 export type WorktreeHostMatchOptions = {
@@ -76,6 +80,8 @@ export type WorktreeLineageUpdateResult = {
   /** The written row's host as the store stamps it, so a same-id twin on another host stays put. */
   hostId: ExecutionHostId
   lineage: WorktreeLineage | null
+  /** The host's own workspace record (a folder parent has no worktree lineage); absent from older hosts. */
+  workspaceLineage?: WorkspaceLineage | null
   updatedRemoteWorktree?: WorktreeWithLineage
 }
 

@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import { revealFloatingWorkspacePanel } from './floating-workspace-panel-reveal'
-import { markVisited, readPreviousActive } from './worktree-activation-visit'
+import { markVisited, readPreviousActive } from './workspace/activation/worktree-activation-visit'
 import {
   getActiveWorkspaceExecutionHostId,
   reselectWorkspaceKeepingHost
@@ -12,10 +12,7 @@ type FloatingPanelState = Pick<
   'settings' | 'updateSettings' | 'floatingWorkspacePanelOpen'
 >
 
-/**
- * Shows a workspace where it lives: the floating one in its panel (selecting it blanks the main window), others as the main selection and a visit.
- * @param createdTabIds tabs the caller just created into a requested group; activation would otherwise prune its empty groups.
- */
+/** Reveal floating workspaces in their panel (main selection would blank it); others become visited main selection. createdTabIds protects requested empty groups from activation pruning. */
 export function revealWorkspaceSurface(
   state: FloatingPanelState &
     Pick<

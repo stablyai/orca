@@ -1,11 +1,11 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import {
-  supportsMobileQuickCommands,
-  terminalQuickCommandAgentPromptMaxLength
-} from '../terminal/quick-commands'
+import { supportsMobileQuickCommands } from '../terminal/quick-commands'
+import { terminalQuickCommandAgentPromptMaxLength } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
-import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import '../../../src/shared/protocol-version'
+import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
+import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../src/shared/program-status/protocol'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
 import type { SessionTabsStreamSource } from './mobile-session-tabs-stream-health'
@@ -16,9 +16,11 @@ import { hasConnectedTerminalAbsentFromSessionTabs } from './mobile-terminal-rec
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-markdown-actions'
 import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
+import { useMobileSessionLastTabs } from './mobile-session-last-tabs'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     connState,
@@ -49,12 +51,16 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   const [parkedPendingTerminalContext, setParkedPendingTerminalContext] = useState<string | null>(
     null
   )
+  const { readLastSessionTabs, rememberLastSessionTabs, forgetLastSessionTab } =
+    useMobileSessionLastTabs(hostId, worktreeId)
   const consumeAcceptedSessionTabs = useCallback(
     (
       _result: SessionTabsResult,
       effectiveTabs: readonly MobileSessionTab[],
       source: SessionTabsStreamSource
     ): void => {
+      // Only host-accepted strips; the controller is per worktree, so the key is always this snapshot's.
+      rememberLastSessionTabs(effectiveTabs)
       runAcceptedMobileSessionTabsEffects<MobileSessionTab>({
         effectiveTabs,
         source,
@@ -76,16 +82,14 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
         }
       })
     },
-    []
+    [rememberLastSessionTabs]
   )
   const hasSessionTabsRecoveryNeed = useCallback(
     () =>
       closedTabTombstonesRef.current.size > 0 ||
       pendingBrowserFocusPageIdRef.current !== null ||
       hasConnectedTerminalAbsentFromSessionTabs(terminalsRef.current, sessionTabsRef.current) ||
-      // Why: a chat-covered handle that ran out of rearms and left `terminal.list`
-      // was reminted by a desktop graph reload. Only a fresh tab snapshot carries
-      // the replacement handle, so force one instead of holding the composer locked.
+      // Exhausted/absent chat handles need a fresh tab snapshot to discover the graph reload’s replacement.
       nativeChatStream.hasTabsRecoveryNeed(),
     [nativeChatStream]
   )
@@ -162,6 +166,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   }, [connState, sessionTabsRef, setSessionTabs])
 
   const hostQueryReplyInputSupportedRef = useRef(false)
+  const hostProgramStatusSupportedRef = useRef(false)
 
   useEffect(() => {
     if (!client || connState !== 'connected') {
@@ -172,10 +177,10 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setQuickCommandAgentPromptMaxLength(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
+      hostProgramStatusSupportedRef.current = false
       return
     }
-    // Why: a client swap can keep the route connected while moving to an older
-    // host; clear the prior capability before exposing host-specific actions.
+    // A client swap may reach an older host without disconnecting the route; clear capabilities before showing host-specific actions.
     setBrowserScreencastSupported(null)
     setAgentSessionHistorySupported(null)
     setAgentSessionHostSupport(null)
@@ -183,22 +188,26 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setQuickCommandAgentPromptMaxLength(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
-    // Why: the probe retries — a relay→direct cutover or request timeout rejects
-    // status.get without changing connState, which used to latch these hidden.
+    hostProgramStatusSupportedRef.current = false
+    // Retry status after cutover/timeouts even when connection state never changes or features can remain hidden forever.
     return startRuntimeCapabilityProbe(client, (capabilities) => {
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
       setAgentSessionHostSupport(structuredAgentSessionHostSupport(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
       setQuickCommandAgentPromptMaxLength(terminalQuickCommandAgentPromptMaxLength(capabilities))
-      // Why: hosts without this capability strip inputKind from terminal.send,
-      // so a forwarded xterm reply would become floor-stealing shell input.
+      // Older hosts discard inputKind, turning forwarded xterm replies into floor-stealing shell input.
       hostQueryReplyInputSupportedRef.current = capabilities.includes(
         TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
+      )
+      hostProgramStatusSupportedRef.current = capabilities.includes(
+        PROGRAM_STATUS_RUNTIME_CAPABILITY
       )
     })
   }, [client, connState])
   return {
+    readLastSessionTabs,
+    forgetLastSessionTab,
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,
     getSessionTabsApplicationRevision,
@@ -210,7 +219,8 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     requestTerminalInventoryRecovery,
     pendingTerminalRecoveryContextKey,
     parkedPendingTerminalContext,
-    hostQueryReplyInputSupportedRef
+    hostQueryReplyInputSupportedRef,
+    hostProgramStatusSupportedRef
   }
 }
 

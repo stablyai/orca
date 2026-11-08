@@ -20,13 +20,12 @@ function fixture() {
   attachOsc52ClipboardBridge(scope, term as unknown as NonNullable<TerminalDocumentScope['term']>)
   const write = async (data: string) => {
     await new Promise<void>((resolve) => term.write(data, resolve))
-    // The handler coalesces a parse's copies into one post on the next microtask.
     await Promise.resolve()
   }
   return { scope, posted, write }
 }
 
-// What Claude Code 2.1.308 writes when `c` is pressed in its /btw panel.
+// Match Claude Code’s /btw copy control sequence.
 const BTW_COPY = `\x1b]52;c;${Buffer.from('hello from btw').toString('base64')}\x07`
 
 describe('OSC 52 in the mobile terminal document', () => {

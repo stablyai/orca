@@ -28,6 +28,7 @@ the validation required before rolling out the updated images and host pins.
 - `apps/push` and `packages/push-contract`: the mobile push gateway that holds
   the APNs key and sends to phones through APNs and FCM, and its wire contract.
   Deployment and operations are owned by the private `stablyai/orca-cloud` repository.
+- `packages/connector-contract`: the connector wire contract (experimental).
 
 ## Mobile push gateway
 

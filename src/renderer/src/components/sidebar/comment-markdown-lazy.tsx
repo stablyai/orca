@@ -2,14 +2,12 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 
-// Boot-path split: react-markdown + remark/rehype/DOMPurify is ~356 KB of JS that
-// only the sidebar's two markdown surfaces pull onto the eager graph. One lazy()
-// identity for both, so they share a component type and a single chunk fetch.
+// Share one lazy identity/chunk so Markdown dependencies stay off the boot graph for both sidebar surfaces.
 const LazyCommentMarkdown = lazyWithRetry(() => import('./CommentMarkdown'), {
   reloadKey: 'comment-markdown'
 })
 
-/** Warms the chunk ahead of render so the fallback is never actually shown. */
+/** Warm the chunk before use to reduce fallback time. */
 export function preloadCommentMarkdown(): void {
   void import('./CommentMarkdown')
 }
@@ -19,11 +17,7 @@ type CommentMarkdownAsyncProps = React.ComponentProps<typeof LazyCommentMarkdown
   fallbackClassName?: string
 }
 
-/**
- * Renders the markdown body, falling back to the raw text in an identically
- * classed box while the chunk loads — same width and wrapping constraints, so a
- * paint before the chunk lands cannot shift layout.
- */
+/** Match raw-text fallback width/wrapping to the loaded renderer to limit layout shifts. */
 export function CommentMarkdownAsync({
   fallbackClassName,
   ...props

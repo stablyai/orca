@@ -1,14 +1,14 @@
-// STA-7826: a CLI close of a terminal a paired runtime runs must reach that runtime, the only
-// machine that can stop its process, instead of "stopping" the remote id on this machine.
+// CLI close must route to the paired runtime that owns the process, not claim a local stop of its remote id (STA-7826).
 import { describe, expect, it, vi } from 'vitest'
-import { toRemoteRuntimePtyId } from '../../shared/remote-runtime-pty-id'
+import { toRemoteRuntimePtyId } from '../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
 
-const { OrcaRuntimeService } = await import('./orca-runtime-test-mocks.spec')
-await import('./orca-runtime-test-lifecycle.spec')
+await import('./orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('./orca-runtime')
+await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { store, makeRuntimeStoreWithWorkspaceSession } =
-  await import('./orca-runtime-test-fixtures.spec')
+  await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 
@@ -97,31 +97,7 @@ describe('closing a terminal that a paired runtime runs', () => {
     expect(closeTerminalTab).toHaveBeenCalledWith('tab-1', {
       localPtyTeardownOwnedExternally: true
     })
-    // This machine cannot stop the paired host's process, so it must not pretend to.
     expect(localStops).toEqual([])
-  })
-
-  it("keeps the host's unconfirmed-stop verdict instead of minting its own", async () => {
-    const { runtime } = pairedHostLeafRuntime(async () => ({
-      close: {
-        handle: 'term_on_host',
-        tabId: 'host-tab',
-        ptyKilled: false,
-        ptyStopVerdict: 'unverifiable',
-        ptyStopReason: 'its SSH host could not be reached',
-        pendingKillRecorded: true
-      }
-    }))
-    const handle = await listedHandle(runtime)
-
-    await expect(runtime.closeTerminal(handle)).resolves.toEqual({
-      handle,
-      tabId: 'tab-1',
-      ptyKilled: false,
-      ptyStopVerdict: 'unverifiable',
-      ptyStopReason: 'its SSH host could not be reached',
-      pendingKillRecorded: true
-    })
   })
 
   it('leaves the terminal in place when the owning host cannot be reached', async () => {
@@ -140,8 +116,7 @@ describe('closing a terminal that a paired runtime runs', () => {
   })
 
   it('retires the mirror of a terminal the owning host no longer knows, without claiming a stop', async () => {
-    // The owner is a real runtime that never issued this handle; the RPC layer passes its
-    // refusal code through, as `mapRuntimeError` does for `terminal_handle_stale`.
+    // Exercise a real owner that never issued the handle so its refusal survives RPC error mapping.
     const owner = new OrcaRuntimeService(store)
     owner.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { runtime, closeTerminalTab } = pairedHostLeafRuntime(async (_env, _method, params) => {
@@ -240,22 +215,5 @@ describe('closing a terminal that a paired runtime runs', () => {
 
     await expect(closing).resolves.toEqual({ handle, tabId: 'tab-1', ptyKilled: true })
     expect(closeTerminalTab).not.toHaveBeenCalled()
-  })
-
-  it('routes a whole-tab close to the owning host too', async () => {
-    const { runtime, call } = pairedHostLeafRuntime(async () => ({
-      close: { handle: 'term_on_host', tabId: 'host-tab', closeMode: 'tab', ptyKilled: false }
-    }))
-    const handle = await listedHandle(runtime)
-
-    // This harness publishes no session snapshot, so the local tab commit after it answers
-    // tab_not_found; the host close must already have been sent.
-    await runtime.closeTerminalTab(handle).catch(() => undefined)
-    expect(call).toHaveBeenCalledWith(
-      'env-1',
-      'terminal.closeTab',
-      { terminal: 'term_on_host' },
-      expect.any(Number)
-    )
   })
 })

@@ -13,7 +13,6 @@ import type { WorkspaceLayoutModel } from './workspace-layout-model'
 import { checkWorkspaceLayoutModelRules } from './workspace-layout-model-rules'
 import { applyLayoutTransition, type LayoutTransition } from './workspace-layout-transitions'
 
-/** One terminal tab split in two, the first pane running `pty-1`. */
 function setup() {
   const context = testContext()
   const created = build(context, [{ type: 'createTerminalTab', workspace: WS }])
@@ -42,7 +41,6 @@ function setup() {
   }
 }
 
-/** Each pane of the tab and the terminal it shows. */
 const leavesOf = (model: WorkspaceLayoutModel, tabId: string) => {
   if (!model.workspaces[WS]!.tabs.some((tab) => tab.id === tabId)) {
     return 'closed'
@@ -191,7 +189,6 @@ describe('workspace removal', () => {
   })
 })
 
-/** Two clients' commands for the same tab or pane: both arrival orders end in a valid layout. */
 describe('concurrent commands, both orders', () => {
   type Step = { command: LayoutCommand } | { transition: LayoutTransition }
   type Run = { model: WorkspaceLayoutModel; codes: string[] }
@@ -258,4 +255,45 @@ describe('concurrent commands, both orders', () => {
       expect(leavesOf(result.model, tabId)).toBe('closed')
     }
   })
+})
+
+it('transfers a removed folder edit view to its owner and drops views when the owner is deleted', () => {
+  const context = testContext()
+  const view = {
+    file: {
+      worktreeId: WS,
+      filePath: '/repo/note.md',
+      relativePath: 'note.md',
+      language: 'markdown'
+    },
+    view: { mode: 'edit' as const }
+  }
+  const model = build(context, [
+    {
+      type: 'openEditorTab',
+      workspace: 'folder:feature',
+      tabId: 'note-tab',
+      fileId: '/repo/note.md',
+      contentType: 'editor',
+      groupId: 'folder-group',
+      view
+    }
+  ]).model
+  const removed = applyLayoutTransition(model, {
+    type: 'ownerRemoved',
+    workspaces: ['folder:feature']
+  })
+  expect(removed.ok && removed.model.workspaces[WS]?.tabs.map((tab) => tab.id)).toEqual([
+    'note-tab'
+  ])
+  expect(
+    removed.ok && removed.model.workspaces[WS]?.editorFiles?.map((file) => file.filePath)
+  ).toEqual(['/repo/note.md'])
+  expect(removed.ok && removed.model.workspaces['folder:feature']).toBeUndefined()
+  if (!removed.ok) {
+    throw new Error(removed.code)
+  }
+  expect(checkWorkspaceLayoutModelRules([removed.model], [model])).toEqual([])
+  const ownerGone = applyLayoutTransition(model, { type: 'ownerRemoved', workspaces: [WS] })
+  expect(ownerGone.ok && ownerGone.model.workspaces['folder:feature']?.tabs).toEqual([])
 })

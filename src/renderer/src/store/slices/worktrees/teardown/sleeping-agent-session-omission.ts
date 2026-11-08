@@ -5,16 +5,7 @@ type SleepingAgentSessionPatch = Partial<
   Pick<AppState, 'sleepingAgentSessionsByPaneKey' | 'agentLaunchConfigByPaneKey'>
 >
 
-/**
- * Drops sleeping-agent records that belong to removed worktrees, plus their launch configs.
- *
- * Why match on `record.worktreeId` and not the pane key's tab: a record can outlive its tab
- * (a provider-session event routed by worktree id writes one without a tab), so tab-based
- * omission misses it. A missed record is persisted and drawn as a sidebar row for the deleted
- * worktree until the host connects (#24784).
- *
- * Returns an empty patch when nothing matches, so callers keep both maps' identity.
- */
+/** Drop sleeping records/configs by record.worktreeId: provider-session events can create records after tabs vanish, so tab-only eviction leaves persisted ghost rows (#24784). Preserve unchanged maps. */
 export function omitSleepingAgentSessionsForWorktrees(
   s: Pick<AppState, 'sleepingAgentSessionsByPaneKey' | 'agentLaunchConfigByPaneKey'>,
   worktreeIds: ReadonlySet<string>,

@@ -1,10 +1,10 @@
-import { resolveQoderTerminalCommand } from '../../../runtime/qoder-terminal-command-resolution'
-import { resolveStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import { resolveQoderTerminalCommand } from '../../../runtime/terminal/launch/qoder-terminal-command-resolution'
+import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function preparePtyIpcQoderCommand(ctx: PtyIpcSpawnState): Promise<void> {
-  // A pane's own agent launch was resolved by its plan, for the runtime its PTY uses.
+  // Adopted owners and pane launch plans already determine their own runtime command.
   if (ctx.preAdoptedStablePane || ctx.paneAgentLaunch || ctx.args.launchAgent !== 'qoder') {
     return
   }

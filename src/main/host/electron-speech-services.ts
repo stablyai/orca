@@ -1,13 +1,14 @@
 import { net } from 'electron'
 import { ModelManager } from '../speech/model-manager'
 import { SttService } from '../speech/stt-service'
+import { spawnSttUtilityProcess } from '../speech/stt-worker-utility-process'
 import type { SpeechServiceFactories } from '../speech/speech-runtime-service'
 import type {
   DownloadIncomingMessage,
   OpenSpeechDownloadRequest
 } from '../speech/speech-model-download-response'
 
-/** Why Chromium's stack: it honors the app's proxy settings, which Node's `https` does not. */
+/** Chromium honors the app's proxy settings; Node https does not. */
 export const openElectronSpeechDownloadRequest: OpenSpeechDownloadRequest = (url) => {
   const request = net.request({ method: 'GET', url })
   return {
@@ -36,9 +37,9 @@ export const openElectronSpeechDownloadRequest: OpenSpeechDownloadRequest = (url
   }
 }
 
-/** The desktop speech factories. Importing this file is what pulls Electron's net in. */
+/** Importing these factories loads Electron net. */
 export const electronSpeechServiceFactories: SpeechServiceFactories = {
   createModelManager: (customModelsDir) =>
     new ModelManager(customModelsDir, openElectronSpeechDownloadRequest),
-  createSttService: (models) => new SttService(models)
+  createSttService: (models) => new SttService(models, spawnSttUtilityProcess)
 }

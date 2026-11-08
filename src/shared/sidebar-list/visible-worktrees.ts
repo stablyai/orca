@@ -6,7 +6,10 @@ import {
   type WorkspaceRowFactReader,
   type WorkspaceRowFilters
 } from '../workspace-view/workspace-row-filters'
-import { getSidebarLineageParentsByIdentity } from './worktree-lineage-projection'
+import {
+  getSidebarLineageParentsByIdentity,
+  type SidebarLineageParentIdentities
+} from './worktree-lineage-projection'
 
 export type VisibleSidebarWorktreeInputs = {
   /** Every catalog row, one per host-qualified identity. */
@@ -18,6 +21,8 @@ export type VisibleSidebarWorktreeInputs = {
   filters: WorkspaceRowFilters
   facts: WorkspaceRowFactReader<Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
+  /** Parents resolved once over every visible store's complete rows; ancestor injection reuses them. */
+  lineageParentIdentities?: SidebarLineageParentIdentities
   filterRepoIds: readonly string[]
   injectLineageAncestors?: boolean
   preserveLineageParentOrder?: boolean
@@ -32,13 +37,13 @@ export function selectVisibleSidebarWorktrees({
   filters,
   facts,
   worktreeLineageById,
+  lineageParentIdentities,
   filterRepoIds,
   injectLineageAncestors,
   preserveLineageParentOrder,
   forcedVisibleWorktreeIds
 }: VisibleSidebarWorktreeInputs): Worktree[] {
-  // Why: sidebar lineage is structural. Archived workspaces stay hidden, but
-  // every other valid ancestor can bypass filters so children never orphan.
+  // Keep valid nonarchived ancestors despite ordinary filters so children retain their hierarchy.
   const selectedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
 
   let all = filterWorkspaceRows(rows, filters, facts)
@@ -56,11 +61,15 @@ export function selectVisibleSidebarWorktrees({
     }
   }
 
-  // Apply cached sort order. Items not yet in the cache (e.g. brand-new
-  // worktrees before the next sortEpoch bump) are appended at the end.
-  // Manual placement belongs to the parent, even when a hidden child has a higher rank.
+  // Append unranked/new rows until the next sortEpoch. Manual placement follows the parent, even if a hidden child ranks higher.
   if (injectLineageAncestors !== false && preserveLineageParentOrder) {
-    all = addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, selectedRepoIds)
+    all = addVisibleLineageAncestors(
+      all,
+      ancestorByIdentity,
+      worktreeLineageById,
+      selectedRepoIds,
+      lineageParentIdentities
+    )
   }
   all = all
     .map((worktree) => ({ worktree, rank: rankOf(worktree) ?? Infinity }))
@@ -69,28 +78,41 @@ export function selectVisibleSidebarWorktrees({
 
   return injectLineageAncestors === false || preserveLineageParentOrder
     ? all
-    : addVisibleLineageAncestors(all, ancestorByIdentity, worktreeLineageById, selectedRepoIds)
+    : addVisibleLineageAncestors(
+        all,
+        ancestorByIdentity,
+        worktreeLineageById,
+        selectedRepoIds,
+        lineageParentIdentities
+      )
 }
 
 function addVisibleLineageAncestors(
   worktrees: Worktree[],
   ancestorByIdentity: ReadonlyMap<string, Worktree>,
   lineageById: Record<string, WorktreeLineage>,
-  selectedRepoIds: ReadonlySet<string> | null
+  selectedRepoIds: ReadonlySet<string> | null,
+  lineageParentIdentities: SidebarLineageParentIdentities | undefined
 ): Worktree[] {
   const result: Worktree[] = []
   const included = new Set<string>()
-  // The parent nesting puts each row under, so an injected ancestor is the one it nests in.
-  const parentByIdentity = getSidebarLineageParentsByIdentity(lineageById, ancestorByIdentity)
+  // Use the same parent for ancestor injection and nesting.
+  const parentByIdentity = getSidebarLineageParentsByIdentity(
+    lineageById,
+    ancestorByIdentity,
+    lineageParentIdentities
+  )
 
+  // An older peer's loop reaches a row again before it is included.
+  const visiting = new Set<string>()
   const addWithAncestors = (worktree: Worktree): void => {
     const identity = getWorktreeHostIdentity(worktree)
-    if (included.has(identity)) {
+    if (included.has(identity) || visiting.has(identity)) {
       return
     }
+    visiting.add(identity)
     const parent = parentByIdentity.get(identity)
-    // Why: a repository filter is an explicit boundary; other filters keep
-    // valid ancestors so visible children retain their hierarchy.
+    // Repository filters are hard boundaries; ordinary filters may retain ancestors.
     if (parent && (!selectedRepoIds || selectedRepoIds.has(parent.repoId))) {
       addWithAncestors(parent)
     }

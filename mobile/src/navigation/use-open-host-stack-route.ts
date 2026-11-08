@@ -7,15 +7,16 @@ import {
   type PendingHostStackNavigation
 } from './host-stack-navigation'
 
-// Why: one root navigator means one pending transition. A per-hook ref would let a
-// Resume tap and a Tasks tap arm two independent pushes that cannot cancel each other.
+// One root navigator needs one pending transition so Resume and Tasks pushes can cancel each other.
 let pendingNavigation: PendingHostStackNavigation | null = null
 
-export function useOpenHostStackRoute(): (hostId: string, target: HostStackRouteTarget) => void {
+// Jump back in and notification taps open a session inside its host's document instead of a second one.
+export function useOpenHostStackRoute(
+  openInHostDocument = false
+): (hostId: string, target: HostStackRouteTarget) => void {
   const navigation = useNavigation<HostStackRootNavigation>()
   const router = useRouter()
-  // Why: an unmounting screen may only cancel a transition it armed itself — home
-  // unmounting for onboarding must not kill a notification push still in flight.
+  // Unmount may cancel only its own transition, never another screen’s notification push.
   const armedRef = useRef<PendingHostStackNavigation | null>(null)
 
   useEffect(
@@ -36,10 +37,11 @@ export function useOpenHostStackRoute(): (hostId: string, target: HostStackRoute
         navigation,
         router,
         hostId,
-        target
+        target,
+        openInHostDocument
       )
       armedRef.current = pendingNavigation
     },
-    [navigation, router]
+    [navigation, openInHostDocument, router]
   )
 }

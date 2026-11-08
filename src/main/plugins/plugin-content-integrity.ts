@@ -7,8 +7,7 @@ export type HashAddressedPluginContent = {
 
 export type PluginContentIntegrityResult = { ok: true } | { ok: false; error: string }
 
-/** Whether a computed tree hash is the recorded identity. Early P0 installs used a
- * 128-bit SHA-256 prefix as the directory name; new installs use the full digest. */
+/** Accept legacy 128-bit SHA-256 directory prefixes alongside current full digests. */
 export function pluginTreeHashMatches(actual: string, expected: string): boolean {
   return actual === expected || (expected.length === 32 && actual.startsWith(expected))
 }
@@ -33,26 +32,31 @@ export async function verifyHashAddressedPluginContent(
   return { ok: true }
 }
 
-/** Deduplicates the first lazy verification for each discovered install. */
+// Why no cache: a hash costs ~1 ms for typical plugin trees, and bytes changed after a first
+// load must be caught on the next one. Only checks already in flight are shared.
 export class PluginContentVerifier {
-  private readonly verifications = new Map<string, Promise<PluginContentIntegrityResult>>()
+  private readonly inFlight = new Map<string, Promise<PluginContentIntegrityResult>>()
 
-  clear(): void {
-    this.verifications.clear()
-  }
-
+  /** Re-hashes the tree on every load; concurrent loads of the same tree share one hash. */
   async verify(plugin: HashAddressedPluginContent & { pluginKey: string }): Promise<void> {
-    // Why: a refresh can replace one same-key install while its old hash is
-    // still being verified. Cache by immutable content identity, never key.
     const identity = JSON.stringify([plugin.pluginKey, plugin.rootDir, plugin.contentHash])
-    let verification = this.verifications.get(identity)
+    let verification = this.inFlight.get(identity)
     if (!verification) {
-      verification = verifyHashAddressedPluginContent(plugin)
-      this.verifications.set(identity, verification)
+      verification = verifyHashAddressedPluginContent(plugin).finally(() => {
+        this.inFlight.delete(identity)
+      })
+      this.inFlight.set(identity, verification)
     }
     const result = await verification
     if (!result.ok) {
-      this.verifications.delete(identity)
+      throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)
+    }
+  }
+
+  /** Unshared check for code about to run: a hash started before this call must not vouch for it. */
+  async verifyNow(plugin: HashAddressedPluginContent & { pluginKey: string }): Promise<void> {
+    const result = await verifyHashAddressedPluginContent(plugin)
+    if (!result.ok) {
       throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)
     }
   }

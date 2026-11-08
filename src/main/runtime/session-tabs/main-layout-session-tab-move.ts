@@ -1,5 +1,4 @@
-// Layout-owner builds: a phone's or paired client's tab move in a workspace main owns is main's own
-// layout command, window or not; every view draws it from main's frames, so the window is not asked.
+// Move main-owned tabs through layout commands so every view follows main without a window relay.
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import type {
@@ -15,6 +14,7 @@ import { liveTerminalsOfTab } from '../session-lifecycle/close/closed-tab-termin
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
 import { isPaneColumnSplitDropNoOp } from '../../../shared/workspace-layout/pane-column-split-drop-no-op'
+import { selectMobileSessionTab } from './mobile-session-tab-selection'
 
 export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithMainLayoutRenames {
   protected abstract toMobileSessionTabsResult(
@@ -48,10 +48,7 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
     return workspace && rowId ? resolveSessionTabRow(workspace, rowId)?.tab.id : undefined
   }
 
-  /**
-   * The move in main's layout, checked against the rows the client was shown and refused with
-   * today's codes. Null for a workspace main does not own: today's path moves it.
-   */
+  /** Validate moves against rows the client saw; retain refusal codes. Null leaves unowned workspaces on the legacy path. */
   protected async moveTabInMainLayout(
     worktreeId: string,
     shown: RuntimeMobileSessionTabsSnapshot,
@@ -88,19 +85,14 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
         throw new Error(reply.code === 'group_not_found' ? 'target_group_not_found' : reply.code)
       }
       if (command.type === 'splitGroup' && reply.result.groupId) {
-        this.selectSplitTab(worktreeId, workspace, command.tabId, reply.result.groupId)
+        this.selectSplitTab(worktreeId, workspace, command.tabId)
       }
     }
     return { moved: true }
   }
 
   /** As the window's drop: the split tab is selected, and its new group is the active one. */
-  private selectSplitTab(
-    worktreeId: string,
-    workspace: WorkspaceLayout,
-    tabId: string,
-    groupId: string
-  ): void {
+  private selectSplitTab(worktreeId: string, workspace: WorkspaceLayout, tabId: string): void {
     const held = this.mobileSessionTabsByWorktree.get(worktreeId)
     const rows = held?.tabs.filter(
       (row) => resolveSessionTabRow(workspace, row.id)?.tab.id === tabId
@@ -109,14 +101,10 @@ export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithM
     if (!held || !moved) {
       return
     }
-    const stored = this.storeMobileSessionSnapshot(worktreeId, {
-      ...held,
-      snapshotVersion: held.snapshotVersion + 1,
-      activeGroupId: groupId,
-      activeTabId: moved.id,
-      activeTabType: moved.type,
-      tabs: held.tabs.map((row) => ({ ...row, isActive: row.id === moved.id }))
-    })
+    const stored = this.storeMobileSessionSnapshot(
+      worktreeId,
+      selectMobileSessionTab({ ...held, snapshotVersion: held.snapshotVersion + 1 }, moved)
+    )
     this.emitMobileSessionTabsSnapshot(stored)
   }
 }

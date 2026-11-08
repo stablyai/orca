@@ -39,6 +39,9 @@ it('updates known exits cheaply and commits zero times for 1,000 inactive unknow
   expect(view.result.current.sessionInventory).toBe(baseline)
   expect(list.mock.calls.length).toBe(calls)
   act(() => cache.exited({ code: 0, id: 'known', incarnationId: 'A', hostId: 'local' }))
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(50)
+  })
   expect(view.result.current.sessionInventory.count).toBe(0)
   expect(renders - before).toBe(1)
 })

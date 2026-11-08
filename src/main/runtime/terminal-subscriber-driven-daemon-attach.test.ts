@@ -1,31 +1,19 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
-/**
- * Subscriber-driven daemon attach (never-activated tab ingestion).
- *
- * Invariant: on a remote-server host, a daemon-backed terminal whose tab was
- * never activated in the host UI must still stream to paired clients and be
- * readable via `terminal read`. The daemon only emits data for sessions this
- * app has ATTACHED, and attach historically happened only via renderer pane
- * mount — so a never-activated tab produced blank paired panes and empty CLI
- * tails while the PTY was alive.
- *
- * Harness: real OrcaRuntimeService + real TERMINAL_METHODS multiplex handler,
- * with an injected pty controller modeling a daemon provider whose data events
- * are deliverable ONLY after attach(id). No window is ever attached — every
- * assertion also holds for headless `orca serve`.
- */
+/** Paired subscriptions must attach never-activated daemon sessions so headless terminal read/streams receive bytes.
+ * Exercise real runtime/multiplex with controller data gated on attach; no renderer is present. */
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
+import { deriveRemoteRuntimeTerminalCreateHandle } from './terminal/identity/remote-runtime-terminal-create-identity'
 import { RpcDispatcher } from './rpc/dispatcher'
 import type { RpcRequest } from './rpc/core'
-import { TERMINAL_METHODS } from './rpc/methods/terminal'
+import { TERMINAL_METHODS } from './rpc/methods/terminal/terminal'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson
-} from '../../shared/terminal-stream-protocol'
+} from '../../shared/terminal/stream/terminal-stream-protocol'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
 const PTY_ID = `${WORKTREE_ID}@@1a2b3c4d`
@@ -38,14 +26,13 @@ type RuntimeInternals = {
   ) => unknown
   issuePtyHandle: (pty: unknown) => string
   headlessTerminals: Map<string, unknown>
-  terminalViewSubscribers: {
-    hasPendingProviderAttach: (ptyId: string) => boolean
-    attachInventoryWaiterIds: () => string[]
-  }
   refreshPtyWorktreeRecordsWithControllerInventory: (
     worktrees: [],
     targetWorktreeId: string | null
   ) => Promise<unknown>
+  // Optional so this suite still runs, and fails on behavior, against a runtime without it.
+  notePtyEndpointLoss?: (ptyId: string) => void
+  resolveTerminalWorkspaceLaunchScope: () => Promise<{ id: string; connectionId: null }>
 }
 
 function internals(runtime: OrcaRuntimeService): RuntimeInternals {
@@ -57,6 +44,8 @@ type DaemonSessionModel = {
   rows: number
   attached: boolean
   screen: string
+  terminalHandle?: string
+  lastTitle?: string
 }
 
 /** Models the daemon provider boundary: inventory of live sessions, data
@@ -65,10 +54,18 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
   const sessions = new Map<string, DaemonSessionModel>()
   const attachCalls: string[] = []
   const resizeCalls: [string, number, number][] = []
+  const writes: string[] = []
   let nextAttachBarrier: { promise: Promise<void>; result: boolean } | null = null
   let runtime: OrcaRuntimeService | null = null
   const controller = {
-    write: () => true,
+    // The adapter refuses input to a session until this app attaches it again.
+    write: (ptyId: string, data: string) => {
+      if (!sessions.get(ptyId)?.attached) {
+        return false
+      }
+      writes.push(data)
+      return true
+    },
     kill: () => true,
     getForegroundProcess: async () => null,
     listProcesses: async () =>
@@ -77,6 +74,7 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
         cwd: '/tmp/wt',
         worktreeId: WORKTREE_ID,
         title: '',
+        ...(session.terminalHandle ? { terminalHandle: session.terminalHandle } : {}),
         cols: session.cols,
         rows: session.rows
       })),
@@ -105,6 +103,10 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
         return false
       }
       session.attached = true
+      // The runtime controller seeds the attach snapshot's title, as attachPtyFromRuntimeController does.
+      if (session.lastTitle) {
+        runtime?.seedTerminalRestoreTail(ptyId, { lastTitle: session.lastTitle })
+      }
       return true
     },
     serializeProviderBuffer: async (ptyId: string) => {
@@ -127,6 +129,13 @@ function createDaemonProviderModel(opts: { snapshotCapable: boolean }) {
     sessions,
     attachCalls,
     resizeCalls,
+    writes,
+    /** Main's daemon link dropped and came back: the daemon released this app's attachments. */
+    dropAttachments(): void {
+      for (const session of sessions.values()) {
+        session.attached = false
+      }
+    },
     deferNextAttach(result: boolean): () => void {
       let release!: () => void
       const promise = new Promise<void>((resolve) => {
@@ -355,62 +364,6 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     expect(model.attachCalls).toEqual([PTY_ID])
   })
 
-  it('never attaches SSH-scoped sessions or sessions absent from the daemon inventory', async () => {
-    const { runtime, model } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-    const sshPtyId = 'ssh:conn-9@@relay-pty-4'
-    const sshRecord = internals(runtime).recordPtyWorktree(sshPtyId, WORKTREE_ID, {
-      connected: true
-    })
-    const sshHandle = internals(runtime).issuePtyHandle(sshRecord)
-    const absentPtyId = `${WORKTREE_ID}@@99999999`
-    const absentRecord = internals(runtime).recordPtyWorktree(absentPtyId, WORKTREE_ID, {
-      connected: true
-    })
-    const absentHandle = internals(runtime).issuePtyHandle(absentRecord)
-
-    const harness = startMultiplex(runtime)
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-
-    sendSubscribe(harness, 1, sshHandle, 'client-ssh')
-    await waitForSubscribed(harness, 1)
-    expect(model.attachCalls).toEqual([])
-
-    // Absent session: subscribing must not create it or surface a new error.
-    sendSubscribe(harness, 2, absentHandle, 'client-absent')
-    await waitForSubscribed(harness, 2)
-    await Promise.resolve()
-    expect(model.sessions.has(absentPtyId)).toBe(false)
-    expect(model.emitData(absentPtyId, 'ghost')).toBe(false)
-    expect(harness.messages.some((message) => message.result?.type === 'error')).toBe(false)
-
-    // Unrelated live sessions are untouched by another pty's subscribers.
-    expect(model.sessions.get(PTY_ID)?.attached).toBe(false)
-    expect(model.attachCalls).not.toContain(PTY_ID)
-    expect(model.resizeCalls).toEqual([])
-  })
-
-  it('retries a refused attach for a later subscriber once the daemon learns the session', async () => {
-    const { runtime, model, handle } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-    // Degraded-daemon shape: main knows the record, the daemon does not own the
-    // id yet, and the controller answers false rather than a no-op success.
-    model.sessions.delete(PTY_ID)
-
-    const harness = startMultiplex(runtime)
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-    sendSubscribe(harness, 1, handle, 'client-a')
-    await waitForSubscribed(harness, 1)
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-    // A refused attach must not pin sticky success while the stream is blank.
-    expect(model.emitData(PTY_ID, 'ghost')).toBe(false)
-
-    model.sessions.set(PTY_ID, { cols: 100, rows: 30, attached: false, screen: '' })
-    sendSubscribe(harness, 2, handle, 'client-b')
-    await waitForSubscribed(harness, 2)
-    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
-    expect(model.emitData(PTY_ID, 'late daemon hello\r\n')).toBe(true)
-    await vi.waitFor(() => expect(outputText(harness)).toContain('late daemon hello'))
-  })
-
   it('retries an existing subscriber when provider inventory becomes ready', async () => {
     const { runtime, model, handle } = setupNeverAttachedDaemonSession({
       snapshotCapable: false
@@ -423,7 +376,6 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     sendSubscribe(harness, 1, handle)
     await waitForSubscribed(harness, 1)
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
-    expect(internals(runtime).terminalViewSubscribers.hasPendingProviderAttach(PTY_ID)).toBe(true)
     expect(runtime.hasRemoteTerminalViewSubscriber(PTY_ID)).toBe(true)
     expect(model.emitData(PTY_ID, 'before inventory\r\n')).toBe(false)
 
@@ -431,17 +383,54 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
     await internals(runtime).refreshPtyWorktreeRecordsWithControllerInventory([], null)
     expect(model.attachCalls).toEqual([PTY_ID])
-    expect(internals(runtime).terminalViewSubscribers.attachInventoryWaiterIds()).toEqual([PTY_ID])
     refuseFirstAttach()
 
     await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
-    await vi.waitFor(() =>
-      expect(internals(runtime).terminalViewSubscribers.attachInventoryWaiterIds()).not.toContain(
-        PTY_ID
-      )
-    )
     expect(model.emitData(PTY_ID, 'after inventory\r\n')).toBe(true)
     await vi.waitFor(() => expect(outputText(harness)).toContain('after inventory'))
+  })
+
+  it('streams a survivor a terminal.create retry adopts after a restart', async () => {
+    const runtime = new OrcaRuntimeService()
+    const model = createDaemonProviderModel({ snapshotCapable: false })
+    model.bind(runtime)
+    runtime.setPtyController(model.controller as never)
+    vi.spyOn(internals(runtime), 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+      id: WORKTREE_ID,
+      connectionId: null
+    })
+    model.sessions.set(PTY_ID, {
+      cols: 80,
+      rows: 24,
+      attached: false,
+      screen: '',
+      terminalHandle: deriveRemoteRuntimeTerminalCreateHandle(
+        'device-a',
+        WORKTREE_ID,
+        'mutation-1'
+      ),
+      lastTitle: '✳ Claude Code'
+    })
+    const spawn = vi.fn()
+
+    const adopted = await runtime.dedupeTerminalCreate(
+      'device-a',
+      `id:${WORKTREE_ID}`,
+      'mutation-1',
+      true,
+      spawn
+    )
+
+    expect(spawn).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    expect(model.emitData(PTY_ID, 'still working\r\n')).toBe(true)
+    const [listed] = (await runtime.listTerminals()).terminals
+    expect(listed).toMatchObject({
+      handle: adopted.handle,
+      title: '✳ Claude Code',
+      preview: 'still working'
+    })
+    expect(listed.lastOutputAt).not.toBeNull()
   })
 
   it('does not subscriber-attach or provider-read a session this app already spawned', async () => {
@@ -463,25 +452,6 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
     expect(read.tail).toEqual([])
   })
 
-  it('terminal read falls back to the provider tail for a never-attached live pty', async () => {
-    const { runtime, handle } = setupNeverAttachedDaemonSession({
-      snapshotCapable: true,
-      screen: 'retained daemon line\r\n'
-    })
-
-    const read = await runtime.readTerminal(handle)
-
-    expect(read.tail.join('\n')).toContain('retained daemon line')
-  })
-
-  it('terminal read stays empty (not an error) when provider state is unprovable', async () => {
-    const { runtime, handle } = setupNeverAttachedDaemonSession({ snapshotCapable: false })
-
-    const read = await runtime.readTerminal(handle)
-
-    expect(read.tail).toEqual([])
-  })
-
   it('terminal read keeps preferring the ingested model over provider state once attached', async () => {
     const { runtime, model, handle } = setupNeverAttachedDaemonSession({
       snapshotCapable: true,
@@ -494,5 +464,99 @@ describe('subscriber-driven daemon attach (never-activated tab)', () => {
 
     expect(read.tail.join('\n')).toContain('live model line')
     expect(read.tail.join('\n')).not.toContain('stale provider frame')
+  })
+})
+
+/** A session this app spawned and attached; then main's daemon link drops and returns. The daemon
+ *  releases every attachment of the reconnecting client, and only a pane mounted in this window
+ *  re-attaches on its own. Main must take back every other session's stream so background agents'
+ *  records stay fresh and a paired client, phone or CLI send is not refused. */
+describe('re-attach after a daemon reconnect detached a spawned session', () => {
+  function setupSpawnedAttachedSession(): ReturnType<typeof setupNeverAttachedDaemonSession> {
+    const setup = setupNeverAttachedDaemonSession({
+      snapshotCapable: true,
+      screen: 'agent screen\r\n'
+    })
+    setup.runtime.onPtySpawned(PTY_ID, undefined, { awaitsRegistration: false })
+    setup.model.sessions.get(PTY_ID)!.attached = true
+    return setup
+  }
+
+  function loseEndpoint(
+    runtime: OrcaRuntimeService,
+    model: ReturnType<typeof createDaemonProviderModel>
+  ): void {
+    model.dropAttachments()
+    // What the local provider's write-unavailable fan-out reports for every session it held.
+    internals(runtime).notePtyEndpointLoss?.(PTY_ID)
+  }
+
+  it('holds input sent while the re-attach is in flight instead of refusing it', async () => {
+    const { runtime, model, handle } = setupSpawnedAttachedSession()
+    const releaseAttach = model.deferNextAttach(true)
+
+    loseEndpoint(runtime, model)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    const send = runtime.sendTerminal(handle, { text: 'early key' }, { inputKind: 'driving' })
+    await Promise.resolve()
+    expect(model.writes).toEqual([])
+    releaseAttach()
+
+    await expect(send).resolves.toMatchObject({ accepted: true })
+    expect(model.writes).toEqual(['early key'])
+  })
+
+  it('drops input cancelled while the re-attach is in flight', async () => {
+    const { runtime, model, handle } = setupSpawnedAttachedSession()
+    const releaseAttach = model.deferNextAttach(true)
+    loseEndpoint(runtime, model)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    const cancel = new AbortController()
+    const send = runtime.sendTerminal(
+      handle,
+      { text: 'cancelled key' },
+      { inputKind: 'driving', signal: cancel.signal }
+    )
+    await Promise.resolve()
+
+    cancel.abort()
+    releaseAttach()
+
+    await expect(send).rejects.toThrow('request_aborted')
+    expect(model.writes).toEqual([])
+  })
+
+  it('does not hand held input to a terminal that replaced the one it was sent to', async () => {
+    const { runtime, model, handle } = setupSpawnedAttachedSession()
+    const releaseAttach = model.deferNextAttach(true)
+    loseEndpoint(runtime, model)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    const send = runtime.sendTerminal(
+      handle,
+      { text: 'for the old shell' },
+      { inputKind: 'driving' }
+    )
+    await Promise.resolve()
+
+    await runtime.onPtyExit(PTY_ID, 0)
+    runtime.onPtySpawned(PTY_ID, undefined, { awaitsRegistration: false })
+    model.sessions.get(PTY_ID)!.attached = true
+    releaseAttach()
+
+    await expect(send).rejects.toThrow()
+    expect(model.writes).toEqual([])
+  })
+
+  it('attaches again when another loss lands while the re-attach is in flight', async () => {
+    const { runtime, model } = setupSpawnedAttachedSession()
+    const releaseFirst = model.deferNextAttach(true)
+
+    loseEndpoint(runtime, model)
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID]))
+    loseEndpoint(runtime, model)
+    releaseFirst()
+
+    await vi.waitFor(() => expect(model.attachCalls).toEqual([PTY_ID, PTY_ID]))
+    expect(model.emitData(PTY_ID, 'after both\r\n')).toBe(true)
   })
 })

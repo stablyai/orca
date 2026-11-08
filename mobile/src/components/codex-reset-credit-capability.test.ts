@@ -13,41 +13,13 @@ vi.mock('../transport/runtime-capability-probe', () => ({
 
 import {
   MOBILE_CODEX_RESET_CREDIT_CAPABILITY,
-  readCodexResetCreditCapability,
   useCodexResetCreditCapability
 } from './codex-reset-credit-capability'
+import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 afterEach(() => {
   vi.restoreAllMocks()
   probe.start.mockReset()
-})
-
-describe('readCodexResetCreditCapability', () => {
-  it('enables reset only when the host explicitly advertises the contract', async () => {
-    const sendRequest = vi.fn().mockResolvedValue({
-      ok: true,
-      result: { capabilities: ['mobile.tasks.v1', MOBILE_CODEX_RESET_CREDIT_CAPABILITY] }
-    })
-
-    await expect(readCodexResetCreditCapability({ sendRequest })).resolves.toBe(true)
-    expect(sendRequest).toHaveBeenCalledWith('status.get')
-  })
-
-  it.each([
-    { ok: true, result: { capabilities: ['mobile.tasks.v1'] } },
-    { ok: true, result: { capabilities: 'accounts.codex-reset-credit.v1' } },
-    { ok: true, result: { capabilities: [MOBILE_CODEX_RESET_CREDIT_CAPABILITY, 7] } },
-    { ok: true, result: {} },
-    { ok: false, error: { code: 'old-host', message: 'unsupported' } }
-  ])('fails closed for an unsupported or malformed host response', async (response) => {
-    const sendRequest = vi.fn().mockResolvedValue(response)
-    await expect(readCodexResetCreditCapability({ sendRequest })).resolves.toBe(false)
-  })
-
-  it('fails closed when the capability probe cannot complete', async () => {
-    const sendRequest = vi.fn().mockRejectedValue(new Error('connection lost'))
-    await expect(readCodexResetCreditCapability({ sendRequest })).resolves.toBe(false)
-  })
 })
 
 describe('useCodexResetCreditCapability', () => {
@@ -71,10 +43,10 @@ describe('useCodexResetCreditCapability', () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
-    expect(renderer!.root.findByType('CapabilityResult').props.supported).toBe(false)
+    expect(findByHostType(renderer!.root, 'CapabilityResult').props.supported).toBe(false)
 
     act(() => publish?.([MOBILE_CODEX_RESET_CREDIT_CAPABILITY]))
-    expect(renderer!.root.findByType('CapabilityResult').props.supported).toBe(true)
+    expect(findByHostType(renderer!.root, 'CapabilityResult').props.supported).toBe(true)
 
     act(() => renderer!.unmount())
     expect(cancel).toHaveBeenCalledOnce()

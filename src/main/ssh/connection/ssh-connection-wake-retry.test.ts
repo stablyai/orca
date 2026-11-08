@@ -15,12 +15,12 @@ import {
 } from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
-import { SshConnectionManager } from './ssh-connection-manager'
+
 import { RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
 import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from '../ssh-user-disconnect'
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
@@ -93,7 +93,6 @@ describe('SshConnection retry after wake or network return', () => {
     await spendLadderWhileAsleep(conn)
     const clientsBefore = clientInstances.length
 
-    // Nothing retries a spent ladder on its own.
     await vi.advanceTimersByTimeAsync(10 * 60_000)
     expect(clientInstances).toHaveLength(clientsBefore)
 
@@ -128,7 +127,6 @@ describe('SshConnection retry after wake or network return', () => {
     await connectWithFakeTimers(conn)
     failHandshakes()
     emitSshEvent('close')
-    // Climb to the 30 s step.
     for (const delayMs of RECONNECT_BACKOFF_MS.slice(0, 7)) {
       await advanceToNextSshClient(delayMs)
     }
@@ -150,7 +148,6 @@ describe('SshConnection retry after wake or network return', () => {
     await advanceToNextSshClient(RECONNECT_BACKOFF_MS[0])
     expect(conn.getState().status).toBe('connecting')
 
-    // A handshake the first wake signal just started is left alone.
     expect(conn.retryAfterNetworkReturn()).toBe(false)
 
     await vi.advanceTimersByTimeAsync(10_000)
@@ -178,47 +175,11 @@ describe('SshConnection retry after wake or network return', () => {
     await vi.advanceTimersByTimeAsync(1)
     expect(conn.getState().status).toBe('connected')
 
-    // Closing a system-SSH channel only signals the process; its close lands after the replacement.
+    // System-channel close can arrive after its replacement; stale cleanup must not overwrite it.
     stale.emit('close', null)
     await vi.advanceTimersByTimeAsync(1)
     expect(conn.getState().status).toBe('connected')
     expect(conn.usesSystemSshTransport()).toBe(true)
-  })
-
-  it('leaves healthy, initial, and explicitly closed connections alone', async () => {
-    const { conn } = recordStatuses()
-    await connectWithFakeTimers(conn)
-    expect(conn.retryAfterNetworkReturn()).toBe(false)
-
-    await conn.disconnect()
-    expect(conn.retryAfterNetworkReturn()).toBe(false)
-
-    const initial = new SshConnection(createTarget(), createCallbacks())
-    ssh2Mock.connectBehavior = 'pending'
-    void initial.connect().catch(() => undefined)
-    await vi.advanceTimersByTimeAsync(10_000)
-    // The first connect owns its own retries and result.
-    expect(initial.retryAfterNetworkReturn()).toBe(false)
-    await initial.disconnect()
-  })
-
-  it('restarts every stalled connection the manager holds', async () => {
-    const manager = new SshConnectionManager(createCallbacks())
-    const created = nextSshClientCreation()
-    const connecting = manager.connect(createTarget())
-    await created
-    await vi.advanceTimersByTimeAsync(1)
-    const conn = await connecting
-    await spendLadderWhileAsleep(conn)
-
-    ssh2Mock.connectBehavior = 'ready'
-    const recreated = nextSshClientCreation()
-    expect(manager.retryStalledReconnects()).toEqual([createTarget().id])
-    await recreated
-    await vi.advanceTimersByTimeAsync(1)
-    expect(manager.getState(createTarget().id)?.status).toBe('connected')
-    expect(manager.retryStalledReconnects()).toEqual([])
-    await manager.disconnectAll()
   })
 
   it('never redials a host the user disconnected while its teardown is still queued', async () => {

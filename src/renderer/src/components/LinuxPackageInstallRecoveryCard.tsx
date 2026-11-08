@@ -6,6 +6,7 @@ import type {
 } from '../../../shared/update-status-types'
 import { UpdateErrorCardContent } from './UpdateErrorCardContent'
 import { translate } from '@/i18n/i18n'
+import { linuxPackageCommandUnavailableText } from '@/lib/updater-message-copy'
 import { useMountedRef } from '@/hooks/useMountedRef'
 
 function copiedNote(packageFileName: string): string {
@@ -35,8 +36,7 @@ export function LinuxPackageInstallRecoveryCard({
   releaseUrl?: string
   onClose: () => void
 }) {
-  // Why: i18n boots in English and swaps catalogs after the persisted language loads, so these must
-  // be resolved per render — at module scope they would freeze the whole card in English.
+  // Translate on render so persisted-language hydration cannot leave the card frozen in English.
   const TITLE = translate(
     'auto.components.LinuxPackageInstallRecoveryCard.53e1559f99',
     'Manual Install Required'
@@ -63,7 +63,7 @@ export function LinuxPackageInstallRecoveryCard({
   )
   const [pendingAction, setPendingAction] = useState<'copy' | 'show' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  // Why: the trusted system directories lack sudo or a package manager — no command can be offered at all.
+  // No trusted sudo/package manager means no safe install command.
   const [commandUnavailable, setCommandUnavailable] = useState(false)
   const mountedRef = useMountedRef()
   const recoveryRef = useRef(recovery)
@@ -83,8 +83,7 @@ export function LinuxPackageInstallRecoveryCard({
       try {
         instructions = await window.api.updater.getLinuxPackageInstallInstructions()
       } catch (error) {
-        // Why: only main knows whether the machine simply has no package manager; any other failure
-        // (stale status, untrusted sender, invalid artifact) must not demote the copy path.
+        // Only main can declare no package manager; stale status/sender/artifact failures must retain Copy.
         if (isCurrentRecovery()) {
           setActionError(toMessage(error))
         }
@@ -93,7 +92,7 @@ export function LinuxPackageInstallRecoveryCard({
       if (!instructions.ok) {
         if (isCurrentRecovery()) {
           setCommandUnavailable(true)
-          setActionError(instructions.message)
+          setActionError(linuxPackageCommandUnavailableText(instructions))
         }
         return
       }
@@ -106,7 +105,7 @@ export function LinuxPackageInstallRecoveryCard({
           toast.success(copiedNote(instructions.packageFileName))
         }
       } catch (error) {
-        // Why: the command itself is valid — only the clipboard failed, so keep the copy action.
+        // Clipboard failure does not invalidate the command or remove Copy.
         if (isCurrentRecovery()) {
           setActionError(toMessage(error))
         }
@@ -138,7 +137,7 @@ export function LinuxPackageInstallRecoveryCard({
       })
   }
 
-  // Why: the label keeps naming its action while the toast carries transient confirmation.
+  // Keep the action label stable; toast confirms the copy.
   const copyAction = {
     label: translate(
       'auto.components.LinuxPackageInstallRecoveryCard.55c86654b7',
@@ -184,7 +183,7 @@ export function LinuxPackageInstallRecoveryCard({
       summary={SUMMARY}
       explainer={commandUnavailable ? undefined : EXPLAINER}
       detail={detail}
-      // Why: with no safe command to copy, revealing the retained package becomes the primary path.
+      // Reveal becomes primary only when no safe command exists.
       primaryAction={commandUnavailable ? showAction : copyAction}
       secondaryAction={commandUnavailable ? undefined : showAction}
       tertiaryAction={officialReleaseAction}

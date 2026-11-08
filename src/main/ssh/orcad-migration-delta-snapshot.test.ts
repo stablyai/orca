@@ -3,13 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
-import { addManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { addManagedOrcadEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import {
+  listEnvironments,
+  resolveEnvironment
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { Store } from '../persistence/loading-store/store'
 import { listOrcadMigrationSourceCutovers } from './orcad-migration-cutover-journal'
 import { fakeOrcadMigrationDestination } from './orcad-migration-destination-fake'
@@ -106,7 +110,6 @@ const now = () => new Date('2026-10-03T00:00:00.000Z')
 
 const HOST_ID = `ssh:${TARGET.id}` as const
 
-/** An unsaved editor draft in the host's session partition, as the renderer saves it. */
 function saveDraft(worktreeId: string, content: string): void {
   store.setWorkspaceSession(
     {
@@ -132,7 +135,6 @@ function savedDraft(worktreeId: string): string | undefined {
     ?.dirtyDraftContent
 }
 
-/** Converted with source retirement off, then an older build adds what `addOnOlderBuild` adds. */
 async function convertedThenAdded(addOnOlderBuild: () => string): Promise<string> {
   await expect(
     convertSshTargetToManagedOrcad(userDataPath, {
@@ -150,7 +152,7 @@ async function convertedThenAdded(addOnOlderBuild: () => string): Promise<string
   return worktreeId
 }
 
-/** The census answers only after `whileChecking` ran, as a user typing during the check would. */
+/** Run the user edit before answering census to model typing during preflight. */
 function deltaMoveTypingDuringTerminalCheck(whileChecking: () => void) {
   return runOrcadDeltaMove({
     userDataPath,
@@ -221,7 +223,6 @@ describe('a draft typed while a delta move checks terminals', () => {
       outcome: 'moved'
     })
     expect(savedDraft(worktreeId)).toBe('draft before the move')
-    // Back to managed, and the next start finds the source as the delta baseline recorded it.
     reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
   })

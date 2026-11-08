@@ -1,20 +1,5 @@
-// Root-mounted gate for the existing-user first-launch notice. New users
-// get NO first-launch surface — default-on with no first-run notice
-// matches the category norm for developer tooling; see telemetry-plan.md
-// §First-launch experience for the rationale.
-//
-// Cohort marker populated by the migration in `src/main/persistence.ts`:
-//
-//   - `existedBeforeTelemetryRelease === true && optedIn === null`
-//       → FirstLaunchBanner (notice; no events transmit until the user
-//         resolves it via ✕ or Turn off)
-//   - otherwise → null (nothing to show)
-//
-// A local `dismissed` state hides the notice for the rest of the session
-// after a button click — the store refresh after the IPC resolves also
-// clears the cohort condition, but the optimistic flip removes a
-// frame-lag flash where the notice briefly re-renders while settings
-// round-trip through IPC.
+// Show the notice only for unresolved pre-telemetry consent; new users receive install-time disclosure. No events transmit until existing users resolve it (telemetry-plan.md §First-launch experience).
+// Hide optimistically while saved settings round-trip to prevent notice flashes; rebase on main’s saved consent after rejection.
 
 import { useState } from 'react'
 import { useAppStore } from '../store'
@@ -32,8 +17,7 @@ export function TelemetryFirstLaunchSurface(): React.JSX.Element | null {
 
   const telemetry = settings.telemetry
   if (!telemetry) {
-    // Defensive: migration guarantees the block exists. If it somehow
-    // doesn't, show nothing rather than guessing a cohort wrong.
+    // Missing consent data cannot safely identify the cohort.
     return null
   }
 

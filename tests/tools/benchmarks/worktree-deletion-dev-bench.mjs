@@ -13,10 +13,10 @@ import { rm } from 'node:fs/promises'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
-// Why @playwright/test, not playwright: only the former is a declared devDependency; it re-exports
-// the same browser types, so the benchmark resolves without relying on a hoisted transitive install.
+// Use declared @playwright/test’s re-export instead of relying on a hoisted transitive playwright install.
 import { chromium } from '@playwright/test'
 import * as branchFixture from './worktree-deletion-branch-fixture.mjs'
+import { round, summarize } from './worktree-deletion-timing-samples.mjs'
 
 const DEFAULT_ITERATIONS = 3
 const DEFAULT_HISTORY_FILES = 10_000
@@ -137,14 +137,18 @@ function launchDevInstance({ label, repoRoot }, fixture, port) {
     REMOTE_DEBUGGING_PORT: String(port)
   }
   delete env.ELECTRON_RUN_AS_NODE
-  const child = spawn(process.execPath, ['config/scripts/run-electron-vite-dev.mjs'], {
-    cwd: repoRoot,
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    // Why: own process group so teardown can signal the Electron/Vite grandchildren, not just the launcher.
-    detached: process.platform !== 'win32',
-    windowsHide: true
-  })
+  const child = spawn(
+    process.execPath,
+    ['config/scripts/development/launch/run-electron-vite-dev.mjs'],
+    {
+      cwd: repoRoot,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      // Why: own process group so teardown can signal the Electron/Vite grandchildren, not just the launcher.
+      detached: process.platform !== 'win32',
+      windowsHide: true
+    }
+  )
   const log = { stdout: '', stderr: '' }
   child.stdout?.on('data', (chunk) => {
     log.stdout = appendLog(log.stdout, chunk)
@@ -171,8 +175,7 @@ async function connectToOrca(instance) {
     try {
       const browser = await chromium.connectOverCDP(instance.endpoint)
       try {
-        // CDP answers long before the renderer exposes window.__store; without this, every
-        // findOrcaPage timeout drops a live browser handle and leaks a connection per retry.
+        // Wait for __store before accepting CDP; findOrcaPage retries otherwise leak browser handles.
         const page = await findOrcaPage(browser)
         return { browser, page }
       } catch (error) {
@@ -324,8 +327,7 @@ async function measureDeletion(page, worktreeId, rootWorktreeId) {
           return result
         })
         .catch((error) => {
-          // Why: without this the poll loop below spins forever on a rejected delete — the exact
-          // failure this benchmark exists to surface would read as a hang.
+          // Surface rejected delete before polling so the regression cannot become an infinite wait.
           settled = true
           failure = error
           return null
@@ -345,8 +347,7 @@ async function measureDeletion(page, worktreeId, rootWorktreeId) {
           )
         ])
         ipcSamplesMs.push(performance.now() - ipcStartedAt)
-        // Why re-read the clock here: anchoring on `now` would fold the IPC round trip that
-        // ipcSamplesMs already records into the next iteration's drift.
+        // Re-read clock after IPC so its separately recorded round-trip does not inflate the next drift sample.
         expectedTimerAt = performance.now() + 10
       }
       const result = await deletion
@@ -497,8 +498,7 @@ async function benchmarkInstance(instanceConfig, index, options) {
     await browser.close()
     browser = null
     await stopDevInstance(instance)
-    // Why a fresh port: the debug listener may still hold the old one, so reusing it can attach to
-    // the dying endpoint or burn the whole start timeout.
+    // Use fresh CDP ports so teardown cannot leave retries attaching to a dying endpoint.
     await verifyRestart(
       instanceConfig,
       fixture,
@@ -552,8 +552,7 @@ function isPortAvailable(port) {
 }
 
 async function stopDevInstance(instance) {
-  // Why signalCode too: a signal-terminated child leaves exitCode null, so an exitCode-only guard
-  // re-enters the kill path for a dead process and burns the full 8s race on every teardown.
+  // Check signalCode too: signal-exited children retain null exitCode and otherwise burn another 8s kill race.
   if (instance.child.exitCode !== null || instance.child.signalCode !== null) {
     return
   }
@@ -579,28 +578,6 @@ function killDevInstanceTree(child, signal) {
   } catch {
     child.kill(signal)
   }
-}
-
-function summarize(values) {
-  const samples = values.map((value) => round(value)).sort((a, b) => a - b)
-  if (samples.length === 0) {
-    return { count: 0, median: 0, p95: 0, max: 0, samples }
-  }
-  return {
-    count: samples.length,
-    median: percentile(samples, 0.5),
-    p95: percentile(samples, 0.95),
-    max: samples.at(-1),
-    samples
-  }
-}
-
-function percentile(sorted, fraction) {
-  return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * fraction) - 1)]
-}
-
-function round(value) {
-  return Math.round(value * 100) / 100
 }
 
 function delay(ms) {

@@ -6,7 +6,9 @@ export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose ext
     worktreeSelector: string,
     tabId: string
   ): Promise<RuntimeMobileSessionTabCloseResult> {
-    const snapshot = await this.listMobileSessionTabs(worktreeSelector)
+    const snapshot = await this.listMobileSessionTabs(worktreeSelector, undefined, {
+      includeAgentSenders: false
+    })
     const tabExists = snapshot.tabs.some(
       (candidate) =>
         candidate.id === tabId ||
@@ -16,8 +18,7 @@ export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose ext
     if (!tabExists) {
       throw new Error('tab_not_found')
     }
-    // Why: a legacy client may already have hidden its mirror; a new snapshot
-    // restores it without granting an unattributed request destructive authority.
+    // Legacy clients may hide their mirror first; republish it without authorizing an unattributed destructive close.
     this.republishMobileSessionTabsSnapshot(snapshot.worktree)
     return {
       closed: true,

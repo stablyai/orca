@@ -1,14 +1,17 @@
-import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
+import type {
+  AgentHookInstallStatus,
+  AgentHookTarget
+} from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   getManagedAgentHookTarget,
   isManagedAgentHookTarget
 } from '../../shared/managed-agent-hook-targets'
-import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import { normalizeDisabledTuiAgents } from '../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
-} from '../../shared/agent-status-hooks-setting'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { probeClaudeCliVersion } from '../claude/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
@@ -20,12 +23,6 @@ import {
   type ManagedAgentHookInstaller,
   type ManagedAgentHookInstallOptions
 } from './managed-agent-hook-registry'
-
-export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
-export {
-  isAgentStatusHooksEnabled,
-  isAgentStatusHooksEnabledForAgent
-} from '../../shared/agent-status-hooks-setting'
 
 type ManagedHookSettings = Partial<
   Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
@@ -40,17 +37,18 @@ type InstallOptions = {
   agents?: readonly AgentHookTarget[]
 }
 
+type ApplyOptions = InstallOptions & {
+  /** Off means skip, never remove: another Orca's panes run on these same user-global entries. */
+  keepSharedEntries?: boolean
+}
+
 type RemoveOptions = {
   agents?: readonly AgentHookTarget[]
 }
 
 export type StartupManagedHookAction = 'install' | 'skip'
 
-// Why never 'remove': this reads THIS instance's settings, but the managed hook files are
-// user-global (~/.claude/settings.json, ~/.cursor/hooks.json). A second Orca profile with the off
-// switch set would delete the hooks every other instance depends on, and Cursor — the one agent
-// with no title-derived status fallback — then goes silently idle (STA-5679). Honoring the off
-// switch only requires skipping the install; explicit removal stays on the Settings toggle.
+// Settings are per profile but hooks are user-global; startup removal would break other instances.
 export function resolveStartupManagedHookAction(
   settings: ManagedHookSettings
 ): StartupManagedHookAction {
@@ -117,10 +115,7 @@ async function runInstaller(
   }
 }
 
-// Why (#11549 aftermath): a CLI that falls off PATH keeps its user-wide config invoking
-// Orca's script, but the presence gate below then skips install() forever, freezing the
-// script at whatever Orca generated last. Existing scripts are Orca-owned, so bring them
-// current before any gating; creating new ones remains install()'s presence-gated job.
+// Refresh owned scripts before CLI presence gating; user-wide configs may still invoke them.
 async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
   const allowed = options.agents ? new Set(options.agents) : null
   for (const [agent, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {
@@ -251,10 +246,12 @@ export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {
 export async function applyAgentStatusHooksEnabled(
   enabled: boolean,
   settings: ManagedHookSettings = null,
-  options: InstallOptions = {}
+  options: ApplyOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
   if (!enabled) {
-    return await removeManagedAgentHooks()
+    return options.keepSharedEntries
+      ? getManagedAgentHookStatuses()
+      : await removeManagedAgentHooks()
   }
   const disabled = normalizeDisabledTuiAgents(settings?.disabledTuiAgents).filter(
     isManagedAgentHookTarget
@@ -263,7 +260,7 @@ export async function applyAgentStatusHooksEnabled(
   const disabledToRemove = options.shouldContinue
     ? disabled.filter((agent) => !options.shouldContinue?.(agent))
     : disabled
-  if (disabledToRemove.length === 0) {
+  if (disabledToRemove.length === 0 || options.keepSharedEntries) {
     return installed
   }
   const removed = new Map(

@@ -4,26 +4,14 @@ import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host
 import { findProjectSetups, setupHostId } from './project-selector'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
+import { getPresentStringFlag } from './flags'
+import { getFolderWorkspaceMissingRepoError } from './caller-folder-workspace'
 
 export type ProjectCreateTarget = {
   repoSelector: string
   /** Repo ids can be shared across hosts. */
   repoHostId: string
   setup: ProjectHostSetup
-}
-
-function getPresentStringFlag(
-  flags: Map<string, string | boolean>,
-  name: string
-): string | undefined {
-  if (!flags.has(name)) {
-    return undefined
-  }
-  const value = flags.get(name)
-  if (typeof value === 'string' && value.length > 0) {
-    return value
-  }
-  throw new RuntimeClientError('invalid_argument', `Missing value for --${name}`)
 }
 
 export function hasWorkspaceProjectTarget(flags: Map<string, string | boolean>): boolean {
@@ -175,7 +163,8 @@ export type CliRepoTarget = { repo: string; repoHostId?: string }
 export async function getCreateRepoTarget(
   flags: Map<string, string | boolean>,
   cwdParentWorktree: { worktreeId: string } | undefined,
-  client: RuntimeClient
+  client: RuntimeClient,
+  resolvedParentWorkspace?: string
 ): Promise<CliRepoTarget> {
   const projectTarget = await resolveProjectCreateTarget(flags, client)
   if (projectTarget) {
@@ -188,6 +177,14 @@ export async function getCreateRepoTarget(
   const inferredRepo = getRepoSelectorFromWorktreeId(cwdParentWorktree?.worktreeId)
   if (inferredRepo) {
     return { repo: inferredRepo }
+  }
+  const folderError = await getFolderWorkspaceMissingRepoError(
+    client,
+    flags,
+    resolvedParentWorkspace
+  )
+  if (folderError) {
+    throw folderError
   }
   throw new RuntimeClientError(
     'invalid_argument',

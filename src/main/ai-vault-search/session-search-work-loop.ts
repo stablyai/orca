@@ -3,19 +3,11 @@ import type { SessionSearchClock, SessionSearchTimerHandle } from './session-sea
 export type SessionSearchWorkLoopOptions = {
   clock: SessionSearchClock
   intervalMs: number
-  /** A task that threw for a reason other than its own abort. */
+  /** Reports failures unless the task was aborted. */
   onFailure: (error: unknown) => void
 }
 
-/**
- * Runs the indexer's passes one at a time, on an interval, until it is closed.
- *
- * Separate from the indexer because it is the part with no opinion about
- * transcripts: a task chain that never overlaps itself, a timer that only ever
- * has one pending tick, and a close that cancels both. Arming inside the chain
- * rather than beside it is what makes `settled` mean "everything queued so far
- * has finished, including the re-arm", which is what a fake-clock test needs.
- */
+/** Serialize passes and rearm within the chain so settled includes timer setup. */
 export class SessionSearchWorkLoop {
   private timer: SessionSearchTimerHandle | null = null
   private controller: AbortController | null = null
@@ -24,12 +16,11 @@ export class SessionSearchWorkLoop {
 
   constructor(private readonly options: SessionSearchWorkLoopOptions) {}
 
-  /** Everything queued so far. Never rejects: a task's failure is reported, not thrown. */
+  /** Includes all queued work and timer rearming; task failures go to onFailure. */
   get settled(): Promise<void> {
     return this.chain
   }
 
-  /** Queues `work` behind whatever is running, then re-arms the interval. */
   queue(work: (signal: AbortSignal) => Promise<void>, tick: () => void): Promise<void> {
     const chained = this.chain
       .then(
@@ -41,11 +32,7 @@ export class SessionSearchWorkLoop {
     return chained
   }
 
-  /**
-   * Stops the timer, the task in flight and everything queued behind it. Nothing
-   * queued before this call may run afterwards: that is what lets the indexer
-   * close its store here and know no pass will reach for it.
-   */
+  /** Cancel running and queued tasks before the owner closes their resources. */
   close(): void {
     this.closed = true
     if (this.timer !== null) {
@@ -74,7 +61,6 @@ export class SessionSearchWorkLoop {
     try {
       await work(controller.signal)
     } catch (error) {
-      // An aborted task is a close, never a failure.
       if (!controller.signal.aborted) {
         this.options.onFailure(error)
       }

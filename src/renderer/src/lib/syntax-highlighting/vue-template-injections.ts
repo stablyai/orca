@@ -3,11 +3,7 @@ import type { LanguageRegistration } from 'shiki/core'
 const CATALOGUE_VUE_SCOPE = 'source.vue'
 const VUE_ROOT_SCOPE = 'text.html.vue'
 
-/**
- * Vue's template grammars inject into `source.vue`, but Vue's root scope is
- * `text.html.vue`, so `{{ }}` and directive values would stay plain. They go in
- * the root grammar's own injections, which apply whatever loaded first.
- */
+// Vue injections target source.vue but root uses text.html.vue; install root-local injections so template expressions/directives color regardless of load order.
 export function withVueTemplateInjections(
   grammars: readonly LanguageRegistration[]
 ): LanguageRegistration[] {

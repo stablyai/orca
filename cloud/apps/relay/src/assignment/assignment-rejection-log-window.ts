@@ -1,10 +1,6 @@
 type CancelWindow = () => void
 
-// Admission rejections run at ~17/s per director instance, so the log summarizes
-// instead of streaming: one line when a key's window opens, then a closing line
-// carrying whatever that same window suppressed. The closing line is driven by the
-// window's own timer, so a key that falls quiet still reports its final count
-// instead of waiting for a rejection that may never arrive.
+// At ~17 rejections/s, log window open and timer-driven close with suppressed count; quiet keys still report their final totals.
 const MAX_TRACKED_KEYS = 64
 
 type RejectionWindow<TSample> = {

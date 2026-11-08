@@ -9,6 +9,7 @@ import {
   isAgentFallbackError,
   isGssapiSystemSshFallbackCandidate,
   isPassphraseError,
+  isSsh2AlgorithmNegotiationError,
   isSystemSshFallbackError
 } from '../ssh-reconnect-error-classification'
 import { isHostKeyVerificationError } from '../ssh-host-key-decision'
@@ -44,6 +45,8 @@ export type Ssh2CredentialFallbackHost = {
   respawnProxy: (config: ConnectConfig, proxy: EffectiveProxy) => void
   killProxyIfCurrent: () => void
   probeSystemSsh: (resolved: SshResolvedConfig | null, gssapiOnly?: boolean) => Promise<void>
+  /** System OpenSSH ignores Orca's store, so a host pinned only there must stay on ssh2. */
+  isPinnedByOrcaHostKeyStore: () => boolean
   resetSystemTransportIfCurrent: () => void
   requestCredential: (kind: SshCredentialKind, detail: string) => Promise<string | null | undefined>
 }
@@ -81,23 +84,13 @@ export async function recoverFailedSsh2Attempt(
     throw err
   }
 
-  // Why generation and not the error: a superseded attempt's host key denial is deliberately
-  // NOT recorded — the verifier withholds it so a dead attempt cannot clobber the live one's
-  // outcome — so nothing about the error identifies it, and ssh2's generic handshake failure
-  // reads as an ordinary fault. Everything below either offers a credential or probes another
-  // transport, and doing that for a connection nobody is waiting on can put a passphrase prompt
-  // in front of a host we just refused. Checking the generation catches it whatever the error
-  // turned out to be, and leaves what connect() rejects with unchanged.
+  // Generation is authoritative: stale verifier denials are unrecorded, so generic handshake errors must not trigger orphan credential/transport fallback.
   if (!host.isCurrentAttempt()) {
     host.killProxyIfCurrent()
     throw err
   }
 
-  // Why first: everything below this line either offers a credential or retries on another
-  // transport. We have just decided this host may not be the one it claims to be, so prompting
-  // would collect the user's passphrase or password on its behalf, and the system-ssh probe
-  // would connect anyway whenever the disagreement is with our own store rather than
-  // known_hosts. A denied key is final for this attempt.
+  // Denied keys are final: credentials could disclose secrets, and system SSH may ignore disagreement with our own trust store.
   if (isHostKeyVerificationError(err)) {
     host.killProxyIfCurrent()
     throw err
@@ -121,18 +114,31 @@ export async function recoverFailedSsh2Attempt(
     }
   }
 
+  // A pinned host that suddenly shares no algorithm could be an impostor steering Orca away from its pin.
+  if (isSsh2AlgorithmNegotiationError(err) && !host.isPinnedByOrcaHostKeyStore()) {
+    host.killProxyIfCurrent()
+    try {
+      await host.probeSystemSsh(resolved)
+      return
+    } catch (probeErr) {
+      host.resetSystemTransportIfCurrent()
+      // ssh2 can never reach this host, so the system SSH failure is the one the user can act on.
+      throw probeErr
+    }
+  }
+
   let authError = err
   let passphrasePromptHandled = false
   let credentialRetryConfig = config
 
-  // Why: ssh2 parses encrypted privateKey before agent auth; when an agent exists, let it try first and fall back to direct key parsing only if it fails.
+  // ssh2 parses encrypted keys before agent auth; try agent first, then direct key fallback.
   if (isAgentFallbackError(authError) && config.agent && !config.privateKey) {
     const keyConfig = buildConnectConfig(host.target, resolved, {
       includeAgent: false,
       includePrivateKey: true,
       skippedIdentityFiles
     })
-    // Why: if the agent path failed, password/passphrase retries must not reuse the same agent-only config.
+    // After agent failure, later credential retries must use the selected key config.
     credentialRetryConfig = keyConfig
     const cachedPassphrase = host.cachedPassphrase()
     if (cachedPassphrase) {
@@ -148,8 +154,7 @@ export async function recoverFailedSsh2Attempt(
         await host.connect(keyConfig)
         return
       } catch (keyErr) {
-        // Same reason as above: the retry re-runs the handshake, so it can be the attempt that
-        // denies the key, and the passphrase prompt is directly below.
+        // A retry can newly deny the host key; stop before the passphrase prompt too.
         if (!(keyErr instanceof Error) || isHostKeyVerificationError(keyErr)) {
           host.killProxyIfCurrent()
           throw keyErr
@@ -161,7 +166,7 @@ export async function recoverFailedSsh2Attempt(
         }
         authError = keyErr
         const passphraseKeyPath = getPassphrasePrivateKeyPath(keyConfig)
-        // Why: with GSSAPI enabled, let the reactive system-ssh probe try a Kerberos ticket before prompting for the passphrase; the prompt still runs if it fails.
+        // Try Kerberos before encrypted-key prompts; prompt only if the reactive probe fails.
         if (
           (isPassphraseError(authError) || passphraseKeyPath) &&
           !host.cachedPassphrase() &&
@@ -180,8 +185,7 @@ export async function recoverFailedSsh2Attempt(
             return
           }
         }
-        // Why: a strict MaxAuthTries host can drop the key retry before it reaches the challenge
-        // the agent-first attempt held back for that key, so offer the challenge on its own.
+        // MaxAuthTries may drop the key retry before its deferred host challenge; offer that challenge alone.
         if (
           isAgentFallbackError(authError) &&
           didDeferKeyboardInteractive(config) &&
@@ -210,7 +214,7 @@ export async function recoverFailedSsh2Attempt(
     }
   }
 
-  // Why: a Kerberos ticket may authenticate where keys did not; try the system ssh binary before falling back to interactive prompts.
+  // Try Kerberos system SSH before interactive credential fallback.
   if (isGssapiSystemSshFallbackCandidate(authError, host.target, resolved)) {
     host.killProxyIfCurrent()
     try {
@@ -219,7 +223,7 @@ export async function recoverFailedSsh2Attempt(
     } catch {
       host.resetSystemTransportIfCurrent()
     }
-    // Why: if a disconnect/reconnect superseded this attempt mid-probe, throw the cancellation error (not the stale authError) so connect() doesn't post auth-failed.
+    // Publish cancellation, not stale auth failure, when another attempt supersedes the probe.
     if (!host.isCurrentAttempt()) {
       throw createCancelledConnectAttemptError()
     }
@@ -230,7 +234,7 @@ export async function recoverFailedSsh2Attempt(
     throw authError
   }
 
-  // Why: prompt for passphrase on encrypted-key error, then retry with a fresh proxy socket (ssh2 may have destroyed the original).
+  // Encrypted-key retries need a fresh proxy socket after ssh2 may have destroyed it.
   const passphraseKeyPath = getPassphrasePrivateKeyPath(credentialRetryConfig)
   if (
     (isPassphraseError(authError) || passphraseKeyPath) &&
@@ -249,7 +253,7 @@ export async function recoverFailedSsh2Attempt(
       return
     }
   }
-  // Why: an agent socket failure can still be recovered by password auth, but the retry must use the no-agent config selected above.
+  // Agent failures can fall back to password only on the selected no-agent config.
   if (isAgentFallbackError(authError) && !host.cachedPassword()) {
     const val = await host.requestCredential('password', config.host || host.target.label)
     if (val) {

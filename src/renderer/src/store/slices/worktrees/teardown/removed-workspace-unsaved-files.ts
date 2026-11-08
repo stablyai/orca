@@ -1,17 +1,22 @@
 import type { AppState } from '../../../types'
-import type { WorktreePurgeTarget } from '../../worktree-helpers'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
 import {
   collectRemovalUnsavedFiles,
   currentUnsavedText,
   flushRemovalPendingEdits,
   lastViewUnsavedFiles,
   unsavedTextViewIds
-} from '@/components/editor/removal-unsaved-editor-files'
+} from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import { worktreePurgeClosedFileIds } from './worktree-purge-closed-files'
-import { resolveEditorModelOwner } from '@/components/editor/editor-model-owner'
-import { isRemovedRuntimeHostId } from '../../stale-runtime-host-rows'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
+import { isRemovedRuntimeHostId } from '../../../host-catalog/removed-runtime-host-rows'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { EditorBufferKeepRequest } from '../../editor/buffers/editor-buffer-kept'
 
 /** Text retained only until the removal notice is dismissed or recovered. */
@@ -72,21 +77,16 @@ export function flushRetiredHostEdits(state: AppState, removed: ReadonlySet<stri
 }
 
 function workspaceLabel(s: AppState, worktreeId: string): string {
-  const worktree = Object.values(selectWorktreesByRepo(s) ?? {})
-    .flat()
-    .find((candidate) => candidate.id === worktreeId)
-  const folder = (selectFolderWorkspaces(s) ?? []).find(
-    (candidate) => folderWorkspaceKey(candidate.id) === worktreeId
-  )
+  const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(s) ?? {}, worktreeId)
+  const scope = parseWorkspaceKey(worktreeId)
+  const folder =
+    scope?.type === 'folder'
+      ? findFolderWorkspaceRecord(selectFolderWorkspaces(s) ?? [], scope.folderWorkspaceId)
+      : undefined
   return worktree?.displayName ?? folder?.name ?? worktreeId
 }
 
-/**
- * Captures the unsaved text of tabs a purge closes and offers it back. Runs inside purge updaters,
- * so one toast per microtask waits for the commit and merges every purge of the batch. Text still
- * equal to `confirmed` is dropped, for this batch only. Returns the keep request the closing write
- * carries, so those records (and their models) outlive the tabs until the notice goes away.
- */
+/** Retain unsaved text/models until notice recovery/dismissal; microtask merges committed purge notices. Drop only text exactly confirmed for discard in this batch; return keep token for closing writes. */
 export function noticeRemovedUnsavedFiles(
   s: AppState,
   removedFileIds: ReadonlySet<string>,

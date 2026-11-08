@@ -57,10 +57,7 @@ async function observeTree(
   }
 }
 
-/**
- * The one reader of a target path. `plan` classifies with it and `execute` re-observes with
- * it, so both compare the same `observed` shape.
- */
+/** Planning and execution share this observation shape so race checks compare like with like. */
 export async function classifyBundledSkillPath(
   filesystem: BundledSkillFilesystem,
   path: string,
@@ -116,7 +113,10 @@ export async function classifyBundledSkillPath(
     }
   }
   return {
-    folderClass: bytes && frontmatterName(bytes) === source.name ? 'edited' : 'other',
+    folderClass:
+      bytes && [source.name, ...(source.aliases ?? [])].includes(frontmatterName(bytes) ?? '')
+        ? 'edited'
+        : 'other',
     observed: await observeTree(filesystem, path, observed, includeTreeDigest)
   }
 }

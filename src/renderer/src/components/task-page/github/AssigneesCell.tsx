@@ -9,14 +9,16 @@ import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
 import { parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { LoaderCircle, ChevronDown, Check } from 'lucide-react'
-import type { TaskPageGitHubWorkItemMutationRunner } from '../../task-page-linear-jira-list-model'
+import type { TaskPageGitHubWorkItemMutationRunner } from '../linear/task-page-linear-jira-list-model'
 import { GitHubAssigneeAvatar } from './Avatars'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 export function GHAssigneesCell({
   item,
   repo,
@@ -101,14 +103,10 @@ export function GHAssigneesCell({
                 number: item.number,
                 updates
               }
-              const res =
-                target.kind === 'environment'
-                  ? await callRuntimeRpc<
-                      Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>
-                    >(target, 'github.project.updateIssueBySlug', args, {
-                      timeoutMs: 30_000
-                    })
-                  : await window.api.gh.updateIssueBySlug(args)
+              const res = await gitHubSlugApiForTarget(target).updateIssueBySlug({
+                ...args,
+                wakeWslDistro: true
+              })
               if (!res.ok) {
                 throw new Error(res.error.message)
               }
@@ -142,11 +140,16 @@ export function GHAssigneesCell({
                       updates
                     })
               if (res && res.ok === false) {
-                throw new Error(res.error)
+                throw new Error(codeHostErrorText(res))
               }
               return res
             }
-            throw new Error('No GitHub repository context available for this issue.')
+            throw new Error(
+              translate(
+                'auto.components.TaskPage.noGitHubRepositoryContext',
+                'No GitHub repository context available for this issue.'
+              )
+            )
           }
         })
       } finally {

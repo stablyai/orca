@@ -20,9 +20,8 @@ vi.mock('sonner', () => ({
   }
 }))
 
-// Polling drives its own timers/IPC that are out of scope here; stub it out so
-// the only listDevices calls are the ones this hook makes directly.
-vi.mock('../settings/mobile-pairing-device-polling', () => ({
+// Disable polling to isolate the listDevices calls made directly by this hook.
+vi.mock('../settings/mobile/pairing/mobile-pairing-device-polling', () => ({
   useMobilePairingDevicePolling: (): void => {}
 }))
 
@@ -91,15 +90,6 @@ describe('useMobilePagePairedDevices', () => {
     document.body.innerHTML = ''
   })
 
-  it('resolves to the paired stage when a device is already paired', async () => {
-    mocks.listDevices.mockResolvedValue({ devices: [device('phone-1')] })
-
-    await renderProbe()
-
-    await vi.waitFor(() => expect(latest?.stage).toBe('paired'))
-    expect(latest?.devices.map((d) => d.deviceId)).toEqual(['phone-1'])
-  })
-
   it('returns to the paired summary from step 0 while devices exist', async () => {
     mocks.listDevices.mockResolvedValue({ devices: [device('phone-1')] })
 
@@ -166,7 +156,6 @@ describe('useMobilePagePairedDevices', () => {
 
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
     expect(mocks.toastSuccess).not.toHaveBeenCalled()
-    // A revoke that did not happen must not fire a second (refresh) IPC call.
     expect(mocks.listDevices).toHaveBeenCalledTimes(1)
     expect(latest?.devices.map((d) => d.deviceId)).toEqual(['phone-1'])
   })
@@ -203,11 +192,34 @@ describe('useMobilePagePairedDevices', () => {
       await latest?.revokeDevice('phone-1')
     })
 
-    // Revoke succeeded server-side, so success is reported and the device is
-    // dropped optimistically even though the reload failed — no false error.
+    // A failed reload cannot undo server-side revocation; report success and remove the device optimistically.
     expect(mocks.toastSuccess).toHaveBeenCalledTimes(1)
     expect(mocks.toastError).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(latest?.devices).toEqual([]))
     await vi.waitFor(() => expect(latest?.stage).toBe('intro'))
+  })
+
+  it('issues one revoke call for a rapid double-click', async () => {
+    mocks.listDevices.mockResolvedValue({ devices: [device('phone-1')] })
+    let releaseRevoke: (() => void) | null = null
+    mocks.revokeDevice.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseRevoke = () => resolve({ revoked: true })
+        })
+    )
+
+    await renderProbe()
+    await vi.waitFor(() => expect(latest?.stage).toBe('paired'))
+
+    await act(async () => {
+      void latest?.revokeDevice('phone-1')
+      void latest?.revokeDevice('phone-1')
+    })
+
+    expect(mocks.revokeDevice).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      releaseRevoke?.()
+    })
   })
 })

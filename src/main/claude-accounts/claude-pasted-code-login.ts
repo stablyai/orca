@@ -3,7 +3,7 @@ import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
 import { isClaudeLocalSignInLink, prepareClaudeSignInBrowser } from './claude-sign-in-browser'
 
-// Why 10 minutes: the same window as the desktop login; signing in on another device is slower.
+// Match the desktop login window and allow time to sign in on another device.
 const LOGIN_TIMEOUT_MS = 600_000
 const MAX_SCAN_CHARS = 8_000
 const CLAUDE_AUTHORIZE_HOSTS = new Set(['claude.com', 'claude.ai'])
@@ -18,10 +18,9 @@ type RunCommand = (
   options?: ClaudeCommandOptions
 ) => Promise<string>
 
-/** The sign-in link Claude prints for a code pasted back, never its localhost-callback one. */
 export function parseClaudePastedCodeSignInLink(output: string): string | null {
   const plain = stripAnsiEscapeSequences(output)
-  // Why trailing whitespace: output arrives in chunks, and a cut link authenticates nothing.
+  // Require trailing whitespace to avoid publishing a link truncated between chunks.
   for (const match of plain.matchAll(/(https:\/\/\S+)\s/g)) {
     try {
       const url = new URL(match[1])
@@ -40,17 +39,14 @@ export function parseClaudePastedCodeSignInLink(output: string): string | null {
   return null
 }
 
-/**
- * Runs `claude auth login` on this host for a person on another device: its printed link goes to
- * `channel`, and the code that page shows comes back through `channel` to Claude's stdin.
- */
+/** Relay the sign-in link and pasted code between a remote user and local Claude. */
 export async function runClaudePastedCodeLogin(
   folder: ClaudeCommandConfig,
   runCommand: RunCommand,
   channel: HostAccountSignInChannel,
   setCancel: (cancel: (() => boolean) | null) => void
 ): Promise<void> {
-  // Why before spawning: a flow cancelled while queued behind another account action runs nothing.
+  // Cancellation while queued must prevent spawning the login.
   if (channel.signal.aborted) {
     throw new Error(CLAUDE_SIGN_IN_CANCELLED_MESSAGE)
   }
@@ -70,7 +66,7 @@ export async function runClaudePastedCodeLogin(
   let codeSent = false
   let browser: Awaited<ReturnType<typeof prepareClaudeSignInBrowser>> | null = null
   try {
-    // Why a stand-in BROWSER: Claude must not open a browser on this host, which nobody is watching.
+    // Suppress browser opening on the unattended execution host.
     browser = await prepareClaudeSignInBrowser(folder)
     await runCommand(['auth', 'login', '--claudeai'], folder, LOGIN_TIMEOUT_MS, {
       signal: controller.signal,
@@ -100,8 +96,7 @@ export async function runClaudePastedCodeLogin(
       }
     })
   } catch (error) {
-    // Why: Claude's own words for a bad code are an HTTP status, which says nothing to a person.
-    // Only its own exit counts; a timeout or denial keeps its message.
+    // Translate CLI exits after code submission; retain timeout, denial, and cancellation errors.
     const exited = error instanceof Error && /^Claude command (failed|exited)/.test(error.message)
     throw codeSent && exited && !controller.signal.aborted
       ? new Error(CLAUDE_PASTED_CODE_REJECTED_MESSAGE, { cause: error })

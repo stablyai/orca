@@ -5,15 +5,20 @@ import {
   type DashboardCard,
   type DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   filterEnabledTuiAgents,
   TUI_AGENT_AUTO_PICK_ORDER
-} from '../../../../shared/tui-agent-selection'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
+import {
+  worktreeLaunchWorkspace,
+  type AgentLaunchRouteView
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type DashboardLaunchDetectionState = Pick<
   AppState,
@@ -92,11 +97,12 @@ function detectedAgentsForWorktree(
     : (state.detectedAgentIds ?? [])
 }
 
-/** Host-detected choices plus providers already proven to run in the workspace. */
+/** Host-detected choices, agents that open as a chat there, and providers proven to run there. */
 export function buildDashboardWorktreeLaunchOptions(
   state: DashboardLaunchOptionState,
   cards: readonly DashboardCard[],
-  workspaces: readonly DashboardWorkspace[] = []
+  workspaces: readonly DashboardWorkspace[] = [],
+  launchRouteStore?: AgentLaunchRouteView
 ): Record<string, TuiAgent[]> {
   const catalog = buildDashboardLaunchCatalog(state)
   const cardsByWorktreeId = new Map<string, DashboardCard[]>()
@@ -115,14 +121,16 @@ export function buildDashboardWorktreeLaunchOptions(
 
   const result: Record<string, TuiAgent[]> = {}
   for (const [worktreeId, repoId] of repoIdByWorktreeId) {
-    // Past the validator's bound the snapshot itself would be rejected, so the
-    // launcher goes quiet for the tail rather than taking the board down.
+    // Bound launch options before validation would reject the entire snapshot.
     if (Object.keys(result).length >= DASHBOARD_MAX_LAUNCH_WORKTREES) {
       break
     }
     const worktreeCards = cardsByWorktreeId.get(worktreeId) ?? []
+    const detected = detectedAgentsForWorktree(state, worktreeId, repoId, catalog)
     const available = new Set<TuiAgent>(
-      detectedAgentsForWorktree(state, worktreeId, repoId, catalog)
+      launchRouteStore
+        ? agentsOfferedForLaunch(launchRouteStore, worktreeLaunchWorkspace(worktreeId), detected)
+        : detected
     )
     for (const card of worktreeCards) {
       if (isTuiAgent(card.agentType)) {

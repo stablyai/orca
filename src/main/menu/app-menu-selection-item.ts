@@ -1,12 +1,9 @@
 import { BrowserWindow, Menu, webContents } from 'electron'
-import { isNativeBrowserPopupWindow } from '../browser/native-browser-popup-windows'
+import { isNativeBrowserPopupWindow } from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
 
 export type AppMenuSelectionAction = 'copy' | 'select-all'
 
-/**
- * The contents that should run a native Edit action itself: DevTools, a browser page or a native
- * popup holding focus. Null when the window's own renderer has focus, where Orca owns the action.
- */
+/** Native pages/popups own Edit actions; null leaves renderer surfaces to Orca. */
 export function resolveNativeEditTarget(
   focusedWindow: Electron.BrowserWindow
 ): Electron.WebContents | null {

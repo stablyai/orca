@@ -21,7 +21,7 @@ vi.mock('../../managed-server/lifecycle/orcad-managed-tunnel', async (importOrig
 
 import { beginSshShutdown } from './ssh-shutdown-drain'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { quitTeardownStartGate } from '../../quit-teardown-start-gate'
+import { quitTeardownStartGate } from '../../startup/quit/quit-teardown-start-gate'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
 
 const { mockSshStore, mockConnectionManager, mockPortForwardManager } = mocks
@@ -91,7 +91,7 @@ describe('SSH IPC handlers', () => {
     mockConnectionManager.disconnectAll.mockResolvedValue(undefined)
     mockConnectionManager.disconnect.mockClear().mockResolvedValue(undefined)
 
-    // Why: a probe holds a transport no session owns, so shutdown has to wait for it to hand it back.
+    // Shutdown must join probes because no session owns their transport.
     const probeState = {
       targetId: 'ssh-probe',
       status: 'connected',

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,13 +11,14 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control-launch-agent-selection'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { readSourceControlLaunchRecipeAgentId } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
-} from '../../../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control-ai-recipe-save'
-import { SourceControlFixSplitButton } from '../../source-control-fix-split-button'
+} from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import { SourceControlFixSplitButton } from '../panel/source-control-fix-split-button'
 
 export type SourceControlRecoveryKind = 'commit' | 'push'
 
@@ -60,17 +61,6 @@ function getRecoveryDialogKey(
   return `${recoveryKind}:${worktreeId ?? 'no-worktree'}`
 }
 
-function syncRecoveryDialogState(
-  state: RecoveryDialogState,
-  worktreeKey: string,
-  hasDetails: boolean
-): RecoveryDialogState {
-  if (state.worktreeKey === worktreeKey && hasDetails) {
-    return state
-  }
-  return { worktreeKey, open: false }
-}
-
 function shouldShowRecoveryDialog(
   state: RecoveryDialogState,
   worktreeKey: string,
@@ -94,6 +84,7 @@ function useRecoveryCopy(recoveryKind: SourceControlRecoveryKind): {
   launchDialogTitle: string
   dialogDescription: string
 } {
+  const languageRevision = useUiLanguageRevision()
   return useMemo(() => {
     if (recoveryKind === 'push') {
       return {
@@ -171,7 +162,8 @@ function useRecoveryCopy(recoveryKind: SourceControlRecoveryKind): {
         'Choose the agent and edit the full command input before launch.'
       )
     }
-  }, [recoveryKind])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
+  }, [recoveryKind, languageRevision])
 }
 
 export function SourceControlRecoveryNotice({
@@ -201,6 +193,10 @@ export function SourceControlRecoveryNotice({
     worktreeKey,
     open: false
   })
+  // Close on switch or lost details during render so returning cannot reopen a stale dialog.
+  if (dialogState.worktreeKey !== worktreeKey || (!hasDetails && dialogState.open)) {
+    setDialogState({ worktreeKey, open: false })
+  }
   const dialogOpen = shouldShowRecoveryDialog(dialogState, worktreeKey, hasDetails)
   const setDialogOpen = useCallback(
     (open: boolean) => {
@@ -223,10 +219,6 @@ export function SourceControlRecoveryNotice({
   const handlePromptDelivered = useCallback(() => {
     setDialogOpen(false)
   }, [setDialogOpen])
-
-  useEffect(() => {
-    setDialogState((current) => syncRecoveryDialogState(current, worktreeKey, hasDetails))
-  }, [hasDetails, worktreeKey])
 
   const splitButtonProps = {
     actionId,

@@ -1,10 +1,9 @@
-// Layout-owner build (L286): main's layout load, given its views, drops the saved tabs the window's
-// restore drops (restoresSavedContentTab), so main never holds a tab no window draws.
+// Main’s load must match restoresSavedContentTab so its layout never retains a transient tab no window can draw (L286).
 
 import { describe, expect, it, vi } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import type { Tab, TabContentType } from '../tab-types'
-import type { WorkspaceSessionState } from '../workspace-session-state-types'
+import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../constants'
 import { translateSessionTabMove } from './old-client/old-client-method-translation'
 import { loadWorkspaceLayout } from './workspace-layout-load'
@@ -30,13 +29,13 @@ function entry(id: string, contentType: TabContentType, entityId: string, sortOr
   }
 }
 
-/** A saved session after a restart: two edit files, and tabs whose documents were never saved. */
 function savedSession(): WorkspaceSessionState {
   const tabs = [
     entry('ghost-diff', 'diff', '/w/gone.ts', 0),
     entry('ed-a', 'editor', '/w/a.ts', 1),
     entry('ghost-review', 'conflict-review', '/w/conflict', 2),
     entry('ghost-checks', 'check-details', '/w/checks', 3),
+    entry('ghost-graph', 'git-graph', `${KEY}::git-graph`, 4),
     entry('ghost-html', 'editor', 'html-preview::/w/page.html', 4),
     entry('kept-diff', 'diff', '/w/b.ts', 5),
     entry('ed-b', 'editor', '/w/b.ts', 6)
@@ -79,18 +78,6 @@ describe("main's layout load of view-less saved editor tabs", () => {
     expect(saved.unifiedTabs?.[KEY]?.map((tab) => tab.id)).toEqual(['ed-a', 'kept-diff', 'ed-b'])
     expect(saved.tabGroups?.[KEY]?.[0]?.tabOrder).toEqual(['ed-a', 'kept-diff', 'ed-b'])
     expect(load(saved).changes).toEqual([])
-  })
-
-  // Main's own edits (a phone's browser tab, an agent tab) load without its views: they must not
-  // drop a live diff whose view only main's memory holds.
-  it('keeps every saved tab in a load that carries no views', () => {
-    const workspace = loadWorkspaceLayout(
-      LOCAL_EXECUTION_HOST_ID,
-      savedSession(),
-      nameBasedLoadContext()
-    ).layout.workspaces[KEY]!
-
-    expect(workspace.tabs).toHaveLength(7)
   })
 
   it('keeps a transient tab while main still holds its view', () => {

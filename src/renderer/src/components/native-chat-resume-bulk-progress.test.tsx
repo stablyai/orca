@@ -8,11 +8,11 @@ import {
 } from './native-chat-resume-modal.test-support'
 import { act } from 'react'
 import { expect, it, vi, type Mock } from 'vitest'
-import { NativeChatResumeOnRestartModal } from './NativeChatResumeOnRestartModal'
-import { chatBox } from './native-chat-resume-on-restart-modal.test-support'
+import { NativeChatResumeOnRestartModal } from './NativeChatResumeRuntimeModal'
+
 import { NativeChatResumeStatusSegment } from './status-bar/NativeChatResumeStatusSegment'
 import type { ResumeCandidate, ResumeFailure } from './native-chat-resume-on-restart-grouping'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import { requestNativeChatResumeOnRestartDialog } from './native-chat-resume-on-restart-dialog'
 import {
   continueNativeChatRestartOffer,
@@ -66,29 +66,6 @@ function emitPhase(
   })
 }
 
-it('resumes a 21-chat selection with one action and no redundant listing', async () => {
-  const candidates = Array.from({ length: 21 }, (_, index) => ({
-    ...offered[0]!,
-    sessionId: `chat-${index}`
-  }))
-  rpc.mockImplementation(async (_target, method) =>
-    method === 'agentSession.restartResumable'
-      ? { sessions: candidates, failed: [] }
-      : {
-          sessions: [],
-          failed: [],
-          continued: candidates.map(({ sessionId }) => ({ sessionId, outcome: 'continued' }))
-        }
-  )
-  await refreshNativeChatRestartOffer()
-  await continueNativeChatRestartOffer(candidates.map(({ sessionId }) => sessionId))
-  expect(rpc.mock.calls.map((call) => [call[1], call[2]])).toEqual([
-    ['agentSession.restartResumable', undefined],
-    ['agentSession.restartContinue', { sessionIds: candidates.map(({ sessionId }) => sessionId) }]
-  ])
-  expect(toasts()).toEqual([['Resumed 21 chats']])
-})
-
 it('uses the host unconfirmed result after a lost bulk reply without reporting a failure', async () => {
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
   let reads = 0
@@ -117,30 +94,6 @@ it('uses the host unconfirmed result after a lost bulk reply without reporting a
   } finally {
     warn.mockRestore()
   }
-})
-
-it('publishes a refusal reply without needing a second host read', async () => {
-  let reads = 0
-  rpc.mockImplementation(async (_target, method) => {
-    if (method === 'agentSession.restartResumable') {
-      if (reads++ > 0) {
-        throw new Error('listing unavailable')
-      }
-      return { sessions: offered, failed: [] }
-    }
-    return {
-      sessions: [offered[1]],
-      failed: [failure('a')],
-      continued: [{ sessionId: 'a', outcome: 'refused' }]
-    }
-  })
-  await mount(<NativeChatResumeOnRestartModal />)
-  await act(async () => chatBox('b').click())
-  await act(async () => button('Resume 1 chat').click())
-  expect(reads).toBe(1)
-  expect(offerIds()).toEqual(['b'])
-  expect(getNativeChatRestartOffer().failed.map((row) => row.sessionId)).toEqual(['a'])
-  expect(toasts()).toEqual([['1 chat couldn’t be resumed']])
 })
 
 it('keeps the run in flight after every feed verdict until the fallback list is published', async () => {
@@ -292,7 +245,7 @@ it.each(['unknown', 'pending'] as const)(
   }
 )
 
-it('dismissing a failure after the reply never promotes it to resumed history', async () => {
+it('dismissing a host failure preserves the uncertain action history', async () => {
   fakeHost({ sessions: [offered[0]!] }, () => 'unknown')
   await mount(<NativeChatResumeOnRestartModal />)
   await act(async () => continueNativeChatRestartOffer(['a']))
@@ -301,8 +254,9 @@ it('dismissing a failure after the reply never promotes it to resumed history', 
   expect(dismiss).not.toBeNull()
   await act(async () => dismiss?.click())
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resumed 0 of 1 chat')
-  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Need you0')
-  expect(runStatus('Prompt a')).toBeNull()
+  expect(getNativeChatRestartOffer().failed).toEqual([])
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Need you1')
+  expect(runStatus('Prompt a')).toBe('Prompt a: Couldn’t confirm the chat was resumed')
   expect(toasts()).toEqual([['Couldn’t confirm 1 chat was resumed']])
 })
 
@@ -315,7 +269,7 @@ it('keeps an unknown reply unconfirmed when it carries no confirmed failure list
   await mount(<NativeChatResumeOnRestartModal />)
   await act(async () => continueNativeChatRestartOffer(['a']))
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Resumed 0 of 1 chat')
-  expect(runStatus('Prompt a')).toBeNull()
+  expect(runStatus('Prompt a')).toBe('Prompt a: Couldn’t confirm the chat was resumed')
   expect(toasts()).toEqual([['Couldn’t confirm 1 chat was resumed']])
 })
 

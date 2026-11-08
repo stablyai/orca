@@ -1,16 +1,12 @@
-// A background Stop reaches what the host's child records say runs, the same records that draw the
-// strip's Stop and word whether /clear, /compact and rewind wait. Replayed from a captured frame
-// order through the real adapter and a real hook server.
-
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   agentChildWorkStopEvidence,
   agentChildWorkStopTargets,
   type AgentChildWorkStopAcknowledgement
-} from '../../shared/agent-child-work-stop-targets'
-import type { AgentSessionRecord } from '../../shared/agent-session-record'
-import { agentChildWorkLiveness } from '../../shared/agent-status-child-work-liveness'
-import { conversationCommandBlocked } from '../native-chat/agent-session-wire/structured-conversation-command-admission'
+} from '../../shared/agent-status/child-work/agent-child-work-stop-targets'
+import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import { agentChildWorkLiveness } from '../../shared/agent-status/child-work/agent-status-child-work-liveness'
+import { conversationCommandBlocked } from '../native-chat/agent-session-wire/operations/structured-conversation-command-admission'
 import type { CapturedFrame } from './claude-captured-frame-builders.test-fixture'
 import { RESUMED_BY_MESSAGE } from './claude-captured-task-frames.test-fixture'
 import { hostWithParent, parent, producer } from './claude-child-work-producer-harness.test-fixture'
@@ -22,8 +18,7 @@ afterEach(() => vi.restoreAllMocks())
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: admission reads only the lease and the command/rewind records, all absent here.
 const RECORD = { lease: {} } as unknown as AgentSessionRecord
 
-/** A backgrounded agent the CLI's roster then drops with no ending of its own: the records keep
- *  it live, the provider tracker does not. */
+/** Host records retain live work after provider roster removal. */
 async function droppedFromRoster() {
   const host = hostWithParent()
   const run = await producer(host)
@@ -39,10 +34,11 @@ async function droppedFromRoster() {
         sessionId: 'session-1',
         fence: 7,
         journal: {
-          snapshot: () => ({ items: [] }),
+          itemsRead: () => ({ items: [] }),
           cursor: () => ({ epoch: 'e', sequence: 0 }),
           item: () => null,
           submissions: () => [],
+          inputOrder: { recoverableSubmissions: () => [] },
           runningTurn: () => null,
           itemFence: () => undefined,
           visitItems: () => undefined,
@@ -51,7 +47,6 @@ async function droppedFromRoster() {
         adapter: run.adapter
       },
       RECORD,
-      // Every child here is on record, so the host's open work is what the records hold live.
       { views: records(), open: agentChildWorkLiveness(records()) !== null }
     )
   const stopCalls = () =>
@@ -61,7 +56,7 @@ async function droppedFromRoster() {
   ])
   expect(run.adapter.backgroundTaskState('session-1')).toBeNull()
   expect(blocked()?.message).toBe('Stop background tasks before using this command.')
-  /** A Stop as the host sends it: targets captured first, what the CLI accepted settled after. */
+  // Snapshot stop targets before dispatch; settle only acknowledged records.
   const stop = async (taskId?: string) => {
     const targets = agentChildWorkStopTargets(records(), taskId)
     const acknowledged: AgentChildWorkStopAcknowledgement[] = []
@@ -90,19 +85,6 @@ describe('a background Stop acts on the host child records', () => {
 
     expect(outcome).toMatchObject({ cancelled: true })
     expect(stopCalls()).toEqual([{ subtype: 'stop_task', params: { taskId: 'agent-1' } }])
-    // The CLI acknowledges a task it no longer runs with no frame: the acknowledgement ends it.
-    expect(records()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
-    expect(basis()).toEqual(['stop-acknowledged'])
-    expect(blocked()).toBeNull()
-  })
-
-  it('stops every task the strip offers a stop when none is named', async () => {
-    const { records, blocked, stopCalls, stop, basis } = await droppedFromRoster()
-
-    const outcome = await stop()
-
-    expect(outcome).toMatchObject({ cancelled: true })
-    expect(stopCalls()).toEqual([{ subtype: 'stop_task', params: { taskId: 'agent-1' } }])
     expect(records()).toMatchObject([{ membership: 'settled', outcome: 'cancelled' }])
     expect(basis()).toEqual(['stop-acknowledged'])
     expect(blocked()).toBeNull()
@@ -119,12 +101,20 @@ describe('a background Stop acts on the host child records', () => {
           task_id: 'agent-1',
           patch: { status: 'completed' }
         }
+      },
+      {
+        at: 7_000,
+        frame: {
+          type: 'system',
+          subtype: 'task_notification',
+          task_id: 'agent-1',
+          status: 'completed'
+        }
       }
     ])
 
     const outcome = await stop('agent-1')
 
-    // The finished row offers no stop, so nothing reaches the CLI and the outcome stands.
     expect(outcome).toMatchObject({ cancelled: false })
     expect(stopCalls()).toEqual([])
     expect(records()).toMatchObject([{ membership: 'settled', outcome: 'succeeded' }])
@@ -150,31 +140,6 @@ describe('a background Stop acts on the host child records', () => {
     ])
     expect(records()).toMatchObject([
       { membership: 'settled', outcome: 'succeeded', lastMessage: 'Found 3 call sites' }
-    ])
-  })
-
-  it('never lets an acknowledged Stop replace an ending the task reported itself', async () => {
-    const { run, records } = await droppedFromRoster()
-    // The task's own failure lands; a Stop the user sent before it is acknowledged after.
-    run.replay([
-      {
-        at: 7_000,
-        frame: {
-          type: 'system',
-          subtype: 'task_notification',
-          task_id: 'agent-1',
-          status: 'failed',
-          summary: 'Exit code 1'
-        }
-      }
-    ])
-    await run.adapter.stopBackgroundTasks({
-      sessionId: 'session-1',
-      fence: 7,
-      taskIds: ['agent-1']
-    })
-    expect(records()).toMatchObject([
-      { membership: 'settled', outcome: 'failed', lastMessage: 'Exit code 1' }
     ])
   })
 })

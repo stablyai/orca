@@ -1,13 +1,13 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { writeEncryptedCredential } from '../integration-credential-file'
-import { readCredentialFileProtection } from '../credential-file-protection'
+import { writeEncryptedCredential } from '../credentials/integration-credential-file'
+import { readCredentialFileProtection } from '../credentials/credential-file-protection'
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
-import type { JiraSite, JiraSiteSelection } from '../../shared/jira-types'
-import { createIntegrationStateFileCache } from '../integration-state-file-cache'
+import type { JiraSite, JiraSiteSelection } from '../../shared/jira/jira-types'
+import { createIntegrationStateFileCache } from '../credentials/integration-state-file-cache'
 import { isJiraGatewayBaseUrl } from './gateway-base-url'
-import { createIntegrationTokenFileCache } from '../integration-token-file-cache'
+import { createIntegrationTokenFileCache } from '../credentials/integration-token-file-cache'
 
 export type JiraSiteFile = {
   version: 1
@@ -189,7 +189,5 @@ export function deleteToken(siteId: string): void {
   tokenFileCache.forget(siteId)
   try {
     unlinkSync(getTokenPath(siteId))
-  } catch {
-    // Token may not exist — safe to ignore.
-  }
+  } catch {}
 }

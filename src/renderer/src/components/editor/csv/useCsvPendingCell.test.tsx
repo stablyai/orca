@@ -3,8 +3,8 @@
 import { act, useRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import { expect, it, vi } from 'vitest'
-import { flushClosingEditorBuffers } from '../editor-pending-flush'
-import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../editor-autosave'
+import { flushClosingEditorBuffers } from '../save/flush/editor-pending-flush'
+import { ORCA_EDITOR_FILE_SAVED_EVENT } from '../autosave/editor-autosave'
 import { EMPTY_EDITOR_BUFFER_VIEW_INDEX as NO_SHARING } from '@/store/slices/editor/buffers/editor-buffer-views'
 import { CSV_RECORD_BYTES } from './csv-byte-index'
 import type { CsvCellEditSession } from './csv-grid-interaction'
@@ -24,7 +24,6 @@ it('keeps an over-limit pending cell as draft text when its tab closes', async (
       source: document.source,
       wasDirty: false
     })
-    // A commit refuses the cell, as the table size limit does.
     useCsvPendingCell({
       fileId: 'data.csv',
       commit: () => false,

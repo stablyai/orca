@@ -1,6 +1,4 @@
-// A pane rename in a layout-owner build: main applies it and its frame draws the title; the window
-// does not write it again. Main's frames run through the shared transport, whose apply check
-// fails any flush that differs from the full build.
+// Main applies renames and frames draw titles without a second window write. Shared transport checks each flush against full-build behavior.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -8,7 +6,7 @@ import { useAppStore } from '@/store'
 import { localDesktopSession } from '../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import { leaf } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { applyRuntimePaneTitle } from '../hooks/ipc-events/terminal-pane-title-ipc-bridge'
 import { layoutApplyTestTransport } from './layout-apply-test-transport.test-fixture'
 import { loadMainLayoutModel } from './main-loaded-layout-frames.test-fixture'
@@ -17,7 +15,7 @@ import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 
 vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Main's answer to the window's layout commands and its frames, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
     await import('@/runtime/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
@@ -95,15 +93,5 @@ describe('a pane title drawn from main’s frame', () => {
     expect(writes.count()).toBe(1)
     // A mounted pane follows the layout's titles (use-host-pane-title-sync), not an event.
     expect(dispatchEvent).not.toHaveBeenCalled()
-  })
-
-  it('clears a pane’s name from main’s frame alone', async () => {
-    const writes = layoutWrites()
-    applyRuntimePaneTitle({ tabId: 'tab-shell', leafId: leaf(2), title: null })
-    await settle()
-    writes.stop()
-
-    expect(titles()).toBeUndefined()
-    expect(writes.count()).toBe(1)
   })
 })

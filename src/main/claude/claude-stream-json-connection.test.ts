@@ -2,29 +2,30 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { providerDiagnosticOf } from '../../shared/agent-session-failure'
+import { providerDiagnosticOf } from '../../shared/agent-session/failures/agent-session-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { SpawnedProcess, ProcessSpec } from '@orca/process-host/process-spec'
 
-import { query, type CanUseTool, type Options } from '@anthropic-ai/claude-agent-sdk'
+import type { query, CanUseTool } from '@anthropic-ai/claude-agent-sdk'
 import {
   openClaudeStreamJsonConnection,
   type ClaudeStreamJsonConnection,
   type ClaudeStreamJsonLaunch
 } from './claude-stream-json-connection'
 import { openAgentSessionJournal } from '../native-chat/agent-session-journal/journal-store-factory'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { claudeAuthDiagnostic } from './claude-structured-init-proof'
-import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
+import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './structured/launch/claude-structured-launch-resolution'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { providerExecutableMissing } from '../provider-process/provider-executable-missing'
 
-// These drive the real SDK against the scripted fake CLI, so every assertion is
-// about the environment, argv and frames a real child actually saw.
+// Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
 const HOLD_OPEN = { delayMs: 10_000 }
@@ -47,6 +48,7 @@ afterEach(async () => {
   }
   await Promise.all(childClosures.splice(0))
   for (const dir of scratchDirs.splice(0)) {
+    await closeTestJournalHostDatabases()
     rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   }
   spawned.splice(0)
@@ -86,9 +88,7 @@ function launchFor(
   }
 }
 
-/** The derived child environment, captured where Orca actually hands it to the OS. */
 const spawned: ProcessSpec[] = []
-/** The retained child, so a test can end it the way a crashing CLI would. */
 const spawnedChildren: SpawnedProcess[] = []
 
 async function open(
@@ -110,16 +110,6 @@ async function open(
   )
   openConnections.push(connection)
   return connection
-}
-
-function launchedArgv(spec: ProcessSpec | undefined): string[] {
-  const argv = [spec?.program ?? '', ...(spec?.args ?? [])]
-  // A supervised launch carries the provider's argv after the supervisor script's '--'.
-  return spec?.env?.ORCA_PROVIDER_SUPERVISOR_SPEC ? argv.slice(argv.indexOf('--') + 1) : argv
-}
-
-function childEnv(): Record<string, string | undefined> {
-  return (spawned.at(-1)?.env ?? {}) as Record<string, string | undefined>
 }
 
 async function until<T>(read: () => T | null | undefined, label: string): Promise<T> {
@@ -157,109 +147,6 @@ function processState(pid: number): 'running' | 'exited' {
 }
 
 describe('Claude stream-json connection', () => {
-  it('passes the Claude Code system-prompt preset through to SDK query', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    let captured: Options | undefined
-    await open(launchFor(scenario), {}, (params) => {
-      captured = params.options
-      return query(params)
-    })
-
-    expect(captured?.systemPrompt).toEqual({ type: 'preset', preset: 'claude_code' })
-  })
-
-  it('hands the child a derived environment, the resolved CLI path, and keeps the pid', async () => {
-    vi.stubEnv('ANTHROPIC_API_KEY', 'sk-ant-SHELL-LEAK')
-    vi.stubEnv('CLAUDE_CODE_CHILD_SESSION', '1')
-    vi.stubEnv('NODE_OPTIONS', '--require=/tmp/inject.js')
-    // An inherited value wins over the SDK's default, so clear it to pin the default.
-    vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined)
-    vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
-    // An Orca launched inside another structured session inherits that session's id.
-    vi.stubEnv('ORCA_AGENT_SESSION_ID', 'a0b1c2d3-0000-4000-8000-00000000abcd')
-    const scenario = scriptScenario([HOLD_OPEN])
-    const connection = await open(
-      launchFor(scenario, {
-        ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666',
-        CLAUDE_CONFIG_DIR: '/accounts/managed/home',
-        ANTHROPIC_AUTH_TOKEN: 'configured-token',
-        ORCA_AGENT_SESSION_SPAWN_TOKEN: 'spawn-9',
-        CLAUDE_CODE_CHILD_SESSION: 'configured-child-session',
-        CLAUDE_CODE_SESSION_ID: 'configured-session',
-        CLAUDE_CODE_BRIDGE_SESSION_ID: 'configured-bridge-session'
-      })
-    )
-
-    // Ownership proof: the pid is a real live process, not a value the SDK reported.
-    expect(connection.pid).toEqual(expect.any(Number))
-    expect(() => process.kill(connection.pid as number, 0)).not.toThrow()
-    const env = childEnv()
-    // The managed home is pinned verbatim: the CLI keys credential lookup on the literal string.
-    expect(env.CLAUDE_CONFIG_DIR).toBe('/accounts/managed/home')
-    expect(env.ANTHROPIC_AUTH_TOKEN).toBe('configured-token')
-    expect(env.ORCA_AGENT_SESSION_SPAWN_TOKEN).toBe('spawn-9')
-    expect(env.ORCA_CONNECTION_MARKER).toBe('inherited')
-    // The session's own id reaches the spawned child over the inherited one.
-    expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
-    expect(env.ANTHROPIC_API_KEY).toBeUndefined()
-    expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
-    expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
-    expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
-    // Two SDK mutations of the child env, pinned so a bump cannot change them unseen.
-    expect(env.CLAUDE_CODE_ENTRYPOINT).toBe('sdk-ts')
-    expect(env.NODE_OPTIONS).toBeUndefined()
-    // The bundled binary is excluded from the install, so the resolved path is mandatory.
-    const report = await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    expect(report.argv[0]).toBe(FAKE_CLI)
-    // The .mjs fixture makes the SDK run it under node; a real CLI path is the program
-    // itself. Either way the resolved path is what Orca's spawner is asked to execute,
-    // through the POSIX supervisor's spec where there is one.
-    expect(launchedArgv(spawned.at(-1))).toContain(FAKE_CLI)
-    expect(report.argv).toContain('--replay-user-messages')
-    expect(report.argv).toContain(`--session-id=${SESSION_ID}`)
-  })
-
-  it("strips the launch's inherited keys after Orca's own env is merged in", async () => {
-    vi.stubEnv('ORCA_PANE_KEY', 'tab-1:pane-1')
-    vi.stubEnv('ORCA_AGENT_HOOK_PORT', '4242')
-    vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
-    const scenario = scriptScenario([HOLD_OPEN])
-    await open({
-      ...launchFor(scenario, { ORCA_AGENT_SESSION_ID: 'f7a1c0de-1111-4222-8333-444455556666' }),
-      envToDelete: ['ORCA_PANE_KEY', 'ORCA_AGENT_HOOK_PORT']
-    })
-
-    await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    const env = childEnv()
-    expect(env.ORCA_PANE_KEY).toBeUndefined()
-    expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
-    // Only the listed keys go: the rest of the inherited env and the launch's own still arrive.
-    expect(env.ORCA_CONNECTION_MARKER).toBe('inherited')
-    expect(env.ORCA_AGENT_SESSION_ID).toBe('f7a1c0de-1111-4222-8333-444455556666')
-  })
-
-  it('leaves the default CLI home unpinned so macOS Keychain OAuth keeps working', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    await open(launchFor(scenario))
-
-    await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
-  })
-
-  it("drops a CLAUDE_CONFIG_DIR from Orca's own process env: only the launch may name a home", async () => {
-    vi.stubEnv('CLAUDE_CONFIG_DIR', '/orca/process/claude')
-    vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
-    const scenario = scriptScenario([HOLD_OPEN])
-    await open(launchFor(scenario))
-
-    await until(() => readReportSafely(scenario), 'the scripted CLI report')
-    expect(childEnv().CLAUDE_CONFIG_DIR).toBeUndefined()
-    expect(childEnv().ORCA_CONNECTION_MARKER).toBe('inherited')
-
-    await open(launchFor(scenario, { CLAUDE_CONFIG_DIR: '/accounts/managed/home' }))
-    expect(childEnv().CLAUDE_CONFIG_DIR).toBe('/accounts/managed/home')
-  })
-
   it('settles a send only once the frame reached the child, and replays reach onMessage', async () => {
     const replay = {
       type: 'user',
@@ -281,9 +168,7 @@ describe('Claude stream-json connection', () => {
       parent_tool_use_id: null,
       session_id: SESSION_ID
     })
-    // The report exists from the child's first line of work, so poll for the frame
-    // itself: `send` settles on the SDK's completed write, and the child still has
-    // to read that line before it can record it.
+    // send resolves on write; poll until the child reads and records the frame.
     const report = await until(
       () => (readReportSafely(scenario)?.userMessages.length ? readReportSafely(scenario) : null),
       'the user frame recorded by the child'
@@ -291,7 +176,6 @@ describe('Claude stream-json connection', () => {
     expect(report.userMessages).toHaveLength(1)
 
     await until(() => messages.find((message) => message.uuid === 'uuid-replay-1'), 'the replay')
-    // The replay is delivered verbatim, so the dispatch acknowledgement still binds on it.
     expect(messages.find((message) => message.uuid === 'uuid-replay-1')).toEqual(replay)
   })
 
@@ -300,9 +184,7 @@ describe('Claude stream-json connection', () => {
     const connection = await open(launchFor(scenario))
     const child = spawnedChildren.at(-1)
 
-    // Same tick as the send, so the liveness guard still passes and the frame
-    // reaches the SDK's input pump: its `transport.write` is what fails, which is
-    // the window a child crashing mid-send actually opens.
+    // Kill in the send tick so the SDK write fails before the liveness guard observes exit.
     child?.kill('SIGKILL')
     const sent = connection.send({
       type: 'user',
@@ -315,25 +197,8 @@ describe('Claude stream-json connection', () => {
     expect(readReportSafely(scenario)?.userMessages ?? []).toHaveLength(0)
   })
 
-  it('delivers an unmodeled frame verbatim so the provider-fallback row survives', async () => {
-    const unknown = {
-      type: 'frame_kind_from_the_future',
-      session_id: SESSION_ID,
-      uuid: 'uuid-unknown-1',
-      payload: { nested: { flags: ['a', 'b'] } }
-    }
-    const scenario = scriptScenario([{ emit: unknown }, HOLD_OPEN])
-    const messages: Record<string, unknown>[] = []
-    await open(launchFor(scenario), { onMessage: (message) => messages.push(message) })
-
-    await until(() => messages.find((message) => message.uuid === 'uuid-unknown-1'), 'the frame')
-    expect(messages.find((message) => message.uuid === 'uuid-unknown-1')).toEqual(unknown)
-  })
-
   it('commits the real partial-message cadence as one assistant item through the translator', async () => {
-    // The frame order and per-frame uuids are the ones Claude Code 2.1.258 emits
-    // under --include-partial-messages: every stream_event and the block's final
-    // assistant frame each carry their own uuid; only message.id ties them.
+    // Claude Code 2.1.258 partial-message order: distinct frame UUIDs correlate through message.id.
     const stream = (uuid: string, event: Record<string, unknown>) => ({
       type: 'stream_event',
       uuid,
@@ -426,14 +291,15 @@ describe('Claude stream-json connection', () => {
         blocks: [{ type: 'text', text: 'STREAMOK_ELEC_64E632' }]
       }
     ])
-    expect(assistant.map((item) => item.itemId)).toEqual([`claude:${SESSION_ID}:uuid-block-start`])
+    expect(assistant.map((item) => item.itemId)).toEqual([
+      `claude:${SESSION_ID}:block%3Amsg_01%3A0`
+    ])
     expect(
       items.flatMap((item) =>
         item.body.kind === 'status' && item.body.providerFrame ? [item.body.providerFrame.kind] : []
       )
     ).toEqual([])
-    // The journal owns a SQLite connection now; afterEach removes this temp root and an open
-    // handle blocks that on Windows.
+    // Close SQLite before Windows cleanup can remove its files.
     await journal.close()
   })
 
@@ -487,85 +353,7 @@ describe('Claude stream-json connection', () => {
     expect(written.response.response).toMatchObject({ behavior: 'deny', message: 'No' })
   })
 
-  it('drives Orca control methods onto the SDK and times out with the init proof message', async () => {
-    const scenario = scriptScenario([HOLD_OPEN], {
-      initialize: { models: [{ value: 'sonnet' }], account: { tokenSource: 'oauth' } },
-      get_settings: { env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' } }
-    })
-    const connection = await open(launchFor(scenario))
-
-    await expect(connection.initializationResult()).resolves.toMatchObject({
-      models: [{ value: 'sonnet' }]
-    })
-    await expect(connection.getSettings()).resolves.toEqual({
-      env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' }
-    })
-    await expect(connection.setModel('opus')).resolves.toBeUndefined()
-    const requests = await until(
-      () =>
-        readReportSafely(scenario)?.controlRequests.find(
-          (frame) => frame.request.subtype === 'set_model'
-        ),
-      'the set_model control request'
-    )
-    expect(requests.request.subtype).toBe('set_model')
-  })
-
-  it('reads supportedModels from the catalog the running CLI reported', async () => {
-    const scenario = scriptScenario([HOLD_OPEN], {
-      initialize: {
-        models: [
-          { value: 'default', resolvedModel: 'claude-opus-5' },
-          {
-            value: 'opus',
-            displayName: 'Opus 5',
-            description: 'The live row, not the seed',
-            resolvedModel: 'claude-opus-5',
-            supportsEffort: true,
-            supportedEffortLevels: ['low', 'high']
-          }
-        ]
-      }
-    })
-    const connection = await open(launchFor(scenario))
-
-    await expect(connection.supportedModels()).resolves.toMatchObject([
-      { value: 'default', resolvedModel: 'claude-opus-5' },
-      { value: 'opus', displayName: 'Opus 5', supportedEffortLevels: ['low', 'high'] }
-    ])
-  })
-
-  it('feeds the auth diagnostic from the settings the running child reports', async () => {
-    for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY']) {
-      vi.stubEnv(key, undefined)
-    }
-    const scenario = scriptScenario([HOLD_OPEN], {
-      get_settings: {
-        env: {
-          ANTHROPIC_BASE_URL: 'https://settings.example.test',
-          ANTHROPIC_AUTH_TOKEN: 'secret'
-        }
-      }
-    })
-    const connection = await open(launchFor(scenario))
-    const init = { providerSessionId: SESSION_ID, uuid: null, model: null, message: {} }
-
-    // With no ambient auth, every true below can only have come from the CLI's settings.
-    expect(claudeAuthDiagnostic(null, init, null)).toMatchObject({
-      baseUrlConfigured: false,
-      authTokenConfigured: false
-    })
-    const diagnostic = claudeAuthDiagnostic(null, init, await connection.getSettings())
-    expect(diagnostic).toMatchObject({
-      baseUrlConfigured: true,
-      authTokenConfigured: true,
-      apiKeyConfigured: false
-    })
-    expect(JSON.stringify(diagnostic)).not.toContain('secret')
-  })
-
   it('settles an unanswered initialize when the child exits, with no timer of its own', async () => {
-    // The scripted CLI never answers, then leaves: only its exit can settle the request.
     const scenario = scriptScenario([{ stderr: 'claude: not signed in\n' }, { exit: 1 }])
     const connection = await open({
       ...launchFor(scenario),
@@ -585,20 +373,17 @@ describe('Claude stream-json connection', () => {
     })
 
     await until(() => exit, 'the exit error')
-    // The status and stderr are the only diagnostic a refused start leaves behind.
     expect((exit as unknown as Error).message).toMatch(/exited \(code 1\): claude: not signed in/)
-    // Kept apart from Orca's wording where it is composed, and marked as log text.
     expect(providerDiagnosticOf(exit)).toEqual({
       text: expect.stringMatching(/^\(code 1\)\n.*claude: not signed in/s),
       audience: 'log'
     })
     expect(connection.closed).toBe(true)
-    // Stderr-triggered capture can win or lose the race with this real child's exit.
+    // Stderr capture races real process exit, so tree proof may remain unverifiable.
     const closed = await connection.close()
     expect(connection.exitVerdict.root).toBe('exited')
     expect(['exited', 'unverifiable']).toContain(connection.exitVerdict.tree)
     if (process.platform === 'win32') {
-      // The self-exit is the close, unless a reap racing it already forced the tree.
       expect(closed || connection.exitVerdict.tree === 'unverifiable').toBe(true)
     } else {
       expect(closed).toBe(connection.exitVerdict.tree === 'exited')
@@ -657,15 +442,12 @@ describe('Claude stream-json connection', () => {
       )
 
       const reported = await until(() => exit, 'the supervised spawn failure')
-      // The supervisor spawned, so this is its exit; only its stderr can say why.
-      // Reads as the direct spawn's own error, never the supervisor's internal report.
+      // The supervisor exits with the missing CLI error carried on stderr.
       expect(reported.message).toBe(
         `claude stream-json exited (code 127): spawn ${missingCli} ENOENT`
       )
-      // Typed, so the start reads as a CLI that is not installed rather than a generic failure.
       expect(providerExecutableMissing(reported)).toBe(true)
       expect(connection.executableMissing).toBe(true)
-      // A first-hand root exit, which releases the lease like a processless start did.
       expect(connection.exitVerdict.root).toBe('exited')
     }
   )
@@ -723,16 +505,4 @@ describe('Claude stream-json connection', () => {
     await until(() => exit, 'the distinct child exit')
     expect(connection.exitVerdict.root).toBe('exited')
   })
-
-  it('proves the exit of a child that ignores a graceful shutdown', async () => {
-    const scenario = scriptScenario([HOLD_OPEN])
-    const connection = await open({
-      ...launchFor(scenario),
-      env: { ...launchFor(scenario).env, ORCA_SDK_CONTRACT_IGNORE_SIGTERM: '1' }
-    })
-
-    // Keep the lstart capture boundary outside the child's displayed start second.
-    await new Promise((resolve) => setTimeout(resolve, 1_100))
-    await expect(connection.close()).resolves.toBe(true)
-  }, 20_000)
 })

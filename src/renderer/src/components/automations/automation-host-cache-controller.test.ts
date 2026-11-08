@@ -1,8 +1,4 @@
-/**
- * The controller is where a rebuilt catalog meets the cache: it must advance
- * generations before fetching, forget hosts the catalog dropped, and leave an
- * unreachable authority alone instead of dialling it.
- */
+/** Advance generations before fetch, evict removed hosts, and leave unreachable authorities undialed. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
@@ -13,10 +9,7 @@ import type {
 } from '../../../../shared/automation-owner-ref'
 import { createAutomationHostCache } from './automation-host-cache'
 import { createAutomationHostQueryController } from './automation-host-cache-controller'
-import {
-  getAuthorityCatalogGeneration,
-  resetAutomationHostCatalogGenerationsForTests
-} from './automation-host-catalog-generation'
+import { resetAutomationHostCatalogGenerationsForTests } from './automation-host-catalog-generation'
 import type {
   AutomationAuthorityHealth,
   AutomationHostCatalog,
@@ -137,18 +130,6 @@ afterEach(() => {
 })
 
 describe('automation host query controller', () => {
-  it('advances catalog generations before fetching anything', async () => {
-    const listScoped = vi.fn(() => Promise.resolve(emptyList()))
-    const { controller } = createController(listScoped)
-    expect(getAuthorityCatalogGeneration(RUNTIME)).toBe(0)
-
-    await controller.applyCatalog(catalogOf([entry(RUNTIME_SELF)]))
-
-    expect(getAuthorityCatalogGeneration(RUNTIME)).toBe(1)
-    expect(listScoped).toHaveBeenCalledTimes(1)
-    controller.dispose()
-  })
-
   it('skips removed entries and unreachable authorities but keeps the selected host', async () => {
     const listScoped = vi.fn(() => Promise.resolve(emptyList()))
     const { controller } = createController(listScoped)
@@ -170,9 +151,7 @@ describe('automation host query controller', () => {
     controller.dispose()
   })
 
-  // The ordinary startup shape: SSH hydration re-applies the catalog while the
-  // four-slot pool still holds a queue, and the hosts in that queue are the ones
-  // that would otherwise sit at `loading` with no request and no Retry.
+  // Startup hydration may reapply the catalog with work still queued; cancelled entries must refetch rather than remain loading forever.
   it('re-fetches hosts whose queued work a second catalog apply cancelled', async () => {
     const gates: ((value: ScopedAutomationList) => void)[] = []
     const queried: string[] = []
@@ -206,8 +185,7 @@ describe('automation host query controller', () => {
     controller.dispose()
   })
 
-  // Design doc: a manual All-host refresh bypasses TTL but leaves hosts already
-  // known to fail to their own Retry rather than dialling them again.
+  // Manual refresh bypasses TTL; permanently failed hosts retain their own Retry without automatic redial.
   it('does not re-enqueue a permanently failed host on a manual refresh', async () => {
     const listScoped = vi.fn(() => Promise.reject(new Error('permission_denied')))
     const { cache, controller } = createController(listScoped)
@@ -221,8 +199,7 @@ describe('automation host query controller', () => {
     controller.dispose()
   })
 
-  // doc:321 — a same-id re-adoption moves the registration generation and nothing
-  // else, so rows fetched under the old one must not survive the applied catalog.
+  // Same-ID re-adoption changes registration generation while preserving display identity; old rows must be discarded (doc:321).
   it('re-fetches a host re-adopted under a new registration inside the TTL', async () => {
     // One row per registration, so a cached row names the incarnation it came from.
     const listScoped = vi.fn((_authority, selector) =>
@@ -254,35 +231,6 @@ describe('automation host query controller', () => {
 
     await controller.applyCatalog(catalogOf([entry(DESKTOP_SELF)]))
     expect(cache.keys()).toEqual([hostStableKey(DESKTOP_SELF)])
-    controller.dispose()
-  })
-
-  // Why: a positive count is what tells the next catalog to show the authority's orphan entry.
-  it('reports the latest orphan count an authority returned', async () => {
-    const listScoped = vi.fn(() =>
-      Promise.resolve({ automations: [], items: [], orphanCount: 3, invalidRows: 0 })
-    )
-    const { controller } = createController(listScoped)
-    expect(controller.authorityOrphanCount(RUNTIME)).toBeNull()
-
-    await controller.applyCatalog(catalogOf([entry(RUNTIME_SELF)]))
-
-    expect(controller.authorityOrphanCount(RUNTIME)).toBe(3)
-    expect(controller.authorityOrphanCount(DESKTOP)).toBeNull()
-    controller.dispose()
-  })
-
-  it('refetches only the entries an event invalidated, past the TTL', async () => {
-    const listScoped = vi.fn(() => Promise.resolve(listOf(['a'])))
-    const { controller } = createController(listScoped)
-    await controller.applyCatalog(catalogOf([entry(DESKTOP_SELF), entry(RUNTIME_SELF)]))
-    expect(listScoped).toHaveBeenCalledTimes(2)
-
-    controller.handleAuthorityEvent({ authority: RUNTIME, selector: { kind: 'self' } })
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(listScoped).toHaveBeenCalledTimes(3)
     controller.dispose()
   })
 

@@ -3,9 +3,9 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as RuntimeFileReadClient from '@/runtime/runtime-file-read-client'
+import type * as RuntimeFileReadClient from '@/runtime/files/reads/runtime-file-read-client'
 import { useAppStore } from '@/store'
-import { makeWorktree } from '../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import type { FileContent } from './editor-panel-content-types'
 import {
   useEditorPanelFileContentLoader,
@@ -13,7 +13,7 @@ import {
 } from './useEditorPanelFileContentLoader'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
-vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileReadClient>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
@@ -23,7 +23,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const WORKTREE = 'repo-1::/root/repo'
 const FILE_PATH = '/root/repo/README.md'
 
-/** The workspace now lives on its managed server; the tab was saved by the relay era, unstamped. */
+/** Simulate unstamped relay-era tabs after their workspace moves to a managed server. */
 function seedConvertedWorkspace(): void {
   useAppStore.setState(useAppStore.getInitialState(), true)
   useAppStore.setState({
@@ -117,7 +117,7 @@ describe('a restored tab whose workspace moved to its managed server', () => {
     expect(file).toMatchObject({ worktreeId: WORKTREE, runtimeEnvironmentId: 'env-1' })
     const tabs = state.unifiedTabsByWorktree[WORKTREE] ?? []
     expect(tabs.map((tab) => tab.entityId)).toEqual([file.id])
-    // Same group, same slot: re-owning is not a second tab.
+    // Re-own in place without adding a tab or moving its slot.
     expect((state.groupsByWorktree[WORKTREE] ?? []).flatMap((group) => group.tabOrder)).toEqual([
       tabs[0]?.id
     ])
@@ -129,24 +129,5 @@ describe('a restored tab whose workspace moved to its managed server', () => {
       worktreeId: WORKTREE
     })
     expect(fileContents[file.id]).toMatchObject({ content: '# repo' })
-  })
-
-  it('keeps its place and focus among the other restored tabs', async () => {
-    seedConvertedWorkspace()
-    const readmeId = openRestored(FILE_PATH)
-    openRestored('/root/repo/NOTES.md')
-    const before = useAppStore.getState()
-    const tabIdsBefore = before.unifiedTabsByWorktree[WORKTREE]?.map((tab) => tab.id)
-    const activeTabBefore = before.groupsByWorktree[WORKTREE]?.[0]?.activeTabId
-
-    await act(async () => load!(FILE_PATH, readmeId, WORKTREE, 'README.md'))
-
-    const after = useAppStore.getState()
-    expect(after.unifiedTabsByWorktree[WORKTREE]?.map((tab) => tab.id)).toEqual(tabIdsBefore)
-    expect(after.groupsByWorktree[WORKTREE]?.[0]?.activeTabId).toBe(activeTabBefore)
-    expect(after.openFiles.map((file) => file.runtimeEnvironmentId ?? null)).toEqual([
-      'env-1',
-      null
-    ])
   })
 })

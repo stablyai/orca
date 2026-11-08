@@ -1,7 +1,7 @@
 import React from 'react'
 import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
+import { BaseRefPicker } from '@/components/source-control/BaseRefPicker'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -12,7 +12,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
-import { SourceControlAgentActionDialog } from '../../SourceControlAgentActionDialog'
+import { SourceControlAgentActionDialog } from '../ai/SourceControlAgentActionDialog'
 import { SourceControlTextGenerationDialog } from '../ai/text-generation-dialog'
 import { SourceControlDiscardDialog } from '../commit/discard-dialog'
 
@@ -34,10 +34,12 @@ export function SourceControlDialogLayer({
   baseRefDialogOpen,
   onBaseRefDialogOpenChange,
   baseRefRepoId,
+  baseRefHostId,
   pickerBaseRef,
   onSelectBaseRef,
   onUsePrimaryBaseRef,
   sourceControlAiActionsVisible,
+  resolveConflictsEditor,
   resolveConflictsComposerOpen,
   recoveryContext,
   onResolveConflictsComposerOpenChange,
@@ -76,11 +78,13 @@ export function SourceControlDialogLayer({
   onConfirmDiscard: DiscardDialogProps['onConfirm']
   baseRefDialogOpen: boolean
   onBaseRefDialogOpenChange: (open: boolean) => void
+  baseRefHostId?: BaseRefPickerProps['hostId']
   baseRefRepoId: string
   pickerBaseRef: BaseRefPickerProps['currentBaseRef']
   onSelectBaseRef: BaseRefPickerProps['onSelect']
   onUsePrimaryBaseRef: NonNullable<BaseRefPickerProps['onUsePrimary']>
   sourceControlAiActionsVisible: boolean
+  resolveConflictsEditor: Partial<AgentDialogProps>
   resolveConflictsComposerOpen: boolean
   recoveryContext?: AgentDialogProps['recoveryContext']
   onResolveConflictsComposerOpenChange: AgentDialogProps['onOpenChange']
@@ -172,6 +176,7 @@ export function SourceControlDialogLayer({
           <div className="min-h-0 overflow-y-auto scrollbar-sleek">
             <BaseRefPicker
               repoId={baseRefRepoId}
+              hostId={baseRefHostId}
               currentBaseRef={pickerBaseRef}
               onSelect={onSelectBaseRef}
               onUsePrimary={onUsePrimaryBaseRef}
@@ -206,7 +211,9 @@ export function SourceControlDialogLayer({
         savedAgentArgs={savedResolveConflictsAgentArgs}
         onSaveAgentDefault={onSaveAgentDefault}
         onOpenSettings={onOpenSourceControlAiSettings}
-        onLaunched={() =>
+        {...resolveConflictsEditor}
+        onLaunched={(backgroundWorkspaceId) =>
+          !backgroundWorkspaceId &&
           toast.success(
             translate(
               'auto.components.right.sidebar.SourceControl.e48caaf0dd',
@@ -227,7 +234,10 @@ export function SourceControlDialogLayer({
           'auto.components.right.sidebar.SourceControl.f4c766f1ca',
           'Choose the agent and command template for this run.'
         )}
-        generateLabel="Generate"
+        generateLabel={translate(
+          'auto.components.right.sidebar.SourceControl.aee92f8684',
+          'Generate'
+        )}
         settings={settings}
         repo={repo}
         discoveryHostKey={discoveryHostKey}
@@ -247,7 +257,10 @@ export function SourceControlDialogLayer({
           'auto.components.right.sidebar.SourceControl.f4c766f1ca',
           'Choose the agent and command template for this run.'
         )}
-        generateLabel="Generate"
+        generateLabel={translate(
+          'auto.components.right.sidebar.SourceControl.aee92f8684',
+          'Generate'
+        )}
         settings={settings}
         repo={repo}
         discoveryHostKey={discoveryHostKey}

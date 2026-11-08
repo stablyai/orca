@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo } from 'react'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
-import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
+import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { useAppStore } from '@/store'
-import { projectViewCacheKeyTarget } from '@/store/github/cache-identity'
+import { projectViewCacheKeyTarget } from '@/store/github/cache/cache-identity'
 import { translate } from '@/i18n/i18n'
 import ProjectViewList from './ProjectViewList'
 import ProjectBoard from './ProjectBoard'
@@ -23,6 +23,7 @@ import type {
 } from '../../../../shared/github/project-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {
   selectedRepoIds: ReadonlySet<string>
@@ -114,9 +115,7 @@ function ProjectViewBody({
         host={activeProject.host}
         onOpenInGitHub={() => {
           if (table) {
-            void window.api.shell.openUrl(
-              `${table.project.url}/views/${table.selectedView.number ?? ''}`
-            )
+            openAppHttpLink(`${table.project.url}/views/${table.selectedView.number ?? ''}`)
           }
         }}
       />
@@ -137,7 +136,7 @@ function ProjectViewBody({
         )}
         onUse={(item) => {
           rowActions.setDialogRepoItem(null)
-          // Why: issue #4756 keeps project-view actions on the direct "start work now" path, not the TaskPage background-create flow.
+          // Project actions start work immediately; TaskPage’s background creation flow does not apply.
           void launchWorkItemDirect({
             item,
             repoId: dialogItem.workItem.repoId,
@@ -145,7 +144,7 @@ function ProjectViewBody({
             telemetrySource: 'sidebar',
             openModalFallback: () => {
               if (item.url) {
-                void window.api.shell.openUrl(item.url)
+                openAppHttpLink(item.url)
               }
             }
           })
@@ -167,7 +166,7 @@ function ProjectViewBody({
       onEditIssueType={(row, issueType) => void rowActions.editIssueType(row, issueType)}
       onOpenInBrowser={(row) => {
         if (row.content.url) {
-          void window.api.shell.openUrl(row.content.url)
+          openAppHttpLink(row.content.url)
         }
       }}
       onStartWork={rowActions.startWork}

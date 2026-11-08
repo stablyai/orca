@@ -1,4 +1,6 @@
 import type { MRComment } from '../../shared/gitlab-types'
+import { viewerAuthorship } from '../source-control/comment-viewer-authorship'
+import { readGlabViewer } from './gitlab-auth-and-rate-limit'
 import { encodedProject } from './project-path-encoding'
 import {
   glabHostnameArgs,
@@ -8,10 +10,7 @@ import {
   type ProjectRef
 } from './gl-utils'
 
-// ── Discussion → MRComment flattening ──────────────────────────────
-// GitLab returns discussions with nested notes; the dialog renders a
-// flat conversation. We drop system notes ("X assigned the MR", auto-
-// generated changelog entries) since they aren't user-authored content.
+// Flatten discussion notes for the conversation, excluding system-generated activity.
 
 type GitLabRawNote = {
   id?: number
@@ -30,14 +29,15 @@ export type GitLabRawDiscussion = {
   notes?: GitLabRawNote[]
 }
 
-export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRComment[] {
+function flattenDiscussions(
+  discussions: GitLabRawDiscussion[],
+  viewerUsername: string | null
+): MRComment[] {
   const out: MRComment[] = []
   for (const discussion of discussions) {
     const notes = discussion.notes ?? []
     for (const note of notes) {
       if (note.system === true) {
-        // Why: skip GitLab's auto-generated activity entries — they
-        // would dominate a busy MR's conversation tab if rendered.
         continue
       }
       out.push({
@@ -48,6 +48,7 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
         createdAt: note.created_at ?? '',
         url: '',
         isBot: note.author?.state === 'bot',
+        ...viewerAuthorship(note.author?.username, viewerUsername),
         ...(discussion.id ? { threadId: discussion.id } : {}),
         ...(note.resolvable === true ? { isResolved: note.resolved === true } : {}),
         ...(note.position?.new_path ? { path: note.position.new_path } : {}),
@@ -55,29 +56,38 @@ export function flattenDiscussions(discussions: GitLabRawDiscussion[]): MRCommen
       })
     }
   }
-  // Why: oldest-first matches gitlab.com's conversation rendering and
-  // makes "what's new" intuitive when polling for updates later.
   return out.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''))
 }
 
-export async function fetchDiscussions(
+export async function fetchDiscussionComments(
   repoPath: string,
   projectRef: ProjectRef,
   type: 'issue' | 'mr',
   iid: number,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<GitLabRawDiscussion[]> {
+  localGitOptions: LocalGitExecOptions = {},
+  markViewer = true
+): Promise<MRComment[]> {
   const resource = type === 'mr' ? 'merge_requests' : 'issues'
-  const { stdout } = await glabExecFileAsync(
-    [
-      'api',
-      ...glabHostnameArgs(projectRef, connectionId),
-      // Why: detail drawers need a bounded recent conversation snapshot.
-      // Walking every historic discussion can retain and render huge note sets.
-      `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
-    ],
-    glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-  )
-  return JSON.parse(stdout) as GitLabRawDiscussion[]
+  const hostArgs = glabHostnameArgs(projectRef, connectionId)
+  const options = glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+  const [{ stdout }, viewerUsername] = await Promise.all([
+    glabExecFileAsync(
+      [
+        'api',
+        ...hostArgs,
+        // Bound detail loads to a recent page rather than retaining every historic discussion.
+        `projects/${encodedProject(projectRef.path)}/${resource}/${iid}/discussions?per_page=100`
+      ],
+      options
+    ),
+    // Notes carry no authorship flag, so ask the reading account who it is.
+    markViewer
+      ? readGlabViewer(hostArgs, options).then(
+          ({ username }) => (typeof username === 'string' ? username : null),
+          () => null
+        )
+      : null
+  ])
+  return flattenDiscussions(JSON.parse(stdout) as GitLabRawDiscussion[], viewerUsername)
 }

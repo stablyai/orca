@@ -18,10 +18,7 @@ export type AutomationAuthorityHealthInput = {
   hasData: boolean
 }
 
-/**
- * Query health only. Callers must not fold execution-target state in here —
- * a disconnected SSH target leaves its owning authority perfectly listable.
- */
+/** Keep storage-query health independent of SSH execution connectivity; target downtime does not prevent authority listing. */
 export function resolveAutomationAuthorityHealth(
   input: AutomationAuthorityHealthInput
 ): AutomationAuthorityHealth {
@@ -60,10 +57,7 @@ function executionHealthForStatus(status: SshConnectionStatus): AutomationExecut
   }
 }
 
-/**
- * Execution health of one SSH target. An unhydrated or removed registration
- * reports `unknown`/`unavailable` rather than borrowing a stale status.
- */
+/** Use unknown/unavailable for unhydrated/removed registrations instead of borrowing stale connection status. */
 export function resolveSshExecutionHealth(
   catalogState: AutomationHostCatalogState,
   status: SshConnectionStatus | undefined,
@@ -79,10 +73,7 @@ export function resolveSshExecutionHealth(
   return effective ? executionHealthForStatus(effective) : 'unknown'
 }
 
-/**
- * Execution health of an authority's own machine. Offline is `disconnected`
- * (reconnectable), never `unavailable`, which is reserved for hosts that are gone.
- */
+/** Offline Self remains reconnectable/disconnected; unavailable is reserved for removed hosts. */
 export function resolveSelfExecutionHealth(
   authorityHealth: AutomationAuthorityHealth
 ): AutomationExecutionHealth {

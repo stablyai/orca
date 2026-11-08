@@ -55,8 +55,7 @@ export type SafeFitContinuationHandle = {
 
 export { readFitClientSize } from './pane-fit-client-size'
 
-/** Returns the exact dimensions the next safe fit will use after any applicable
- * deferred metrics. An owner override remains measurable while its pane is hidden. */
+/** Propose the next safe-fit grid after deferred metrics; owner overrides remain measurable while hidden. */
 export function readProposedPaneFitDimensions(
   pane: ManagedPane
 ): { cols: number; rows: number } | null {
@@ -66,8 +65,7 @@ export function readProposedPaneFitDimensions(
   if (!measurable && !override) {
     return null
   }
-  // Re-check after the metric flush: larger cells can push a narrow pane below
-  // the fit floor even though it was measurable with the old metrics.
+  // Larger deferred cells can push the pane below the fit floor; recheck after flushing.
   if (measurable && flushDeferredPaneMetricOptions(pane) && !canMeasurePaneForFit(pane)) {
     return null
   }
@@ -78,7 +76,7 @@ export function readProposedPaneFitDimensions(
 }
 
 function canPreserveScrollIntentForFit(pane: ManagedPane): boolean {
-  // Why: split reparent has its own delayed restore; restoring here can fight that timer.
+  // Split reparent owns a delayed scroll restore; restoring here would fight it.
   return !(
     'pendingSplitScrollState' in pane && (pane as ManagedPaneInternal).pendingSplitScrollState
   )
@@ -91,8 +89,7 @@ function performSafeFit(pane: ManagedPane): boolean {
   if (!canMeasurePaneForFit(pane)) {
     return false
   }
-  // Why here: metric options deferred while the pane was unmeasurable must land
-  // before this fit reads dimensions, then the fit floor must be checked again.
+  // Apply parked metrics before measuring and recheck the fit floor afterwards.
   if (flushDeferredPaneMetricOptions(pane) && !canMeasurePaneForFit(pane)) {
     return false
   }
@@ -101,14 +98,13 @@ function performSafeFit(pane: ManagedPane): boolean {
   let shouldRestoreScroll = false
   const captureScrollForFit = (): void => {
     scrollIntent = captureTerminalStructuralScrollIntent(pane.terminal)
-    // Why: fit can reflow and renumber every buffer row; a marker tracks the
-    // pinned content itself, while a numeric line would point elsewhere after.
+    // Reflow renumbers buffer rows; a marker tracks pinned content while a numeric line drifts.
     pinnedScrollState =
       scrollIntent?.kind === 'pinnedViewport' ? captureScrollState(pane.terminal) : null
     shouldRestoreScroll = true
   }
   try {
-    // Why: a mobile-owned PTY must stay at its phone grid on passive desktop panes.
+    // Passive desktop panes must preserve the mobile owner’s PTY grid.
     const ptyId = pane.container?.dataset?.ptyId
     const override = ptyId ? getFitOverrideForPty(ptyId) : null
     if (override) {
@@ -125,7 +121,7 @@ function performSafeFit(pane: ManagedPane): boolean {
 
     const dims = getProposedPaneDimensions(pane)
     if (dims && dims.cols === pane.terminal.cols && dims.rows === pane.terminal.rows) {
-      // Why: divider drags often stay within one cell; avoid needless clear/refresh churn.
+      // Subcell divider motion needs no clear/refresh churn.
       resumePendingFitScrollRestoreAfterFit(pane.terminal)
       return true
     }
@@ -135,7 +131,6 @@ function performSafeFit(pane: ManagedPane): boolean {
     pane.fitAddon.fit()
     return true
   } catch {
-    // Container may not have dimensions yet.
     return false
   } finally {
     if (shouldRestoreScroll) {
@@ -147,7 +142,7 @@ function performSafeFit(pane: ManagedPane): boolean {
           pinnedScrollState = null
           restoreScrollStateAfterFit(pane.terminal, state, {
             onRestored: () => {
-              // Why: do not replace a durable pre-replay pin with transient 0/0 geometry.
+              // Transient 0/0 geometry must not replace a durable pre-replay scroll pin.
               if (!state.wasAtBottom) {
                 markTerminalPinnedViewport(pane.terminal)
               }
@@ -160,7 +155,7 @@ function performSafeFit(pane: ManagedPane): boolean {
           restoreTerminalStructuralScrollIntent(pane.terminal, scrollIntent)
         }
       } catch {
-        // Why: SSH reattach can briefly expose xterm without renderer dimensions.
+        // SSH reattach can expose xterm before renderer dimensions exist.
       } finally {
         if (pinnedScrollState) {
           releaseScrollStateMarker(pinnedScrollState)
@@ -173,12 +168,10 @@ function performSafeFit(pane: ManagedPane): boolean {
 export function safeFit(pane: ManagedPane): boolean {
   const completed = performSafeFit(pane)
   if (completed) {
-    // A completed fit proves measurability — the reattach moment for a DOM-stuck pane.
+    // Successful fit is a recovery opportunity for DOM-stuck panes.
     notifyPaneFitSucceeded(pane)
-    // Why: baseline for the reveal fit to tell a real resize from a metric wobble.
     recordPaneFitClientSize(pane)
-    // Why: replay transactions may be waiting for renderer dimensions; any
-    // successful ordinary fit is the event that makes their PTY grid authoritative.
+    // A successful ordinary fit makes renderer dimensions authoritative for waiting replay transactions.
     flushPendingSafeFitContinuations(pane)
     clearPaneFitContinuationRetry(pane)
   }
@@ -195,15 +188,13 @@ function armSafeFitContinuationRetry(pane: ManagedPane): void {
       return safeFit(pane)
     },
     onExhausted: () => {
-      // Why: a reveal transaction must degrade after its bounded layout wait;
-      // leaving completion pending forever blocks deferred output release.
+      // Bound reveal’s layout wait or pending completion would block deferred output forever.
       failPendingSafeFitContinuations(pane)
     }
   })
 }
 
-// Why: callers that forward xterm's grid to a PTY must wait for a measurable
-// fit or explicit lifecycle cancellation instead of observing replay dimensions.
+// PTY grid forwarding must wait for measurable fit or lifecycle cancellation, never use replay dimensions.
 export function safeFitAndThen(
   pane: ManagedPane,
   operationKey: string,
@@ -240,8 +231,7 @@ export function safeFitAndThen(
         if (isPendingSafeFitContinuationCurrent(pane, operationKey, pending)) {
           if (!safeFit(pane) && options.retryIfUnmeasurable) {
             if (isManagedPaneDisplayNone(pane)) {
-              // Why not the frame retry: a zero-box pane can stay hidden indefinitely, so
-              // burning the budget only logs an exhaustion crumb. Hand it to the reveal instead.
+              // Zero-box panes can stay hidden indefinitely; wait for reveal instead of exhausting frame retries.
               releaseSafeFitContinuationUntilMeasurable(pane, operationKey, pending)
             } else {
               armSafeFitContinuationRetry(pane)

@@ -1,7 +1,3 @@
-/**
- * What the headless automation sweep asks a runtime about a run's terminal before closing it:
- * whether a client used it, and whether only its shell still runs.
- */
 import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type { TerminalRunFactsRegister } from './terminal-run-facts'
 import {
@@ -9,15 +5,13 @@ import {
   inspectionShowsShellAlone
 } from './run-terminal-shell-alone'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 
-/**
- * Whether a client drove or is viewing a PTY's current process, for closing finished run
- * terminals: `unknown` when this process cannot tell (it adopted the PTY rather than spawned it).
- */
+/** For finished-run cleanup, adopted PTYs have unknown client-use history because this process did not spawn them. */
 export function readRunTerminalClientUse(
   host: {
     hasRawTerminalViewSubscriber: (ptyId: string) => boolean
-    terminalRunFacts: Pick<TerminalRunFactsRegister, 'read'>
+    terminalRunFacts: Pick<TerminalRunFactsRegister, 'read' | 'wasOpenedByUser'>
   },
   ptyId: string
 ): 'used' | 'unused' | 'unknown' {
@@ -25,16 +19,30 @@ export function readRunTerminalClientUse(
     return 'used'
   }
   const facts = host.terminalRunFacts.read(ptyId, undefined)
-  if (facts.firstUserInputAt !== null) {
+  if (facts.firstUserInputAt !== null || host.terminalRunFacts.wasOpenedByUser(ptyId)) {
     return 'used'
   }
   return facts.freshSpawn ? 'unused' : 'unknown'
 }
 
-/**
- * Fresh execution-host proof that only the spawned shell runs in a PTY, at its prompt, on POSIX
- * and Windows alike; false whenever that cannot be proven.
- */
+/** Mark the pane a user open shows, read after any spawn it started so a new process keeps the mark. */
+export function recordShownTerminalUserOpen(
+  host: {
+    mobileSessionTabsByWorktree: ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
+    terminalRunFacts: Pick<TerminalRunFactsRegister, 'recordUserOpen'>
+  },
+  worktreeId: string,
+  tabId: string
+): void {
+  const shown = host.mobileSessionTabsByWorktree
+    .get(worktreeId)
+    ?.tabs.find((tab) => tab.id === tabId)
+  if (shown?.type === 'terminal' && shown.ptyId) {
+    host.terminalRunFacts.recordUserOpen(shown.ptyId)
+  }
+}
+
+/** Require fresh execution-host proof that only the shell runs at its prompt, on POSIX and Windows; observation failure is unproven. */
 export async function confirmRunTerminalShellAlone(
   controller: RuntimePtyController | null | undefined,
   ptyId: string

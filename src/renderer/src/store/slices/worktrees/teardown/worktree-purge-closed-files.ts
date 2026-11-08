@@ -1,12 +1,9 @@
 import type { AppState } from '../../../types'
-import type { WorktreePurgeTarget } from '../../worktree-helpers'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
 import { collectRemovedHostTwinState } from '../../../repos/repo-removal-host-twin-attribution'
 import { collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
 
-/**
- * Editor tab ids a purge of `targets` would close, decided the way `buildWorktreePurgeState`
- * decides it: a host target whose id another host still publishes closes only that host's tabs.
- */
+/** Match purge policy: host targets close only attributable editor tabs while another host still publishes the ID. */
 export function worktreePurgeClosedFileIds(
   s: AppState,
   targets: readonly WorktreePurgeTarget[]

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { parseWorkspaceSession } from '../../../../shared/workspace-session-schema'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
+import { parseWorkspaceSession } from '../../../../shared/workspace-session/workspace-session-schema'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 const WORKTREE_ID = 'repo1::/wt-1'
 const STARTUP_COMMAND = "claude '--dangerously-skip-permissions'"
@@ -16,9 +17,7 @@ function seededStore() {
   return store
 }
 
-// Pins main's current launch behaviour as the convergence parity baseline (B6; window-lane new tabs,
-// rows 1-2 and 6): a queued startup that never reached a pane does not survive an app restart.
-// C2 (D-b) must keep a never-mounted tab reopening as a plain shell with no launch record read.
+// Pin baseline B6/C2 D-b: queued startup for never-mounted tab is not persisted; restart restores a plain shell without launch-record lookup.
 describe('queued tab startup across an app restart on main', () => {
   it('persists the agent tab but not its queued startup command', () => {
     const before = seededStore()

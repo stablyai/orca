@@ -10,7 +10,6 @@ import { notifyTerminalSurfaceTap } from './surface-tap'
 import { viewportToMouseReportCell } from './mouse-report-cell'
 import { dispatcherShouldBlockSurface, TAP_SLOP } from './tap-dispatch'
 
-/** A mouse press being tracked from pointerdown to pointerup. */
 export type TerminalMouseGesture = {
   startX: number
   startY: number
@@ -22,10 +21,6 @@ export type TerminalMouseGesture = {
   dismissedSelection: boolean
 }
 
-// One report per transition, built with the same encoding ladder as
-// buildMouseClickInput: SGR pixels (1016) > SGR (1006) > default. Returns ''
-// when the mode does not report this transition (x10 has no release, only
-// drag/any report motion), the encoding is unproven, or the cell is not encodable.
 export function buildMouseButtonReport(
   scope: TerminalDocumentScope,
   kind: string,
@@ -55,7 +50,6 @@ export function buildMouseButtonReport(
     return ESC + '[<' + sgrButton + ';' + cell.x + ';' + cell.y + sgrFinal
   }
   if (scope.sgrMouseMode) {
-    // Why: xterm increments zero-based mouse cells before encoding reports.
     const sgrCol = cell.col + 1
     const sgrRow = cell.row + 1
     if (!isSafeSgrMouseCoordinate(sgrCol) || !isSafeSgrMouseCoordinate(sgrRow)) {
@@ -66,8 +60,7 @@ export function buildMouseButtonReport(
   const button = kind === 'motion' ? 64 : kind === 'release' ? 35 : 32
   const col = cell.col + 1 + 32
   const row = cell.row + 1 + 32
-  // Why: non-SGR mouse bytes above ASCII are not preserved reliably through
-  // the mobile JSON/RPC string path; drop instead of corrupting input.
+  // Non-SGR bytes above ASCII are unsafe through JSON/RPC; drop unencodable input.
   if (col > 126 || row > 126) {
     return ''
   }
@@ -88,8 +81,7 @@ export function abandonMouseGesture(scope: TerminalDocumentScope) {
     return
   }
   if (gesture.mode === 'tracking') {
-    // Why: the press report already went to the TUI; a lost pointer must not
-    // leave the button latched down on the far side.
+    // The TUI already received press; lost pointers must release its latched button.
     const release = buildMouseButtonReport(scope, 'release', gesture.lastX, gesture.lastY)
     if (release) {
       notify(scope, { type: 'terminal-input', bytes: release })
@@ -104,7 +96,7 @@ export function abandonMouseGesture(scope: TerminalDocumentScope) {
 
 export function beginMouseDrag(scope: TerminalDocumentScope, gesture: TerminalMouseGesture) {
   gesture.moved = true
-  // Why: with no proven encoding the program would get no reports, so select locally instead.
+  // Without proven encoding, select locally instead of sending guessed mouse bytes.
   if (getMouseTrackingMode(scope) !== 'none' && scope.mouseEncodingKnown) {
     gesture.mode = 'tracking'
     gesture.lastCellKey = mouseReportCellKey(scope, gesture.startX, gesture.startY)
@@ -119,9 +111,7 @@ export function beginMouseDrag(scope: TerminalDocumentScope, gesture: TerminalMo
     gesture.mode = 'cancelled'
     return
   }
-  // Why: mouse drags select character-anchored ranges like desktop terminals,
-  // not the word-seeded long-press selection; reuse the touch handle-drag
-  // plumbing (edge scroll included) by acting as a live 'end' handle.
+  // Mouse selects character anchors; reuse handle-drag edge scrolling without touch’s word seeding.
   gesture.mode = 'selecting'
   scope.selMode = 'select'
   scope.sel = { anchor: anchor, focus: anchor, activeHandle: 'end' }
@@ -144,13 +134,13 @@ export function attachSurfaceMouseClickDragHandler(
       if (dispatcherShouldBlockSurface(scope) || !scope.term) {
         return
       }
+      notify(scope, { type: 'terminal-interaction' })
       // Why: a pointerup lost outside the WebView must not leave the previous
       // gesture latched (tracking press with no release) when the next one lands.
       if (scope.mouseGesture) {
         abandonMouseGesture(scope)
       }
-      // Why: mouse pointers have no implicit capture; without it a drag that
-      // leaves the surface drops pointermove/pointerup and strands the gesture.
+      // Capture mouse pointers so leaving the surface cannot strand drag state without pointerup.
       try {
         if (targetSurface.setPointerCapture) {
           targetSurface.setPointerCapture(e.pointerId)
@@ -167,8 +157,6 @@ export function attachSurfaceMouseClickDragHandler(
         dismissedSelection: false
       }
       if (scope.selMode === 'select') {
-        // Why: touch parity — pressing outside the pill dismisses the current
-        // selection; the same press may still start a new drag selection.
         cancelSelect(scope)
         scope.mouseGesture.dismissedSelection = true
       }
@@ -189,10 +177,7 @@ export function attachSurfaceMouseClickDragHandler(
       gesture.lastX = e.clientX
       gesture.lastY = e.clientY
       if ((e.buttons & 1) === 0) {
-        // Why: a pointerup lost outside the WebView (capture unavailable) must
-        // end the gesture here, or a tracked press stays latched at the TUI.
-        // Coordinates first, so the synthesized release lands where the
-        // pointer re-entered rather than at the previous cell.
+        // On re-entry release the stale TUI press at the new pointer coordinates when capture was unavailable.
         abandonMouseGesture(scope)
         return
       }
@@ -205,8 +190,7 @@ export function attachSurfaceMouseClickDragHandler(
         beginMouseDrag(scope, gesture)
       }
       if (gesture.mode === 'tracking') {
-        // Why: one motion report per cell keeps drags bounded by grid size, not
-        // by pointermove cadence, so the RN rate limiter is never the bottleneck.
+        // Report once per cell to bound traffic by grid size instead of pointermove cadence.
         const cellKey = mouseReportCellKey(scope, e.clientX, e.clientY)
         if (cellKey && cellKey !== gesture.lastCellKey) {
           gesture.lastCellKey = cellKey
@@ -251,12 +235,10 @@ export function attachSurfaceMouseClickDragHandler(
       if (dispatcherShouldBlockSurface(scope)) {
         return
       }
-      // Why: a dismissing tap only clears the selection (touch parity); it must
-      // not also open a link or focus the keyboard underneath.
+      // Dismissing selection must not also activate a link or focus the keyboard.
       if (gesture.dismissedSelection) {
         return
       }
-      // Pointer clicks keep their current link, file, TUI mouse, and focus priority.
       notifyTerminalSurfaceTap(scope, e.clientX, e.clientY, false)
     },
     true
@@ -273,9 +255,7 @@ export function attachSurfaceMouseClickDragHandler(
     true
   )
 
-  // Why: Android input injection can pair a mouse-flavored pointerdown with
-  // real touch events (SOURCE_MOUSE + TOOL_TYPE_FINGER). If touch arrives,
-  // the document touch dispatcher owns the gesture.
+  // Android can pair mouse-flavored pointer events with real touches; touch dispatch takes ownership when they arrive.
   targetSurface.addEventListener(
     'touchstart',
     function () {

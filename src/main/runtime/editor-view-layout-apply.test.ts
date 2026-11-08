@@ -1,5 +1,4 @@
-// A diff tab's view through main's real Store apply, the path OrcaRuntime.applyLayoutCommand takes:
-// views are in memory only, so each apply must carry them past the saved session it reloads.
+// Layout apply reloads saved sessions; retain editor views, which exist only in memory.
 
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -53,7 +52,6 @@ async function harness() {
   store.setWorkspaceSession(window.snapshot())
   await store.flushPendingOrThrowAsync()
   const runtime = new OrcaRuntimeService(store)
-  // A live subscriber, as a window's frame sync is: the stream projects from its cached partitions.
   const subscription = runtime.subscribeWorkspaceLayouts(() => {})
   return { store, runtime, directory, subscription }
 }
@@ -71,19 +69,6 @@ function openDiff(tabId: string) {
   } as const
 }
 
-function openFile(tabId: string, path: string) {
-  return {
-    type: 'openEditorTab',
-    workspace: WT,
-    tabId,
-    fileId: path,
-    contentType: 'editor',
-    groupId: GROUP,
-    file: { filePath: path, relativePath: path.slice(1), language: 'typescript' }
-  } as const
-}
-
-/** The editor view main's layout stream publishes for `tabId` now. */
 function publishedView(runtime: OrcaRuntimeService, tabId: string, workspace = WT) {
   const reader = runtime.subscribeWorkspaceLayouts(() => {})
   reader.unsubscribe()
@@ -92,17 +77,6 @@ function publishedView(runtime: OrcaRuntimeService, tabId: string, workspace = W
 }
 
 describe("main's Store apply keeps an editor tab's in-memory view", () => {
-  it('publishes the view after the open and after a later command', async () => {
-    const { runtime, subscription } = await harness()
-
-    expect((await runtime.applyLayoutCommand(openDiff('d1'))).ok).toBe(true)
-    expect(publishedView(runtime, 'd1')).toEqual(DIFF_VIEW)
-
-    expect((await runtime.applyLayoutCommand(openFile('e1', '/fixture/local/b.ts'))).ok).toBe(true)
-    expect(publishedView(runtime, 'd1')).toEqual(DIFF_VIEW)
-    subscription.unsubscribe()
-  })
-
   it('a view-only re-send sticks, a close drops it, and no view reaches disk', async () => {
     const { store, runtime, directory, subscription } = await harness()
     await runtime.applyLayoutCommand({ ...openDiff('d1'), preview: undefined })

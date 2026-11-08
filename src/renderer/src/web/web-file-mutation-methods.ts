@@ -3,8 +3,11 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { SshConnectionState, SshMutationExpectation } from '../../../shared/ssh-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { toRuntimeWorktreeSelector } from '../runtime/runtime-worktree-selector'
-import type { RuntimeFileSnapshot } from '../runtime/runtime-file-range-client'
-import { pagedTextFileResult, readFileInChunks } from '../runtime/runtime-paged-file-read'
+import type { RuntimeFileSnapshot } from '../runtime/files/reads/runtime-file-range-client'
+import {
+  pagedTextFileResult,
+  readFileInChunks
+} from '../runtime/files/reads/runtime-paged-file-read'
 import type { RuntimeFileReadChunkResult } from '../../../shared/runtime-types'
 import {
   compareDiskWritePrecondition,
@@ -34,10 +37,7 @@ type ResolvedWebRuntimeFile = {
 
 type WebFileMutationSession = {
   resolveFilePath: (filePath: string) => Promise<ResolvedWebRuntimeFile>
-  /**
-   * Resolves to the host's advertised capabilities. `pinConnection` sends the session's later
-   * calls only over the connection that answered, for writes whose choice depends on that host.
-   */
+  /** Pin later writes to the connection that advertised these capabilities so host-dependent choices stay valid. */
   assertMutationSupported: (options: { pinConnection: boolean }) => Promise<readonly string[]>
   callRuntimeResult: (method: string, params: unknown) => Promise<unknown>
   getSshState: (targetId: string) => Promise<SshConnectionState | null>

@@ -1,13 +1,4 @@
-/**
- * The connect-time relay census on a Windows host, before any relay session exists.
- *
- * Every relay pipe on the machine is listed, whichever desktop's target launched it, and each one
- * this account's version directories account for is asked through its own bridge, with its own
- * credential, for `pty.listProcesses`. A pipe no directory here accounts for is set aside only when
- * the host proves it another Windows account's; otherwise it is unverifiable, as is a listing that
- * failed or a live pipe that cannot be asked: a shell no lease here knows must never let the host
- * convert under it.
- */
+/** Ask every account-owned relay pipe, including other desktops, through its own bridge/credential. Unmapped pipes stay unverifiable unless proven foreign or gone; unseen shells must block conversion. */
 import type { SshConnection } from '../connection/ssh-connection'
 import { RELAY_REMOTE_DIR } from '../remote-exec/remote-frame-protocol'
 import { RELAY_INSTALL_MODEL } from '../../managed-server/install/remote-install-model'
@@ -119,10 +110,7 @@ export async function censusWindowsHostRelays(
     : { verdict: 'idle', count: 0 }
 }
 
-/**
- * The Node a Windows census probes and bridges with: the pinned runtime relays on this host run on,
- * when it is published, else the host's own Node.
- */
+/** Prefer the host's published pinned relay runtime; fall back to its own Node. */
 export async function windowsCensusNodePath(
   conn: SshConnection,
   host: RemoteHostPlatform,

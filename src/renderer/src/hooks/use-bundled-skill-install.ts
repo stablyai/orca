@@ -1,8 +1,8 @@
-import { bundledSkillSetupAttentionMessage } from '@/components/settings/bundled-skill-setup-result-copy'
+import { bundledSkillSetupAttentionMessage } from '@/components/skills/setup/bundled-skill-setup-result-copy'
 import {
   bundledSkillSetupChanges,
   type BundledSkillSetupChanges
-} from '@/components/settings/bundled-skill-setup-copy'
+} from '@/components/skills/setup/bundled-skill-setup-copy'
 import { useCallback, useRef, useState } from 'react'
 import {
   bundledSkillInstallAction,
@@ -19,7 +19,7 @@ import {
   executeBundledSkillsOnTarget,
   planBundledSkillsOnTarget,
   type BundledSkillUnsupportedReason
-} from '@/runtime/runtime-bundled-skills-client'
+} from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { notifyInstalledAgentSkillsChanged } from './installed-agent-skill-discovery'
 import { useActiveProjectSkillRuntime } from './useActiveProjectSkillRuntime'
 import { useMountedRef } from './useMountedRef'
@@ -58,10 +58,7 @@ export function bundledSkillInstallNeedsAttention(state: BundledSkillInstallStat
   return state.kind === 'failed' || (state.kind === 'done' && !state.summary.ok)
 }
 
-/**
- * Installs Orca's bundled skills for every detected agent on the host Update skills plans:
- * this machine or the paired server or SSH host (never this machine for it).
- */
+/** Install for every detected agent on the planned owner host; remote installs must never fall back to this client. */
 export function useBundledSkillInstall(
   options: { onFinished?: () => void; target?: BundledSkillTarget | null } = {}
 ): BundledSkillInstall {

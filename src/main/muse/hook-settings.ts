@@ -15,11 +15,11 @@ import { parseMuseSettingsText } from './hook-config-json'
 
 const MUSE_SCRIPT_BASE = 'muse-hook'
 
-// Muse 1.3 emits Claude-shaped lifecycle events; absent matchers cover every tool.
-// SubagentStart names the internal child sessions whose hooks must not drive pane status.
+// Muse 1.3 uses Claude-shaped events; subagent events track background children, never the parent's own status.
 export const MUSE_HOOK_EVENTS = [
   'SessionStart',
   'SubagentStart',
+  'SubagentStop',
   'SessionEnd',
   'Notification',
   'UserPromptSubmit',
@@ -28,14 +28,14 @@ export const MUSE_HOOK_EVENTS = [
   'PostToolUseFailure',
   'PermissionRequest',
   'Stop',
-  'StopFailure'
+  'StopFailure',
+  'Interrupt'
 ] as const
 
 export const MUSE_MANAGED_HOOKS_FILE_NAME = 'muse-hooks.json'
 
 function getMuseConfigDir(home: string): string {
-  // Why: honor XDG_CONFIG_HOME like the CLI does; default matches muse's own
-  // `~/.config/muse` resolution.
+  // Match the CLI's XDG_CONFIG_HOME resolution.
   const xdg = process.env.XDG_CONFIG_HOME?.trim()
   return xdg ? join(xdg, 'muse') : join(home, '.config', 'muse')
 }
@@ -57,7 +57,7 @@ export function getMuseManagedHooksPath(): string {
 }
 
 export function getMuseRemoteConfigPath(remoteHome: string): string {
-  // Why: remote XDG_CONFIG_HOME is unknown over SFTP; default matches muse's own resolution.
+  // SFTP does not expose remote XDG_CONFIG_HOME; use Muse's default path.
   return `${remoteHome.replace(/\/$/, '')}/.config/muse/settings.json`
 }
 
@@ -75,13 +75,13 @@ export function getMuseRemoteManagedCommand(scriptPath: string): string {
   return wrapPosixHookCommand(scriptPath)
 }
 
-// Why: the managed file is fully Orca-owned (muse runs it without a trust
-// step via `managed_hooks_path`), so generate it wholesale — no user content
-// to preserve, unlike an inline `hooks` block in settings.json.
+// This managed file contains no user content; unlike inline hooks, it can be replaced wholesale.
 export function buildMuseManagedHooksFile(command: string): string {
   const hooks: Record<string, HookDefinition[]> = {}
   for (const event of MUSE_HOOK_EVENTS) {
-    hooks[event] = [{ hooks: [buildManagedCommandHook(command)] }]
+    const hook = buildManagedCommandHook(command)
+    // Muse refuses synchronous Interrupt hooks.
+    hooks[event] = [{ hooks: [event === 'Interrupt' ? { ...hook, async: true } : hook] }]
   }
   return `${JSON.stringify({ hooks }, null, 2)}\n`
 }

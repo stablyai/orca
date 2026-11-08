@@ -15,7 +15,7 @@ type ProfileStateRecoveryLocation = {
 export class ProfileStateAuthorityBootstrapError extends Error {
   readonly code = 'ambiguous-profile-state' as const
 
-  /** `diverged-json`: both copies are readable, so the user can pick one at startup. */
+  /** Readable divergent copies allow a startup choice. */
   constructor(
     message: string,
     readonly divergence?: 'diverged-json'
@@ -35,7 +35,6 @@ export function assertProfileStateCanInitialize(options: ProfileStateRecoveryLoc
   }
 }
 
-/** Startup can surface this error with the exact artifacts an explicit rollback may use. */
 export class ProfileStateRecoveryRequiredError extends Error {
   readonly code = 'profile-state-recovery-required' as const
   readonly dataFile: string
@@ -43,7 +42,7 @@ export class ProfileStateRecoveryRequiredError extends Error {
   readonly exportPaths: readonly string[]
   readonly backupPaths: readonly string[]
   readonly profileId: string
-  /** Set when only these sections are damaged, so the rest of the profile can be kept. */
+  /** Confined damage permits preserving the other sections. */
   readonly repairableSections?: readonly ProfileStateRepairSection[]
 
   constructor(
@@ -53,7 +52,7 @@ export class ProfileStateRecoveryRequiredError extends Error {
   ) {
     super(
       repairableSections
-        ? `Damaged profile sections: ${profileStateSectionLabels(repairableSections.map(({ domain }) => domain)).join(', ')}; run \`orca profile state rollback --repair --profile-id ${options.profileId}\` to replace only those sections from backups`
+        ? `Damaged profile sections: ${profileStateSectionLabels(repairableSections.map(({ domain }) => domain)).join(', ')}; run \`orca profile state rollback --repair --profile-id ${options.profileId}\` to repair only those sections`
         : `SQLite profile state could not be read; choose a retained backup or JSON export to recover the profile`,
       { cause }
     )
@@ -64,8 +63,7 @@ export class ProfileStateRecoveryRequiredError extends Error {
     if (repairableSections) {
       this.repairableSections = repairableSections
     }
-    // Recovery guidance must survive a permissions failure while enumerating the directory.
-    // The startup error still names the canonical paths and remains typed for fail-closed handling.
+    // Directory permission errors must not hide typed recovery guidance or canonical paths.
     try {
       this.exportPaths = profileStateJsonExportPaths(options.dataFile)
     } catch {

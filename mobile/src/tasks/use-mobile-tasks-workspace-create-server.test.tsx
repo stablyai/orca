@@ -28,7 +28,6 @@ const { useMobileTasksWorkspaceCreateActions } =
 type Sent = { method: string; params?: unknown; executionHost?: string }
 const sentBy = new WeakMap<FakeSession, Sent[]>()
 
-/** Records where each call ran, then answers it with `answer`. */
 function recording(
   client: FakeSession,
   answer: (method: string, executionHost: string | undefined) => Promise<RpcResponse>

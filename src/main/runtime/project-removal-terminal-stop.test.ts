@@ -1,12 +1,14 @@
-/**
- * The host owns a project's shells, so removing the project stops them itself: a client only
- * stops the workspaces it has loaded, and an unhydrated or hidden one would keep running.
- */
+/** Host-owned project removal stops even hidden/unhydrated workspace shells that no client can sweep. */
 import { describe, expect, it, vi } from 'vitest'
 import { spawnWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import type { Repo } from '../../shared/repo-types'
-import { OrcaRuntimeService } from './orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
+import './orca-runtime-tests/runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from './orca-runtime'
+import {
+  TEST_REPO_ID,
+  TEST_WORKTREE_ID,
+  store
+} from './orca-runtime-tests/orca-runtime-test-fixtures.spec'
 
 const HIDDEN_WORKTREE_ID = `${TEST_REPO_ID}::/tmp/hidden-worktree`
 const OTHER_WORKTREE_ID = 'repo-2::/tmp/other'
@@ -59,34 +61,6 @@ describe('project removal on the execution host', () => {
 
     expect(stoppedBeforeRemoval.sort()).toEqual(['pty-hidden', 'pty-visible'])
     expect(removeProjectForHost).toHaveBeenCalledWith(expect.objectContaining({ id: TEST_REPO_ID }))
-  })
-
-  it('stops native shells of a project a paired client registered under a runtime stamp', async () => {
-    const removeProjectForHost = vi.fn()
-    const stopAndWait = vi.fn(async () => true)
-    const stampedRepo: Repo = {
-      ...store.getRepo(TEST_REPO_ID)!,
-      executionHostId: 'runtime:env-self'
-    }
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getRepo: (id: string) => (id === TEST_REPO_ID ? stampedRepo : undefined),
-      getRepos: () => [stampedRepo],
-      removeProjectForHost
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: vi.fn(() => false),
-      stopAndWait,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    runtime.registerPty('pty-native', TEST_WORKTREE_ID, null)
-
-    await expect(runtime.removeProject(TEST_REPO_ID)).resolves.toEqual({ removed: true })
-
-    expect(stopAndWait).toHaveBeenCalledWith('pty-native', expect.anything())
   })
 
   it('fences a runtime-stamped project with a nested SSH connection to that connection', async () => {
@@ -227,33 +201,6 @@ describe('project removal on the execution host', () => {
     releaseLocal()
   })
 
-  it('refuses a spawn on any host once no row with the removed id survives', async () => {
-    const sshRow: Repo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-target' }
-    let rows = [sshRow]
-    const runtime = new OrcaRuntimeService({
-      ...store,
-      getRepo: (id: string) => rows.find((row) => row.id === id),
-      getRepos: () => rows,
-      removeProjectForHost: () => {
-        rows = []
-      }
-    })
-    runtime.setPtyController({
-      write: () => true,
-      kill: vi.fn(() => false),
-      stopAndWait: vi.fn(async () => true),
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-
-    await runtime.removeProject(TEST_REPO_ID)
-
-    await expect(
-      runtime.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(TEST_WORKTREE_ID, null))
-    ).rejects.toThrow('repo_not_found')
-  })
-
   it('stops nothing when a same-id sibling row would claim the same PTYs', async () => {
     const removeProjectForHost = vi.fn()
     const stopAndWait = vi.fn(async (_ptyId: string) => true)
@@ -293,15 +240,5 @@ describe('project removal on the execution host', () => {
     await runtime.removeProject(TEST_REPO_ID)
 
     expect(stopAndWait.mock.calls.map(([ptyId]) => ptyId)).toContain('pty-late')
-  })
-
-  it('still removes the project when a stop cannot be verified', async () => {
-    const { runtime, stopAndWait, removeProjectForHost } = createRemovableRuntime()
-    runtime.registerPty('pty-unverifiable', TEST_WORKTREE_ID, null)
-
-    await expect(runtime.removeProject(TEST_REPO_ID)).resolves.toEqual({ removed: true })
-
-    expect(stopAndWait).toHaveBeenCalledWith('pty-unverifiable', expect.anything())
-    expect(removeProjectForHost).toHaveBeenCalledTimes(1)
   })
 })

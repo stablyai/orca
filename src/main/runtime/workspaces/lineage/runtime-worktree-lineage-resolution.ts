@@ -1,0 +1,307 @@
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import type { WorkspaceKey } from '../../../../shared/workspace-scope'
+import type {
+  WorktreeLineage,
+  WorktreeLineageWarning
+} from '../../../../shared/worktree/lineage-types'
+import { crossStoreCreateLineage } from './runtime-worktree-lineage-recording'
+import type { CrossStoreLineageResolution } from './runtime-worktree-lineage-recording'
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
+import type { RuntimeManagedWorktreeCreateArgs } from '../creation/runtime-managed-worktree-create-types'
+import { WorktreeIdRequiresFullPathError } from './worktree-id-requires-full-path-error'
+
+export type WorktreeLineageInput = NonNullable<RuntimeManagedWorktreeCreateArgs['lineage']>
+
+export type ResolvedWorkspaceParent =
+  | {
+      type: 'worktree'
+      workspaceKey: WorkspaceKey
+      worktree: ResolvedWorktree
+      instanceId: string | null
+    }
+  | {
+      type: 'folder'
+      workspaceKey: WorkspaceKey
+      folderWorkspace: FolderWorkspace
+      instanceId: string | null
+    }
+
+export type WorktreeLineageResolution =
+  | {
+      kind: 'lineage'
+      parent: ResolvedWorkspaceParent
+      origin: WorktreeLineage['origin']
+      capture: WorktreeLineage['capture']
+      orchestrationRunId?: string
+      taskId?: string
+      coordinatorHandle?: string
+      createdByTerminalHandle?: string
+    }
+  | CrossStoreLineageResolution
+  | { kind: 'none'; warnings: WorktreeLineageWarning[] }
+
+export type WorktreeLineageCandidate = {
+  source: 'env-workspace' | 'cwd-context' | 'terminal-context' | 'orchestration-context'
+  parent: ResolvedWorkspaceParent
+  orchestrationRunId?: string
+  taskId?: string
+  coordinatorHandle?: string
+}
+
+export class RuntimeLineageError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly data?: unknown
+  ) {
+    super(message)
+  }
+}
+
+export const LINEAGE_PARENT_AMBIGUOUS = 'LINEAGE_PARENT_AMBIGUOUS'
+
+export function formatAmbiguousCwdParentMessage(agent?: TuiAgent): string {
+  return `Orca did not create the workspace${agent ? ` or start ${agent}` : ''} because more than one workspace matched the current directory when this request was prepared.
+Run \`orca worktree list --limit 10000 --json\` with the same server and host selection. Match path and host; if truncated, repeat with a larger --limit using totalCount. Choose id:<id> (or identity:<identity.key> for a shared ID), then add --parent-worktree <selector> to your original invocation, or deliberately use --no-parent. Pass the selector as one argument quoted for your shell.
+To choose a parent, start a fresh request without --retry-launch; retrying the old ID returns this refusal.`
+}
+
+type LineageResolutionDependencies = {
+  resolveParent(selector: string): Promise<ResolvedWorkspaceParent>
+  resolveWorktreeParent(selector: string): Promise<ResolvedWorkspaceParent>
+  resolveTaskCandidate(taskId: string): Promise<WorktreeLineageCandidate | null>
+  resolveCaller(handle: string): Promise<{
+    parent: ResolvedWorkspaceParent
+    activeDispatch?: { taskId: string }
+    activeRun?: { id: string; coordinatorHandle: string }
+  }>
+}
+
+export async function resolveRuntimeWorktreeCreateLineage(
+  input: WorktreeLineageInput | undefined,
+  deps: LineageResolutionDependencies
+): Promise<WorktreeLineageResolution> {
+  const nextSteps = [
+    'Pass a valid --parent-worktree selector such as folder:<id>, worktree:<worktreeId>, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<absolute-path>, or active/current.',
+    'Retry with --no-parent to create without lineage.'
+  ]
+  const notFoundMessage = (error: unknown): string =>
+    error instanceof WorktreeIdRequiresFullPathError
+      ? error.message
+      : 'Parent selector was not found.'
+  if (!input) {
+    return { kind: 'none', warnings: [] }
+  }
+  const parents = [input.parentWorkspace, input.parentWorktree, input.crossStoreParent]
+  if (parents.filter(Boolean).length > (input.noParent === true ? 0 : 1)) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      'Choose either one parent selector or --no-parent.'
+    )
+  }
+  if (input.noParent === true || input.crossStoreParent) {
+    return input.crossStoreParent
+      ? crossStoreCreateLineage({ ...input, crossStoreParent: input.crossStoreParent })
+      : { kind: 'none', warnings: [] }
+  }
+  if (input.parentWorkspace) {
+    try {
+      const parent = await deps.resolveParent(input.parentWorkspace)
+      const manuallySelected = input.parentWorkspaceOrigin === 'manual'
+      return {
+        kind: 'lineage',
+        parent,
+        origin: manuallySelected ? 'manual' : 'cli',
+        capture: manuallySelected
+          ? {
+              source: parent.type === 'worktree' ? 'manual-action' : 'active-workspace',
+              confidence: 'explicit'
+            }
+          : { source: 'explicit-cli-flag', confidence: 'explicit' }
+      }
+    } catch (error) {
+      throw new RuntimeLineageError('LINEAGE_PARENT_NOT_FOUND', notFoundMessage(error), {
+        nextSteps
+      })
+    }
+  }
+  if (input.parentWorktree) {
+    try {
+      return {
+        kind: 'lineage',
+        parent: await deps.resolveWorktreeParent(input.parentWorktree),
+        origin: 'cli',
+        capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
+      }
+    } catch (error) {
+      throw new RuntimeLineageError('LINEAGE_PARENT_NOT_FOUND', notFoundMessage(error), {
+        nextSteps
+      })
+    }
+  }
+  const warnings: WorktreeLineageWarning[] = []
+  const candidates: WorktreeLineageCandidate[] = []
+  let cwdCandidate: WorktreeLineageCandidate | null = null
+  let terminalContextResolved = false
+  if (input.envParentWorkspace) {
+    try {
+      candidates.push({
+        source: 'env-workspace',
+        parent: await deps.resolveParent(input.envParentWorkspace)
+      })
+    } catch {
+      warnings.push({
+        code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+        message: 'Worktree created, but Orca could not validate the environment parent context.',
+        details: { envParentWorkspace: input.envParentWorkspace }
+      })
+    }
+  }
+  if (input.orchestrationContext?.parentWorktreeId) {
+    try {
+      candidates.push({
+        source: 'orchestration-context',
+        parent: await deps.resolveWorktreeParent(
+          `id:${input.orchestrationContext.parentWorktreeId}`
+        )
+      })
+    } catch {}
+  }
+  const taskId = input.comment?.match(/\btask_[A-Za-z0-9]+\b/)?.[0]
+  if (taskId) {
+    const candidate = await deps.resolveTaskCandidate(taskId)
+    if (candidate) {
+      candidates.push(candidate)
+    }
+  }
+  if (input.callerTerminalHandle) {
+    try {
+      const caller = await deps.resolveCaller(input.callerTerminalHandle)
+      candidates.push(
+        caller.activeDispatch
+          ? {
+              source: 'orchestration-context',
+              parent: caller.parent,
+              taskId: caller.activeDispatch.taskId,
+              ...(caller.activeRun
+                ? {
+                    orchestrationRunId: caller.activeRun.id,
+                    coordinatorHandle: caller.activeRun.coordinatorHandle
+                  }
+                : {})
+            }
+          : { source: 'terminal-context', parent: caller.parent }
+      )
+      terminalContextResolved = true
+    } catch {
+      warnings.push({
+        code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+        message:
+          'Worktree created, but Orca could not validate the caller terminal as a parent context.',
+        details: { callerTerminalHandle: input.callerTerminalHandle }
+      })
+    }
+  }
+  if (input.cwdParentWorktree) {
+    try {
+      cwdCandidate = {
+        source: 'cwd-context',
+        parent: await deps.resolveParent(input.cwdParentWorktree)
+      }
+    } catch {
+      warnings.push({
+        code: 'LINEAGE_PARENT_CONTEXT_MISSING',
+        message:
+          'Worktree created, but Orca could not validate the current directory as a parent context.',
+        details: { cwdParentWorktree: input.cwdParentWorktree }
+      })
+    }
+  }
+  if (candidates.length === 0 && cwdCandidate) {
+    candidates.push(cwdCandidate)
+  }
+  if (candidates.length === 0) {
+    return { kind: 'none', warnings }
+  }
+  const [first] = candidates
+  if (candidates.some((candidate) => candidate.parent.workspaceKey !== first.parent.workspaceKey)) {
+    return {
+      kind: 'none',
+      warnings: [
+        {
+          code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          message: 'Worktree created, but Orca could not prove which parent context caused it.',
+          details: {
+            terminalParentWorkspaceKey: candidates.find((c) => c.source === 'terminal-context')
+              ?.parent.workspaceKey,
+            envParentWorkspaceKey: candidates.find((c) => c.source === 'env-workspace')?.parent
+              .workspaceKey,
+            orchestrationParentWorkspaceKey: candidates.find(
+              (c) => c.source === 'orchestration-context'
+            )?.parent.workspaceKey
+          }
+        }
+      ]
+    }
+  }
+  const preferred =
+    candidates.find((candidate) => candidate.source === 'env-workspace') ??
+    candidates.find((candidate) => candidate.source === 'orchestration-context') ??
+    first
+  return {
+    kind: 'lineage',
+    parent: preferred.parent,
+    origin: preferred.source === 'orchestration-context' ? 'orchestration' : 'cli',
+    capture: { source: preferred.source, confidence: 'inferred' },
+    ...((preferred.orchestrationRunId ?? input.orchestrationContext?.orchestrationRunId)
+      ? {
+          orchestrationRunId:
+            preferred.orchestrationRunId ?? input.orchestrationContext?.orchestrationRunId
+        }
+      : {}),
+    ...((preferred.taskId ?? input.orchestrationContext?.taskId)
+      ? { taskId: preferred.taskId ?? input.orchestrationContext?.taskId }
+      : {}),
+    ...((preferred.coordinatorHandle ?? input.orchestrationContext?.coordinatorHandle)
+      ? {
+          coordinatorHandle:
+            preferred.coordinatorHandle ?? input.orchestrationContext?.coordinatorHandle
+        }
+      : {}),
+    ...(terminalContextResolved && input.callerTerminalHandle
+      ? { createdByTerminalHandle: input.callerTerminalHandle }
+      : {})
+  }
+}
+
+/** Match update/hydrate/projection host boundaries (#12757): reject explicit cross-host parents before create, warn/drop inferred ones; unknown hosts stay permissive. */
+export function enforceCreateLineageHostBoundary(
+  resolution: WorktreeLineageResolution,
+  childHostId: ExecutionHostId | undefined
+): WorktreeLineageResolution {
+  if (resolution.kind !== 'lineage' || resolution.parent.type !== 'worktree') {
+    return resolution
+  }
+  const parentHostId = resolution.parent.worktree.hostId
+  if (!childHostId || !parentHostId || parentHostId === childHostId) {
+    return resolution
+  }
+  const message = 'Parent worktree must be on the same execution host as the new worktree.'
+  if (resolution.capture.confidence === 'explicit') {
+    throw new RuntimeLineageError('LINEAGE_PARENT_CONTEXT_CONFLICT', message, {
+      nextSteps: ['Pass a parent on the same execution host, or retry with --no-parent.']
+    })
+  }
+  return {
+    kind: 'none',
+    warnings: [
+      {
+        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        message: `Worktree created without lineage. ${message}`,
+        details: { parentWorktreeId: resolution.parent.worktree.id, parentHostId, childHostId }
+      }
+    ]
+  }
+}

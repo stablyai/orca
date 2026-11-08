@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { collectLeafIds } from '../../../shared/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../shared/workspace-layout/terminal-pane-layout-tree'
 import type { Store } from '../loading-store/store'
 import { _resetClosedPaneFencesForTests } from './closed-pane-binding-fence'
 import { WindowSession } from './terminal-topology-window-session-fixture'
@@ -76,8 +76,7 @@ describe('layout-owner build: a create sent again after its close', () => {
     expect(store.getWorkspaceSession()).toBe(before)
   })
 
-  // No sender replays a sent layout.apply create (PR body: sender table); a pane create lifts the
-  // closed-pane fence by design, so a replayed split brings its pane back.
+  // Senders must not replay creates: explicit pane creation lifts close fences and can revive a pane.
   it('lets a replayed split bring back a pane main closed: pane creates are not deduped', async () => {
     const store = await openStore()
     await store.applyLayoutCommand(create)

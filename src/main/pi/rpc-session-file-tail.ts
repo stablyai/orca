@@ -2,19 +2,15 @@ import { open } from 'node:fs/promises'
 import { z } from 'zod'
 
 const BLOCK_BYTES = 64 * 1024
-/** One entry line is never longer than a reply the peer accepts. */
+// Bound tail scanning to the peer's maximum accepted reply size.
 const MAX_TAIL_BYTES = 8 * 1024 * 1024
 
-/**
- * The id of the newest entry Pi saved, read backwards from the file's end. Only a hint for a cheap
- * `get_entries since` that asks Pi for its leaf: Pi answers from what it loaded, which the file
- * may no longer match, so the answer, not this, is what counts.
- */
+/** File-tail ID only hints where to query; Pi's loaded-tree answer remains authoritative. */
 export async function readPiSessionLastEntryId(file: string): Promise<string | null> {
   const handle = await open(file, 'r')
   try {
     let position = (await handle.stat()).size
-    // The newest line not yet ended by an earlier newline, oldest bytes first.
+    // Reassemble the newest partial line in file order.
     let partial: Buffer[] = []
     let partialBytes = 0
     // A last line without its newline is still being appended; it is not an entry yet.
@@ -57,6 +53,5 @@ function entryId(parts: Buffer[]): string | null {
     return null
   }
   const head = entryHeadSchema.safeParse(record)
-  // The header names the session, not an entry.
   return head.success && head.data.type !== 'session' ? head.data.id : null
 }

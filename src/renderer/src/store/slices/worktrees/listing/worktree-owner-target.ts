@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { resolveOwner, runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { hostRouteForAuthority, type HostRoute } from '@/runtime/runtime-client-target'
+import { hostRouteForAuthority, type HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { AppState } from '../../../types'
 import { ambiguousWorkspaceOwnerMessage } from '@/lib/duplicate-paired-servers'
@@ -36,9 +36,16 @@ export function runtimeTargetForWorktreeOwner(
   return target
 }
 
-/** The owner's transport and place together, refusing an unresolved owner. */
-export function hostRouteForWorktreeOwner(state: AppState, worktreeId: string): HostRoute {
-  const match = resolveOwner(state, { workspaceId: worktreeId })
+/** The owner's transport and place together (on `executionHostId` when given), refusing an unresolved owner. */
+export function hostRouteForWorktreeOwner(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): HostRoute {
+  const match = resolveOwner(state, {
+    workspaceId: worktreeId,
+    ...(executionHostId ? { hostId: executionHostId } : {})
+  })
   if (match.kind !== 'resolved') {
     throw new Error(ambiguousWorkspaceOwnerMessage(state, worktreeId))
   }

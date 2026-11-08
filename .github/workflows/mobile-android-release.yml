@@ -1,8 +1,6 @@
 name: Mobile Android Release
 
-# Why a separate workflow from iOS: iOS releases go through App Store review,
-# which can take days. Decoupling the triggers lets an Android release ship
-# immediately without waiting on iOS, and vice versa.
+# Release Android independently so App Store review cannot block its shipping cadence.
 on:
   push:
     tags:
@@ -23,10 +21,7 @@ jobs:
   android-build:
     runs-on: ubuntu-latest
 
-    # Why: the "Create GitHub Release" step below uses the default GITHUB_TOKEN
-    # to call `gh release create`, which requires contents:write. Without this,
-    # the job builds the APK fine but fails at release time with
-    # "HTTP 403: Resource not accessible by integration".
+    # Grant contents:write for gh release create; build success alone does not authorize publication.
     permissions:
       contents: write
 
@@ -41,6 +36,38 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+
+      # Release signing is enforced once ORCA_ANDROID_RELEASE_CERT_SHA256 (or ORCA_ANDROID_REQUIRE_RELEASE_SIGNING=true)
+      # is set as a repository variable. Until then the build keeps the Expo debug key, with a warning.
+      - name: Check release signing configuration
+        id: signing
+        env:
+          ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
+          ORCA_ANDROID_RELEASE_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: ${{ vars.ORCA_ANDROID_REQUIRE_RELEASE_SIGNING }}
+        run: |
+          set -euo pipefail
+          if [ -z "${ORCA_ANDROID_RELEASE_CERT_SHA256:-}" ] && [ "${ORCA_ANDROID_REQUIRE_RELEASE_SIGNING:-}" != 'true' ]; then
+            message="Android release signing is not enabled, so this APK is signed with the Expo debug key as before. Set the ORCA_ANDROID_RELEASE_CERT_SHA256 repository variable to enable it; see the Android Release Signing section of mobile/README.md."
+            echo "::warning::$message"
+            printf '### Android release signing not enabled\n\n%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
+            echo "mode=debug" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          missing=()
+          for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD ORCA_ANDROID_RELEASE_CERT_SHA256; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::Android release signing is enabled but not fully configured. Missing secrets or variables: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
+            exit 1
+          fi
+          echo "mode=release" >> "$GITHUB_OUTPUT"
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -72,13 +99,55 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
 
+      - name: Decode release keystore
+        if: steps.signing.outputs.mode == 'release'
+        env:
+          ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$ORCA_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orca-release.keystore"
+
       - name: Build Android release APK
+        env:
+          # Empty in debug mode, which leaves Gradle on the debug key exactly as before.
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: ${{ steps.signing.outputs.mode == 'release' && 'true' || '' }}
+          ORCA_ANDROID_KEYSTORE_PATH: ${{ steps.signing.outputs.mode == 'release' && format('{0}/orca-release.keystore', runner.temp) || '' }}
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEYSTORE_PASSWORD || '' }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEY_ALIAS || '' }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ steps.signing.outputs.mode == 'release' && secrets.ORCA_ANDROID_KEY_PASSWORD || '' }}
         run: cd android && ./gradlew assembleRelease
 
-      # Why: an install that fails with a missing certificate or a package-parse error is
-      # usually a download that died near the end, and the signature block sits in the last
-      # ~100 KB. Publishing the size and digest is what lets a reporter tell a truncated
-      # download apart from a bad build without anyone re-deriving them from the asset.
+      - name: Remove release keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/orca-release.keystore"
+
+      # Why pin the certificate: a regenerated or swapped key would make every installed copy refuse the update.
+      - name: Verify APK signing certificate
+        id: signer
+        if: steps.signing.outputs.mode == 'release'
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.ORCA_ANDROID_RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          # Expo template debug keystore, public in expo-template-bare-minimum.
+          debug_cert="fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          apks=(android/app/build/outputs/apk/release/*.apk)
+          certs="$("$apksigner" verify --print-certs "${apks[0]}" | sed -n 's/^Signer #[0-9]* certificate SHA-256 digest: //p' | sort -u)"
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
+          if [ "$certs" = "$debug_cert" ]; then
+            echo "::error::The APK is signed with the public Expo debug key."
+            exit 1
+          fi
+          if [ "$certs" != "$expected" ]; then
+            echo "::error::The APK signing certificate ($certs) does not match ORCA_ANDROID_RELEASE_CERT_SHA256 ($expected)."
+            exit 1
+          fi
+          echo "cert_sha256=$(printf '%s' "$certs" | tr 'a-f' 'A-F' | sed 's/../&:/g; s/:$//')" >> "$GITHUB_OUTPUT"
+          echo "APK signing certificate SHA-256: $certs"
+
+      # Publish size/digest to distinguish truncated downloads (missing tail signature block) from bad APK builds.
       - name: Checksum the APK
         id: apk
         run: |
@@ -93,10 +162,8 @@ jobs:
           apk="${apks[0]}"
           bytes="$(wc -c < "$apk" | tr -d ' ')"
           sha256="$(sha256sum "$apk" | cut -d ' ' -f 1)"
-          # A sibling file in `sha256sum -c` format, so verifying a download is one command
-          # and no retyped digest. The asset globs below match *.apk and skip it. The ` *`
-          # marker is binary mode: Git Bash's sha256sum reads text mode as a licence to
-          # translate line endings while hashing, which would fail on a valid APK.
+          # Publish sha256sum -c sidecars, excluded by *.apk globs. Use binary “ *” mode:
+          # Git Bash text-mode newline translation can reject a valid APK.
           printf '%s *%s\n' "$sha256" "$(basename "$apk")" > "$apk.sha256"
 
           {
@@ -139,27 +206,27 @@ jobs:
 
           # printf rather than a heredoc: YAML block indentation would leak into the Markdown.
           # Both platforms' commands are named because a reader on macOS has no sha256sum.
+          # Only release-signed builds list a certificate, since only they are pinned.
+          signer_line=''
+          if [ -n '${{ steps.signer.outputs.cert_sha256 }}' ]; then
+            signer_line='- Signing certificate SHA-256: `${{ steps.signer.outputs.cert_sha256 }}`\n'
+          fi
           verification_section() {
-            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
-              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}'
+            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n%b\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
+              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}' "$signer_line"
           }
 
-          # The section is always last, so dropping from its heading to EOF leaves the
-          # generated notes intact. \r* because a body round-tripped through the API has CRLFs.
+          # Verification is last; replace from heading to EOF, accepting API-roundtripped CRLFs.
           drop_verification_section() {
             sed '/^### Verify your download\r*$/,$d'
           }
 
-          # Why: reuse the desktop release path's character-safe truncation so a multi-byte
-          # character cannot be split at the cap. The section's own length is reserved out of
-          # that cap, because appending after truncating would push a near-limit body past
-          # GitHub's API limit and fail the call — on the upload path, after --clobber has
-          # already replaced the assets. `wc -c` counts bytes, so the section's multi-byte
-          # characters over-reserve, which errs toward a shorter body.
+          # Truncate by characters like desktop releases and reserve the appended section inside GitHub’s cap,
+          # or --clobber could replace assets before notes fail. wc -c over-reserves multibyte section text safely.
           write_notes_with_verification() {
             NOTES_FILE="$notes_file" \
             NOTES_RESERVE="$(verification_section | wc -c | tr -d ' ')" \
-            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/create-draft-release.mjs" \
+            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/release/publication/create-draft-release.mjs" \
             node --input-type=module -e '
               const { readFileSync, writeFileSync } = await import("node:fs")
               const { pathToFileURL } = await import("node:url")
@@ -179,26 +246,21 @@ jobs:
               --clobber \
               android/app/build/outputs/apk/release/*.apk \
               "${{ steps.apk.outputs.checksum }}"
-            # Why the body is rewritten too: --clobber replaced the APK, so a digest left
-            # over from the previous build now describes a file nobody can download, and a
-            # reader comparing against it would reject a good APK.
+            # --clobber replaced the APK; rewrite its digest so users cannot compare against obsolete bytes.
             gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body \
               | drop_verification_section > "$notes_file"
             write_notes_with_verification
             gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$notes_file"
           else
-            # Why: release tags live on side branches, so GitHub's automatic
-            # previous-tag detection reaches back several releases; that body
-            # already exceeds the 125000-character API limit and grows each
-            # release. Pin the comparison base and cap the size.
+            # Side-branch release tags make automatic previous-tag detection span multiple releases and exceed
+            # the 125000-character API cap; pin the comparison base and truncate.
             previous_tag="$(
               gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
                 | grep '^mobile-android-v' | grep -Fxv "$tag" | sort -V | tail -1 || true
             )"
 
             if [ -n "$previous_tag" ]; then
-              # Why: gh writes the JSON error body to stdout on an HTTP error, so a
-              # non-empty file is not proof of success — gate on exit status.
+              # gh writes HTTP error JSON to stdout too; require exit success, not merely a nonempty file.
               if ! gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -X POST \
                 -f tag_name="$tag" \
                 -f target_commitish="$GITHUB_SHA" \
@@ -222,8 +284,7 @@ jobs:
               "${{ steps.apk.outputs.checksum }}"
           fi
 
-  # Why a separate job: the release is already published here, so a failed bump only leaves
-  # the site's APK download on the previous release and must not fail the release run.
+  # Keep site bump advisory after publication; failure only leaves its download link on the prior APK.
   bump-apk-download:
     needs: android-build
     if: needs.android-build.outputs.publish_release == 'true'
@@ -267,7 +328,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          node ../config/scripts/bump-android-apk-download-version.mjs src/lib/downloadTargets.ts "$VERSION"
+          node ../config/scripts/release/versioning/bump-android-apk-download-version.mjs src/lib/downloadTargets.ts "$VERSION"
           if git diff --quiet; then
             echo "The site's main branch already has Android APK $VERSION or newer." >> "$GITHUB_STEP_SUMMARY"
             exit 0

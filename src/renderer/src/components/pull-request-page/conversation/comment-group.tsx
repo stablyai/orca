@@ -11,7 +11,7 @@ import {
   getPRCommentGroupRoot,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from '../../../../../shared/pr-comment-groups'
+} from '../../../../../shared/source-control/review-comments/pr-comment-groups'
 import { translate } from '@/i18n/i18n'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
@@ -21,6 +21,7 @@ import { ConversationCommentCard } from './comment-card'
 
 export function ConversationCommentGroup({
   group,
+  itemType,
   repoPath,
   repoId,
   sourceContext,
@@ -36,6 +37,7 @@ export function ConversationCommentGroup({
   onSubmitReply
 }: {
   group: PRCommentGroup
+  itemType: 'issue' | 'pr'
   repoPath: string | null
   repoId: string
   sourceContext?: TaskSourceContext | null
@@ -51,6 +53,7 @@ export function ConversationCommentGroup({
   onSubmitReply: (comment: PRComment, replyBody: string) => Promise<boolean>
 }): React.JSX.Element {
   const cardProps = {
+    itemType,
     repoPath,
     repoId,
     sourceContext,
@@ -93,11 +96,21 @@ export function ConversationCommentGroup({
       >
         <AccordionTrigger className="px-3 py-2 text-[13px] text-muted-foreground hover:bg-accent/30">
           <span className="min-w-0 truncate">
-            {translate('auto.components.PullRequestPage.f4fe47c2bb', 'Resolved')}{' '}
             {group.kind === 'thread'
-              ? translate('auto.components.PullRequestPage.345b68254c', 'thread')
-              : translate('auto.components.PullRequestPage.e01e34f5fa', 'comment')}{' '}
-            {translate('auto.components.PullRequestPage.3c891789f6', 'by')} {root.author}
+              ? translate(
+                  'auto.components.PullRequestPage.resolvedThreadBy',
+                  'Resolved thread by {{author}}',
+                  {
+                    author: root.author
+                  }
+                )
+              : translate(
+                  'auto.components.PullRequestPage.resolvedCommentBy',
+                  'Resolved comment by {{author}}',
+                  {
+                    author: root.author
+                  }
+                )}
             {count > 1 ? ` (${count})` : ''}
           </span>
         </AccordionTrigger>

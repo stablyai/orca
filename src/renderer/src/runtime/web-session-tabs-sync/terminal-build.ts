@@ -1,11 +1,14 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
-import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/terminal-layout-pty-ownership'
-import { resolvePaneAgentOwnerRecord } from '../../../../shared/pane-agent-owner'
-import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-title-owner'
-import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../../shared/workspace-layout/terminal-tab-types'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
+import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
+import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
+import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
 
@@ -142,12 +145,22 @@ export function buildMirroredTerminalTabs(
       surfaces
         .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
         .find((tab): tab is TerminalTab => Boolean(tab))
-    // Why: a headless host publishes the literal "Terminal" while an idle pane
-    // has no live PTY. Keep the client's known title until a ready surface reports one.
+    // A host window that resolves the session name is its only writer (null clears); a headless or older host's name is a saved cache, so the client resolves its own.
+    const hostResolvesSessionTitle = activeSurface.resolvesSessionTitle === true
+    const sessionTitle = hostResolvesSessionTitle
+      ? activeSurface.aiVaultTitle?.title.trim()
+        ? activeSurface.aiVaultTitle
+        : null
+      : existing?.aiVaultTitle
+    // The host's titles rank its session names in, so when it clears a name none of the retained ones is a safe placeholder.
+    const sessionNameCleared = hostResolvesSessionTitle && !sessionTitle && !!existing?.aiVaultTitle
+    // Idle headless panes publish default Terminal; retain known title until a ready surface supplies one.
     const hostTitle = activeSurface.title.trim() || surfaces[0]?.title.trim() || ''
     const hostTitleIsPlaceholder =
       hostTitle === '' || (activeSurface.status === 'pending-handle' && hostTitle === 'Terminal')
-    const retainedTitle = existing?.title?.trim() || existing?.defaultTitle?.trim() || ''
+    const retainedTitle = sessionNameCleared
+      ? ''
+      : existing?.title?.trim() || existing?.defaultTitle?.trim() || ''
     const title = normalizeCompatibleAgentTitleForOwner(
       (hostTitleIsPlaceholder ? retainedTitle || hostTitle : hostTitle) || 'Terminal',
       ownerRecord?.agent,
@@ -176,18 +189,15 @@ export function buildMirroredTerminalTabs(
         worktreeId: snapshot.worktree,
         title,
         defaultTitle: existing?.defaultTitle ?? title,
-        // Why: the host transport carries no generated title, so rebuilding the tab
-        // without this dropped the client's agent-prompt label on every snapshot.
+        // Host omits generated titles; retain client agent-prompt labels across rebuilds.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
-        ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
-        // Why: the recovery ledger is client-local and the host carries none, so
-        // rebuilding without it would restore this tab's remount allowance on
-        // every snapshot — the counting loop recovery is meant to end (b5cfc6ca).
+        ...(sessionTitle ? { aiVaultTitle: sessionTitle } : {}),
+        ...(hostResolvesSessionTitle ? { sessionTitleFromHost: true as const } : {}),
+        // Host omits client recovery ledger; preserve it or every snapshot rearms remount allowance (b5cfc6ca).
         ...(existing?.recovery ? { recovery: existing.recovery } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
-        // Why: the host's manual name is the one the CLI and phones see; it must outrank this
-        // client's saved-session title (#29975). Older hosts omit it, so keep ours then.
+        // Host manual names outrank client saved-session titles for CLI/phone parity; older hosts omit them, so retain local names (#29975).
         customTitle:
           activeSurface.customTitle !== undefined
             ? activeSurface.customTitle

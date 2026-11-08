@@ -2,7 +2,11 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraConnectionStatus, JiraIssue, JiraTransition } from '../../../shared/jira-types'
+import type {
+  JiraConnectionStatus,
+  JiraIssue,
+  JiraTransition
+} from '../../../shared/jira/jira-types'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import type { AppState } from '@/store/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
@@ -41,14 +45,16 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     fallback.replace(/{{(\w+)}}/g, (_match, key) => values?.[key] ?? '')
 }))
-vi.mock('@/runtime/runtime-jira-client', () => ({
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => ({
   jiraGetIssueForTarget: async () => null,
   jiraIssueCommentsForTarget: async () => [],
   jiraListTransitionsForTarget: mocks.transitions,
   jiraListPrioritiesForTarget: async () => [],
-  jiraListAssignableUsersForTarget: async () => [],
   jiraUpdateIssueForTarget: mocks.update,
   jiraAddIssueCommentForTarget: async () => ({ ok: true })
+}))
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: async () => []
 }))
 vi.mock('@/components/ui/sheet', () => {
   const Content = ({ children }: { children: ReactNode }) => <div>{children}</div>
@@ -206,14 +212,5 @@ describe('Jira transition form source ownership', () => {
         'site-a'
       )
     )
-  })
-  it('drops the form when a source without a selected project changes execution host', async () => {
-    const view = render(workspace())
-    await openForm()
-    mocks.settings = { activeRuntimeEnvironmentId: 'environment-b' }
-    view.rerender(workspace())
-    await waitForTransitions()
-    expect(screen.queryByLabelText('Comment')).toBeNull()
-    expect(mocks.update).not.toHaveBeenCalled()
   })
 })

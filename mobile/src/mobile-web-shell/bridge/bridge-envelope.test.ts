@@ -51,7 +51,6 @@ const BINARY_FRAME = {
 
 type BridgeBinaryEvent = Extract<BridgeHostMessage, { binary: unknown }>
 
-/** Compile-time pin: everything a decoded frame holds but its bytes crosses as a field. */
 function asDecodedFrameFields(
   binary: BridgeBinaryEvent['binary']
 ): Omit<BrowserScreencastFrame, 'image'> {
@@ -146,8 +145,7 @@ describe('client messages', () => {
   }
 
   it('drops a target a page attached to a navigate-back, rather than carrying it to the shell', () => {
-    // Additive fields are dropped and never refused, which is what keeps a newer desktop's bundle
-    // working against an older shell — so the absence has to be read off the parsed frame.
+    // Assert parsed output drops additive fields; newer desktop bundles must remain usable with older shells.
     const read = readClient(
       client({ type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY, href: '/h/host-a' })
     )
@@ -256,7 +254,6 @@ describe('client messages', () => {
 })
 
 describe('host messages', () => {
-  /** An otherwise valid `init`, so a refusal below is the route's and not the frame's. */
   function initRoute(route: unknown): Record<string, unknown> {
     return client({
       type: 'init',
@@ -292,7 +289,6 @@ describe('host messages', () => {
         buildId: 'b1',
         connection: CONNECTION,
         grants: GRANTS,
-        // Without this the refusals above would also pass a rule that banned the character.
         route: { pathname: '/h/a..b/...' }
       }
     ],
@@ -304,9 +300,7 @@ describe('host messages', () => {
         buildId: 'b1',
         connection: CONNECTION,
         grants: GRANTS,
-        // An encoded space, a segment that starts with an encoded dot, and an encoded slash, which
-        // the router reads as one segment's text. Without these the refusals above would pass a
-        // rule that banned the escape rather than the dot segment it spells.
+        // Allow escaped text and encoded slashes within named segments; reject dot-segment semantics rather than all escapes.
         route: { pathname: '/h/a%20b/%2ex/a%2fb' }
       }
     ],
@@ -341,8 +335,6 @@ describe('host messages', () => {
       }
     ],
     [
-      // The recorder records every code it finds, whatever its shape, so refusing one here would
-      // move a golden.
       'an error whose code is an object',
       {
         type: 'error',
@@ -466,18 +458,13 @@ describe('host messages', () => {
       'an end for a reason that is not one of the three',
       client({ type: 'end', id: ID, reason: 'done' })
     ],
-    // Every one of these reaches `history.replaceState`. A protocol-relative path makes it throw a
-    // cross-origin SecurityError and takes the mount down; the other three are a URL the page
-    // would have to parse to separate again, which is what `params` exists to avoid.
+    // replaceState rejects cross-origin protocol-relative paths; queries/fragments belong in params instead of requiring URL re-parsing.
     ['an init route that is not rooted', initRoute({ pathname: 'h/host-a' })],
     ['an init route that is protocol-relative', initRoute({ pathname: '//evil.example/h' })],
     ['an init route that is backslash-relative', initRoute({ pathname: '/\\evil.example/h' })],
     ['an init route carrying its own query', initRoute({ pathname: '/h/a?name=b' })],
     ['an init route carrying a fragment', initRoute({ pathname: '/h/a#top' })],
-    // `replaceState` normalises each of these and the page then renders whatever came out:
-    // `/../../etc` resolves to `/etc`, `/h/a/../x` to `/h/x`, and `/h/a\\b` to `/h/a/b`. All three
-    // leave the `/h/<host>` prefix the page's tree starts at, which is the whole point of refusing
-    // shape rather than trusting the router to be handed one.
+    // Reject paths that replaceState normalizes away from their intended host prefix, including dot segments and backslashes.
     ['an init route that climbs out of its prefix', initRoute({ pathname: '/../../etc' })],
     [
       'an init route with an interior dot segment',
@@ -486,8 +473,7 @@ describe('host messages', () => {
     ['an init route ending in a dot segment', initRoute({ pathname: '/h/a/..' })],
     ['an init route with a single dot segment', initRoute({ pathname: '/h/./a' })],
     ['an init route with an interior backslash', initRoute({ pathname: '/h/a\\b' })],
-    // The same climb, spelled the way a URL parser still reads as a dot segment: it percent-decodes
-    // the path before it resolves it, so `%2e%2e` escapes the prefix exactly as `..` does.
+    // Encoded dots resolve as dot segments too, so they must not bypass the prefix guard.
     [
       'an init route that climbs out of its prefix percent-encoded',
       initRoute({ pathname: '/h/%2e%2e/render-check-host' })
@@ -555,12 +541,7 @@ describe('host messages', () => {
 })
 
 describe('the reply reader is the native acceptance predicate', () => {
-  /**
-   * Agreement, not a second table of accepted shapes. The page stands in for the wire the native
-   * client reads, so anything `isRpcResponse` takes off that wire has to cross the bridge, and
-   * anything it drops has to be refused here too — including `{ ok: true }` with no `result` key,
-   * which no real frame boundary carries.
-   */
+  // Use isRpcResponse as the acceptance oracle: both bridge and native transport must agree, including refusal of ok:true with no result.
   const payloads: [string, unknown][] = [
     ['a success the runtime stamped', { id: 'r1', ok: true, result: 1, _meta: { runtimeId: 'a' } }],
     ['a success with no `_meta` at all', { id: 'r1', ok: true, result: 1 }],
@@ -678,12 +659,7 @@ describe('the readers bound their two directions differently', () => {
   })
 })
 
-/**
- * One rule, two patterns.
- *
- * The screen the shell names and the screen a page asks for are the same vocabulary, and a spelling
- * one refuses while the other takes is a hole with a `notify` already pointed at it.
- */
+// Pathnames and returned navigation hrefs share one segment rule; disagreement would expose a path through notify.
 describe('navigate query boundaries', () => {
   it('refuses query-ended dot segments through the navigate reader', () => {
     for (const href of ['/h/..?x', '/h/%2e%2e?x', '/h/.?x', '/h/a/..?x', '/h/..?']) {

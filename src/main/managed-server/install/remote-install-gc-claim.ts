@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import {
@@ -21,8 +21,7 @@ import {
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 const RELAY_GC_CLAIM_SUFFIX = '.gc-claim'
 const RELAY_GC_OWNER_NAME = '.gc-owner'
-// Why: the claim guards only a bounded sibling rename or launch handoff, not
-// npm or deletion. Ten minutes bounds crashes while exceeding either sequence.
+// Ten minutes exceeds bounded rename/launch handoffs while permitting crashed-claim recovery.
 const RELAY_GC_CLAIM_STALE_SECONDS = 10 * 60
 
 export function relayGcClaimPath(remoteRelayDir: string): string {
@@ -108,8 +107,7 @@ async function writeRelayGcClaimOwner(
     if (isUnconfirmedSshCommandTermination(error)) {
       throw error
     }
-    // Why: the write may have succeeded remotely before SSH lost its reply.
-    // A conditional release removes only the claim generation with our token.
+    // A lost reply may hide a successful write; release only our token's generation.
     await releaseRelayGcClaim(conn, remoteRelayDir, token, host)
     return null
   }
@@ -227,8 +225,7 @@ export async function waitForRelayGcClaimRelease(
           return
         }
       }
-      // A lost or uncertain release can mean a successor owns the stable path.
-      // Probe again instead of treating recovery as complete.
+      // An uncertain release may leave a successor at the stable path; probe again.
       continue
     }
     await new Promise<void>((resolve, reject) => {

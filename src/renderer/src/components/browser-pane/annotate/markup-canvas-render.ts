@@ -1,13 +1,4 @@
-// Renders the live markup scene into the overlay canvas at device resolution.
-// Committed shapes are rasterized once into an offscreen layer; the per-frame
-// paint blits that layer and draws only the in-progress shape on top, so a fast
-// pointermove stream never re-strokes the whole scene. Kept separate from the
-// editor hook so the draw composition stays focused.
-//
-// Why the caller passes dpr: the committed layer and the visible canvas are sized
-// in two separate paints. Reading window.devicePixelRatio independently in each
-// could size them differently if the ratio changed between them (monitor move),
-// misaligning the 1:1 blit. Taking one measured dpr keeps them in lockstep.
+// Cache committed raster ink between pointer moves; pass one measured DPR to both layers so a monitor move cannot misalign them.
 
 import { clampMarkupScale } from './markup-screenshot-compose'
 import { drawShapes } from './markup-shape-render'
@@ -18,8 +9,7 @@ function sceneDevicePixels(
   cssHeight: number,
   dpr: number
 ): { scale: number; width: number; height: number } {
-  // Why: clamp identically to the compositor so the live preview and the exported
-  // PNG render shapes at the same scale.
+  // Use the compositor’s scale clamp so preview and export agree.
   const scale = clampMarkupScale(dpr)
   return {
     scale,
@@ -28,9 +18,7 @@ function sceneDevicePixels(
   }
 }
 
-// Rasterizes the committed shapes into an offscreen layer. Called only when the
-// visible shape list, the size, or the dpr changes — on the pointermove path only
-// when an erase drag hits a new mark.
+// Rebuild only when visible shapes, size or DPR change; erase drags rebuild only after hitting new ink.
 export function renderCommittedLayer(
   layer: HTMLCanvasElement,
   shapes: readonly MarkupShape[],
@@ -52,8 +40,7 @@ export function renderCommittedLayer(
   drawShapes(ctx, shapes)
 }
 
-// Blits the cached committed layer plus the in-progress shape onto the visible
-// canvas. Cheap enough for every frame: one image blit + at most one shape.
+// One cached blit plus the in-progress shape keeps per-frame cost independent of committed ink.
 export function blitMarkupScene(
   canvas: HTMLCanvasElement,
   committedLayer: HTMLCanvasElement,
@@ -71,16 +58,12 @@ export function blitMarkupScene(
     canvas.width = width
     canvas.height = height
   }
-  // Why: blit the committed layer under the identity transform, stretched to the
-  // canvas's device box. It's 1:1 when the layer matches (the common case, since
-  // both are sized from the same dpr) and degrades gracefully — never clips or
-  // offsets — if a layer render briefly lags a dpr change.
+  // Blit in device coordinates, stretching if the cached layer briefly lags a DPR change to avoid clipping or offset.
   ctx.setTransform(1, 0, 0, 1, 0, 0)
   ctx.clearRect(0, 0, width, height)
   if (committedLayer.width > 0 && committedLayer.height > 0) {
     ctx.drawImage(committedLayer, 0, 0, width, height)
   }
-  // Then switch to the dpr transform to draw the in-progress shape in CSS coords.
   ctx.setTransform(scale, 0, 0, scale, 0, 0)
   if (inProgress) {
     drawShapes(ctx, [inProgress])

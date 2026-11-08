@@ -1,4 +1,4 @@
-import type { ProtectedSecretRetentionUpdate } from '../../protected-secret-persistence'
+import type { ProtectedSecretRetentionUpdate } from '../../credentials/protected-secret-persistence'
 import type {
   ProfileStateAuthority,
   ProfileStateDomainReplacement,

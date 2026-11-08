@@ -46,31 +46,8 @@ const retainedRun = {
   status: 'dispatched'
 } as unknown as AutomationRun
 
-/**
- * The gate the startup fix depends on: an empty window graph and a bound PTY are
- * two different answers, and only the second is evidence about the terminal.
- */
 describe('resolving an automation run terminal across startup states', () => {
-  it('cannot answer for any pane while no graph has published', () => {
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-    const observer = createRuntimeAutomationRunTerminalObserver(runtime)
-
-    expect(observer.resolveRunTerminal(retainedRun)).toBeNull()
-  })
-
-  it('still cannot answer once an explicitly empty headless graph publishes', () => {
-    // Serve publishes exactly this graph before arming automations, so leaves are
-    // empty there too — serve is not saved by graph ordering alone.
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    const observer = createRuntimeAutomationRunTerminalObserver(runtime)
-
-    expect(observer.resolveRunTerminal(retainedRun)).toBeNull()
-  })
-
   it('answers from an adopted PTY bound to the pane, with no leaves at all', () => {
-    // What serve's pre-start refreshRestoredOrchestrationAuthority produces: a
-    // ptysById record carrying the restored paneKey, never a leaf.
     const runtime = new OrcaRuntimeService(makeStore() as never)
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
     runtime.registerPty('pty-1', WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_ID })

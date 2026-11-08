@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
-import { resolveRepoWorktreeLaunchPlatform } from './execution-host-facts'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
+import {
+  resolveRepoWorktreeLaunchPlatform,
+  resolveWorktreeExecutionHostPlatform
+} from './execution-host-facts'
+import { getDefaultSettings } from '../../../shared/constants'
 
 vi.mock('./new-workspace', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -39,8 +43,7 @@ function state(): State {
     projects: [],
     activeRepoId: null,
     activeWorktreeId: null,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver reads no other setting.
-    settings: {} as State['settings'],
+    settings: getDefaultSettings('/tmp'),
     sshConnectionStates: new Map(),
     sshStateByEnvironment: new Map(),
     runtimeStatusByEnvironmentId: linuxServer()
@@ -50,10 +53,63 @@ function state(): State {
 const serverRepo = { path: '/srv/repo', executionHostId: 'runtime:linux-box' }
 
 describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
-  it("reads a server project's worktree as the server's OS (#27971)", () => {
+  it('keeps the nested SSH platform for a captured folder owner, matching ordinary launch', () => {
+    const nested = state()
+    nested.folderWorkspaces = [
+      {
+        id: 'folder',
+        projectGroupId: 'group',
+        name: 'Folder',
+        folderPath: 'C:\\project',
+        executionHostId: 'runtime:linux-box',
+        connectionId: 'box',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    nested.sshStateByEnvironment.set('linux-box', {
+      connectionStates: new Map([
+        [
+          'box',
+          {
+            targetId: 'box',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            remotePlatform: 'win32'
+          }
+        ]
+      ]),
+      targetLabels: new Map(),
+      targetGenerations: new Map(),
+      removedTargetLabels: new Map(),
+      targetsHydrated: true
+    })
+    const ordinary = resolveWorktreeExecutionHostPlatform(nested, 'folder:folder', 'C:\\project')
+    const captured = resolveWorktreeExecutionHostPlatform(
+      { ...nested, activeWorktreeId: 'folder:folder' },
+      'folder:folder',
+      'C:\\project',
+      'runtime:linux-box'
+    )
+    expect(ordinary).toMatchObject({ kind: 'known', platform: 'win32', hostKind: 'ssh' })
+    expect(captured).toEqual(ordinary)
+    nested.runtimeStatusByEnvironmentId.clear()
     expect(
-      resolveRepoWorktreeLaunchPlatform(state(), serverRepo, { id: 'wt', path: '/srv/wt' })
-    ).toBe('linux')
+      resolveWorktreeExecutionHostPlatform(
+        nested,
+        'folder:folder',
+        'C:\\project',
+        'runtime:linux-box'
+      )
+    ).toEqual(ordinary)
   })
 
   it("lets a worktree's own host outrank its repo's", () => {

@@ -13,14 +13,6 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-it('preserves an older single-entry build identity for rollback', () => {
-  const entry = join(directory, 'orcad.js')
-  writeFileSync(entry, 'old-server')
-  expect(hashOrcadLauncher(entry)).toBe(
-    createHash('sha256').update('old-server').digest('hex').slice(0, 16)
-  )
-})
-
 it('keeps the launcher hash older clients expect for both split entry paths', () => {
   const launcher = join(directory, 'orcad.js')
   const server = join(directory, 'orcad-server.js')

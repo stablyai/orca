@@ -1,7 +1,9 @@
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/layout-serialization'
-import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { collectLeafIdsInOrder } from '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
+import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '../../store/types'
 
 type AgentStatusPaneResolution = {
@@ -32,8 +34,8 @@ export type AgentStatusPaneRoutingIndex = {
   unifiedLabelsByWorktreeId: Map<string, Map<string, string | undefined>>
   layoutsByTabId: AppState['terminalLayoutsByTabId']
   leafIdsByRoot: WeakMap<TerminalPaneLayoutNode, Set<string>>
-  worktreesById: ReturnType<typeof getWorktreeMapFromState>
-  reposById: ReturnType<typeof getRepoMapFromState>
+  worktreesById: ReturnType<typeof getIndexedWorktreeMap>
+  reposById: ReturnType<typeof getIndexedRepoMap>
 }
 
 /** Deterministic build accounting for the memoization ratchet test and the routing benchmark. */
@@ -53,8 +55,7 @@ export function resetAgentStatusPaneRoutingIndexCounters(): void {
   agentStatusPaneRoutingIndexCounters.leafSetBuilds = 0
 }
 
-// Why: layout roots are immutable snapshots, so leaf membership keyed on the root node stays
-// correct across commits and never has to be rewalked once seen.
+// Immutable layout roots keep cached leaf membership valid without rewalking each commit.
 const leafIdsByRoot = new WeakMap<TerminalPaneLayoutNode, Set<string>>()
 const tabsByIdCache = new WeakMap<AppState['tabsByWorktree'], Map<string, IndexedAgentStatusTab>>()
 const unifiedLabelIndexCache = new WeakMap<object, Map<string, Map<string, string | undefined>>>()
@@ -130,14 +131,10 @@ function resolveUnifiedLabel(
   return labelsByTabId.get(tabId)
 }
 
-/**
- * Ownership index for agent-status routing, memoized on the identity of the slices it reads.
- * A status commit replaces none of them, so a dense burst reuses one index instead of rebuilding
- * a per-worktree tab and label map for every event.
- */
+/** Memoize ownership by relevant slice identity so status-only bursts reuse tab/label indexes. */
 export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusPaneRoutingIndex {
-  const worktreesById = getWorktreeMapFromState(store)
-  const reposById = getRepoMapFromState(store)
+  const worktreesById = getIndexedWorktreeMap(selectWorktreesByRepo(store))
+  const reposById = getIndexedRepoMap(store.repos)
   const layoutsKey = store.terminalLayoutsByTabId ?? NO_LAYOUTS
   let indexesByLayout = routingIndexCache.get(store.tabsByWorktree)
   const cached = indexesByLayout?.get(layoutsKey)

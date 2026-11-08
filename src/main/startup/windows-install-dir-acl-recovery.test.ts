@@ -53,10 +53,7 @@ const DENIED: InstallDirPackageGrantOutcome = {
   reason: 'Access is denied.'
 }
 
-/**
- * Drives the production path: the real probe hands its verdict to the real gate,
- * which decides whether a grant ever runs. Only the DACL read and the grant are faked.
- */
+/** Keep probe-to-gate decisions real; fake only DACL reads and grants. */
 function probeThenRecover(
   savedAces: (target: string) => string[],
   options: { failRepair?: boolean } = {}
@@ -82,8 +79,7 @@ function probeThenRecover(
           grants: grantsFrom(grantFn),
           recordBreadcrumb: () => undefined
         })
-        // Longer than the repair's own setImmediate hop, so a repair that was
-        // started has always granted by the time this resolves.
+        // Wait past the repair's deferred grant hop before asserting.
         setTimeout(() => resolve(specs), 25)
       }
     })
@@ -102,9 +98,7 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
     expect(specs).toEqual(['root', 'tree'])
   })
 
-  // Orphan + the Program Files ALL APPLICATION PACKAGES default launched clean on
-  // win32 10.0.26200 / Electron 43.4.1, so it earns neither an ACL write nor the
-  // accusing dialog copy.
+  // ALL APPLICATION PACKAGES launched clean with an orphan on Windows 10.0.26200/Electron 43.4.1; require no repair or accusation.
   it('leaves an install whose package grant is ALL APPLICATION PACKAGES alone', async () => {
     const specs = await probeThenRecover(() => [ORPHAN_PACKAGE_ACE, ALL_PACKAGES_ACE])
     expect(specs).toHaveLength(0)
@@ -218,8 +212,7 @@ describe('install-dir ACL repair vs the GPU safe-graphics marker', () => {
 
   it('clears the sticky safe-graphics marker once the real cause is repaired', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-gpu-'))
-    // The machine is in the reproduced state: the poisoned install DACL killed the
-    // GPU child three times, so Orca latched safe graphics for this build.
+    // Model poisoned-DACL GPU deaths that engaged the build's safe-graphics latch.
     writeGpuFallbackMarker(
       userDataPath,
       { engagedAt: Date.now(), crashesInWindow: 3, userConfirmed: false },
@@ -230,7 +223,7 @@ describe('install-dir ACL repair vs the GPU safe-graphics marker', () => {
     await new Promise<void>((resolve) => {
       startWindowsInstallDirAclRepairIfPoisoned(POISON_VERDICT, {
         ...recoveryOptions(userDataPath, okRun),
-        // Settles after the repair's own setImmediate hop and its two grant passes.
+        // Wait for both deferred grant passes.
         recordBreadcrumb: () => {
           setTimeout(resolve, 0)
           return undefined
@@ -239,13 +232,11 @@ describe('install-dir ACL repair vs the GPU safe-graphics marker', () => {
     })
 
     expect(describeInstallDirAclPoison()?.detail).toContain('repaired the permissions')
-    // The GPU child deaths were never a driver fault, so safe graphics — and the
-    // --in-process-gpu launch that hides the next crash's evidence — must not outlive the repair.
+    // Successful ACL repair must retire unconfirmed safe graphics, which hides future sibling-death evidence.
     expect(readActiveGpuFallbackMarker(userDataPath, GPU_ENV)).toBeNull()
   })
 
-  // "Keep safe graphics" is a durable user choice with its own reasons; the repair
-  // only retires the latch Orca engaged on its own.
+  // Preserve user-confirmed safe graphics; only Orca's automatic latch may be retired.
   it('leaves a user-confirmed safe-graphics marker alone', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-gpu-'))
     writeGpuFallbackMarker(
@@ -280,8 +271,7 @@ describe('isInstallDirAclSuspect', () => {
     expect(isInstallDirAclSuspect()).toBe(false)
   })
 
-  // The GPU child dies ~74ms in and the probe answers 0.9-3.0s later, so "no verdict
-  // yet" is the entire window in which the misdiagnosis happens.
+  // GPU deaths can precede the probe by seconds; pending verdict is the misdiagnosis window.
   it('holds while the probe verdict is outstanding, and releases on a clean verdict', () => {
     noteWindowsInstallDirAclProbePending()
     expect(isInstallDirAclSuspect()).toBe(true)
@@ -308,7 +298,6 @@ describe('isInstallDirAclSuspect', () => {
     )
     expect(isInstallDirAclSuspect()).toBe(true)
     await vi.waitFor(() => expect(describeInstallDirAclPoison()?.detail).toContain('could not'))
-    // Still suspect: the tree is proven poisoned, and safe graphics does not rescue it.
     expect(isInstallDirAclSuspect()).toBe(true)
 
     resetWindowsInstallDirAclRecoveryForTest()
@@ -341,18 +330,16 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     expect(specs).toHaveLength(0)
   })
 
-  // The crash this fixes: launch 1 detects the poison but createMainWindow already
-  // ran, so the renderer is dead before the grant runs. Launch 2 must not repeat it.
+  // Persisted poison must repair before launch-two window creation; launch one's deferred probe was too late.
   it('repairs a launch that a previous one recorded as poisoned, before returning', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-gate-'))
-    // Launch 1: the probe reports poison and the app dies mid-repair.
+    // First launch dies after recording poison but before repair completes.
     startWindowsInstallDirAclRepairIfPoisoned(
       POISON_VERDICT,
       recoveryOptions(userDataPath, () => new Promise<never>(() => undefined))
     )
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
 
-    // Launch 2.
     resetWindowsInstallDirAclRecoveryForTest()
     resetWindowsInstallDirAclRepairForTest()
     writeGpuFallbackMarker(
@@ -367,7 +354,6 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     }
     const mode = await repairKnownPoisonedInstallDirBeforeWindow(recoveryOptions(userDataPath, run))
     expect(mode).toBe('repaired')
-    // Both passes have already run by the time the window may be created.
     expect(specs).toEqual(['root', 'tree'])
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(false)
     expect(readActiveGpuFallbackMarker(userDataPath, GPU_ENV)).toBeNull()
@@ -428,8 +414,7 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(false)
   })
 
-  // An unreadable DACL is not evidence of health; forgetting the verdict there would
-  // hand the next launch straight back to the crash it already recorded.
+  // Unreadable DACL cannot retire poison evidence or the next launch repeats a known crash.
   it('keeps the marker when the probe could not read the DACL', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-gate-'))
     startWindowsInstallDirAclRepairIfPoisoned(
@@ -444,14 +429,7 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
   })
 
-  // The gate-timed-out ordering. The gate's budget is 20s while the tree grant's own cap is
-  // 120s, so the grant routinely outlives the gate: the window opens, and this launch's probe
-  // reads the tree POISONED while that repair is still in flight. When the orphaned grant
-  // then claims success -- exit 0, and on a localized Windows no parsable failure summary to
-  // contradict it -- the claim must not outrank a reading taken after it was dispatched.
-  // Otherwise this launch deletes the poison marker that arms every later gate, un-suspects
-  // the tree so --in-process-gpu can engage, clears the safe-graphics marker, and tells the
-  // user their permissions are fixed.
+  // A 20s gate can time out before its 120s grant. Later poison readings outrank that grant's success claim or it falsely disarms recovery and enables in-process GPU.
   it('does not let a timed-out gate repair outrank a poison reading taken after it', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-gate-timeout-'))
     writeInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)
@@ -483,7 +461,7 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     })
     expect(mode).toBe('timeout')
 
-    // The window is open now, and this launch's own probe reads the tree still poisoned.
+    // Probe after window creation supplies newer poison evidence than the still-running grant.
     startWindowsInstallDirAclRepairIfPoisoned(POISON_VERDICT, recoveryOptions(userDataPath, okRun))
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
 
@@ -496,9 +474,7 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     expect(readActiveGpuFallbackMarker(userDataPath, GPU_ENV)).not.toBeNull()
   })
 
-  // The other ordering of the same two events: the orphaned grant succeeds and clears the
-  // safe-graphics marker BEFORE the probe reads the tree still poisoned. The disproof must
-  // give the marker back, or the two orderings disagree about the same launch.
+  // Reverse ordering: a later poison reading must restore safe graphics already cleared by the grant's disproved success claim.
   it('restores the safe-graphics marker when the probe disproves a timed-out gate repair', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-gate-timeout-restore-'))
     writeInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)
@@ -530,12 +506,10 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     })
     expect(mode).toBe('timeout')
 
-    // The orphan claims success first; the claim is believed and takes the marker with it.
     releaseIcacls()
     await reported
     expect(readActiveGpuFallbackMarker(userDataPath, GPU_ENV)).toBeNull()
 
-    // Then this launch's probe reads the tree still poisoned.
     startWindowsInstallDirAclRepairIfPoisoned(POISON_VERDICT, recoveryOptions(userDataPath, okRun))
 
     expect(readActiveGpuFallbackMarker(userDataPath, GPU_ENV)?.userConfirmed).toBe(false)
@@ -544,10 +518,7 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
   })
 })
 
-// The repair marker matches whatever the outcome, so on its own 'marker-hit' cannot tell a
-// finished tree from one Orca gave up on. Both callers hold outstanding poison evidence —
-// this launch's probe reading, or the persisted marker that armed the gate — so a recorded
-// success never stands in for the repair, and 'marker-hit' only ever means budget spent.
+// With outstanding poison evidence, a completed-repair marker proves no current health; marker-hit means spent budget only.
 describe('a repair marker recording a completed repair', () => {
   beforeEach(() => {
     resetWindowsInstallDirAclProbeForTest()
@@ -555,7 +526,7 @@ describe('a repair marker recording a completed repair', () => {
     resetWindowsInstallDirAclRecoveryForTest()
   })
 
-  /** One launch: fresh module latches, then the gate runs against the userData on disk. */
+  /** Reset process latches between launches while retaining persisted evidence. */
   async function gateLaunch(
     userDataPath: string,
     run: Runner
@@ -566,23 +537,16 @@ describe('a repair marker recording a completed repair', () => {
     return repairKnownPoisonedInstallDirBeforeWindow(recoveryOptions(userDataPath, run))
   }
 
-  // The three-launch shape the gate exists for, and the one it used to disarm itself on:
-  // launch 1 repairs; the tree is re-poisoned (an installer, AV, or a grant that
-  // silently no-opped); launch 2's probe records the poison but Chromium FATALs before the
-  // repair can write its marker. Launch 3's gate then meets a poison marker and a repair
-  // marker claiming success. Treating that as 'repaired' ran no grant, deleted the poison
-  // marker so no later gate ever fires again, un-suspected the tree so --in-process-gpu
-  // could engage, and told the user their permissions were fixed.
+  // Three-launch regression: old successful repair, re-poisoning/crash mid-repair, then poison plus stale-success markers. The third gate must grant again within budget.
   it('re-runs the grant when a poison marker outlives it', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-repaired-hit-'))
 
-    // Launch 1: the gate repairs the tree and retires the poison marker.
+    // First launch repairs and retires poison.
     writeInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)
     expect(await gateLaunch(userDataPath, okRun)).toBe('repaired')
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(false)
 
-    // Launch 2: the probe reads the tree as poisoned again; the process dies mid-repair,
-    // so the repair marker still records launch 1's success.
+    // Second launch dies mid-repair after recording new poison; the old success marker remains.
     resetWindowsInstallDirAclRecoveryForTest()
     resetWindowsInstallDirAclRepairForTest()
     startWindowsInstallDirAclRepairIfPoisoned(
@@ -591,7 +555,7 @@ describe('a repair marker recording a completed repair', () => {
     )
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
 
-    // Launch 3: the gate must repair, not congratulate itself on launch 1's work.
+    // Third launch must repair rather than trust first-launch success.
     const spent: InstallDirPackageGrantPass[] = []
     const mode = await gateLaunch(userDataPath, async (_installDir, pass) => {
       spent.push(pass)
@@ -604,8 +568,7 @@ describe('a repair marker recording a completed repair', () => {
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
   })
 
-  // The budget is what stops the retry above running forever; a spent one must still read
-  // as "Orca could not fix this", never as a repair it never made.
+  // Spent budget must report unrepaired, without falsely clearing poison.
   it('does not let the gate report a spent budget as a repair', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-gate-budget-'))
     writeFileSync(
@@ -630,12 +593,10 @@ describe('a repair marker recording a completed repair', () => {
     expect(isInstallDirAclSuspect()).toBe(true)
     expect(isInstallDirAclRepairExhausted()).toBe(true)
     expect(describeInstallDirAclPoison()?.detail).toContain('could not repair them')
-    // Still armed: nothing has proven this tree healthy, so a later launch still gates.
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
   })
 
-  // The probe reads the tree AFTER the pre-window gate has finished with it, so a signature
-  // still matching means the repair never landed however the grant reported.
+  // A later probe reading outranks gate success if the tree still matches poison.
   it('is overruled by a probe that reads the tree poisoned after the gate repaired it', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-noop-grant-'))
     writeInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)
@@ -648,14 +609,10 @@ describe('a repair marker recording a completed repair', () => {
     expect(isInstallDirAclSuspect()).toBe(true)
     expect(isInstallDirAclRepairExhausted()).toBe(false)
     expect(describeInstallDirAclPoison()?.detail).toContain('could not repair them')
-    // Re-armed: the next launch gates before it opens a window it cannot render.
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
   })
 
-  // The gate's 'repaired' is the grant's own claim, not a reading of the tree — and the GPU
-  // children die 48-1373ms after window creation while the probe answers 0.9-3.0s in.
-  // Un-suspecting the tree on the claim alone opens exactly that interval to
-  // --in-process-gpu on a tree safe graphics cannot rescue.
+  // Gate success is provisional until probe/grace expiry: child deaths can precede the probe, and early in-process GPU would hide evidence.
   it('keeps a gate-repaired tree suspect until this launch probe has read it', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-provisional-'))
     writeInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)
@@ -663,13 +620,13 @@ describe('a repair marker recording a completed repair', () => {
       await repairKnownPoisonedInstallDirBeforeWindow(recoveryOptions(userDataPath, okRun))
     ).toBe('repaired')
 
-    // openMainWindow dispatches the probe: the reading is outstanding.
+    // Model window creation dispatching a still-pending probe.
     noteWindowsInstallDirAclProbePending()
     expect(isInstallDirAclSuspect()).toBe(true)
-    // A probe that never answers releases at the grace window, like any pending verdict.
+    // Probe timeout bounds suspicion when no reading arrives.
     expect(isInstallDirAclSuspect(Date.now() + 15_000)).toBe(false)
 
-    // A clean reading corroborates the claim and releases immediately.
+    // A clean reading corroborates repair and releases immediately.
     startWindowsInstallDirAclRepairIfPoisoned(
       { status: 'ok', matchesPoisonSignature: false },
       recoveryOptions(userDataPath, okRun)
@@ -677,9 +634,7 @@ describe('a repair marker recording a completed repair', () => {
     expect(isInstallDirAclSuspect()).toBe(false)
   })
 
-  // A disproved claim owes back everything it took on the false premise — the poison
-  // marker (above) and the safe-graphics marker, or the machine relaunches hardware
-  // accelerated into the re-armed gate and FATALs before that gate can finish.
+  // Disproved repair must restore cleared safe graphics or hardware relaunch can abort before the re-armed gate repairs.
   it('restores the safe-graphics marker a disproved repair claim cleared', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-gpu-restore-'))
     writeInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)
@@ -691,7 +646,6 @@ describe('a repair marker recording a completed repair', () => {
     expect(
       await repairKnownPoisonedInstallDirBeforeWindow(recoveryOptions(userDataPath, okRun))
     ).toBe('repaired')
-    // The claim was believed, so the marker went with it.
     expect(readActiveGpuFallbackMarker(userDataPath, GPU_ENV)).toBeNull()
 
     startWindowsInstallDirAclRepairIfPoisoned(POISON_VERDICT, recoveryOptions(userDataPath, okRun))
@@ -700,11 +654,7 @@ describe('a repair marker recording a completed repair', () => {
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
   })
 
-  // The opposite evidence: the probe has just READ this tree and found it poisoned, so a
-  // marker claiming success describes a tree that was re-poisoned, or a grant that
-  // silently no-opped. Reporting 'repaired' there runs no grant, deletes the poison marker
-  // that arms the next launch's gate, un-suspects the tree so --in-process-gpu can engage,
-  // and tells the user their permissions are fixed.
+  // Fresh poison evidence contradicts prior success; rerun within budget rather than disarm the gate or claim repaired permissions.
   it('re-runs the grant when a fresh probe verdict contradicts the repaired marker', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-repoisoned-'))
     writeInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)
@@ -712,7 +662,7 @@ describe('a repair marker recording a completed repair', () => {
       await repairKnownPoisonedInstallDirBeforeWindow(recoveryOptions(userDataPath, okRun))
     ).toBe('repaired')
 
-    // Next launch: the gate is disarmed, and the probe reads the same tree as poisoned.
+    // Next launch re-probes poison after the old repair disarmed the gate.
     resetWindowsInstallDirAclRecoveryForTest()
     resetWindowsInstallDirAclRepairForTest()
     const spent: InstallDirPackageGrantPass[] = []
@@ -736,8 +686,7 @@ describe('a repair marker recording a completed repair', () => {
     expect(describeInstallDirAclPoison()?.detail).toContain('could not repair them')
   })
 
-  // The contradiction re-opens the budget, it does not remove it: a tree that has spent
-  // every attempt must not re-walk the tree on every launch forever.
+  // New poison evidence cannot remove the attempt cap or every launch would re-walk permanently broken trees.
   it('still stops at the attempt budget when the probe keeps reporting poison', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-repoisoned-budget-'))
     writeFileSync(
@@ -767,7 +716,7 @@ describe('a repair marker recording a completed repair', () => {
     })
 
     expect(spent).toHaveLength(0)
-    // Nothing was repaired, so the user still gets the commands and the gate stays armed.
+    // Unrepaired trees retain commands and next-launch gating.
     expect(isInstallDirAclSuspect()).toBe(true)
     expect(describeInstallDirAclPoison()?.detail).toContain('could not repair them')
     expect(hasInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)).toBe(true)
@@ -781,8 +730,7 @@ describe('a clean probe verdict', () => {
     resetWindowsInstallDirAclRecoveryForTest()
   })
 
-  // The launch this covers: the repair budget is spent, so the gate can only report
-  // 'marker-hit' — and then the probe reads the tree and finds it healthy.
+  // A clean probe retires suspicion even after the gate exhausted its repair budget.
   it('retires a verdict the gate could no longer act on', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-clean-'))
     writeFileSync(
@@ -811,13 +759,11 @@ describe('a clean probe verdict', () => {
       { status: 'ok', matchesPoisonSignature: false },
       recoveryOptions(userDataPath, okRun)
     )
-    // Neither the driver fallback stays suppressed nor does the dialog accuse a healthy folder.
     expect(isInstallDirAclSuspect()).toBe(false)
     expect(describeInstallDirAclPoison()).toBeNull()
   })
 
-  // The probe answers while the repair is still walking the tree: 'failed' from a
-  // repair with nothing left to fix must not re-accuse an install just read clean.
+  // A clean reading outranks a later failed repair result about a tree with nothing left to fix.
   it('outranks a repair verdict that lands after it', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-clean-'))
     const failing: Runner = async () => DENIED
@@ -846,9 +792,7 @@ describe('the probe-pending grace window', () => {
     resetWindowsInstallDirAclRecoveryForTest()
   })
 
-  // openMainWindow re-runs on every tray/second-instance reopen while the probe is
-  // once-per-process, so a re-arm would wait 15s on a verdict that already landed
-  // and drop every GPU child crash in between.
+  // Reopen must not re-arm the once-per-process probe wait and suppress real GPU recovery for another 15s.
   it('is armed by a dispatched probe only, so a reopen cannot re-arm it', async () => {
     installFakeDacls(() => [RESTRICTED_PACKAGES_ACE])
     const probeArgs = {
@@ -859,7 +803,7 @@ describe('the probe-pending grace window', () => {
     }
     let settleVerdict: () => void = () => undefined
     const verdict = new Promise<void>((resolve) => (settleVerdict = resolve))
-    // Launch, wired exactly as main-window-controller wires it.
+    // Use the same dispatch-gated arming as window startup.
     const dispatched = probeWindowsInstallDirAcl({
       ...probeArgs,
       onDone: (data) => {

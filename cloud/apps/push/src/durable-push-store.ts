@@ -109,8 +109,7 @@ export class DurablePushStore {
   async claim(canClaim?: () => boolean): Promise<QueuedPushDelivery | null> {
     return this.claims.transaction(async (tx) => {
       if (canClaim && !canClaim()) return null
-      // The previous revision's claim holds this key exclusively; sharing it makes that claim snapshot
-      // only after our leases commit. Drop one release after every worker runs this revision.
+      // Share the previous revision’s exclusive claim key so it snapshots after our leases commit; drop one release after all workers upgrade.
       if (!(await tx.tryLockSharedScope('push-worker-claim'))) return null
       const now = this.now()
       // SQLite already serializes the whole transaction.
@@ -134,8 +133,7 @@ export class DurablePushStore {
     })
   }
 
-  // The row lock alone lets a second claimer skip this device's head and lease the row behind it.
-  // Under the device lock, a fresh read sees every committed lease and every uncommitted head.
+  // Row locks alone allow leasing behind a skipped device head; device locking plus reread sees committed leases and uncommitted heads.
   private async ownsDeviceHead(tx: PushDatabase, row: SqlRow, now: number): Promise<boolean> {
     const registrationId = String(row.registration_id)
     if (!(await tx.tryLockScope(`push-device:${registrationId}`))) return false

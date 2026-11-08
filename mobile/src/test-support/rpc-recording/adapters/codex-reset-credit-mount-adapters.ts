@@ -5,11 +5,7 @@ import type { AccountsSnapshot } from '../../../components/accounts-snapshot'
 
 const ACCOUNT_REVISION = 1_700_000_000_000
 
-/**
- * The offer the scenario confirms against. Recorded rather than invented: the expected scope the
- * request carries is derived from this by the product's own `getCodexResetCreditScope`, so the
- * bytes on the wire are the ones a screen holding this snapshot would send.
- */
+// Derive request scope from this offer through product code instead of inventing expected wire params.
 const CODEX_ACCOUNTS = mountFixture<AccountsSnapshot>({
   claude: { accounts: [], activeAccountId: null },
   codex: {
@@ -33,7 +29,6 @@ const CODEX_ACCOUNTS = mountFixture<AccountsSnapshot>({
   }
 })
 
-/** Redeeming a Codex rate-limit reset credit; the host's ledger is what makes it idempotent. */
 export function codexResetCreditMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

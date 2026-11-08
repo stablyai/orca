@@ -1,4 +1,4 @@
-import { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import { app } from 'electron'
 import { join } from 'node:path'
 import type { ParsedWarpThemeResult, ParseWarpThemeOptions } from './parser'
@@ -31,12 +31,11 @@ export function parseWarpThemeYamlWithTimeout(
   timeoutOptions: ParseWarpThemeTimeoutOptions = {}
 ): Promise<ParsedWarpThemeResult> {
   return new Promise((resolve) => {
-    const worker = new Worker(getParserWorkerPath(), {
+    const worker = spawnWorkerThread(getParserWorkerPath(), {
       workerData: { content, fileLabel, options }
     })
     let settled = false
-    // Why: callers may shorten the parse timeout (preview budget) but never
-    // extend it past the default cap, keeping untrusted-input parse time bounded.
+    // Preview callers may shorten but never extend untrusted-input parse budgets.
     const timeoutMs = Math.max(
       0,
       Math.min(WARP_THEME_PARSE_TIMEOUT_MS, timeoutOptions.timeoutMs ?? WARP_THEME_PARSE_TIMEOUT_MS)

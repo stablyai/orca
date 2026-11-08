@@ -1,3 +1,4 @@
+import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,14 +8,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.unstubAllGlobals()
   })
 
-  // Why: regression guard. The CLI "create agent" flow emits
-  // `ui:activateWorktree` to switch the user to the new workspace. A prior
-  // implementation hand-rolled the activation (setActiveRepo + setActiveView
-  // + setActiveWorktree + ensureWorktreeHasInitialTerminal +
-  // revealWorktreeInSidebar), which bypassed recordWorktreeVisit and left
-  // the back/forward buttons ignoring the CLI-driven switch. This test pins
-  // the handler to the canonical `activateAndRevealWorktree` helper, which
-  // is the single place that records the visit in history.
+  // Canonical activateAndRevealWorktree records CLI-driven navigation in back/forward history; hand-rolled activation bypassed visits.
   it('uses immediate reveal only for newly fetched ui:activateWorktree targets', async () => {
     const activateAndRevealWorktree = vi.fn()
     let worktreeKnown = false
@@ -72,6 +66,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
+          setUnrestoredPortForwards: vi.fn(),
           clearPortForwards: vi.fn(),
           setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
@@ -85,21 +80,22 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree,
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
       nextEditorFontZoomLevel: vi.fn(() => 0),
       computeEditorFontSize: vi.fn(() => 13)
     }))
-    vi.doMock('@/components/settings/SettingsConstants', () => ({
+    vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+      ...(await importOriginal<typeof UIZoomLevelModule>()),
       zoomLevelToPercent: vi.fn(() => 100),
-      ZOOM_MIN: -3,
-      ZOOM_MAX: 3
+      UI_ZOOM_MIN: -3,
+      UI_ZOOM_MAX: 3
     }))
     vi.doMock('@/lib/zoom-events', () => ({
       dispatchZoomLevelChanged: vi.fn()
@@ -145,6 +141,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onPublishAgentLaunchTab: () => () => {},
           onRevealTerminalPane: () => () => {},
           onAgentLaunchPaneVerdict: () => () => {},
+          onLaunchRecipe: () => () => {},
           onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
@@ -160,8 +157,6 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCloseTerminal: () => () => {},
           onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
-          onNewBrowserTab: () => () => {},
-          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           onRequestRemoteCliBrowserScope: () => () => {},
           replyTabCreate: () => {},
@@ -169,14 +164,11 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           replyTabClose: () => {},
           onRequestTabSetProfile: () => () => {},
           replyTabSetProfile: () => {},
-          onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onCloseFloatingItem: () => () => {},
           onSelectFloatingIndex: () => () => {},
-          onSwitchTab: () => () => {},
-          onSwitchTabAcrossAllTypes: () => () => {},
+          onBrowserPageTabShortcut: () => () => {},
           onSwitchRecentTab: () => () => {},
-          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
@@ -194,6 +186,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -205,12 +198,14 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -242,20 +237,13 @@ describe('useIpcEvents CLI-created worktree activation', () => {
       setup
     })
 
-    // Wait for the async IPC handler (it awaits fetchWorktrees before activating).
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    // Worktrees must be fetched first so activateAndRevealWorktree can resolve
-    // the CLI-created worktree out of store state.
+    // Fetch before activation so renderer state can resolve the just-created CLI workspace.
     expect(fetchWorktrees).toHaveBeenCalledWith('repo-1')
 
-    // The core regression guard: the handler must delegate to the canonical
-    // activation helper (which records the visit in history) rather than
-    // hand-rolling the activation steps and skipping recordWorktreeVisit.
-    // `setup` must be passed through the `setup` opt — not positionally
-    // mis-aliased into `startup`, which was a latent bug in the original
-    // hand-rolled path.
+    // Delegate to canonical activation with setup in its own option; positional startup aliasing would regress launch semantics.
     expect(activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-new', {
       setup,
@@ -283,8 +271,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
   it('routes local and runtime worktree events to their owning hosts', async () => {
     const fetchWorktrees = vi.fn()
     const fetchWorktreeLineage = vi.fn()
-    // Mutable so the test can drop the runtime mid-run and prove the local flag
-    // is origin-based, not a sample of runtime state.
+    // Change runtime during the test to prove the local flag represents event origin, not focus state.
     const mockSettings: { activeRuntimeEnvironmentId: string | null; terminalFontSize: number } = {
       activeRuntimeEnvironmentId: 'env-1',
       terminalFontSize: 13
@@ -313,6 +300,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           fetchRepos: vi.fn(),
           fetchRuntimeEnvironmentRepos: vi.fn(),
           fetchProjectGroups: vi.fn(),
+          fetchHostWorkspaceStatuses: vi.fn(),
           fetchWorktrees,
           fetchWorktreeLineage,
           repos: [{ id: 'repo-1' }],
@@ -347,6 +335,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           setSshConnectionState: vi.fn(),
           setSshTargetLabels: vi.fn(),
           setPortForwards: vi.fn(),
+          setUnrestoredPortForwards: vi.fn(),
           clearPortForwards: vi.fn(),
           setDetectedPorts: vi.fn(),
           enqueueSshCredentialRequest: vi.fn(),
@@ -360,21 +349,22 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     vi.doMock('@/lib/ui-zoom', () => ({
       applyUIZoom: vi.fn()
     }))
-    vi.doMock('@/lib/worktree-activation', () => ({
+    vi.doMock('../lib/workspace/activation/worktree-activation', () => ({
       activateAndRevealWorktree: vi.fn(),
       ensureWorktreeHasInitialTerminal: vi.fn()
     }))
-    vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+    vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
     vi.doMock('@/lib/editor-font-zoom', () => ({
       nextEditorFontZoomLevel: vi.fn(() => 0),
       computeEditorFontSize: vi.fn(() => 13)
     }))
-    vi.doMock('@/components/settings/SettingsConstants', () => ({
+    vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+      ...(await importOriginal<typeof UIZoomLevelModule>()),
       zoomLevelToPercent: vi.fn(() => 100),
-      ZOOM_MIN: -3,
-      ZOOM_MAX: 3
+      UI_ZOOM_MIN: -3,
+      UI_ZOOM_MAX: 3
     }))
     vi.doMock('@/lib/zoom-events', () => ({
       dispatchZoomLevelChanged: vi.fn()
@@ -415,6 +405,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onPublishAgentLaunchTab: () => () => {},
           onRevealTerminalPane: () => () => {},
           onAgentLaunchPaneVerdict: () => () => {},
+          onLaunchRecipe: () => () => {},
           onRequestTerminalTabMount: () => () => {},
           replyTerminalCreate: () => {},
           onSplitTerminal: () => () => {},
@@ -430,8 +421,6 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           onCloseTerminal: () => () => {},
           onWorkspaceSleep: () => () => {},
           onResumeSleepingAgents: () => () => {},
-          onNewBrowserTab: () => () => {},
-          onNewMarkdownTab: () => () => {},
           onRequestTabCreate: () => () => {},
           onRequestRemoteCliBrowserScope: () => () => {},
           replyTabCreate: () => {},
@@ -439,14 +428,11 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           replyTabClose: () => {},
           onRequestTabSetProfile: () => () => {},
           replyTabSetProfile: () => {},
-          onNewTerminalTab: () => () => {},
           onCloseActiveTab: () => () => {},
           onCloseFloatingItem: () => () => {},
           onSelectFloatingIndex: () => () => {},
-          onSwitchTab: () => () => {},
-          onSwitchTabAcrossAllTypes: () => () => {},
+          onBrowserPageTabShortcut: () => () => {},
           onSwitchRecentTab: () => () => {},
-          onSwitchTerminalTab: () => () => {},
           onToggleStatusBar: () => () => {},
           onFullscreenChanged: () => () => {},
           onTerminalZoom: () => () => {},
@@ -464,6 +450,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         browser: {
           onGuestLoadFailed: () => () => {},
           onOpenLinkInOrcaTab: () => () => {},
+          onSessionProfilesChanged: () => () => {},
           onNavigationUpdate: () => () => {},
           onActivateView: () => () => {},
           onPaneFocus: () => () => {}
@@ -475,12 +462,14 @@ describe('useIpcEvents CLI-created worktree activation', () => {
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
+          listUnrestoredPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
           onPortForwardsChanged: () => () => {},
           onDetectedPortsChanged: () => () => {},
+          onTargetRemoved: () => () => {},
           onCredentialResolved: () => () => {}
         },
         runtime: {
@@ -521,8 +510,7 @@ describe('useIpcEvents CLI-created worktree activation', () => {
 
     fetchWorktrees.mockClear()
     fetchWorktreeLineage.mockClear()
-    // With no runtime active the flag must still be true — it marks the event's
-    // local origin; sampling runtime state here would regress to false.
+    // Local origin remains true even when no runtime is active.
     mockSettings.activeRuntimeEnvironmentId = null
     localWorktreesOnChanged({ repoId: 'repo-1' })
     await new Promise((resolve) => setTimeout(resolve, 0))

@@ -5,11 +5,11 @@ import {
   inheritedObjectStore,
   pathApiForGitPath,
   type GitObjectsDirectory
-} from '../../shared/git-object-quarantine'
+} from '../../shared/git/objects/git-object-quarantine'
 import { toLinuxPath, toWindowsWslPath } from '../../shared/wsl-paths'
-import { parseWslPath } from '../wsl'
-import { usesHostGitForWslLinkedWorktree } from './wsl-linked-worktree-git-routing'
-import { readRepoCommonDirFromGit } from './worktree-list-reader'
+import { parseWslPath } from '../wsl/filesystem/unc-path-access'
+import { usesHostGitForWslLinkedWorktree } from './command-runner/wsl-linked-worktree-git-routing'
+import { readRepoCommonDirFromGit } from './worktrees/catalog/worktree-list-reader'
 
 export type LocalGitObjectQuarantine = {
   /** `env` is a full process env for `gitExecFileAsync`, or undefined to run unquarantined. */
@@ -73,8 +73,7 @@ export function createLocalGitObjectQuarantine(
       ...(options.spawnOnWorkerThread ? { spawnOnWorkerThread: true } : {}),
       ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
     })
-    // Why after the read: that first Git call is what settles the WSL linked-worktree route,
-    // and Windows Git on that route may not share the spelling resolved above.
+    // Probe first to settle linked-worktree routing; host Git may need a different object-store spelling.
     if (!commonDir || usesHostGitForWslLinkedWorktree(repoPath, options.wslDistro)) {
       return undefined
     }
@@ -82,7 +81,7 @@ export function createLocalGitObjectQuarantine(
   })
   return {
     run: (command) =>
-      // Why no WSLENV: the WSL runner puts both variables on WSL Git's command line.
+      // The WSL runner injects these variables in the command, without WSLENV.
       quarantine.run((env) => command(env ? { ...process.env, ...env } : undefined))
   }
 }

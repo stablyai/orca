@@ -1,5 +1,4 @@
-/** The writer's default path (no opt-in option) must stay main's: same queue, same completion
- *  timing, same per-run re-read of a leaf's PTY. Only opted-in calls take the submit layer. */
+/** Default writes preserve queue, completion timing and per-send PTY lookup; only opted-in sends use submission settlement. */
 
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
@@ -26,35 +25,6 @@ function dispatchRuntime(): OrcaRuntimeService {
   return runtime
 }
 
-/** Microtasks between the inner write settling and the caller observing the receipt. */
-async function completionTicks(): Promise<number> {
-  const target = dispatchRuntime()
-  let release!: (value: { submits: number }) => void
-  let reached = false
-  Object.defineProperty(target, 'writeTerminalAgentPrompt', {
-    value: () => {
-      reached = true
-      return new Promise((resolve) => {
-        release = resolve
-      })
-    }
-  })
-  let done = false
-  void target.sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' }).then(() => {
-    done = true
-  })
-  while (!reached) {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  }
-  release({ submits: 1 })
-  let ticks = 0
-  while (!done && ticks < 50) {
-    await Promise.resolve()
-    ticks += 1
-  }
-  return ticks
-}
-
 describe('agent prompt writer: default path', () => {
   it('never enters the opt-in submit layer', async () => {
     const target = dispatchRuntime()
@@ -70,9 +40,40 @@ describe('agent prompt writer: default path', () => {
     expect(submit).not.toHaveBeenCalled()
   })
 
-  it("settles its receipt on main's microtask schedule", async () => {
-    // Pinned against main's writer; one more async layer in between makes it 6.
-    expect(await completionTicks()).toBe(5)
+  it('settles its receipt after the write without waiting for a timer', async () => {
+    vi.useFakeTimers()
+    try {
+      const target = dispatchRuntime()
+      let started!: () => void
+      const writing = new Promise<void>((resolve) => {
+        started = resolve
+      })
+      let release!: (value: { submits: number }) => void
+      const written = new Promise<{ submits: number }>((resolve) => {
+        release = resolve
+      })
+      Object.defineProperty(target, 'writeTerminalAgentPrompt', {
+        value: () => {
+          started()
+          return written
+        }
+      })
+      let settled = false
+      const receipt = target
+        .sendTerminalAgentPrompt(HANDLE, 'hello', { inputKind: 'driving' })
+        .then((result) => {
+          settled = true
+          return result
+        })
+
+      await writing
+      await vi.advanceTimersByTimeAsync(0)
+      expect(settled).toBe(false)
+      release({ submits: 1 })
+      await expect(receipt).resolves.toMatchObject({ handle: HANDLE, accepted: true })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('writes a queued leaf prompt to the PTY the leaf names when its turn comes', async () => {
@@ -87,7 +88,7 @@ describe('agent prompt writer: default path', () => {
       getLivePtyForHandle: { value: () => null },
       getLiveLeafForHandle: { value: () => ({ leaf }) },
       isLeafPtyProvenAbsent: { value: async () => false },
-      // Both PTYs share a generation here, as main's re-read assumes when it writes the new one.
+      // Default-path relookup assumes the replacement PTY shares this generation.
       assertAgentPromptGeneration: { value: () => {} },
       writeTerminalAgentPrompt: {
         value: async (_handle: string, ptyId: string) => {
@@ -106,7 +107,7 @@ describe('agent prompt writer: default path', () => {
     }
     const second = target.sendTerminalAgentPrompt(HANDLE, 'second', { inputKind: 'driving' })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    // The pane's leaf now names a respawned PTY while `second` waits behind `first`.
+    target.registerPty('pty-default-path-respawned', 'repo::/tmp/default-path', null)
     leaf.ptyId = 'pty-default-path-respawned'
     releaseFirst()
 

@@ -42,7 +42,10 @@ export function createTerminalTab(
   command: CommandOf<'createTerminalTab'>,
   context: LayoutContext
 ): Applied {
-  if (command.initial && !admitsInitialSurface(model, command.workspace, command.initial)) {
+  if (
+    command.initial &&
+    !admitsInitialSurface(model, command.workspace, command.initial, context.visibility)
+  ) {
     return applied(model)
   }
   const held = command.adopt && appliedHeldAdoption(model, command.workspace, command.adopt)
@@ -175,23 +178,7 @@ function recordClosedTerminalTabs(
   return withWorkspace(model, key, { ...workspace, closedTerminalTabs })
 }
 
-export function renameTab(model: WorkspaceLayoutModel, command: CommandOf<'renameTab'>): Applied {
-  const tab = findTab(model.workspaces[command.workspace]!, command.tabId)
-  if (!tab) {
-    return refuse('tab_not_found')
-  }
-  if (command.kind === 'aiVault') {
-    return updateTab(model, command.workspace, { ...tab, aiVaultTitle: command.title })
-  }
-  if (command.kind === 'custom') {
-    return updateTab(model, command.workspace, { ...tab, customTitle: command.title })
-  }
-  // As the window's own generated titles: an agent's later prompt does not rename the tab.
-  if (tab.generatedTitle?.trim() && !command.replaceExisting) {
-    return refuse('generated_title_kept')
-  }
-  return updateTab(model, command.workspace, { ...tab, generatedTitle: command.title })
-}
+export { renameTab } from './workspace-layout-tab-rename'
 
 export function setTabProps(
   model: WorkspaceLayoutModel,
@@ -263,11 +250,7 @@ export function promotePreviewTab(
   return updateTab(model, command.workspace, promoted)
 }
 
-/**
- * A new tab replaces the group's preview tab of a compatible kind, as a single click does today,
- * unless closing it is refused like any close (an unsaved draft): then both stay. The new tab is
- * placed first, so closing a group's only tab, its preview, never closes the group.
- */
+/** Place the new tab before closing its compatible preview so the group survives. Refuse the preview close normally for unsaved drafts, retaining both tabs. */
 export function placeContentTab(
   model: WorkspaceLayoutModel,
   key: string,
@@ -283,6 +266,7 @@ export function placeContentTab(
     ? workspace.tabs.find(
         (entry) =>
           entry.isPreview &&
+          (!context.visibility || context.visibility(entry)) &&
           group?.tabOrder.includes(entry.id) &&
           canReplacePreviewContentType(tab.kind, entry.kind)
       )
@@ -294,13 +278,13 @@ export function placeContentTab(
       workspace,
       key,
       tab,
-      // The sender's group names a workspace's first group.
       {
         groupId: group?.id ?? placement.groupId,
         afterTabId: placement.afterTabId,
         index: placement.index
       },
-      context
+      context,
+      preview && !placement.dirtyTabIds?.includes(preview.id) ? preview.id : undefined
     )
   )
   if (!preview) {

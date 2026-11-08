@@ -2,7 +2,7 @@ import {
   markHiddenRendererPty,
   shouldDropHiddenRendererPtyData,
   unmarkHiddenRendererPty
-} from '../../pty-hidden-delivery-gate'
+} from './pty-hidden-delivery-gate'
 import { invalidatePendingPtyDrainPolicy } from './visibility-state'
 import type { PtyIpcSession } from '../session'
 

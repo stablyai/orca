@@ -3,12 +3,14 @@ import { toast } from 'sonner'
 import { RotateCcw } from 'lucide-react'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { RepoIcon } from '../../../../../../shared/repo-icon'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../../shared/constants'
-import { normalizeRepoBadgeColor } from '../../../../../../shared/repo-badge-color'
+import {
+  DEFAULT_REPO_BADGE_COLOR,
+  normalizeRepoBadgeColor
+} from '../../../../../../shared/repo-badge-color'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { RepoIconGlyph, getRepoLucideIconOptions } from '../../../repo/repo-icon'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
@@ -20,8 +22,8 @@ import {
   buildRepositoryGitHubAvatarUpdate,
   resolveRepositoryGitHubAvatar,
   resolveRepositoryUpstreamLive
-} from './repository-icon-github'
-import { translate } from '@/i18n/i18n'
+} from '../../../../runtime/repository-github/repository-icon-github'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function RepositoryIconPicker({
   repo,
@@ -30,11 +32,11 @@ export function RepositoryIconPicker({
   repo: Repo
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [loadingGitHub, setLoadingGitHub] = useState(false)
   const [resetting, setResetting] = useState(false)
   const mountedRef = useMountedRef()
-  // Why: resolve this repo's upstream/avatar on the host that owns it, not the
-  // focused runtime.
+  // Resolve avatars/upstream on the selected repo owner, independent of focused host.
   const selectedHost = parseExecutionHostId(getRepoExecutionHostId(repo))
   const ownerEnvironmentId = selectedHost?.kind === 'runtime' ? selectedHost.environmentId : null
   const selectedLucideName = repo.repoIcon?.type === 'lucide' ? repo.repoIcon.name : null
@@ -89,14 +91,13 @@ export function RepositoryIconPicker({
       }
       if (!resolution.repoIcon) {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.RepositoryIconPicker.f79972271a',
             'No GitHub remote found for this repo.'
           )
         )
         return
       }
-      // A null build means the stored icon/upstream already match — nothing to write.
       const updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
       if (updates) {
         updateRepo(repo.id, updates)
@@ -104,7 +105,7 @@ export function RepositoryIconPicker({
     } catch {
       if (mountedRef.current) {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.RepositoryIconPicker.d71df44587',
             'Failed to resolve the GitHub repo.'
           )
@@ -150,8 +151,7 @@ export function RepositoryIconPicker({
       let updates: Partial<Repo> | null
       try {
         if (hasGitHubAvatar) {
-          // Why: stored upstream/icon metadata can outlive a GitHub repo transfer.
-          // Refresh only when settings opens for the affected GitHub-avatar repo.
+          // Stored GitHub avatar metadata can outlive transfers; refresh live only when opening affected repo settings.
           const resolution = await resolveGitHubAvatar({ forceLive: true })
           updates = buildRepositoryGitHubAvatarUpdate(repo, resolution)
         } else {
@@ -182,7 +182,7 @@ export function RepositoryIconPicker({
         />
         <div className="min-w-0 flex-1">
           <Label className="text-sm font-semibold">
-            {translate('auto.components.settings.RepositoryIconPicker.4e2a14f967', 'Repo Icon')}
+            {t('auto.components.settings.RepositoryIconPicker.4e2a14f967', 'Repo Icon')}
           </Label>
           <div className="mt-1 truncate text-xs text-muted-foreground">{currentIconLabel}</div>
         </div>
@@ -195,7 +195,7 @@ export function RepositoryIconPicker({
           onClick={() => void handleResetToDefault()}
         >
           <RotateCcw className="size-3.5" />
-          {translate('auto.components.settings.RepositoryIconPicker.549d126081', 'Reset')}
+          {t('auto.components.settings.RepositoryIconPicker.549d126081', 'Reset')}
         </Button>
       </div>
 

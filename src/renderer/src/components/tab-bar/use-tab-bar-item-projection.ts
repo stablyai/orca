@@ -1,5 +1,6 @@
+import { useStructuredChatTabNames } from '@/runtime/structured-chat-name-observation'
 import { useMemo, useState } from 'react'
-import type { GitFileStatus } from '../../../../shared/git-status-types'
+import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TabBarProps } from './tab-bar-props'
 import {
@@ -138,15 +139,17 @@ export function useTabBarItemProjection({
       orderedItems
     ]
   )
+  const chatNames = useStructuredChatTabNames()
   const tabStripLayoutKey = useMemo(
     () =>
       buildTabStripLayoutKey(
         orderedItems,
         generatedTabTitlesEnabled,
         expandedPaneByTabId,
-        statusByRelativePath
+        statusByRelativePath,
+        chatNames
       ),
-    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath]
+    [expandedPaneByTabId, generatedTabTitlesEnabled, orderedItems, statusByRelativePath, chatNames]
   )
 
   return {

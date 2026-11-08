@@ -3,19 +3,23 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
-import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
-import { addManagedOrcadEnvironment } from '../../shared/runtime-environment-managed-orcad-store'
-import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
+import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
+import { addManagedOrcadEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import {
+  listEnvironments,
+  resolveEnvironment
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { Repo } from '../../shared/repo-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import {
   closeTestStores,
   createSqliteTestStore,
   readPersistedStateJson,
   writePersistedStateJson
-} from '../persistence-test-harness'
+} from '../persistence/persistence-test-harness'
 import type { PersistedState } from '../../shared/persisted-state-types'
 import { Store } from '../persistence/loading-store/store'
 import {
@@ -125,7 +129,7 @@ afterEach(async () => {
 
 const now = () => new Date('2026-10-03T00:00:00.000Z')
 
-/** Converted with source retirement off, then an older build adds repo-2 and renames repo-1. */
+/** Model an older build adding repo-2 and renaming retained repo-1 after conversion. */
 async function convertedThenChangedOnOlderBuild(): Promise<void> {
   await expect(
     convertSshTargetToManagedOrcad(userDataPath, {
@@ -278,7 +282,7 @@ async function reopenWithOlderBuildRelayRows(rows: Partial<PersistedState>): Pro
   mocks.state.targetStore = sshStore
 }
 
-/** The delta's commit and every read after it fail, as when the tunnel drops mid-commit. */
+/** Lose both commit and later reads, as on a mid-commit tunnel drop. */
 function loseContactAtDeltaCommit(): () => void {
   const read = destination.readState.getMockImplementation()!
   let lost = false
@@ -314,7 +318,6 @@ describe('moving what an older build added to a converted host', () => {
     expect(journals.every((journal) => journal.sourceRetainedAt)).toBe(true)
     expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
     expect(visibleRepos(store, () => userDataPath)).toEqual([])
-    // Back to managed, and a start with nothing new keeps it there.
     reconcileManagedOrcadSshTargets(userDataPath, store, now)
     expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
   })
@@ -401,7 +404,6 @@ describe('moving what an older build added to a converted host', () => {
       'project-group',
       'repository'
     ])
-    // The relay answers with no terminals, so the expired lease is proven exited.
     await expect(deltaMove()).resolves.toMatchObject({ outcome: 'moved' })
     const delta = listOrcadMigrationSourceCutovers(userDataPath).find(
       (journal) => journal.supersedesMigrationId
@@ -468,7 +470,7 @@ describe('moving what an older build added to a converted host', () => {
     expect(store.getSshTarget(TARGET.id)?.orcadFence?.sourceChangedAt).toBeUndefined()
   })
 
-  // Codex repro: an older build's delta exported the moved group its new row sits in.
+  // Interrupted older deltas may include a moved group still referenced by their new row.
   it('resumes an older build’s interrupted delta that exported a moved group', async () => {
     const group = store.createProjectGroup({
       name: 'Apps',
@@ -559,7 +561,7 @@ describe('moving what an older build added to a converted host', () => {
     const reconnect = loseContactAtDeltaCommit()
     await expect(deltaMove()).rejects.toThrow('socket closed')
     reconnect()
-    // What a crash before the mark came back leaves: the delta journal, a fence without its mark.
+    // Model a crash after journal write but before the migration mark returned.
     const environmentId = store.getSshTarget(TARGET.id)!.orcadFence!.environmentId
     store.updateSshTarget(TARGET.id, { orcadFence: { environmentId } })
     expect(visibleRepos(store, () => userDataPath)).toHaveLength(2)
@@ -571,7 +573,6 @@ describe('moving what an older build added to a converted host', () => {
 
 const HOST_ID = `ssh:${TARGET.id}` as const
 
-/** An unsaved editor draft in the host's session partition, as either build would save it. */
 function saveDraft(worktreeId: string, content: string): void {
   store.setWorkspaceSession(
     {
@@ -609,7 +610,6 @@ async function convertKeepingSource(): Promise<void> {
   ).resolves.toMatchObject({ outcome: 'converted' })
 }
 
-/** Everything of the host's that this build keeps for a downgrade, as stored. */
 function retainedRows(): string {
   return JSON.stringify({
     repos: store.getRepos(),
@@ -623,7 +623,7 @@ function retainedRows(): string {
 const expectAllRetained = () =>
   expect(listOrcadMigrationSourceCutovers(userDataPath).every((j) => j.sourceRetainedAt)).toBe(true)
 
-/** What a connect does with a committed head; there is no retirement step any more. */
+/** Committed connects retain source rows without a retirement step. */
 async function connectAgain(): Promise<void> {
   const target = store.getSshTarget(TARGET.id)!
   const environmentId = target.orcadFence!.environmentId
@@ -637,11 +637,12 @@ async function connectAgain(): Promise<void> {
       if (head?.phase === 'destination-committed') {
         await retainOrcadMigrationSource(userDataPath, head.migrationId, store, now)
       }
+      return 0
     }
   })
 }
 
-/** A restart: the profile and journals are re-read from disk by a fresh store. */
+/** Reopen profile and journals from disk to model restart. */
 async function restart(): Promise<void> {
   await store.flushPendingOrThrowAsync()
   await closeTestStores()
@@ -690,7 +691,7 @@ describe('a retained source is never deleted', () => {
     expectAllRetained()
   })
 
-  // The trade-off: identity drives "changed", so an edit inside a moved project only stays kept.
+  // Identity changes mark the source changed; edits inside moved projects remain retained only.
   it('keeps an older build’s draft edit without marking the host changed', async () => {
     saveDraft('repo-1::/srv/app', 'draft before migration')
     await convertKeepingSource()

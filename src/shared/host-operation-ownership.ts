@@ -37,6 +37,7 @@ export const HOST_OPERATION_OWNERSHIP = {
   jira: 'scope-picked',
   layout: 'host',
   linear: 'scope-picked',
+  linkPreview: 'host',
   managedRuntime: 'host',
   managedServer: 'host',
   markdown: 'host',
@@ -56,6 +57,8 @@ export const HOST_OPERATION_OWNERSHIP = {
   reference: 'host',
   repo: 'host',
   runtime: 'host',
+  // The desktop that owns a recipe VM wakes it; only that desktop's runtime serves the call.
+  runtimeEnvironment: 'host',
   session: 'host',
   settings: 'scope-picked',
   shell: 'client',

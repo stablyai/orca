@@ -1,6 +1,4 @@
-// Tabs this window drew, closed or moved before main answered, in a layout-owner build: frames
-// keep each as the window shows it until main's answer is in, then redraw its workspaces, so a
-// frame sent before main had the change neither drops a just-drawn tab nor brings back a closed one.
+// Hold window-drawn open/close/move state until main answers, then redraw affected workspaces; earlier frames must not drop new tabs or resurrect closed ones.
 
 /** A workspace's held tabs, by tab-bar or entity id; `groupLayout`: the group sizes the window set. */
 export type DrawnTabHold = { workspace: string; ids: readonly string[]; groupLayout?: true }

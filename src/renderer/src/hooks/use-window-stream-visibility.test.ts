@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
+import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/viewport/visibility/stale-document-visibility'
 import { useWindowStreamVisible, WINDOW_STREAM_PARK_DELAY_MS } from './use-window-stream-visibility'
 
 function setDocumentVisibility(state: 'visible' | 'hidden'): void {
@@ -39,8 +39,7 @@ describe('useWindowStreamVisible', () => {
     expect(hook.result.current).toBe(false)
   })
 
-  // Pins the `|| isDocumentVisibilityProvenStale()` term: dropping it wedges every stream pane
-  // hidden forever whenever macOS stops reporting occlusion changes.
+  // Stale-visibility evidence must reopen streams when macOS occlusion updates stop.
   it('treats a wedged hidden document as visible once user input disproves it', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const hook = renderHook(() => useWindowStreamVisible())

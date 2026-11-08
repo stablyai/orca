@@ -1,14 +1,7 @@
 import type { RpcClient } from './rpc-client'
 
-// Why: after a socket drop the direct client parks a send in waitForConnected, but a
-// relay session rejects it outright ('relay session not connected') until the supervisor
-// migrates a replacement in. A replay that fires the instant the drop lands therefore
-// burns its budget on the dead session, so callers that mean to re-issue an idempotent
-// request wait for the transport to come back first.
-//
-// Unlike waitForAuthenticated, intermediate 'disconnected'/'reconnecting' states are the
-// expected path here, not a failure. Only a revoked pairing and the timeout end the wait
-// unsuccessfully.
+// Wait for recovery before replaying idempotent work; a dead relay rejects immediately and would consume replay budget.
+// Intermediate disconnect/reconnect states are expected; only revoked pairing or timeout fails this wait.
 export function waitForRpcClientReconnected(
   client: RpcClient,
   timeoutMs: number

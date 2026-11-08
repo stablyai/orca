@@ -1,3 +1,4 @@
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import React from 'react'
 import { ExternalLink, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -8,7 +9,7 @@ import {
   PR_COMMENT_OPEN_AUTHOR_CLASS,
   PR_COMMENT_RESOLVED_AUTHOR_CLASS,
   PR_COMMENT_RESOLVED_CONTAINER_CLASS
-} from '@/lib/pr-comment-resolution-classes'
+} from '@/lib/source-control/review/comments/pr-comment-resolution-classes'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { CommentCodeContext } from '@/components/github/CommentCodeContext'
 import { CommentReactions } from '@/components/github/CommentReactions'
@@ -20,11 +21,13 @@ import type { TaskSourceContext } from '../../../../../shared/task-source-contex
 import type { MentionOption } from '../page-types'
 import { loadPRFileContents } from '../cache/file-content'
 import { CommentReplyForm } from '../comments/reply-form'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function ConversationCommentCard({
   comment,
   isReply = false,
   repoPath,
+  itemType,
   repoId,
   sourceContext,
   prNumber,
@@ -40,6 +43,7 @@ export function ConversationCommentCard({
 }: {
   comment: PRComment
   isReply?: boolean
+  itemType: 'issue' | 'pr'
   repoPath: string | null
   repoId: string
   sourceContext?: TaskSourceContext | null
@@ -123,7 +127,7 @@ export function ConversationCommentCard({
                   variant="ghost"
                   size="icon-xs"
                   className="size-7"
-                  onClick={() => window.api.shell.openUrl(comment.url)}
+                  onClick={(event) => openAppHttpLink(comment.url, { event })}
                   aria-label={translate(
                     'auto.components.PullRequestPage.0ac19bb52e',
                     'Open comment on GitHub'
@@ -161,6 +165,13 @@ export function ConversationCommentCard({
         <CommentReactions reactions={comment.reactions} />
         {resolvedReplyingTo === comment.id && (
           <CommentReplyForm
+            imageUploadAddress={githubCommentImageUploadAddress({
+              repoPath: repoPath ?? '',
+              repoId,
+              sourceContext,
+              type: itemType,
+              prRepo
+            })}
             className="mt-3"
             placeholder={
               comment.path

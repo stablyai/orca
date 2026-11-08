@@ -26,7 +26,6 @@ class RpcTimeoutError extends Error {
   }
 }
 
-/** What the wire actually does to a capture, so nothing in these tests is proved in memory. */
 function overTheWire(capture: BridgeErrorCapture): BridgeErrorCapture {
   const parsed = BridgeErrorCaptureSchema.safeParse(JSON.parse(JSON.stringify(capture)))
   if (!parsed.success) {
@@ -271,7 +270,6 @@ describe('reconstructBridgeError', () => {
 })
 
 describe('captureBridgeError budgets', () => {
-  /** One character to six bytes escaped, which is the most a JSON string can cost. */
   const CONTROL = String.fromCharCode(1)
 
   it('truncates a message past its budget and says so', () => {

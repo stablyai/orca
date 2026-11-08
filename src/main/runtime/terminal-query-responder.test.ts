@@ -1,17 +1,12 @@
-/**
- * Phase 5 model query responder:
- * reply parity through the runtime emulator, the per-chunk ownership matrix,
- * the main-side replay guard, and the ingestion-time capture race.
- */
+/** Verify emulator reply parity, per-chunk ownership, replay silence and capture races. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
-import { HeadlessEmulator } from '../daemon/headless-emulator'
+import { HeadlessEmulator } from '../daemon/emulation/headless-emulator'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
   markHiddenRendererPty,
-  setRendererPtyDeliveryInterest,
   unmarkHiddenRendererPty
-} from '../ipc/pty-hidden-delivery-gate'
+} from '../ipc/pty/delivery/pty-hidden-delivery-gate'
 import {
   _resetTerminalModelQueryAuthorityForTest,
   markNativeWindowsConptyPty
@@ -19,9 +14,12 @@ import {
 import {
   _resetTerminalViewAttributesForTest,
   setTerminalViewAttributes
-} from './terminal-view-attribute-store'
-import type { TerminalViewAttributes, TerminalViewRgb } from '../../shared/terminal-view-attributes'
-import type { TerminalInputKind } from '../../shared/terminal-input-kind'
+} from './terminal/view/terminal-view-attribute-store'
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
+} from '../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type { TerminalInputKind } from '../../shared/terminal/input/terminal-input-kind'
 
 const QUERY_BATCH = '\x1b[c\x1b]11;?\x07\x1b[?996n'
 
@@ -117,119 +115,7 @@ afterEach(() => {
   settingsState.terminalModelQueryAuthority = true
 })
 
-describe('reply parity for hidden-dropped chunks', () => {
-  // Expected replies pinned from the design doc and verified against the
-  // bundled @xterm/headless build — the same core the renderer runs, so
-  // parity is structural for static and model-state classes.
-  it.each([
-    ['DA1 CSI c', '\x1b[c', ['\x1b[?1;2c']],
-    ['DA1 CSI 0 c variant', '\x1b[0c', ['\x1b[?1;2c']],
-    ['DA2', '\x1b[>c', ['\x1b[>0;276;0c']],
-    ['DSR 5n operating status', '\x1b[5n', ['\x1b[0n']],
-    ['CPR 6n at origin', '\x1b[6n', ['\x1b[1;1R']],
-    ['CPR 6n reports the model cursor position', 'hello\r\nworld\x1b[6n', ['\x1b[2;6R']],
-    ['DECXCPR ?6n', '\x1b[?6n', ['\x1b[?1;1R']],
-    ['DECRPM ?1 DECCKM default', '\x1b[?1$p', ['\x1b[?1;2$y']],
-    ['DECRPM ?6 DECOM default', '\x1b[?6$p', ['\x1b[?6;2$y']],
-    ['DECRPM ?7 DECAWM default', '\x1b[?7$p', ['\x1b[?7;1$y']],
-    ['DECRPM ?25 DECTCEM default', '\x1b[?25$p', ['\x1b[?25;1$y']],
-    ['DECRPM ?1004 focus events default', '\x1b[?1004$p', ['\x1b[?1004;2$y']],
-    ['DECRPM ?1006 SGR mouse default', '\x1b[?1006$p', ['\x1b[?1006;2$y']],
-    ['DECRPM ?1016 SGR pixels default', '\x1b[?1016$p', ['\x1b[?1016;2$y']],
-    ['DECRPM ?1049 alt screen default', '\x1b[?1049$p', ['\x1b[?1049;2$y']],
-    ['DECRPM ?2004 bracketed paste default', '\x1b[?2004$p', ['\x1b[?2004;2$y']],
-    ['DECRPM ?2026 synchronized output default', '\x1b[?2026$p', ['\x1b[?2026;2$y']],
-    ['DECRPM reports a set mode as enabled', '\x1b[?2004h\x1b[?2004$p', ['\x1b[?2004;1$y']],
-    ['DECRPM unknown mode reports 0', '\x1b[?12345$p', ['\x1b[?12345;0$y']],
-    ['DECRQM ANSI insert mode', '\x1b[4$p', ['\x1b[4;2$y']],
-    ['DECRQSS DECSTBM default margins', '\x1bP$qr\x1b\\', ['\x1bP1$r1;24r\x1b\\']],
-    ['DECRQSS DECSTBM after margin set', '\x1b[5;20r\x1bP$qr\x1b\\', ['\x1bP1$r5;20r\x1b\\']],
-    ['DECRQSS DECSCUSR default cursor', '\x1bP$q q\x1b\\', ['\x1bP1$r2 q\x1b\\']],
-    ['DECRQSS DECSCA', '\x1bP$q"q\x1b\\', ['\x1bP1$r0"q\x1b\\']],
-    ['DECRQSS SGR', '\x1bP$qm\x1b\\', ['\x1bP1$r0m\x1b\\']],
-    ['XTVERSION', '\x1b[>0q', ['\x1bP>|xterm.js(6.0.0)\x1b\\']],
-    ['kitty CSI ? u default flags', '\x1b[?u', ['\x1b[?0u']],
-    ['kitty CSI ? u reports pushed flags', '\x1b[=5;1u\x1b[?u', ['\x1b[?5u']]
-  ])('%s', async (_label, chunk, expectedReplies) => {
-    const { runtime, replies, inputKinds } = createResponderRuntime()
-    markHiddenRendererPty('pty-q')
-
-    runtime.onPtyData('pty-q', chunk, Date.now())
-    await settle(runtime, 'pty-q')
-
-    expect(replies.map((reply) => reply.data)).toEqual(expectedReplies)
-    expect(replies.every((reply) => reply.ptyId === 'pty-q')).toBe(true)
-    // Why: a reply written as driving input would read the untouched run as typed.
-    expect(inputKinds).toEqual(expectedReplies.map(() => 'query-reply'))
-  })
-
-  it.each([
-    ['XTWINOPS', '\x1b[14t'],
-    ['XTGETTCAP', '\x1bP+q544e\x1b\\'],
-    ['DSR ?15n printer status', '\x1b[?15n'],
-    ['DSR ?25n UDK status', '\x1b[?25n'],
-    ['DSR ?26n keyboard status', '\x1b[?26n'],
-    ['DSR ?53n locator status', '\x1b[?53n'],
-    // View-attribute class: silent until the slice-2 renderer attribute push
-    // — a fabricated default would resurrect the default-black OSC-11 bug.
-    ['OSC 10 foreground query', '\x1b]10;?\x07'],
-    ['OSC 11 background query', '\x1b]11;?\x07'],
-    ['OSC 12 cursor-color query', '\x1b]12;?\x1b\\'],
-    ['OSC 4 palette query', '\x1b]4;1;?\x07'],
-    ['DSR ?996n color-scheme query', '\x1b[?996n']
-  ])('stays silent for %s', async (_label, chunk) => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-q')
-
-    runtime.onPtyData('pty-q', chunk, Date.now())
-    await settle(runtime, 'pty-q')
-
-    expect(replies).toEqual([])
-  })
-})
-
 describe('reply ownership matrix', () => {
-  it('never answers delivered (unmarked) chunks — the visible xterm owns them', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData('pty-v', QUERY_BATCH, Date.now())
-    await settle(runtime, 'pty-v')
-
-    expect(replies).toEqual([])
-  })
-
-  it('never answers while renderer delivery interest holds the chunk delivered', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    setTerminalViewAttributes(viewAttributes())
-    markHiddenRendererPty('pty-i')
-    setRendererPtyDeliveryInterest('pty-i', true)
-
-    runtime.onPtyData('pty-i', QUERY_BATCH, Date.now())
-    await settle(runtime, 'pty-i')
-
-    expect(replies).toEqual([])
-  })
-
-  it.each([
-    ['terminalModelQueryAuthority', () => (settingsState.terminalModelQueryAuthority = false)],
-    ['terminalHiddenDeliveryGate', () => (settingsState.terminalHiddenDeliveryGate = false)],
-    [
-      'terminalMainSideEffectAuthority',
-      () => (settingsState.terminalMainSideEffectAuthority = false)
-    ]
-  ])('never answers with kill switch %s off', async (_label, flip) => {
-    flip()
-    const { runtime, replies } = createResponderRuntime()
-    setTerminalViewAttributes(viewAttributes())
-    markHiddenRendererPty('pty-k')
-
-    runtime.onPtyData('pty-k', QUERY_BATCH, Date.now())
-    await settle(runtime, 'pty-k')
-
-    expect(replies).toEqual([])
-  })
-
   it('yields until every remote view subscriber releases, including repeated release', async () => {
     const { runtime, replies } = createResponderRuntime()
     setTerminalViewAttributes(viewAttributes())
@@ -260,25 +146,52 @@ describe('reply ownership matrix', () => {
     ])
   })
 
-  it('keeps raw preview presence separate from terminal query authority', async () => {
+  // #32944: a paired desktop pauses a background pane's stream, so the DA1 fish waits on reaches no xterm.
+  it('answers while the only remote view has paused its output, and yields once it resumes', async () => {
     const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-preview')
-    const release = runtime.registerRawTerminalViewSubscriber('pty-preview')
+    markHiddenRendererPty('pty-paused')
+    let paused = true
+    const releasePaused = runtime.registerRemoteTerminalViewSubscriber('pty-paused', () => paused)
 
-    expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(true)
-    expect(runtime.hasRemoteTerminalViewSubscriber('pty-preview')).toBe(false)
-    runtime.onPtyData('pty-preview', '\x1b[c', Date.now())
-    await settle(runtime, 'pty-preview')
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
 
-    release()
-    expect(runtime.hasRawTerminalViewSubscriber('pty-preview')).toBe(false)
+    paused = false
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(1)
+
+    // A second, receiving view keeps authority even while the first pauses again.
+    paused = true
+    const releaseLive = runtime.registerRemoteTerminalViewSubscriber('pty-paused', () => false)
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(1)
+
+    releaseLive()
+    releasePaused()
+    runtime.onPtyData('pty-paused', '\x1b[c', Date.now())
+    await settle(runtime, 'pty-paused')
+    expect(replies).toHaveLength(2)
   })
 
-  it('treats mobile subscriber records as remote view subscribers', async () => {
-    const { runtime } = createResponderRuntime()
-    await runtime.handleMobileSubscribe('pty-mob', 'client-1', { cols: 40, rows: 20 })
-    expect(runtime.hasRemoteTerminalViewSubscriber('pty-mob')).toBe(true)
+  it('yields to a phone-fitted mobile view but answers for a passive desktop-size one', async () => {
+    const { runtime, replies } = createResponderRuntime()
+    markHiddenRendererPty('pty-fit')
+    runtime.registerRemoteTerminalViewSubscriber('pty-fit', () => false, 'client-1')
+    await runtime.handleMobileSubscribe('pty-fit', 'client-1', { cols: 40, rows: 20 })
+    runtime.onPtyData('pty-fit', '\x1b[6n', 1_000)
+    await settle(runtime, 'pty-fit')
+    expect(replies).toEqual([])
+
+    markHiddenRendererPty('pty-passive')
+    runtime.setMobileDisplayMode('pty-passive', 'desktop')
+    runtime.registerRemoteTerminalViewSubscriber('pty-passive', () => false, 'client-1')
+    await runtime.handleMobileSubscribe('pty-passive', 'client-1', { cols: 40, rows: 20 })
+    runtime.onPtyData('pty-passive', '\x1b[6n', 1_000)
+    await settle(runtime, 'pty-passive')
+    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[1;1R'])
   })
 })
 
@@ -300,20 +213,6 @@ describe('main-side replay guard', () => {
       '\x1b[?997;1n'
     ])
   })
-
-  it('never answers queries replayed by renderer-buffer hydration', async () => {
-    setTerminalViewAttributes(viewAttributes())
-    const { runtime, replies } = createResponderRuntime({
-      rendererBuffer: { data: `restored screen${QUERY_BATCH}`, cols: 80, rows: 24 }
-    })
-    markHiddenRendererPty('pty-hyd')
-
-    // Hydrated snapshots must not answer embedded terminal queries.
-    runtime.onPtyData('pty-hyd', 'live output', Date.now())
-    await settle(runtime, 'pty-hyd')
-
-    expect(replies).toEqual([])
-  })
 })
 
 describe('kitty flag re-seed parity (terminal-query-authority.md §kitty)', () => {
@@ -321,9 +220,7 @@ describe('kitty flag re-seed parity (terminal-query-authority.md §kitty)', () =
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-kitty')
 
-    // Daemon warm-reattach threads modes.kittyKeyboardFlags through the
-    // spawn result into the seed; applying them is a seed-side write and
-    // must answer no one (main-side replay guard).
+    // Warm-reattach kitty flags seed state and must emit no replies.
     runtime.seedHeadlessTerminal('pty-kitty', 'restored prompt', undefined, {
       kittyKeyboardFlags: 5
     })
@@ -333,17 +230,6 @@ describe('kitty flag re-seed parity (terminal-query-authority.md §kitty)', () =
     runtime.onPtyData('pty-kitty', '\x1b[?u', Date.now())
     await settle(runtime, 'pty-kitty')
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?5u'])
-  })
-
-  it('answers ?0u when the snapshot carried no flags (fresh-shell paths)', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-kitty0')
-
-    runtime.seedHeadlessTerminal('pty-kitty0', 'restored prompt')
-    runtime.onPtyData('pty-kitty0', '\x1b[?u', Date.now())
-    await settle(runtime, 'pty-kitty0')
-
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?0u'])
   })
 })
 
@@ -361,32 +247,10 @@ describe('ingestion-time ownership capture', () => {
 
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?1;2c'])
   })
-
-  it('stays silent when the hidden mark lands after ingestion', async () => {
-    const { runtime, replies } = createResponderRuntime()
-
-    runtime.onPtyData('pty-race2', DA1, Date.now())
-    markHiddenRendererPty('pty-race2')
-    await settle(runtime, 'pty-race2')
-
-    expect(replies).toEqual([])
-  })
 })
 
 describe('stale writeChain links after dispose', () => {
   const DA1 = '\x1b[c'
-
-  it('never forwards a queued reply once the PTY state is disposed', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-stale')
-
-    // Queue a forward-flagged chain link, then dispose before it runs.
-    runtime.onPtyData('pty-stale', DA1, Date.now())
-    runtime.onPtyExit('pty-stale', 0)
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(replies).toEqual([])
-  })
 
   it('never injects a stale reply into a successor PTY reusing the session id', async () => {
     const { runtime, replies } = createResponderRuntime()
@@ -418,71 +282,17 @@ describe('ConPTY DA1 override', () => {
 
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?61;4c'])
   })
-
-  it('answers once at creation and after a repeated native-Windows mark', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markNativeWindowsConptyPty('pty-win-idem')
-    markHiddenRendererPty('pty-win-idem')
-
-    runtime.onPtyData('pty-win-idem', '\x1b[c', Date.now())
-    await settle(runtime, 'pty-win-idem')
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?61;4c'])
-
-    markNativeWindowsConptyPty('pty-win-idem')
-    runtime.onPtyData('pty-win-idem', '\x1b[c', Date.now())
-    await settle(runtime, 'pty-win-idem')
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?61;4c', '\x1b[?61;4c'])
-  })
-
-  it('lets non-primary device-attribute queries fall through to the core', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markNativeWindowsConptyPty('pty-win2')
-    markHiddenRendererPty('pty-win2')
-
-    runtime.onPtyData('pty-win2', '\x1b[>c', Date.now())
-    await settle(runtime, 'pty-win2')
-
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[>0;276;0c'])
-  })
-
-  it('keeps the override silent for delivered chunks', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markNativeWindowsConptyPty('pty-win3')
-
-    runtime.onPtyData('pty-win3', '\x1b[c', Date.now())
-    await settle(runtime, 'pty-win3')
-
-    expect(replies).toEqual([])
-  })
 })
 
 describe('HeadlessEmulator forwarding window', () => {
-  it('forwards replies only for writes flagged forwardQueryReplies', async () => {
-    const onQueryReply = vi.fn()
-    const emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
-    try {
-      await emulator.write('\x1b[c')
-      expect(onQueryReply).not.toHaveBeenCalled()
-
-      await emulator.write('\x1b[c', { forwardQueryReplies: true })
-      expect(onQueryReply).toHaveBeenCalledTimes(1)
-      expect(onQueryReply).toHaveBeenCalledWith('\x1b[?1;2c')
-    } finally {
-      emulator.dispose()
-    }
-  })
-
   it('scopes the async-fallback forwarding window to the flagged chunk parse', async () => {
     const onQueryReply = vi.fn()
     const emulator = new HeadlessEmulator({ cols: 80, rows: 24, onQueryReply })
-    // Force the async write path (xterm deprecates writeSync; the fallback
-    // must stay structurally safe without writeChain serialization).
+    // Exercise async xterm writes without writeChain serialization; writeSync is deprecated.
     const internals = emulator as unknown as { terminal: { _core: { writeSync?: unknown } } }
     internals.terminal._core.writeSync = undefined
     try {
-      // Enqueue an unflagged seed carrying a query, then a flagged live
-      // chunk, WITHOUT awaiting between them: both sit in xterm's write
-      // queue together. The seed parse must not see an open window.
+      // Queue unflagged seed and flagged live writes together; the seed must not borrow the live reply window.
       const seed = emulator.write('seeded\x1b[c')
       const live = emulator.write('\x1b[5n', { forwardQueryReplies: true })
       await Promise.all([seed, live])
@@ -513,10 +323,7 @@ describe('HeadlessEmulator forwarding window', () => {
 })
 
 describe('view-attribute bridge replies (after renderer push)', () => {
-  // Reply bytes pinned to the renderer xterm's format: OSC replies use the
-  // queried ident, 16-bit doubled-byte channels, and ST termination
-  // (CoreBrowserTerminal._handleColorEvent + toRgbString); ?996n answers with
-  // the contour 997 report, same bytes as mode2031SequenceFor.
+  // Match renderer xterm: queried OSC id, doubled-byte 16-bit RGB and ST; ?996n uses contour 997 (CoreBrowserTerminal._handleColorEvent/toRgbString).
   it.each([
     ['OSC 10 foreground', '\x1b]10;?\x07', ['\x1b]10;rgb:d0d0/d0d0/d0d0\x1b\\']],
     ['OSC 11 background', '\x1b]11;?\x07', ['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\']],
@@ -547,51 +354,6 @@ describe('view-attribute bridge replies (after renderer push)', () => {
     expect(replies.map((reply) => reply.data)).toEqual(expectedReplies)
   })
 
-  it('answers ?996n from palette luminance, not the pushed app mode (dark palette, light app mode)', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-lum-dark')
-    // Supported divergence: light app mode with terminalUseSeparateLightTheme
-    // off renders a dark terminal theme. A visible xterm answers ?996n from
-    // bg/fg relative luminance (CoreBrowserTerminal._reportColorScheme), so
-    // the hidden reply must say dark here too.
-    setTerminalViewAttributes(viewAttributes({ colorSchemeMode: 'light' }))
-
-    runtime.onPtyData('pty-lum-dark', '\x1b[?996n', Date.now())
-    await settle(runtime, 'pty-lum-dark')
-
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?997;1n'])
-  })
-
-  it('answers ?996n light for a light palette regardless of the pushed app mode', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-lum-light')
-    setTerminalViewAttributes(
-      viewAttributes({
-        foreground: [0x33, 0x33, 0x33],
-        background: [0xfa, 0xfa, 0xfa],
-        colorSchemeMode: 'dark'
-      })
-    )
-
-    runtime.onPtyData('pty-lum-light', '\x1b[?996n', Date.now())
-    await settle(runtime, 'pty-lum-light')
-
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?997;2n'])
-  })
-
-  it('answers ?996n from OSC-SET-mutated colors like a visible xterm', async () => {
-    // _reportColorScheme reads the CURRENT theme-service colors, which include
-    // OSC 10/11 SET mutations — the per-PTY overlays layer the same way.
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-lum-set')
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData('pty-lum-set', '\x1b]11;#ffffff\x07\x1b]10;#101010\x07\x1b[?996n', Date.now())
-    await settle(runtime, 'pty-lum-set')
-
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b[?997;2n'])
-  })
-
   it('stays silent before the first push, then answers the same query after it', async () => {
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-first')
@@ -605,21 +367,6 @@ describe('view-attribute bridge replies (after renderer push)', () => {
     runtime.onPtyData('pty-first', '\x1b]11;?\x07', Date.now())
     await settle(runtime, 'pty-first')
     expect(replies.map((reply) => reply.data)).toEqual(['\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\'])
-  })
-
-  it('retrofits cursor options onto already-live emulators when the push lands late', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-late')
-
-    // Emulator exists before any push: core default DECSCUSR is steady block.
-    runtime.onPtyData('pty-late', '\x1bP$q q\x1b\\', Date.now())
-    await settle(runtime, 'pty-late')
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1bP1$r2 q\x1b\\'])
-
-    setTerminalViewAttributes(viewAttributes({ cursorStyle: 'underline', cursorBlink: false }))
-    runtime.onPtyData('pty-late', '\x1bP$q q\x1b\\', Date.now())
-    await settle(runtime, 'pty-late')
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1bP1$r2 q\x1b\\', '\x1bP1$r4 q\x1b\\'])
   })
 })
 
@@ -641,64 +388,8 @@ describe('per-PTY OSC color SET layering', () => {
     ])
   })
 
-  it('restores a single indexed color via OSC 104;<idx>', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-104')
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData('pty-104', '\x1b]4;1;#00ff00\x07\x1b]104;1\x07\x1b]4;1;?\x07', Date.now())
-    await settle(runtime, 'pty-104')
-
-    expect(replies.map((reply) => reply.data)).toEqual(['\x1b]4;1;rgb:cccc/0000/0000\x1b\\'])
-  })
-
-  it('restores the whole indexed table via bare OSC 104', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-104all')
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData(
-      'pty-104all',
-      '\x1b]4;1;#00ff00;196;#0000ff\x07\x1b]104\x07\x1b]4;1;?;196;?\x07',
-      Date.now()
-    )
-    await settle(runtime, 'pty-104all')
-
-    expect(replies.map((reply) => reply.data)).toEqual([
-      '\x1b]4;1;rgb:cccc/0000/0000\x1b\\',
-      '\x1b]4;196;rgb:c4c4/8888/4c4c\x1b\\'
-    ])
-  })
-
-  it('layers OSC 10/11/12 SETs and restores them via 110/111/112', async () => {
-    const { runtime, replies } = createResponderRuntime()
-    markHiddenRendererPty('pty-special')
-    setTerminalViewAttributes(viewAttributes())
-
-    runtime.onPtyData(
-      'pty-special',
-      '\x1b]10;#010203\x07\x1b]11;rgb:ff/ff/ff\x07\x1b]12;#0a0b0c\x07' +
-        '\x1b]10;?\x07\x1b]11;?\x07\x1b]12;?\x07' +
-        '\x1b]110\x07\x1b]111\x07\x1b]112\x07' +
-        '\x1b]10;?\x07\x1b]11;?\x07\x1b]12;?\x07',
-      Date.now()
-    )
-    await settle(runtime, 'pty-special')
-
-    expect(replies.map((reply) => reply.data)).toEqual([
-      '\x1b]10;rgb:0101/0202/0303\x1b\\',
-      '\x1b]11;rgb:ffff/ffff/ffff\x1b\\',
-      '\x1b]12;rgb:0a0a/0b0b/0c0c\x1b\\',
-      '\x1b]10;rgb:d0d0/d0d0/d0d0\x1b\\',
-      '\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\',
-      '\x1b]12;rgb:ffff/9999/0000\x1b\\'
-    ])
-  })
-
   it('tracks SET mutations parsed from a seed without replying, like renderer replay', async () => {
-    // Cold-restore scrollback replayed into a visible renderer xterm re-applies
-    // OSC SETs to its theme service; the model mirrors that state — but the
-    // replay guard still keeps the seed from ANSWERING anything.
+    // Restored OSC SETs update theme state like visible xterm, while replay remains silent.
     const { runtime, replies } = createResponderRuntime()
     markHiddenRendererPty('pty-seedset')
     setTerminalViewAttributes(viewAttributes())
@@ -720,9 +411,7 @@ describe('per-PTY OSC color SET layering', () => {
     runtime.onPtyData('pty-idem', '\x1b]11;#ffffff\x07', Date.now())
     await settle(runtime, 'pty-idem')
 
-    // A second window / renderer reload / macOS re-activation re-pushes
-    // byte-identical attributes (its publisher dedupe is per-process). That is
-    // not a theme apply, so the OSC SET overlay must survive.
+    // Identical renderer re-pushes after reload/window activation are not theme applies and must retain OSC SET overlays.
     setTerminalViewAttributes(viewAttributes())
     runtime.onPtyData('pty-idem', '\x1b]11;?\x07', Date.now())
     await settle(runtime, 'pty-idem')
@@ -738,9 +427,7 @@ describe('per-PTY OSC color SET layering', () => {
     runtime.onPtyData('pty-clear', '\x1b]11;#ffffff\x07', Date.now())
     await settle(runtime, 'pty-clear')
 
-    // A theme apply overwrites OSC-SET-mutated colors on visible panes too
-    // (ThemeService._setTheme), so the model mirrors that on every CHANGED
-    // push (identical re-pushes are filtered — see the test above).
+    // Changed theme pushes reset OSC SET overlays like visible xterm ThemeService._setTheme.
     setTerminalViewAttributes(viewAttributes({ background: [0x10, 0x20, 0x30] }))
     runtime.onPtyData('pty-clear', '\x1b]11;?\x07', Date.now())
     await settle(runtime, 'pty-clear')

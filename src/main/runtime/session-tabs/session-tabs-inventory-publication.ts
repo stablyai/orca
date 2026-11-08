@@ -1,3 +1,5 @@
+import type { PtyControllerInventory } from '../runtime-pty-controller-contract'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees } from './session-tabs-inventory'
 
 export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees {
@@ -43,5 +45,21 @@ export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntime
     for (const publish of Array.from(this.sessionTabsInventoryWaiters)) {
       publish()
     }
+  }
+  protected assertSessionTabsInventoryRequestActive(signal?: AbortSignal): void {
+    if (signal?.aborted) {
+      throw new Error('client_disconnected')
+    }
+  }
+
+  protected isCompleteSessionTabsPtyCensus(inventory: PtyControllerInventory | null): boolean {
+    if (!inventory) {
+      return false
+    }
+    const knownHostIds = this.listKnownExecutionHostIds(inventory.queriedHostIds)
+    return ![...knownHostIds].some((hostId) => {
+      const parsed = parseExecutionHostId(hostId)
+      return parsed?.kind !== 'runtime' && !inventory.queriedHostIds.has(hostId)
+    })
   }
 }

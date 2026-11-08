@@ -1,15 +1,9 @@
-/**
- * A WSL host's orcad is started by `wsl.exe --exec sh -c`, so no rc file ran and git, gh and glab
- * calls it makes miss what the user's shell exports (SSH agent, proxies, signing, forge tokens).
- * The bridge ran those calls in `$SHELL -ilc`; this restores that for an allowlist of variables.
- * Terminals need none of it: they are login shells and source the rc files themselves.
- */
+// WSL exec skips shell setup; hydrate login-shell credentials/proxies before git and daemon startup.
 import { isWslHostOrcadProcess } from '../ipc/wsl-guest-windows-drive-path'
 import { PROBE_MARKER_ENV_VAR } from '../startup/hydrate-shell-path'
 import { resolveLoginShellEnvironment } from '../startup/login-shell-environment'
 
-// Why an allowlist: the snapshot is the whole rc environment, and PATH has its own hydration with
-// the Windows-drive rules; askpass helpers are left out because a GUI one would block a headless git.
+// Allowlist excludes GUI askpass (which could block) and PATH (which has separate drive filtering).
 const WSL_HOST_LOGIN_ENV_NAMES: readonly string[] = [
   'SSH_AUTH_SOCK',
   'SSH_AGENT_PID',
@@ -50,7 +44,6 @@ const WSL_HOST_LOGIN_ENV_NAMES: readonly string[] = [
   'XDG_RUNTIME_DIR'
 ]
 
-/** The allowlisted variables whose login-shell value differs from `current`. */
 export function wslHostLoginEnvironmentOverlay(
   shellEnv: NodeJS.ProcessEnv,
   current: NodeJS.ProcessEnv
@@ -65,14 +58,10 @@ export function wslHostLoginEnvironmentOverlay(
   return overlay
 }
 
-/**
- * Lays the login shell's allowlisted variables over this process's env, before the terminal daemon
- * and the first git call inherit it. A no-op off a WSL host; a failed probe keeps the launch env.
- */
+/** Failed login probes retain the launch environment; non-WSL hosts remain unchanged. */
 export async function adoptWslHostLoginEnvironment(
   env: NodeJS.ProcessEnv = process.env,
-  // The PATH probe's marker and budget: an rc that skips `exec tmux` for it skips it here too,
-  // and a profile measured at 6-7 s under load still lands.
+  // Reuse PATH probe markers to suppress interactive rc behavior within its startup budget.
   resolveShellEnv: () => Promise<NodeJS.ProcessEnv> = () =>
     resolveLoginShellEnvironment({
       env: { ...env, [PROBE_MARKER_ENV_VAR]: '1' },
@@ -86,4 +75,16 @@ export async function adoptWslHostLoginEnvironment(
   const overlay = wslHostLoginEnvironmentOverlay(await resolveShellEnv(), env)
   Object.assign(env, overlay)
   return Object.keys(overlay)
+}
+
+/** Adopts and logs the overlay; never rejects, so startup steps can chain on it. */
+export function adoptWslHostLoginEnvironmentLogged(): Promise<void> {
+  return adoptWslHostLoginEnvironment().then(
+    (names) => {
+      if (names.length > 0) {
+        console.info(`[orcad] adopted login-shell variables: ${names.join(', ')}`)
+      }
+    },
+    (error: unknown) => console.warn('[orcad] could not adopt login-shell variables:', error)
+  )
 }

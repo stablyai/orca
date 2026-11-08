@@ -1,4 +1,4 @@
-import { getCompiledSchema } from '../../zod-schema-compilation'
+import { getCompiledSchema } from '../../schema-validation/zod-schema-compilation'
 import {
   formatZodError,
   type RpcAnyMethodDeclaration,

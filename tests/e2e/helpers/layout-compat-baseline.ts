@@ -1,23 +1,19 @@
-/**
- * Mixed-version, two-client and phone baselines (layout rework P3). Each scenario reduces what the
- * server and its clients report to a shape with stable labels in place of generated ids, and
- * compares it with the shape recorded on main in `layout-compat-baselines.json`. A change that
- * moves a scenario updates its recorded shape in the same PR, so every difference is reviewed.
- */
+// Normalize generated ids and compare real multi-client observations to main’s per-platform recorded shapes; review differences in the same PR.
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
-import { decodePairingOffer } from '../../../src/shared/pairing'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime-client'
+import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
+import { isServeMintedPtySessionId } from '../../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead
 } from '../../../src/shared/runtime-terminal-contracts'
-import type { TerminalPaneLayoutNode } from '../../../src/shared/terminal-tab-types'
+import type { TerminalPaneLayoutNode } from '../../../src/shared/workspace-layout/terminal-tab-types'
 import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
 import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
 
@@ -52,7 +48,7 @@ export class IdLabels {
     if (!id) {
       return null
     }
-    const kind = id.includes('@@') ? 'pty@@' : id.startsWith('serve-') ? 'ptyServe' : 'pty'
+    const kind = isServeMintedPtySessionId(id) ? 'ptyServe' : id.includes('@@') ? 'pty@@' : 'pty'
     return this.label(kind, id)
   }
 }
@@ -241,10 +237,7 @@ export async function expectLayoutCompatBaseline(
   expect(JSON.parse(body)).toEqual(recorded)
 }
 
-/**
- * Reads until four reads in a row agree, so a step records where the server came to rest rather
- * than a value mid-update. Only a convergence wait: the recorded shape is compared, never polled for.
- */
+// Require four matching reads before recording; compare the baseline once, never poll until the expected shape appears.
 export async function readSettled<T>(read: () => Promise<T>, timeoutMs = 20_000): Promise<T> {
   const deadline = Date.now() + timeoutMs
   let last = JSON.stringify(await read())
@@ -261,10 +254,7 @@ export async function readSettled<T>(read: () => Promise<T>, timeoutMs = 20_000)
   return JSON.parse(last)
 }
 
-/**
- * Reads until `ready` holds, or returns the last read at the deadline: for a step whose outcome
- * the baseline records either way (it differs by platform), so neither outcome is a race.
- */
+// Return the last read on timeout so platform-specific outcomes can still be recorded without a race.
 export async function readUntil<T>(
   read: () => Promise<T>,
   ready: (value: T) => boolean,
@@ -279,12 +269,7 @@ export async function readUntil<T>(
   return value
 }
 
-/**
- * After a server restart: waits until the client's own status call is answered, which only the
- * new server process can do, then types an `echo` into one of its panes, reads the output on the
- * host and waits for the desktop to draw it in that pane, so input and output both cross the
- * reconnected link.
- */
+// Prove reconnection with a new-server status reply, then echo through host PTY and desktop rendering in both directions.
 export async function expectReconnectedPaneEcho(args: {
   page: Page
   environmentId: string

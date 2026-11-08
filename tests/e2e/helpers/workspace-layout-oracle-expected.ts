@@ -1,7 +1,4 @@
-/**
- * The layout a step's commands should produce, checked against the runtime: panes per tab, which
- * panes are gone, and that every other pane still shows the terminal it showed before the step.
- */
+// Compare command outcomes: pane counts/removals and unchanged terminal bindings for every surviving pane.
 
 import type { OracleLayout, OracleTerminalTab } from './workspace-layout-oracle-model'
 

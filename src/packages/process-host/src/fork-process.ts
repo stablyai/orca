@@ -17,6 +17,10 @@ export type ForkSpec = {
   /** Must keep an `'ipc'` slot; without one the child gets no channel and cannot `send`. */
   stdio?: NodeSpawnOptions['stdio']
   execPath?: string
+  /** Replaces the inherited process.execArgv (Node/V8 flags placed before the module path). */
+  execArgv?: readonly string[]
+  /** 'advanced' sends structured clones, so typed arrays survive IPC. */
+  serialization?: ForkOptions['serialization']
 }
 
 export function forkProcess(spec: ForkSpec): SpawnedProcess {
@@ -26,7 +30,9 @@ export function forkProcess(spec: ForkSpec): SpawnedProcess {
     detached: spec.detached,
     stdio: spec.stdio,
     // Node treats an explicit undefined execPath differently from an absent key.
-    ...(spec.execPath ? { execPath: spec.execPath } : {})
+    ...(spec.execPath ? { execPath: spec.execPath } : {}),
+    ...(spec.execArgv ? { execArgv: [...spec.execArgv] } : {}),
+    ...(spec.serialization ? { serialization: spec.serialization } : {})
   }
   // Node forwards this undocumented fork option to spawn, preventing console flashes on Windows.
   return nodeFork(

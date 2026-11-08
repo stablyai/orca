@@ -1,8 +1,5 @@
-/**
- * The client half of talking to a released relay: its own bridge transport and what a shipped
- * desktop did over it. Kept free of build tooling so Playwright specs can import it.
- * COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
- */
+// Use the released relay’s bridge transport without build-tool imports so Playwright can load it.
+// COMPAT(legacy-relay-bridge): revisit 2027-01-15, with src/main/ssh/legacy-relay/.
 import { spawn } from 'node:child_process'
 import {
   SshChannelMultiplexer,
@@ -13,10 +10,7 @@ import { RELAY_SENTINEL } from '../../../src/main/ssh/remote-exec/remote-frame-p
 const SENTINEL = Buffer.from(RELAY_SENTINEL, 'utf-8')
 const OWNER_HELD_DISCONNECTED = -32045
 
-/**
- * Runs a shell command the way an SSH exec channel would and hands back the relay stream after its
- * ready sentinel — the local stand-in for the bridge transport the client opens over SSH.
- */
+// Model SSH exec locally and expose the framed stream only after the ready sentinel.
 export function openShellRelayTransport(command: string): Promise<MultiplexerTransport> {
   return new Promise((resolve, reject) => {
     const child = spawn('sh', ['-c', command], { stdio: ['pipe', 'pipe', 'pipe'] })
@@ -105,10 +99,7 @@ export async function connectAsReleasedApp(
   }
 }
 
-/**
- * What a shipped app leaves behind on quit: its relay keeps one shell that echoes each line it
- * reads (and its size on `size`), and the app's owner claim lapses. Returns the relay PTY id.
- */
+// Leave an echo/size shell and release the owner claim, matching the state a shipped app leaves on quit.
 export async function leaveShellInReleasedRelay(
   openTransport: () => Promise<MultiplexerTransport>,
   clientInstanceId: string,

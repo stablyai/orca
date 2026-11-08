@@ -1,17 +1,23 @@
-import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type {
+  MessagePriority,
+  MessageType
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
-import { bindCoordinatorMutationPayload } from '../../../../orchestration/dispatch-message-binding'
-import { isDispatchMutationMessageType, parseMessageTaskId } from '../schemas'
-import type { SendParams } from '../schemas'
+import { reconcileLifecycleMessage } from '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
+import { bindCoordinatorMutationPayload } from '../../../../orchestration/workers/reports/dispatch-message-binding'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { parseMessageTaskId } from './message-payload'
+import type { SendParams } from './send-params'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
+import { WORKER_DONE_RECORDED_NEXT } from '../receipt-next'
 import { recordReceiptForPostCommitNudge } from './mutation-replay-nudge'
 import type { SendRecipientWarning } from './recipient-routing'
 import {
   workerReportRefusal,
   type WorkerReportRefusal
-} from '../../../../orchestration/worker-report-admission'
+} from '../../../../orchestration/workers/reports/worker-report-admission'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -49,7 +55,6 @@ export function sendPointToPointMessage(args: {
     markWorkerDoneMutationEffectFree,
     withSendWarnings
   } = args
-  // Point-to-point — existing single-recipient behavior
   revalidateLegacyCoordinator?.()
   const messageType = (params.type ?? 'status') as MessageType
   const processIncarnation = isDispatchMutationMessageType(messageType)
@@ -107,7 +112,7 @@ export function sendPointToPointMessage(args: {
 
     if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
       const reconciled = reconcileLifecycleMessage(db, msg)
-      // Why: a suppressed message is already read, so skip waking a check waiter to an empty result.
+      // Suppressed mail is already read; do not wake a waiter to an empty inbox.
       if (reconciled.action === 'suppressed') {
         return recordReceiptForPostCommitNudge(
           recordMutationReceipt,
@@ -127,7 +132,13 @@ export function sendPointToPointMessage(args: {
       }
       const receipt = withSendWarnings(
         msg.type === 'worker_done'
-          ? { message: exposeMessage(msg), lifecycle: reconciled }
+          ? {
+              message: exposeMessage(msg),
+              lifecycle: reconciled,
+              ...(reconciled.action === 'completed' || reconciled.action === 'failed'
+                ? { next: WORKER_DONE_RECORDED_NEXT }
+                : {})
+            }
           : { message: exposeMessage(msg) }
       )
       return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
@@ -139,7 +150,7 @@ export function sendPointToPointMessage(args: {
       runtime.notifyMessageArrived(msg.to_handle, msg.type)
     )
   }
-  // Why: worker_done wakes the Run only after its mailbox row, settlement, and replay receipt commit together.
+  // Wake the Run only after worker_done mail, settlement and replay receipt commit atomically.
   if (messageType === 'worker_done') {
     markWorkerDoneMutationEffectFree?.()
   }

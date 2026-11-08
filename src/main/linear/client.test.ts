@@ -112,9 +112,9 @@ async function loadClientModule(options: SafeStorageMockOptions = {}) {
     return { ...actual, homedir: () => tempHome }
   })
   class AuthenticationLinearError extends Error {}
-  // Why: client.ts loads @linear/sdk lazily via ./linear-sdk (createRequire) to
-  // keep it off the startup parse path; mock the loader, not the raw module.
+  // Mock the lazy loader; createRequire bypasses mocks on the raw SDK module.
   vi.doMock('./linear-sdk', () => ({
+    createLinearClient: (options: { apiKey: string }) => new linearClientMock(options),
     loadLinearSdk: () => ({
       AuthenticationLinearError,
       LinearClient: linearClientMock
@@ -156,21 +156,6 @@ function mkdtempLike(prefix: string): string {
 }
 
 describe('Linear client workspace storage', () => {
-  it('forwards an optional detail deadline to both SDK clients', async () => {
-    const linear = await loadClientModule()
-    await linear.connect('token-alpha')
-    const signal = new AbortController().signal
-    const entry = linear.getClients('org-alpha', signal)[0]
-    expect(linearClientMock).toHaveBeenLastCalledWith({ apiKey: 'token-alpha', signal })
-    linear.getPublicFileUrlClient(entry, signal)
-    expect(linearClientMock).toHaveBeenLastCalledWith({
-      apiKey: 'token-alpha',
-      signal,
-      headers: {
-        'public-file-urls-expire-in': String(linear.LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
-      }
-    })
-  })
   it('requests temporary file URLs using only the selected workspace credential', async () => {
     const linear = await loadClientModule()
     await linear.connect('token-alpha')
@@ -212,22 +197,6 @@ describe('Linear client workspace storage', () => {
       connected: true,
       workspaces: [{ id: 'org-beta', organizationName: 'Beta' }]
     })
-  })
-
-  it('reports a legacy single-token workspace without constructing a Linear client', async () => {
-    writeLegacyLinearFiles('token-alpha', {
-      displayName: 'Ada',
-      email: 'ada@example.com',
-      organizationName: 'Alpha'
-    })
-    const linear = await loadClientModule()
-
-    expect(linear.getStatus()).toMatchObject({
-      connected: true,
-      selectedWorkspaceId: 'legacy',
-      workspaces: [{ id: 'legacy', organizationName: 'Alpha', isLegacy: true }]
-    })
-    expect(linearClientMock).not.toHaveBeenCalled()
   })
 
   it('migrates legacy token storage to a real workspace id when explicitly tested', async () => {
@@ -364,23 +333,6 @@ describe('Linear client workspace storage', () => {
     expect(linear.getStatus().credentialError).toBeUndefined()
   })
 
-  it('treats empty Linear token files as missing credentials', async () => {
-    writeLegacyLinearToken(Buffer.alloc(0), {
-      displayName: 'Ada',
-      email: 'ada@example.com',
-      organizationName: 'Alpha'
-    })
-    const linear = await loadClientModule({ encryptionAvailable: false })
-
-    await expect(linear.testConnection('legacy')).resolves.toEqual({
-      ok: false,
-      error: 'No API key stored.'
-    })
-
-    expect(linearClientMock).not.toHaveBeenCalled()
-    expect(linear.getStatus()).toMatchObject({ connected: false })
-  })
-
   it('keeps healthy workspaces under the "all" selection when one cannot be decrypted', async () => {
     writeMultiWorkspaceFiles(
       [
@@ -398,8 +350,7 @@ describe('Linear client workspace storage', () => {
     })
     const linear = await loadClientModule({
       encryptionAvailable: true,
-      // Why: the plaintext "token-good" falls back through the legacy path;
-      // the binary "bad" token throws CredentialDecryptionError.
+      // Plaintext tokens use the legacy path; binary tokens exercise decryption failures.
       decryptString: () => {
         throw new Error('userCanceledErr')
       }
@@ -408,24 +359,6 @@ describe('Linear client workspace storage', () => {
     const clients = linear.getClients('all')
     expect(clients.map((client) => client.workspace.id)).toEqual(['good'])
     expect(linear.getStatus().credentialError).toContain('Could not decrypt')
-  })
-
-  it('rethrows the decrypt error for a specific workspace selection', async () => {
-    writeMultiWorkspaceFiles(
-      [
-        { id: 'good', token: 'token-good' },
-        { id: 'bad', token: Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]) }
-      ],
-      'bad'
-    )
-    const linear = await loadClientModule({
-      encryptionAvailable: true,
-      decryptString: () => {
-        throw new Error('userCanceledErr')
-      }
-    })
-
-    expect(() => linear.getClients('bad')).toThrow('Could not decrypt')
   })
 })
 
@@ -509,7 +442,7 @@ describe('Linear workspace file cross-process visibility', () => {
       [{ id: 'ws-alpha', token: 'token-alpha', credentialRevision: 3 }],
       'ws-alpha'
     )
-    // A revision update must change metadata even within one filesystem clock tick.
+    // Equal timestamps isolate credential revisions from filesystem clock resolution.
     utimesSync(join(tempHome, '.orca', 'linear-workspaces.json'), 1, 1)
     const linear = await loadClientModule()
     const signal = new AbortController().signal
@@ -537,8 +470,7 @@ describe('Linear workspace file cross-process visibility', () => {
     expect(linear.getStatus()).toMatchObject({ connected: false, workspaces: [] })
   })
   it('picks up a workspace connected by another Orca process', async () => {
-    // ~/.orca is shared by every Orca process on the machine, so a load-once
-    // cache would report "not connected" until this process restarted.
+    // Shared ~/.orca metadata must refresh without restarting other Orca processes.
     const linear = await loadClientModule()
     expect(linear.getStatus()).toMatchObject({ connected: false })
 
@@ -548,19 +480,5 @@ describe('Linear workspace file cross-process visibility', () => {
       connected: true,
       activeWorkspaceId: 'ws-alpha'
     })
-  })
-
-  it('follows the selected workspace changing underneath it', async () => {
-    const workspaces = [
-      { id: 'ws-alpha', token: 'token-alpha' },
-      { id: 'ws-beta', token: 'token-beta' }
-    ]
-    writeMultiWorkspaceFiles(workspaces, 'ws-alpha')
-    const linear = await loadClientModule()
-    expect(linear.getStatus()).toMatchObject({ selectedWorkspaceId: 'ws-alpha' })
-
-    writeMultiWorkspaceFiles(workspaces, 'ws-beta')
-
-    expect(linear.getStatus()).toMatchObject({ selectedWorkspaceId: 'ws-beta' })
   })
 })

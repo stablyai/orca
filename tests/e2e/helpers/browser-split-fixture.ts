@@ -1,8 +1,3 @@
-/**
- * Split-layout fixtures for browser shortcut E2E specs: a terminal beside a browser, or two
- * browsers side by side, plus helpers that press real chords inside a registered guest.
- */
-
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 

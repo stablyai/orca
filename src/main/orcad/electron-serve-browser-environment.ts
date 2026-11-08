@@ -1,4 +1,4 @@
-/** The helper's environment: none of orcad's user-data or agent-browser overrides leak into it. */
+/** Strip orcad-owned user-data and browser overrides from the helper environment. */
 export function electronServeEnvironment(userDataPath: string): NodeJS.ProcessEnv {
   const environment = { ...process.env }
   for (const key of [
@@ -23,7 +23,7 @@ export function electronServeEnvironment(userDataPath: string): NodeJS.ProcessEn
   if (process.env.ORCA_E2E_USER_DATA_DIR || process.env.ORCA_E2E_HOME_DIR) {
     environment.ORCA_E2E_USER_DATA_DIR = userDataPath
   }
-  // Why not ORCA_BACKGROUND_LAUNCH: an older installed app would hide without handing opens to the desktop app.
+  // Older installed apps hide without forwarding opens if given ORCA_BACKGROUND_LAUNCH.
   environment.ORCA_ORCAD_SIDECAR = '1'
   return environment
 }

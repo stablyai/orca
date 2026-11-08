@@ -1,4 +1,3 @@
-/** An action inside a grey status line, drawn like the line's links. */
 export function ManagedRuntimeLinkButton(
   props: Omit<React.ComponentProps<'button'>, 'className' | 'type'>
 ): React.JSX.Element {

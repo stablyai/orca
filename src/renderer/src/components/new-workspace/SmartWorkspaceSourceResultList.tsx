@@ -1,10 +1,11 @@
 import React from 'react'
+import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { getSmartWorkspaceEmptyHint } from '../../../../shared/new-workspace/smart-workspace-source-results'
-import { getRowItemClassName, RowIcon, RowLabel } from './smart-workspace-source-row-content'
+import { RowIcon, RowLabel } from './smart-workspace-source-row-content'
 import type { RowEntry } from './smart-workspace-name-field-model'
 import type { WorkItemSourceSearch } from './use-work-item-source-search'
 
@@ -14,7 +15,8 @@ export function SmartWorkspaceSourceResultList({
   isLinked,
   beforeResults,
   emptyHint,
-  isRowDisabled
+  isRowDisabled,
+  focusBehavior
 }: {
   model: Pick<
     WorkItemSourceSearch,
@@ -39,6 +41,7 @@ export function SmartWorkspaceSourceResultList({
   beforeResults?: React.ReactNode
   emptyHint?: string
   isRowDisabled?: (row: RowEntry) => boolean
+  focusBehavior?: 'page'
 }): React.JSX.Element {
   const {
     mode,
@@ -59,10 +62,11 @@ export function SmartWorkspaceSourceResultList({
   } = model
   // Why: only the Linear tab speaks for Linear; Smart lists what the other sources return.
   const visibleLinearReadError = mode === 'linear' ? linearReadError : null
+  const credentialError =
+    visibleLinearReadError && isIntegrationCredentialDecryptionError(visibleLinearReadError)
   return (
     <>
       {mode === 'gitlab' ? (
-        // Why: state chips mirror GitLab's merge-request tab strip.
         <div
           className="flex shrink-0 items-center gap-1 border-b border-border/40 px-2 py-1.5"
           onMouseDown={(e) => e.preventDefault()}
@@ -72,16 +76,15 @@ export function SmartWorkspaceSourceResultList({
               key={id}
               type="button"
               variant={mrStateFilter === id ? 'secondary' : 'ghost'}
-              size="sm"
+              size="xs"
               onClick={() => setMrStateFilter(id)}
-              className="h-6 px-2 text-xs"
             >
               {label}
             </Button>
           ))}
         </div>
       ) : null}
-      <CommandList className="!max-h-none min-h-0 flex-1 scrollbar-sleek">
+      <CommandList className="!max-h-none min-h-0 flex-1" data-focus-behavior={focusBehavior}>
         {beforeResults}
         {typedTextActionRow ? (
           <div
@@ -93,11 +96,39 @@ export function SmartWorkspaceSourceResultList({
               key={typedTextActionRow.value}
               value={typedTextActionRow.value}
               onSelect={() => onSelect(typedTextActionRow)}
-              className={getRowItemClassName(typedTextActionRow, { pinnedAction: true })}
+              density="workspace"
+              emphasis={
+                typedTextActionRow.kind === 'use-name' ||
+                typedTextActionRow.kind === 'create-branch'
+                  ? 'pinned'
+                  : 'default'
+              }
             >
               <RowIcon row={typedTextActionRow} />
               <RowLabel row={typedTextActionRow} />
             </CommandItem>
+          </div>
+        ) : null}
+        {visibleLinearReadError && !jiraSource.intent && !loading ? (
+          <div role="status" aria-live="polite" className="px-3 py-6 text-center text-xs">
+            {credentialError ? (
+              <>
+                <p className="font-medium text-foreground">
+                  {translate(
+                    'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
+                    'Reconnect Linear'
+                  )}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  {translate(
+                    'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableBody',
+                    'Unable to read saved Linear login. Reconnect it in Settings.'
+                  )}
+                </p>
+              </>
+            ) : (
+              <p className="text-muted-foreground">{visibleLinearReadError}</p>
+            )}
           </div>
         ) : null}
         {jiraSource.errorKind ? null : reserveLinearLoadingResults ? (
@@ -121,22 +152,7 @@ export function SmartWorkspaceSourceResultList({
               <div key={index} className="h-8 animate-pulse rounded bg-muted/40" />
             ))}
           </div>
-        ) : searchResultRows.length === 0 && visibleLinearReadError && !jiraSource.intent ? (
-          <div role="status" aria-live="polite" className="px-3 py-6 text-center text-xs">
-            <p className="font-medium text-foreground">
-              {translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableTitle',
-                'Reconnect Linear'
-              )}
-            </p>
-            <p className="mt-0.5 text-muted-foreground">
-              {translate(
-                'auto.components.new.workspace.SmartWorkspaceNameField.linearLoginUnreadableBody',
-                'Unable to read saved Linear login. Reconnect it in Settings.'
-              )}
-            </p>
-          </div>
-        ) : searchResultRows.length === 0 && !typedTextActionRow ? (
+        ) : searchResultRows.length === 0 && !typedTextActionRow && !visibleLinearReadError ? (
           <div className="px-3 py-6 text-center text-xs text-muted-foreground">
             {jiraSource.intent
               ? null
@@ -148,7 +164,7 @@ export function SmartWorkspaceSourceResultList({
                 : (emptyHint ?? getSmartWorkspaceEmptyHint(mode))}
           </div>
         ) : searchResultRows.length > 0 ? (
-          <CommandGroup className="p-1">
+          <CommandGroup>
             {searchResultRows.map((row) => (
               <CommandItem
                 selection="palette"
@@ -156,7 +172,7 @@ export function SmartWorkspaceSourceResultList({
                 value={row.value}
                 disabled={isLinked?.(row) || isRowDisabled?.(row)}
                 onSelect={() => onSelect(row)}
-                className={getRowItemClassName(row)}
+                density="workspace"
               >
                 <RowIcon row={row} />
                 <RowLabel

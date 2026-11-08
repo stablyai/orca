@@ -4,18 +4,19 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import type { sendMobileNativeChatPermissionResponse } from '../../../mobile/src/session/mobile-native-chat-permission-send'
+import type { sendMobileNativeChatPermissionResponse } from '../../../mobile/src/session/native-chat/input/mobile-native-chat-permission-send'
 import {
   WRITE_ACCEPTED,
   writeUnverifiable,
   type WriteSettlement
-} from '../../../src/shared/pty-write-settlement'
+} from '../../../src/shared/terminal/pty/lifecycle/pty-write-settlement'
+import { toSshExecutionHostId } from '../../../src/shared/execution-host'
 import { createPtyWriteInput } from '../../../src/main/ipc/pty/ipc/write-input'
 import type { IPtyProvider } from '../../../src/main/providers/pty-provider-contract'
 import type * as PtyProviderRegistry from '../../../src/main/ipc/pty/provider/registry'
 import { ptyOwnership } from '../../../src/main/ipc/pty/provider/ownership-state'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import { makeStore } from '../../../src/main/runtime/runtime-rpc-worktree-store-fixtures'
+import { makeStore } from '../../../src/main/runtime/rpc/server/runtime-rpc-worktree-store-fixtures'
 
 const io = vi.hoisted(() => ({
   getProvider: (): IPtyProvider => {
@@ -33,10 +34,10 @@ vi.mock('../../../src/main/ipc/pty/provider/registry', async (importOriginal) =>
   }
 })
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({ terminalLayoutsByTabId: {} }) } }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (...args: unknown[]) => io.rpc(...args)
 }))
-vi.mock('@/runtime/runtime-terminal-stream', () => ({
+vi.mock('@/runtime/hosted-terminals/identity/remote-runtime-pty-owner', () => ({
   getRemoteRuntimePtyEnvironmentId: (id: string) => (id.startsWith('remote:') ? 'owner' : null),
   getRemoteRuntimeTerminalHandle: (id: string) => (id.startsWith('remote:') ? 'terminal' : null),
   getRemoteRuntimePtyOwner: (id: string) =>
@@ -45,11 +46,17 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
       : null
 }))
 
+type SettlingPtyProvider = Omit<IPtyProvider, 'write'> & {
+  write: (id: string, data: string) => boolean
+  hasPty: (id: string) => boolean
+  dispose: () => void
+}
+
 /** A remote PTY owner whose write acknowledgments settle per `mode`, like a host transport. */
 function createSettlingProvider(
   bytes: string[],
   mode: 'accepted' | 'lost' | 'slow'
-): IPtyProvider & { hasPty: (id: string) => boolean; dispose: () => void } {
+): SettlingPtyProvider {
   const timers = new Set<ReturnType<typeof setTimeout>>()
   const settleAfter = (ms: number, settlement: WriteSettlement): Promise<WriteSettlement> =>
     new Promise((resolve) => {
@@ -71,7 +78,7 @@ function createSettlingProvider(
       if (mode === 'lost') {
         return settleAfter(10, writeUnverifiable('transport_settlement_lost', true))
       }
-      if (mode === 'slow' && data.startsWith('X')) {
+      if (mode === 'slow' && (data.startsWith('X') || data.startsWith('\x1b[200~X'))) {
         return settleAfter(1300, WRITE_ACCEPTED)
       }
       return Promise.resolve(WRITE_ACCEPTED)
@@ -82,7 +89,7 @@ function createSettlingProvider(
       }
       timers.clear()
     }
-  } as unknown as IPtyProvider & { hasPty: (id: string) => boolean; dispose: () => void }
+  } as unknown as SettlingPtyProvider
 }
 
 export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted') {
@@ -93,7 +100,7 @@ export function createSshDelivery(mode: 'accepted' | 'lost' | 'slow' = 'accepted
   io.getProvider = () => provider
   const input = createPtyWriteInput({})
   const id = 'ssh:connection@@pty-1'
-  ptyOwnership.set(id, 'connection')
+  ptyOwnership.set(id, toSshExecutionHostId('connection'))
   vi.stubGlobal('window', {
     api: {
       pty: {
@@ -167,7 +174,7 @@ async function bundleMobilePermissionModule(): Promise<unknown> {
     entryPoints: [
       fileURLToPath(
         new URL(
-          '../../../mobile/src/session/mobile-native-chat-permission-send.ts',
+          '../../../mobile/src/session/native-chat/input/mobile-native-chat-permission-send.ts',
           import.meta.url
         )
       )

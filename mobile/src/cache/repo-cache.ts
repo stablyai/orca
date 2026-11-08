@@ -1,6 +1,4 @@
-// Why: repo metadata is mostly decorative and changes rarely. Keeping a short
-// host-scoped cache lets workspace creation open from the last known list while
-// a fresh repo.list refresh happens in the background.
+// Cache decorative repo metadata per host so create-workspace opens immediately while repo.list refreshes.
 
 type CachedRepos = {
   repos: unknown[]

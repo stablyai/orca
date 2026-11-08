@@ -1,12 +1,14 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { snapshotEvent } from './use-mobile-structured-agent-session-queued.test-fixture'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
+import type { AgentJournalRenderItem } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
-import { ANSWERED_PROMPT_ITEMS } from './mobile-native-chat-answered-prompts.test-fixture'
+import { ANSWERED_PROMPT_ITEMS } from './native-chat/input/mobile-native-chat-answered-prompts.test-fixture'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null), setItem: vi.fn(), removeItem: vi.fn() }
@@ -48,28 +50,7 @@ const ITEMS: AgentJournalRenderItem[] = [
 ]
 
 function snapshot(items: AgentJournalRenderItem[]): AgentSessionSubscribeEvent {
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence: 3,
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence: 3,
-      direction: 'tail',
-      items,
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: { epoch: 'epoch-1', sequence: 1 },
-        newest: { epoch: 'epoch-1', sequence: 3 },
-        nextCursor: { epoch: 'epoch-1', sequence: 4 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: 3 },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
+  return snapshotEvent({ items })
 }
 
 describe('useMobileStructuredAgentSession transcript', () => {
@@ -81,7 +62,9 @@ describe('useMobileStructuredAgentSession transcript', () => {
 
   async function mount(agent: string, items: AgentJournalRenderItem[]) {
     let listener: ((value: unknown) => void) | null = null
-    const client: Pick<RpcClient, 'sendRequest' | 'subscribe'> = {
+    const client: Pick<RpcClient, 'sendRequest' | 'subscribe' | 'getState' | 'onStateChange'> = {
+      getState: () => 'connected',
+      onStateChange: () => () => {},
       sendRequest: vi.fn(async (): Promise<RpcResponse> => ({
         id: 'response-1',
         ok: true,
@@ -89,7 +72,9 @@ describe('useMobileStructuredAgentSession transcript', () => {
         _meta: { runtimeId: 'runtime-1' }
       })),
       subscribe: vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
-        listener = onData
+        if (_method === 'agentSession.subscribe') {
+          listener = onData
+        }
         return () => {}
       })
     }
@@ -98,8 +83,9 @@ describe('useMobileStructuredAgentSession transcript', () => {
     }
     function Harness(): null {
       rendered.hook = useMobileStructuredAgentSession({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook calls only sendRequest and subscribe, both provided.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook's request, subscription and connection members are provided.
         client: client as RpcClient,
+        pairedHostClient: null,
         sessionId: 'session-1',
         enabled: true,
         connected: true,
@@ -110,7 +96,7 @@ describe('useMobileStructuredAgentSession transcript', () => {
       return null
     }
     act(() => {
-      renderer = create(createElement(Harness))
+      renderer = createWithQueryClient(createElement(Harness))
     })
     await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
 
@@ -132,7 +118,6 @@ describe('useMobileStructuredAgentSession transcript', () => {
         ]
       })
     )
-    // The turn bars place rows by the same items, so the notice joins the cut turn.
     expect(rendered.hook?.turnJournal.items.at(-1)).toMatchObject({ turnScope: SCOPE })
   })
 

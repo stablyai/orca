@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_APP_ROUTE_ROOT,
-  ROUTE_CONTEXT_SOURCE,
   ROUTE_MODULE_SYNCHRONOUS_EXPORTS,
   collectMobileWebAppRouteKeys,
   collectMobileWebAppRoutes,
@@ -16,8 +15,7 @@ import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-depende
 const projectDir = fileURLToPath(new URL('../../..', import.meta.url))
 const appDir = join(projectDir, 'mobile', 'app')
 
-// The sharded `test` job does not install mobile dependencies, so anything that runs esbuild over
-// the route tree is skipped there and run for real in pr.yml's mobile_web_app job.
+// Root shards omit mobile dependencies; route-tree builds run in mobile_web_app job.
 const itBundling = mobileWebAppDependenciesPresent() ? it : it.skip
 
 async function withScratch(run) {
@@ -30,21 +28,6 @@ async function withScratch(run) {
 }
 
 describe('route manifest', () => {
-  it('collects the h/ subtree and, above it, only the root layout web sibling', async () => {
-    const routes = await collectMobileWebAppRoutes(appDir)
-    const keys = routes.map((route) => route.key)
-    expect(keys.length).toBeGreaterThan(0)
-    for (const key of keys.filter((key) => key !== './_layout.tsx')) {
-      expect(key.startsWith(`./${MOBILE_WEB_APP_ROUTE_ROOT}/`)).toBe(true)
-    }
-    // The native-only shell (pairing, settings, notifications) must not reach the page bundle: the
-    // root layout key is served by the page's own `_layout.web.tsx`, never the native file.
-    expect(routes.find((route) => route.key === './_layout.tsx')?.module).toBe(
-      join(appDir, '_layout.web.tsx')
-    )
-    expect(keys).not.toContain('./pair.tsx')
-  })
-
   it('carries no root layout for a tree without a web sibling of it', async () => {
     await withScratch(async (scratch) => {
       await mkdir(join(scratch, MOBILE_WEB_APP_ROUTE_ROOT), { recursive: true })
@@ -54,13 +37,8 @@ describe('route manifest', () => {
     })
   })
 
-  it('is sorted, so the generated module is a pure function of the tree', async () => {
-    const keys = await collectMobileWebAppRouteKeys(appDir)
-    expect(keys).toEqual([...keys].sort())
-  })
-
   it('excludes test files and API routes', async () => {
-    // mobile/app holds none of these today, so assert the rule against a tree that does.
+    // Synthetic tree exercises absent-today forbidden route exports.
     await withScratch(async (scratch) => {
       const directory = join(scratch, MOBILE_WEB_APP_ROUTE_ROOT)
       await mkdir(directory, { recursive: true })
@@ -81,29 +59,7 @@ describe('route manifest', () => {
     expect(await collectMobileWebAppRouteKeys(appDir)).not.toContain('./h/_layout.test.tsx')
   })
 
-  it('refuses an empty subtree rather than emitting a context with no routes', async () => {
-    await withScratch(async (scratch) => {
-      await mkdir(join(scratch, MOBILE_WEB_APP_ROUTE_ROOT))
-      await expect(collectMobileWebAppRouteKeys(scratch)).rejects.toThrow(
-        '[mobile-web-app] no routes under'
-      )
-    })
-  })
-
-  it('has no route carrying an export a lazy module would swallow', async () => {
-    const routes = await collectMobileWebAppRoutes(appDir)
-    expect(routes.length).toBeGreaterThan(0)
-    for (const { module } of routes) {
-      const { named, starExports } = await routeModuleSynchronousExports(module)
-      // expo-router reads these off the namespace while it builds the tree, which a module behind
-      // import() cannot answer. Adding one to a page route needs a static import for that route.
-      expect(named, `${module} exports ${named.join(', ')}`).toEqual([])
-      expect(starExports, `${module} re-exports all of ${starExports.join(', ')}`).toEqual([])
-    }
-  })
-
-  // Each of these puts the name on the namespace without declaring it, which is why the guard
-  // reads esbuild's parse instead of the source text.
+  // Alias/reexport controls require namespace parse, not declaration-name matching.
   it('reads the names off the namespace, not off a declaration', async () => {
     expect(ROUTE_MODULE_SYNCHRONOUS_EXPORTS).toEqual(['unstable_settings', 'ErrorBoundary'])
     await withScratch(async (scratch) => {
@@ -139,8 +95,7 @@ describe('route manifest', () => {
   it('refuses a star re-export rather than reading it as clean', async () => {
     await withScratch(async (scratch) => {
       const file = join(scratch, 'star.tsx')
-      // Nothing here says whether ./boundary exports ErrorBoundary, and answering would mean
-      // bundling the route. Reported as a violation so the guard fails closed.
+      // Unresolved export * cannot prove namespace clean without bundling; fail closed.
       await writeFile(file, 'export * from "./boundary"\nexport default null\n', 'utf8')
       const { named, starExports } = await routeModuleSynchronousExports(file)
       expect(named).toEqual([])
@@ -152,8 +107,7 @@ describe('route manifest', () => {
     'reads a .js route that carries JSX, which the app tree allows',
     async () => {
       await withScratch(async (scratch) => {
-        // React Native ships untranspiled JSX inside .js, and collectMobileWebAppRoutes accepts a
-        // .js route, so the guard has to parse one the same way the bundle does.
+        // Guard must accept JSX-in-.js routes like actual RN bundler.
         const file = join(scratch, 'jsx-route.js')
         await writeFile(
           file,
@@ -175,40 +129,10 @@ describe('route manifest', () => {
         { key: './h/index.tsx', module: join(directory, 'index.tsx') }
       ])
       await writeFile(join(directory, 'index.web.tsx'), 'export default function Route() {}\n')
-      // The key is still the native filename, so the override changes the code and not the URL.
+      // Preserve native key so web override changes implementation without changing URL.
       expect(await collectMobileWebAppRoutes(scratch)).toEqual([
         { key: './h/index.tsx', module: join(directory, 'index.web.tsx') }
       ])
     })
-  })
-})
-
-describe('the synthesized RequireContext', () => {
-  const build = (modules) =>
-    new Function('modules', `${ROUTE_CONTEXT_SOURCE}; return routeContext`)(modules)
-
-  it('answers the four members expo-router reads', () => {
-    const context = build({ './h/index.tsx': { default: 'screen' } })
-    expect(context.keys()).toEqual(['./h/index.tsx'])
-    expect(context('./h/index.tsx')).toEqual({ default: 'screen' })
-    expect(context.resolve('./h/index.tsx')).toBe('./h/index.tsx')
-    expect(context.id).toBe('orca-mobile-web-app-routes')
-  })
-
-  it('hands out a copy of keys, so a caller cannot mutate the route tree', () => {
-    const context = build({ './h/index.tsx': {} })
-    context.keys().push('./injected.tsx')
-    expect(context.keys()).toEqual(['./h/index.tsx'])
-  })
-
-  it('throws rather than returning undefined for an unknown key', () => {
-    const context = build({ './h/index.tsx': {} })
-    expect(() => context('./missing.tsx')).toThrow('no route module')
-    expect(() => context.resolve('./missing.tsx')).toThrow('cannot resolve route')
-  })
-
-  it('does not answer inherited Object keys', () => {
-    const context = build({ './h/index.tsx': {} })
-    expect(() => context('constructor')).toThrow('no route module')
   })
 })

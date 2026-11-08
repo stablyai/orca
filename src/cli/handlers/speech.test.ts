@@ -35,8 +35,9 @@ describe('orca speech openai-key against an older server', () => {
         throw new RuntimeClientError('method_not_found', 'Unknown method: speech.openAiKey.status')
       }
     }
-    await expect(callOpenAiKeyMethod(client, 'speech.openAiKey.status')).rejects.toThrow(
-      'Update Orca on the server'
-    )
+    await expect(callOpenAiKeyMethod(client, 'speech.openAiKey.status')).rejects.toMatchObject({
+      code: 'incompatible_runtime',
+      message: expect.stringContaining('Update Orca on the server')
+    })
   })
 })

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration-compatibility-evidence'
 import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 import {
@@ -84,39 +84,28 @@ describe('orchestration.check on a re-attached Dispatch', () => {
       code: 'consumer_fenced',
       message: expect.stringContaining('no longer owns its Dispatch')
     })
-    expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
   })
 
-  it('hands the live worker a fresh Delivery with the same unread mail', async () => {
+  it('leaves mail the replaced process already took in the live worker history', async () => {
     const dispatchId = attachedDispatchWithMail()
-    const staleDelivery = (await check(PANE_A)).deliveryId
+    await check(PANE_A)
     reattach(dispatchId)
 
-    const live = await check(PANE_B)
-    expect(live.deliveryId).not.toBe(staleDelivery)
-    expect(live.replayed).toBe(false)
-    expect(live.messages.map((message) => message.subject)).toEqual(['do the work'])
-
-    await check(PANE_B, { ack: live.deliveryId })
-    expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual([])
-  })
-
-  it('keeps serving a worker whose process restarted without a re-attach', async () => {
-    attachedDispatchWithMail()
-    const first = await check(PANE_A)
-
-    const replay = await check(PANE_A)
-    expect(replay.deliveryId).toBe(first.deliveryId)
-    expect(replay.replayed).toBe(true)
-    await expect(check(PANE_A, { ack: first.deliveryId })).resolves.toMatchObject({
-      acknowledged: first.deliveryId
-    })
+    expect(await check(PANE_B)).toMatchObject({ deliveryId: null, count: 0 })
+    const history = await check(PANE_B, { all: true })
+    expect(history.messages.map((message) => message.subject)).toEqual(['do the work'])
   })
 
   it('refuses the stale worker a plain check, so it cannot steal the next Delivery', async () => {
     const dispatchId = attachedDispatchWithMail()
     await check(PANE_A)
     reattach(dispatchId)
+    db.insertMessage({
+      from: 'term_coord',
+      to: `dispatch:${dispatchId}`,
+      subject: 'next step',
+      runId: db.getDispatchContextById(dispatchId)!.run_id
+    })
 
     await expect(check(PANE_A)).rejects.toMatchObject({
       code: 'consumer_fenced',
@@ -125,13 +114,11 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
 
     const live = await check(PANE_B)
-    expect(live.messages.map((message) => message.subject)).toEqual(['do the work'])
-    await check(PANE_B, { ack: live.deliveryId })
+    expect(live.messages.map((message) => message.subject)).toEqual(['next step'])
     expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual([])
   })
 
-  // Peek is unfenced against a stale generation, but a caller on the wrong pane is not this
-  // mailbox's consumer at all, so it must not read the new owner's instructions either.
+  // Peek may ignore stale generation, but a different pane must never read the current consumer's instructions.
   it('refuses the stale worker a --peek at the new owner mail', async () => {
     const dispatchId = attachedDispatchWithMail()
     reattach(dispatchId)

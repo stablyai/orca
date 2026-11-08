@@ -6,7 +6,9 @@ vi.mock('electron', async () =>
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
-vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+vi.mock('./desktop-integration/app-icon', async () =>
+  (await import('./createMainWindow-test-harness')).appIconMock()
+)
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -31,6 +33,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -85,7 +88,14 @@ describe('createMainWindow', () => {
     expect(disabledPreventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalledWith('ui:dictationKeyDown')
 
+    // #18691: with no model the renderer still needs the chord to show its setup toast.
     voice.enabled = true
+    const noModelPreventDefault = vi.fn()
+    windowHandlers['before-input-event']({ preventDefault: noModelPreventDefault }, dictationInput)
+    expect(noModelPreventDefault).toHaveBeenCalledTimes(1)
+    expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
+
+    webContents.send.mockClear()
     voice.sttModel = 'test-model'
     voice.dictationMode = 'hold'
     const holdPreventDefault = vi.fn()
@@ -123,6 +133,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -209,7 +220,7 @@ describe('createMainWindow', () => {
     expect(webContents.send).toHaveBeenCalledWith('ui:dictationKeyDown')
   })
 
-  it('forwards ctrl/cmd+j to the worktree palette toggle event', () => {
+  it('forwards the search shortcut to the worktree palette toggle event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
     const webContents = {
       on: vi.fn((event, handler) => {
@@ -217,6 +228,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -247,8 +259,8 @@ describe('createMainWindow', () => {
     for (const input of [
       {
         type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
+        code: isDarwin ? 'KeyK' : 'KeyJ',
+        key: isDarwin ? 'k' : 'j',
         meta: isDarwin,
         control: !isDarwin,
         alt: false,
@@ -256,7 +268,7 @@ describe('createMainWindow', () => {
       },
       {
         type: 'keyDown',
-        code: 'KeyJ',
+        code: isDarwin ? 'KeyK' : 'KeyJ',
         key: '',
         meta: isDarwin,
         control: !isDarwin,
@@ -282,6 +294,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -346,6 +359,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -404,6 +418,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -441,18 +456,15 @@ describe('createMainWindow', () => {
 
     const preventDefault = vi.fn()
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      } as never
-    )
+    windowHandlers['before-input-event']({ preventDefault } as never, {
+      type: 'keyDown',
+      code: isDarwin ? 'KeyK' : 'KeyJ',
+      key: isDarwin ? 'k' : 'j',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: !isDarwin
+    })
 
     expect(preventDefault).not.toHaveBeenCalled()
     expect(webContents.send).not.toHaveBeenCalled()
@@ -466,6 +478,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -545,6 +558,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -582,18 +596,15 @@ describe('createMainWindow', () => {
 
     const preventDefault = vi.fn()
     const isDarwin = process.platform === 'darwin'
-    windowHandlers['before-input-event'](
-      { preventDefault } as never,
-      {
-        type: 'keyDown',
-        code: 'KeyJ',
-        key: 'j',
-        meta: isDarwin,
-        control: !isDarwin,
-        alt: false,
-        shift: !isDarwin
-      } as never
-    )
+    windowHandlers['before-input-event']({ preventDefault } as never, {
+      type: 'keyDown',
+      code: isDarwin ? 'KeyK' : 'KeyJ',
+      key: isDarwin ? 'k' : 'j',
+      meta: isDarwin,
+      control: !isDarwin,
+      alt: false,
+      shift: !isDarwin
+    })
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
     expect(webContents.send).toHaveBeenNthCalledWith(1, 'ui:terminalShortcutCaptured', {
@@ -610,6 +621,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -687,6 +699,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),
@@ -757,6 +770,7 @@ describe('createMainWindow', () => {
       }),
       setZoomLevel: vi.fn(),
       setBackgroundThrottling: vi.fn(),
+      setWebRTCIPHandlingPolicy: vi.fn(),
       invalidate: vi.fn(),
       setWindowOpenHandler: vi.fn(),
       send: vi.fn(),

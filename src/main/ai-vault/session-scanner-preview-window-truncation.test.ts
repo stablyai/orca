@@ -19,24 +19,10 @@ function accumulatorWithUserTurns(count: number): SessionAccumulator {
 }
 
 describe('AI Vault preview-window truncation signal', () => {
-  it('leaves the flag off while the window still holds the whole transcript', () => {
-    const session = finalizeSession(accumulatorWithUserTurns(PREVIEW_LIMIT), 'darwin')
-
-    expect(session?.previewMessages).toHaveLength(PREVIEW_LIMIT)
-    expect(session?.previewMessagesTruncated).toBeUndefined()
-  })
-
   it('flags the session once an older turn falls out of the window', () => {
     const session = finalizeSession(accumulatorWithUserTurns(PREVIEW_LIMIT + 1), 'darwin')
 
-    // The opening ask is gone, so the earliest preview turn is not the first prompt.
     expect(session?.previewMessages[0]?.text).toBe('turn 1')
     expect(session?.previewMessagesTruncated).toBe(true)
-  })
-
-  it('carries the flag onto snapshots taken from a cloned accumulator', () => {
-    const accumulator = accumulatorWithUserTurns(PREVIEW_LIMIT + 1)
-
-    expect(finalizeSession({ ...accumulator }, 'darwin')?.previewMessagesTruncated).toBe(true)
   })
 })

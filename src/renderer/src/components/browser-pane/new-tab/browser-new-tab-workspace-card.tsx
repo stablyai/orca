@@ -1,3 +1,7 @@
+import {
+  getProviderChecksOutcome,
+  type CheckPresentationOutcome
+} from '../../../../../shared/source-control/checks/provider-check-summary'
 import { useState } from 'react'
 import { ChevronRight, CircleDot, GitMerge, GitPullRequest } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -5,18 +9,16 @@ import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { getReviewStateTone } from '@/components/github/review-state-presentation'
-import { workspaceAttachmentReferenceLabel } from '../../../../../shared/workspace-attachments'
+import { workspaceAttachmentReferenceLabel } from '../../../../../shared/workspace-attachments/workspace-attachments'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import type { HostedReviewState } from '../../../../../shared/hosted-review'
-import type { CheckStatus } from '../../../../../shared/github/pull-request-types'
-import { ReviewIcon } from '../../sidebar/worktree-review-helpers'
-import { workspaceAttachmentLabel } from '../../sidebar/worktree-attachment-editing'
-import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-hover-attachments'
+import type { HostedReviewState } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { ReviewIcon } from '../../sidebar/workspace-card/review/worktree-review-presentation'
+import { workspaceAttachmentLabel } from '../../sidebar/workspace-card/metadata/worktree-attachment-editing'
+import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-card/review/workspace-hover-attachments'
 import { BrowserNewTabRow } from './browser-new-tab-row'
 import { BrowserNewTabServerRow } from './browser-new-tab-server-row'
 import type { BrowserNewTabServers } from './use-browser-new-tab-servers'
 
-/** This workspace's running servers and linked reviews and tasks, then servers elsewhere on its host. */
 export function BrowserNewTabWorkspaceCard({
   servers,
   linkedItems,
@@ -48,10 +50,10 @@ export function BrowserNewTabWorkspaceCard({
   return (
     <div className="flex flex-col gap-1.5">
       {own.length > 0 || linkedItems.length > 0 ? (
-        <div className="flex flex-col gap-px rounded-xl border border-border bg-card p-1">
+        <div className="flex flex-col gap-0.5 rounded-2xl border border-border bg-card p-1.5">
           {own.map((server) => serverRow(server, false))}
           {own.length > 0 && linkedItems.length > 0 ? (
-            <div className="mx-2 my-1 h-px bg-border" />
+            <div className="mx-3 my-1 h-px bg-border" />
           ) : null}
           {linkedItems.map((row) => (
             <LinkedItemRow key={row.key} row={row} onOpenUrl={onOpenUrl} />
@@ -99,7 +101,11 @@ function LinkedItemRow({
     issue: (number) => `#${number}`,
     mr: (number) => `!${number}`
   })
-  const status = live ? reviewChecksLabel(live.status) : linkedTaskState(row)
+  const status = live
+    ? reviewChecksLabel(
+        live.status ? getProviderChecksOutcome(live.checksSummary, live.status) : undefined
+      )
+    : linkedTaskState(row)
   const reviewState = live?.state ? reviewStateLabel(live.state) : undefined
   return (
     <BrowserNewTabRow
@@ -135,26 +141,26 @@ function LinkedItemRow({
 function LinkedItemIcon({ row }: { row: WorkspaceLinkedItemRow }): React.JSX.Element {
   const { item, live } = row
   if (live) {
-    return <ReviewIcon review={live} className="size-4" />
+    return <ReviewIcon review={live} className="size-5" />
   }
   if (item.provider === 'linear') {
-    return <LinearIcon className="size-4 text-muted-foreground" />
+    return <LinearIcon className="size-5 text-muted-foreground" />
   }
   if (item.provider === 'jira') {
-    return <JiraIcon className="size-4 text-muted-foreground" />
+    return <JiraIcon className="size-5 text-muted-foreground" />
   }
   if (item.type === 'mr') {
-    return <GitMerge className="size-4 text-muted-foreground" />
+    return <GitMerge className="size-5 text-muted-foreground" />
   }
   if (item.type === 'pr') {
-    return <GitPullRequest className="size-4 text-muted-foreground" />
+    return <GitPullRequest className="size-5 text-muted-foreground" />
   }
   return (
     <CircleDot
       className={
         linkedIssueState(row) === 'open'
-          ? 'size-4 text-workspace-status-review/80'
-          : 'size-4 text-muted-foreground'
+          ? 'size-5 text-workspace-status-review/80'
+          : 'size-5 text-muted-foreground'
       }
     />
   )
@@ -173,7 +179,10 @@ function reviewStateLabel(state: HostedReviewState): string {
   return translate('browser.newTab.state.open', 'Open')
 }
 
-function reviewChecksLabel(status: CheckStatus | undefined): string | undefined {
+function reviewChecksLabel(status: CheckPresentationOutcome | undefined): string | undefined {
+  if (status === 'cancelled') {
+    return translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')
+  }
   if (status === 'success') {
     return translate('browser.newTab.checks.passing', 'Checks passing')
   }

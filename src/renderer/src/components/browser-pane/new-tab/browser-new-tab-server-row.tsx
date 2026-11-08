@@ -2,12 +2,12 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { BrowserFavicon } from '@/components/browser-favicon'
-import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
-import { addressForPort } from '@/lib/workspace-port-urls'
+import { useLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
+import { addressForPort } from '@/lib/workspace-ports/workspace-port-urls'
 import {
   openWorkspacePortInBrowser,
   resolveWorkspacePortBrowserUrl
-} from '@/lib/workspace-port-actions'
+} from '@/lib/workspace-ports/workspace-port-actions'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { BrowserNewTabRow } from './browser-new-tab-row'
 import type { BrowserNewTabServer } from './use-browser-new-tab-servers'
@@ -59,13 +59,14 @@ export function BrowserNewTabServerRow({
       icon={
         <BrowserFavicon
           faviconUrl={faviconDataUrl}
-          className="size-4"
+          className="size-5"
           fallbackClassName="text-muted-foreground"
         />
       }
       title={title ?? port.processName ?? address}
       detail={
         <>
+          <span className="mr-1.5 inline-block size-1.5 rounded-full bg-status-success align-middle" />
           <span className="font-mono">{address}</span>
           {context ? ` · ${context}` : null}
         </>

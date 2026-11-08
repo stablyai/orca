@@ -1,3 +1,4 @@
+import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type { GitHubAssignableUser, GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import type { LocalGitExecOptions } from './gh-utils'
@@ -12,7 +13,8 @@ export async function listLabels(
   preference?: IssueSourcePreference,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  repositoryOverride?: GitHubOwnerRepo | null
+  repositoryOverride?: GitHubOwnerRepo | null,
+  expectedGhAccount?: GhAccountBinding | null
 ): Promise<string[]> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
@@ -27,7 +29,8 @@ export async function listLabels(
           )
         ).source),
     connectionId,
-    localGitOptions
+    localGitOptions,
+    expectedGhAccount
   )
   if (!ownerRepo) {
     return []
@@ -60,7 +63,8 @@ export async function listAssignableUsers(
   preference?: IssueSourcePreference,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  repositoryOverride?: GitHubOwnerRepo | null
+  repositoryOverride?: GitHubOwnerRepo | null,
+  expectedGhAccount?: GhAccountBinding | null
 ): Promise<GitHubAssignableUser[]> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
@@ -75,18 +79,15 @@ export async function listAssignableUsers(
           )
         ).source),
     connectionId,
-    localGitOptions
+    localGitOptions,
+    expectedGhAccount
   )
   if (!ownerRepo) {
     return []
   }
   await acquire()
   try {
-    // Why: paginate through all assignable users — GraphQL's assignableUsers
-    // maxes out at 100 per page and large orgs/repos silently lose assignees
-    // beyond the first page. REST /assignees with --paginate walks every page;
-    // --jq collapses per-page arrays into NDJSON so we don't have to stitch
-    // JSON arrays that gh concatenates back-to-back.
+    // REST pagination covers all assignees; jq emits NDJSON instead of concatenated page arrays.
     const { stdout } = await ghExecFileAsync(
       [
         'api',

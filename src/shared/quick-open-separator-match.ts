@@ -36,3 +36,28 @@ export function matchQuickOpenSeparatorAlternatives(
   const score = previous.reduce((best, value) => Math.min(best, value), Infinity)
   return Number.isFinite(score) ? score : null
 }
+
+/** Whether `filename` contains `query` with any of -, _ or space standing in for each separator. */
+export function filenameContainsSeparatorVariant(filename: string, query: string): boolean {
+  for (let start = 0; start <= filename.length - query.length; start++) {
+    let offset = 0
+    while (offset < query.length) {
+      const expected = query[offset]
+      const actual = filename[start + offset]
+      if (
+        expected !== actual &&
+        !(
+          (expected === '-' || expected === '_') &&
+          (actual === '-' || actual === '_' || actual === ' ')
+        )
+      ) {
+        break
+      }
+      offset++
+    }
+    if (offset === query.length) {
+      return true
+    }
+  }
+  return false
+}

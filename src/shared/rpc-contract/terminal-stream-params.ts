@@ -32,23 +32,30 @@ export const TerminalSubscribe = TerminalHandle.extend({
       terminalBinaryStream: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       mobileInputLeaseOnly: z.literal(1).optional(),
-      writeUnavailable: z.literal(1).optional()
+      writeUnavailable: z.literal(1).optional(),
+      // Ask for credited output; the host echoes `outputAck: true` and a `streamToken` in `subscribed`.
+      outputAck: z.literal(1).optional()
     })
     .optional(),
-  /**
-   * The bytes a mobile snapshot may occupy once it is JSON, when the subscriber has a frame cap.
-   *
-   * Additive and optional, so no negotiation is involved: a host that predates it ignores the field
-   * and trims on the raw byte budget it always did, and a subscriber that never sends one is served
-   * exactly as before (Rule 1 of docs/reference/remote-wire-compatibility.md). The page sends it
-   * because the shell measures the frame rather than the text, and an ANSI snapshot escapes every
-   * ESC byte into six — a 512 KiB budgeted screen serializes past the 640 KiB bridge cap and ends
-   * the stream before a live byte lands.
-   *
-   * Never inferred from `client.type`: a mobile subscriber on the socket has no frame cap at all,
-   * and one that sends this has whatever cap its own transport imposes.
-   */
+  /** Continue an ended stream: `units` is the Output text, in UTF-16 code units, the client applied from that
+   * stream id after its snapshot (or its `resumed` reply), read once it stops applying that stream. The host
+   * answers `resumed: true` and sends only what was missed, or a snapshot as usual. Each token resumes at
+   * most once; older hosts strip this and snapshot. */
+  resume: z
+    .object({
+      streamToken: requiredString('Missing stream token'),
+      units: z.number().int().nonnegative()
+    })
+    .optional(),
+  /** Budget the JSON frame, not raw text: ESC expands sixfold and can push a 512 KiB snapshot past a 640 KiB bridge cap.
+   * Optional for legacy raw-byte trimming; never infer from client.type because mobile socket clients have no frame cap. */
   snapshotByteBudget: z.number().int().positive().optional()
+})
+
+/** Credit for Output text the client has parsed, in UTF-16 code units since its previous ack. */
+export const TerminalAckOutput = z.object({
+  streamToken: requiredString('Missing stream token'),
+  units: z.number().int().positive()
 })
 
 export const TerminalMultiplex = z.object({})

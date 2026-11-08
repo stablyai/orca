@@ -23,7 +23,7 @@ permissions:
 cache-mode: read
 jobs:
   compatibility:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v6
@@ -59,7 +59,7 @@ jobs:
           --project=electron-headless --workers=1 --retries=0 --repeat-each=3 --reporter=list,json
       - name: Require all six compatibility executions
         if: always()
-        run: node config/scripts/verify-packaged-browser-participation.mjs test-results/packaged-browser-results.json
+        run: node "$(if [ -f config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.mjs ]; then printf %s config/scripts/desktop-distribution/runtime-verification/verify-packaged-browser-participation.mjs; else printf %s config/scripts/verify-packaged-browser-participation.mjs; fi)" test-results/packaged-browser-results.json
       - uses: actions/upload-artifact@v7
         if: always()
         with:
@@ -67,7 +67,7 @@ jobs:
           path: test-results/
           retention-days: 3
   layout-compat:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6

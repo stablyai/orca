@@ -59,7 +59,7 @@ vi.mock('../runtime/orca-runtime', () => ({
     setCommitMessageAgentEnvironmentResolvers() {}
   }
 }))
-vi.mock('../runtime/agent-session-claim-identity', () => ({
+vi.mock('../runtime/agent-session/ownership/agent-session-claim-identity', () => ({
   loadAgentSessionClaimSigner: () => null
 }))
 vi.mock('../ai-vault-search/session-search-enablement', () => ({
@@ -72,14 +72,14 @@ vi.mock('../runtime/agent-state-rules/agent-state-rules-live-update', () => ({
 vi.mock('../artifacts/artifact-cloud-service', () => ({ ArtifactCloudService: class {} }))
 vi.mock('../skills/skill-cloud-service', () => ({ SkillCloudService: class {} }))
 vi.mock('./wsl-orcad-account-env-wiring', () => ({ installWslOrcadAccountShim: vi.fn() }))
-vi.mock('../codex/codex-hook-reconcile', () => ({ startCodexHooks: vi.fn() }))
+vi.mock('../codex/hooks/reconciliation/codex-hook-reconcile', () => ({ startCodexHooks: vi.fn() }))
 vi.mock('../star-nag/service', () => ({
   StarNagService: class {
     start = vi.fn()
     registerIpcHandlers = vi.fn()
   }
 }))
-vi.mock('../browser/agent-browser-bridge', () => ({
+vi.mock('../browser/agent-browser/agent-browser-bridge', () => ({
   AgentBrowserBridge: class {
     sweepOrphanedSessions = vi.fn()
   }
@@ -87,9 +87,9 @@ vi.mock('../browser/agent-browser-bridge', () => ({
 vi.mock('../emulator/emulator-bridge', () => ({ EmulatorBridge: class {} }))
 vi.mock('../runtime/rpc/dispatcher', () => ({ RpcDispatcher: class {} }))
 vi.mock('../browser/browser-manager', () => ({
-  browserManager: { setBrowserGuestStateChangedListener: vi.fn() }
+  browserManager: { setBrowserGuestStateChangedListener: vi.fn(), setOffscreenTabOpener: vi.fn() }
 }))
-vi.mock('../browser/browser-client-page-automation-runtime', () => ({
+vi.mock('../browser/client-pages/execution/browser-client-page-automation-runtime', () => ({
   configureBrowserClientPageAutomationRuntime: vi.fn()
 }))
 vi.mock('../crash-reporting/process-gone-diagnostics', () => ({
@@ -105,7 +105,7 @@ vi.mock('./main-process-account-services', () => ({
 }))
 vi.mock('./main-process-automations', () => ({ initializeMainProcessAutomations: vi.fn() }))
 vi.mock('./main-process-plugins', () => ({ initializeMainProcessPlugins: vi.fn() }))
-vi.mock('../worktree-trash', () => ({
+vi.mock('../workspaces/removal/worktree-trash', () => ({
   collectWorktreeTrashSweepRoots: vi.fn(),
   sweepStaleWorktreeTrash: vi.fn()
 }))
@@ -167,7 +167,6 @@ function storedLeafIds(directory: string): string[] {
   }
 }
 
-// Ready services finish before the window opens and RPC starts (main-process-ready.ts:24-31).
 it('finishes the duplicate-terminal repair before ready services resolve, even behind a held write', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'desktop-duplicate-pty-repair-'))
   directories.push(directory)

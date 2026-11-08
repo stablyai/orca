@@ -31,8 +31,7 @@ function createCodeChallenge(verifier: string): string {
 
 function closeServer(server: Server): void {
   try {
-    // Why: keep-alive sockets from the browser can delay 'close' (and the
-    // timeout cleanup) until the browser drops the connection.
+    // Browser keep-alive sockets can delay close and timeout cleanup.
     server.closeAllConnections?.()
     server.close()
   } catch {
@@ -93,7 +92,7 @@ export function beginOrcaCloudPkceFlow(
         const code = url.searchParams.get('code')
         const returnedState = url.searchParams.get('state')
         if (returnedState !== state) {
-          // Why: stray loopback probes must not be able to cancel the user's login.
+          // Stray loopback probes must not cancel the user’s login.
           writeInvalidCallback(response)
           return
         }

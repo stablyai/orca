@@ -9,8 +9,7 @@ vi.mock('react-native', async () => {
     ({ children, ...props }: { children?: React.ReactNode }) =>
       React.createElement(name, props, children)
   return {
-    // The native preview's external-link opener reaches for this at module load, and a named import
-    // missing from a mocked module throws before any case runs.
+    // Mock native external-link opener’s module-load import or missing named export prevents collection.
     Linking: { openURL: async () => true },
     Pressable: host('Pressable'),
     ScrollView: host('ScrollView'),
@@ -21,8 +20,7 @@ vi.mock('react-native', async () => {
   }
 })
 
-// The preview's toggle carries two icons, and `lucide-react-native` imports a `LucideProvider` its
-// own context module does not export, so the real barrel does not load under vitest at all.
+// Mock toggle icons: lucide barrel imports absent LucideProvider and cannot load in Vitest.
 vi.mock('lucide-react-native', () => ({
   Bold: () => null,
   Code: () => null,
@@ -55,8 +53,7 @@ import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor'
 
 const renderers: ReactTestRenderer[] = []
 
-/** By tag name through the predicate form: `findAllByType` is typed for components, and every
- *  element the mocks above render is a host string. */
+// Match mocked host strings by predicate; findAllByType expects component ElementType.
 function findHosts(renderer: ReactTestRenderer, type: string) {
   return renderer.root.findAll((node) => node.type === type)
 }
@@ -153,8 +150,7 @@ describe('the html preview on the page', () => {
     )
     const frames = findHosts(renderer, 'iframe')
     expect(frames).toHaveLength(1)
-    // The artifact reaches the frame as `srcDoc`, which the browser parses inside it. Neither
-    // `allow-scripts` nor `allow-same-origin`, which is the whole of what makes that safe.
+    // Only srcDoc hands artifact to sealed frame; deny scripts and same-origin.
     expect(frames[0]?.props.srcDoc).toBe('<h1>hi</h1>')
     expect(frames[0]?.props.sandbox).toBe(MOBILE_HTML_PREVIEW_SANDBOX)
     expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).not.toContain('allow-scripts')
@@ -174,8 +170,7 @@ describe('the html preview on the page', () => {
     expect(
       findHosts(renderer, 'View').filter((node) => node.props.accessibilityRole === 'tablist')
     ).toHaveLength(1)
-    // The showing side, which is what a screen reader has no other way to learn: the active
-    // position is styling and styling is not announced.
+    // Assert selected state for screen reader: active styling alone is silent.
     expect(toggles().map((node) => node.props.accessibilityState?.selected)).toEqual([true, false])
 
     act(() => toggles()[1]?.props.onPress())
@@ -190,8 +185,7 @@ describe('the html preview on the page', () => {
       })
     )
     const tree = JSON.stringify(renderer.toJSON())
-    // Once, as the frame's `srcDoc`, and nowhere else: not as a child, not as `dangerouslySetInnerHTML`,
-    // not in a prop of the surrounding view.
+    // Artifact appears only as iframe srcDoc, never surrounding child or dangerous HTML.
     expect(findHosts(renderer, 'iframe')[0]?.props.srcDoc).toBe('<script>alert(1)</script>')
     expect(tree.split('alert(1)')).toHaveLength(2)
     expect(tree).not.toContain('dangerouslySetInnerHTML')

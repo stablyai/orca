@@ -1,4 +1,5 @@
-import { useBottomDrawerFollowUp } from '../components/use-bottom-drawer-follow-up'
+import { useRef, useCallback } from 'react'
+import { useBottomDrawerFollowUp } from '../components/bottom-drawer/use-bottom-drawer-follow-up'
 import type { RouteAndItemStateModel } from './use-mobile-tasks-route-and-item-state'
 import type { WorkspaceSshRecord } from './workspace-ssh-gate'
 import {
@@ -32,8 +33,7 @@ import {
 } from './mobile-tasks-legacy-foundation'
 
 export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateModel) {
-  // Both repo-unscoped providers land here: neither Linear nor Jira carries a repo, so the
-  // target has to be picked rather than defaulted to the first one.
+  // Jira/Linear issues have no repo; ask for a target instead of choosing the first.
   const [workspaceRepoPickerItem, setWorkspaceRepoPickerItem] = useState<Extract<
     TaskItem,
     { provider: 'linear' | 'jira' }
@@ -82,9 +82,10 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   > | null>(null)
   const [setupPrompt, setSetupPrompt] = useState<SetupPrompt | null>(null)
   const [creatingKey, setCreatingKey] = useState<string | null>(null)
-  const [mutatingStatus, setMutatingStatus] = useState(false)
+  const { mutatingStatus, tryBeginMutation } = useMobileTasksMutation()
   const [linearStates, setLinearStates] = useState<LinearState[]>([])
   const [linearStatesLoading, setLinearStatesLoading] = useState(false)
+  const [linearStatesError, setLinearStatesError] = useState('')
   const [linearCommentDraft, setLinearCommentDraft] = useState('')
   const [linearSubIssueTitle, setLinearSubIssueTitle] = useState('')
   const [taskStateHydrated, setTaskStateHydrated] = useState(false)
@@ -120,7 +121,6 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   )
   const [showGitHubProjectPicker, setShowGitHubProjectPicker] = useState(false)
   const [showGitHubProjectViewPicker, setShowGitHubProjectViewPicker] = useState(false)
-  const [showGitHubProjectSortPicker, setShowGitHubProjectSortPicker] = useState(false)
   const [showGitHubProjectFieldsPicker, setShowGitHubProjectFieldsPicker] = useState(false)
   const [pendingGitHubProjectViewSelection, setPendingGitHubProjectViewSelection] =
     useState<GitHubProjectRef | null>(null)
@@ -221,11 +221,13 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     creatingKey,
     setCreatingKey,
     mutatingStatus,
-    setMutatingStatus,
+    tryBeginMutation,
     linearStates,
     setLinearStates,
     linearStatesLoading,
     setLinearStatesLoading,
+    linearStatesError,
+    setLinearStatesError,
     linearCommentDraft,
     setLinearCommentDraft,
     linearSubIssueTitle,
@@ -274,8 +276,6 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setShowGitHubProjectPicker,
     showGitHubProjectViewPicker,
     setShowGitHubProjectViewPicker,
-    showGitHubProjectSortPicker,
-    setShowGitHubProjectSortPicker,
     showGitHubProjectFieldsPicker,
     setShowGitHubProjectFieldsPicker,
     pendingGitHubProjectViewSelection,
@@ -332,3 +332,25 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
 export type WorkspaceAndProjectStateModel = ReturnType<
   typeof useMobileTasksWorkspaceAndProjectState
 >
+
+export function useMobileTasksMutation() {
+  const inFlight = useRef(false)
+  const [mutatingStatus, setMutatingStatus] = useState(false)
+  const tryBeginMutation = useCallback(() => {
+    if (inFlight.current) {
+      return null
+    }
+    inFlight.current = true
+    setMutatingStatus(true)
+    let finished = false
+    return () => {
+      if (finished) {
+        return
+      }
+      finished = true
+      inFlight.current = false
+      setMutatingStatus(false)
+    }
+  }, [])
+  return { mutatingStatus, tryBeginMutation }
+}

@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION
@@ -23,7 +23,6 @@ afterEach(async () => {
   await closeProviderTimelineRigs()
 })
 
-// Answers the handshake and echoes one reply chunk for the prompt, then runs `onPrompt`.
 const agentScript = (onPrompt: string): string => String.raw`
   const fs = require('node:fs')
   fs.writeFileSync(process.env.ORCA_TEST_PID_FILE, String(process.pid))
@@ -66,7 +65,6 @@ const CLOSES_STDOUT_MID_TURN = `
   process.stdin.once('end', () => process.exit(0))
   ${agentScript('fs.closeSync(1)')}
 `
-// Starts a process that inherits its stdout and outlives it, records that process, then exits.
 const EXITS_HOLDING_STDOUT = agentScript(String.raw`
   const held = require('@orca/process-host').spawnProcess({
     program: process.execPath,

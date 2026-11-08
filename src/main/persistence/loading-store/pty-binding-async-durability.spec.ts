@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
+import { TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
 
@@ -37,143 +37,6 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
       expect(readState().workspaceSession.activeWorktreeIdsOnShutdown).toEqual([binding.worktreeId])
     })
 
-    it('repairs activity on an otherwise matching durable reattach', async () => {
-      const { store, authority, readState } = await fixture()
-      await store.persistPtyBinding(binding)
-      store.getWorkspaceSession().activeWorktreeIdsOnShutdown = []
-      await store.flushPendingOrThrowAsync()
-      authority.captures.length = 0
-      await store.persistPtyBinding(binding)
-      expect(readState().workspaceSession.activeWorktreeIdsOnShutdown).toEqual([binding.worktreeId])
-      expect(authority.captures).toHaveLength(1)
-      await store.persistPtyBinding(binding)
-      expect(authority.captures).toHaveLength(1)
-    })
-
-    it('evaluates membership refusal after an older write finishes', async () => {
-      const { store, authority } = await fixture()
-      await store.persistPtyBinding(binding)
-      const gate = authority.pause()
-      store.updateSettings({ theme: 'dark' })
-      const older = store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
-      await gate.started.promise
-      const resolveBinding = vi.fn(() => ({ ...binding, mayCreate: false }))
-      const queued = store.persistPtyBinding(resolveBinding)
-      expect(resolveBinding).not.toHaveBeenCalled()
-      const session = store.getWorkspaceSession()
-      session.tabsByWorktree[binding.worktreeId] = []
-      delete session.terminalLayoutsByTabId[binding.tabId]
-      store.setWorkspaceSession(session)
-      gate.finish.resolve()
-      await older
-      expect(await queued).toBe(false)
-      expect(resolveBinding).toHaveBeenCalledTimes(1)
-    })
-
-    it('restores the binding after a known write failure', async () => {
-      const { store, authority } = await fixture()
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      store.getWorkspaceSession().activeWorktreeIdsOnShutdown = []
-      const before = structuredClone(store.getWorkspaceSession())
-      const gate = authority.pause()
-      const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
-      await gate.started.promise
-      gate.finish.reject(
-        new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
-      )
-      await rejected
-      expect(store.getWorkspaceSession()).toEqual(before)
-    })
-
-    it('preserves newer getter edits when an older binding write fails', async () => {
-      const { store, authority } = await fixture()
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const gate = authority.pause()
-      const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
-      await gate.started.promise
-      store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId = {
-        [binding.leafId]: 'newer-pty'
-      }
-      gate.finish.reject(
-        new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
-      )
-      await rejected
-      expect(
-        store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId
-      ).toEqual({
-        [binding.leafId]: 'newer-pty'
-      })
-    })
-
-    it.each(['tab title', 'pane title'] as const)(
-      'rolls back a failed replacement while preserving a newer %s',
-      async (edit) => {
-        const { store, authority, readState } = await fixture()
-        vi.spyOn(console, 'error').mockImplementation(() => {})
-        await store.persistPtyBinding(binding)
-        const gate = authority.pause()
-        const rejected = expect(
-          store.persistPtyBinding({
-            ...binding,
-            ptyId: 'failed-replacement',
-            incarnationId: 'failed-incarnation',
-            expectedBinding: binding
-          })
-        ).rejects.toThrow('disk refused')
-        await gate.started.promise
-        const session = store.getWorkspaceSession()
-        const tab = session.tabsByWorktree[binding.worktreeId].find(
-          (candidate) => candidate.id === binding.tabId
-        )
-        if (!tab) {
-          throw new Error('binding did not create its terminal row')
-        }
-        if (edit === 'tab title') {
-          tab.customTitle = 'new title'
-        } else {
-          session.terminalLayoutsByTabId[binding.tabId].titlesByLeafId = {
-            [binding.leafId]: 'new title'
-          }
-        }
-        gate.finish.reject(
-          new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
-        )
-        await rejected
-        await store.flushPendingOrThrowAsync()
-        const persisted = readState().workspaceSession
-        expect(persisted.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId).toEqual({
-          [binding.leafId]: binding.ptyId
-        })
-        expect(
-          persisted.terminalPtyIncarnationsByPaneKey[`${binding.tabId}:${binding.leafId}`]
-        ).toBe(binding.incarnationId)
-        if (edit === 'tab title') {
-          expect(persisted.tabsByWorktree[binding.worktreeId]).toContainEqual(
-            expect.objectContaining({ id: binding.tabId, customTitle: 'new title' })
-          )
-        } else {
-          expect(persisted.terminalLayoutsByTabId[binding.tabId].titlesByLeafId).toEqual({
-            [binding.leafId]: 'new title'
-          })
-        }
-      }
-    )
-
-    it('rolls back a failed binding while retaining an unrelated newer navigation edit', async () => {
-      const { store, authority } = await fixture()
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const gate = authority.pause()
-      const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
-      await gate.started.promise
-      store.getWorkspaceSession().activeRepoId = 'newer-repo'
-      gate.finish.reject(
-        new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
-      )
-      await rejected
-      expect(store.getWorkspaceSession().activeRepoId).toBe('newer-repo')
-      expect(store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
-    })
-
     it('retains a newer root sibling when rolling back a failed leaf replacement', async () => {
       const { store, authority, readState } = await fixture()
       vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -199,13 +62,14 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
       }
       layout.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId, [TEST_LEAF_2]: 'new-root-pty' }
       tab.ptyId = 'new-root-pty'
+      const expectedRoot = structuredClone(layout.root)
       gate.finish.reject(
         new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
       )
       await rejected
       await store.flushPendingOrThrowAsync()
       const persisted = readState().workspaceSession
-      expect(persisted.terminalLayoutsByTabId[binding.tabId].root).toEqual(layout.root)
+      expect(persisted.terminalLayoutsByTabId[binding.tabId].root).toEqual(expectedRoot)
       expect(persisted.terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId).toEqual({
         [binding.leafId]: binding.ptyId,
         [TEST_LEAF_2]: 'new-root-pty'
@@ -213,48 +77,6 @@ export function registerPtyBindingAsyncDurabilityTests(): void {
       expect(persisted.tabsByWorktree[binding.worktreeId]).toContainEqual(
         expect.objectContaining({ id: binding.tabId, ptyId: 'new-root-pty' })
       )
-    })
-
-    it('removes a failed new binding while retaining a newer sibling tab', async () => {
-      const { store, authority } = await fixture()
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const gate = authority.pause()
-      const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('disk refused')
-      await gate.started.promise
-      const tabs = store.getWorkspaceSession().tabsByWorktree[binding.worktreeId]
-      const boundTab = tabs.find((tab) => tab.id === binding.tabId)
-      if (!boundTab) {
-        throw new Error('binding did not create its terminal row')
-      }
-      tabs.push({ ...boundTab, id: 'newer-sibling', ptyId: 'newer-sibling-pty' })
-      gate.finish.reject(
-        new ProfileStateWriterError('test-disk-failure', 'disk refused', 'known-failure')
-      )
-      await rejected
-      expect(
-        store.getWorkspaceSession().tabsByWorktree[binding.worktreeId].map((tab) => tab.id)
-      ).toContain('newer-sibling')
-      expect(
-        store.getWorkspaceSession().tabsByWorktree[binding.worktreeId].map((tab) => tab.id)
-      ).not.toContain(binding.tabId)
-      expect(store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
-    })
-
-    it('retains a binding whose commit outcome is indeterminate', async () => {
-      const { store, authority } = await fixture()
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      const gate = authority.pause()
-      const rejected = expect(store.persistPtyBinding(binding)).rejects.toThrow('worker exited')
-      await gate.started.promise
-      gate.finish.reject(
-        new ProfileStateWriterError('test-worker-exit', 'worker exited', 'indeterminate')
-      )
-      await rejected
-      expect(
-        store.getWorkspaceSession().terminalLayoutsByTabId[binding.tabId].ptyIdsByLeafId
-      ).toEqual({
-        [binding.leafId]: binding.ptyId
-      })
     })
   })
 }

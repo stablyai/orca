@@ -1,18 +1,16 @@
-/** Words and the one recovery for a managed-server setup that couldn't download Node.js. */
+// @protected-copy: Node download mirror trust copy.
 import type {
   SshManagedServerNodeDownloadBlocked,
   SshManagedServerStatus
 } from '../../../shared/ssh-types'
 import type { NodeDistMirrorRefusal } from '../../../shared/node-dist-mirror'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 /** `offer`: set a mirror now. `settings`: a mirror was tried, so only its setting is left. */
 export type NodeMirrorRecovery = 'offer' | 'settings'
 
-/**
- * Read from main's structured flag only. `configuredMirror` is this computer's setting now: once it
- * holds a mirror, offering another would only overwrite it.
- */
+/** Use main’s structured flag; an already configured local mirror must not be overwritten by another offer. */
 export function nodeMirrorRecovery(
   status: SshManagedServerStatus | undefined,
   configuredMirror: string | undefined
@@ -40,33 +38,38 @@ export function blockedNodeDownload(
   return status.nodeDownloadBlocked
 }
 
-export function nodeDownloadBlockedText(blocked: SshManagedServerNodeDownloadBlocked): string {
+export function nodeDownloadBlockedText(
+  blocked: SshManagedServerNodeDownloadBlocked,
+  t: Translate = translate
+): string {
   switch (blocked.mirror) {
     case 'unset':
-      return translate(
+      return t(
         'auto.components.settings.sshHostServer.nodeDownloadBlocked',
         'Neither this computer nor this host could download Node.js, which Orca’s server needs. Use a Node.js mirror, or check the network on both machines.'
       )
     case 'unsupported':
-      return translate(
+      return t(
         'auto.components.settings.sshHostServer.nodeDownloadBlockedNoMirror',
         'Neither this computer nor this host could download Node.js, which Orca’s server needs. Check the network or proxy on both machines, then connect again.'
       )
     case 'tried':
-      return translate(
+      return t(
         'auto.components.settings.sshHostServer.nodeDownloadBlockedMirrorTried',
         'Neither this computer nor this host could download Node.js, including from the Node.js download mirror. Check the mirror setting, then connect again.'
       )
   }
 }
 
-export function nodeMirrorRecoveryLabel(recovery: NodeMirrorRecovery): string {
+export function nodeMirrorRecoveryLabel(
+  recovery: NodeMirrorRecovery,
+  t: Translate = translate
+): string {
   return recovery === 'offer'
-    ? translate('auto.components.settings.nodeDistMirrorDialog.action', 'Use a Node.js mirror…')
-    : translate('auto.components.settings.nodeDistMirrorDialog.openSetting', 'Open mirror setting')
+    ? t('auto.components.settings.nodeDistMirrorDialog.action', 'Use a Node.js mirror…')
+    : t('auto.components.settings.nodeDistMirrorDialog.openSetting', 'Open mirror setting')
 }
 
-/** The shared validator's refusal, in the user's language. */
 export function nodeDistMirrorRefusalText(reason: NodeDistMirrorRefusal): string {
   switch (reason) {
     case 'too-long':

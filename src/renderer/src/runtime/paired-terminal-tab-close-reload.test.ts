@@ -1,20 +1,20 @@
-// STA-6224: a close the paired host never received must survive a reload, or the host's next
-// snapshot brings the closed tab back and the close is never sent.
+// Persist unheard paired closes across reload or the next host snapshot restores closed tabs forever (STA-6224).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import { useAppStore, type AppState } from '@/store'
+import { parseWorkspaceSession } from '../../../shared/workspace-session/workspace-session-schema'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   createSessionWriteSubscriber,
   type WorkspaceSessionWrite
-} from '@/lib/session-write-subscriber'
+} from '@/lib/workspace/persistence/session-write-subscriber'
 import { closeWebRuntimeSessionTab } from './web-runtime-session-tab-lifecycle'
 import { resetWebSessionCloseReplaysForTests } from './web-session-close-replay'
 import { recordReceivedWebSessionTabsSnapshot } from './web-session-tabs-sync/tracking'
 import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
-import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
-import { stubRuntimeEnvironmentBridge } from './runtime-environment-bridge-fixture'
+import { replaceRuntimeEnvironmentRevisions } from './rpc/environment-revisions/runtime-environment-revision'
+import { stubRuntimeEnvironmentBridge } from './rpc/testing/runtime-environment-bridge-fixture'
 import {
   ENV,
   HOST_SURFACE_ID,
@@ -24,7 +24,7 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from './web-session-tabs-sync-test-harness'
+} from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
@@ -105,8 +105,7 @@ describe('a held paired-host close across a reload', () => {
       )
     )
 
-    // The reload: every in-memory record is gone, the store starts from the saved session, and
-    // the environment list has not published its pairings yet.
+    // Reload loses in-memory state; saved closes must work before environment pairings arrive.
     resetWebSessionTabsSyncTestState()
     resetWebSessionCloseReplaysForTests()
     replaceRuntimeEnvironmentRevisions([])

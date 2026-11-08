@@ -57,6 +57,7 @@ describe('host descriptor store', () => {
     await act(async () => {
       renderer = create(createElement(Row, { hostId: 'host-1' }))
     })
+    expect(seen['host-1']?.at(-1)).toEqual({ machineName: 'Desk', platform: 'darwin' })
     const renders = seen['host-1']?.length ?? 0
     await act(async () => {
       recordHostDescriptor('host-1', { machineName: 'Desk', platform: 'darwin' })
@@ -81,6 +82,8 @@ describe('host descriptor store', () => {
       recordHostDescriptor('host-1', { machineName: 'Desk', platform: 'darwin' })
     })
 
+    expect(seen['host-1']?.at(-1)).toEqual({ machineName: 'Desk', platform: 'darwin' })
+    expect(seen['host-2']?.at(-1)).toBeNull()
     expect(seen['host-2']).toHaveLength(host2Renders)
   })
 })

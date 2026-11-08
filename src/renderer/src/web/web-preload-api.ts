@@ -37,6 +37,7 @@ import { createNotificationsApi } from './preload-api/web-notifications-api'
 import { createWebOnboardingApi } from './preload-api/web-onboarding-api'
 import { createWebOrcaProfilesApi } from './preload-api/web-orca-profiles-api'
 import { createWebPlatformApi } from './preload-api/web-platform-api'
+import { createWebPluginsApi } from './preload-api/web-plugins-api'
 import { createRateLimitsApi } from './preload-api/web-rate-limits-api'
 import { createReposApi } from './preload-api/web-repositories-api'
 import { createHooksApi, createRuntimeNamespaceApi } from './preload-api/web-review-api'
@@ -47,12 +48,14 @@ import { createRuntimeEnvironmentsApi } from './preload-api/web-runtime-environm
 import { webRuntimeState } from './preload-api/web-runtime-session'
 import { createWebSettingsApi } from './preload-api/web-settings-api'
 import { createShellApi } from './preload-api/web-shell-api'
+import { createWebSpeechApi } from './preload-api/web-speech-api'
 import { createWebStarNagApi } from './preload-api/web-star-nag-api'
 import { createWebTelemetryApi } from './preload-api/web-telemetry-api'
 import { createPtyApi, createSshApi } from './preload-api/web-terminal-api'
 import { createWebUiApi } from './preload-api/web-ui-api'
 import { createUpdaterApi } from './preload-api/web-updater-api'
 import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-api'
+import { createWebLinkPreviewApi } from './preload-api/web-link-preview-api'
 import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
@@ -64,23 +67,30 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
-function createWebPreloadApi(): Partial<PreloadApi> {
+function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins' | 'speech'> & {
+  settings: Partial<PreloadApi['settings']>
+  plugins: Partial<PreloadApi['plugins']>
+  speech: Partial<PreloadApi['speech']>
+} {
   return {
     ...createWebAppApi(),
     ...createWebStarNagApi(),
     ...createWebPlatformApi(),
     ...createWebWorkspacePortsApi(),
+    linkPreview: createWebLinkPreviewApi(),
     ...createWebOrcaProfilesApi(),
     ...createWebE2EApi(),
     ...createWebSettingsApi(),
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
+    plugins: createWebPluginsApi(),
     ...createWebDiagnosticsApi(),
     ...createWebWorkspaceSessionApi(),
     ...createWebOnboardingApi(),
     ...createWebGithubCacheApi(),
     runtime: createWebRuntimeApi(),
     nativeChat: createWebNativeChatApi(),
+    speech: createWebSpeechApi(),
     runtimeEnvironments: createRuntimeEnvironmentsApi(),
     repos: createReposApi(),
     worktrees: createWorktreesApi(),
@@ -139,6 +149,25 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     },
     // Desktop-only: a web client never owns a WSL move's desktop stores.
     wslMove: {
+      listPendingRendererRewrites: () => Promise.resolve([]),
+      recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' }),
+      preview: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
+      start: () => Promise.resolve({ outcome: 'refused', code: 'wsl_move_unavailable' }),
+      cancel: () => Promise.resolve(false),
+      listUnfinished: () => Promise.resolve([]),
+      isRunning: () => Promise.resolve(false),
+      useProjectHereAgain: () => Promise.resolve({ released: false, reason: 'gated-off' }),
+      onProgress: () => () => {},
+      listOrchestrator: () => Promise.resolve([]),
+      orchestratorUserAction: () => Promise.resolve(null),
+      orchestratorProjectOpened: () => Promise.resolve(),
+      onOrchestratorStatus: () => () => {},
+      onOrchestratorSleptPanesRequest: () => () => {},
+      answerOrchestratorSleptPanes: () => Promise.resolve()
+    },
+    // Desktop-only: a web client never converts this computer's projects.
+    wslDriveUnc: {
+      convert: () => Promise.resolve({ outcome: 'refused', blockers: [] }),
       listPendingRendererRewrites: () => Promise.resolve([]),
       recordStoreRewritten: () => Promise.resolve({ recorded: false, reason: 'gated-off' })
     },

@@ -10,7 +10,6 @@ export const PROFILE_STATE_DOCUMENT_VERSION = 1
 
 export const PROFILE_STATE_META_PROFILE_ID = 'profile_id'
 export const PROFILE_STATE_META_REVISION = 'revision'
-/** Records the legacy JSON bytes accepted by the SQLite authority bootstrap. */
 export const PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE = 'legacy_json_acceptance'
 
 export function createProfileStateTablesSql(): string {

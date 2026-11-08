@@ -11,10 +11,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 
-/**
- * Reload as browsers do it: left-click reloads, right-click offers the harder variant. Shared so
- * both guest surfaces get the same gesture — what "hard" means is the caller's to define.
- */
+/** Share left-click reload/right-click hard reload gestures; the caller defines the hard variant. */
 export function BrowserReloadControl({
   menuOpen,
   onMenuOpenChange,
@@ -51,15 +48,13 @@ export function BrowserReloadControl({
               variant="ghost"
               className="h-7 w-7"
               aria-label={label}
-              // Why: preventDefault suppresses Radix's open-on-left-click (composeEventHandlers skips its
-              // handler once defaultPrevented), keeping left-click on the primary action and the menu on right-click.
+              // Prevent Radix left-click opening so the primary action remains reload and only right-click opens the menu.
               onPointerDown={(e) => {
                 if (e.button === 0) {
                   e.preventDefault()
                 }
               }}
-              // Why: same trick for Radix's open-on-Enter/Space, which would otherwise preventDefault the
-              // synthesized click and strand keyboard users. ArrowDown still falls through to open the menu.
+              // Keep Enter/Space synthesized clicks for the primary action; ArrowDown still opens the menu.
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault()

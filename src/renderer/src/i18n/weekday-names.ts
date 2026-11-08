@@ -1,18 +1,12 @@
 import { getIntlLocale } from './i18n'
 
-// Why: weekday names are language words, so they follow the configured UI language rather than
-// the OS locale — same contract as relative-time-format.ts. The language can change at runtime
-// and plugin packs register under a synthetic tag, so resolve through getIntlLocale() and cache
-// per resolved locale instead of freezing one formatter at module scope.
+// Weekday words follow the UI language; resolve plugin pack tags and cache per locale for live switches.
 let cached: { locale: string; names: readonly string[] } | null = null
 
-// 2026-01-04 is a Sunday, so array index equals the cron/RRULE day-of-week number. Intl supplies
-// names only, never ordering: many locales start the week on Monday while the persisted
-// AutomationDraft.dayOfWeek stays Sunday-indexed.
+// 2026-01-04 is Sunday: preserve cron/RRULE Sunday indexing regardless of the locale’s first weekday.
 const SUNDAY_UTC_MS = Date.UTC(2026, 0, 4)
 const DAY_MS = 24 * 60 * 60 * 1000
 
-/** Full weekday names in the UI language, Sunday first, indexed by cron day-of-week number. */
 export function getUiWeekdayNames(): readonly string[] {
   const locale = getIntlLocale()
   if (!cached || cached.locale !== locale) {

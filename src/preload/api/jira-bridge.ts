@@ -4,7 +4,7 @@ import type {
   JiraIssueSummaryGenerationCancellation
 } from '../../shared/jira/jira-issue-summary-generation'
 import { ipcRenderer } from 'electron'
-import type { JiraIssueListFilters, JiraProjectStatusOrder } from '../../shared/jira-types'
+import type { JiraIssueListFilters, JiraProjectStatusOrder } from '../../shared/jira/jira-types'
 import type { PreloadApi } from '../api-types'
 
 export const jiraApi = {

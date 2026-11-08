@@ -7,22 +7,17 @@ import {
   SHA256_PATTERN
 } from './manifest-contract'
 
-/** 48 KiB survives the compounded ~1.78x expansion (base64 body inside a base64 mobile E2EE reply)
- *  against the 1 MiB frame ceiling on both the WebSocket and relay transports. */
+/** Legacy 48 KiB chunks fit the 1 MiB transport ceiling after double-base64 expansion (~16/9). */
 export const MOBILE_WEB_BUNDLE_CHUNK_BYTES = 48 * 1024
 
-/** Compatibility ceiling; hosts advertise their current grid separately. 384 KiB raw is 512 KiB
- *  of base64, which the base64 mobile E2EE reply grows to ~683 KiB
- *  (393216 x 16/9 = 699051 bytes) plus the envelope: under the 1 MiB WebSocket and relay frame
- *  ceiling. Gzip never raises that bound, because the host sends identity when gzip does not shrink. */
+/** Compatibility ceiling, separate from the advertised grid: 384 KiB × 16/9 ≈ 683 KiB plus envelope fits 1 MiB.
+ * Gzip cannot enlarge the reply: hosts send identity when compression does not shrink it. */
 export const MOBILE_WEB_BUNDLE_RANGE_BYTES = 384 * 1024
 
-/** Takes no params, and carries no params schema: the dispatcher substitutes `{}` for absent params,
- *  so a `z.null()` schema could never be satisfied. The method declares `params: null` host-side. */
+/** No params schema: dispatch substitutes {} for absent params, which cannot satisfy z.null(); host declares params: null. */
 export const MOBILE_WEB_BUNDLE_MANIFEST_METHOD = 'mobileWeb.bundle.manifest'
 export const MOBILE_WEB_BUNDLE_CHUNK_METHOD = 'mobileWeb.bundle.chunk'
-/** A method rather than a field on `mobileWeb.bundle.chunk`: released hosts parse chunk params
- *  strictly and released phones may read chunk replies strictly, so neither can carry an encoding. */
+/** Separate method because released hosts parse chunk params strictly and released phones may parse replies strictly; neither can add encoding. */
 export const MOBILE_WEB_BUNDLE_RANGE_METHOD = 'mobileWeb.bundle.range'
 
 export const MOBILE_WEB_BUNDLE_RANGE_ENCODINGS = ['gzip', 'identity'] as const
@@ -56,11 +51,9 @@ export const MobileWebBundleErrorCodeSchema = z.enum(MOBILE_WEB_BUNDLE_ERROR_COD
 export const MobileWebBundleManifestResultSchema = z
   .object({
     manifest: MobileWebBundleManifestSchema,
-    /** Read, never assumed, so the host can shrink it without a client release. Capped at the
-     *  constant because a larger value would overshoot the chunk reply's `dataBase64` bound. */
+    /** Read the advertised grid; hosts may shrink it without client releases. The constant caps reply dataBase64. */
     chunkBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_CHUNK_BYTES),
-    /** The range grid, present only from a host that serves `mobileWeb.bundle.range`: absence is
-     *  how a phone knows to stay on chunks. Optional, so a phone reading loosely sees Rule 1. */
+    /** Absent on hosts without range support; loose phone readers must fall back to chunks (Rule 1). */
     rangeBytes: z.number().int().positive().max(MOBILE_WEB_BUNDLE_RANGE_BYTES).optional()
   })
   .strict()
@@ -71,8 +64,7 @@ const windowParamsFields = {
   offset: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
 }
 
-/** No `multipleOf` pin on `offset`: alignment is against the host's advertised `chunkBytes`, which
- *  may be smaller than the constant, so the host rejects a misaligned offset instead. */
+/** Host validates offset alignment against advertised chunkBytes, which may be smaller than the constant; no fixed multipleOf. */
 export const MobileWebBundleChunkParamsSchema = z.object(windowParamsFields).strict()
 
 /** The chunk params exactly, on the `rangeBytes` grid the manifest reply advertised. */
@@ -81,8 +73,7 @@ export const MobileWebBundleRangeParamsSchema = MobileWebBundleChunkParamsSchema
 /** What every chunk or range reply restates about the window it answers. */
 const windowHeaderFields = {
   ...windowParamsFields,
-  /** The whole asset, not this window: named for it so a reassembler cannot misread the two, and
-   *  paired with `sha256` it describes the asset without a second index. */
+  /** Whole-asset size, paired with sha256 for reassembly; never the window size. */
   assetByteLength: z.number().int().nonnegative().max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES),
   sha256: z.string().regex(SHA256_PATTERN),
   eof: z.boolean()

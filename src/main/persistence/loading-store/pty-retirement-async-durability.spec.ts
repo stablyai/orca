@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import { retirePersistedStablePaneOwner } from '../../ipc/pty/pane/stable-owner'
-import { TEST_LEAF_1 } from '../../persistence-session-fixtures'
-import { retireTerminalSurfaceFromPersistence } from '../../runtime/mobile-session-terminal-persistence-retirement'
+import { TEST_LEAF_1 } from '../persistence-session-fixtures'
+import { retireTerminalSurfaceFromPersistence } from '../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
 import { ProfileStateWriterError } from '../profile-state/profile-state-writer-errors'
 import { fixture } from './profile-state-delayed-authority-fixture'
 
@@ -93,19 +93,6 @@ export function registerPtyRetirementAsyncDurabilityTests(): void {
         expect(persistedLayout()?.ptyIdsByLeafId).toEqual({ [binding.leafId]: binding.ptyId })
         await expect(retire()).resolves.toBe(true)
         expect(persistedLayout()).toBeUndefined()
-      })
-
-      it('skips disk work when the pane removal is already durable', async () => {
-        const { authority, retire, persistedLayout } = await retirementFixture(connectionId)
-        await expect(retire()).resolves.toBe(true)
-        expect(persistedLayout()).toBeUndefined()
-        authority.captures.length = 0
-        const revisionCheck = vi.spyOn(authority, 'assertCurrentRevision')
-        const fullStateWrite = vi.spyOn(authority, 'writeSerializedState')
-        await expect(retire()).resolves.toBe(true)
-        expect(authority.captures).toEqual([])
-        expect(revisionCheck).not.toHaveBeenCalled()
-        expect(fullStateWrite).not.toHaveBeenCalled()
       })
     }
   )

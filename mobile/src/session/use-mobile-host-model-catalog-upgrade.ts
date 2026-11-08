@@ -1,27 +1,32 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
-import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session-wire'
-import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
-import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/structured-agent-session-option-state'
-import type { StructuredAgentSessionOptionState } from '../../../src/shared/structured-agent-session-options'
+import type { AgentSessionModelCatalogResult } from '../../../src/shared/agent-session/agent-session-wire'
+import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+import type { StructuredAgentSessionOptionRecord } from '../../../src/shared/agent-session/options/structured-agent-session-option-state'
+import type { StructuredAgentSessionOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
 } from '../../../src/shared/host-model-listing-waits'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import { usesModelSpecificAcpEfforts } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
+import type { HostModelCatalogLaunch } from '../../../src/shared/agent-session/options/host-model-catalog-snapshot-rules'
+
+/** This world's last host lists for one chat's agent (`useHostModelCatalogCache`). A port, so this hook's
+ *  module graph stays free of the query layer for the root-only tests that bundle it. */
+export type HostModelCatalogCache = {
+  seed: (launch: HostModelCatalogLaunch) => AgentSessionModelCatalogResult | undefined
+  record: (worktree: string, catalog: AgentSessionModelCatalogResult) => void
+}
 
 // The host answers a waiting read when its first listing lands, within its own 30s picker wait.
 const LISTING_WAIT_TIMEOUT_MS = 45_000
 
-/**
- * The desktop's host-catalog upgrade on the phone: the picker lists the account's models from the
- * host store while the session's own options read may still wait on its attach. Until the host
- * answers it shows the quiet placeholder; it never waits on a listing: a first listing still
- * running lands in place. An older host refuses the method, and the built-in list stands, naming
- * nothing, until the options read lands.
- */
+// Show host model listings as they arrive without waiting for session attach; unsupported hosts retain a nameless built-in list until options load.
 export function useMobileHostModelCatalogUpgrade(args: {
   agent: string | null
+  selectedModel?: string
+  modelCatalogCache?: HostModelCatalogCache | null
   client: RpcClient | null
   sessionId: string | null
   enabled: boolean
@@ -29,6 +34,8 @@ export function useMobileHostModelCatalogUpgrade(args: {
   newLaunch: boolean
   /** Where a new chat runs: the host names no default its config could replace. */
   worktree?: string
+  /** The chat has a turn or a send, so its answers are its own account's, which a new chat may no longer pin. */
+  hasTurn?: boolean
   fence: number | null
   optionCatalog: AgentSessionOptionCatalog | null
   receiveCatalog: (
@@ -48,6 +55,7 @@ export function useMobileHostModelCatalogUpgrade(args: {
     client,
     enabled,
     fence,
+    modelCatalogCache,
     newLaunch,
     onListingLanded,
     optionCatalog,
@@ -56,17 +64,32 @@ export function useMobileHostModelCatalogUpgrade(args: {
     worktree
   } = args
   const receiver = useRef(args.receiveCatalog)
+  const recordsNewChat = useRef(newLaunch && args.hasTurn !== true)
+  const recordingWait = useRef<string | null>(null)
   useEffect(() => {
     receiver.current = args.receiveCatalog
-  }, [args.receiveCatalog])
+    recordsNewChat.current = newLaunch && args.hasTurn !== true
+  }, [args.receiveCatalog, newLaunch, args.hasTurn])
   const [rereads, setRereads] = useState(0)
+  const selectedModel = usesModelSpecificAcpEfforts(agent ?? '') ? args.selectedModel : undefined
   const recheck = useCallback(() => setRereads((count) => count + 1), [])
   useEffect(() => {
     if (!client || !sessionId || !enabled || !agent || !optionCatalog) {
       return
     }
     let stale = false
-    const params = { agent, sessionId, ...(newLaunch && worktree ? { worktree } : {}) }
+    const key = `${agent}\u0000${sessionId}`
+    // A read sent before the chat's first turn or send answers for the account a new chat pins,
+    // and so does the listing it waits on, whichever later run picks that up.
+    const records =
+      recordsNewChat.current ||
+      (recordingWait.current === key && isHostModelListingWaitInFlight(key, client))
+    const params = {
+      agent,
+      sessionId,
+      ...(selectedModel ? { selectedModel } : {}),
+      ...(newLaunch && worktree ? { worktree } : {})
+    }
     const read = (waitForListing: boolean): Promise<AgentSessionModelCatalogResult> =>
       waitForListing
         ? callAgentSession(
@@ -85,6 +108,10 @@ export function useMobileHostModelCatalogUpgrade(args: {
       if (stale) {
         return
       }
+      // A new chat's answer is the account's a new chat pins, so the next chat starts from it.
+      if (records) {
+        modelCatalogCache?.record(worktree ?? '', catalog)
+      }
       receiver.current(catalog, settled ? 'settled' : event)
     }
     // A refused or failed read is no list: the built-in one becomes usable, naming nothing.
@@ -93,9 +120,9 @@ export function useMobileHostModelCatalogUpgrade(args: {
         receiver.current(null, 'demand')
       }
     }
-    const key = `${agent}\u0000${sessionId}`
     let leave: (() => void) | undefined
     const wait = () => {
+      recordingWait.current = records ? key : null
       leave = joinHostModelListingWait(
         key,
         () => read(true),
@@ -116,6 +143,11 @@ export function useMobileHostModelCatalogUpgrade(args: {
       )
     }
     if (isHostModelListingWaitInFlight(key, client)) {
+      if (selectedModel) {
+        void read(false)
+          .then((catalog) => apply(catalog))
+          .catch(() => {})
+      }
       wait()
     } else {
       void read(false)
@@ -140,10 +172,12 @@ export function useMobileHostModelCatalogUpgrade(args: {
     client,
     enabled,
     fence,
+    modelCatalogCache,
     newLaunch,
     onListingLanded,
     optionCatalog,
     sessionId,
+    selectedModel,
     updateOptionState,
     worktree,
     rereads

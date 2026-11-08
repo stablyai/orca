@@ -1,16 +1,12 @@
-import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kitty-keyboard-flags'
-import { buildKittyKeyboardRestore } from '../../../../shared/terminal-mode-reset-profiles'
+import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
+import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
+import { buildKittyKeyboardRestore } from '../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type {
   TerminalPreviewReplayChunk,
   TerminalPreviewSnapshot
-} from '../../../../shared/terminal-preview'
+} from '../../../../shared/terminal/replay/terminal-preview'
 
-/**
- * Apply snapshot + buffered replay, restoring proven kitty flags after the
- * snapshot bytes (snapshot ANSI omits kitty pushes). Synchronous so no browser
- * event observes the temporary reset.
- */
+/** Restore proven kitty flags after kitty-free snapshot ANSI; remain synchronous so events cannot observe the temporary reset. */
 export function replayPreviewConnectionSnapshot(args: {
   snapshot: TerminalPreviewSnapshot
   replay: TerminalPreviewReplayChunk[]

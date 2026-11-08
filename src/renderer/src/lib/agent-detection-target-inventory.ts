@@ -1,3 +1,9 @@
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import { PREFLIGHT_PROJECT_LAUNCH_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import type { ProjectLaunchContext } from '../../../shared/rpc-contract/preflight-params'
+import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '@/store/types'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import {
@@ -5,9 +11,9 @@ import {
   parseAgentDetectionTargetKey,
   type AgentDetectionOwnerState
 } from '@/hooks/useAgentDetectionTarget'
-import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import type { TuiAgent } from '../../../shared/tui-agent'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 
 type DetectionReadState = Pick<
   AppState,
@@ -43,7 +49,6 @@ export function readDetectedAgentsForTarget(
     : state.detectedAgentIds
 }
 
-/** Loads a target's list from the host that owns it. */
 export function ensureDetectedAgentsForTarget(
   state: DetectionActionState,
   target: AgentDetectionTarget
@@ -79,10 +84,7 @@ export function readDetectedAgentsForWorktree(
   return target ? readDetectedAgentsForTarget(state, target) : null
 }
 
-/**
- * Loads the worktree's agents from the host that runs them: a hub-owned SSH workspace asks the hub,
- * never this client's SSH map. An unresolved owner lists nothing rather than probing this machine.
- */
+/** Ask the workspace owner, including hub-owned SSH; unresolved owners list nothing rather than probing this client. */
 export function ensureDetectedAgentsForWorktree(
   state: WorktreeAgentInventoryState,
   worktreeId: string | null
@@ -91,7 +93,6 @@ export function ensureDetectedAgentsForWorktree(
   return target ? ensureDetectedAgentsForTarget(state, target) : Promise.resolve([])
 }
 
-/** Which host's list a worktree reads now; changes when the workspace moves to another host. */
 export function getDetectionTargetIdentityForWorktree(
   state: AgentDetectionOwnerState,
   worktreeId: string | null
@@ -100,7 +101,6 @@ export function getDetectionTargetIdentityForWorktree(
   return target ? JSON.stringify(target) : null
 }
 
-/** The worktree host's list, probing that host only when nothing usable is cached. */
 export async function loadDetectedAgentsForWorktree(
   state: WorktreeAgentInventoryState,
   worktreeId: string | null
@@ -112,11 +112,7 @@ export async function loadDetectedAgentsForWorktree(
 
 export type RepoHostFields = { connectionId?: string | null; executionHostId?: string | null }
 
-/**
- * A project's agents, for launches that run before the workspace exists. Null for a paired
- * server's project: that server resolves agents per workspace (its SSH target, a WSL project),
- * so only the new workspace can be asked — and never this client in its place.
- */
+/** Resolve project agents before workspace creation; paired projects return null until the new workspace identifies its server-owned SSH/WSL target. */
 export function ensureDetectedAgentsForRepo(
   state: DetectionActionState,
   repo: RepoHostFields
@@ -144,4 +140,49 @@ export function ensureDetectedAgentsForNewWorktree(
   return host?.kind === 'runtime'
     ? state.ensureRuntimeDetectedAgents(host.environmentId, worktreeId)
     : (ensureDetectedAgentsForRepo(state, repo) ?? Promise.resolve([]))
+}
+
+/** Per-attempt project facts; older hosts retain their existing pre-create validation. */
+export async function loadProjectLaunchContext(
+  target: RuntimeClientTarget,
+  repoId: string
+): Promise<ProjectLaunchContext | undefined> {
+  const capability = PREFLIGHT_PROJECT_LAUNCH_CONTEXT_RUNTIME_CAPABILITY
+  let supported = false
+  try {
+    supported =
+      target.kind === 'local'
+        ? (await ensureLocalRuntimeCapabilities())?.includes(capability) === true
+        : await runtimeEnvironmentSupportsCapability(target.environmentId, capability)
+  } catch {
+    // An unknown capability keeps the existing launch path.
+  }
+  return supported
+    ? callRuntimeRpc<ProjectLaunchContext>(target, 'preflight.detectAgents', {
+        project: { repo: `id:${repoId}` }
+      })
+    : undefined
+}
+
+/** IDs and the latest attempt outcome always describe the same target. */
+export function readAgentInventoryForTarget(state: AppState, target: AgentDetectionTarget) {
+  if (target.kind === 'local') {
+    return state.readLocalAgentInventory(target.worktreeId)
+  }
+  const ids = readDetectedAgentsForTarget(state, target)
+  if (target.kind !== 'runtime') {
+    return { ids, state: state.remoteAgentInventoryOutcome(target.connectionId) }
+  }
+  const key = getRuntimeAgentInventoryKey(target.environmentId, target.worktreeId)
+  const unsupported = state.runtimeAgentDetectionNeedsServerUpdate[key]
+  return {
+    ids,
+    state: unsupported ? ('unsupported' as const) : state.runtimeAgentInventoryOutcome(key)
+  }
+}
+export function readAgentInventoryForWorktree(state: AppState, worktreeId: string) {
+  const target = detectionTargetForWorktree(state, worktreeId)
+  return target
+    ? readAgentInventoryForTarget(state, target)
+    : { ids: null, state: 'unresolved' as const }
 }

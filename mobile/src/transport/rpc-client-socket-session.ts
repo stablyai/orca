@@ -1,15 +1,17 @@
-import type { PairedE2EEFraming } from '../../../src/shared/paired-e2ee-client-handshake'
-import type { PairedE2EEFramingPolicy } from '../../../src/shared/paired-e2ee-framing-policy'
+import type { PairedE2EEFraming } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
+import { PAIRED_E2EE_HANDSHAKE_DEADLINE_MS } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-handshake-deadline'
+import type { PairedE2EEFramingPolicy } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import { createDirectSocketFraming, type DirectSocketFraming } from './direct-socket-framing'
 import { isRpcResponse } from './rpc-response-shape'
+import { AUTH_REJECTED } from './rpc-client-authentication-retry'
 import { isStaleRpcSocketEvent, logRpcSocketClose } from './rpc-socket-close-evidence'
 import { describeSocketEvent, redactSocketEndpoint } from './socket-event-debug'
 import { reportSocketDeadline, type SocketDeadlineKind } from './socket-deadline-suspension'
 import { startSocketDeadlineClock } from './socket-deadline-clock'
+import { receiveBinaryAsBase64 } from './websocket-payload-bytes'
 import type { ConnectionLogEmitter, ConnectionState, RpcRequest, RpcResponse } from './types'
 
 const CONNECT_TIMEOUT_MS = 12_000
-const HANDSHAKE_TIMEOUT_MS = 5_000
 const WEBSOCKET_CONNECTING_STATE = 0
 const UNAUTHORIZED_CLOSE_CODE = 4001
 
@@ -26,7 +28,7 @@ type SocketSessionOptions = {
   onHandshakeStarted: () => void
   onAuthenticated: (session: RpcClientSocketSession) => void
   onAuthRejected: (reason: string) => void
-  onRpcResponse: (response: RpcResponse) => void
+  onRpcResponse: (session: RpcClientSocketSession, response: RpcResponse) => void
   onBinary: (bytes: Uint8Array) => void
   onAnyInbound: (receivedAt: number) => void
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
@@ -47,7 +49,7 @@ export class RpcClientSocketSession {
   private handshakeTimer: ReturnType<typeof setTimeout> | null = null
 
   constructor(private readonly options: SocketSessionOptions) {
-    this.socket = new WebSocket(options.endpoint)
+    this.socket = receiveBinaryAsBase64(new WebSocket(options.endpoint))
     this.attachHandlers()
     this.armConnectTimeout()
   }
@@ -153,8 +155,7 @@ export class RpcClientSocketSession {
     }
   }
 
-  // Why: hosts that predate direct v2 refuse the v2 hello with 4001 before any ready;
-  // that is an auth verdict only for a host already proven to speak v2.
+  // Before v2 ready, old hosts answer 4001 to an unsupported hello; treat it as auth failure only after prior v2 proof.
   private classifyClose(closeCode: number | undefined): number | undefined {
     if (this.framingKind !== 'v2' || this.readyAccepted || closeCode !== UNAUTHORIZED_CLOSE_CODE) {
       return closeCode
@@ -190,8 +191,10 @@ export class RpcClientSocketSession {
           this.options.onAuthenticated(this)
         },
         onText: (plaintext) => {
-          this.options.onAuthenticatedInbound(this)
-          this.deliverRpcText(plaintext)
+          if (isCurrent()) {
+            this.options.onAuthenticatedInbound(this)
+            this.deliverRpcText(plaintext)
+          }
         },
         onBinary: (plaintext) => {
           if (isCurrent()) {
@@ -202,7 +205,7 @@ export class RpcClientSocketSession {
         onAuthRejected: () => {
           if (isCurrent()) {
             this.clearHandshakeTimer()
-            this.options.onAuthRejected('Unauthorized — pairing may be revoked')
+            this.options.onAuthRejected(AUTH_REJECTED)
           }
         },
         onProtocolError: (error) => {
@@ -230,7 +233,7 @@ export class RpcClientSocketSession {
       return
     }
     if (isRpcResponse(response)) {
-      this.options.onRpcResponse(response)
+      this.options.onRpcResponse(this, response)
     }
   }
 
@@ -239,7 +242,7 @@ export class RpcClientSocketSession {
   }
 
   private armHandshakeTimeout(): void {
-    this.armSocketDeadline('handshake', HANDSHAKE_TIMEOUT_MS)
+    this.armSocketDeadline('handshake', PAIRED_E2EE_HANDSHAKE_DEADLINE_MS)
   }
 
   private armSocketDeadline(kind: SocketDeadlineKind, timeoutMs: number): void {

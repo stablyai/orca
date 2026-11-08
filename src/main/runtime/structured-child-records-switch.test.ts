@@ -1,42 +1,34 @@
-// The switch, end to end on a host with no renderer: a Codex session's frames reach the host's
-// canonical store; the status summary every session list reads and the chat strip's channel both
-// carry the running children, and the parent row is folded from the same records.
-//
-// Deliberately NOT a comparison against the provider tracker's task list: that tracker and the
-// record producer read the same child executions, so agreeing with it could not catch a defect in
-// what those executions observe. Every expectation below is written out literally.
+// Exercise host child-work projections without a renderer. Use literal expectations: comparing with the provider tracker would share the producer's observation bugs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentSessionBackgroundTaskState,
-  AgentSessionStatusSummary
-} from '../../shared/agent-session-wire'
-import type { AgentChildWorkView } from '../../shared/agent-status-child-work-view'
-import { makeStructuredAgentStatusSubject } from '../../shared/agent-status-subject'
+import type { AgentSessionStatusSummary } from '../../shared/agent-session/agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentChildWorkView } from '../../shared/agent-status/child-work/agent-status-child-work-view'
+import { makeStructuredAgentStatusSubject } from '../../shared/agent-status/contracts/agent-status-subject'
 import type {
   CodexAppServerConnection,
-  CodexAppServerConnectionHandlers,
-  openCodexAppServerConnection
-} from '../codex/codex-app-server-connection'
-import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
+  CodexAppServerConnectionHandlers
+} from '../codex/app-server/codex-app-server-connection-types'
+import type { openCodexAppServerConnection } from '../codex/app-server/codex-app-server-connection'
+import { collectRuntimeWorktreeAgentSources } from './workspaces/process-listing/runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../agent-hooks/server'
-import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestMessage
-} from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+} from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import type { StructuredAgentSessionStatusSink } from '../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
-import { scriptedCodexTransport } from './scripted-codex-transport.test-fixture'
-import { createScriptedClaudeRuntime } from './structured-claude-scripted-runtime-test-support'
+} from './agent-session/structured-agent-session-runtime'
+import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { scriptedCodexTransport } from './orca-runtime-tests/scripted-codex-transport.test-fixture'
+import { createScriptedClaudeRuntime } from './agent-session/installation/structured-claude-scripted-runtime-test-support'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -129,7 +121,8 @@ describe('the chat strip and the session list read the same host child records',
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveCodexCommand: () => 'codex',
+      // Side reads (at-rest `/` commands) spawn the CLI directly; a missing binary keeps them off the real codex.
+      resolveCodexCommand: () => ({ command: join(root, 'codex-not-installed'), prefixArgs: [] }),
       resolveEnvironment: async () => ({ PATH: process.env.PATH }),
       ...scriptedCodexTransport(openConnection),
       statusSink
@@ -239,7 +232,6 @@ describe('the chat strip and the session list read the same host child records',
       }
     ])
 
-    // A command that exits leaves nothing behind.
     await item('item/completed', REVIEWER, 'r1', {
       type: 'commandExecution',
       id: 'cmd-1',
@@ -294,9 +286,7 @@ describe('the chat strip and the session list read the same host child records',
       exitCode: 0
     })
     expect(parentRow()).toMatchObject({ state: 'done' })
-    // Nothing runs: the sidebar and the strip list nothing, and the strip hides. The finished
-    // child's record stays in the store until the user's next turn; the dev server's record went
-    // when its process exited.
+    // Finished child records remain until the user's next turn; exited command records are removed immediately.
     expect(summaries.at(-1)).not.toHaveProperty('children')
     expect(strip.at(-1)).toBeNull()
     const stored = () => rows(server.getStructuredChildWorkViews(parentSubject(summaries)))
@@ -314,7 +304,6 @@ describe('the chat strip and the session list read the same host child records',
     await notify('turn/started', { threadId: THREAD, turn: { id: 'p-own', status: 'inProgress' } })
     await notify('turn/completed', { threadId: THREAD, turn: { id: 'p-own', status: 'completed' } })
     expect(stored()).toHaveLength(1)
-    // The user's next message, which Codex takes into its next turn.
     const body = hostTestMessage('check it again')
     const clientOperationId = `${Date.now()}-${'2'.padStart(32, '0')}`
     await host.send(

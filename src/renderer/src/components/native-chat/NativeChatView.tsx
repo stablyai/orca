@@ -1,16 +1,13 @@
-import { NativeChatSessionGate } from './NativeChatSessionGate'
+import { NativeChatSessionGate } from './host-access/NativeChatSessionGate'
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { NativeChatResolvedView } from './NativeChatResolvedView'
-import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
+import { useNativeChatStatusEntry } from './session/status/use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
-import { NativeChatPaneFileDropSurface } from './NativeChatPaneFileDropSurface'
-import { NativeChatVisualOwnerProvider } from './native-chat-visual-owner'
-import { NativeChatFileLinkExistenceProvider } from './use-native-chat-file-link-existence'
-import { NativeChatMarkdownImageOwnerProvider } from './native-chat-markdown-image-owner'
+import { NativeChatPaneFileDropSurface } from './attachments/intake/NativeChatPaneFileDropSurface'
+import { NativeChatVisualOwnerProvider } from './media/visuals/native-chat-visual-owner'
+import { NativeChatFileLinkExistenceProvider } from './links/actions/use-native-chat-file-link-existence'
+import { NativeChatMarkdownImageOwnerProvider } from './media/images/native-chat-markdown-image-owner'
 
-export type { NativeChatViewProps } from './native-chat-view-types'
-
-/** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (
     <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">
@@ -49,6 +46,7 @@ function NativeChatBridgeView({
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
   readTerminalScreen,
+  readTerminalDraft,
   contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
@@ -82,6 +80,7 @@ function NativeChatBridgeView({
               ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
               onSwitchToTerminal={onSwitchToTerminal}
               readTerminalScreen={readTerminalScreen}
+              readTerminalDraft={readTerminalDraft}
               contextMenuActions={contextMenuActions}
             />
           </NativeChatMarkdownImageOwnerProvider>

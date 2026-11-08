@@ -6,7 +6,7 @@ import {
   buildProcessTableIndex,
   collectDescendantsFromIndex
 } from '../../shared/process-table-index'
-import { parseDaemonPidFile } from '../daemon/daemon-pid-file-parse'
+import { parseDaemonPidFile } from '../daemon/endpoint/identity/daemon-pid-file-parse'
 import type { WindowsProcessRow } from '../windows/windows-process-table'
 import { ORCAD_LOCK_FILE_NAME, readOrcadInstanceLockRecord } from './orcad-instance-lock'
 
@@ -47,7 +47,6 @@ function errorDetails(error: unknown): Record<string, unknown> {
   return details
 }
 
-/** Observes this recipe's processes; never changes shutdown or removal decisions. */
 export class ServeCleanupDiagnostics {
   private readonly events: Record<string, unknown>[] = []
   private readonly snapshots: Record<string, unknown>[] = []
@@ -141,7 +140,7 @@ export class ServeCleanupDiagnostics {
         return
       }
       const table = await import('../windows/windows-process-table')
-      // The public reader falls back to CIM when the native binding is absent.
+      // Refuse fallback evidence: the public reader can use CIM without the native binding.
       if (!table.isWindowsProcessTableAvailable()) {
         snapshot.processEvidence = 'unverifiable: native process table unavailable'
         return

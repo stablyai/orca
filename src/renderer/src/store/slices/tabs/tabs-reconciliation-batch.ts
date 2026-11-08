@@ -1,42 +1,22 @@
 import type { AppState } from '../../types'
 
-/**
- * Scratch shared by one multi-workspace reconciliation fold.
- *
- * Reconciling N workspaces one `set()` at a time re-spreads the same
- * workspace-keyed maps N times and rescans `openFiles` N times. A batch lets
- * the fold clone each map once and then write into its own private draft, and
- * index `openFiles` once — `openFiles` is never written by reconciliation, so
- * the index stays valid for the whole fold.
- */
+/** One multi-workspace fold clones each shared map once and indexes read-only openFiles once, avoiding repeated map spreads and file scans per workspace. */
 export type WorktreeTabModelReconciliationBatch = {
   /** Top-level `AppState` keys this fold already cloned and therefore owns. */
   readonly ownedStateKeys: Set<string>
-  readonly liveEditorIdsByWorktree: ReadonlyMap<string, Set<string>>
+  readonly liveEditorIds: ReadonlySet<string>
 }
-
-export const EMPTY_LIVE_EDITOR_IDS: ReadonlySet<string> = new Set<string>()
 
 export function createWorktreeTabModelReconciliationBatch(
   state: Pick<AppState, 'openFiles'>
 ): WorktreeTabModelReconciliationBatch {
-  const liveEditorIdsByWorktree = new Map<string, Set<string>>()
-  for (const file of state.openFiles) {
-    let ids = liveEditorIdsByWorktree.get(file.worktreeId)
-    if (!ids) {
-      ids = new Set<string>()
-      liveEditorIdsByWorktree.set(file.worktreeId, ids)
-    }
-    ids.add(file.id)
+  return {
+    ownedStateKeys: new Set<string>(),
+    liveEditorIds: new Set(state.openFiles.map((file) => file.id))
   }
-  return { ownedStateKeys: new Set<string>(), liveEditorIdsByWorktree }
 }
 
-/**
- * Sets one workspace entry, mutating the batch's own draft once it owns the
- * map. Insertion order matches the spread it replaces: an existing key keeps
- * its slot, a new key is appended.
- */
+/** Mutate only batch-owned maps; preserve spread insertion order (existing keys keep their slot, new keys append). */
 export function writeBatchedWorkspaceRecordEntry<T>(
   current: Record<string, T>,
   stateKey: string,
@@ -49,10 +29,7 @@ export function writeBatchedWorkspaceRecordEntry<T>(
     ;(current as Record<string, T | undefined>)[worktreeId] = value
     return current
   }
-  // Why: the reconciliation gate writes every map when any one changed; spreading an
-  // already-equal entry would rerender its selectors for no data change. Nothing was
-  // cloned, so ownership is deliberately not claimed. Absent keys still get stored,
-  // matching the spread (`in` check).
+  // Equal present entries preserve identity without claiming ownership; absent keys still insert, matching spread semantics.
   if (worktreeId in current && Object.is(current[worktreeId], value)) {
     return current
   }

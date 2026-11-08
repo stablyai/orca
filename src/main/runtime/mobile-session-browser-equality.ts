@@ -2,10 +2,7 @@ import type { RuntimeMobileSessionBrowserTab } from '../../shared/runtime-types'
 import { sameRuntimeBrowserPlacement } from '../../shared/runtime-browser-placement'
 import { browserLoadErrorsEqual } from '../../shared/browser-load-failure'
 
-// Why: change detection for headless browser tabs. Compares the fields that
-// actually vary (a JSON.stringify equality was order-sensitive and silently
-// dropped `undefined` keys, so it only worked while both sides shared one
-// construction path).
+// JSON equality depended on key order and discarded undefined; compare client-visible fields structurally.
 export function headlessBrowserTabsUnchanged(
   live: RuntimeMobileSessionBrowserTab[],
   existing: RuntimeMobileSessionBrowserTab[]

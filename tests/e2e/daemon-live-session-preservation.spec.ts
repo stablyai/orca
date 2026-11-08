@@ -13,8 +13,8 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
+import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 
 function daemonPidPath(userDataDir: string): string {
   return path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`)
@@ -80,8 +80,7 @@ test('preserves a live daemon PTY when the daemon launch identity is stale', asy
     await session.close(firstApp)
     firstApp = null
 
-    // Why: this simulates the exact app-path mismatch that can happen after a
-    // dev-path change or app update while keeping the live daemon process intact.
+    // Change the launch identity while preserving the live daemon to model app updates or dev-path changes.
     spoofDaemonEntryPath(session.userDataDir)
 
     const secondLaunch = await session.launch()

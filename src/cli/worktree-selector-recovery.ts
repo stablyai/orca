@@ -1,3 +1,6 @@
+import { RuntimeClientError } from './runtime/types'
+import { attachCliErrorData } from './handlers/worktree-setup-decision-recovery'
+
 // The runtime omits the typed selector from not-found errors; add it and its grammar at the CLI boundary.
 
 export const WORKTREE_SELECTOR_FORMS = [
@@ -49,3 +52,36 @@ export function worktreeSelectorRecovery(selector: string): WorktreeSelectorReco
     ]
   }
 }
+
+export async function withWorktreeSelectorRecovery<T>(
+  pending: Promise<T>,
+  nextSteps: readonly string[],
+  selector?: string
+): Promise<T> {
+  try {
+    return await pending
+  } catch (error) {
+    if (
+      !nextSteps.length ||
+      !(error instanceof RuntimeClientError) ||
+      error.code !== 'selector_not_found'
+    ) {
+      throw error
+    }
+    const data = error.data && typeof error.data === 'object' ? error.data : {}
+    const previousSteps =
+      'nextSteps' in data && Array.isArray(data.nextSteps)
+        ? data.nextSteps.filter((step: unknown): step is string => typeof step === 'string')
+        : []
+    throw attachCliErrorData(error, {
+      ...data,
+      ...(selector ? { selector } : {}),
+      validSelectorForms: WORKTREE_SELECTOR_FORMS,
+      nextSteps: [...nextSteps, ...previousSteps]
+    })
+  }
+}
+
+export const parentCwdNextSteps = (selector?: string): string[] => [
+  `The parent selector "${selector}" could not be resolved. Run from an Orca-managed worktree or pass an explicit parent selector.`
+]

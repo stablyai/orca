@@ -1,12 +1,4 @@
-/**
- * An abort whose desktop cancel is still in flight when a newer dictation takes over.
- *
- * `abandonDictation` reads what it will report before it awaits the cancel, and the await is a full
- * round trip to the desktop. A start that lands inside it owns the capture, the screen and the
- * status by the time the cancel answers, so the abort's own write is stale: reporting it would toast
- * over a live recording, and resetting it would idle one. The same await sits in the capture open
- * the abort races, which must not walk a recorded closure back to idle when it rejects late.
- */
+// A new start must not reach the host before its cancel of the previous one, and late capture rejection must preserve the reported closure.
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -21,7 +13,6 @@ type PermissionSettler = { grant: () => void; refuse: (error: unknown) => void }
 
 type DeviceLog = {
   calls: string[]
-  /** Every permission ask still waiting, in the order the hook made them. */
   permissions: PermissionSettler[]
 }
 
@@ -75,7 +66,6 @@ function dictation(): UseMobileDictationResult {
   return current
 }
 
-/** Answers every forwarded request, keeping the first of `hold` for the case to settle. */
 async function pumpHolding(
   rpc: FakeRpcClient,
   hold: string,
@@ -98,7 +88,6 @@ async function pump(rpc: FakeRpcClient): Promise<void> {
   await pumpHolding(rpc, 'none', { request: null })
 }
 
-/** Takes a mounted, enabled hook all the way to recording. */
 async function reachRecording(rpc: FakeRpcClient): Promise<void> {
   await act(async () => {
     void dictation()
@@ -118,56 +107,34 @@ beforeEach(() => {
   held.dictation = null
 })
 
-describe('an abort whose desktop cancel answers after a newer dictation is recording', () => {
-  it('does not report the disable over the recording that replaced it', async () => {
-    const rpc = createFakeRpcClient()
-    let renderer: ReactTestRenderer | null = null
-    act(() => {
-      renderer = create(createElement(Probe, { client: rpc, enabled: true }))
-    })
-    await reachRecording(rpc)
-    // The composer loses its send, and the abort's cancel stays in flight.
-    const staleCancel: { request: SentRequest | null } = { request: null }
-    // The disable Effect flushes when this scope ends, so the cancel it sends is held in the next.
-    await act(async () => {
-      renderer?.update(createElement(Probe, { client: rpc, enabled: false }))
-    })
-    await act(async () => {
-      await pumpHolding(rpc, 'speech.dictation.cancel', staleCancel)
-    })
-    expect(staleCancel.request).not.toBeNull()
-    // It comes back, and the user starts again — that start owns everything now.
-    await act(async () => {
-      renderer?.update(createElement(Probe, { client: rpc, enabled: true }))
-      await pump(rpc)
-    })
-    await reachRecording(rpc)
-    errors.length = 0
-    // Only now does the old cancel answer.
-    await act(async () => {
-      staleCancel.request?.resolve({ id: 'desktop', ok: true, result: {} })
-      await pump(rpc)
-    })
-    expect(errors).toEqual([])
-    expect(dictation().status).toBe('recording')
-    expect(dictation().error).toBeNull()
-  })
-
-  it('does not idle the recording that replaced a cancel the user asked for', async () => {
+describe('a start right after a cancel the host has not answered yet', () => {
+  it('waits for the host to drop the cancelled dictation before starting the next', async () => {
     const rpc = createFakeRpcClient()
     act(() => {
       create(createElement(Probe, { client: rpc, enabled: true }))
     })
     await reachRecording(rpc)
-    const staleCancel: { request: SentRequest | null } = { request: null }
+    const pendingCancel: { request: SentRequest | null } = { request: null }
     await act(async () => {
       void dictation().cancel()
-      await pumpHolding(rpc, 'speech.dictation.cancel', staleCancel)
+      await pumpHolding(rpc, 'speech.dictation.cancel', pendingCancel)
     })
-    expect(staleCancel.request).not.toBeNull()
-    await reachRecording(rpc)
+    expect(pendingCancel.request).not.toBeNull()
+    expect(dictation().status).toBe('idle')
+
     await act(async () => {
-      staleCancel.request?.resolve({ id: 'desktop', ok: true, result: {} })
+      void dictation()
+        .start()
+        .catch(() => undefined)
+      await Promise.resolve()
+      device.permissions.shift()?.grant()
+      await pump(rpc)
+    })
+    // The host refuses a second start from this phone while it still holds the cancelled one.
+    expect(dictation().status).toBe('starting')
+
+    await act(async () => {
+      pendingCancel.request?.resolve({ id: 'desktop', ok: true, result: {} })
       await pump(rpc)
     })
     expect(dictation().status).toBe('recording')
@@ -197,15 +164,13 @@ describe('a capture open that rejects after the composer already closed the star
       await pump(rpc)
     })
     expect(errors).toEqual([MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE])
-    // The microphone the abort no longer owns now refuses, too late to say anything.
     await act(async () => {
       device.permissions.shift()?.refuse(new Error('microphone unavailable'))
       await pump(rpc)
     })
     expect(dictation().status).toBe('error')
     expect(dictation().error).toBe(MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE)
-    // Nor is it rethrown: the composer toasts what `start` rejects with, and this start's refusal
-    // would land on top of the closure the disable already reported.
+    // Do not rethrow: the composer would toast this stale rejection over the closure already reported by disable.
     expect(started.failure).toBeNull()
     expect(errors).toEqual([MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE])
   })

@@ -1,9 +1,8 @@
 import { lstatSync } from 'node:fs'
 import { nodeFileContentsEqualSync } from './node-file-content-equality'
 
-// Why: OpenCode 2 reloads a plugin (and every plugin loaded after it) when its file's mtime changes,
-// even with identical bytes, so installers must skip the write when Orca's plugin is already current.
-// Follows symlinks: OpenCode 2 loads through them, so a linked file with Orca's bytes is current.
+// OpenCode 2 reloads this and subsequent plugins on mtime changes even for identical bytes; skip current writes.
+// Follow canonical symlinks because OpenCode loads through them.
 export function isInstalledOpenCodePluginCurrent(pluginPath: string, source: string): boolean {
   try {
     return nodeFileContentsEqualSync(pluginPath, source)

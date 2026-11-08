@@ -1,12 +1,13 @@
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type { Worktree } from '../../../shared/worktree/types'
-import { resolveOwnerOrLocal } from './worktree-runtime-owner'
-import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
+import { resolveOwnerOrLocal } from './workspace/ownership/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 import {
   resolveWorktreeOperationRouteResultForHost,
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { routeForOwner } from './worktree-owner-route'
+import { getLocalPathOpenOwnerForRoute } from './local-path-open-guard'
 
 export type WorktreeRowOpenInOwner = {
   runtimeEnvironmentId: string | null
@@ -65,4 +66,17 @@ export function resolveWorktreeRowOpenInRuntimeOwner(
         resolution.route.executionHostId ?? worktree.hostId
       )
     : UNRESOLVED
+}
+
+/** The same owner as a local-path guard owner, for row actions beside Open in such as Copy Path. */
+export function getWorktreeRowLocalPathOpenOwner(
+  state: WorktreeOperationRouteState & WorktreeRuntimeOwnerState,
+  worktree: Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>,
+  repoConnectionId: string | null | undefined
+): ExecutionHostId | 'unresolved' {
+  const owner = resolveWorktreeRowOpenInRuntimeOwner(state, worktree)
+  return getLocalPathOpenOwnerForRoute({
+    ...owner,
+    connectionId: owner.connectionId ?? repoConnectionId
+  })
 }

@@ -1,12 +1,6 @@
 import type { BridgeInitHost } from './bridge-envelope'
 
-/**
- * The host `init` named, for the page-only modules that cannot be handed it.
- *
- * A module-scoped read and not a context, because its reader is `host-store.web.ts`: a store the
- * app's screens call as a plain async function, from effects that no provider sits above. The entry
- * publishes this once, before it renders anything, so a screen never sees it change.
- */
+// Publish the init host before render for plain host-store.web.ts functions outside React context; this document’s host never changes.
 let profile: BridgeInitHost | null = null
 
 export function publishPageHostProfile(next: BridgeInitHost | null): void {

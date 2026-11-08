@@ -1,8 +1,7 @@
-// The layout stream a frame sync reads: this window's own main's, or a paired server's under this
-// window's ids. Each stream's positions answer the layout.apply replies of the main it reads.
+// Read local-main or paired-server frames under this window’s IDs; positions settle that source main’s apply replies.
 
 import type { AppState } from '@/store/types'
-import type { HeldDrawnTabs } from '@/store/workspace-layout-frame-held-tabs'
+import type { HeldDrawnTabs } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
 import {
@@ -67,8 +66,7 @@ export function openLayoutFrameStream(
       }
       source.onStatus?.(status)
     },
-    // After the frame's flush. A held tab may still show as the window drew it, so a waiting reply
-    // checks the store rather than assume the frame shows.
+    // After flush, check store before releasing replies: held tabs can still show the window’s tree.
     (seq) => queueMicrotask(() => open && noteLayoutFramePosition(seq, key))
   )
   return {

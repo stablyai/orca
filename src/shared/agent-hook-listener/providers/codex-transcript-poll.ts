@@ -1,31 +1,44 @@
 import { record } from '../../codex-rollout-jsonl-cursor'
 import {
+  hasPendingCodexSubagentIdentity,
+  retryPendingCodexSubagentIdentities
+} from '../../codex-subagent-roster'
+import {
   codexTranscriptTurnEnd,
   reconcileCodexSubagentTranscript
 } from '../../codex-subagent-transcript'
-import { normalizeHookPayload } from '../../agent-hook-listener'
+import { normalizeHookPayload } from '../normalization/normalize-hook-payload'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import { buildCodexChildDrivenStatusPayload } from './codex-events'
 import { getOrCreateCodexSubagentRoster, markCodexLeadTurnInterrupted } from './codex-state'
 
-/** Polling reads new host-owned records without replaying the hook that started the turn; a turn
- *  end the rollout records is replayed as the root Stop that Codex skips for internal subagents. */
+/** Poll new host rollout records without replaying starting hooks; replay ended root turns as Stops skipped for internal subagents. */
 export function pollCodexTranscriptStatus(
   state: HookListenerState,
   original: AgentHookEventPayload,
   body: unknown,
   env: string
 ): AgentHookEventPayload | undefined {
+  const roster = getOrCreateCodexSubagentRoster(state, original.paneKey)
   const transcript = state.codexSubagentTranscriptByPaneKey.get(original.paneKey)
   if (!transcript?.parent.filePath) {
-    return undefined
+    const named = retryPendingCodexSubagentIdentities(roster)
+    // Without a parent rollout, keep polling only while a child's own rollout still owes its name.
+    const payload = named
+      ? buildCodexChildDrivenStatusPayload(state, undefined, original.paneKey, {})
+      : undefined
+    if (payload) {
+      return { ...original, hookEventName: undefined, payload }
+    }
+    return hasPendingCodexSubagentIdentity(roster) ? original : undefined
   }
-  const changed = reconcileCodexSubagentTranscript(
+  const reconciled = reconcileCodexSubagentTranscript(
     transcript,
-    getOrCreateCodexSubagentRoster(state, original.paneKey),
+    roster,
     transcript.parent.filePath
   )
+  const changed = retryPendingCodexSubagentIdentities(roster) || reconciled
   const lead = state.codexLeadStateByPaneKey.get(original.paneKey)
   const interrupted = transcript.rootTurn.interrupted && lead?.state !== 'done'
   const envelope = record(body)

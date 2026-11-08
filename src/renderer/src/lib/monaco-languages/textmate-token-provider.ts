@@ -1,7 +1,8 @@
 import type * as Monaco from 'monaco-editor'
 import type { Grammar, LanguageRegistration } from 'shiki/core'
-import type { StateStack } from 'shiki/textmate'
+import type { IToken, StateStack } from 'shiki/textmate'
 import {
+  COLD_GRAMMAR_LINE_ATTEMPTS,
   createTextMateCore,
   tokenizeLineWithinLimits,
   type TextMateCore
@@ -14,12 +15,13 @@ export type TextMateGrammarLoader = () => Promise<LanguageRegistration>
 
 export type TextMateTokensProviderOptions = {
   loadGrammar: TextMateGrammarLoader
+  mapTokenScopes?: (scopes: readonly string[]) => string
 }
 
 let editorCorePromise: Promise<TextMateCore> | undefined
 
 // Why: chat's registry holds the catalogue's Nim and Typst under the same scope names as these vendored grammars.
-function loadEditorCore(): Promise<TextMateCore> {
+export function loadEditorCore(): Promise<TextMateCore> {
   editorCorePromise ??= createTextMateCore([]).catch((error: unknown) => {
     editorCorePromise = undefined
     throw error
@@ -46,16 +48,20 @@ class TextMateTokenizerState implements Monaco.languages.IState {
   }
 }
 
-function createTokensProvider(
+export function createTokensProvider(
   { textmate }: TextMateCore,
   grammar: Grammar,
-  fallbackScopeName: string
+  fallbackScopeName: string,
+  mapTokenScopes?: (scopes: readonly string[]) => string,
+  onLineTokens?: (line: string, tokens: readonly IToken[]) => void,
+  lineAttempts?: number
 ): TextMateTokensProvider {
   const plain = (state: TextMateTokenizerState): Monaco.languages.ILineTokens => ({
     endState: state,
     tokens: [{ startIndex: 0, scopes: fallbackScopeName }]
   })
   const skipped = new TextMateTokenizerState(null)
+  let warm = false
   return {
     getInitialState() {
       return new TextMateTokenizerState(textmate.INITIAL)
@@ -65,20 +71,23 @@ function createTokensProvider(
       if (!ruleStack) {
         return plain(skipped)
       }
-      const result = tokenizeLineWithinLimits(line, (text, timeLimitMs) =>
-        grammar.tokenizeLine(text, ruleStack, timeLimitMs)
+      const result = tokenizeLineWithinLimits(
+        line,
+        (text, timeLimitMs) => grammar.tokenizeLine(text, ruleStack, timeLimitMs),
+        lineAttempts ?? (warm ? undefined : COLD_GRAMMAR_LINE_ATTEMPTS)
       )
       if (!result) {
         // Why: the line's end state is unknown, so continuing would color later lines from a guess.
         return plain(skipped)
       }
+      warm = true
+      onLineTokens?.(line, result.tokens)
       return {
         endState: new TextMateTokenizerState(result.ruleStack),
         tokens: result.tokens.map((token) => ({
           startIndex: token.startIndex,
-          // Why: Monaco themes match a single token scope; TextMate returns a
-          // scope stack, and the final entry is the most specific reusable one.
-          scopes: token.scopes.at(-1) ?? fallbackScopeName
+          // Use final TextMate scope: Monaco accepts one scope, while TextMate’s final stack entry is most specific.
+          scopes: mapTokenScopes?.(token.scopes) ?? token.scopes.at(-1) ?? fallbackScopeName
         }))
       }
     }
@@ -93,6 +102,7 @@ export async function createTextMateTokensProvider(
   return createTokensProvider(
     editorCore,
     editorCore.core.getLanguage(registration.name),
-    registration.scopeName
+    registration.scopeName,
+    options.mapTokenScopes
   )
 }

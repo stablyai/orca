@@ -1,17 +1,17 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace-session-hydration-keys'
+import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import {
   buildValidWorktreeIdsForSessionHydration,
   collectPersistedWorktreeIdsForSessionHydration
 } from '../../../../../shared/worktree/degraded-repo-worktree-validity'
-import { buildHydratedTabState } from '../tabs-hydration'
+import { buildHydratedTabState } from './tabs-hydration'
 import { projectWorktreeTabModelReconciliation } from './tabs-reconciliation'
 import { createWorktreeTabModelReconciliationBatch } from './tabs-reconciliation-batch'
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
-import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 
 function replaceWorkspaceRecordKeys<T>(
   current: Record<string, T>,
@@ -24,12 +24,7 @@ function replaceWorkspaceRecordKeys<T>(
   }
 }
 
-/**
- * Folds every workspace's reconciliation into one patch. Equivalent to
- * applying each patch with its own `set()`: each projection reads the state
- * left by its predecessors (they share `unreadTerminalTabs` and the orphan
- * cleanup maps), only the store write and subscriber fanout are deferred.
- */
+/** Fold in workspace order so shared unread/orphan maps see prior patches; defer only the store write and subscriber notifications. */
 function projectWorktreeTabModelReconciliations(
   state: AppState,
   worktreeIds: readonly string[]
@@ -92,7 +87,12 @@ export function createTabsSessionActions(
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
       addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-      const hydrated = buildHydratedTabState(session, validWorktreeIds)
+      const hydrated = buildHydratedTabState(
+        session,
+        validWorktreeIds,
+        undefined,
+        new Set(options?.wslMovedChatWorkspaceKeys)
+      )
       if (!options?.replaceWorkspaceKeys) {
         set(hydrated)
         return

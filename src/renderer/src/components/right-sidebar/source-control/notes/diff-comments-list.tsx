@@ -9,7 +9,7 @@ import { useCopyFeedbackState } from './copy-feedback'
 function getLocalizedDiffCommentLineLabel(
   comment: Pick<DiffComment, 'lineNumber' | 'startLine'>
 ): string {
-  // Why: lineNumber 0 is the file-level note sentinel (see formatDiffComment's "Scope: file"), not a real line.
+  // Line zero is the file-level note sentinel, not a real line.
   if (comment.lineNumber === 0) {
     return translate(
       'auto.components.right.sidebar.source.control.diff.comments.list.cefacd0ec7',
@@ -40,10 +40,9 @@ export function DiffCommentsInlineList({
   comments: DiffComment[]
   onDelete: (commentId: string) => void
   onClearFile: (filePath: string) => void
-  // Why: opens the comment's file diff (or editor fallback), scrolling to the note via scrollToDiffCommentId when an id is given.
+  // Open its diff/editor and reveal the note through scrollToDiffCommentId.
   onOpen: (comment: DiffComment) => void
 }): React.JSX.Element {
-  // Why: group by filePath so the inline list mirrors the Notes tab's per-file sections.
   const groups = useMemo(() => {
     const map = new Map<string, DiffComment[]>()
     for (const c of comments) {
@@ -65,7 +64,7 @@ export function DiffCommentsInlineList({
         await window.api.ui.writeClipboardText(formatDiffComment(c))
         showCopiedId(c.id)
       } catch {
-        // Why: swallow — clipboard write can fail when the window isn't focused.
+        // Clipboard writes may fail when the window lacks focus; keep copying retryable.
       }
     },
     [showCopiedId]
@@ -130,7 +129,7 @@ export function DiffCommentsInlineList({
               >
                 <button
                   type="button"
-                  // Why: single inner target keeps copy/delete as siblings, not nested interactive elements (violates ARIA no-interactive-descendants).
+                  // Keep copy/delete as siblings of the main target to avoid nested interactive elements.
                   className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded text-left"
                   onClick={() => onOpen(c)}
                   title={translate(

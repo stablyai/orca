@@ -2,16 +2,13 @@ import { useEffect, useState } from 'react'
 import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import { BUNDLED_ORCA_SKILL_UPDATE_REQUIRED_MESSAGE } from '../../../../shared/skill-install-capability'
 import { bundledSkillTargetKey, type BundledSkillTarget } from '@/lib/bundled-skill-target'
-import { planBundledSkillsOnTarget } from '@/runtime/runtime-bundled-skills-client'
+import { planBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 
 type ReviewedPlan = { plan: BundledSkillPlan | null; loading: boolean; error: string | null }
 
 type ForcedPlanResult = { request: string; plan: BundledSkillPlan | null; error: string | null }
 
-/**
- * The plan the dialog shows and executes. Replace toggles re-plan with `force`, so main still
- * decides every op; the renderer never edits one. Without toggles it is the shared plan.
- */
+/** Replan Replace choices through main with force paths; the renderer never edits operations and otherwise reuses the shared plan. */
 export function useReviewedSkillPlan(
   target: BundledSkillTarget | null,
   sharedPlan: BundledSkillPlan | null,

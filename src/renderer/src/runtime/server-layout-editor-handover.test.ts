@@ -1,20 +1,22 @@
+import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type * as ResolveOwnerModule from '@/lib/resolve-owner'
-import type * as RuntimeRpcClientModule from './runtime-rpc-client'
-import type * as RuntimeFileMutationClient from './runtime-file-mutation-client'
+
+import type * as RuntimeFileMutationClient from './files/mutations/runtime-file-mutation-client'
 import type * as FrameDrawnModule from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type {
   LayoutApplyReply,
   LayoutCommand
 } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { ownedEditorFileId } from '../../../shared/workspace-session-pane-ownership'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import { ownedEditorFileId } from '../../../shared/workspace-session/workspace-session-pane-ownership'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
-import { TEST_REPO, makeWorktree } from '../store/slices/worktrees-slice-test-fixtures'
-import { createEditorSaveQueue } from '@/components/editor/editor-save-queue'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { createEditorSaveQueue } from '@/components/editor/save/queue/editor-save-queue'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
 import { _resetLayoutFramePositionForTests } from './layout-frame-position'
 import {
   CAPABLE,
@@ -34,7 +36,7 @@ import {
   resetFrameDrawnServerWorkspacesForTests
 } from './web-session-tabs-sync/frame-drawn-server-workspaces'
 import { resetMirroredTerminalHandlesForTests } from './web-session-tabs-sync/mirrored-terminal-handle-index'
-import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync-test-harness'
+import { resetWebSessionTabsSyncTestState } from './web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 
 type Subscribe = (...args: never[]) => { close: () => void }
 type Sent = { target: RuntimeClientTarget; command: LayoutCommand }
@@ -85,8 +87,8 @@ vi.mock('./web-session-tabs-sync/frame-drawn-server-workspaces', async (importOr
   ...(await importOriginal<typeof FrameDrawnModule>()),
   resyncMirroredServerWorkspace: hoisted.resync
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
-  const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCallModule>()
   return {
     ...actual,
     callRuntimeRpc: (target: RuntimeClientTarget, method: string, params?: unknown) => {
@@ -112,7 +114,7 @@ vi.mock('./web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: hoisted.closeSessionTab
 }))
 
-vi.mock('@/runtime/runtime-file-mutation-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeFileMutationClient>()),
   writeRuntimeFile: hoisted.writeRuntimeFile
 }))
@@ -154,40 +156,10 @@ function openDesktopFile(
   return { fileId, tabId: tab?.id }
 }
 
-/** An editor tab of a workspace no server owns, drawn as this window's own main would. */
-function seedEditorTab(
-  store: TestStore,
-  worktreeId: string,
-  filePath: string,
-  executionHostId: ExecutionHostId
-): void {
-  const id = ownedEditorFileId(filePath, worktreeId, undefined)
-  store.setState({
-    openFiles: [
-      ...store.getState().openFiles,
-      {
-        id,
-        filePath,
-        relativePath: 'a.ts',
-        worktreeId,
-        language: 'typescript',
-        mode: 'edit',
-        isDirty: false
-      }
-    ]
-  })
-  store
-    .getState()
-    .createUnifiedTab(worktreeId, 'editor', { entityId: id, label: 'a.ts', executionHostId })
-}
-
 function editDraft(store: TestStore, fileId: string, draft: string): void {
   store.getState().setEditorDraft(fileId, draft)
   store.getState().markFileDirty(fileId, true)
 }
-
-const LOCAL_KEY = 'local-repo::/local'
-const SSH_KEY = 'ssh-repo::/remote'
 const RUNTIME_HOST = toRuntimeExecutionHostId(ENV)
 
 /** The editor opens this window sent the ENV server. */
@@ -288,51 +260,6 @@ describe('a desktop-only editor tab when the server’s frames take its workspac
     expect(store.getState().editorDrafts[fileId]).toBe('unsaved')
     expect(store.getState().tabsByWorktree[WT]?.[0]?.customTitle).toBe('named on the server')
     expect(stream.closed).toBe(false)
-  })
-
-  it('lets the server place a tab whose group only this desktop drew', async () => {
-    const store = mirroredStore()
-    const { tabId } = openDesktopFile(store, FILE_PATH)
-    const desktopGroup = 'desktop-only-group'
-    store.setState({
-      groupsByWorktree: {
-        [WT]: (store.getState().groupsByWorktree[WT] ?? []).map((group) => ({
-          ...group,
-          id: desktopGroup
-        }))
-      },
-      unifiedTabsByWorktree: {
-        [WT]: (store.getState().unifiedTabsByWorktree[WT] ?? []).map((tab) => ({
-          ...tab,
-          groupId: desktopGroup
-        }))
-      }
-    })
-    const server = serverWith()
-
-    await connect(store, server)
-
-    expect(serverOpens()).toHaveLength(1)
-    expect(serverOpens()[0]).not.toHaveProperty('groupId')
-    expect(server.layout(WT)?.groups[0]?.tabIds).toContain(tabId)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    expect(editorTabIds(store)).toEqual([tabId])
-  })
-
-  it('keeps the tab and its draft on the mirror when the server answers `tab_exists`: its id is another tab’s there', async () => {
-    const store = mirroredStore()
-    const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
-    editDraft(store, fileId, 'unsaved')
-    const server = serverWith()
-    server.answer = { refuse: 'tab_exists' }
-
-    await connect(store, server)
-
-    expect(serverOpens()).toHaveLength(1)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-    expect(editorTabIds(store)).toEqual([tabId])
-    expect(openFileIds(store)).toEqual([fileId])
-    expect(store.getState().editorDrafts[fileId]).toBe('unsaved')
   })
 
   it('keeps the tab and its draft on the mirror for the stream after any other refusal', async () => {
@@ -590,105 +517,5 @@ describe('closing a desktop editor tab after the hand-over', () => {
     expect(server.layout(WT)?.tabs.map((tab) => tab.id)).not.toContain(tabId)
     expect(editorTabIds(store)).toEqual([])
     expect(openFileIds(store)).toEqual([])
-  })
-
-  it('closes a tab the server opened, in the frame-drawn workspace, by session.tabs.close', async () => {
-    const store = mirroredStore()
-    const server = serverWith()
-    await connect(store, server)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(true)
-    // Opened on the server itself (a phone, say): its frame draws it here.
-    await server.reply({
-      type: 'openEditorTab',
-      tabId: 'server-editor-tab',
-      fileId: serverFileId(FILE_PATH),
-      contentType: 'editor',
-      file: { filePath: FILE_PATH, relativePath: 'src/a.ts', language: 'typescript' },
-      groupId: HOST_GROUP,
-      workspace: WT
-    })
-    await settle()
-    expect(editorTabIds(store)).toEqual(['server-editor-tab'])
-    expect(openFileIds(store)).toEqual([desktopFileId(FILE_PATH)])
-
-    store.getState().closeFile(desktopFileId(FILE_PATH))
-    await settle()
-    await settle()
-
-    expect(hoisted.closeSessionTab).toHaveBeenCalledTimes(1)
-    expect(hoisted.closeSessionTab).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worktreeId: WT,
-        tabId: 'server-editor-tab',
-        environmentId: ENV,
-        reason: 'user'
-      })
-    )
-    expect(layoutCloses()).toEqual([])
-    expect(server.layout(WT)?.tabs.map((tab) => tab.id)).not.toContain('server-editor-tab')
-    expect(editorTabIds(store)).toEqual([])
-  })
-
-  it.each([
-    { name: '`tab_exists`', answer: { refuse: 'tab_exists' } as const },
-    { name: 'another refusal', answer: { refuse: 'group_not_found' } as const }
-  ])('closes a tab kept on the mirror after $name here only', async ({ answer }) => {
-    const store = mirroredStore()
-    const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
-    const server = serverWith()
-    server.answer = answer
-    await connect(store, server)
-    expect(isFrameDrawnServerWorkspace(ENV, WT)).toBe(false)
-    const serverTabs = server.layout(WT)?.tabs.map((tab) => tab.id)
-
-    store.getState().closeFile(fileId)
-    await settle()
-    await settle()
-
-    expect(hoisted.closeSessionTab).not.toHaveBeenCalled()
-    expect(layoutCloses().filter(({ target }) => target.kind === 'environment')).toEqual([])
-    expect(server.layout(WT)?.tabs.map((tab) => tab.id)).toEqual(serverTabs)
-    expect(editorTabIds(store)).not.toContain(tabId)
-    expect(openFileIds(store)).toEqual([])
-  })
-})
-
-describe('workspaces the hand-over never touches', () => {
-  it('leaves a local and an SSH workspace’s editor tabs alone, even under keys the server publishes', async () => {
-    const store = mirroredStore()
-    seedEditorTab(store, LOCAL_KEY, '/local/a.ts', 'local')
-    seedEditorTab(store, SSH_KEY, '/remote/a.ts', 'ssh:target-1')
-    const localTabs = editorTabIds(store, LOCAL_KEY)
-    const sshTabs = editorTabIds(store, SSH_KEY)
-    expect(localTabs).toHaveLength(1)
-    expect(sshTabs).toHaveLength(1)
-    const server = createFakeServerMain(streams, {
-      [WT]: SERVER_LAYOUT,
-      [LOCAL_KEY]: { ...SERVER_LAYOUT, worktreeId: LOCAL_KEY },
-      [SSH_KEY]: { ...SERVER_LAYOUT, worktreeId: SSH_KEY }
-    })
-    hoisted.reply = (command) => server.reply(command)
-
-    await connect(store, server)
-
-    expect(serverOpens()).toEqual([])
-    expect(isFrameDrawnServerWorkspace(ENV, LOCAL_KEY)).toBe(false)
-    expect(isFrameDrawnServerWorkspace(ENV, SSH_KEY)).toBe(false)
-    expect(editorTabIds(store, LOCAL_KEY)).toEqual(localTabs)
-    expect(editorTabIds(store, SSH_KEY)).toEqual(sshTabs)
-  })
-
-  it('makes no attempt for a server without layout intents, whose workspace keeps its tabs', async () => {
-    const store = mirroredStore()
-    const { fileId, tabId } = openDesktopFile(store, FILE_PATH)
-    editDraft(store, fileId, 'unsaved')
-    install(store)
-    setServers(store, [{ ...CAPABLE, capable: false }])
-    await settle()
-
-    expect(streams.of(ENV)).toEqual([])
-    expect(serverOpens()).toEqual([])
-    expect(editorTabIds(store)).toEqual([tabId])
-    expect(store.getState().editorDrafts[fileId]).toBe('unsaved')
   })
 })

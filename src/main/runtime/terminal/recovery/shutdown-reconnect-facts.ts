@@ -1,13 +1,11 @@
-// Layout-owner build: what the next startup reconnects, derived by main from its own layout, its
-// terminal records and its SSH connections, never taken from a window's save. The rules are the
-// window's (buildTerminalSessionData, buildActiveConnectionIdsAtShutdown), read from main's state.
+// Derive shutdown reconnect facts from main-owned layout, terminal records and SSH connections, matching window capture rules without depending on window saves.
 
-import { isPaneSleepRecord } from '../../../../shared/agent-session-resume'
+import { isPaneSleepRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isOwnedSshTargetId } from '../../../../shared/execution-host'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export type ShutdownReconnectFacts = Pick<
   WorkspaceSessionState,

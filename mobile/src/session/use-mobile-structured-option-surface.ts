@@ -1,22 +1,23 @@
-import { useCallback, useMemo, useState, type RefObject } from 'react'
-import { structuredAgentSessionShownSnapshot } from '../../../src/shared/structured-agent-session-option-view'
-import type { StructuredAgentSessionOptionState } from '../../../src/shared/structured-agent-session-options'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface,
   SessionOptionValue
-} from '../../../src/shared/native-chat-session-options'
+} from '../../../src/shared/native-chat/input/native-chat-session-options'
 
-/** The picker surface over a structured chat's options: picks, `/`-opened pickers, snapshots. */
 export function useMobileStructuredOptionSurface(args: {
+  admits: NonNullable<SessionOptionsSurface['admits']>
   demandModelCatalog: () => void
-  lockSnapshot: (snapshot: SessionOptionDescriptor[]) => SessionOptionDescriptor[]
   optionSnapshot: SessionOptionDescriptor[]
   setStructuredOption: (id: string, value: SessionOptionValue) => Promise<boolean>
-  /** The latest option state, which a settled pick's snapshot is read from. */
-  optionStateRef: RefObject<StructuredAgentSessionOptionState>
+  readOptionSnapshot: () => SessionOptionDescriptor[]
 }) {
-  const { optionSnapshot, optionStateRef, setStructuredOption, demandModelCatalog } = args
+  const { admits, optionSnapshot, readOptionSnapshot, setStructuredOption, demandModelCatalog } =
+    args
+  const snapshotRef = useRef(readOptionSnapshot)
+  useLayoutEffect(() => {
+    snapshotRef.current = readOptionSnapshot
+  }, [readOptionSnapshot])
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
@@ -36,22 +37,21 @@ export function useMobileStructuredOptionSurface(args: {
   const setOption = useCallback(
     async (id: string, value: SessionOptionValue) => {
       await setStructuredOption(id, value)
-      return {
-        snapshot: args.lockSnapshot(structuredAgentSessionShownSnapshot(optionStateRef.current))
-      }
+      return { snapshot: snapshotRef.current() }
     },
-    [args.lockSnapshot, optionStateRef, setStructuredOption]
+    [setStructuredOption]
   )
 
   const optionSurface = useMemo<SessionOptionsSurface>(
     () => ({
       getSnapshot: () => optionSnapshot,
+      admits,
       demandModelCatalog,
       setOption,
       invokeAction: async () => ({ snapshot: optionSnapshot }),
       subscribe: () => () => {}
     }),
-    [optionSnapshot, setOption, demandModelCatalog]
+    [optionSnapshot, setOption, demandModelCatalog, admits]
   )
 
   return { optionPickerRequest, invokeStructuredOption, optionSurface }

@@ -1,13 +1,4 @@
-/**
- * Removing a project from a paired client must stop the project's shells on the host. The host
- * resolves `terminal.stop` through the project's workspace rows, so a client that sent `repo.rm`
- * first left the shells running on the host after the dialog promised to close them.
- *
- * Run:
- *   ORCA_BACKGROUND_LAUNCH=1 pnpm exec playwright test \
- *     tests/e2e/paired-client-project-removal-stops-host-terminals.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// Stop paired-project shells before repo.rm: terminal.stop resolves through workspace rows that removal otherwise deletes.
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

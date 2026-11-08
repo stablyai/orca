@@ -1,17 +1,15 @@
-// Ruling 2 (L80): with the switch on, main keeps or closes an SSH pane whose shell the host says
-// ended exactly as the window does, by the exit code alone (pty-exit-hibernate's isProvenProcessExit):
-// a negative code keeps the bound leaf, a failed code keeps the leaf behind its card, and both let
-// recovery start a shell in that leaf; a clean exit closes the pane.
+// Main matches window SSH exit-code rules: negative and failed exits retain recoverable panes; clean exits close them (L80 ruling 2).
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
-const { makePaneKey } = await import('../../orca-runtime-test-mocks.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { makePaneKey } = await import('../../../../shared/workspace-layout/stable-pane-id')
 const { HEADLESS_LEAF_ID, TEST_WORKTREE_ID, createRuntimeWithSshLease } =
-  await import('../../orca-runtime-test-fixtures.spec')
-const { registerBoundPty } = await import('../../bind-first-pane.test-fixture')
+  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+const { registerBoundPty } = await import('../../orca-runtime-tests/bind-first-pane.test-fixture')
 const { boundSessionOf } = await import('../../profile-session-store.test-fixture')
 
 function exitedSshPane(tabId: string, ptyId: string, exitCode: number) {
@@ -56,7 +54,8 @@ describe('an SSH pane the host says ended (switch on)', () => {
     expect(createTerminal).toHaveBeenCalledWith(`id:${TEST_WORKTREE_ID}`, {
       tabId,
       leafId: HEADLESS_LEAF_ID,
-      focus: false
+      focus: false,
+      reopensPane: true
     })
   })
 

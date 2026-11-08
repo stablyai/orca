@@ -6,7 +6,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import Database from '../../sqlite/sync-database'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrchestrationDb } from '../../runtime/orchestration/db'
+import { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
+import '../../runtime/orchestration/db/contract-constants'
+import '../../runtime/orchestration/db/messages/mailbox-routing-page'
+import '../../runtime/orchestration/db/dispatch-row-writer'
+import '../../runtime/orchestration/db/attempt-outcome-projection'
 import { createRootDispatch } from '../../runtime/orchestration/db/root-dispatch-test-fixture'
 import { LEGACY_RELAY_CLI_UNVERIFIED } from './legacy-relay-cli-caller'
 import { createLegacyRelayCliServer } from './legacy-relay-cli-server'
@@ -184,7 +188,7 @@ describe('the relay-era orca CLI on migrated legacy orchestration records', () =
     expect(escalation.body).toMatchObject({ ok: true })
     const check = await run(runtime, ['orchestration', 'check', '--json'], coordinatorEnv())
     expect(check.body).toMatchObject({ ok: true })
-    // Bound to its own pane only: the same handle from an unrelated pane is still refused.
+    // Binding one pane must not authorize an unrelated pane using the same handle.
     await expect(
       run(runtime, ['orchestration', 'check', '--json'], {
         ...coordinatorEnv(),
@@ -219,7 +223,7 @@ describe('the relay-era orca CLI on migrated legacy orchestration records', () =
     expect(database.getTask(taskId)?.status).toBe('completed')
     const replay = await run(runtime, done)
     expect(replay.body).toMatchObject({ ok: true })
-    // A new assignment must not strand the settled one's retry.
+    // A new assignment cannot strand the settled assignment's exact retry.
     const next = database.createTask({
       runId: database.getLegacyAdoption()?.adopted_run_id ?? '',
       spec: 'next',

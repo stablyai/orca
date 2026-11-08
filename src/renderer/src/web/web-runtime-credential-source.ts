@@ -1,7 +1,7 @@
 import {
   DEVICE_KEY_EPHEMERAL_RUNTIME_CAPABILITY,
   DEVICE_KEY_RUNTIME_CAPABILITY
-} from '../../../shared/device-key-capability'
+} from '../../../shared/remote-runtime/pairing/device-key-capability'
 import {
   createSessionDeviceSigningKey,
   getOrCreatePendingWebDeviceKey,
@@ -27,8 +27,7 @@ export type WebRuntimeAuthPlan =
   | { kind: 'device-key'; deviceId: string; key: WebDeviceSigningKey }
 
 export type WebRuntimeCredentialSource = {
-  /** Helper sockets pass false so only the primary socket ever registers a key. Synchronous
-   *  when no key store is read, so a token-only socket opens in the same task as before. */
+  /** Only primary sockets allow migration; token-only sources stay synchronous so sockets open in the same task. */
   nextPlan(allowMigration: boolean): WebRuntimeAuthPlan | Promise<WebRuntimeAuthPlan>
   /** The host forked `deviceId` for the plan's key; the token may now be forgotten. */
   migrated(plan: Extract<WebRuntimeAuthPlan, { kind: 'migrate' }>, deviceId: string): Promise<void>
@@ -36,11 +35,17 @@ export type WebRuntimeCredentialSource = {
   migrationUnavailable(): void
   /** A sealed device_revoked naming `deviceId`: delete the key only if it is ours. */
   deviceRevoked(deviceId: string): Promise<boolean>
+  /** Send the token over v2 to hosts that take it (falling back for older hosts); keyed pages use keys instead. */
+  tryV2Token?: boolean
 }
 
-/** Today's behaviour: a bearer token over legacy framing. */
-export function tokenOnlyCredentialSource(deviceToken: string): WebRuntimeCredentialSource {
+/** A bearer token; legacy framing unless `tryV2Token` (pages that can never hold a device key). */
+export function tokenOnlyCredentialSource(
+  deviceToken: string,
+  options: { tryV2Token?: boolean } = {}
+): WebRuntimeCredentialSource {
   return {
+    tryV2Token: options.tryV2Token === true,
     nextPlan: () => ({ kind: 'legacy-token', deviceToken }),
     migrated: async () => {},
     migrationUnavailable: () => {},
@@ -53,10 +58,7 @@ export type WebRuntimeCredentialEnvironment = {
   hostPublicKeyB64: string
   deviceToken: string
   pairingRevision: number
-  /**
-   * persisted: the pairing lives in localStorage (existing pairings, kept working as-is when
-   * no persistent key is possible). session: memory only, never written to disk.
-   */
+  /** Persisted localStorage pairings retain legacy token fallback when keys are unavailable; session pairings stay memory-only. */
   storage: 'persisted' | 'session'
 }
 

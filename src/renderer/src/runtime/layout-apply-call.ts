@@ -1,5 +1,5 @@
 // The `layout.apply` call itself: one intent to a main, answered once the frame holding it is in.
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterLayoutFrame, layoutFramePositionKey } from '@/runtime/layout-frame-position'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspace-layout-command-types'
@@ -19,8 +19,7 @@ export function callLayoutApply(
       (reply) =>
         afterLayoutFrame(reply.frameSeq, () => answer(reply), layoutFramePositionKey(target)),
       (error: unknown) => {
-        // Why: a thrown write is rolled back. An indeterminate disk write is not, and may leave a
-        // pane main minted, which its frame then draws. Never sent again: main may have applied it.
+        // Thrown writes roll back; indeterminate disk writes may leave minted panes main’s frames draw. Never replay a possibly applied intent.
         console.warn(`[layout-owner] ${command.type} refused: call_failed`, errorMessage(error))
         answer(null)
       }

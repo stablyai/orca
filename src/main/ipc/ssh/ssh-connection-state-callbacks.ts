@@ -29,8 +29,7 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
     state.status === 'connected' &&
     (connectInFlight.has(targetId) || isSshHostCensusInFlight(targetId))
   ) {
-    // Why: the raw transport reaches 'connected' while the connect is still deciding the host's
-    // server; forwarding it would let the renderer treat the host as up before anything serves it.
+    // Raw transport connected is premature while the host server decision is still pending.
     broadcastSshState(getCurrentMainWindow, targetId, {
       targetId,
       status: 'connecting',
@@ -49,7 +48,7 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
 export function createSshConnectionCallbacks(): SshConnectionCallbacks {
   return {
     onCredentialRequest: (targetId, kind, detail, echo, signal) => {
-      // Why: after a Cancel only an explicit connect may prompt; answer the rest as cancelled.
+      // After Cancel, only explicit connects may prompt again.
       if (isSshCredentialDeclined(targetId, signal)) {
         return Promise.resolve(null)
       }

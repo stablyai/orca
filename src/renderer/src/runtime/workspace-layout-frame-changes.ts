@@ -1,8 +1,7 @@
-// Live title changes of the terminal tabs a frame retitled: title frames arrive at spinner rate,
-// so each shows as a title update of its tab alone.
+// Apply spinner-rate live title frames to individual tabs, avoiding workspace rebuilds.
 
-import { shownLiveTitle } from '@/store/workspace-layout-frame-slices'
-import type { TerminalTabTitleUpdate } from '@/store/slices/terminal-tab-title-batch'
+import { shownLiveTitle } from '@/store/workspace-layout/frames/workspace-layout-frame-slices'
+import type { TerminalTabTitleUpdate } from '@/store/terminals/terminal-tab-title-batch'
 import type {
   PublishedTab,
   PublishedWorkspaceLayout

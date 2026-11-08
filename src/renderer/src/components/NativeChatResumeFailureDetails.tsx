@@ -8,11 +8,7 @@ import {
 } from './native-chat-resume-failure-guidance'
 import type { ResumeFailure } from './native-chat-resume-on-restart-grouping'
 
-/**
- * What a failed row adds to an ordinary offered row: one status icon whose tooltip carries the
- * status and the host's reason, a dismiss control, and a "To resume" line with the button that does
- * it. Retry is offered only where a retry can succeed.
- */
+/** Keep unconfirmed outcomes distinct from refusals; offer Retry only where it can succeed. */
 
 function actionLabel(action: ResumeFailureAction): string {
   return action === 'open'
@@ -35,6 +31,7 @@ export function ResumeFailureStatus({
   disabled: boolean
   onAction: (action: ResumeFailureAction) => void
 }): React.JSX.Element {
+  const canDismiss = failure.executionHostId === undefined || failure.executionHostId === 'local'
   const status =
     failure.outcome === 'unconfirmed'
       ? translate(
@@ -66,24 +63,25 @@ export function ResumeFailureStatus({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6} className="max-w-72">
           {status}
-          {/* The code verbatim, so it can be quoted in a report. A lost resume request carries this
-              side's own code; its real error is in the renderer log. */}
+          {/* Show the exact reportable code; lost-request codes are local and their underlying error stays in renderer logs. */}
           <span className="mt-0.5 block font-mono text-[10px] opacity-75">{failure.reason}</span>
         </TooltipContent>
       </Tooltip>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        disabled={disabled}
-        aria-label={translate(
-          'auto.components.NativeChatResumeOutcomeRow.dismissChat',
-          'Dismiss "{{value0}}" in {{value1}}',
-          { value0: title, value1: workspaceName }
-        )}
-        onClick={() => onAction('dismiss')}
-      >
-        <X className="size-3" />
-      </Button>
+      {canDismiss && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          disabled={disabled}
+          aria-label={translate(
+            'auto.components.NativeChatResumeOutcomeRow.dismissChat',
+            'Dismiss "{{value0}}" in {{value1}}',
+            { value0: title, value1: workspaceName }
+          )}
+          onClick={() => onAction('dismiss')}
+        >
+          <X className="size-3" />
+        </Button>
+      )}
     </>
   )
 }
@@ -109,16 +107,19 @@ export function ResumeFailureGuidanceLine({
       <Button size="xs" disabled={disabled} onClick={() => onAction(guidance.primary)}>
         {actionLabel(guidance.primary)}
       </Button>
-      {guidance.secondary && (
-        <Button
-          size="xs"
-          variant="secondary"
-          disabled={disabled}
-          onClick={() => onAction(guidance.secondary!)}
-        >
-          {actionLabel(guidance.secondary)}
-        </Button>
-      )}
+      {guidance.secondary &&
+        (guidance.secondary !== 'dismiss' ||
+          failure.executionHostId === undefined ||
+          failure.executionHostId === 'local') && (
+          <Button
+            size="xs"
+            variant="secondary"
+            disabled={disabled}
+            onClick={() => onAction(guidance.secondary!)}
+          >
+            {actionLabel(guidance.secondary)}
+          </Button>
+        )}
     </div>
   )
 }

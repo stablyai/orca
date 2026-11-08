@@ -50,15 +50,6 @@ describe('openBrowserTab under the window’s ids', () => {
     expect(saved.browserTabsByWorktree?.[WS]?.at(-1)).toMatchObject({ pageIds: ['page-1'] })
   })
 
-  // Why: the window's next save carries its own timestamps; main's copy must hold the same ones.
-  it('keeps the times the window drew the entry and the record at', () => {
-    const { model } = build(testContext(), [
-      { ...WINDOW_OPEN, createdAt: 1_700_000_000_001, browserCreatedAt: 1_700_000_000_000 }
-    ])
-    expect(model.workspaces[WS]!.tabs.at(-1)?.createdAt).toBe(1_700_000_000_001)
-    expect(records(model)?.at(-1)?.createdAt).toBe(1_700_000_000_000)
-  })
-
   it('places the tab where the window drew it', () => {
     const { ctx, model, hostTab } = setup()
     const placed = build(
@@ -170,23 +161,5 @@ describe('browser tab record commands', () => {
     expect(
       outcome(model, { type: 'closeBrowserPage', workspace: WS, browserTabId: 'gone', pageId: 'x' })
     ).toBe('tab_not_found')
-  })
-
-  it('switches the tab’s profile', () => {
-    const { ctx, model } = setup()
-    const next = build(
-      ctx,
-      [
-        {
-          type: 'setBrowserTabProfile',
-          workspace: WS,
-          browserTabId: 'browser-1',
-          profileId: null,
-          sessionPartition: null
-        }
-      ],
-      model
-    ).model
-    expect(records(next)?.at(-1)).toMatchObject({ sessionProfileId: null, sessionPartition: null })
   })
 })

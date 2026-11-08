@@ -62,8 +62,7 @@ export function RecipesSubmenuRow({
         className={SUBMENU_CONTENT}
         onOpenAutoFocus={(event) => event.preventDefault()}
       >
-        {/* Why: submenu rows track their own hover — without it they were the
-            only rows in either picker that never highlighted under the pointer. */}
+        {/* Nested rows own hover so pointer movement updates their highlight too. */}
         <div
           role="listbox"
           aria-label={getEphemeralVmLabel()}
@@ -88,10 +87,7 @@ export function RecipesSubmenuRow({
   )
 }
 
-/**
- * "Add host", pinned to the popover edge so it stays reachable in every state —
- * scrolled, filtered to nothing, or with no hosts at all.
- */
+/** Pin Add host so scrolling, filtering and empty results cannot hide it. */
 export function AddHostSubmenuRow({
   open,
   onOpenChange,
@@ -126,11 +122,13 @@ export function AddHostSubmenuRow({
           onMouseMove={onArm}
           onClick={() => onOpenChange(true)}
           className={cn(
-            'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-2 text-sm',
+            'flex h-9 shrink-0 cursor-default items-center gap-2 border-t border-border px-3 text-sm',
             armed && 'bg-accent text-accent-foreground'
           )}
         >
-          <Plus className="size-3.5 shrink-0 text-muted-foreground" />
+          <span className="flex w-4 shrink-0 items-center justify-center">
+            <Plus className="size-3.5 text-muted-foreground" />
+          </span>
           <span className="truncate">{addHostLabel}</span>
           <span className="ml-auto flex shrink-0 items-center">
             <ChevronDown className="size-3.5 -rotate-90 text-muted-foreground" />

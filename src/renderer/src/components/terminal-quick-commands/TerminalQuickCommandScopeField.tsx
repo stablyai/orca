@@ -3,7 +3,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../shared/terminal-quick-command-types'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -71,8 +71,7 @@ export function TerminalQuickCommandScopeField({
               if (!repoId) {
                 return
               }
-              // Why: toggling Global should not discard the command's project
-              // and silently move it to whichever repo is first in the list.
+              // Global toggling must preserve the chosen project instead of selecting the first repo.
               rememberRepoScopeId(repoId)
               setDraft((current) => ({
                 ...current,

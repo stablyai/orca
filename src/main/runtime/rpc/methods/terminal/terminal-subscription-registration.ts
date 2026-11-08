@@ -8,13 +8,16 @@ type RegistrationRuntime = Pick<
   | 'handleMobileUnsubscribe'
 >
 
+/** `ptyExited`: the PTY's exit released the stream, so its last output should still go out. */
+export type TerminalSubscriptionTeardown = (release: { ptyExited: boolean }) => void
+
 /** One `terminal.subscribe` request, addressable from admission until it is released. */
 export type TerminalSubscriptionRegistration = {
   readonly released: boolean
   /** Aborted once release has torn everything down. */
   readonly signal: AbortSignal
   /** Runs the stream's teardown on release, or now if the registration was already released. */
-  setTeardown(teardown: () => void): void
+  setTeardown(teardown: TerminalSubscriptionTeardown): void
   releaseOnPtyExit(ptyId: string): void
   addMobilePresence(
     ptyId: string,
@@ -46,7 +49,8 @@ export function registerTerminalSubscription({
   const controller = new AbortController()
   let released = false
   let ended = false
-  let teardown: (() => void) | null = null
+  let teardown: TerminalSubscriptionTeardown | null = null
+  let ptyExited = false
   let stopWatchingExit = (): void => {}
   let presence: { ptyId: string; clientId: string } | null = null
 
@@ -58,7 +62,7 @@ export function registerTerminalSubscription({
     emit({ type: 'end' })
   }
   const releaseOnce = (): void => {
-    // Why: the registry calls cleanup before recording it as in flight, so a re-entrant release must be a no-op.
+    // Registry records in-flight cleanup after calling it; latch first against reentrant release.
     if (released) {
       return
     }
@@ -67,9 +71,9 @@ export function registerTerminalSubscription({
     try {
       try {
         stopWatchingExit()
-        teardown?.()
+        teardown?.({ ptyExited })
       } finally {
-        // Why: the latch makes any retry a no-op, so a throwing teardown must not strand phone presence.
+        // The latch prevents retries, so teardown failure must still release presence.
         if (presence) {
           runtime.handleMobileUnsubscribe(presence.ptyId, presence.clientId)
         }
@@ -78,7 +82,7 @@ export function registerTerminalSubscription({
       controller.abort()
     }
   }
-  // Why: a closed socket hands out a pre-aborted signal; registering would evict the slot's live stream for a dead request.
+  // Dead sockets provide pre-aborted signals; do not evict a live slot for one.
   const registryEntry = requestSignal?.aborted
     ? null
     : runtime.registerOwnedSubscriptionCleanup(
@@ -93,7 +97,7 @@ export function registerTerminalSubscription({
         connectionId,
         requestId
       )
-  // Why: route through the registry so the entry leaves with the release and a teardown error is contained there.
+  // Registry release removes the entry and contains teardown errors.
   const release = (): void => registryEntry?.releaseIfCurrent()
   const onRequestAbort = (): void => release()
 
@@ -104,15 +108,18 @@ export function registerTerminalSubscription({
     signal: controller.signal,
     setTeardown(nextTeardown) {
       if (released) {
-        nextTeardown()
+        nextTeardown({ ptyExited })
         return
       }
       teardown = nextTeardown
     },
     releaseOnPtyExit(ptyId) {
-      const unsubscribe = runtime.subscribeToPtyExit(ptyId, release)
+      const unsubscribe = runtime.subscribeToPtyExit(ptyId, () => {
+        ptyExited = true
+        release()
+      })
       if (released) {
-        // Why: an already-exited pty releases synchronously, before the unsubscribe exists to stop.
+        // An already-exited PTY releases synchronously before unsubscribe is available.
         unsubscribe()
         return
       }
@@ -122,7 +129,7 @@ export function registerTerminalSubscription({
       if (released) {
         return
       }
-      // Why: presence and the driver are set before the layout await, so a release during it must remove them.
+      // Release during layout await must undo presence/driver registered before it.
       presence = { ptyId, clientId }
       await runtime.handleMobileSubscribe(ptyId, clientId, viewport)
     },

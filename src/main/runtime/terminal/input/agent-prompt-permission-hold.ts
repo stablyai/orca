@@ -1,8 +1,4 @@
-/**
- * The agent-prompt writer's opt-in `onPermission: 'wait'`: hold a prompt while the agent asks for
- * permission instead of refusing it. The writer passes its own blocked predicate; this file owns
- * only when to re-read it and what ends the hold.
- */
+/** Opt-in permission holds re-read the writer's predicate until clear, exit or abort; the writer owns binding validity. */
 
 /** A title- or screen-only answer moves no hook row, so the predicate is also re-read on a timer. */
 export const AGENT_PROMPT_PERMISSION_RECHECK_MS = 1_000
@@ -10,7 +6,6 @@ export const AGENT_PROMPT_PERMISSION_RECHECK_MS = 1_000
 /** The writer's pre-paste refusal under `wait`: no byte was written, so the hold may resume. */
 export class AgentPromptPermissionReturnedError extends Error {
   constructor() {
-    // The refusal's own message, so a leak reads as the refusal it stands for.
     super('agent_prompt_blocked')
     this.name = 'AgentPromptPermissionReturnedError'
   }
@@ -19,16 +14,15 @@ export class AgentPromptPermissionReturnedError extends Error {
 export type AgentPromptPermissionHold = {
   /** The writer's predicate; throws when the write must not happen at all (binding changed). */
   isBlocked: () => boolean
+  /** Brings screen evidence current before a timed re-read; undefined when nothing needs reading. */
+  refresh?: () => Promise<void> | undefined
   /** Hook-store changes for the pane; absent when the pane has no key. */
   subscribeStatus?: (wake: () => void) => () => void
   subscribeExit: (exited: () => void) => () => void
   signal?: AbortSignal
 }
 
-/**
- * Resolves once the predicate reads clear. Rejects on process exit, a throwing read, or abort. No
- * timeout: a lost SSH relay is none of those, so the hold survives it.
- */
+/** No timeout: lost SSH contact does not prove exit or end the hold. */
 export function waitWhileAgentPromptBlocked(hold: AgentPromptPermissionHold): Promise<void> {
   return new Promise((resolve, reject) => {
     const releases: (() => void)[] = []
@@ -79,9 +73,17 @@ export function waitWhileAgentPromptBlocked(hold: AgentPromptPermissionHold): Pr
       signal.addEventListener('abort', onAbort)
       own(() => signal.removeEventListener('abort', onAbort))
     }
-    check()
+    const recheck = (): void => {
+      const refreshed = hold.refresh?.()
+      if (refreshed) {
+        void refreshed.then(check, check)
+      } else {
+        check()
+      }
+    }
+    recheck()
     if (!done) {
-      const timer = setInterval(check, AGENT_PROMPT_PERMISSION_RECHECK_MS)
+      const timer = setInterval(recheck, AGENT_PROMPT_PERMISSION_RECHECK_MS)
       own(() => clearInterval(timer))
     }
   })

@@ -1,13 +1,10 @@
-import type { AgentStatus } from '../agent-title-core'
-import type { ProgramActivityChange } from '../agent-status-osc'
+import type { AgentStatus } from '../agent-status/title/agent-title-core'
+import type { ProgramActivityChange } from '../agent-status/transport/agent-status-osc'
 
 /** An activity change to apply before the title at `beforeTitle` (`titles.length`: after them all). */
 export type PlacedProgramActivity = { beforeTitle: number; activity: AgentStatus | null }
 
-/**
- * Orders a chunk's OSC 7501 activity changes among its titles. Why: explicit activity outranks a
- * title only while it exists, so a title read before a later Clear must not be judged after it.
- */
+/** Interleave explicit activity with titles in chunk order; titles preceding a later Clear must use the activity that existed then. */
 export function placeProgramActivityAmongTitles(
   titleEnds: readonly number[],
   activity: readonly ProgramActivityChange[]

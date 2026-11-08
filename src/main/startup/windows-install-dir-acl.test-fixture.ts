@@ -8,10 +8,7 @@ import type {
   InstallDirPackageGrants
 } from './windows-install-dir-package-acl-grant'
 
-/**
- * Shared ACL doubles for the install-dir DACL probe, repair, and recovery tests.
- * ACEs are written as SDDL for readability; the fake hands the probe their structure.
- */
+/** Use readable SDDL fixtures while feeding structured ACEs to real probe logic. */
 
 export const ORPHAN_PACKAGE_ACE = '(A;OICI;0x1200a9;;;S-1-15-2-999-999-999)'
 /** ALL RESTRICTED APPLICATION PACKAGES; SDDL has no alias for it. */
@@ -25,16 +22,11 @@ export const BASELINE_ACES = [
   '(A;OICIID;FA;;;S-1-5-21-432636774-4279371817-3971399515-1001)'
 ]
 
-/** The SDDL a target carrying these ACEs (plus the inherited baseline) reads back as. */
 export function savedDacl(aces: string[]): string {
   return `D:AI${[...aces, ...BASELINE_ACES].join('')}`
 }
 
-/**
- * Installs a fake windows-security addon whose DACL reads come from `saved`: the target's extra
- * ACEs, or a raw SDDL string; `null` makes the read throw, as an unreadable target does. Returns
- * the paths read. Reset with resetWindowsSecurityLoadForTests().
- */
+/** Fake extra ACEs/raw SDDL; null throws for unreadable targets. Returns read paths; reset with resetWindowsSecurityLoadForTests. */
 export function installFakeDacls(saved: (target: string) => string[] | string | null): {
   calls: string[]
 } {
@@ -55,7 +47,6 @@ export function installFakeDacls(saved: (target: string) => string[] | string | 
 
 export type InstallDirPackageGrantPass = keyof InstallDirPackageGrants
 
-/** One function standing in for both passes, the shape most tests find easiest to write. */
 export type InstallDirPackageGrant = (
   installDir: string,
   pass: InstallDirPackageGrantPass
@@ -68,7 +59,7 @@ export function grantsFrom(grant: InstallDirPackageGrant): InstallDirPackageGran
   }
 }
 
-/** Records each grant pass; `reply` decides its outcome (default: success). */
+/** Record both passes; reply controls outcome and defaults to success. */
 export function fakePackageGrant(
   reply: (
     pass: InstallDirPackageGrantPass

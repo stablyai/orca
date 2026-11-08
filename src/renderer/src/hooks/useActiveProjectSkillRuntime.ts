@@ -24,7 +24,10 @@ import {
 } from '@/lib/bundled-skill-target'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
 import { useAppStore } from '@/store'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ActiveProjectSkillRuntime = {
   projectRuntime?: ProjectExecutionRuntimeResolution
@@ -56,12 +59,7 @@ export function hasLocalSkillRuntimeAuthority(runtimeTarget: RuntimeClientTarget
   return runtimeTarget?.kind === 'local'
 }
 
-// Why: on Windows the runtime resolution is rebuilt from scratch on every
-// worktree-store change, so a same-runtime result still arrives with a fresh
-// identity. Downstream skill discovery keys effects off `discoveryTarget`, so
-// that churn would re-run a scan (and blink its loading state) per store update.
-// Serializing the whole value (rather than picking fields) keeps the comparison
-// honest if the resolution grows a field the runtime cache keys do not encode.
+// Compare the full serialized Windows resolution so equal store-driven reconstructions retain discovery identity, including future fields.
 function activeProjectSkillRuntimeIdentity(runtime: ActiveProjectSkillRuntime): string {
   return JSON.stringify(runtime)
 }
@@ -165,8 +163,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
     }
   }, [activeWorkspaceHostId, currentPlatform, runtimeState, runtimeTarget, windowsCapabilities])
 
-  // Content-equal runtimes keep one reference so effect keys do not thrash.
-  // Adjust during render (not a ref write) when serialized identity changes.
+  // Keep content-equal runtime identity; update React state during render so discarded renders cannot leak ref writes.
   const [stable, setStable] = useState(resolved)
   const stableIdentity = activeProjectSkillRuntimeIdentity(stable)
   const resolvedIdentity = activeProjectSkillRuntimeIdentity(resolved)

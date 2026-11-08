@@ -3,18 +3,18 @@ import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt
 } from '../../../shared/utf8-byte-limits'
+import '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText
-} from '@/components/terminal-pane/terminal-bracketed-paste'
-import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
-import type { TerminalInputKind } from '../../../shared/terminal-input-kind'
+} from '../../../shared/terminal/input/terminal-bracketed-paste-text'
+import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/input/paste/terminal-pty-input-transaction'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
+import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 
-// Why: bracketed paste markers let supported TUIs treat generated prompt text
-// as one paste instead of echoing character-by-character or triggering edits.
+// Bracketed paste keeps generated prompts together without triggering per-character TUI edits.
 export const AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES = 64 * 1024
 export const AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES = 16 * 1024
 export const AGENT_DRAFT_PASTE_MAX_BYTES = 16 * 1024 * 1024
@@ -36,8 +36,7 @@ export async function sendAgentDraftPasteContent(
   )
 }
 
-// Why: callers that must keep extra PTY writes (e.g. submit Enter) inside the same
-// transaction take the lock themselves; taking it again here would deadlock.
+// Callers owning the larger paste/Enter transaction must hold the lock; reacquiring here would deadlock.
 export async function sendAgentDraftPasteContentNow(
   ptyId: string,
   content: string,
@@ -61,8 +60,7 @@ export async function sendAgentDraftPasteContentNow(
     )
   }
 
-  // Why: generated prompts can be paste-sized; yield during accepted-size
-  // preflight before starting any PTY writes so the renderer is not pinned.
+  // Yield during size preflight so large generated prompts cannot pin the renderer before PTY writes.
   if (await isSanitizedDraftPasteOverLimit(terminalContent, AGENT_DRAFT_PASTE_MAX_BYTES)) {
     return false
   }
@@ -106,8 +104,7 @@ export function* iterateAgentDraftPasteContentChunks(
 ): Generator<string> {
   const safeMaxChunkBytes = Math.max(4, maxChunkBytes)
   yield BRACKETED_PASTE_START
-  // Why: normalize the complete draft before chunking so a CRLF pair cannot
-  // straddle chunks and leak its LF half to a Windows ConPTY agent.
+  // Normalize before chunking so split CRLF cannot leak an LF to Windows ConPTY.
   const terminalContent = normalizeTerminalPasteLineEndings(content)
   let chunk = ''
   let chunkBytes = 0
@@ -208,8 +205,7 @@ async function closeAgentDraftBracketedPaste(
   writePty?: AgentDraftPtyInputWriter
 ): Promise<void> {
   try {
-    // Why: once the opener reached the PTY, a failed content chunk should not
-    // leave the target TUI in bracketed-paste mode.
+    // Close bracketed-paste mode even after a content write fails.
     await writeAgentDraftPtyInput(ptyId, BRACKETED_PASTE_END, inputKind, writePty)
   } catch {
     // The original write already failed; callers only need the paste to fail closed.

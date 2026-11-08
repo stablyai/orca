@@ -28,9 +28,9 @@ export async function resyncMirroredServerWorkspace(
       new Set([...current].filter((id) => id !== worktreeId))
     )
   }
-  // Why lazy: keeps the RPC layer out of the apply's import graph, as the tab lifecycle module does.
+  // Lazy RPC import avoids the apply graph’s lifecycle cycle.
   const { refreshWebRuntimeSessionTabsSnapshot } = await import('../web-runtime-session-snapshot')
-  // Why replay: frames-era frames already advanced freshness, so the current version would read as stale.
+  // Frames advanced freshness; replay current version or it is refused as stale.
   acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
   await refreshWebRuntimeSessionTabsSnapshot(environmentId, worktreeId, { errorMode: 'throw' })
 }

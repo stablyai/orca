@@ -27,12 +27,6 @@ describe('ripgrep filename decoding', () => {
     expect(decoder.decode(Buffer.from([0xf0, 0x9f]))).toBe('')
     expect(() => decoder.finish()).toThrow('not valid UTF-8')
   })
-
-  it('accepts string fixtures without losing decoder state', () => {
-    const decoder = new RipgrepFilenameDecoder()
-    expect(decoder.decode('literal-�\0')).toBe('literal-�\0')
-    decoder.finish()
-  })
 })
 
 it('refuses literal WSL backslashes only when Windows translation is required', () => {

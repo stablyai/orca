@@ -12,13 +12,7 @@ import { readManagedHookEventsFromJson } from '../agent-hooks/managed-hooks-json
 
 const DSH_SCRIPT_BASE = 'dsh-hook'
 
-/**
- * The events DeepSeek Harness's own Claude-Code hook bridge
- * (`@deepseek-ai/dsh-hooks-claude-code`) can fire. This is a strict subset of Claude's:
- * the bridge documents no `Notification`, no `PermissionRequest` and no `SessionEnd`,
- * and registering an unsupported event name makes it register nothing for that event.
- * `normalizeDshEvent` is written against exactly this list.
- */
+/** Register only bridge-supported events; unsupported Claude events never fire in DSH. */
 export const DSH_HOOK_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',
@@ -29,25 +23,17 @@ export const DSH_HOOK_EVENTS = [
 
 export const DSH_MANAGED_HOOKS_FILE_NAME = 'dsh-hooks.json'
 
-/** `$DSH_HOME`, matching the launcher's own `DSH_HOME ?? ~/.dsh` resolution. */
 export function getDshHome(): string {
   return process.env.DSH_HOME?.trim() || join(homedir(), '.dsh')
 }
 
-/**
- * The home-level patch layer.
- *
- * Why here and not in a profile: DSH composes every profile as bundle patches, then the
- * profile's own `cordis.patch.yml`, then this file. Installing one layer above every
- * profile means a pane the user started themselves — any profile, including one Orca
- * never launched — still reports status, and Orca never edits a profile the user owns.
- */
+/** Use the home layer so every profile inherits hooks without editing user-owned profile layers. */
 export function getDshConfigPath(): string {
   return join(getDshHome(), 'cordis.patch.yml')
 }
 
 export function getDshRemoteConfigPath(remoteHome: string): string {
-  // Why: a remote $DSH_HOME is unknown over SFTP; default matches the launcher's own resolution.
+  // SFTP cannot resolve remote DSH_HOME; use the launcher's default home.
   return pathPosix.join(remoteHome.replace(/\/$/, ''), '.dsh', 'cordis.patch.yml')
 }
 
@@ -73,7 +59,6 @@ export function getDshRemoteManagedHooksPath(remoteHome: string): string {
 }
 
 export function getDshManagedCommand(scriptPath: string): string {
-  // Why: DSH runs hooks through `ctx.shell`: bash off Windows, PowerShell on it, which runs a bare .cmd too.
   return process.platform === 'win32'
     ? wrapWindowsBatchHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
@@ -87,11 +72,7 @@ export function getDshManagedCommandMatcher(): (command: string | undefined) => 
   return createManagedCommandMatcher(getDshManagedScriptFileName())
 }
 
-/**
- * The managed hooks file is Orca's outright: DSH has no user-owned `hooks.json`
- * convention of its own, and the bridge reads whatever single path it is pointed at. So
- * generate it wholesale rather than merging into someone's file.
- */
+/** This is Orca-owned config: DSH reads the explicit path rather than a user hooks.json convention. */
 export function buildDshManagedHooksFile(command: string): string {
   const hooks: Record<string, HookDefinition[]> = {}
   for (const event of DSH_HOOK_EVENTS) {

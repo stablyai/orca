@@ -1,4 +1,4 @@
-import type { DeviceRegistry } from '../device-registry'
+import type { DeviceRegistry } from '../rpc/server/pairing/device-registry'
 import type { RelayRevokeOutbox } from './relay-revoke-outbox'
 
 type RelayDemandLedgerOptions = {
@@ -51,9 +51,7 @@ export class RelayDemandLedger {
       ) {
         return false
       }
-      // Why: E2EE authentication marks a scanned DeviceEntry as seen before
-      // relay credential install commits. Only removing the invite expiry at
-      // the durable install boundary promotes it to standing device demand.
+      // E2EE marks seen before install; only durable credential install removes invite expiry and grants standing demand.
       return binding.inviteExpiresAt === undefined || binding.inviteExpiresAt > now
     })
   }

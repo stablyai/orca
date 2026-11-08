@@ -1,25 +1,26 @@
-/**
- * Inbound decode steps done natively instead of in Hermes JS: every v2 text frame the phone opens
- * (base64, secretbox, UTF-8), plus the gunzip of page-bundle ranges.
- */
+// Move frame seal/decode and bundle gunzip off Hermes’s JS thread when native bindings are available.
 export type PairedE2EENativeCodec = {
   /** Canonical padded base64 only; null for anything else, including what `atob` forgives. */
   decodeBase64(value: string): Uint8Array | null
+  /** Standard padded base64. */
+  encodeBase64(bytes: Uint8Array): string
   /** XSalsa20-Poly1305 secretbox open; null for a box that fails authentication. */
   openSecretbox(box: Uint8Array, nonce: Uint8Array, key: Uint8Array): Uint8Array | null
+  /** XSalsa20-Poly1305 secretbox seal, byte-identical to tweetnacl's `secretbox`. */
+  sealSecretbox(message: Uint8Array, nonce: Uint8Array, key: Uint8Array): Uint8Array
   /** Throws on a body that is not one well-formed gzip member. See orca-gzip-utf8-codec. */
   gunzip(input: Uint8Array, outputLimit: number): Uint8Array
   /** Null where only TextDecoder's replacement or BOM rules give the answer, or native failed. */
   decodeUtf8(input: Uint8Array): string | null
 }
 
-/** The two react-native-libsodium JSI functions the phone needs; both throw on failure. */
 export type LibsodiumBindings = {
   fromBase64: (value: string, variant: number) => ArrayBuffer
+  toBase64: (value: ArrayBuffer, variant: number) => string
   secretboxOpen: (box: ArrayBuffer, nonce: ArrayBuffer, key: ArrayBuffer) => ArrayBuffer
+  secretboxSeal: (message: ArrayBuffer, nonce: ArrayBuffer, key: ArrayBuffer) => ArrayBuffer
 }
 
-/** What the app entry hands over: libsodium plus the orca-gzip-utf8-codec module. */
 export type PairedE2EENativeBindings = {
   codec: {
     gunzip(input: Uint8Array, outputLimit: number): Uint8Array
@@ -39,20 +40,14 @@ const PROBE_GZIP_BASE64 = 'H4sIAAAAAAAAE8vPBgBH3dx5AgAAAA=='
 let loadBindings: (() => PairedE2EENativeBindings | null) | null = null
 let detected: PairedE2EENativeCodec | null | undefined
 
-/**
- * Called once by the app entry. Injected rather than imported so that this module, which shared,
- * desktop and e2e code reach, never loads the native modules or their global types.
- */
+// Inject from app entry so shared/desktop/e2e imports never load native modules or globals.
 export function providePairedE2EENativeBindings(load: () => PairedE2EENativeBindings | null): void {
   loadBindings = load
   // Why: a lookup that ran before this must not pin the JS path for the whole run.
   detected = undefined
 }
 
-/**
- * The native codec, or null when none was provided or any part of it is missing or answers the
- * probe wrongly; the caller then runs the JS path. Detected once, on first use.
- */
+// Probe once and use JS fallback if bindings are absent, incomplete or incompatible.
 export function pairedE2EENativeCodec(): PairedE2EENativeCodec | null {
   if (detected === undefined) {
     detected = detectPairedE2EENativeCodec()
@@ -79,6 +74,9 @@ function detectPairedE2EENativeCodec(): PairedE2EENativeCodec | null {
           return null
         }
       },
+      // Why: like decodeBase64, never hand libsodium a zero-length buffer.
+      encodeBase64: (bytes) =>
+        bytes.length === 0 ? '' : sodium.toBase64(wholeBuffer(bytes), SODIUM_BASE64_ORIGINAL),
       openSecretbox: (box, nonce, key) => {
         // Why: libsodium's output length underflows below the MAC length and crashes the app.
         if (box.length < SECRETBOX_MAC_BYTES) {
@@ -93,6 +91,10 @@ function detectPairedE2EENativeCodec(): PairedE2EENativeCodec | null {
           return null
         }
       },
+      sealSecretbox: (message, nonce, key) =>
+        new Uint8Array(
+          sodium.secretboxSeal(wholeBuffer(message), wholeBuffer(nonce), wholeBuffer(key))
+        ),
       gunzip: (input, outputLimit) => module.gunzip(input, outputLimit),
       decodeUtf8: (input) => {
         // Why: the frame is already open and the counter advanced, so a throw here must not drop it.
@@ -120,6 +122,7 @@ function answersProbe(codec: PairedE2EENativeCodec): boolean {
   const opened = codec.openSecretbox(box, nonce, key)
   return (
     opened !== null &&
+    codec.encodeBase64(codec.sealSecretbox(opened, nonce, key)) === PROBE_BOX_BASE64 &&
     codec.decodeUtf8(opened) === 'ok' &&
     codec.decodeUtf8(codec.gunzip(gzip, 3)) === 'ok' &&
     codec.decodeBase64('b2s=') !== null &&

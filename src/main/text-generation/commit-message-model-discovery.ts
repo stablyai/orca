@@ -1,16 +1,16 @@
 import { isMissingProviderExecutable } from '../provider-process/provider-executable-missing'
 import { mergeCommandEnvironment } from '../../shared/command-environment'
-import type { CommandTemplateBackslash } from '../../shared/commit-message-prompt'
+import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import {
   getAgentModelProbeSpec,
   type AgentModelProbeSpec
 } from '../../shared/agent-model-probe-spec'
-import type { CommitMessagePlan } from '../../shared/commit-message-plan'
+import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
 import {
   runClaudeBackgroundAttempts,
   type ClaudeBackgroundFailedExit
 } from '../../shared/claude-background-run-isolation'
-import type { TuiAgent } from '../../shared/tui-agent'
+import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { resolveCodexHomeProcessLockKeyForSpawnEnv } from '../codex-cli/codex-home-process-lock'
 import { supervisedProviderSpawnFailure } from '../provider-process/provider-spawn-failure-report'
 import {
@@ -43,7 +43,7 @@ type DiscoverModelsLocalInput = {
   options: CommitMessageModelDiscoveryLocalOptions
   backslash: CommandTemplateBackslash
   spawnAgent: SpawnSourceControlAgent
-  /** The command actually spawned, when the caller replaces the plan's; a missing one is typed. */
+  /** Actual spawned command when it differs from the plan; missing binaries return a typed failure. */
   binary?: string
 }
 
@@ -195,7 +195,6 @@ async function discoverModelsOnce(
       }
       const onClose = (code: number | null): void => {
         markClosedAfterTermination()
-        // A supervised spawn failure reads as the same failure a direct spawn reports.
         const spawnFailure = outputLimitExceeded
           ? null
           : supervisedProviderSpawnFailure(code, stderr)

@@ -22,10 +22,7 @@ import { createNativeSkillAlias } from '../skill-placement-reconciliation'
 
 export type BundledSkillPathStat = { kind: SkillFilesystemEntryKind; mtimeMs: number | null }
 
-/**
- * Everything the bundled installer does to a host's disk, so a WSL guest or a remote host can
- * supply its own. Reads never throw for a missing path; writes throw on any failure.
- */
+/** Host adapter for native/WSL/remote disks. Missing reads do not throw; failed writes do. */
 export type BundledSkillFilesystem = {
   /** Whether this host can make a directory link; decided once, so `plan` never promises one it can't. */
   readonly supportsLinks: boolean
@@ -73,7 +70,6 @@ function isMissing(error: unknown): boolean {
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
-/** Every entry's relative path, kind and content (or link target), in a fixed order. */
 export async function bundledSkillTreeSignature(
   filesystem: BundledSkillFilesystem,
   path: string
@@ -129,7 +125,7 @@ export async function moveAcrossFilesystems(
     errorOnExist: true,
     force: false
   })
-  // The source is removed only once the copy provably holds the same bytes.
+  // Remove source only after proving backup contents match.
   if (
     (await bundledSkillTreeSignature(nativeBundledSkillFilesystem, source)) !==
     (await bundledSkillTreeSignature(nativeBundledSkillFilesystem, target))
@@ -204,7 +200,7 @@ export const nativeBundledSkillFilesystem: BundledSkillFilesystem = {
   },
   writeFolder: async (path, files) => {
     await mkdir(dirname(path), { recursive: true })
-    // Why explicit modes: the cloud installer stages 0700, which other agents' users can't read.
+    // Cloud staging uses private modes; installed skills must be readable by other agents' users.
     await mkdir(path, { mode: 0o755 })
     for (const file of files) {
       await mkdir(dirname(join(path, file.path)), { recursive: true, mode: 0o755 })
