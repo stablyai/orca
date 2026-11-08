@@ -1,6 +1,5 @@
 import { isGeminiTerminalTitle as actualIsGeminiTerminalTitle } from '../../../../../../shared/agent-status/title/agent-title-core'
 import { vi } from 'vitest'
-import { resetAgentStartupDelayedDeliveryForTests } from '@/lib/agent-startup-delayed-delivery'
 import * as agentStatusStartupSnapshot from '@/hooks/ipc-events/agent-status-startup-snapshot'
 import { drainFakeTimerWork, flushAsyncTicks } from './pty-connection-test-async'
 import { takeTerminalTestPanes } from './pty-connection-test-pane-fixtures'
@@ -14,6 +13,7 @@ type StatusSnapshot = ReturnType<
 >
 let statusSnapshot: StatusSnapshot | undefined
 let resetStatusSnapshot: StatusSnapshot | undefined
+let freshModulesLoaded = false
 
 export function buildAgentStatusModuleMock(
   actual: Record<string, unknown>
@@ -116,6 +116,16 @@ export async function installTerminalTestGlobals(): Promise<void> {
   globalThis.cancelAnimationFrame = vi.fn()
 }
 
+/** For tests that stub import-time globals (navigator) or need once-per-load subscriptions bound to this test; call before importing the code under test. */
+export async function loadFreshTerminalModules(): Promise<void> {
+  vi.resetModules()
+  freshModulesLoaded = true
+  resetStatusSnapshot?.dispose()
+  const actual = await import('@/hooks/ipc-events/agent-status-startup-snapshot')
+  resetStatusSnapshot = actual.registerAgentStatusStartupSnapshot()
+  resetStatusSnapshot.settle()
+}
+
 export async function restoreTerminalTestGlobals(): Promise<void> {
   // Drain deferred confirmation work before the next test replaces its store mock.
   await drainFakeTimerWork()
@@ -129,6 +139,7 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
     cancelPendingSafeFitContinuations(pane as unknown as ManagedPane)
   }
   await flushAsyncTicks(20)
+  await resetSharedTerminalModuleState()
   statusSnapshot?.dispose()
   resetStatusSnapshot?.dispose()
   statusSnapshot = undefined
@@ -154,7 +165,61 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   // Late reattach continuations can outlive teardown; keep an inert window like a real renderer until the next test installs its replacement (orca#14728).
   ;(globalThis as unknown as { window?: unknown }).window = { api: createInertApi() }
   delete (globalThis as Record<string, unknown>).__ptyConnectDiag
-  resetAgentStartupDelayedDeliveryForTests()
+  if (freshModulesLoaded) {
+    // Later tests must not reuse a graph evaluated for this one.
+    vi.resetModules()
+    freshModulesLoaded = false
+  }
+}
+
+/** Suites that skip resetModules share one module graph; import the live instances and clear what tests leave behind. */
+async function resetSharedTerminalModuleState(): Promise<void> {
+  const [
+    outputQueue,
+    startupDelivery,
+    startupDeliveryGuards,
+    hookCommandDelivery,
+    completionIdentity,
+    commandCodeDoneSettle,
+    processInspection,
+    rendererOwnedStatus,
+    deliveryClaims,
+    sideEffectFacts,
+    hiddenOutputRestore,
+    attentionSubscriptions,
+    paneRecovery
+  ] = await Promise.all([
+    import('@/lib/pane-manager/pane-terminal-output-queue-registry'),
+    import('@/lib/agent-startup-delayed-delivery'),
+    import('@/lib/agent-startup-delivery-guards'),
+    import('@/lib/hook-command-delayed-delivery'),
+    import('../../agent-completion/agent-completion-identity-store'),
+    import('../../agent-completion/command-code/command-code-done-settle'),
+    import('../../agent-completion/process-inspection/agent-process-inspection-queue'),
+    import('../../agent-status/renderer-owned-agent-status-registry'),
+    import('../../pty-transport/delivery/pty-renderer-delivery-claims'),
+    import('../../pty-transport/output/terminal-side-effect-facts-handler'),
+    import('../output-restore/hidden-output-restore-scheduler'),
+    import('../../titles/terminal-pane-attention-subscriptions'),
+    import('../../render-health/recovery/terminal-pane-recovery')
+  ])
+  for (const terminal of Array.from(outputQueue.queuedByTerminal.keys())) {
+    outputQueue.discardTerminalOutput(terminal)
+  }
+  // A drain armed under abandoned fake timers never fires; any armed delay is >= 0, so this clears it and the empty queue arms nothing new.
+  outputQueue.scheduleDrain(-1)
+  startupDelivery.resetAgentStartupDelayedDeliveryForTests()
+  startupDeliveryGuards.clearConsumedAgentStartupDeliveriesForTests()
+  hookCommandDelivery.resetHookCommandDelayedDeliveryForTests()
+  completionIdentity.resetAgentCompletionIdentityStoreForTest()
+  commandCodeDoneSettle._resetCommandCodeDoneSettlesForTest()
+  processInspection.resetAgentProcessInspectionQueueForTests()
+  rendererOwnedStatus.resetRendererOwnedAgentStatusPanesForTests()
+  deliveryClaims._resetPtyRendererDeliveryClaimsForTest()
+  sideEffectFacts._resetTerminalSideEffectFactConsumersForTest()
+  hiddenOutputRestore.resetHiddenOutputRestoreSchedulerForTests()
+  attentionSubscriptions.resetTerminalPaneAttentionSubscriptionsForTests()
+  paneRecovery._resetTerminalPaneRecoveryForTests()
 }
 
 /** Any property resolves to another inert callable; any call resolves to undefined. */

@@ -17,7 +17,7 @@ import {
 } from './pane/serializer-state'
 import { seedTerminalRestoreRecordsFromSpawnResult } from './pane/agent-session-owners'
 import { seedResumeLaunchIdentityFromSpawn } from './pane/resume-launch-identity'
-import { recordPtySpawnTelemetry } from './pane/spawn-telemetry'
+import { recordAgentStartTelemetry } from './pane/spawn-telemetry'
 import type { PtySpawnOutcome } from './spawn-outcome'
 import type { PtySpawnCommitInput, PtySpawnCommitState } from './spawn-commit-assembly'
 
@@ -79,7 +79,7 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
   }
   // Emit agent_started only after confirmed spawn, with field validation at the telemetry boundary.
   if (args.telemetry && !state.stablePaneOwner) {
-    recordPtySpawnTelemetry(args.telemetry)
+    recordAgentStartTelemetry(args.telemetry)
   }
   // Publish reverse pane lookup for hook titles and provider cleanup.
   const rememberedPaneKey = rememberPaneKeyForPty(result.id, input.paneKey)

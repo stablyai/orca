@@ -1,5 +1,6 @@
 import { win32 } from 'node:path'
 import { GROK_CHAT_HISTORY_FILE } from '../../shared/grok-session-paths'
+import { isClaudeProjectBucketDirectory } from '../ai-vault/scanners/claude/claude-project-dir-encoding'
 import { isOmpConversationDirectory } from '../ai-vault/scanners/omp/session-scanner-omp-subagent-transcripts'
 
 export type SessionIdLookupAgent = 'claude' | 'codex' | 'grok' | 'omp'
@@ -18,8 +19,7 @@ function stem(path: string): string {
 export const SESSION_FILE_ID_LAYOUTS: Record<SessionIdLookupAgent, SessionFileIdLayout> = {
   claude: {
     fileMatchesId: (path, id) => win32.basename(path) === `${id}.jsonl`,
-    // Transcripts sit in project buckets; `<id>/` folders below hold only subagent and tool output.
-    directoryPredicate: (_name, depth) => depth === 0
+    directoryPredicate: isClaudeProjectBucketDirectory
   },
   codex: {
     fileMatchesId: (path, id) => {

@@ -20,7 +20,7 @@ import { installWebPreloadApi } from './web-preload-api'
 import { initWebDeviceKeySupport } from './web-device-key-support'
 import { WebPairingSecurityNotice } from './WebPairingSecurityNotice'
 import { I18nProvider } from '../i18n/I18nProvider'
-import { translate } from '../i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { installOsFileDropCancellationGuard } from '../lib/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from '../lib/body-overlay-attributes'
 import { installAppKeyboardRouter } from '../lib/app-keyboard-router'
@@ -91,13 +91,14 @@ function WebRoot(): React.JSX.Element {
 }
 
 function WebRootBoundary(): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="web.root"
       surface="web-root"
-      title={translate('app.recoverableError.webTitle', 'Orca web hit a renderer error.')}
-      description={translate(
+      title={t('app.recoverableError.webTitle', 'Orca web hit a renderer error.')}
+      description={t(
         'app.recoverableError.webDescription',
         'Retry the web client or reconnect to the paired runtime.'
       )}

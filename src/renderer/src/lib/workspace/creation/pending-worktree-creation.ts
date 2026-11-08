@@ -1,3 +1,4 @@
+import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
 import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
@@ -22,10 +23,11 @@ import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-st
 import type {
   TaskSourceContext,
   WorkspaceRunContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatComposerDraftImage } from '@/components/native-chat/native-chat-composer-draft-storage'
+import type { Translate } from '@/i18n/use-translate'
+import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
@@ -33,8 +35,7 @@ export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching'
 
 export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
 
-/** Serializable creation intent, including any script checks deferred until
- * after the composer closes. Retained by the pending panel for Retry. */
+/** Session-only creation intent, including script checks and compatibility planning retained for Retry. */
 export type WorktreeCreationRequest = {
   repoId: string
   /** Execution owner retained after script preparation, including retries. */
@@ -93,6 +94,20 @@ export type WorktreeCreationRequest = {
   /** Renderer-owned route decision captured at submit time and reused on retry. */
   agentLaunchRoute?: AgentLaunchRoute
   launchInputs?: ReturnType<typeof agentPickerLaunchInputs>
+  legacyLaunchInputs?: ReturnType<typeof agentPickerLaunchInputs>
+  creationStartup?: {
+    onLegacyPreparationFailure?: (error: unknown) => void
+    sessionOptions?: AgentStartupPlan['sessionOptions']
+    launchToken?: string
+    legacy: (
+      prompt?: string,
+      delivery?: 'draft' | 'auto-submit'
+    ) => {
+      startupPlan: AgentStartupPlan | null
+      backendStartup: WorktreeStartupLaunch | undefined
+      promptPlan?: LaunchAgentStartupPromptPlan
+    }
+  }
   linkedLinearIssue?: string
   linkedLinearIssueWorkspaceId?: string | null
   linkedLinearIssueOrganizationUrlKey?: string | null
@@ -257,29 +272,27 @@ export function getCreationProgressLabel(
   entry: Pick<
     PendingWorktreeCreation,
     'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress'
-  >
+  >,
+  t: Translate = translate
 ): string {
   const checkout = getVisibleCheckoutProgress(entry)
   if (checkout) {
-    return translate(
+    return t(
       'auto.lib.pendingWorktreeCreation.checkingOutFiles',
       'Checking out files… {{percent}}%',
       { percent: checkout.percent }
     )
   }
   if (entry.phase === 'provisioning-vm') {
-    return translate('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
+    return t('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
   }
   if (entry.indeterminate) {
-    return translate(
-      'auto.lib.pendingWorktreeCreation.settingUpWorkspace',
-      'Setting up your workspace…'
-    )
+    return t('auto.lib.pendingWorktreeCreation.settingUpWorkspace', 'Setting up your workspace…')
   }
   if (entry.phase === 'preparing') {
-    return translate('auto.lib.pendingWorktreeCreation.preparingWorkspace', 'Preparing workspace…')
+    return t('auto.lib.pendingWorktreeCreation.preparingWorkspace', 'Preparing workspace…')
   }
   return entry.phase === 'creating'
-    ? translate('auto.lib.pendingWorktreeCreation.creatingWorktree', 'Creating worktree…')
-    : translate('auto.lib.pendingWorktreeCreation.fetchingBaseBranch', 'Fetching base branch…')
+    ? t('auto.lib.pendingWorktreeCreation.creatingWorktree', 'Creating worktree…')
+    : t('auto.lib.pendingWorktreeCreation.fetchingBaseBranch', 'Fetching base branch…')
 }

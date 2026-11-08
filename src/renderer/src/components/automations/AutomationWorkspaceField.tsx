@@ -2,8 +2,8 @@ import { Info } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { CreateFromPicker } from '@/components/repo/CreateFromPicker'
-import { translate } from '@/i18n/i18n'
-import type { AutomationWorkspaceMode } from '../../../../shared/automations-types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { AutomationWorkspaceMode } from '../../../../shared/automations/automation-definition'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
@@ -25,17 +25,18 @@ export function AutomationWorkspaceField({
   pickerTriggerClassName,
   onDraftChange
 }: AutomationWorkspaceFieldProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Field
       labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
       label={
         <span className="inline-flex items-center gap-1">
-          {translate('auto.components.automations.AutomationEditorDialog.b28b140eaf', 'Workspace')}
+          {t('auto.components.automations.AutomationEditorDialog.b28b140eaf', 'Workspace')}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.automations.AutomationEditorDialog.2c3fd9bfa1',
                   'Workspace mode help'
                 )}
@@ -45,7 +46,7 @@ export function AutomationWorkspaceField({
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6} className="max-w-72">
-              {translate(
+              {t(
                 'auto.components.automations.AutomationEditorDialog.6f9610e667',
                 'Worktree runs in the selected workspace. New run creates a fresh workspace from the selected branch each time.'
               )}
@@ -71,10 +72,10 @@ export function AutomationWorkspaceField({
           variant="segmented-card"
         >
           <ToggleGroupItem value="existing">
-            {translate('auto.components.automations.AutomationEditorDialog.a2e688226d', 'Worktree')}
+            {t('auto.components.automations.AutomationEditorDialog.a2e688226d', 'Worktree')}
           </ToggleGroupItem>
           <ToggleGroupItem value="new_per_run">
-            {translate('auto.components.automations.AutomationEditorDialog.6ff66f9012', 'New run')}
+            {t('auto.components.automations.AutomationEditorDialog.6ff66f9012', 'New run')}
           </ToggleGroupItem>
         </ToggleGroup>
         {draft.workspaceMode === 'existing' ? (

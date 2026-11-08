@@ -1,0 +1,123 @@
+// Removed servers can never receive held closes; discard them immediately, including removals while app was closed, rather than waiting 30 days.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { resetDeferredPeerChecksForTests } from '@/store/slices/runtime-status/runtime-environment-peer-replacement'
+import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
+import { appPairedTerminalTabCloseIntentStore as STORE } from './paired-terminal-tab-close-intent-store'
+import {
+  holdWebSessionCloseForReplay,
+  resetWebSessionCloseReplaysForTests,
+  takeDueWebSessionCloseReplays
+} from './web-session-close-replay'
+import { isWebSessionCloseIntentPending } from './web-session-close-intent'
+import { resetWebSessionTabsSyncTestState } from '../testing/web-session-tabs-sync.test-fixture'
+
+vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
+  observeAgentHookCompletionForNotification: vi.fn()
+}))
+const refreshSnapshot = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../inventory/web-runtime-session-snapshot', () => ({
+  refreshWebRuntimeSessionTabsSnapshot: refreshSnapshot
+}))
+
+const WT = 'repo::/wt'
+const TAB = 'host-tab-1'
+
+function environment(
+  id: string,
+  overrides: Partial<PublicKnownRuntimeEnvironment> = {}
+): PublicKnownRuntimeEnvironment {
+  return {
+    id,
+    name: id,
+    createdAt: 1,
+    updatedAt: 1,
+    pairingRevision: 1,
+    ...overrides,
+    lastUsedAt: null,
+    runtimeId: null,
+    endpoints: [{ id: `ws-${id}`, kind: 'websocket', label: id, endpoint: `wss://${id}` }],
+    preferredEndpointId: `ws-${id}`
+  }
+}
+
+function managed(id: string, pairingRevision: number, hostKeyFingerprint?: string) {
+  return environment(id, {
+    pairingRevision,
+    hostKeyFingerprint,
+    orcadDeployment: {
+      sshTargetId: 'box',
+      sshTargetGeneration: 1,
+      localPort: 46_768,
+      remotePort: 6_768
+    }
+  })
+}
+
+/** A user close the host never received: held, and its tab hidden. */
+function hold(environmentId: string): void {
+  holdWebSessionCloseForReplay(STORE, { environmentId, pairingRevision: 1 }, WT, [TAB])
+}
+
+function hidden(environmentId: string, pairingRevision: number): boolean {
+  return isWebSessionCloseIntentPending({ environmentId, pairingRevision }, WT, TAB, Date.now())
+}
+
+function heldRevisions(environmentId: string): (number | undefined)[] | undefined {
+  return useAppStore
+    .getState()
+    .pairedTerminalTabCloseIntentsByEnvironment[environmentId]?.map(
+      (intent) => intent.pairingRevision
+    )
+}
+
+let initialState: AppState
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: 1_700_000_000_000 })
+  initialState = useAppStore.getState()
+})
+afterEach(() => {
+  vi.useRealTimers()
+  useAppStore.setState(initialState, true)
+  replaceRuntimeEnvironmentRevisions([])
+  resetDeferredPeerChecksForTests()
+  resetWebSessionCloseReplaysForTests()
+  resetWebSessionTabsSyncTestState()
+})
+
+describe('held paired-host closes when a server is removed', () => {
+  it("holds a managed re-pair's closes, unsent, until its host key decides the machine", async () => {
+    useAppStore.getState().setRuntimeEnvironments([managed('env-a', 1, 'key-a')])
+    hold('env-a')
+    // The re-pair lands before the catalog carries the host's key.
+    useAppStore.getState().setRuntimeEnvironments([managed('env-a', 2)])
+
+    expect(takeDueWebSessionCloseReplays(STORE, 'env-a', WT, new Set([TAB]))).toEqual([])
+    expect(heldRevisions('env-a')).toEqual([1])
+    expect(hidden('env-a', 2)).toBe(true)
+
+    refreshSnapshot.mockClear()
+    useAppStore.getState().setRuntimeEnvironments([managed('env-a', 2, 'key-a')])
+
+    expect(heldRevisions('env-a')).toEqual([2])
+    // An idle host may publish nothing more, so the decision itself asks for the snapshot.
+    await vi.waitFor(() =>
+      expect(refreshSnapshot).toHaveBeenCalledWith('env-a', WT, {
+        expectedEnvironmentPairingRevision: 2
+      })
+    )
+    const due = takeDueWebSessionCloseReplays(STORE, 'env-a', WT, new Set([TAB]))
+    expect(due.map((replay) => replay.owner)).toEqual([
+      { environmentId: 'env-a', pairingRevision: 2 }
+    ])
+    // Once moved, a later catalog has nothing to move and asks for nothing.
+    refreshSnapshot.mockClear()
+    useAppStore.getState().setRuntimeEnvironments([managed('env-a', 2, 'key-a')])
+    await Promise.resolve()
+    expect(refreshSnapshot).not.toHaveBeenCalled()
+  })
+})

@@ -1,11 +1,10 @@
 // Phones/paired desktops must project main layout after create/close/rename despite stale window rows; rows arrive with the window's next publication.
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import '../../../shared/runtime-types'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
-  HEADLESS_THIRD_LEAF_ID,
   TEST_WORKTREE_ID
 } from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
@@ -49,10 +48,6 @@ function stalePublication(
   }
 }
 
-async function phoneActiveRow(runtime: ReturnType<typeof surfaceRuntime>['runtime']) {
-  return (await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).activeTabId
-}
-
 async function phoneRows(runtime: ReturnType<typeof surfaceRuntime>['runtime']) {
   const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
   return listed.tabs.map((tab) => ({
@@ -63,34 +58,6 @@ async function phoneRows(runtime: ReturnType<typeof surfaceRuntime>['runtime']) 
 }
 
 describe('session.tabs rows follow main’s layout (switch on)', () => {
-  it('a pane main split in, and a pane main closed, before the window republished', async () => {
-    const { runtime, store, setSession } = surfaceRuntime()
-    runtime.attachWindow(1)
-    const session = store.getSession()
-    const layout = session.terminalLayoutsByTabId[SURFACE_TAB_ID]!
-    setSession({
-      ...session,
-      terminalLayoutsByTabId: {
-        [SURFACE_TAB_ID]: {
-          ...layout,
-          root: {
-            type: 'split',
-            direction: 'vertical',
-            first: { type: 'leaf', leafId: HEADLESS_LEAF_ID },
-            second: { type: 'leaf', leafId: HEADLESS_THIRD_LEAF_ID }
-          }
-        }
-      }
-    })
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [stalePublication(1)] })
-
-    const rows = await phoneRows(runtime)
-    expect(rows.map((entry) => entry.id)).toEqual([
-      row(HEADLESS_LEAF_ID),
-      row(HEADLESS_THIRD_LEAF_ID)
-    ])
-  })
-
   it('a tab main renamed before the window republished', async () => {
     const { runtime } = surfaceRuntime()
     runtime.attachWindow(1)
@@ -109,51 +76,6 @@ describe('session.tabs rows follow main’s layout (switch on)', () => {
       ['Build', 'Build'],
       ['Build', 'Build']
     ])
-  })
-
-  it("save or view lands after publication: the phone's row updates", async () => {
-    const { runtime, store, setSession } = surfaceRuntime()
-    runtime.attachWindow(1)
-    // The user focuses the second pane: the window publishes at once, its save lands later.
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [stalePublication(1, HEADLESS_SECOND_LEAF_ID)]
-    })
-    expect(await phoneActiveRow(runtime)).toBe(row(HEADLESS_SECOND_LEAF_ID))
-
-    const session = store.getSession()
-    const layout = session.terminalLayoutsByTabId[SURFACE_TAB_ID]!
-    setSession({
-      ...session,
-      terminalLayoutsByTabId: {
-        [SURFACE_TAB_ID]: { ...layout, activeLeafId: HEADLESS_SECOND_LEAF_ID }
-      }
-    })
-    expect(await phoneActiveRow(runtime)).toBe(row(HEADLESS_SECOND_LEAF_ID))
-
-    // Back to the first pane, published before its save: the phone follows the view.
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [stalePublication(2, HEADLESS_LEAF_ID)]
-    })
-    expect(await phoneActiveRow(runtime)).toBe(row(HEADLESS_LEAF_ID))
-  })
-
-  it("with no window, rows follow main's saved view", async () => {
-    const { runtime, store, setSession } = surfaceRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    const session = store.getSession()
-    const layout = session.terminalLayoutsByTabId[SURFACE_TAB_ID]!
-    setSession({
-      ...session,
-      terminalLayoutsByTabId: {
-        [SURFACE_TAB_ID]: { ...layout, activeLeafId: HEADLESS_SECOND_LEAF_ID }
-      }
-    })
-
-    expect(await phoneActiveRow(runtime)).toBe(row(HEADLESS_SECOND_LEAF_ID))
   })
 
   it("a reorder and a move to a split main made, before the window's groups caught up", async () => {

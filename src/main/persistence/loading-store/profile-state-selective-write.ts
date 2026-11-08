@@ -5,7 +5,7 @@ import type {
   ProfileStatePersistenceAuthority
 } from './profile-state-authority'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 
 export type SelectiveProfileStateWriteResult = {
   handled: boolean

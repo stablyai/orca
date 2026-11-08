@@ -515,11 +515,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
 
   private func emit(_ emission: MobileWebShellLoadEmission?) {
     guard let emission else { return }
-    var payload: [String: Any] = ["state": emission.state]
-    if let reason = emission.reason {
-      payload["reason"] = reason
-    }
-    onLoadState(payload)
+    onLoadState(emission.payload)
   }
 
   private func reportDocumentFailure() {
@@ -607,6 +603,7 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
 
   /// history.replaceState changes the path before finish; finished() uses commit state instead of URL equality.
   func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+    MobileWebShellWarmUp.release()
     emit(loadState.finished())
   }
 
@@ -615,17 +612,22 @@ final class OrcaMobileWebShellView: ExpoView, WKNavigationDelegate, WKUIDelegate
     didFailProvisionalNavigation navigation: WKNavigation!,
     withError error: Error
   ) {
+    MobileWebShellWarmUp.release()
     reportNavigationFailure(error)
   }
 
   func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+    MobileWebShellWarmUp.release()
     reportNavigationFailure(error)
   }
 
   /// Report renderer death; memory pressure/provider updates look alike, so the caller owns retry policy.
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    MobileWebShellWarmUp.release()
     clearBridgeTarget()
-    emit(loadState.failed(.renderProcessGone))
+    // Jetsam takes WebContent while Orca is backgrounded; the report can arrive as the app resumes, before it is active.
+    let background = window == nil || UIApplication.shared.applicationState != .active
+    emit(loadState.failed(.renderProcessGone, background: background))
   }
 
   func webView(

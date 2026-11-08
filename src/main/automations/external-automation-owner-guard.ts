@@ -10,12 +10,12 @@ import {
   isExternalAutomationProvider,
   type ScopedExternalAutomationRequest
 } from '../../shared/external-automation-scope'
-import { ownerKey } from '../../shared/automation-owner-key'
+import { ownerKey } from '../../shared/automations/ownership/automation-owner-key'
 import { sanitizeSshTargetGeneration } from '../../shared/ssh-target-generation'
 import type {
   ExternalAutomationProvider,
   ExternalAutomationTarget
-} from '../../shared/automations-types'
+} from '../../shared/automations/external/external-automation'
 import type { SshTarget } from '../../shared/ssh-types'
 import {
   isManagedOrcadSshTarget,

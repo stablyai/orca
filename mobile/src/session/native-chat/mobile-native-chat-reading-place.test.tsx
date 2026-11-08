@@ -447,13 +447,16 @@ it('a parked reader stays parked when React Native Web repeats the scroll event 
   expect(chat0.scroller.top(mobileNativeChatRowId('m4'))).toBe(line)
 })
 
-it('releases a held change once a chat hidden mid-scroll is shown again and the reader rests', () => {
+it('releases a held change once a chat hidden mid-touch is shown again and the reader rests', () => {
   const rows = Array.from({ length: 12 }, (_, i) => say(`m${i}`, i % 2 ? 'assistant' : 'user', 'x'))
   const chat0 = mount(rows)
+  chat0.scroller.touch('touchstart')
   chat0.scroller.showFrom(40)
   chat0.scrolled()
   chat0.show([...rows, say('n1', 'assistant', 'reply')])
   chat0.display('hidden')
+  // The hidden list hears no touchend.
+  chat0.scroller.touch('touchend')
   chat0.display('visible')
   chat0.rest()
   expect(chat0.drawn(mobileNativeChatRowId('n1'))).toBe(1)

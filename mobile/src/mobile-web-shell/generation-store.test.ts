@@ -97,14 +97,13 @@ describe('generation store', () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
     const other = deriveHostCacheKey('host-b')
+    // The manifest is written last, so a download cut off mid-stage leaves assets without one.
+    fs.seed(`${HOST}/tmp/${BUILD}/index.html`, { kind: 'file', bytes: new Uint8Array(4) })
+    fs.seed(`${other}/tmp/${BUILD}/index.html`, { kind: 'file', bytes: new Uint8Array(4) })
 
-    await store.stageGeneration(HOST, buildResult({}))
-    await store.stageGeneration(other, buildResult({}))
-    await store.sweepStagedGenerations()
-
-    expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
     expect(await store.readActiveGeneration(other)).toBeNull()
+    expect(fs.paths().some((path) => path.includes('/tmp'))).toBe(false)
   })
 
   it('replaces the previous generation when the build id changes', async () => {
@@ -311,7 +310,7 @@ describe('generation store', () => {
     const store = createGenerationStore({ fileSystem: fs })
     const manifest = `${HOST}/generations/${BUILD}/manifest.json`
     await activate(store, HOST)
-    const before = fs.paths()
+    const before = fs.paths().filter((path) => !path.endsWith('/tmp'))
 
     fs.failReadsAt(manifest)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
@@ -521,5 +520,28 @@ describe('an update staged behind a live page', () => {
     release()
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
     expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${BUILD}/index.html`)).toBe(false)
+  })
+
+  it('lets a page that waited on another page fetch the build itself when that page gives up', async () => {
+    const store = createGenerationStore({ fileSystem: createFakeFileSystem() })
+    const first = await store.claimUpdate(HOST, SECOND_BUILD)
+    const second = store.claimUpdate(HOST, SECOND_BUILD)
+
+    first?.()
+
+    expect(await second).not.toBeNull()
+  })
+
+  it('commits at the next launch when the app ends while the page still reads the old build', async () => {
+    const fs = createFakeFileSystem()
+    const first = createGenerationStore({ fileSystem: fs })
+    await activate(first, HOST)
+    first.holdGeneration(HOST)
+    first.deferCommit(await first.stageGeneration(HOST, buildResult(SECOND)))
+
+    const relaunched = createGenerationStore({ fileSystem: fs })
+
+    expect((await relaunched.readActiveGeneration(HOST))?.buildId).toBe(SECOND_BUILD)
+    expect(await fs.fileExists(`${ROOT}/${HOST}/generations/${SECOND_BUILD}/index.html`)).toBe(true)
   })
 })

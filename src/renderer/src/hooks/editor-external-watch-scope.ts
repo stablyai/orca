@@ -1,4 +1,4 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
 
 // Why: recently used workspaces keep their watch so switching back needs no re-read.

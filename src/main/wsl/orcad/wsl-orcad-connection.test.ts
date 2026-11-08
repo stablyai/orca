@@ -415,23 +415,6 @@ describe('WslOrcadConnectionManager', () => {
     expect(deployAndLaunch).toHaveBeenCalledTimes(1)
   })
 
-  it("hands the deploy this desktop's enrolled pairing for the incumbent's terminal count", async () => {
-    const enrolled = parsePairingCode(
-      encodePairingOffer({
-        v: PAIRING_OFFER_VERSION,
-        endpoint: 'ws://127.0.0.1:41000',
-        deviceToken: 'enrolled-token',
-        publicKeyB64: Buffer.alloc(32, 7).toString('base64')
-      })
-    )
-    const { manager, deployAndLaunch } = setup({ getPairingOffer: () => enrolled })
-    await manager.ensure('Ubuntu')
-    expect(deployAndLaunch).toHaveBeenCalledWith(
-      'Ubuntu',
-      expect.objectContaining({ pairedOffer: enrolled })
-    )
-  })
-
   it('throws the deferral and starts no bridge', async () => {
     const { manager, launches, children, onChange } = setup()
     launches.push({

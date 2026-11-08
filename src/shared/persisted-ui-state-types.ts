@@ -4,7 +4,7 @@ import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
-import type { FeatureTipId } from './feature-tips'
+import type { FeatureTipSeenId } from './feature-tips'
 import type { ContextualTourId } from './contextual-tours'
 import type { FeatureInteractionState } from './feature-interactions'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
@@ -28,7 +28,7 @@ import type {
   WorktreeCardProperty
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
-import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { PersistedAutomationHostFilter } from './automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
 
 export type PersistedUIState = {
@@ -260,7 +260,7 @@ export type PersistedUIState = {
   taskResumeState?: TaskResumeState
   workspaceCleanup?: WorkspaceCleanupUIState
   /** Feature tips already surfaced; startup opens the tips modal only when a current tip id is missing here. */
-  featureTipsSeenIds?: FeatureTipId[]
+  featureTipsSeenIds?: FeatureTipSeenId[]
   /** Feature ids the user has actually used; education surfaces skip teaching already-discovered features. */
   featureInteractions?: FeatureInteractionState
   /** Contextual tours already surfaced; unknown ids ignored on hydration for downgrade/upgrade forward-compat. */

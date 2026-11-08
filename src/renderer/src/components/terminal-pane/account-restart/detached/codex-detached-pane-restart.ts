@@ -8,7 +8,7 @@ import type { LocatedCodexPane } from './located-codex-pane'
 
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
-import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { singlePaneLayoutSnapshot } from '@/store/terminals/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import {
   buildCodexAccountRestartStartup,

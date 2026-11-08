@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionStatus
@@ -6,42 +7,34 @@ import type {
 
 export function developerPermissionStatusLabel(
   id: DeveloperPermissionId,
-  status: DeveloperPermissionStatus | undefined
+  status: DeveloperPermissionStatus | undefined,
+  t: Translate = translate
 ): string {
   switch (status) {
     case 'granted':
-      return translate('auto.components.settings.DeveloperPermissionsPane.statusGranted', 'Granted')
+      return t('auto.components.settings.DeveloperPermissionsPane.statusGranted', 'Granted')
     case 'denied':
-      return translate('auto.components.settings.DeveloperPermissionsPane.statusDenied', 'Denied')
+      return t('auto.components.settings.DeveloperPermissionsPane.statusDenied', 'Denied')
     case 'not-determined':
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.statusNotRequested',
         'Not requested'
       )
     case 'restricted':
-      return translate(
-        'auto.components.settings.DeveloperPermissionsPane.statusRestricted',
-        'Restricted'
-      )
+      return t('auto.components.settings.DeveloperPermissionsPane.statusRestricted', 'Restricted')
     case 'unsupported':
-      return translate(
-        'auto.components.settings.DeveloperPermissionsPane.statusUnsupported',
-        'macOS only'
-      )
+      return t('auto.components.settings.DeveloperPermissionsPane.statusUnsupported', 'macOS only')
     case 'ready':
-      return translate(
-        'auto.components.settings.DeveloperPermissionsPane.statusEntitled',
-        'Entitled'
-      )
+      return t('auto.components.settings.DeveloperPermissionsPane.statusEntitled', 'Entitled')
     case 'unknown':
     case undefined:
       if (id === 'local-network') {
-        return translate(
+        return t(
           'auto.components.settings.DeveloperPermissionsPane.statusManagedByMacOS',
           'Managed by macOS'
         )
       }
-      return translate(
+      return t(
         'auto.components.settings.DeveloperPermissionsPane.statusCheckManually',
         'Check manually'
       )

@@ -1,6 +1,6 @@
 /** Keep host origin on every visible row. Until a host in view commits an answer, preserve the caller’s prior rows instead of claiming an empty result. */
 
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { AutomationHostCacheEntry } from './automation-host-cache-types'
 import type {
   AutomationHostCatalog,

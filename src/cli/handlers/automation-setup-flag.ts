@@ -1,5 +1,5 @@
 import { RuntimeClientError } from '../runtime-client'
-import type { AutomationWorkspaceMode } from '../../shared/automations-types'
+import type { AutomationWorkspaceMode } from '../../shared/automations/automation-definition'
 
 export function getAutomationSetupFlag(
   flags: Map<string, string | boolean>

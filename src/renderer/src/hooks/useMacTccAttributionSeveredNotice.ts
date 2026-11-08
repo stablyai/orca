@@ -7,7 +7,10 @@ import type {
 } from '../../../preload/api-types'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { useAppStore } from '@/store'
-import { usePluginLanguagePackStore, usePluginLanguagePacks } from '@/store/plugin-language-packs'
+import {
+  usePluginLanguagePackStore,
+  usePluginLanguagePacks
+} from '@/store/plugins/localization/plugin-language-packs'
 import { translate } from '@/i18n/i18n'
 import { track } from '@/lib/telemetry'
 import { resolveUiLocale } from '@/i18n/supported-languages'
@@ -16,7 +19,7 @@ import { macFolderAccessFolderName } from '@/components/shared/mac-folder-access
 import {
   FOLDER_ACCESS_MISMATCH_NOTICE_ID,
   useMacFolderAccessFixStore
-} from '@/store/mac-folder-access-fix'
+} from '@/store/terminals/folder-access/mac-folder-access-fix'
 
 const SEVERED_TCC_NOTICE_ID = 'mac-tcc-attribution-severed'
 

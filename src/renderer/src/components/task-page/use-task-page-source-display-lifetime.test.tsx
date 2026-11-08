@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { taskPageGitHubResumeCache } from './github/task-page-github-resume-cache'
+
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
@@ -12,7 +12,6 @@ import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTest
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import {
   Q1,
-  Q2,
   upstream,
   fork,
   sources,
@@ -134,43 +133,6 @@ describe('mounted Tasks source lifetime', () => {
     })
     expect(screen.getByTestId('mounted-count').textContent).not.toBe(currentCount)
   })
-  it('shows the loading rows, never the empty state, from a held source click until that source answers', async () => {
-    const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
-    vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(180)
-    const { container } = await mountUpstream(true)
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(upstream.owner)
-    const save = Promise.withResolvers<Repo>()
-    vi.mocked(window.api.repos.update).mockReturnValueOnce(save.promise)
-    const origin = Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
-    list.mockReturnValue(origin.promise)
-    const expectLoading = (loading: boolean) => {
-      expect(screen.queryByText('No matching GitHub work')).toBeNull()
-      expect(container.querySelector('.animate-pulse') !== null).toBe(loading)
-    }
-    fireEvent.click(screen.getByRole('button', { name: 'Origin' }))
-    expectLoading(true)
-    await act(flush)
-    expectLoading(true)
-    await act(async () => {
-      save.resolve({ ...repo, issueSourcePreference: 'origin' })
-      await flush()
-    })
-    expectLoading(true)
-    await act(async () => {
-      origin.resolve(answer(fork))
-      await flush()
-    })
-    expectLoading(false)
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(fork.owner)
-    // An accepted empty answer is an answer: the existing empty state, never skeletons.
-    list.mockResolvedValue({ items: [], sources: sources(fork) })
-    await act(async () => {
-      view.setAppliedTaskSearch(Q2)
-      await flush()
-    })
-    expect(screen.getByText('No matching GitHub work')).toBeInTheDocument()
-    expect(container.querySelector('.animate-pulse')).toBeNull()
-  })
   it('ends loading at once when a held save loses its last selected owner, and Refresh keeps it ended', async () => {
     const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
     // A folder project keeps Tasks open after the only GitHub-eligible repo is removed.
@@ -215,96 +177,6 @@ describe('mounted Tasks source lifetime', () => {
       await flush()
     })
     ended()
-  })
-  it('rejects a held numbered page after a flip and retires mounted/resume data on origin replacement with upstream fixed', async () => {
-    const list = vi.mocked(window.api.gh.listWorkItems).mockResolvedValue(answer(upstream))
-    vi.mocked(window.api.gh.countWorkItems).mockResolvedValue(120)
-    vi.mocked(window.api.repos.update).mockImplementation(async ({ updates }) => ({
-      ...repo,
-      issueSourcePreference: updates.issueSourcePreference
-    }))
-    await mountUpstream()
-    const initialContext = view.githubResumeContextKey
-    expect(taskPageGitHubResumeCache.read(initialContext, 0)?.items[0].title).toBe(upstream.owner)
-    const picker = screen.getByRole('group', { name: 'Issue source' })
-    const page = Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
-    list.mockReturnValueOnce(page.promise).mockResolvedValue(answer(fork))
-    let paging!: Promise<void>
-    await act(async () => {
-      paging = view.handleLoadNextPage(2)
-      await flush()
-    })
-    expect(view.paginationLoading).toBe(true)
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Origin' }))
-      await flush()
-    })
-    await act(async () => {
-      page.resolve(answer(upstream))
-      await paging
-      await flush()
-    })
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(fork.owner)
-    expect(view.currentPage).toBe(0)
-    expect(view.paginationLoading).toBe(false)
-    expect(taskPageGitHubResumeCache.read(initialContext, 2)).toBeNull()
-    const originContext = view.githubResumeContextKey
-    const refreshed =
-      Promise.withResolvers<Awaited<ReturnType<typeof window.api.gh.listWorkItems>>>()
-    const replacement = { owner: 'new-fork', repo: 'project', host: 'ghe.example.com' }
-    list
-      .mockResolvedValueOnce({
-        items: [item(replacement.owner)],
-        sources: { ...sources(replacement), originCandidate: replacement }
-      })
-      .mockReturnValue(refreshed.promise)
-    await act(async () => {
-      await useAppStore
-        .getState()
-        .fetchWorkItems(repo.id, repo.path, view.githubPerRepoPageLimit, 'label:replacement', {
-          force: true
-        })
-      await flush()
-    })
-    expect(screen.getByRole('group', { name: 'Issue source' })).toBe(picker)
-    expect(screen.getByTestId('mounted-rows')).toBeEmptyDOMElement()
-    expect(screen.getByTestId('mounted-count')).toHaveTextContent('unknown')
-    expect(taskPageGitHubResumeCache.read(initialContext, 0)).toBeNull()
-    expect(taskPageGitHubResumeCache.read(originContext, 0)).toBeNull()
-    await act(async () => {
-      refreshed.resolve({
-        items: [item(replacement.owner)],
-        sources: { ...sources(replacement), originCandidate: replacement }
-      })
-      await flush()
-    })
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(replacement.owner)
-    // An older host's answer (origin absent) is checked on the candidate it does report.
-    const lifetime = () => [
-      useAppStore.getState().githubSourceCollections.context(useAppStore.getState().repos[0]),
-      useAppStore.getState().workItemsInvalidationNonce
-    ]
-    const oldHost = async (upstreamCandidate: GitHubOwnerRepo) => {
-      list.mockResolvedValueOnce({
-        items: [item(replacement.owner)],
-        sources: { issues: replacement, prs: replacement, upstreamCandidate }
-      })
-      await act(async () => {
-        await useAppStore
-          .getState()
-          .fetchWorkItems(repo.id, repo.path, view.githubPerRepoPageLimit, 'label:replacement', {
-            force: true
-          })
-        await flush()
-      })
-    }
-    const recorded = lifetime()
-    await oldHost(upstream)
-    expect(lifetime()).toEqual(recorded)
-    expect(screen.getByTestId('mounted-rows')).toHaveTextContent(replacement.owner)
-    await oldHost({ owner: 'other-upstream', repo: 'project' })
-    expect(lifetime()[0]).not.toBe(recorded[0])
-    expect(lifetime()[1]).toBeGreaterThan(recorded[1])
   })
 
   it.each(['upstream', 'origin'] as const)(

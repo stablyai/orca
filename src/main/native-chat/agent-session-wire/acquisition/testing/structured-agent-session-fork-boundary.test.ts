@@ -1,51 +1,17 @@
-import { readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { forkSession, type SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
-import { prepareLegacyTranscriptImport } from '../../../agent-session-journal/history-import/journal-legacy-import'
-import capture from '../../../../claude/__fixtures__/claude-plugin-recovery.json'
+import { prepareForkSnapshot } from '../structured-agent-session-fork-snapshot'
+import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { readFile } from 'node:fs/promises'
+
 import { expect, it } from 'vitest'
 import { claudeConversationForkBoundary } from '../../../../claude/claude-conversation-fork-boundary'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
-import {
-  fixture,
-  appendItems,
-  item
-} from '../../publication/history/testing/agent-session-history-contract-test-fixture'
+
 import { structuredAgentSessionForkBoundary } from '../structured-agent-session-fork-boundary'
-
-it('allows the last inherited response without a new turn and rejects responses removed by rewind', async () => {
-  await appendItems(2)
-  const selected = agentJournalItemKey(item(2))
-  const record = agentSessionRecordFixture({
-    sessionId: 'session-1',
-    provider: 'codex',
-    forkedFrom: {
-      sessionId: 'parent',
-      itemId: 'source',
-      childBoundary: { kind: 'item', itemId: selected }
-    }
-  })
-  expect(
-    structuredAgentSessionForkBoundary(fixture.journal.snapshot(), record, selected)
-  ).toMatchObject({ latest: true, checkpoint: { turnId: 'turn-1', settled: true } })
-  await fixture.journal.replaceEpochItems('handle_forked', 1, [])
-  expect(
-    structuredAgentSessionForkBoundary(fixture.journal.snapshot(), record, selected)
-  ).toBeNull()
-})
-
-it('does not treat the presence of saved assistant content as completion of an unresolved root', async () => {
-  await appendItems(1)
-  const record = agentSessionRecordFixture({ sessionId: 'session-1' })
-  expect(
-    structuredAgentSessionForkBoundary(
-      fixture.journal.snapshot(),
-      record,
-      agentJournalItemKey(item(1))
-    )?.checkpoint.settled
-  ).toBe(false)
-})
+import {
+  continuedOutsideNotice,
+  continuedOutsideRecordId
+} from '../structured-agent-session-history-catch-up'
 
 it('carries a settled root opener even when the streamed block never acquired a final native row', () => {
   const opener = agentJournalItemKey({
@@ -139,99 +105,76 @@ it('cuts Claude forks before a local-command caveat following the response', asy
   ).toBe('ef5b13f9-6a3f-5d82-8452-cb799862efc0')
 })
 
-it.each([false, true])(
-  'cuts a Claude fork at a recorded task wake, retaining caller-owned results: %s',
-  async (mixed) => {
-    const opener = {
-      ...capture[0]!,
-      uuid: 'prompt',
-      parentUuid: null,
-      origin: { kind: 'human' },
-      message: { role: 'user', content: 'original request' }
-    }
-    const answer = {
-      ...capture[1]!,
-      uuid: 'answer',
-      parentUuid: 'prompt',
-      message: {
-        role: 'assistant',
-        content: [
-          { type: 'text', text: 'original response' },
-          ...(mixed
-            ? [{ type: 'tool_use', id: 'toolu_1', name: 'Read', input: { path: 'original' } }]
-            : [])
-        ],
-        stop_reason: mixed ? 'tool_use' : 'end_turn'
-      }
-    }
-    const wake = {
-      ...capture[0]!,
-      parentUuid: 'answer',
-      ...(mixed
-        ? {
-            message: {
-              role: 'user',
-              content: [
-                { type: 'text', text: String(capture[0]!.message.content) },
-                { type: 'tool_result', tool_use_id: 'toolu_1', content: 'real result' }
-              ]
-            }
-          }
-        : {})
-    }
-    const following = { ...answer, uuid: 'wake-answer', parentUuid: wake.uuid }
-    const entries = [opener, answer, wake, following]
-    const checkpoint = {
-      selectedItemId: 'response',
-      settled: true,
-      rootMessage: { sessionId: opener.sessionId, uuid: 'prompt' },
-      throughMessage: { sessionId: opener.sessionId, uuid: 'answer' }
-    }
-    const endpoint = claudeConversationForkBoundary(entries, checkpoint)
-    expect(endpoint).toBe(mixed ? wake.uuid : 'answer')
-    expect(claudeConversationForkBoundary(entries, { ...checkpoint, rootMessage: undefined })).toBe(
-      mixed ? wake.uuid : 'answer'
-    )
-    expect(
-      claudeConversationForkBoundary(entries, {
-        ...checkpoint,
-        beforeMessage: { sessionId: opener.sessionId, uuid: wake.uuid }
-      })
-    ).toBe(mixed ? wake.uuid : 'answer')
-    const copied: SessionStoreEntry[] = []
-    const result = await forkSession(opener.sessionId, {
-      upToMessageId: endpoint,
-      sessionStore: {
-        load: async () => entries,
-        append: async (_key, rows) => {
-          copied.push(...rows)
+it('cuts before a Claude continuation notice attributed to the next imported prompt', () => {
+  const key = (uuid: string) =>
+    agentJournalItemKey({ provider: 'claude', sessionId: 'source', uuid })
+  const turn = (recordId: string) =>
+    agentJournalItemKey({ provider: 'legacy', agent: 'claude', sessionId: 'chat', recordId })
+  const snapshot: AgentJournalSnapshot = {
+    sessionId: 'chat',
+    cursor: { epoch: 'epoch', sequence: 6 },
+    submissions: [],
+    items: (
+      [
+        { itemId: turn('T1'), body: { kind: 'turn', turnId: 'T1', state: 'completed' } },
+        {
+          itemId: turn(continuedOutsideRecordId(key('answer'))),
+          body: continuedOutsideNotice(false),
+          turnScope: { kind: 'thread' }
+        },
+        {
+          itemId: key('answer'),
+          body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'FOXTROT' }] },
+          turnScope: { kind: 'turn', turnItemId: turn('T1') }
+        },
+        {
+          itemId: turn(continuedOutsideRecordId(key('late-detail'))),
+          body: continuedOutsideNotice(false),
+          turnScope: { kind: 'thread' }
+        },
+        {
+          itemId: turn(continuedOutsideRecordId(key('terminal-user'))),
+          body: continuedOutsideNotice(false),
+          turnScope: { kind: 'thread' }
+        },
+        {
+          itemId: turn('T2'),
+          body: { kind: 'turn', turnId: 'T2', state: 'completed', userItemId: key('terminal-user') }
+        },
+        {
+          itemId: key('terminal-user'),
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'later terminal prompt' }]
+          },
+          turnScope: { kind: 'turn', turnItemId: turn('T2') }
+        },
+        {
+          itemId: key('late-detail'),
+          body: { kind: 'status', text: 'retained detail' },
+          turnScope: { kind: 'turn', turnItemId: turn('T1') }
         }
-      }
-    })
-    // The SDK remaps uuids but records each copied row's source uuid, so the
-    // independent wake answer must not appear anywhere in the copy.
-    expect(copied.some((row) => JSON.stringify(row).includes('"wake-answer"'))).toBe(false)
-    const path = join(fixture.root, 'fork.jsonl')
-    await writeFile(path, `${copied.map((row) => JSON.stringify(row)).join('\n')}\n`)
-    const prepared = await prepareLegacyTranscriptImport({
-      agent: 'claude',
-      sessionId: result.sessionId,
-      options: { filePath: path }
-    })
-    expect(prepared.ok).toBe(true)
-    if (!prepared.ok) {
-      throw new Error(prepared.error)
-    }
-    expect(
-      prepared.items.filter((row) => row.body.kind === 'message' && row.body.role === 'user')
-    ).toHaveLength(1)
-    expect(JSON.stringify(prepared.items)).not.toContain('<task-notification>')
-    if (mixed) {
-      expect(prepared.items.at(-1)?.body).toMatchObject({
-        kind: 'message',
-        role: 'tool',
-        blocks: [{ type: 'tool-result', callId: 'toolu_1', output: 'real result' }]
-      })
-    }
+      ] satisfies Omit<
+        AgentJournalSnapshot['items'][number],
+        'sequence' | 'revision' | 'observedAt'
+      >[]
+    ).map((item, index) => ({
+      ...item,
+      sequence: index + 1,
+      revision: 1,
+      observedAt: 123
+    }))
   }
-)
+  expect(
+    prepareForkSnapshot({ snapshot, nextItemId: turn('T2') }).map((item) =>
+      agentJournalItemKey(item.identity)
+    )
+  ).toEqual([
+    'legacy:claude:chat:T1',
+    'legacy:claude:chat:continued-outside%3Aclaude%3Asource%3Aanswer',
+    'claude:source:answer',
+    'legacy:claude:chat:continued-outside%3Aclaude%3Asource%3Alate-detail',
+    'claude:source:late-detail'
+  ])
+})

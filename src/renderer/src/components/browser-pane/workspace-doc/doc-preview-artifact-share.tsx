@@ -1,4 +1,4 @@
-import type { ArtifactWriteRequest } from '../../../../../shared/artifacts'
+import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
 import {
   getConnectionExecutionHostId,
   toRuntimeExecutionHostId
@@ -18,7 +18,7 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../../../../shared/cross-platform-path'
-import type { RuntimeFilePreviewResult } from '../../../../../shared/runtime-types'
+import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
 import {
   acquireTerminalArtifactGrant,
   pinTerminalArtifactGrantTarget,

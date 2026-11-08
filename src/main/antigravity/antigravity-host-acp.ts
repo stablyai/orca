@@ -1,14 +1,15 @@
 // The execution host's own `agy acp`: preferred for new chats when it answers as a compatible server.
 
 import { existsSync } from 'node:fs'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { InitializeResponse } from '../acp/generated/acp-protocol.generated'
-import { AcpConnectionClosedError } from '../acp/acp-errors'
+import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
 } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
 import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'
 import {
@@ -135,20 +136,10 @@ export async function agyUsesApiKey(homePath: string): Promise<boolean> {
   }
 }
 
-/** Whether Orca's own Chat sign-in has left credentials in its managed home or a folder inside it. */
+/** Whether Orca's own Chat holds the managed server's personal sign-in token. */
 export async function hasManagedAntigravityChatSignIn(managedHome: string): Promise<boolean> {
-  const entries = await readdir(managedHome, { withFileTypes: true }).catch(() => [])
-  const folders = [
-    managedHome,
-    ...entries.filter((entry) => entry.isDirectory()).map((entry) => join(managedHome, entry.name))
-  ]
-  for (const folder of folders) {
-    const names = await readdir(folder).catch(() => [])
-    if (names.some((name) => name.endsWith('oauth-token'))) {
-      return true
-    }
-  }
-  return false
+  const token = join(managedHome, ANTIGRAVITY_ACP_HOME, 'acp_token.json')
+  return (await stat(token).catch(() => null)) !== null
 }
 
 /** Whether agy itself is signed in on this host; an unreadable store counts as signed out. */

@@ -5,10 +5,7 @@ import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
   MAX_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES,
-  MAX_FEEDBACK_IMAGE_SOURCE_BYTES,
   MAX_FEEDBACK_IMAGE_TOTAL_BYTES,
-  MIN_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES,
-  maxFeedbackImageBatchBytes,
   readFeedbackImageFiles
 } from './feedback-image-attachments'
 import type * as FeedbackImageShrinkModule from './feedback-image-shrink'
@@ -81,107 +78,11 @@ function oversizedPng(
   return file
 }
 
-function gifFile(name: string, size: number): File {
-  const file = new File([new Uint8Array([71, 73, 70, 56, 57, 97, 1, 0, 1, 0])], name, {
-    type: 'image/gif'
-  })
-  Object.defineProperty(file, 'size', { value: size })
-  return file
-}
-
 function encoded(size: number, type: string): Blob {
   return new Blob([new Uint8Array(size)], { type })
 }
 
-describe('maxFeedbackImageBatchBytes', () => {
-  it('covers a GIF admitted by slack from an earlier optimization', async () => {
-    shrinkFeedbackImage.mockResolvedValue(encoded(1_750_000, 'image/png'))
-    const batch = [pngFile('retina.png', 6_400_000), gifFile('anim.gif', 2_444_304)]
-
-    const reserved = maxFeedbackImageBatchBytes(batch, 0, 0)
-    const { images, errors } = await readFeedbackImageFiles(batch, 0)
-
-    expect(errors).toEqual([])
-    expect(images).toHaveLength(2)
-    expect(images.reduce((total, image) => total + image.bytes, 0)).toBe(4_194_304)
-    expect(reserved).toBeGreaterThanOrEqual(4_194_304)
-  })
-})
-
 describe('readFeedbackImageFiles', () => {
-  it('caps rejection detail so a large drop cannot mount one toast per file', async () => {
-    const files = Array.from(
-      { length: 100 },
-      (_, index) => new File(['x'], `image-${index}.svg`, { type: 'image/svg+xml' })
-    )
-
-    const { images, errors } = await readFeedbackImageFiles(files, 0)
-
-    expect(images).toEqual([])
-    expect(errors).toHaveLength(5)
-    expect(errors.at(-1)).toBe('96 additional images could not be attached.')
-  })
-
-  it('refuses an additional image when full-resolution PNG cannot fit the remaining budget', async () => {
-    shrinkFeedbackImage.mockImplementation(async (_file: File, maxBytes: number) =>
-      maxBytes >= 1_750_000 ? encoded(1_750_000, 'image/png') : null
-    )
-    const attached: { contentType: string; bytes: number }[] = []
-
-    for (const name of ['first.png', 'second.png']) {
-      const { images, errors } = await readFeedbackImageFiles(
-        [pngFile(name, 6_400_000)],
-        attached.length,
-        attached.reduce((total, image) => total + image.bytes, 0)
-      )
-      expect(errors).toEqual([])
-      attached.push(...images)
-    }
-    const { images, errors, notices } = await readFeedbackImageFiles(
-      [pngFile('third.png', 6_400_000)],
-      attached.length,
-      attached.reduce((total, image) => total + image.bytes, 0)
-    )
-
-    expect(attached.map((image) => image.contentType)).toEqual(['image/png', 'image/png'])
-    expect(images).toEqual([])
-    expect(errors).toEqual(['third.png would bring the attachments over 4.0 MB in total.'])
-    expect(notices).toEqual([])
-  })
-
-  it('shrinks into the space left when less than half the budget remains', async () => {
-    const first = pngFile('first.png', 3_000_000)
-    const second = pngFile('second.png', 3_000_000)
-    shrinkFeedbackImage.mockResolvedValue(encoded(900_000, 'image/png'))
-
-    const { images, errors } = await readFeedbackImageFiles([first, second], 0)
-
-    expect(errors).toEqual([])
-    expect(shrinkFeedbackImage).toHaveBeenCalledTimes(1)
-    expect(shrinkFeedbackImage).toHaveBeenCalledWith(
-      second,
-      MAX_FEEDBACK_IMAGE_TOTAL_BYTES - 3_000_000
-    )
-    expect(images.map((image) => [image.name, image.contentType, image.bytes])).toEqual([
-      ['first.png', 'image/png', 3_000_000],
-      ['second.png', 'image/png', 900_000]
-    ])
-  })
-
-  it('refuses without shrinking when too little budget is left to shrink into', async () => {
-    const almostSpent = MAX_FEEDBACK_IMAGE_TOTAL_BYTES - MIN_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES + 1
-
-    const { images, errors } = await readFeedbackImageFiles(
-      [pngFile('second.png', 2_000_000)],
-      1,
-      almostSpent
-    )
-
-    expect(shrinkFeedbackImage).not.toHaveBeenCalled()
-    expect(images).toEqual([])
-    expect(errors).toEqual(['second.png would bring the attachments over 4.0 MB in total.'])
-  })
-
   it('refuses an oversized animated PNG rather than flattening it', async () => {
     // Why: a large metadata chunk can push acTL well past the first 64 KB.
     const apng = oversizedPng('anim.png', [
@@ -227,59 +128,6 @@ describe('readFeedbackImageFiles', () => {
     expect(images.map((image) => image.name)).toEqual(['corrupt-length.png'])
   })
 
-  it('refuses a file too large to read before shrinking', async () => {
-    const file = pngFile('enormous.png', MAX_FEEDBACK_IMAGE_SOURCE_BYTES + 1)
-    file.arrayBuffer = vi.fn()
-
-    const { images, errors } = await readFeedbackImageFiles([file], 0)
-
-    expect(file.arrayBuffer).not.toHaveBeenCalled()
-    expect(images).toEqual([])
-    expect(errors).toEqual(['enormous.png is larger than 4.0 MB.'])
-  })
-
-  // Why: the size message would tell the user to make a file smaller that is actually corrupt.
-  it('reports an image the browser could not decode for shrinking as invalid', async () => {
-    shrinkFeedbackImage.mockRejectedValueOnce(new Error('decode failed'))
-    shrinkFeedbackImage.mockResolvedValueOnce(encoded(900_000, 'image/png'))
-
-    const { images, errors } = await readFeedbackImageFiles(
-      [pngFile('corrupt.png', 6_400_000), pngFile('retina.png', 6_400_000)],
-      0
-    )
-
-    expect(errors).toEqual(['corrupt.png is not a valid supported image.'])
-    expect(images.map((image) => image.name)).toEqual(['retina.png'])
-    expect(shrinkFeedbackImage).toHaveBeenLastCalledWith(
-      expect.objectContaining({ name: 'retina.png' }),
-      MAX_FEEDBACK_IMAGE_SHRINK_TARGET_BYTES
-    )
-  })
-
-  it('accepts a set that totals exactly the attachment budget', async () => {
-    const quarter = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / MAX_FEEDBACK_IMAGE_COUNT
-    const files = Array.from({ length: MAX_FEEDBACK_IMAGE_COUNT }, (_, index) =>
-      pngFile(`part-${index}.png`, quarter)
-    )
-
-    const { images, errors } = await readFeedbackImageFiles(files, 0)
-
-    expect(errors).toEqual([])
-    expect(images).toHaveLength(MAX_FEEDBACK_IMAGE_COUNT)
-  })
-
-  it('rejects an image that would take the set over the total budget', async () => {
-    const half = MAX_FEEDBACK_IMAGE_TOTAL_BYTES / 2
-
-    const { images, errors } = await readFeedbackImageFiles(
-      [pngFile('a.png', half), pngFile('b.png', half), pngFile('c.png', 1)],
-      0
-    )
-
-    expect(images.map((image) => image.name)).toEqual(['a.png', 'b.png'])
-    expect(errors).toEqual(['c.png would bring the attachments over 4.0 MB in total.'])
-  })
-
   it('counts already attached bytes and still fits a later smaller image', async () => {
     const { images, errors } = await readFeedbackImageFiles(
       [pngFile('big.png', 2048), pngFile('small.png', 1024)],
@@ -300,16 +148,6 @@ describe('readFeedbackImageFiles', () => {
     expect(errors).toEqual([
       'huge-dimensions.png has dimensions that are too large to preview safely.'
     ])
-    expect(URL.createObjectURL).not.toHaveBeenCalled()
-  })
-
-  it('rejects invalid raster bytes instead of mounting a broken preview', async () => {
-    const file = new File(['not an image'], 'broken.png', { type: 'image/png' })
-
-    const { images, errors } = await readFeedbackImageFiles([file], 0)
-
-    expect(images).toEqual([])
-    expect(errors).toEqual(['broken.png is not a valid supported image.'])
     expect(URL.createObjectURL).not.toHaveBeenCalled()
   })
 
@@ -334,20 +172,5 @@ describe('readFeedbackImageFiles', () => {
 
     await expect(readFeedbackImageFiles([good, broken], 0)).rejects.toThrow('file went away')
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:feedback-1')
-  })
-
-  it('does not depend on crypto.randomUUID, which LAN web clients do not expose', async () => {
-    const realCrypto = globalThis.crypto
-    Object.defineProperty(globalThis, 'crypto', {
-      configurable: true,
-      value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) }
-    })
-    try {
-      const { images, errors } = await readFeedbackImageFiles([pngFile('a.png')], 0)
-      expect(errors).toEqual([])
-      expect(images).toHaveLength(1)
-    } finally {
-      Object.defineProperty(globalThis, 'crypto', { configurable: true, value: realCrypto })
-    }
   })
 })

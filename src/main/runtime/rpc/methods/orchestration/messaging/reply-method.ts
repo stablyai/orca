@@ -3,7 +3,7 @@ import { answerSenderRelayReport } from '../../../../orchestration/mailbox/sende
 import { defineMethod } from '../../../core'
 import { deliverQuestionAnswer } from '../../../../orchestration/mailbox/questions/question-answer-delivery'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { orchestrationCallerIdentity, resolveRunScope } from '../runs/run-scope'
 import {
   readMutationReplayNudge,

@@ -1,11 +1,11 @@
 import {
   createRejectedNativeFileDropPayload,
   validateNativeFileDropPaths
-} from '../../../shared/native-file-drop'
+} from '../../../shared/file-import/native-file-drop'
 import type {
   DroppedPathConsumer,
   PreparedDroppedPaths
-} from '../../../shared/native-file-drop-preparation'
+} from '../../../shared/file-import/native-file-drop-preparation'
 
 /** Validate OS file paths and let main temp-copy the ones that may vanish before delivery. */
 export async function prepareOsFileDropPaths(

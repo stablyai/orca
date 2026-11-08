@@ -2,7 +2,7 @@ import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from '
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   formatAutomationDateTime,
@@ -24,7 +24,7 @@ import {
   isAutomationRunHistoryArrowKey,
   shouldHandleAutomationRunHistoryKey
 } from './automation-run-history-keyboard-navigation'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 // Base height covers date/workspace/padding; only folded occurrence text adds a line.
 const RUN_ROW_HEIGHT_PX = 57
@@ -57,6 +57,8 @@ export function AutomationRunHistory({
   onRecoverHistory,
   onOpenRun
 }: AutomationRunHistoryProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const containerRef = React.useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
@@ -72,12 +74,12 @@ export function AutomationRunHistory({
   }))
   const runCountLabel = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length
-    return translate(
+    return t(
       'auto.components.automations.runHistory.runCountSummary',
       '{{count}} runs · {{completed}} completed',
       { count: runs.length, completed, defaultValue_one: '{{count}} run · {{completed}} completed' }
     )
-  }, [runs])
+  }, [runs, t])
 
   const selectedRunId =
     selectedRunState.automationId === automationId ? selectedRunState.runId : null
@@ -219,7 +221,7 @@ export function AutomationRunHistory({
     >
       <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="text-sm font-medium">
-          {translate('auto.components.automations.AutomationRunHistory.53fc5f07ab', 'Run history')}
+          {t('auto.components.automations.AutomationRunHistory.53fc5f07ab', 'Run history')}
         </div>
         {/* A failed read knows no counts; "0 runs" would answer a question nobody asked the host. */}
         {notice ? null : <div className="text-xs text-muted-foreground">{runCountLabel}</div>}
@@ -234,24 +236,13 @@ export function AutomationRunHistory({
               'sticky top-0 z-10 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground'
             )}
           >
+            <div>{t('auto.components.automations.AutomationRunHistory.8faaa00726', 'Run')}</div>
             <div>
-              {translate('auto.components.automations.AutomationRunHistory.8faaa00726', 'Run')}
+              {t('auto.components.automations.AutomationRunHistory.149c0b49c7', 'Workspace')}
             </div>
-            <div>
-              {translate(
-                'auto.components.automations.AutomationRunHistory.149c0b49c7',
-                'Workspace'
-              )}
-            </div>
-            <div>
-              {translate('auto.components.automations.AutomationRunHistory.86a248187e', 'Spend')}
-            </div>
-            <div>
-              {translate('auto.components.automations.AutomationRunHistory.13988187b3', 'Tokens')}
-            </div>
-            <div>
-              {translate('auto.components.automations.AutomationRunHistory.9974a2b429', 'Status')}
-            </div>
+            <div>{t('auto.components.automations.AutomationRunHistory.86a248187e', 'Spend')}</div>
+            <div>{t('auto.components.automations.AutomationRunHistory.13988187b3', 'Tokens')}</div>
+            <div>{t('auto.components.automations.AutomationRunHistory.9974a2b429', 'Status')}</div>
           </div>
           <div
             ref={rowsRef}
@@ -264,12 +255,15 @@ export function AutomationRunHistory({
                 return null
               }
               const runWorktree = run.workspaceId ? (worktreeMap.get(run.id) ?? null) : null
-              const workspaceLabel = getAutomationRunWorkspaceDisplay({
-                run,
-                worktree: runWorktree
-              })
-              const usageLabel = getAutomationUsageStatusLabel(run.usage)
-              const occurrenceLabel = automationRunOccurrenceLabel(run)
+              const workspaceLabel = getAutomationRunWorkspaceDisplay(
+                {
+                  run,
+                  worktree: runWorktree
+                },
+                t
+              )
+              const usageLabel = getAutomationUsageStatusLabel(run.usage, t, intlLocale)
+              const occurrenceLabel = automationRunOccurrenceLabel(run, t, intlLocale)
               return (
                 <div
                   key={virtualRow.key}
@@ -294,7 +288,7 @@ export function AutomationRunHistory({
                     }}
                   >
                     <div className="min-w-0">
-                      <div>{formatAutomationDateTime(run.scheduledFor)}</div>
+                      <div>{formatAutomationDateTime(run.scheduledFor, t, intlLocale)}</div>
                       {/* The row's own date is the first occurrence; only this line says it recurred. */}
                       {occurrenceLabel ? (
                         <div
@@ -326,7 +320,7 @@ export function AutomationRunHistory({
                       }
                       title={usageLabel}
                     >
-                      {formatAutomationCost(run.usage?.estimatedCostUsd)}
+                      {formatAutomationCost(run.usage?.estimatedCostUsd, t)}
                     </div>
                     <div
                       className={
@@ -337,15 +331,12 @@ export function AutomationRunHistory({
                       title={usageLabel}
                     >
                       {run.usage?.status === 'known'
-                        ? formatAutomationTokens(run.usage.totalTokens)
-                        : translate(
-                            'auto.components.automations.AutomationRunHistory.a00e38d1a3',
-                            'n/a'
-                          )}
+                        ? formatAutomationTokens(run.usage.totalTokens, intlLocale)
+                        : t('auto.components.automations.AutomationRunHistory.a00e38d1a3', 'n/a')}
                     </div>
                     <div className="flex justify-start">
                       <Badge variant={getAutomationRunStatusVariant(run.status)}>
-                        {getAutomationRunStatusLabel(run.status)}
+                        {getAutomationRunStatusLabel(run.status, t)}
                       </Badge>
                     </div>
                   </button>
@@ -356,7 +347,7 @@ export function AutomationRunHistory({
           {notice ? (
             <div className="grid gap-2 px-3 py-6" data-testid="automation-run-history-failure">
               <p className="text-center text-sm text-foreground">
-                {translate(
+                {t(
                   'auto.components.automations.AutomationRunHistory.historyUnavailable',
                   'Run history is unavailable from this host. This does not mean the automation failed or has no runs.'
                 )}
@@ -365,10 +356,7 @@ export function AutomationRunHistory({
             </div>
           ) : runs.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {translate(
-                'auto.components.automations.AutomationRunHistory.402651bfb6',
-                'No runs yet.'
-              )}
+              {t('auto.components.automations.AutomationRunHistory.402651bfb6', 'No runs yet.')}
             </div>
           ) : null}
         </div>

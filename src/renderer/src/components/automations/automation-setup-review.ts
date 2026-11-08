@@ -7,9 +7,9 @@ import {
   type HookTrustApproval
 } from '@/lib/ensure-hooks-confirmed'
 import type { AutomationSaveContext } from './automation-save-context'
-import type { Automation } from '../../../../shared/automations-types'
-import type { AutomationUsageSummary } from '../../../../shared/automation-usage-summary'
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationUsageSummary } from '../../../../shared/automations/history/automation-usage-summary'
+import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
 import type { SetupDecision, SetupTrustMismatch } from '../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 

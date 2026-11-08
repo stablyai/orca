@@ -15,7 +15,7 @@ import {
   agentBrowserScreenshotArgs,
   readAgentBrowserScreenshot
 } from './agent-browser-screenshot-arguments'
-import { readRasterImageDimensions } from '../../../shared/raster-image-dimensions'
+import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import { acquireElectronDebugger } from '../cdp/debugger/electron-debugger-lease'
 import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
 import { AgentBrowserBridgeUtilityCommands } from './agent-browser-bridge-page-commands'

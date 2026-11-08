@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import '@/lib/connection-context'

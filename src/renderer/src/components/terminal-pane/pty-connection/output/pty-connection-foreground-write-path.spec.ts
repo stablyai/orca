@@ -21,6 +21,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
@@ -36,7 +37,6 @@ export function registerPtyConnectionForegroundBulkAndInteractiveOutputTests(): 
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -178,7 +178,6 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -285,6 +284,7 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks8 =
@@ -337,6 +337,7 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks9 =
@@ -387,6 +388,7 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks10 =
@@ -437,6 +439,7 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks11 =
@@ -496,6 +499,7 @@ export function registerPtyConnectionForegroundFrameSchedulingTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
         const agentTitleMocks12 =

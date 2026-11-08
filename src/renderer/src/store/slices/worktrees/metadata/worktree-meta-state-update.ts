@@ -1,11 +1,11 @@
-import type { WorktreeMetaBatchUpdate } from '../../worktree-helpers'
+import type { WorktreeMetaBatchUpdate } from './worktree-meta-update-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import {
   selectWorktreesByRepo,
   selectDetectedWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { applyWorktreeUpdates } from '../../worktree-helpers'
+import { applyWorktreeUpdates } from './worktree-meta-update-application'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
 import { getHostedReviewCacheKey } from '../../hosted-review/hosted-review-cache-identity'
 import { getGitHubPRCacheKeyCandidates } from '../../../../../../shared/github/github-cache-key'

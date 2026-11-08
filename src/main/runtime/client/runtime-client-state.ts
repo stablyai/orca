@@ -17,7 +17,7 @@ import { killAllProcessesForWorktree } from '../workspaces/removal/worktree-tear
 import type { MemorySnapshot, StatsSummary } from '../../../shared/process-stats-types'
 import { collectMemorySnapshot } from '../../memory/collector'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
 import type { RuntimeClientSettingsUpdate } from './settings/runtime-client-settings-shape'
 import type { AgentLaunchSettingsMutation } from '../../../shared/agent-launch/choices/agent-launch-settings'
 import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
@@ -25,7 +25,7 @@ import type { TerminalQuickCommandMutation } from '../../../shared/terminal/quic
 import type { NativeChatSessionOptionSettingsMutation } from '../../../shared/native-chat/input/native-chat-session-options'
 import type { WorktreeTerminalStopOptions } from '../terminal/stop/worktree-terminal-stop-options'
 import type { PtyLivenessVerdict } from '../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import type { Automation } from '../../../shared/automations-types'
+import type { Automation } from '../../../shared/automations/automation-definition'
 
 export abstract class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithStateFields {
   abstract retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean

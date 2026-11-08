@@ -1,6 +1,6 @@
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionLiveSubscribe } from '../../../src/shared/agent-session/structured-agent-session-live-read'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 function isSubscribeEvent(value: unknown): value is AgentSessionSubscribeEvent {
   if (typeof value !== 'object' || value === null || !('type' in value)) {
