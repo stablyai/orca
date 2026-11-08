@@ -34,11 +34,13 @@ describe('retirement discovery of Claude buckets', () => {
   }
 
   it.each([
-    ['the cut falls inside the workspace name', 195],
-    ['the workspace root alone is longer than the cut', 230]
-  ])('keeps a long workspace path spent when %s', async (_case, rootLength) => {
+    ['the cut falls inside the workspace name', 195, (root: string) => root],
+    ['the workspace root alone is longer than the cut', 230, (root: string) => root],
+    // Case-insensitive volumes let the transcript spell the same root differently.
+    ['the transcript spells the root in another case', 230, (root: string) => root.toUpperCase()]
+  ])('keeps a long workspace path spent when %s', async (_case, rootLength, recordedRoot) => {
     const root = `/synthetic/${'a'.repeat(rootLength - '/synthetic/'.length)}`
-    await addHashedBucket(`${root}/${FIRST}`)
+    await addHashedBucket(`${recordedRoot(root)}/${FIRST}`)
 
     const retired = await discoverRetiredWorktreeNames({ workspaceRoots: [root], home, env: {} })
 

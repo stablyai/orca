@@ -60,8 +60,11 @@ async function hashedBucketLeafNames(
   if (!cwd) {
     return []
   }
-  // Compare real paths: /repo/my-app and /repo/my/app share a bucket name but not a cwd.
-  return roots.flatMap((root) => relativePathInsideRoot(root, cwd)?.split('/')[0] || [])
+  // Compare paths, not names: /repo/my-app and /repo/my/app share a bucket name. Fold case like the bucket match.
+  const folded = cwd.toLowerCase()
+  return roots.flatMap(
+    (root) => relativePathInsideRoot(root.toLowerCase(), folded)?.split('/')[0] || []
+  )
 }
 
 /** Share WSL scan admission/deadlines; report refusals without discarding names readable from other sources. */
