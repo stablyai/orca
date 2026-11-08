@@ -4,6 +4,8 @@ import {
   findMemoizedHookCalls,
   findMemoizedStoreReads,
   findSourceHazards,
+  findVirtualizerMemoFlows,
+  findVirtualizerWrappers,
   renderStoreReadLines
 } from './react-compiler-hazards.mjs'
 
@@ -99,5 +101,50 @@ describe('store reads in memo blocks', () => {
       '}'
     ].join('\n')
     expect(renderStoreReadLines('a.ts', src, 'useRoute')).toEqual([3])
+  })
+})
+
+describe('virtualizer flows into memo blocks', () => {
+  it('follows wrapper hooks and flags cached reads and props, not closures or bound methods', () => {
+    const wrapper = [
+      'export function useRows(n) {',
+      '  const virtualizer = useVirtualizer({ count: n })',
+      '  return { virtualizer, n }',
+      '}'
+    ].join('\n')
+    expect(findVirtualizerWrappers('w.ts', wrapper)).toEqual([
+      { name: 'useRows', shape: 'property' }
+    ])
+    const hooks = new Map([
+      ['useVirtualizer', 'direct'],
+      ['useList', 'direct']
+    ])
+    const compiled = [
+      'import { c as _c } from "react/compiler-runtime";',
+      'export function Pane() {',
+      '  const $ = _c(4);',
+      '  const list = useList();',
+      '  let t0;',
+      '  if ($[0] !== list) {',
+      '    t0 = <Rows list={list} height={list.getTotalSize()} onPick={() => list.scrollToIndex(0)} rowRef={list.measureElement} />;',
+      '    $[0] = list;',
+      '    $[1] = t0;',
+      '  } else {',
+      '    t0 = $[1];',
+      '  }',
+      '  let t1;',
+      '  if ($[2] !== list) {',
+      '    t1 = () => list.getVirtualItems();',
+      '    $[2] = list;',
+      '    $[3] = t1;',
+      '  } else {',
+      '    t1 = $[3];',
+      '  }',
+      '  return t0;',
+      '}'
+    ].join('\n')
+    expect(
+      findVirtualizerMemoFlows('a.jsx', '', compiled, hooks).map(({ fn, text }) => `${fn}:${text}`)
+    ).toEqual(['Pane:list={list}', 'Pane:list.getTotalSize'])
   })
 })
