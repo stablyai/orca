@@ -116,10 +116,7 @@ export function useNativeChatSessionOptionCommand(args: {
         onSlashCommand?.(command.trim())
         emitNativeChatMessageSent({
           agent,
-          runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local',
-          action: 'command',
-          outcome: 'unconfirmed',
-          backend: 'pty'
+          runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
         })
         const outcome = observer ? await observer.result : undefined
         return { outcome }

@@ -67,8 +67,7 @@ const card = z.object({
   returnedRejection: storedFailureFact.nullable(),
   consumedAs: z.string().nullable(),
   queuedAt: cursor.nullable(),
-  options: AgentSessionExecutionOptionsSchema.optional(),
-  chatAction: z.enum(['message', 'command', 'continue']).optional()
+  options: AgentSessionExecutionOptionsSchema.optional()
 })
 const receipt = z.object({
   clientMessageId: z.string(),

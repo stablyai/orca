@@ -1,5 +1,4 @@
 import { openingMessageReceipt } from '../operations/structured-agent-session-command-receipt'
-import { structuredChatAction } from '../structured-agent-session-chat-action'
 import { prepareForkFounding, readForkHydration } from './agent-session-fork-founding'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
@@ -71,7 +70,7 @@ async function foundConversation(
   params: AgentSessionAttachParams,
   options: StructuredAgentSessionCreateOptions
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  const { callerKey, clientKind } = caller
+  const { callerKey } = caller
   const { deps } = context
   const { store } = deps
   const sessionId = params.envelope.sessionId
@@ -225,7 +224,6 @@ async function foundConversation(
             ...first,
             payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, first.body),
             origin: 'client',
-            chatAction: structuredChatAction({ body: first.body, userSend: true }, clientKind),
             source: { kind: 'user' },
             ...(first.selection === undefined
               ? openingMessageOptions(candidate.record.options)

@@ -1,4 +1,3 @@
-import type { AgentSessionChatAction } from '../../../../shared/agent-session/journal/agent-session-chat-action'
 import type { UnreadAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
 import {
@@ -17,7 +16,6 @@ import type { JournalRowBase } from '../durable-rows/journal-row-schema'
 
 export type JournalQueueChange =
   | {
-      chatAction?: AgentSessionChatAction
       op: 'queued'
       body: AgentJournalMessageItem
       position: number

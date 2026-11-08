@@ -1,4 +1,3 @@
-import { isSlashCommandDraft } from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
 import {
   hasNativeChatStagedFiles,
@@ -219,8 +218,7 @@ export function useNativeChatStructuredComposerSend({
           completeNativeChatStructuredUserAction(
             agent,
             structuredTransport,
-            revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined,
-            isSlashCommandDraft(submittedText) ? 'command' : 'message'
+            revealsTranscript && (!hostCommand || isCurrent()) ? revealAdmitted : undefined
           )
           consume()
           return true

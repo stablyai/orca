@@ -1,5 +1,3 @@
-import { prepareJournalDispatchTelemetry } from '../submissions/journal-dispatch-telemetry'
-import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { isDeepStrictEqual } from 'node:util'
 import type { JournalHostDatabase } from '../database/journal-host-database'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -25,7 +23,6 @@ export class JournalWriteProjection {
 
   constructor(
     private readonly deps: {
-      identity: AgentSessionJournalIdentity
       database: JournalHostDatabase
       state: () => JournalReducerState
       convertingLegacyQueue?: () => boolean
@@ -51,13 +48,6 @@ export class JournalWriteProjection {
       finishFold,
       this.deps.convertingLegacyQueue?.()
     )
-    const dispatchTelemetry = prepareJournalDispatchTelemetry(
-      db,
-      this.deps.identity,
-      before,
-      transition.state,
-      transition.changedSubmissions
-    )
     this.deps.captureCommittedRows?.(
       db,
       before.sessionId,
@@ -72,7 +62,6 @@ export class JournalWriteProjection {
     return () => {
       withdrawal?.committed()
       this.deps.adopt(transition.adopt())
-      dispatchTelemetry()
     }
   }
 

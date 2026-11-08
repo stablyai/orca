@@ -290,7 +290,6 @@ export function buildJournalSubmissionRow(
     ...(input.handoverRecorded ? { handoverRecorded: true } : {}),
     ...(input.queuedMessageId !== undefined ? { queuedMessageId: input.queuedMessageId } : {}),
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
-    ...(input.chatAction ? { chatAction: input.chatAction } : {}),
     // Sender identities belong to message bodies; persist only the source kind here.
     ...(input.source !== undefined ? { source: { kind: input.source.kind } } : {}),
     ...(input.options ? { options: input.options } : {})

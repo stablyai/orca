@@ -74,7 +74,7 @@ export function sendStructuredAgentSessionTurn(
   },
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
-  const plan = sendPlan(params, caller.clientKind)
+  const plan = sendPlan(params)
   return runAfterRewindStart(context, caller.callerKey, params.envelope, plan, (selection) =>
     runStructuredAgentSessionMutation(
       context,
@@ -110,13 +110,7 @@ export function sendStructuredAgentSessionTurn(
             }
           }
           params.beforeRun?.()
-          return runQueueableStructuredAgentSessionSend(
-            context,
-            ctx,
-            params,
-            () => plan.run(ctx),
-            caller.clientKind
-          )
+          return runQueueableStructuredAgentSessionSend(context, ctx, params, () => plan.run(ctx))
         }
       },
       sendPreparation(context, params.envelope, arrival, selection)

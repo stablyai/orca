@@ -71,12 +71,7 @@ export function persistJournalOutcomeRows(
   upgradeNative = false,
   finish?: (state: JournalReducerState) => void,
   format: 2 | 3 = 3
-): {
-  state: JournalReducerState
-  changedSubmissions: ReadonlySet<string>
-  adopt: () => JournalReducerState
-} {
-  const changedSubmissions = new Set<string>()
+): { state: JournalReducerState; adopt: () => JournalReducerState } {
   let scalar = state.lastSequence === 0 ? {} : journalOutcomeScalars(state)
   const transition = isolateJournalTransition(state, () => undefined)
   if (format === 3) {
@@ -111,11 +106,6 @@ export function persistJournalOutcomeRows(
           isNativeOutcomeField(entry.path) ||
           OUTCOME_FORMAT_1_COLLECTIONS.some((path) => path === entry.path)
       )
-    for (const change of changes) {
-      if (change.path === 'submissions' && typeof change.key === 'string') {
-        changedSubmissions.add(change.key)
-      }
-    }
     if (upgradeNative) {
       for (const path of ['inputEntries', 'inputCards'] as const) {
         const changed = new Set(
@@ -164,7 +154,7 @@ export function persistJournalOutcomeRows(
       )
     }
   }
-  return { state: transition.state, changedSubmissions, adopt: transition.adopt }
+  return { state: transition.state, adopt: transition.adopt }
 }
 
 function appended(seq: number, index: number): string {

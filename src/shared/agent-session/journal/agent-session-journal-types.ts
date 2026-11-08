@@ -1,4 +1,3 @@
-import type { AgentSessionChatAction } from './agent-session-chat-action'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
 import type { AgentSessionProviderContextBoundary } from '../agent-session-provider-context'
@@ -400,8 +399,6 @@ export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[n
 /** The write-ahead submission row, projected. `unknown` is a displayed state:
  *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
 export type AgentJournalSubmission = {
-  /** Desktop admission annotation, preserved across queue/reconnect; never inferred on replay. */
-  chatAction?: AgentSessionChatAction
   clientMessageId: string
   /** Execution fence of the latest dispatch attempt or recovery. */
   fence: number

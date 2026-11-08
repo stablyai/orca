@@ -1,7 +1,3 @@
-import {
-  structuredChatAction,
-  queuedStructuredChatAction
-} from '../structured-agent-session-chat-action'
 // Drafts owe no execution work; derive delivery gates under serialization before consuming one card per turn.
 
 import { randomUUID } from 'node:crypto'
@@ -66,9 +62,7 @@ export async function maybeQueueStructuredAgentSessionSend(
     /** A person's send at a chat surface: every attachment it names must still be stored. */
     userSend?: true
     personsMessage?: true
-    usageLimitContinuationOfTurnItemId?: string
-  },
-  clientKind?: 'mobile' | 'runtime'
+  }
 ): Promise<
   | { ok: true; value: AgentSessionSendResult }
   | { ok: false; refusal: AgentSessionWireRefusal }
@@ -111,7 +105,6 @@ export async function maybeQueueStructuredAgentSessionSend(
     row = await ctx.journal.queuedMessages.insert(
       {
         messageId: clientMessageId,
-        chatAction: structuredChatAction(params, clientKind),
         body: params.body,
         deliveryMode: params.delivery === 'queue-if-active' ? 'queue' : 'steer',
         unattended: !params.userSend && !params.personsMessage,
@@ -212,7 +205,6 @@ export class StructuredAgentSessionQueuedMessageDrain {
           clientMessageId: submissionId,
           // Automatic handoffs never become personal kept cards on close/restart.
           origin: 'host',
-          chatAction: queuedStructuredChatAction(next),
           payloadFingerprint: next.fingerprint,
           body: next.body,
           ...(next.options ? { options: next.options } : {}),

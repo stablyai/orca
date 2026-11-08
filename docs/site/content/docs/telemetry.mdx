@@ -35,7 +35,7 @@ Fields include fixed enum values, version strings, numeric counts and revisions,
 
 ## Delivery and accuracy
 
-Remote structured-chat message outcomes and agent-start events are delivered on a best-effort basis to the originating desktop while it is connected. If a queued message settles while that desktop is disconnected, its telemetry event is not retained or replayed after reconnect. This can undercount remote usage; these events do not provide a complete record of message delivery or agent starts.
+Remote structured-chat agent-start events are delivered on a best-effort basis to the originating desktop while it is connected. Events are not retained or replayed after reconnect. This can undercount remote usage; these events do not provide a complete record of agent starts.
 
 ## What we never send
 

@@ -148,8 +148,7 @@ export async function holdUnsentSends(
                       unattended: !journal.inputOrder.personalSubmission(submission)
                     }
                   : {}),
-                ...(submission.options ? { options: submission.options } : {}),
-                ...(submission.chatAction ? { chatAction: submission.chatAction } : {})
+                ...(submission.options ? { options: submission.options } : {})
               }
               changes.push({ messageId: clientMessageId, change })
             }
@@ -224,7 +223,6 @@ export function keepFailedStartSends(
               }
             : {}),
           ...(send?.options ? { options: send.options } : {}),
-          ...(send?.chatAction ? { chatAction: send.chatAction } : {}),
           returned: { reason: dispatch.reason, rejection: dispatch.rejection }
         }
       })

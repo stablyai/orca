@@ -112,12 +112,8 @@ export class JournalSubmissionWriter {
           return [dispatch, ...planned.rows]
         },
         {
-          write: (db) => {
-            planned?.receipt.write(db)
-          },
-          committed: () => {
-            planned?.receipt.committed()
-          }
+          write: (db) => planned?.receipt.write(db),
+          committed: () => planned?.receipt.committed()
         },
         (rows) => rows[0]
       )
@@ -137,12 +133,8 @@ export class JournalSubmissionWriter {
         return [...witness.rows, journalDispatchRowBuilder(state, input)]
       },
       {
-        write: (db) => {
-          witness?.receipt.write(db)
-        },
-        committed: () => {
-          witness?.receipt.committed()
-        }
+        write: (db) => witness?.receipt.write(db),
+        committed: () => witness?.receipt.committed()
       }
     )
   }

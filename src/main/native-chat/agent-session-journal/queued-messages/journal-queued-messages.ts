@@ -16,6 +16,7 @@ import type {
   AgentSessionQueuedMessageMoveResult,
   AgentSessionQueuedMessageUpdateResult
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
 import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
 import {
@@ -35,7 +36,6 @@ import {
 import {
   isUnsettledQueuedMessage,
   type QueuedMessageHoldReason,
-  type QueuedMessageInsertInput,
   type QueuedMessageRow
 } from './queued-message-table'
 import { QueuedMessageEditLeases } from './queued-message-edit-leases'
@@ -124,7 +124,15 @@ export class JournalQueuedMessages {
 
   // Card insertion, attachment claims and send receipt must commit together.
   insert(
-    input: QueuedMessageInsertInput,
+    input: {
+      messageId: string
+      body: AgentJournalMessageItem
+      deliveryMode?: 'queue' | 'steer'
+      unattended?: boolean
+      requireAttachments?: true
+      holdReason?: QueuedMessageHoldReason
+      options?: AgentSessionExecutionOptions
+    },
     receipt?: JournalOperationReceipt
   ): Promise<QueuedMessageRow> {
     const { messageId, body } = input
@@ -141,7 +149,6 @@ export class JournalQueuedMessages {
         const position = journalInputOrder(this.inputState()).cardBounds(this.deps.state()).last + 1
         const change = {
           op: 'queued' as const,
-          ...(input.chatAction ? { chatAction: input.chatAction } : {}),
           body,
           position,
           queuedAt: { epoch, sequence: lastSequence },

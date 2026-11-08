@@ -324,13 +324,7 @@ it('keeps the draft through Continue admission, refusal, uncertainty and recorde
     }
   ])
   expect(reveal).toHaveBeenCalledOnce()
-  expect(emitNativeChatMessageSent).toHaveBeenCalledWith({
-    agent: 'codex',
-    runtime: 'remote',
-    action: 'continue',
-    outcome: 'unconfirmed',
-    backend: 'structured'
-  })
+  expect(emitNativeChatMessageSent).toHaveBeenCalledWith({ agent: 'codex', runtime: 'remote' })
   await act(async () =>
     answer.resolve({
       ok: false,

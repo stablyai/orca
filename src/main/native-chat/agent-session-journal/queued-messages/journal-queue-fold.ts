@@ -1,4 +1,3 @@
-import { readAgentSessionChatAction } from '../../../../shared/agent-session/journal/agent-session-chat-action'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -73,9 +72,6 @@ export function queuedCardFromChange(
 ): QueuedMessageRow {
   const options = readAgentSessionExecutionOptions(change.options)
   const card: QueuedMessageRow = {
-    ...(readAgentSessionChatAction(change.chatAction)
-      ? { chatAction: readAgentSessionChatAction(change.chatAction) }
-      : {}),
     messageId,
     position: change.position,
     body: change.body,

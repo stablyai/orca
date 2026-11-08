@@ -181,8 +181,7 @@ export const storedItem = AgentJournalRenderItemSchema.extend({ body: storedItem
 export const storedSubmission = AgentJournalSubmissionSchema.extend({
   rejection: storedFailureFact.optional(),
   acceptedSequence: count,
-  origin: z.enum(['client', 'host']).optional(),
-  chatAction: z.enum(['message', 'command', 'continue']).optional()
+  origin: z.enum(['client', 'host']).optional()
 })
 
 export type StoredValuesAreDeclared = [

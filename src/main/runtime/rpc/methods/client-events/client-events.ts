@@ -10,10 +10,7 @@ import {
 } from '../../../../../shared/rpc-contract/client-events-params'
 import { BROWSER_CLIENT_HOST_REQUEST_CAPABILITY } from '../../../../../shared/browser/client-hosting/browser-client-host-request-protocol'
 import { getBrowserHostRequestRegistry } from '../../../browser-host/leases/browser-host-request-registry'
-import {
-  STRUCTURED_CHAT_DISPATCH_TELEMETRY_CLIENT_CAPABILITY,
-  STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY
-} from '../../../../../shared/structured-chat-dispatch-telemetry'
+import { STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY } from '../../../../../shared/structured-chat-dispatch-telemetry'
 import { subscribeStructuredChatTelemetry } from '../../../../telemetry/structured-chat-dispatch'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
 
@@ -41,22 +38,18 @@ export const CLIENT_EVENT_METHODS = [
           clientCapabilities?.includes(BROWSER_CLIENT_HOST_REQUEST_CAPABILITY)
             ? getBrowserHostRequestRegistry(runtime).register({ pairedDeviceId, emit })
             : undefined
-        const unsubscribeTelemetry =
-          clientCapabilities?.includes(STRUCTURED_CHAT_DISPATCH_TELEMETRY_CLIENT_CAPABILITY) ||
-          clientCapabilities?.includes(STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY)
-            ? subscribeStructuredChatTelemetry((event, callerKey) => {
-                if (
-                  callerKey === structuredCallerFor(ctx).callerKey &&
-                  clientCapabilities?.includes(
-                    event.type === 'structuredChatAgentStart'
-                      ? STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY
-                      : STRUCTURED_CHAT_DISPATCH_TELEMETRY_CLIENT_CAPABILITY
-                  )
-                ) {
-                  emit(event)
-                }
-              })
-            : undefined
+        const unsubscribeTelemetry = clientCapabilities?.includes(
+          STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY
+        )
+          ? subscribeStructuredChatTelemetry((event, callerKey) => {
+              if (
+                callerKey === structuredCallerFor(ctx).callerKey &&
+                clientCapabilities?.includes(STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY)
+              ) {
+                emit(event)
+              }
+            })
+          : undefined
 
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`

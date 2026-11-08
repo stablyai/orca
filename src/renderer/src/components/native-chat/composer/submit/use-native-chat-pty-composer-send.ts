@@ -96,27 +96,12 @@ export function useNativeChatPtyComposerSend(args: {
         args.setNotice(translate('components.native-chat.messageNotSent', 'Message not sent'))
         return false
       }
-      let telemetryEmitted = false
-      const reportSend = (outcome: 'unconfirmed' | 'rejected'): void => {
-        if (telemetryEmitted) {
-          return
-        }
-        telemetryEmitted = true
-        emitNativeChatMessageSent({
-          agent: args.agent,
-          runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local',
-          action: classification === 'chat' ? 'message' : 'command',
-          outcome,
-          backend: 'pty'
-        })
-      }
       let pendingId: string | undefined
       const sendOptions =
         args.agent === 'claude' && classification === 'chat'
           ? {
               ...launchSendOptions,
               onWriteRejected: () => {
-                reportSend('rejected')
                 if (pendingId) {
                   args.optimisticSendOutcome?.reject(pendingId)
                 }
@@ -172,14 +157,10 @@ export function useNativeChatPtyComposerSend(args: {
           }
         }
       }
-      if (pendingHandle?.settled) {
-        void pendingHandle.settled.then(
-          () => reportSend('unconfirmed'),
-          () => reportSend('unconfirmed')
-        )
-      } else {
-        reportSend('unconfirmed')
-      }
+      emitNativeChatMessageSent({
+        agent: args.agent,
+        runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
+      })
       args.onSubmitted?.()
       if (!retry) {
         args.setDraft('')

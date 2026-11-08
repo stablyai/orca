@@ -65,13 +65,6 @@ export function projectionWriter(database: JournalHostDatabase, initial: Journal
   let state = initial
   const queue = new JournalWriteQueue(state.sessionId)
   const projection = new JournalWriteProjection({
-    identity: {
-      sessionId: initial.sessionId,
-      workspaceId: 'projection-workspace',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: null
-    },
     database,
     state: () => state,
     adopt: (next) => {

@@ -20,7 +20,7 @@ export function prepareJournalOutcomeWrite(
   savedAt: number,
   finishFold?: (draft: JournalReducerState) => void,
   convertingLegacyQueue = false
-): ReturnType<typeof persistJournalOutcomeRows> {
+): { state: JournalReducerState; adopt: () => JournalReducerState } {
   const previous = journalOutcomeSource(db, live.sessionId, live.epoch)
   const format = previous?.format === 3 || !convertingLegacyQueue ? 3 : 2
   if (

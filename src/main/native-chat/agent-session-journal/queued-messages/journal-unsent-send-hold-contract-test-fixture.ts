@@ -22,7 +22,7 @@ import {
   updateTestJournalRowJson
 } from '../store-lifecycle/journal-host-database-test-support'
 
-export function createFixture(options = { legacyInputs: true }) {
+export function createFixture() {
   const IDENTITY: AgentSessionJournalIdentity = {
     sessionId: 'session-held',
     workspaceId: 'ws-1',
@@ -45,7 +45,7 @@ export function createFixture(options = { legacyInputs: true }) {
 
   let epochs = 0
 
-  const journals = createTrackedJournalOpener(options)
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   function message(text: string): AgentJournalMessageItem {
     return { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }

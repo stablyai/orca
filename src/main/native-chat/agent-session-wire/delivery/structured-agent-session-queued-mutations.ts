@@ -1,4 +1,3 @@
-import { queuedStructuredChatAction } from '../structured-agent-session-chat-action'
 // Commit action receipts with effects so lost replies replay without ledger admission.
 // Published cards own rendered text; mutation answers carry none.
 
@@ -133,8 +132,6 @@ export function sendQueuedStructuredAgentMessage(
             clientMessageId: submissionId,
             // Personal handoffs return as cards on close/restart.
             origin: 'client',
-            chatAction:
-              caller.clientKind === 'mobile' ? undefined : queuedStructuredChatAction(row),
             payloadFingerprint: row.fingerprint,
             body: row.body,
             ...(row.options ? { options: row.options } : {}),

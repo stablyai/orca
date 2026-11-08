@@ -11,10 +11,19 @@ export function decodeRuntimeEnvironmentSubscriptionEvents(
       method === 'runtime.clientEvents.subscribe' &&
       isCurrent() &&
       payload.type === 'response' &&
-      payload.response.ok &&
-      recordRemoteStructuredChatTelemetry(payload.response.result)
+      payload.response.ok
     ) {
-      return
+      const event = payload.response.result
+      if (
+        typeof event === 'object' &&
+        event !== null &&
+        'type' in event &&
+        (event.type === 'structuredChatMessageDispatch' ||
+          event.type === 'structuredChatAgentStart') &&
+        recordRemoteStructuredChatTelemetry(event)
+      ) {
+        return
+      }
     }
     onEvent(payload)
   })
