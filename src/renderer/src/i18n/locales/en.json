@@ -21528,7 +21528,9 @@
       "continue": "Continue link",
       "policyChanged": "Collaboration limits changed by the owner",
       "policyResumed": "Collaboration limits changed and link continued",
-      "ownerAnswered": "Answered by the owner"
+      "ownerAnswered": "Answered by the owner",
+      "optionalNote": "Optional note to both agents",
+      "sendResume": "Send and continue"
     },
     "wslHostMark": {
       "runsOn": "Runs on WSL: {{distro}} (Linux)"

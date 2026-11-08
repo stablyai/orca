@@ -50,6 +50,9 @@ export function SessionLinkControl({
     false
   const limitPause =
     link?.state === 'paused' && ['turn-limit', 'message-limit'].includes(link.reason)
+  const ownerMessageLabel = limitPause
+    ? t('components.sessionLink.optionalNote', 'Optional note to both agents')
+    : t('components.sessionLink.ownerMessage', 'Your message to both agents')
   const control = (action: 'pause' | 'resume' | 'stop' | 'end') => {
     if (link) {
       void state.mutate('orchestration.linkControl', { id: link.id, action, version: link.version })
@@ -234,16 +237,11 @@ export function SessionLinkControl({
                     onChange={(e) => setBody(e.target.value)}
                     disabled={state.busy || state.uncertain || link?.state === 'ended'}
                     maxLength={8192}
-                    aria-label={t(
-                      'components.sessionLink.ownerMessage',
-                      'Your message to both agents'
-                    )}
-                    placeholder={t(
-                      'components.sessionLink.ownerMessage',
-                      'Your message to both agents'
-                    )}
+                    aria-label={ownerMessageLabel}
+                    placeholder={ownerMessageLabel}
                   />
                   <Button
+                    variant={limitPause ? 'secondary' : 'default'}
                     disabled={
                       state.busy || state.uncertain || !body.trim() || link?.state === 'ended'
                     }
@@ -272,7 +270,7 @@ export function SessionLinkControl({
                     }}
                   >
                     {link?.state === 'paused' && state.policySupported
-                      ? t('components.sessionLink.answerResume', 'Answer and continue')
+                      ? t('components.sessionLink.sendResume', 'Send and continue')
                       : t('components.sessionLink.sendBoth', 'Send to both')}
                   </Button>
                 </>
