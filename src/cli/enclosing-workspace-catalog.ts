@@ -5,8 +5,8 @@ import type { FolderWorkspace } from '../shared/folder-workspaces/folder-workspa
 import type { ProjectGroup } from '../shared/project-group-types'
 import type { Repo } from '../shared/repo-types'
 import type { RuntimeWorktreeListResult } from '../shared/runtime-types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../shared/workspace-scope'
-import type { CatalogRow } from './caller-host-worktree-selection'
+import { folderWorkspaceKey } from '../shared/workspace-scope'
+import type { CatalogRow } from './workspace-catalog-row'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 
@@ -67,30 +67,4 @@ export async function readEnclosingWorkspaceCatalog(
       : { ...row, hostUnresolved: true }
   })
   return [...rows, ...folderRows]
-}
-
-/** An innermost folder with an unknown host can't be ruled in or out, so no owner is guessed. */
-export function refuseUnresolvedOwner(innermost: readonly CatalogRow[]): void {
-  const unresolved = innermost.filter((row) => row.hostUnresolved)
-  if (unresolved.length === 0) {
-    return
-  }
-  throw new RuntimeClientError(
-    'selector_ambiguous',
-    `Orca can't tell which host owns the folder workspace containing the current directory (${unresolved.map((row) => `${row.id} at ${row.path}`).join(', ')}), so it won't guess the workspace.`,
-    {
-      workspaces: innermost.map((row) => ({
-        kind: parseWorkspaceKey(row.id)?.type === 'folder' ? 'folder workspace' : 'worktree',
-        id: row.id,
-        path: row.path,
-        hostId: row.hostUnresolved ? null : (row.hostId ?? 'local')
-      })),
-      nextSteps: [
-        ...unresolved.map(
-          (row) => `Pass --worktree ${row.id} to target the folder workspace itself.`
-        ),
-        'Or pass an explicit worktree selector from `orca worktree ps --json`.'
-      ]
-    }
-  )
 }

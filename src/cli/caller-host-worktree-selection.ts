@@ -10,18 +10,13 @@ import {
   type ExecutionHostId
 } from '../shared/execution-host'
 import { readOrchestrationCompatibilityEvidence } from '../shared/orchestration-compatibility-evidence'
-import type { RuntimeWorktreeListResult, RuntimeWorktreeRecord } from '../shared/runtime-types'
+import type { RuntimeWorktreeListResult } from '../shared/runtime-types'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
-import { refuseUnresolvedOwner } from './enclosing-workspace-catalog'
+import { refuseUnresolvedOwner, type CatalogRow } from './workspace-catalog-row'
 import { createCwdContainment } from './caller-cwd-containment'
 
-export type CatalogRow = Pick<RuntimeWorktreeRecord, 'id' | 'path' | 'hostId'> & {
-  identity?: { key: string }
-  repoId?: string
-  /** A folder workspace whose owning host couldn't be derived; it may be the caller's, so it counts. */
-  hostUnresolved?: true
-}
+export type { CatalogRow }
 
 /** Group-level folder workspaces join the catalog keyed `folder:<id>`, beside repo-backed rows. */
 function isFolderRow(row: CatalogRow): boolean {
