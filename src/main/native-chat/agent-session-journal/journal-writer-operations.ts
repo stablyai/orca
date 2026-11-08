@@ -123,7 +123,7 @@ export type JournalWriterSettled<T = unknown> = { value: T } | { failure: Journa
 /** Runs one command's operation; `receipt` carries the host-computed effects into its row transaction. */
 export async function runJournalWriterOperation(
   session: JournalWriterSession,
-  operation: JournalWriterOperation,
+  operation: Exclude<JournalWriterOperation, { kind: 'steps' }>,
   receipt: JournalOperationReceipt | undefined
 ): Promise<unknown> {
   const { collaborators } = session

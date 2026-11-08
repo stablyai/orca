@@ -1,4 +1,5 @@
 import type { PiRpcConnection, PiRpcSessionDeps } from './rpc-session-contracts'
+import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { withStructuredHistoryInvocation } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
 import type {
   StructuredAgentSessionAcquireInput,

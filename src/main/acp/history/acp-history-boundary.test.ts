@@ -92,7 +92,10 @@ describe('ACP recovered history boundaries', () => {
       JSON.stringify(frame.message.params ?? {}).includes('"agent_message_chunk"')
     )!
     await fixture.feed([answer])
-    expect(await fixture.rig.eventSink.written?.()).toEqual({ ok: false, error: failure })
+    expect(await fixture.rig.eventSink.written?.()).toMatchObject({
+      ok: false,
+      error: { message: 'controlled answer resolver failure' }
+    })
     reject.mockRestore()
     fixture.rig.assembler.dispose()
     await settleObservedExitForTest({
@@ -367,18 +370,20 @@ describe('ACP recovered history boundaries', () => {
         tryAppendTransition: (transition: Parameters<typeof append>[0]) => {
           const admission = append({
             ...transition,
-            steps: transition.steps.map((step) =>
-              step.kind !== 'settlement'
-                ? step
-                : {
-                    ...step,
-                    resolve: (current) => {
-                      const mutations = step.resolve(current)
-                      resolved.push(...mutations.map(journalLifecycleMutationItemId))
-                      return mutations
-                    }
-                  }
-            )
+            onResolved: (outcomes) => {
+              transition.onResolved?.(outcomes)
+              transition.steps.forEach((step, index) => {
+                const outcome = outcomes[index]
+                if (
+                  step.kind === 'settlement' &&
+                  'resolution' in step &&
+                  outcome?.kind === 'committed' &&
+                  outcome.wrote
+                ) {
+                  resolved.push(...step.resolution.mutations.map(journalLifecycleMutationItemId))
+                }
+              })
+            }
           })
           expect(admission.accepted).toBe(true)
           return admission

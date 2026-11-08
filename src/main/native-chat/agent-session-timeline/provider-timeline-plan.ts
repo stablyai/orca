@@ -14,6 +14,7 @@ export type ProviderTimelineSink = Required<
 
 type ItemStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'item' }>
 type SettlementStep = Extract<StructuredAgentSessionTransitionStep, { kind: 'settlement' }>
+type StepInput<T> = T extends StructuredAgentSessionTransitionStep ? Omit<T, 'kind'> : never
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
@@ -27,7 +28,7 @@ export class ProviderTimelinePlan {
     this.lifecycle ||= lifecycle
   }
 
-  settlement(step: Omit<SettlementStep, 'kind'>): void {
+  settlement(step: StepInput<SettlementStep>): void {
     this.steps.push({ kind: 'settlement', ...step })
     this.lifecycle = true
   }

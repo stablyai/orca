@@ -89,7 +89,6 @@ export type ClaudeDispatchWaiter = {
   sentUuid: string
   /** Sequence used to identify the latest pending dispatch for control ownership. */
   dispatchSequence: number
-  historyCatchUp?: AbortController
   /** Host submission instant owned by this exact dispatch. */
   requestedAt: number | null
   /** Set when the provider replay settled this waiter before send returned. */
@@ -103,6 +102,7 @@ export type ClaudeDispatchWaiter = {
 }
 
 export type ClaudeSession = {
+  historyCatchUp?: AbortController
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   /** Latest main-chain message seen on the live stream, mid-turn included. */

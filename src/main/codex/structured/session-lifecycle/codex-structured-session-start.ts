@@ -123,13 +123,14 @@ export async function openCodexStructuredSession(
     input.events &&
     (returnedTurns.length > 0 || (launch.resumeThreadId !== null && !opened.supersededThreadId))
   ) {
+    const sink = input.events
     await waitForPromiseWithSignal(
       withStructuredHistoryInvocation(attempt, openInput.signal, (signal) =>
         catchUpCodexThread({
           connection,
           threadId: opened.threadId,
           sessionId,
-          sink: input.events,
+          sink,
           returnedTurns,
           paginate: opened.historyMode === 'paginated' || returnedTurns.length === 0,
           subagentExecutions: start.subagentExecutions,

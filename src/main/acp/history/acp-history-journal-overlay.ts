@@ -42,6 +42,9 @@ export class AcpHistoryJournalOverlay {
       tryAppendTransition: (transition) => {
         for (const step of transition.steps) {
           if (step.kind === 'settlement') {
+            if ('resolution' in step) {
+              throw new Error('history catch-up cannot settle a per-turn translation overlay')
+            }
             step.resolve(this.journal).forEach((mutation) => this.write(mutation))
           } else {
             const resolved = step.resolve(this.journal)

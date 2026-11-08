@@ -135,12 +135,14 @@ export async function initializeAcpStructuredSession(
     started.sessionId === resume?.sessionId &&
     acquire.events
   ) {
+    const identity = spec.historyCatchUp
+    const sink = acquire.events
     await withStructuredHistoryInvocation(child, input.signal, (signal) =>
       catchUpAcpHistory({
         signal,
         frames: replayed,
-        identity: spec.historyCatchUp,
-        sink: acquire.events,
+        identity,
+        sink,
         sessionId,
         agent: spec.agent,
         providerSessionId: started.sessionId,
